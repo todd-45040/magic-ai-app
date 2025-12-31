@@ -1,0 +1,106 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="apple-touch-icon" href="/icon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    
+    <!-- SEO Meta Tags -->
+    <title>Magic AI App</title>
+    <meta name="description" content="An AI wizard for magicians and their audiences. Provides scripting help, rehearsal coaching, effect brainstorming, show planning, and more.">
+    <meta name="keywords" content="magic, magician, AI, artificial intelligence, magic tricks, scripting, rehearsal, performance, illusion, mentalism, card tricks, show planner">
+    <meta name="author" content="Magicians' AI Wizard, LLC">
+    <meta name="robots" content="index, follow">
+    <meta name="theme-color" content="#8b5cf6">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Magic AI App">
+    <meta property="og:description" content="The ultimate creative partner for magicians, offering AI-powered tools for scripting, rehearsal, effect brainstorming, and more.">
+    <meta property="og:url" content="https://magicaiwizard.com/">
+    <meta property="og:image" content="https://magicaiwizard.com/social-image.svg">
+    <meta property="og:image:type" content="image/svg+xml">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:title" content="Magic AI App">
+    <meta property="twitter:description" content="The ultimate creative partner for magicians, offering AI-powered tools for scripting, rehearsal, effect brainstorming, and more.">
+    <meta property="twitter:url" content="https://magicaiwizard.com/">
+    <meta property="twitter:image" content="https://magicaiwizard.com/social-image.svg">
+
+    <!-- Canonical Link -->
+    <link rel="canonical" href="https://magicaiwizard.com/">
+    
+    <link rel="manifest" href="/manifest.json" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Lato:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+      body {
+        font-family: 'Lato', sans-serif;
+      }
+      .font-cinzel {
+        font-family: 'Cinzel', serif;
+      }
+      @keyframes fade-in {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .animate-fade-in {
+        animation: fade-in 0.5s ease-out forwards;
+      }
+      
+      /* Magical Background Styles */
+      .magical-bg {
+        background-color: #020617; /* Very dark slate */
+        background-image: 
+          radial-gradient(circle at 50% -20%, rgba(124, 58, 237, 0.15), transparent 60%), /* Top center violet glow */
+          radial-gradient(circle at 100% 20%, rgba(56, 189, 248, 0.08), transparent 40%), /* Top right sky glow */
+          radial-gradient(circle at 0% 20%, rgba(236, 72, 153, 0.08), transparent 40%), /* Top left pink glow */
+          linear-gradient(to bottom, transparent, #020617 90%); /* Fade to black at bottom */
+        min-height: 100vh;
+        position: relative;
+        overflow-x: hidden;
+      }
+
+      .dust-pattern {
+        position: fixed;
+        inset: 0;
+        /* Subtle sparkle/cross pattern */
+        background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+        pointer-events: none;
+        z-index: 0;
+      }
+      
+      .glow-text {
+        text-shadow: 0 0 15px rgba(167, 139, 250, 0.4);
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react-dom": "https://aistudiocdn.com/react-dom@^19.2.0",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1",
+    "qrcode": "https://aistudiocdn.com/qrcode@^1.5.4",
+    "firebase/": "https://aistudiocdn.com/firebase@^12.6.0/",
+    "vite": "https://aistudiocdn.com/vite@^7.2.6",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.89.0"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
