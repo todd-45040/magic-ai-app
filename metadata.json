@@ -1,0 +1,8 @@
+{
+  "name": "magic-ai-app",
+  "description": "An AI wizard for magicians and their audiences. Provides scripting help and rehearsal coaching for magicians in a private mode, and offers trivia and show information to the public in audience mode.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}

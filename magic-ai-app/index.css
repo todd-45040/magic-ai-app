@@ -1,0 +1,107 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.magical-bg {
+  background-color: #020617;
+  background-image: 
+    radial-gradient(circle at 50% -20%, rgba(124, 58, 237, 0.15), transparent 60%),
+    radial-gradient(circle at 100% 20%, rgba(56, 189, 248, 0.08), transparent 40%),
+    radial-gradient(circle at 0% 20%, rgba(236, 72, 153, 0.08), transparent 40%),
+    linear-gradient(to bottom, transparent, #020617 90%);
+  min-height: 100vh;
+}
+
+.dust-pattern {
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.5s ease-out forwards;
+}
+
+
+/* --- Brand icon polish --- */
+.wizard-nav-icon{
+  transition: filter 200ms ease, transform 200ms ease, opacity 200ms ease;
+  will-change: filter, transform;
+}
+.wizard-nav-icon:hover{
+  filter: drop-shadow(0 0 10px rgba(168, 85, 247, 0.55)) drop-shadow(0 0 18px rgba(245, 158, 11, 0.25));
+  transform: translateY(-1px);
+}
+
+/* Subtle entrance animation for the login wizard */
+@keyframes wizard-pop-in{
+  0%{ opacity:0; transform: translateY(-6px) scale(0.98); }
+  60%{ opacity:1; transform: translateY(0) scale(1.02); }
+  100%{ opacity:1; transform: translateY(0) scale(1); }
+}
+.wizard-login-entrance{
+  animation: wizard-pop-in 520ms ease-out both;
+}
+
+/* Optional: if you ever add a light theme toggle, this makes glows softer on light backgrounds */
+@media (prefers-color-scheme: light){
+  .wizard-nav-icon:hover{
+    filter: drop-shadow(0 0 10px rgba(109, 40, 217, 0.35)) drop-shadow(0 0 16px rgba(245, 158, 11, 0.20));
+  }
+}
+
+
+/* Gold accent text (brand) */
+.text-gold{ color: var(--yellow, #f6c343); }
+
+
+/* --- Nav wand: subtle glow pulse on hover (respects reduced motion) --- */
+@keyframes wand-glow{
+  0%   { filter: drop-shadow(0 0 6px rgba(245, 158, 11, 0.18)) drop-shadow(0 0 10px rgba(168, 85, 247, 0.12)); }
+  50%  { filter: drop-shadow(0 0 10px rgba(245, 158, 11, 0.30)) drop-shadow(0 0 16px rgba(168, 85, 247, 0.22)); }
+  100% { filter: drop-shadow(0 0 6px rgba(245, 158, 11, 0.18)) drop-shadow(0 0 10px rgba(168, 85, 247, 0.12)); }
+}
+
+.wizard-nav-icon{
+  transition: transform 200ms ease, opacity 200ms ease;
+  will-change: transform, filter;
+}
+.wizard-nav-icon:hover{
+  transform: translateY(-1px);
+  animation: wand-glow 900ms ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce){
+  .wizard-nav-icon:hover{ animation: none; }
+}
+
+/* --- Brand motif: subtle wand watermark used in key surfaces --- */
+.brand-motif{
+  position: relative;
+  overflow: hidden;
+}
+.brand-motif::before{
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: url("/images/nav-wand.png");
+  background-repeat: no-repeat;
+  background-position: right -60px center;
+  background-size: 220px auto;
+  opacity: 0.06;
+  transform: rotate(-6deg);
+}
+@media (prefers-color-scheme: light){
+  .brand-motif::before{ opacity: 0.045; }
+}
+@media (prefers-contrast: more), (forced-colors: active){
+  .brand-motif::before{ display: none; }
+}
