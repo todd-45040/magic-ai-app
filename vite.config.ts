@@ -3,8 +3,7 @@ import react from "@vitejs/plugin-react";
 import { resolve } from "path";
 
 export default defineConfig(({ mode }) => {
-  // Load env file based on mode, but also merge in process.env
-  // to catch variables set directly in the environment (common in CI/Vercel).
+  // Merge Vercel/CI env with .env files (if any)
   const env = { ...process.env, ...loadEnv(mode, process.cwd(), "") };
 
   return {
@@ -14,7 +13,6 @@ export default defineConfig(({ mode }) => {
       dedupe: ["react", "react-dom"],
     },
 
-    // Multi-page build: marketing site at / and app at /app/
     build: {
       outDir: "dist",
       sourcemap: false,
@@ -30,8 +28,10 @@ export default defineConfig(({ mode }) => {
       port: 3000,
     },
 
-    // Expose env vars if you were using `define` previously.
-    // With Vite, client code should use `import.meta.env.*`.
+    // Only here to support any legacy references to process.env in tooling.
+    // In client code, prefer import.meta.env.*
     define: {
-      "process.env": env, // keeps any legacy references from breaking build tools
+      "process.env": env,
     },
+  };
+});
