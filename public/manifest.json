@@ -1,0 +1,17 @@
+
+{
+  "name": "Magic AI App",
+  "short_name": "MagicAI",
+  "description": "An AI wizard for magicians and their audiences. Provides scripting help and rehearsal coaching for magicians in a private mode, and offers trivia and show information to the public in audience mode.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#8b5cf6",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
