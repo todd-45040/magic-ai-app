@@ -62,6 +62,17 @@
 /* Gold accent text (brand) */
 .text-gold{ color: var(--yellow, #f6c343); }
 
+/* Magic Wire: gold titles + hover polish */
+.mw-title{ color: var(--yellow, #f6c343); }
+.mw-title:hover{
+  text-decoration: underline;
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.35);
+}
+.group:hover .mw-title{
+  text-decoration: underline;
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.35);
+}
+
 
 /* --- Nav wand: subtle glow pulse on hover (respects reduced motion) --- */
 @keyframes wand-glow{

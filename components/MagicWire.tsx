@@ -95,7 +95,7 @@ ${article.body}
               </span>
               <span className="text-xs text-slate-500">{new Date(article.timestamp).toLocaleString()}</span>
             </div>
-            <h2 className="text-xl font-semibold text-[var(--yellow)] mt-2 break-words transition-all hover:underline hover:[text-shadow:0_0_10px_rgba(255,215,0,0.35)]">
+            <h2 className="text-xl font-semibold mw-title mt-2 break-words">
               {article.headline}
             </h2>
 
@@ -255,7 +255,7 @@ const MagicWire: React.FC<{ onIdeaSaved?: () => void; currentUser?: User }> = ({
                   <span className={`inline-flex px-2 py-0.5 rounded-full text-xs ${CATEGORY_STYLES[article.category]}`}>
                     {article.category}
                   </span>
-                  <h3 className="font-bold text-lg text-[var(--yellow)] mt-2 transition-all group-hover:underline group-hover:[text-shadow:0_0_10px_rgba(255,215,0,0.35)]">
+                  <h3 className="font-bold text-lg mw-title mt-2">
                     {article.headline}
                   </h3>
                   <p className="text-sm text-slate-400 mt-2 line-clamp-3">{article.summary}</p>
