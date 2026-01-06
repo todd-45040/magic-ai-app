@@ -95,7 +95,9 @@ ${article.body}
               </span>
               <span className="text-xs text-slate-500">{new Date(article.timestamp).toLocaleString()}</span>
             </div>
-            <h2 className="text-xl font-semibold text-[var(--yellow)] mt-2 break-words">{article.headline}</h2>
+            <h2 className="text-xl font-semibold text-[var(--yellow)] mt-2 break-words transition-all hover:underline hover:[text-shadow:0_0_10px_rgba(255,215,0,0.35)]">
+              {article.headline}
+            </h2>
 
             {/* Source row (more explicit) */}
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-300">
@@ -228,8 +230,9 @@ const MagicWire: React.FC<{ onIdeaSaved?: () => void; currentUser?: User }> = ({
             className="inline-flex items-center gap-2 rounded-md bg-slate-800 hover:bg-slate-700 text-white px-3 py-2 text-sm font-medium"
             onClick={fetchArticles}
             disabled={isLoading}
+            title="Refresh Magic Wire (runs one AI call)"
           >
-            <WandIcon className="w-4 h-4" />
+            <WandIcon className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
             <span>{isLoading ? 'Loading…' : 'Refresh Feed'}</span>
           </button>
         </div>
@@ -246,13 +249,15 @@ const MagicWire: React.FC<{ onIdeaSaved?: () => void; currentUser?: User }> = ({
               <button
                 key={article.id}
                 onClick={() => setSelected(article)}
-                className="text-left rounded-xl bg-slate-900/40 border border-slate-800 hover:border-purple-500 hover:shadow-lg hover:shadow-purple-900/20 p-4 flex flex-col justify-between gap-4"
+                className="group text-left rounded-xl bg-slate-900/40 border border-slate-800 hover:border-purple-500 hover:shadow-lg hover:shadow-purple-900/20 p-4 flex flex-col justify-between gap-4"
               >
                 <div>
                   <span className={`inline-flex px-2 py-0.5 rounded-full text-xs ${CATEGORY_STYLES[article.category]}`}>
                     {article.category}
                   </span>
-                  <h3 className="font-bold text-lg text-[var(--yellow)] mt-2">{article.headline}</h3>
+                  <h3 className="font-bold text-lg text-[var(--yellow)] mt-2 transition-all group-hover:underline group-hover:[text-shadow:0_0_10px_rgba(255,215,0,0.35)]">
+                    {article.headline}
+                  </h3>
                   <p className="text-sm text-slate-400 mt-2 line-clamp-3">{article.summary}</p>
                 </div>
 
