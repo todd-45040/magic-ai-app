@@ -21,6 +21,22 @@ const Auth: React.FC<AuthProps> = ({ onBack, onLogin }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState('');
 
+  // The app is deployed under /app on Vercel (see vercel.json rewrites).
+  // Supabase email links MUST redirect back to the same base path.
+  const getAppBasePath = () => {
+    try {
+      return window.location.pathname.startsWith('/app') ? '/app' : '';
+    } catch {
+      return '';
+    }
+  };
+
+  const getAuthRedirectUrl = () => {
+    const base = getAppBasePath();
+    // Keep the redirect simple (no client-side routes) so Vercel rewrites always work.
+    return `${window.location.origin}${base}/?mode=auth-callback`;
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
   e.preventDefault();
   setError('');
@@ -81,7 +97,13 @@ const handleSignUp = async (e: React.FormEvent) => {
     setError('');
     setIsLoading(true);
 
-    const { data, error: authError } = await supabase.auth.signUp({ email, password });
+    const { data, error: authError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: getAuthRedirectUrl(),
+      },
+    });
 
     if (authError) {
       setError(authError.message);
@@ -98,7 +120,9 @@ const handleSignUp = async (e: React.FormEvent) => {
     setMessage('');
     setIsLoading(true);
 
-    const { error: authError } = await supabase.auth.resetPasswordForEmail(email);
+    const { error: authError } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: getAuthRedirectUrl(),
+    });
     if (authError) {
         setError(authError.message);
     } else {

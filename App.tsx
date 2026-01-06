@@ -33,6 +33,25 @@ function App() {
 
     const urlParams = new URLSearchParams(window.location.search);
     const modeParam = urlParams.get('mode');
+
+    // Helper: our SPA is commonly served under /app (vercel.json rewrites).
+    const getAppBasePath = () => {
+      try {
+        return window.location.pathname.startsWith('/app') ? '/app' : '';
+      } catch {
+        return '';
+      }
+    };
+
+    const cleanupAuthCallbackUrl = () => {
+      try {
+        const base = getAppBasePath();
+        // Strip auth callback query params and any hash fragments from Supabase.
+        window.history.replaceState({}, document.title, `${base}/`);
+      } catch {
+        // noop
+      }
+    };
     // Demo Mode (for conventions / talks)
     const demoEnabled = (() => {
       try {
@@ -68,6 +87,13 @@ function App() {
         return; 
     }
 
+    // When a user clicks the Supabase email verification link, we redirect back
+    // to /app/?mode=auth-callback (set in components/Auth.tsx). During this
+    // callback we keep the user in the auth flow while Supabase hydrates the session.
+    if (modeParam === 'auth-callback') {
+      setMode('auth');
+    }
+
 	    if (!isSupabaseConfigValid) {
         setAuthLoading(false);
         clearTimeout(loadingTimeout);
@@ -98,13 +124,18 @@ function App() {
                 setUser(appUser);
                 refreshAllData(dispatch);
                 setMode(prev => (prev === 'auth' || prev === 'selection') ? 'magician' : prev);
+                if (modeParam === 'auth-callback') cleanupAuthCallbackUrl();
             } else {
                 setUser(null);
                 setMode(prev => prev === 'magician' ? 'selection' : prev);
+                if (modeParam === 'auth-callback') cleanupAuthCallbackUrl();
             }
         } catch (error) {
             console.error('Supabase initial auth sync error:', error);
         } finally {
+            if (modeParam === 'auth-callback') {
+              cleanupAuthCallbackUrl();
+            }
             setAuthLoading(false);
             clearTimeout(loadingTimeout);
         }
