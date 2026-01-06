@@ -1,6 +1,7 @@
 import { Type, Modality } from "@google/genai";
 import { supabase } from '../supabase';
 import type { ChatMessage, TrickIdentificationResult, User } from '../types';
+import { getAiProvider } from './aiProviderService';
 
 // Keep this type export for components that reference live sessions.
 // Live sessions are currently not enabled through the serverless proxy.
@@ -39,6 +40,7 @@ async function postJson<T>(url: string, body: any, currentUser?: User): Promise<
     headers: {
       'Content-Type': 'application/json',
       'Authorization': await getBearerToken(),
+      'X-AI-Provider': getAiProvider(),
     },
     body: JSON.stringify(body),
   });
