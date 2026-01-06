@@ -49,7 +49,7 @@ const ArticleModal: React.FC<{
             <div className="w-full max-w-3xl h-[90vh] bg-slate-800 border border-purple-500 rounded-lg shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
                 <header className="p-4 border-b border-slate-700 flex-shrink-0">
                     <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${CATEGORY_STYLES[article.category]}`}>{article.category}</span>
-                    <h2 className="text-xl lg:text-2xl font-bold text-white mt-2">{article.headline}</h2>
+                    <h2 className="text-xl lg:text-2xl font-bold text-[var(--yellow)] mt-2">{article.headline}</h2>
                     <p className="text-sm text-slate-400">By {article.source} &bull; {new Date(article.timestamp).toLocaleDateString()}</p>
                 </header>
                 <main className="flex-1 overflow-y-auto p-6">
@@ -127,7 +127,7 @@ const MagicWire: React.FC<{ onIdeaSaved: () => void }> = ({ onIdeaSaved }) => {
                             <button key={article.id} onClick={() => setSelectedArticle(article)} className="text-left bg-slate-800 border border-slate-700 rounded-lg p-4 flex flex-col justify-between transition-all hover:border-purple-500 hover:shadow-lg hover:shadow-purple-900/20">
                                 <div>
                                     <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${CATEGORY_STYLES[article.category]}`}>{article.category}</span>
-                                    <h3 className="font-bold text-lg text-white mt-2">{article.headline}</h3>
+                                    <h3 className="font-bold text-lg text-[var(--yellow)] mt-2">{article.headline}</h3>
                                     <p className="text-sm text-slate-400 mt-2 line-clamp-3">{article.summary}</p>
                                 </div>
                                 <p className="text-xs text-slate-500 mt-4">By {article.source}</p>
