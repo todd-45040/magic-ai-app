@@ -40,6 +40,10 @@ export default async function handler(request: any, response: any) {
     const ai = new GoogleGenAI({ apiKey });
     const { model, contents, config } = request.body;
 
+    if (!contents) {
+      return response.status(400).json({ error: 'Missing request.body.contents (Gemini contents payload).' });
+    }
+
     // Call the Gemini model
     // Note: Use 'gemini-3-pro-preview' for complex magician tasks as per guidelines
     const result = await ai.models.generateContent({
@@ -67,8 +71,11 @@ export default async function handler(request: any, response: any) {
         return response.status(400).json({ error: 'The request was blocked by safety filters.' });
     }
 
-    return response.status(500).json({ 
-      error: 'An internal error occurred while processing your request.' 
+    return response.status(500).json({
+      error: 'An internal error occurred while processing your request.',
+      // Help debug misconfiguration / invalid model / auth issues.
+      // This does NOT include your API key.
+      details: error?.message || String(error),
     });
   }
 }

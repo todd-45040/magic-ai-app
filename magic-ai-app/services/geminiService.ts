@@ -79,7 +79,15 @@ async function postJson<T>(url: string, body: any, currentUser?: User): Promise<
   }
 
   if (!res.ok) {
-    const message = json?.error || json?.message || `Request failed (${res.status})`;
+    // Prefer a helpful message for debugging (without leaking secrets)
+    const rawSnippet = typeof json?.raw === 'string' ? json.raw.slice(0, 300) : '';
+    const details = typeof json?.details === 'string' ? json.details : '';
+    const message =
+      json?.error ||
+      json?.message ||
+      details ||
+      rawSnippet ||
+      `Request failed (${res.status})`;
     throw new Error(message);
   }
 
