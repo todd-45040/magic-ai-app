@@ -1,6 +1,6 @@
 import { Type, Modality } from "@google/genai";
 import { supabase } from '../supabase';
-import type { ChatMessage, TrickIdentificationResult, User, NewsArticle } from '../types';
+import type { ChatMessage, TrickIdentificationResult, User } from '../types';
 
 // Keep this type export for components that reference live sessions.
 // Live sessions are currently not enabled through the serverless proxy.
@@ -79,15 +79,7 @@ async function postJson<T>(url: string, body: any, currentUser?: User): Promise<
   }
 
   if (!res.ok) {
-    // Prefer a helpful message for debugging (without leaking secrets)
-    const rawSnippet = typeof json?.raw === 'string' ? json.raw.slice(0, 300) : '';
-    const details = typeof json?.details === 'string' ? json.details : '';
-    const message =
-      json?.error ||
-      json?.message ||
-      details ||
-      rawSnippet ||
-      `Request failed (${res.status})`;
+    const message = json?.error || json?.message || `Request failed (${res.status})`;
     throw new Error(message);
   }
 
@@ -313,68 +305,5 @@ export const generateNewsArticle = async (currentUser?: User): Promise<any> => {
     currentUser
   );
 };
-
-
-/**
- * Generates a batch of Magic Wire articles in ONE request (avoids burst limits and 500s from parallel calls).
- */
-export const generateMagicWireFeed = async (
-  count: number = 6,
-  currentUser?: User
-): Promise<NewsArticle[]> => {
-  const safeCount = Math.max(1, Math.min(12, Math.floor(count)));
-
-  const prompt = `Generate ${safeCount} distinct magic news articles for the "Magic Wire" feed.
-Return ONLY valid JSON that matches the response schema.
-Rules:
-- Keep it family-friendly and non-exposure.
-- Vary categories across: New Release, Interview, Review, Community News, Opinion.
-- Make each headline unique and specific.
-- If you mention a real public source, include its URL in sourceUrl; otherwise omit sourceUrl.`;
-
-  const responseSchema = {
-    type: Type.OBJECT,
-    properties: {
-      articles: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            category: { type: Type.STRING },
-            headline: { type: Type.STRING },
-            source: { type: Type.STRING },
-            sourceUrl: { type: Type.STRING },
-            summary: { type: Type.STRING },
-            body: { type: Type.STRING },
-          },
-          required: ['category', 'headline', 'source', 'summary', 'body'],
-        },
-      },
-    },
-    required: ['articles'],
-  };
-
-  const result = await generateStructuredResponse(
-    prompt,
-    'You are the Magic Wire editor. Write engaging, plausible-sounding magic industry news. Keep it safe and family-friendly.',
-    responseSchema,
-    currentUser
-  );
-
-  const articles = (result?.articles ?? []) as any[];
-
-  return articles
-    .filter(Boolean)
-    .slice(0, safeCount)
-    .map((a) => ({
-      category: a.category,
-      headline: a.headline,
-      source: a.source,
-      sourceUrl: a.sourceUrl,
-      summary: a.summary,
-      body: a.body,
-    })) as NewsArticle[];
-};
-
 
 export { Modality, Type };

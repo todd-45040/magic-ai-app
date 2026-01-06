@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { generateMagicWireFeed } from '../services/geminiService';
+import { generateNewsArticle } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
 import type { NewsArticle, NewsCategory, User } from '../types';
 import { NewspaperIcon, WandIcon, SaveIcon, ShareIcon, CheckIcon } from './icons';
@@ -174,21 +174,22 @@ const MagicWire: React.FC<{ onIdeaSaved?: () => void; currentUser?: User }> = ({
     setError(null);
 
     try {
-      const rawArticles = await generateMagicWireFeed(6, currentUser);
-
-      const nowBase = Date.now();
-      const normalized: NewsArticle[] = rawArticles.map((raw, idx) => {
-        const ts = nowBase - idx; // keep stable ordering
-        return {
-          id: crypto?.randomUUID ? crypto.randomUUID() : `${ts}-${Math.random()}`,
-          timestamp: ts,
-          ...(raw as any),
+      const articlePromises = Array.from({ length: 8 }, async () => {
+        const raw = await generateNewsArticle(currentUser);
+        // Ensure required shape and add id/timestamp if not provided
+        const now = Date.now();
+        const a: NewsArticle = {
+          id: crypto?.randomUUID ? crypto.randomUUID() : `${now}-${Math.random()}`,
+          timestamp: now,
+          ...raw,
         };
+        return a;
       });
 
+      const newArticles = await Promise.all(articlePromises);
       // Sort by timestamp desc (newest first)
-      normalized.sort((a, b) => b.timestamp - a.timestamp);
-      setArticles(normalized);
+      newArticles.sort((a, b) => b.timestamp - a.timestamp);
+      setArticles(newArticles);
     } catch (e: any) {
       setError(e?.message ?? 'Failed to load Magic Wire.');
     } finally {

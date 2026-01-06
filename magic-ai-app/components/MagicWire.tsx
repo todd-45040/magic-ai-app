@@ -84,7 +84,7 @@ const MagicWire: React.FC<{ onIdeaSaved: () => void }> = ({ onIdeaSaved }) => {
         setError(null);
         try {
             // FIX: generateNewsArticle expects currentUser
-            const articlePromises = Array.from({ length: 6 }, () => generateNewsArticle(currentUser || { email: '', membership: 'free', generationCount: 0, lastResetDate: '' }));
+            const articlePromises = Array.from({ length: 5 }, () => generateNewsArticle(currentUser || { email: '', membership: 'free', generationCount: 0, lastResetDate: '' }));
             const results = await Promise.all(articlePromises);
             const newArticles: NewsArticle[] = results.map(art => ({
                 ...art,

@@ -5,6 +5,8 @@ import { resolve } from "path";
 export default defineConfig(({ mode }) => {
   // Merge Vercel/CI env with .env files (if any)
   const env = { ...process.env, ...loadEnv(mode, process.cwd(), "") };
+  // Only expose VITE_* variables to the client bundle
+  const clientEnv = Object.fromEntries(Object.entries(env).filter(([k]) => k.startsWith('VITE_')));
 
   return {
     plugins: [react()],
@@ -31,7 +33,8 @@ export default defineConfig(({ mode }) => {
     // Only here to support any legacy references to process.env in tooling.
     // In client code, prefer import.meta.env.*
     define: {
-      "process.env": env,
+      // Prevent accidental leakage of server env vars into the client bundle
+      "process.env": clientEnv,
     },
   };
 });

@@ -1,5 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
-import { enforceAiUsage } from './_usage';
+import { enforceAiUsage } from './_usage.js';
 
 export default async function handler(request: any, response: any) {
   if (request.method !== 'POST') {
