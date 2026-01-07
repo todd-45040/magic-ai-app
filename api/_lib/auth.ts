@@ -14,14 +14,28 @@ export function getSupabaseAdmin() {
   return createClient(url, serviceKey, { auth: { persistSession: false } }) as any;
 }
 
-export function getBearerToken(req: Request): string | null {
-  const h = req.headers.get('authorization') || req.headers.get('Authorization');
-  if (!h) return null;
+export function getBearerToken(req: any): string | null {
+  // Vercel Node functions pass a Node-style req with `headers` as a plain object.
+  // Some runtimes (or polyfills) may pass a Fetch Request with `headers.get()`.
+  let h: any = null;
+  try {
+    if (req?.headers?.get) {
+      h = req.headers.get('authorization') || req.headers.get('Authorization');
+    } else if (req?.headers) {
+      h = req.headers['authorization'] || req.headers['Authorization'];
+    }
+  } catch {
+    h = null;
+  }
+
+  if (Array.isArray(h)) h = h[0];
+  if (!h || typeof h !== 'string') return null;
+
   const m = /^Bearer\s+(.+)$/i.exec(h.trim());
   return m ? m[1] : null;
 }
 
-export async function requireSupabaseAuth(req: Request): Promise<
+export async function requireSupabaseAuth(req: any): Promise<
   | { ok: true; admin: any; userId: string; email?: string }
   | { ok: false; status: number; error: string }
 > {
@@ -41,7 +55,7 @@ export async function requireSupabaseAuth(req: Request): Promise<
   return { ok: true, admin, userId: data.user.id, email: data.user.email };
 }
 
-export async function requireAdmin(req: Request): Promise<
+export async function requireAdmin(req: any): Promise<
   | { ok: true; admin: any; userId: string; email?: string }
   | { ok: false; status: number; error: string }
 > {
