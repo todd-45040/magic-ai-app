@@ -5,7 +5,7 @@ export type SupabaseAuthOk = {
   token: string;
   userId: string;
   // Supabase Admin client (service role). Use ONLY on server.
-  admin: ReturnType<typeof createClient>;
+  admin: any;
 };
 
 export type SupabaseAuthFail = {

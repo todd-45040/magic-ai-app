@@ -111,17 +111,15 @@ export async function getAiUsageStatus(req: any): Promise<{
     return { ok: false, status: 503, error: 'Server usage tracking is not configured.' };
   }
 
-    const auth = await requireSupabaseAuth(req);
+  const auth = await requireSupabaseAuth(req);
   if (!auth.ok) {
     // Preserve previous wording for clients.
     const msg = auth.status === 503 ? 'Server usage tracking is not configured.' : auth.error;
     return { ok: false, status: auth.status, error: msg };
   }
 
-  const { admin, userId } = auth;
-
-const identity = userId;
-
+  const userId = (auth as any).userId as string;
+  const admin = (auth as any).admin as any;
   const { data: profile, error: profileErr } = await admin
     .from('users')
     .select('id, membership, generation_count, last_reset_date')
@@ -208,14 +206,13 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
     return { ok: true, remaining: limit - (used + costUnits), limit, burstRemaining: burst.remaining, burstLimit: burst.limit };
   }
 
-    const auth = await requireSupabaseAuth(req);
+  const auth = await requireSupabaseAuth(req);
   if (!auth.ok) {
     return { ok: false, status: auth.status, error: auth.error };
   }
 
-  const { admin, userId } = auth;
-
-const identity = userId;
+  const userId = (auth as any).userId as string;
+  const admin = (auth as any).admin as any;
   const today = getTodayKeyUTC();
 
   // Anonymous / IP-based enforcement: strict caps + burst
