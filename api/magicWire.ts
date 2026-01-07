@@ -1,13 +1,8 @@
-import { requireSupabaseAuth } from './_lib/auth';
+import { requireSupabaseAuth } from './lib/auth';
 
 function json(res: any, status: number, body: any) {
-  const payload = JSON.stringify(body);
-  // Support both Vercel Node function response shapes.
-  if (typeof res.status === 'function') res.status(status);
-  else res.statusCode = status;
-  if (typeof res.setHeader === 'function') res.setHeader('Content-Type', 'application/json');
-  if (typeof res.send === 'function') res.send(payload);
-  else res.end(payload);
+  res.status(status).setHeader('Content-Type', 'application/json');
+  res.send(JSON.stringify(body));
 }
 
 function decodeHtml(s: string) {
@@ -73,9 +68,7 @@ export default async function handler(req: any, res: any) {
     const auth = await requireSupabaseAuth(req as any);
     if (!auth.ok) return json(res, auth.status, { error: auth.error });
 
-    const url = new URL(req?.url || '', 'http://localhost');
-    const countParam = url.searchParams.get('count') || '9';
-    const count = Math.max(1, Math.min(12, parseInt(String(countParam), 10) || 9));
+    const count = Math.max(1, Math.min(12, parseInt(String(req.query.count || '9'), 10) || 9));
 
     const feeds = [
       { url: 'https://www.vanishingincmagic.com/rss/', source: 'Vanishing Inc.' },

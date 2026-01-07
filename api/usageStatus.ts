@@ -1,4 +1,4 @@
-import { getAiUsageStatus } from './_lib/usage';
+import { getAiUsageStatus } from './lib/usage';
 
 export default async function handler(request: any, response: any) {
   if (request.method !== 'GET') {

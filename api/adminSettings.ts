@@ -1,14 +1,10 @@
-import { requireAdmin } from './_lib/auth';
+import { requireAdmin } from './lib/auth';
 
 type AdminAIProvider = 'gemini' | 'openai' | 'anthropic';
 
 function json(res: any, status: number, body: any) {
-  const payload = JSON.stringify(body);
-  if (typeof res.status === 'function') res.status(status);
-  else res.statusCode = status;
-  if (typeof res.setHeader === 'function') res.setHeader('Content-Type', 'application/json');
-  if (typeof res.send === 'function') res.send(payload);
-  else res.end(payload);
+  res.status(status).setHeader('Content-Type', 'application/json');
+  res.send(JSON.stringify(body));
 }
 
 export default async function handler(req: any, res: any) {

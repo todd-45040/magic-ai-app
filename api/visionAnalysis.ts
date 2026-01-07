@@ -1,6 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
-import { enforceAiUsage } from './_lib/usage';
-import { resolveProvider, callOpenAI, callAnthropic } from './_lib/providers';
+import { enforceAiUsage } from './lib/usage';
+import { resolveProvider, callOpenAI, callAnthropic } from './lib/providers';
 
 export default async function handler(request: any, response: any) {
   if (request.method !== 'POST') {
