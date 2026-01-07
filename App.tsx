@@ -266,11 +266,10 @@ function App() {
         return (
           <Auth
             onLogin={(appUser) => {
-              // Immediately enter the app shell on successful login.
-              // This avoids "stuck on login until refresh" when the Supabase session hydration
-              // or background profile bootstrap lags behind UI state.
-              setUser(appUser);
+              // Auth.tsx may complete login before our initial session sync finishes.
+              // Drop the loading gate immediately so the app can transition without a manual refresh.
               setAuthLoading(false);
+              setUser(appUser);
               refreshAllData(dispatch);
               setMode('magician');
             }}
