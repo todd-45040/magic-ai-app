@@ -1,4 +1,4 @@
-import { requireSupabaseAuth } from './_auth';
+import { requireSupabaseAuth } from '../server/auth';
 
 /**
  * Lightweight server-side AI configuration check.

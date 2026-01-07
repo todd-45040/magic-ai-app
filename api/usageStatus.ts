@@ -1,5 +1,5 @@
-import { getAiUsageStatus } from './_usage';
-import { requireSupabaseAuth } from './_auth';
+import { getAiUsageStatus } from '../server/usage';
+import { requireSupabaseAuth } from '../server/auth';
 
 export default async function handler(request: any, response: any) {
   if (request.method !== 'GET') {
