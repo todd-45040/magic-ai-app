@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { generateMagicWireFeed } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
-import { supabase } from '../supabase';
 import type { NewsArticle, NewsCategory, User } from '../types';
 import { NewspaperIcon, WandIcon, SaveIcon, ShareIcon, CheckIcon } from './icons';
 import ShareButton from './ShareButton';
@@ -11,7 +11,6 @@ const CATEGORY_STYLES: Record<NewsCategory, string> = {
   'Review': 'bg-amber-500/20 text-amber-300',
   'Community News': 'bg-blue-500/20 text-blue-300',
   'Opinion': 'bg-indigo-500/20 text-indigo-300',
-  'Historical Piece': 'bg-purple-500/20 text-purple-300',
 };
 
 function buildSearchUrl(article: NewsArticle) {
@@ -177,38 +176,18 @@ const MagicWire: React.FC<{ onIdeaSaved?: () => void; currentUser?: User }> = ({
     setError(null);
 
     try {
-      // Fetch the Magic Wire feed from the server (non-AI RSS aggregation).
-      // This avoids AI-provider failures taking down the entire page.
-      const { data } = await (supabase as any).auth.getSession();
-      const token = data?.session?.access_token;
-      const res = await fetch(`/api/magicWire?count=9`, {
-        method: 'GET',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-
-      const text = await res.text();
-      let json: any;
-      try { json = text ? JSON.parse(text) : []; } catch { json = []; }
-
-      if (!res.ok) {
-        const msg = json?.error || `Request failed (${res.status})`;
-        throw new Error(msg);
-      }
-
-      const rawItems = Array.isArray(json) ? json : [];
+      // IMPORTANT: Use ONE AI call to generate the entire feed.
+      // This is significantly more reliable than firing N parallel calls,
+      // and it avoids tripping burst limits.
+      const rawItems = await generateMagicWireFeed(9, currentUser);
       const now = Date.now();
 
-      const newArticles: NewsArticle[] = rawItems.map((raw: any, idx: number) => {
-        const ts = typeof raw?.timestamp === 'number' ? raw.timestamp : (now - idx);
+      const newArticles: NewsArticle[] = (rawItems || []).map((raw: any, idx: number) => {
+        const ts = now - idx; // keep stable ordering
         return {
-          id: raw?.id || (crypto?.randomUUID ? crypto.randomUUID() : `${ts}-${Math.random()}`),
+          id: crypto?.randomUUID ? crypto.randomUUID() : `${ts}-${Math.random()}`,
           timestamp: ts,
-          category: raw?.category || 'Community News',
-          headline: raw?.headline || 'Untitled',
-          source: raw?.source || 'Unknown',
-          sourceUrl: raw?.sourceUrl,
-          summary: raw?.summary || '',
-          body: raw?.body || raw?.summary || '',
+          ...raw,
         } as NewsArticle;
       });
 

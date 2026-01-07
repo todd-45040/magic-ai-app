@@ -1,47 +1,51 @@
-import { requireSupabaseAuth } from '../server/auth';
-import type { AIProvider } from '../server/providers';
-import { getAppSettings, setAppSettings } from '../server/settings';
+import { requireAdmin } from '../server/auth';
 
-function normProvider(v: any): AIProvider | null {
-  const s = String(v || '').toLowerCase().trim();
-  if (s === 'gemini' || s === 'openai' || s === 'anthropic') return s as AIProvider;
-  return null;
+type AdminAIProvider = 'gemini' | 'openai' | 'anthropic';
+
+function json(res: any, status: number, body: any) {
+  res.status(status).setHeader('Content-Type', 'application/json');
+  res.send(JSON.stringify(body));
 }
 
-export default async function handler(request: any, response: any) {
-  // Require a valid Supabase JWT (hard block).
-  const auth = await requireSupabaseAuth(request);
-  if (!auth.ok) {
-    return response.status(auth.status).json({ error: auth.error });
+export default async function handler(req: any, res: any) {
+  try {
+    const auth = await requireAdmin(req as any);
+    if (!auth.ok) return json(res, auth.status, { error: auth.error });
+
+    if (req.method === 'GET') {
+      const { data, error } = await auth.admin
+        .from('app_settings')
+        .select('value')
+        .eq('key', 'ai_defaults')
+        .maybeSingle();
+
+      if (error && String(error.message || '').includes('does not exist')) {
+        // Table not created yet; return safe defaults
+        return json(res, 200, { defaultProvider: 'gemini' as AdminAIProvider, note: 'app_settings table not found; using defaults.' });
+      }
+
+      const provider = (data?.value?.provider as AdminAIProvider) || 'gemini';
+      return json(res, 200, { defaultProvider: provider });
+    }
+
+    if (req.method === 'POST') {
+      const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
+      const provider: AdminAIProvider = body.defaultProvider || 'gemini';
+
+      const payload = { key: 'ai_defaults', value: { provider }, updated_at: new Date().toISOString() };
+
+      const { error } = await auth.admin
+        .from('app_settings')
+        .upsert(payload, { onConflict: 'key' });
+
+      if (error) return json(res, 500, { error: error.message || String(error) });
+
+      return json(res, 200, { ok: true });
+    }
+
+    res.setHeader('Allow', 'GET, POST');
+    return json(res, 405, { error: 'Method Not Allowed' });
+  } catch (e: any) {
+    return json(res, 500, { error: e?.message || String(e) });
   }
-
-  const admin = (auth as any).admin as any;
-  const userId = (auth as any).userId as string;
-
-  // Enforce admin-only.
-  const { data: me, error: meErr } = await admin
-    .from('users')
-    .select('id, is_admin')
-    .eq('id', userId)
-    .maybeSingle();
-
-  if (meErr) console.error('AdminSettings check error:', meErr);
-  if (!me?.is_admin) {
-    return response.status(403).json({ error: 'Admin access required.' });
-  }
-
-  if (request.method === 'GET') {
-    const settings = await getAppSettings(admin);
-    return response.status(200).json({ settings });
-  }
-
-  if (request.method === 'POST') {
-    const next = normProvider(request.body?.aiProvider);
-    if (!next) return response.status(400).json({ error: 'Invalid aiProvider.' });
-
-    const settings = await setAppSettings(admin, { aiProvider: next });
-    return response.status(200).json({ settings });
-  }
-
-  return response.status(405).json({ error: 'Method not allowed' });
 }

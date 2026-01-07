@@ -6,27 +6,10 @@ function normProvider(v: any): AIProvider | null {
   return null;
 }
 
-/**
- * Resolve the AI provider for this request.
- *
- * IMPORTANT: End-users should NOT be able to override the provider.
- * We intentionally ignore any X-AI-Provider header unless your server
- * explicitly opts-in.
- */
-export function resolveProvider(_req: any, opts?: { allowHeader?: boolean; defaultProvider?: AIProvider }): AIProvider {
-  const allowHeader = !!opts?.allowHeader;
-  if (allowHeader) {
-    // Vercel / Node lowercases header keys
-    const h = _req?.headers || {};
-    const fromHeader = normProvider(h['x-ai-provider'] || h['X-AI-Provider']);
-    if (fromHeader) return fromHeader;
-  }
-
+export function resolveProvider(_req: any): AIProvider {
+  // Provider is controlled by the administrator (env/app settings). End-users cannot override.
   const fromEnv = normProvider(process.env.AI_PROVIDER);
-  if (fromEnv) return fromEnv;
-
-  if (opts?.defaultProvider) return opts.defaultProvider;
-  return 'gemini';
+  return fromEnv || 'gemini';
 }
 
 function partsToText(contents: any): string {

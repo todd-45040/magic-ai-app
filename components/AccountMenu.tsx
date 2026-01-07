@@ -3,97 +3,70 @@ import type { User } from '../types';
 import { DatabaseIcon } from './icons';
 import DataManager from './DataManager';
 import { useAppDispatch, refreshAllData } from '../store';
-import AdminSettings from './AdminSettings';
+import AdminSettingsModal from './AdminSettingsModal';
 
 interface AccountMenuProps {
   user: User;
   onLogout: () => void;
 }
 
-const AccountMenu: React.FC<AccountMenuProps> = ({ user, onLogout }) => {
+export default function AccountMenu({ user, onLogout }: AccountMenuProps) {
   const dispatch = useAppDispatch();
-  const [isDataManagerOpen, setIsDataManagerOpen] = useState(false);
-  const [showAdminSettings, setShowAdminSettings] = useState(false);
+  const [openDataManager, setOpenDataManager] = useState(false);
+  const [openAdmin, setOpenAdmin] = useState(false);
 
-  const getMembershipDisplay = () => {
-    if (user.membership === 'trial' && user.trialEndDate) {
-      const daysLeft = Math.ceil((user.trialEndDate - Date.now()) / (1000 * 60 * 60 * 24));
-      if (daysLeft > 0) return `Trial (${daysLeft} day${daysLeft !== 1 ? 's' : ''} left)`;
-      return 'Trial Expired';
-    }
-    return `${user.membership} Member`;
-  };
-
-  const getMembershipClass = () => {
-    switch (user.membership) {
-      case 'professional':
-        return 'text-yellow-300';
-      case 'hobbyist':
-        return 'text-purple-300';
-      case 'amateur':
-        return 'text-sky-300';
-      case 'trial':
-        return 'text-green-300';
-      default:
-        return 'text-slate-400';
-    }
-  };
-
-  const handleDataRestored = () => {
-    refreshAllData(dispatch);
-  };
+  const isAdmin = !!user.isAdmin;
 
   return (
-    <div className="flex items-center gap-4">
-      {isDataManagerOpen && (
-        <DataManager
-          onClose={() => setIsDataManagerOpen(false)}
-          onDataRestored={handleDataRestored}
-        />
-      )}
+    <>
+      <div style={{ padding: 12 }}>
+        <div style={{ fontWeight: 700, marginBottom: 6 }}>{user.email}</div>
+        <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 12 }}>
+          Membership: {user.membership}
+        </div>
 
-      <div className="text-right hidden sm:block">
-        <p className="text-sm font-semibold text-white truncate max-w-[160px]">{user.email}</p>
-        <p className={`text-xs font-bold uppercase tracking-wider ${getMembershipClass()}`}>
-          {getMembershipDisplay()}
-        </p>
-      </div>
-
-      <div className="flex items-center gap-2">
-        {showAdminSettings && <AdminSettings onClose={() => setShowAdminSettings(false)} />}
-
-        {user.isAdmin ? (
+        <div className="menu-item" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button
-            onClick={() => setShowAdminSettings(true)}
-            className="px-3 py-2 text-sm bg-slate-800 hover:bg-slate-700 rounded-md text-slate-200 transition-colors"
-            title="Administrator Settings"
-            type="button"
+            onClick={() => setOpenDataManager(true)}
+            className="btn"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+            aria-label="Manage Data"
           >
-            Admin
+            <DatabaseIcon className="w-4 h-4" />
+            Data
           </button>
-        ) : null}
 
-        <button
-          onClick={() => setIsDataManagerOpen(true)}
-          className="px-3 py-2 text-sm bg-slate-800 hover:bg-slate-700 rounded-md text-slate-200 transition-colors flex items-center gap-2"
-          title="Import/Export Data"
-          type="button"
-        >
-          <DatabaseIcon className="w-4 h-4" />
-          <span className="hidden sm:inline">Data</span>
-        </button>
+          {isAdmin && (
+            <button
+              onClick={() => setOpenAdmin(true)}
+              className="btn"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+              aria-label="Administrator Settings"
+            >
+              Admin
+            </button>
+          )}
 
-        <button
-          onClick={onLogout}
-          className="px-4 py-2 text-sm bg-slate-800 hover:bg-slate-700 rounded-md text-slate-300 hover:text-red-300 transition-colors"
-          title="Logout"
-          type="button"
-        >
-          Logout
-        </button>
+          <button
+            onClick={() => dispatch(refreshAllData())}
+            className="btn"
+            aria-label="Refresh data"
+          >
+            Refresh
+          </button>
+
+          <button onClick={onLogout} className="btn" aria-label="Logout">
+            Logout
+          </button>
+        </div>
+
+        <div style={{ marginTop: 10, fontSize: 12, opacity: 0.75 }}>
+          AI Provider is managed by the administrator. Default: Google Gemini.
+        </div>
       </div>
-    </div>
-  );
-};
 
-export default AccountMenu;
+      {openDataManager && <DataManager onClose={() => setOpenDataManager(false)} />}
+      <AdminSettingsModal open={openAdmin} onClose={() => setOpenAdmin(false)} />
+    </>
+  );
+}

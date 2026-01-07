@@ -263,19 +263,7 @@ function App() {
       case 'audience':
         return <AudienceMode onBack={() => setMode('selection')} />;
       case 'auth':
-        return (
-          <Auth
-            onLogin={(appUser) => {
-              // Auth.tsx may complete login before our initial session sync finishes.
-              // Drop the loading gate immediately so the app can transition without a manual refresh.
-              setAuthLoading(false);
-              setUser(appUser);
-              refreshAllData(dispatch);
-              setMode('magician');
-            }}
-            onBack={() => setMode('selection')}
-          />
-        );
+        return <Auth onLogin={(appUser) => { setUser(appUser); refreshAllData(dispatch); setMode('magician'); }} onBack={() => setMode('selection')} />;
       case 'selection':
       default:
         return <ModeSelector onSelectMode={handleSelectMode} />;

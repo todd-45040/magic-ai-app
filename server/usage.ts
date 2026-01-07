@@ -1,4 +1,5 @@
-import { requireSupabaseAuth } from './auth';
+import { createClient } from '@supabase/supabase-js';
+
 // Canonical membership tiers used for usage enforcement.
 // Legacy tiers are accepted and normalized server-side.
 type Membership = 'free' | 'trial' | 'performer' | 'professional' | 'expired' | 'amateur' | 'semi-pro';
@@ -62,6 +63,12 @@ function getMinuteKeyUTC(d = new Date()): string {
   return `${y}-${m}-${day}T${hh}:${mm}`;
 }
 
+function parseBearer(req: any): string | null {
+  const h = req?.headers?.authorization || req?.headers?.Authorization;
+  if (!h || typeof h !== 'string') return null;
+  const m = h.match(/^Bearer\s+(.+)$/i);
+  return m ? m[1].trim() : null;
+}
 
 function ipKey(req: any): string {
   const xff = req?.headers?.['x-forwarded-for'] || req?.headers?.['X-Forwarded-For'];
@@ -103,27 +110,46 @@ export async function getAiUsageStatus(req: any): Promise<{
   remaining?: number;
   burstLimit?: number;
   burstRemaining?: number;
-  isAdmin?: boolean;
 }> {
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const token = parseBearer(req);
 
   if (!supabaseUrl || !serviceKey) {
     return { ok: false, status: 503, error: 'Server usage tracking is not configured.' };
   }
 
-  const auth = await requireSupabaseAuth(req);
-  if (!auth.ok) {
-    // Preserve previous wording for clients.
-    const msg = auth.status === 503 ? 'Server usage tracking is not configured.' : auth.error;
-    return { ok: false, status: auth.status, error: msg };
+  const admin = createClient(supabaseUrl, serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+
+  let userId: string | null = null;
+  if (token && token !== 'guest') {
+    const { data, error } = await admin.auth.getUser(token);
+    if (!error && data?.user?.id) userId = data.user.id;
   }
 
-  const userId = (auth as any).userId as string;
-  const admin = (auth as any).admin as any;
+  const identity = userId || ipKey(req);
+
+  // For anonymous users, show strict caps (best-effort)
+  if (!userId) {
+    const membership: Membership = 'free';
+    const limit = 15;
+    const used = 0;
+    const remaining = limit;
+    const burstLimit = 8;
+    // Compute burst remaining from current in-memory counter (best-effort)
+    const minuteKey = getMinuteKeyUTC();
+    const key = `AI_BURST:${minuteKey}:${identity}`;
+    const map = getRateMap();
+    const usedBurst = map.get(key) || 0;
+    const burstRemaining = Math.max(0, burstLimit - usedBurst);
+    return { ok: true, membership, used, limit, remaining, burstLimit, burstRemaining };
+  }
+
   const { data: profile, error: profileErr } = await admin
     .from('users')
-    .select('id, membership, generation_count, last_reset_date, is_admin')
+    .select('id, membership, generation_count, last_reset_date')
     .eq('id', userId)
     .maybeSingle();
 
@@ -132,13 +158,11 @@ export async function getAiUsageStatus(req: any): Promise<{
   let membership: Membership = 'trial';
   let generationCount = 0;
   let lastResetDateISO = new Date().toISOString();
-  let isAdmin = false;
 
   if (profile) {
     membership = (profile.membership as Membership) || 'trial';
     generationCount = profile.generation_count ?? 0;
     lastResetDateISO = profile.last_reset_date ? new Date(profile.last_reset_date).toISOString() : lastResetDateISO;
-    isAdmin = !!profile.is_admin;
   } else {
     // If no profile exists yet, treat as trial until created
     membership = 'trial';
@@ -164,7 +188,7 @@ export async function getAiUsageStatus(req: any): Promise<{
   const usedBurst = map.get(key) || 0;
   const burstRemaining = Math.max(0, burstLimit - usedBurst);
 
-  return { ok: true, membership: tier as any, used: generationCount, limit, remaining, burstLimit, burstRemaining, isAdmin };
+  return { ok: true, membership: tier as any, used: generationCount, limit, remaining, burstLimit, burstRemaining };
 }
 
 export async function enforceAiUsage(req: any, costUnits: number): Promise<{
@@ -176,10 +200,11 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
   membership?: Membership;
   burstRemaining?: number;
   burstLimit?: number;
-  isAdmin?: boolean;
 }> {
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  const token = parseBearer(req);
 
   // If server isn't configured for Supabase admin, fall back to a very small per-IP cap (fails safe).
   if (!supabaseUrl || !serviceKey) {
@@ -210,20 +235,45 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
     return { ok: true, remaining: limit - (used + costUnits), limit, burstRemaining: burst.remaining, burstLimit: burst.limit };
   }
 
-  const auth = await requireSupabaseAuth(req);
-  if (!auth.ok) {
-    return { ok: false, status: auth.status, error: auth.error };
+  const admin = createClient(supabaseUrl, serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+
+  // Determine user id (preferred) or fall back to IP-based identity
+  let userId: string | null = null;
+  if (token && token !== 'guest') {
+    const { data, error } = await admin.auth.getUser(token);
+    if (!error && data?.user?.id) userId = data.user.id;
   }
 
-  const userId = (auth as any).userId as string;
-  const admin = (auth as any).admin as any;
+  const identity = userId || ipKey(req);
   const today = getTodayKeyUTC();
 
+  // Anonymous / IP-based enforcement: strict caps + burst
+  if (!userId) {
+    const burst = enforceBurst(identity, 8);
+    if (!burst.ok) {
+      return { ok: false, status: 429, error: 'Rate limit: too many requests per minute.', burstRemaining: 0, burstLimit: burst.limit };
+    }
+
+    const key = `anon:${today}:${identity}`;
+    const map = getRateMap();
+
+    const used = map.get(key) || 0;
+    const limit = 15;
+    const remaining = Math.max(0, limit - used);
+
+    if (remaining < costUnits) {
+      return { ok: false, status: 429, error: 'AI usage limit reached for today.', remaining, limit, burstRemaining: burst.remaining, burstLimit: burst.limit };
+    }
+    map.set(key, used + costUnits);
+    return { ok: true, remaining: limit - (used + costUnits), limit, burstRemaining: burst.remaining, burstLimit: burst.limit };
+  }
 
   // Authed user: enforce against public.users table
   const { data: profile, error: profileErr } = await admin
     .from('users')
-    .select('id, membership, generation_count, last_reset_date, is_admin')
+    .select('id, membership, generation_count, last_reset_date')
     .eq('id', userId)
     .maybeSingle();
 
@@ -231,7 +281,6 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
   let membership: Membership = 'trial';
   let generationCount = 0;
   let lastResetDateISO = new Date().toISOString();
-  let isAdmin = false;
 
   if (profileErr) {
     console.error('Usage lookup error:', profileErr);
@@ -241,7 +290,6 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
     membership = (profile.membership as Membership) || 'trial';
     generationCount = profile.generation_count ?? 0;
     lastResetDateISO = profile.last_reset_date ? new Date(profile.last_reset_date).toISOString() : lastResetDateISO;
-    isAdmin = !!profile.is_admin;
   } else {
     const { error: upsertErr } = await admin.from('users').upsert({
       id: userId,
@@ -274,7 +322,6 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
       status: 429,
       error: 'Rate limit: too many requests per minute.',
       membership,
-      isAdmin,
       burstRemaining: 0,
       burstLimit,
     };
@@ -291,7 +338,6 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
       remaining,
       limit,
       membership: tier as any,
-      isAdmin,
       burstRemaining: burst.remaining,
       burstLimit,
     };
@@ -315,7 +361,6 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
     remaining: Math.max(0, limit - newCount),
     limit,
     membership: tier as any,
-    isAdmin,
     burstRemaining: burst.remaining,
     burstLimit,
   };

@@ -23,5 +23,10 @@
         }
       ]
     }
-  ]
+  ],
+  "functions": {
+    "api/**/*.ts": {
+      "includeFiles": "server/**"
+    }
+  }
 }

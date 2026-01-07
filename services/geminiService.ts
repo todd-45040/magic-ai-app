@@ -1,6 +1,7 @@
 import { Type, Modality } from "@google/genai";
 import { supabase } from '../supabase';
 import type { ChatMessage, TrickIdentificationResult, User } from '../types';
+import { getAiProvider } from './aiProviderService';
 
 // Keep this type export for components that reference live sessions.
 // Live sessions are currently not enabled through the serverless proxy.
@@ -39,7 +40,7 @@ async function postJson<T>(url: string, body: any, currentUser?: User): Promise<
     headers: {
       'Content-Type': 'application/json',
       'Authorization': await getBearerToken(),
-      // AI Provider is controlled server-side (Admin only).
+      'X-AI-Provider': getAiProvider(),
     },
     body: JSON.stringify(body),
   });
@@ -117,7 +118,7 @@ export const generateResponse = async (
   })) || [];
 
   const body: GeminiGenerateBody = {
-    model: 'gemini-1.5-pro',
+    model: 'gemini-3-pro-preview',
     contents: [...apiHistory, { role: 'user', parts: [{ text: prompt }] }],
     config: { systemInstruction },
   };
@@ -138,7 +139,7 @@ export const generateStructuredResponse = async (
   currentUser?: User
 ): Promise<any> => {
   const body: GeminiGenerateBody = {
-    model: 'gemini-1.5-flash',
+    model: 'gemini-3-flash-preview',
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
     config: {
       systemInstruction,
@@ -179,7 +180,7 @@ export const identifyTrickFromImage = async (
   };
 
   const body: GeminiGenerateBody = {
-    model: 'gemini-1.5-flash',
+    model: 'gemini-3-flash-preview',
     contents: {
       parts: [
         { text: prompt },
@@ -311,46 +312,23 @@ export const generateNewsArticle = async (currentUser?: User): Promise<any> => {
  * Generate multiple fictional news articles for the Magic Wire in ONE server call.
  * This is much more reliable than firing many parallel requests (burst limits / timeouts).
  */
-export const generateMagicWireFeed = async (
-  count: number,
-  currentUser?: User
-): Promise<any[]> => {
+export const generateMagicWireFeed = async (count: number): Promise<any[]> => {
   const safeCount = Math.max(1, Math.min(12, Math.floor(count || 1)));
-  const prompt = `Generate ${safeCount} DISTINCT magic news articles for the 'Magic Wire' feed.
 
-Return ONLY a JSON array of ${safeCount} items.
+  // Magic Wire is now sourced from server-side RSS aggregation (no AI dependency).
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new Error('Not authenticated');
 
-Each item must include: category, headline, source, summary, body.
-If you reference a real public source, include its URL in sourceUrl; otherwise omit sourceUrl.
+  const res = await fetch(`/api/magicWire?count=${safeCount}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
 
-Make the headlines varied (new releases, interviews, reviews, community news, opinions). Keep it safe and family-friendly.`;
+  const text = await res.text();
+  if (!res.ok) throw new Error(text || `Request failed (${res.status})`);
 
-  const itemSchema = {
-    type: Type.OBJECT,
-    properties: {
-      category: { type: Type.STRING },
-      headline: { type: Type.STRING },
-      source: { type: Type.STRING },
-      sourceUrl: { type: Type.STRING },
-      summary: { type: Type.STRING },
-      body: { type: Type.STRING },
-    },
-    required: ['category', 'headline', 'source', 'summary', 'body'],
-  };
-
-  const responseSchema = {
-    type: Type.ARRAY,
-    items: itemSchema,
-  };
-
-  const arr = await generateStructuredResponse(
-    prompt,
-    'You are the Magic Wire editor. Write engaging, plausible-sounding magic industry news. Keep it safe and family-friendly.',
-    responseSchema,
-    currentUser
-  );
-
-  return Array.isArray(arr) ? arr : [];
+  return JSON.parse(text);
 };
+
 
 export { Modality, Type };
