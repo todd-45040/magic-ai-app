@@ -1,11 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
-
-function parseBearer(req: any): string | null {
-  const h = req?.headers?.authorization || req?.headers?.Authorization;
-  if (!h || typeof h !== 'string') return null;
-  const m = h.match(/^Bearer\s+(.+)$/i);
-  return m ? m[1].trim() : null;
-}
+import { requireSupabaseAuth } from './_auth';
 
 /**
  * Lightweight server-side AI configuration check.
@@ -19,27 +12,12 @@ export default async function handler(request: any, response: any) {
   }
 
   // Require a valid Supabase JWT (hard block).
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const token = parseBearer(request);
-
-  if (!supabaseUrl || !serviceKey) {
-    return response.status(503).json({ error: 'Server auth is not configured.' });
-  }
-  if (!token || token === 'guest') {
-    return response.status(401).json({ error: 'Unauthorized' });
+  const auth = await requireSupabaseAuth(request);
+  if (!auth.ok) {
+    return response.status(auth.status).json({ error: auth.error });
   }
 
-  const admin = createClient(supabaseUrl, serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-
-  const { data, error } = await admin.auth.getUser(token);
-  if (error || !data?.user?.id) {
-    return response.status(401).json({ error: 'Unauthorized' });
-  }
-
-  const hasApiKey = !!process.env.API_KEY;
+const hasApiKey = !!process.env.API_KEY;
   const hasSupabaseUrl = !!process.env.SUPABASE_URL;
   const hasServiceRole = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 
