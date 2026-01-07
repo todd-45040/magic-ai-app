@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
-  <rect width="1200" height="630" fill="#0f172a"/>
-  <g transform="translate(600, 280) scale(18) translate(-12, -12)">
-    <path fill="#8b5cf6" d="M9.5,3A1.5,1.5 0 0,1 11,4.5V10A1.5,1.5 0 0,1 9.5,11.5A1.5,1.5 0 0,1 8,10V4.5A1.5,1.5 0 0,1 9.5,3M14.5,3A1.5,1.5 0 0,1 16,4.5V10A1.5,1.5 0 0,1 14.5,11.5A1.5,1.5 0 0,1 13,10V4.5A1.5,1.5 0 0,1 14.5,3M12,13C8.69,13 6,15.69 6,19V21H18V19C18,15.69 15.31,13 12,13Z" />
-  </g>
-  <text x="600" y="530" font-family="serif" font-size="70" font-weight="bold" fill="#fcd34d" text-anchor="middle" letter-spacing="4" style="font-family: 'Cinzel', serif;">MAGICIANS' AI WIZARD</text>
-</svg>

@@ -123,29 +123,19 @@ export async function getAiUsageStatus(req: any): Promise<{
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  let userId: string | null = null;
-  if (token && token !== 'guest') {
-    const { data, error } = await admin.auth.getUser(token);
-    if (!error && data?.user?.id) userId = data.user.id;
+  // Require a valid Supabase JWT for all API usage status requests.
+  if (!token || token === 'guest') {
+    return { ok: false, status: 401, error: 'Unauthorized' };
   }
 
-  const identity = userId || ipKey(req);
-
-  // For anonymous users, show strict caps (best-effort)
-  if (!userId) {
-    const membership: Membership = 'free';
-    const limit = 15;
-    const used = 0;
-    const remaining = limit;
-    const burstLimit = 8;
-    // Compute burst remaining from current in-memory counter (best-effort)
-    const minuteKey = getMinuteKeyUTC();
-    const key = `AI_BURST:${minuteKey}:${identity}`;
-    const map = getRateMap();
-    const usedBurst = map.get(key) || 0;
-    const burstRemaining = Math.max(0, burstLimit - usedBurst);
-    return { ok: true, membership, used, limit, remaining, burstLimit, burstRemaining };
+  const { data: authData, error: authErr } = await admin.auth.getUser(token);
+  if (authErr || !authData?.user?.id) {
+    return { ok: false, status: 401, error: 'Unauthorized' };
   }
+
+  const userId = authData.user.id;
+
+  const identity = userId;
 
   const { data: profile, error: profileErr } = await admin
     .from('users')
@@ -240,13 +230,19 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
   });
 
   // Determine user id (preferred) or fall back to IP-based identity
-  let userId: string | null = null;
-  if (token && token !== 'guest') {
-    const { data, error } = await admin.auth.getUser(token);
-    if (!error && data?.user?.id) userId = data.user.id;
+  // Require a valid Supabase JWT for all AI API calls.
+  if (!token || token === 'guest') {
+    return { ok: false, status: 401, error: 'Unauthorized' };
   }
 
-  const identity = userId || ipKey(req);
+  const { data: authData, error: authErr } = await admin.auth.getUser(token);
+  if (authErr || !authData?.user?.id) {
+    return { ok: false, status: 401, error: 'Unauthorized' };
+  }
+
+  const userId = authData.user.id;
+
+  const identity = userId;
   const today = getTodayKeyUTC();
 
   // Anonymous / IP-based enforcement: strict caps + burst

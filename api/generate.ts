@@ -1,18 +1,10 @@
 import { GoogleGenAI } from '@google/genai';
 import { enforceAiUsage } from './_usage.js';
-
-// In a real production app, you would use firebase-admin to verify the Bearer token
-// and check the user's membership tier in Firestore before proceeding.
+import { resolveProvider, callOpenAI, callAnthropic } from './_providers.js';
 
 export default async function handler(request: any, response: any) {
   if (request.method !== 'POST') {
     return response.status(405).json({ error: 'Method not allowed' });
-  }
-
-  const apiKey = process.env.API_KEY;
-
-  if (!apiKey) {
-    return response.status(500).json({ error: 'API_KEY is not configured on the server.' });
   }
 
   // Basic Auth Check (Simulated)
@@ -26,49 +18,59 @@ export default async function handler(request: any, response: any) {
   if (!usage.ok) {
     return response
       .status(usage.status || 429)
-            .json({
+      .json({
         error: usage.error || 'AI usage limit reached.',
         remaining: usage.remaining,
         limit: usage.limit,
         burstRemaining: usage.burstRemaining,
         burstLimit: usage.burstLimit,
-      });}
-
-
+      });
+  }
 
   try {
-    const ai = new GoogleGenAI({ apiKey });
-    const { model, contents, config } = request.body;
+    const provider = resolveProvider(request);
+    const { model, contents, config } = request.body || {};
 
-    // Call the Gemini model
-    // Note: Use 'gemini-3-pro-preview' for complex magician tasks as per guidelines
-    const result = await ai.models.generateContent({
-      model: model || 'gemini-3-pro-preview',
-      contents,
-      config: {
-        ...config,
-        // Enforce safety settings or specific configs here if needed
+    let result: any;
+
+    if (provider === 'openai') {
+      result = await callOpenAI({ model, contents, config });
+    } else if (provider === 'anthropic') {
+      result = await callAnthropic({ model, contents, config });
+    } else {
+      const apiKey = process.env.API_KEY;
+      if (!apiKey) {
+        return response.status(500).json({ error: 'API_KEY is not configured on the server.' });
       }
-    });
 
-    // Return the response candidate
+      const ai = new GoogleGenAI({ apiKey });
+      result = await ai.models.generateContent({
+        model: model || 'gemini-3-pro-preview',
+        contents,
+        config: {
+          ...config,
+        },
+      });
+    }
+
+    // Return usage headers for the Usage Meter UI (best-effort)
     response.setHeader('X-AI-Remaining', String(usage.remaining ?? ''));
     response.setHeader('X-AI-Limit', String(usage.limit ?? ''));
     response.setHeader('X-AI-Membership', String(usage.membership ?? ''));
     response.setHeader('X-AI-Burst-Remaining', String(usage.burstRemaining ?? ''));
     response.setHeader('X-AI-Burst-Limit', String(usage.burstLimit ?? ''));
-    return response.status(200).json(result);
+    response.setHeader('X-AI-Provider-Used', provider);
 
+    return response.status(200).json(result);
   } catch (error: any) {
-    console.error('Gemini API Error:', error);
-    
-    // Check for specific error types to handle tier limits or safety blocks
-    if (error.message?.includes('finishReason: SAFETY')) {
-        return response.status(400).json({ error: 'The request was blocked by safety filters.' });
+    console.error('AI Provider Error:', error);
+
+    if (error?.message?.includes('finishReason: SAFETY')) {
+      return response.status(400).json({ error: 'The request was blocked by safety filters.' });
     }
 
-    return response.status(500).json({ 
-      error: 'An internal error occurred while processing your request.' 
+    return response.status(500).json({
+      error: error?.message || 'An internal error occurred while processing your request.',
     });
   }
 }
