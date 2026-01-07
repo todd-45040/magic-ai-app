@@ -14,24 +14,18 @@ export function getSupabaseAdmin() {
   return createClient(url, serviceKey, { auth: { persistSession: false } }) as any;
 }
 
-// Supports both Web Fetch Request (headers.get) and Node/Vercel req (plain object headers)
 export function getBearerToken(req: any): string | null {
-  const headersObj = (req && (req.headers as any)) || undefined;
+  // Supports both Fetch Request (headers.get) and Node/Next (headers as plain object)
+  const headers: any = req?.headers;
+  const h =
+    typeof headers?.get === 'function'
+      ? (headers.get('authorization') || headers.get('Authorization'))
+      : (headers?.authorization || headers?.Authorization || headers?.AUTHORIZATION);
 
-  // Web Fetch Request style
-  const hWeb = headersObj && typeof headersObj.get === 'function'
-    ? (headersObj.get('authorization') || headersObj.get('Authorization'))
-    : null;
-
-  // Node/Vercel style: req.headers is a plain object
-  const hNode = !hWeb && headersObj && typeof headersObj === 'object'
-    ? (headersObj['authorization'] || headersObj['Authorization'])
-    : null;
-
-  const h = (hWeb || hNode || '').toString();
-  if (!h) return null;
-  const m = /^Bearer\s+(.+)$/i.exec(h.trim());
-  return m ? m[1] : null;
+  if (!h || typeof h !== 'string') return null;
+  const s = h.trim();
+  if (!s.toLowerCase().startsWith('bearer ')) return null;
+  return s.slice(7).trim();
 }
 
 export async function requireSupabaseAuth(req: any): Promise<
@@ -54,7 +48,7 @@ export async function requireSupabaseAuth(req: any): Promise<
   return { ok: true, admin, userId: data.user.id, email: data.user.email };
 }
 
-export async function requireAdmin(req: Request): Promise<
+export async function requireAdmin(req: any): Promise<
   | { ok: true; admin: any; userId: string; email?: string }
   | { ok: false; status: number; error: string }
 > {

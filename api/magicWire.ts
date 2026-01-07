@@ -1,9 +1,23 @@
 import { requireSupabaseAuth } from './lib/auth';
 
 function sendJson(res: any, status: number, body: any) {
-  res.status(status);
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.send(JSON.stringify(body));
+  // Works with Next/Vercel response objects AND plain Node responses
+  try {
+    if (typeof res?.status === 'function' && typeof res?.json === 'function') {
+      return res.status(status).json(body);
+    }
+  } catch {}
+  try {
+    if (typeof res?.status === 'function' && typeof res?.send === 'function') {
+      res.status(status);
+      try { res.setHeader?.('Content-Type', 'application/json; charset=utf-8'); } catch {}
+      return res.send(JSON.stringify(body));
+    }
+  } catch {}
+  // Fallback: Node ServerResponse
+  res.statusCode = status;
+  try { res.setHeader?.('Content-Type', 'application/json; charset=utf-8'); } catch {}
+  res.end(JSON.stringify(body));
 }
 
 function decodeHtml(s: string) {
@@ -20,14 +34,12 @@ function stripTags(s: string) {
 }
 
 function extractTag(block: string, tag: string): string | null {
-  // Use double-escaped sequences so the RegExp receives \s and \S correctly.
   const re = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i');
   const m = re.exec(block);
   return m ? m[1].trim() : null;
 }
 
 async function fetchRss(url: string, source: string) {
-  // Prevent a single slow/broken feed from causing Vercel function timeouts
   const controller = new AbortController();
   const timeoutMs = 6500;
   const t = setTimeout(() => controller.abort(), timeoutMs);
@@ -37,25 +49,25 @@ async function fetchRss(url: string, source: string) {
       signal: controller.signal,
       headers: {
         'User-Agent': 'MagicAIWizard/1.0 (+https://www.magicaiwizard.com)',
-        Accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',
+        'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',
       },
     } as any);
 
     if (!r.ok) return [];
+
     const xml = await r.text();
 
-    // Prefer <item> (RSS) then <entry> (Atom)
-    const items = xml.match(/<item[\s\S]*?<\/item>/gi) || [];
-    const entries = xml.match(/<entry[\s\S]*?<\/entry>/gi) || [];
+    const items = xml.match(/<item[\\s\\S]*?<\\/item>/gi) || [];
+    const entries = xml.match(/<entry[\\s\\S]*?<\\/entry>/gi) || [];
     const blocks = items.length ? items : entries;
 
     return blocks.slice(0, 15).map((b) => {
-      const title = decodeHtml(stripTags(extractTag(b, 'title') || ''));
-      let link = extractTag(b, 'link');
+      const title = decodeHtml(stripTags(extractTag(b, 'title') || '')) || 'Magic News';
 
-      // Atom often uses <link href="..."/>
+      let link = extractTag(b, 'link');
+      // Atom <link href="..."/>
       if (!link) {
-        const m = b.match(/<link[^>]*href=["']([^"']+)["'][^>]*\/>/i);
+        const m = b.match(/<link[^>]*href=["']([^"']+)["'][^>]*\\/?>/i);
         if (m) link = m[1];
       } else {
         link = stripTags(link);
@@ -71,14 +83,12 @@ async function fetchRss(url: string, source: string) {
         '';
 
       const summary = desc
-        ? desc.length > 180
-          ? desc.slice(0, 177) + '...'
-          : desc
+        ? (desc.length > 180 ? desc.slice(0, 177) + '...' : desc)
         : 'Tap to read more.';
 
       return {
         category: 'Community News',
-        headline: title || 'Magic News',
+        headline: title,
         source,
         sourceUrl: link || undefined,
         summary,
@@ -87,6 +97,7 @@ async function fetchRss(url: string, source: string) {
       };
     });
   } catch {
+    // Fail soft for this feed only
     return [];
   } finally {
     clearTimeout(t);
@@ -95,15 +106,15 @@ async function fetchRss(url: string, source: string) {
 
 export default async function handler(req: any, res: any) {
   try {
-    if (req.method && req.method !== 'GET') {
+    if (req?.method && req.method !== 'GET') {
       return sendJson(res, 405, { error: 'Method not allowed' });
     }
 
     const auth = await requireSupabaseAuth(req);
     if (!auth.ok) return sendJson(res, auth.status, { error: auth.error });
 
-    const rawCount = String(req?.query?.count ?? '9');
-    const count = Math.max(1, Math.min(12, parseInt(rawCount, 10) || 9));
+    const countRaw = req?.query?.count ?? '9';
+    const count = Math.max(1, Math.min(12, parseInt(String(countRaw), 10) || 9));
 
     const feeds = [
       { url: 'https://www.vanishingincmagic.com/rss/', source: 'Vanishing Inc.' },
@@ -111,22 +122,18 @@ export default async function handler(req: any, res: any) {
       { url: 'https://www.magicshop.co.uk/feed/', source: 'Magic Shop UK' },
     ];
 
-    const results = await Promise.allSettled(
-      feeds.map((f) => fetchRss(f.url, f.source))
-    );
+    const results = await Promise.allSettled(feeds.map((f) => fetchRss(f.url, f.source)));
 
     const merged: any[] = [];
     for (const r of results) {
       if (r.status === 'fulfilled' && Array.isArray(r.value)) merged.push(...r.value);
     }
 
-    // If all feeds fail, fail soft (return empty) rather than 500
     if (!merged.length) return sendJson(res, 200, []);
 
-    // Basic de-dupe by headline
     const seen = new Set<string>();
     const deduped = merged.filter((a) => {
-      const k = (a.headline || '').toLowerCase();
+      const k = (a?.headline || '').toLowerCase().trim();
       if (!k || seen.has(k)) return false;
       seen.add(k);
       return true;
@@ -134,7 +141,6 @@ export default async function handler(req: any, res: any) {
 
     return sendJson(res, 200, deduped.slice(0, count));
   } catch (e: any) {
-    // Return JSON so UI can show meaningful error
     return sendJson(res, 500, { error: e?.message || String(e) });
   }
 }
