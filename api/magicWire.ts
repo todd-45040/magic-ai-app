@@ -1,4 +1,4 @@
-import { requireSupabaseAuth } from './_auth';
+import { requireSupabaseAuth } from './lib/auth';
 
 function json(res: any, status: number, body: any) {
   res.status(status).setHeader('Content-Type', 'application/json');
@@ -25,7 +25,7 @@ function extractTag(block: string, tag: string): string | null {
 }
 
 async function fetchRss(url: string, source: string) {
-  // IMPORTANT: prevent Vercel function timeouts on slow RSS servers
+  // Prevent a single slow/broken feed from causing Vercel function timeouts
   const controller = new AbortController();
   const timeoutMs = 6500;
   const t = setTimeout(() => controller.abort(), timeoutMs);
@@ -40,43 +40,42 @@ async function fetchRss(url: string, source: string) {
     } as any);
 
     if (!r.ok) return [];
-
     const xml = await r.text();
 
-    // Prefer <item> (RSS) then <entry> (Atom)
-    const items = xml.match(/<item[\s\S]*?<\/item>/gi) || [];
-    const entries = xml.match(/<entry[\s\S]*?<\/entry>/gi) || [];
-    const blocks = items.length ? items : entries;
+  // Prefer <item> (RSS) then <entry> (Atom)
+  const items = xml.match(/<item[\s\S]*?<\/item>/gi) || [];
+  const entries = xml.match(/<entry[\s\S]*?<\/entry>/gi) || [];
+
+  const blocks = items.length ? items : entries;
 
     return blocks.slice(0, 15).map((b) => {
-      const title = decodeHtml(stripTags(extractTag(b, 'title') || ''));
-      let link = extractTag(b, 'link');
+    const title = decodeHtml(stripTags(extractTag(b, 'title') || ''));
+    let link = extractTag(b, 'link');
 
-      // Atom often uses <link href="..."/>
-      if (!link) {
-        const m = b.match(/<link[^>]*href=["']([^"']+)["'][^>]*\/>/i);
-        if (m) link = m[1];
-      } else {
-        link = stripTags(link);
-      }
+    // Atom often uses <link href="..."/>
+    if (!link) {
+      const m = b.match(/<link[^>]*href=["']([^"']+)["'][^>]*\/>/i);
+      if (m) link = m[1];
+    } else {
+      link = stripTags(link);
+    }
 
-      const desc = decodeHtml(stripTags(extractTag(b, 'description') || extractTag(b, 'summary') || ''));
-      const pub = extractTag(b, 'pubDate') || extractTag(b, 'updated') || extractTag(b, 'published') || '';
+    const desc = decodeHtml(stripTags(extractTag(b, 'description') || extractTag(b, 'summary') || ''));
+    const pub = extractTag(b, 'pubDate') || extractTag(b, 'updated') || extractTag(b, 'published') || '';
 
-      const summary = desc ? (desc.length > 180 ? desc.slice(0, 177) + '...' : desc) : 'Tap to read more.';
+    const summary = desc ? (desc.length > 180 ? desc.slice(0, 177) + '...' : desc) : 'Tap to read more.';
 
-      return {
-        category: 'Community News',
-        headline: title || 'Magic News',
-        source,
-        sourceUrl: link || undefined,
-        summary,
-        body: desc || summary,
-        publishedAt: pub || undefined,
-      };
+    return {
+      category: 'Community News',
+      headline: title || 'Magic News',
+      source,
+      sourceUrl: link || undefined,
+      summary,
+      body: desc || summary,
+      publishedAt: pub || undefined,
+    };
     });
   } catch {
-    // Fail soft for this single feed
     return [];
   } finally {
     clearTimeout(t);
@@ -85,14 +84,10 @@ async function fetchRss(url: string, source: string) {
 
 export default async function handler(req: any, res: any) {
   try {
-    if (req.method && req.method !== 'GET') {
-      return json(res, 405, { error: 'Method not allowed' });
-    }
-
-    const auth = await requireSupabaseAuth(req);
+    const auth = await requireSupabaseAuth(req as any);
     if (!auth.ok) return json(res, auth.status, { error: auth.error });
 
-    const count = Math.max(1, Math.min(12, parseInt(String(req.query?.count || '9'), 10) || 9));
+    const count = Math.max(1, Math.min(12, parseInt(String(req.query.count || '9'), 10) || 9));
 
     const feeds = [
       { url: 'https://www.vanishingincmagic.com/rss/', source: 'Vanishing Inc.' },
@@ -101,13 +96,12 @@ export default async function handler(req: any, res: any) {
     ];
 
     const results = await Promise.allSettled(feeds.map((f) => fetchRss(f.url, f.source)));
-
     const merged: any[] = [];
     for (const r of results) {
-      if (r.status === 'fulfilled' && Array.isArray(r.value)) merged.push(...r.value);
+      if (r.status === 'fulfilled') merged.push(...r.value);
     }
 
-    // Fail soft (do NOT 500 the whole page)
+    // If all feeds fail, fail soft (return empty) rather than 500
     if (!merged.length) return json(res, 200, []);
 
     // Basic de-dupe by headline
@@ -121,6 +115,7 @@ export default async function handler(req: any, res: any) {
 
     return json(res, 200, deduped.slice(0, count));
   } catch (e: any) {
+    // Return JSON so UI can show meaningful error
     return json(res, 500, { error: e?.message || String(e) });
   }
 }
