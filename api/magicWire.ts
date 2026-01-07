@@ -1,4 +1,4 @@
-import { requireSupabaseAuth } from '../server/auth';
+import { requireSupabaseAuth } from './_lib/auth';
 
 function json(res: any, status: number, body: any) {
   res.status(status).setHeader('Content-Type', 'application/json');

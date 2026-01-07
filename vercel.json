@@ -26,7 +26,17 @@
   ],
   "functions": {
     "api/**/*.ts": {
-      "includeFiles": "server/**"
+      "includeFiles": [
+        "s",
+        "e",
+        "r",
+        "v",
+        "e",
+        "r",
+        "/",
+        "*",
+        "*"
+      ]
     }
   }
 }
