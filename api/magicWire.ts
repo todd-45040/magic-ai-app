@@ -1,20 +1,14 @@
-import { requireSupabaseAuth } from "./_auth.js";
-
 type WireItem = {
   category: string;
   headline: string;
   summary: string;
   body: string;
   source: string;
-  sourceUrl: string | null; // IMPORTANT: consistent null (no undefined)
+  sourceUrl: string | null;
   publishedAt?: string;
 };
 
 function sendJson(res: any, status: number, body: any) {
-  // Works across Vercel/Next handlers and plain Node responses
-  if (typeof res?.status === "function" && typeof res?.json === "function") {
-    return res.status(status).json(body);
-  }
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.end(JSON.stringify(body));
@@ -34,15 +28,12 @@ function stripTags(s: string) {
 }
 
 function extractTag(block: string, tag: string): string | null {
-  // IMPORTANT: backslashes must be escaped inside string patterns.
-  // This avoids “Invalid regular expression flags” in some build outputs.
   const re = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i");
   const m = re.exec(block);
   return m ? m[1].trim() : null;
 }
 
 function extractAtomLink(block: string): string | null {
-  // Atom often uses <link href="..."/> or <link rel="alternate" href="..."/>
   const m = block.match(/<link[^>]*href=["']([^"']+)["'][^>]*\/?>/i);
   return m ? m[1] : null;
 }
@@ -65,41 +56,32 @@ async function fetchRss(url: string, source: string): Promise<WireItem[]> {
 
     const xml = await r.text();
 
-    // RSS <item> or Atom <entry>
     const items = xml.match(/<item[\s\S]*?<\/item>/gi) || [];
     const entries = xml.match(/<entry[\s\S]*?<\/entry>/gi) || [];
     const blocks = items.length ? items : entries;
 
-    const parsed: WireItem[] = blocks.slice(0, 20).map((b) => {
-      const titleRaw = extractTag(b, "title") || "";
+    return blocks.slice(0, 20).map((b) => {
       const headline =
-        decodeHtml(stripTags(titleRaw))?.trim() || "Magic News";
+        decodeHtml(stripTags(extractTag(b, "title") || "")) || "Magic News";
 
-      // RSS: <link>...</link>, Atom: <link href="..."/>
       let link = extractTag(b, "link");
       if (link) link = stripTags(link);
       if (!link) link = extractAtomLink(b);
 
       const sourceUrl = link && link.length ? link : null;
 
-      const descRaw =
-        extractTag(b, "description") ||
-        extractTag(b, "summary") ||
-        extractTag(b, "content") ||
-        "";
-      const desc = decodeHtml(stripTags(descRaw)).trim();
+      const desc =
+        decodeHtml(
+          stripTags(
+            extractTag(b, "description") ||
+              extractTag(b, "summary") ||
+              extractTag(b, "content") ||
+              ""
+          )
+        ) || "";
 
-      const pub =
-        extractTag(b, "pubDate") ||
-        extractTag(b, "updated") ||
-        extractTag(b, "published") ||
-        "";
-
-      const summary = desc
-        ? desc.length > 180
-          ? desc.slice(0, 177) + "..."
-          : desc
-        : "Tap to read more.";
+      const summary =
+        desc.length > 180 ? desc.slice(0, 177) + "..." : desc || "Read more…";
 
       return {
         category: "Community News",
@@ -107,15 +89,15 @@ async function fetchRss(url: string, source: string): Promise<WireItem[]> {
         summary,
         body: desc || summary,
         source,
-        sourceUrl, // string | null (always)
-        publishedAt: pub || undefined,
+        sourceUrl,
+        publishedAt:
+          extractTag(b, "pubDate") ||
+          extractTag(b, "updated") ||
+          extractTag(b, "published") ||
+          undefined,
       };
     });
-
-    // Remove obvious empties
-    return parsed.filter((x) => x.headline && x.headline.trim().length > 0);
   } catch {
-    // Fail-soft for this single feed
     return [];
   } finally {
     clearTimeout(t);
@@ -128,16 +110,9 @@ export default async function handler(req: any, res: any) {
       return sendJson(res, 405, { error: "Method not allowed" });
     }
 
-    // Require logged-in user
-    const auth = await requireSupabaseAuth(req);
-    if (!auth.ok) {
-      return sendJson(res, auth.status, { error: auth.error });
-    }
-
     const countRaw = String(req?.query?.count ?? "9");
     const count = Math.max(1, Math.min(12, parseInt(countRaw, 10) || 9));
 
-    // Feeds (keep small and reliable)
     const feeds = [
       { url: "https://www.vanishingincmagic.com/rss/", source: "Vanishing Inc." },
       { url: "https://www.penguinmagic.com/rss.php", source: "Penguin Magic" },
@@ -150,23 +125,19 @@ export default async function handler(req: any, res: any) {
 
     const merged: WireItem[] = [];
     for (const r of results) {
-      if (r.status === "fulfilled" && Array.isArray(r.value)) {
-        merged.push(...r.value);
-      }
+      if (r.status === "fulfilled") merged.push(...r.value);
     }
 
-    // Deduplicate by headline (case-insensitive)
     const seen = new Set<string>();
     const deduped = merged.filter((a) => {
-      const k = (a.headline || "").toLowerCase().trim();
-      if (!k || seen.has(k)) return false;
+      const k = a.headline.toLowerCase();
+      if (seen.has(k)) return false;
       seen.add(k);
       return true;
     });
 
-    // Fail-soft: empty array is OK (don’t crash the page)
     return sendJson(res, 200, deduped.slice(0, count));
   } catch (e: any) {
-    return sendJson(res, 500, { error: e?.message || String(e) });
+    return sendJson(res, 200, []); // NEVER break the UI
   }
 }
