@@ -215,26 +215,6 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
   const admin = (auth as any).admin as any;
   const today = getTodayKeyUTC();
 
-  // Anonymous / IP-based enforcement: strict caps + burst
-  if (!userId) {
-    const burst = enforceBurst(identity, 8);
-    if (!burst.ok) {
-      return { ok: false, status: 429, error: 'Rate limit: too many requests per minute.', burstRemaining: 0, burstLimit: burst.limit };
-    }
-
-    const key = `anon:${today}:${identity}`;
-    const map = getRateMap();
-
-    const used = map.get(key) || 0;
-    const limit = 15;
-    const remaining = Math.max(0, limit - used);
-
-    if (remaining < costUnits) {
-      return { ok: false, status: 429, error: 'AI usage limit reached for today.', remaining, limit, burstRemaining: burst.remaining, burstLimit: burst.limit };
-    }
-    map.set(key, used + costUnits);
-    return { ok: true, remaining: limit - (used + costUnits), limit, burstRemaining: burst.remaining, burstLimit: burst.limit };
-  }
 
   // Authed user: enforce against public.users table
   const { data: profile, error: profileErr } = await admin
