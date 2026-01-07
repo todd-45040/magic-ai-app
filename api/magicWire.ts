@@ -34,7 +34,6 @@ function extractTag(block: string, tag: string): string | null {
 }
 
 function extractAtomLink(block: string): string | null {
-  // Atom: <link href="..."/> (Google News is RSS, Reddit is RSS, but keep this anyway)
   const m = block.match(/<link[^>]*href=["']([^"']+)["'][^>]*\/?>/i);
   return m ? m[1] : null;
 }
@@ -61,6 +60,7 @@ async function fetchXml(url: string): Promise<string | null> {
     } as any);
 
     if (!r.ok) return null;
+
     const text = await r.text();
 
     // If a site returns HTML (WAF page), ignore it.
@@ -75,13 +75,27 @@ async function fetchXml(url: string): Promise<string | null> {
   }
 }
 
+function cleanTextFromRss(raw: string): string {
+  if (!raw) return "";
+
+  // IMPORTANT: decode first, then strip tags.
+  // Some feeds (notably Google News) escape HTML in <description>.
+  const decodedOnce = decodeHtml(raw);
+  const stripped = stripTags(decodedOnce);
+
+  // Some feeds double-encode; decode again safely.
+  const decodedTwice = decodeHtml(stripped);
+
+  return decodedTwice.trim();
+}
+
 function parseFeed(xml: string, source: string, category: string): WireItem[] {
   const { blocks } = pickBlocks(xml);
   if (!blocks.length) return [];
 
   return blocks.slice(0, 25).map((b) => {
     const titleRaw = extractTag(b, "title") || "";
-    const headline = decodeHtml(stripTags(titleRaw)) || "Magic News";
+    const headline = cleanTextFromRss(titleRaw) || "Magic News";
 
     // RSS: <link>...</link>
     let link = extractTag(b, "link");
@@ -98,10 +112,13 @@ function parseFeed(xml: string, source: string, category: string): WireItem[] {
       extractTag(b, "content") ||
       "";
 
-    const desc = decodeHtml(stripTags(descRaw)).trim();
+    const desc = cleanTextFromRss(descRaw);
+
+    // Short summary (2–3 lines)
+    const maxLen = 170;
     const summary = desc
-      ? desc.length > 180
-        ? desc.slice(0, 177) + "..."
+      ? desc.length > maxLen
+        ? desc.slice(0, maxLen - 1) + "…"
         : desc
       : "Read more…";
 
@@ -115,7 +132,7 @@ function parseFeed(xml: string, source: string, category: string): WireItem[] {
       category,
       headline,
       summary,
-      body: desc || summary,
+      body: desc || summary, // body is clean full text; summary is short
       source,
       sourceUrl,
       publishedAt: publishedAt || undefined,
@@ -149,14 +166,11 @@ export default async function handler(req: any, res: any) {
     const countRaw = String(req?.query?.count ?? "9");
     const count = Math.max(1, Math.min(12, parseInt(countRaw, 10) || 9));
 
-    // Cache for 10 minutes (prevents slow feeds + stabilizes UI)
+    // Cache 10 minutes
     const cached = getCached(10 * 60 * 1000);
-    if (cached) {
-      return sendJson(res, 200, cached.slice(0, count));
-    }
+    if (cached) return sendJson(res, 200, cached.slice(0, count));
 
-    // ✅ Reliable feeds for serverless:
-    // Google News RSS queries (very stable)
+    // (These are the reliable feeds you’re using now)
     const feeds: { url: string; source: string; category: string }[] = [
       {
         url: "https://news.google.com/rss/search?q=magic+trick+magician&hl=en-US&gl=US&ceid=US:en",
@@ -168,7 +182,6 @@ export default async function handler(req: any, res: any) {
         source: "Google News",
         category: "Shows & Events",
       },
-      // Reddit RSS tends to work well from serverless
       {
         url: "https://www.reddit.com/r/MagicTricks/.rss",
         source: "Reddit r/MagicTricks",
@@ -198,29 +211,13 @@ export default async function handler(req: any, res: any) {
       return true;
     });
 
-    // If still empty, provide stable fallback so UI always populates
+    // Fallback keeps UI from going blank
     const fallback: WireItem[] = [
       {
         category: "Magic News",
-        headline: "Magic Wire is warming up feeds",
-        summary: "If sources throttle requests, feeds may take a moment to refresh. Try Refresh in a minute.",
-        body: "If sources throttle requests, feeds may take a moment to refresh. Try Refresh in a minute.",
-        source: "Magic AI Wizard",
-        sourceUrl: "https://www.magicaiwizard.com/app/",
-      },
-      {
-        category: "Community",
-        headline: "Tip: Add more sources anytime",
-        summary: "You can add or swap RSS sources easily in api/magicWire.ts under the feeds list.",
-        body: "You can add or swap RSS sources easily in api/magicWire.ts under the feeds list.",
-        source: "Magic AI Wizard",
-        sourceUrl: "https://www.magicaiwizard.com/app/",
-      },
-      {
-        category: "Shows & Events",
-        headline: "Want dealer/event feeds too?",
-        summary: "We can add convention/event RSS sources next for a stronger Magic Wire.",
-        body: "We can add convention/event RSS sources next for a stronger Magic Wire.",
+        headline: "Magic Wire is refreshing sources",
+        summary: "If a source throttles requests, try refresh again in a minute.",
+        body: "If a source throttles requests, try refresh again in a minute.",
         source: "Magic AI Wizard",
         sourceUrl: "https://www.magicaiwizard.com/app/",
       },
@@ -231,7 +228,6 @@ export default async function handler(req: any, res: any) {
     setCached(finalItems);
     return sendJson(res, 200, finalItems.slice(0, count));
   } catch {
-    // Never break the page
     return sendJson(res, 200, []);
   }
 }
