@@ -263,7 +263,20 @@ function App() {
       case 'audience':
         return <AudienceMode onBack={() => setMode('selection')} />;
       case 'auth':
-        return <Auth onLogin={(appUser) => { setUser(appUser); refreshAllData(dispatch); setMode('magician'); }} onBack={() => setMode('selection')} />;
+        return (
+          <Auth
+            onLogin={(appUser) => {
+              // Immediately enter the app shell on successful login.
+              // This avoids "stuck on login until refresh" when the Supabase session hydration
+              // or background profile bootstrap lags behind UI state.
+              setUser(appUser);
+              setAuthLoading(false);
+              refreshAllData(dispatch);
+              setMode('magician');
+            }}
+            onBack={() => setMode('selection')}
+          />
+        );
       case 'selection':
       default:
         return <ModeSelector onSelectMode={handleSelectMode} />;

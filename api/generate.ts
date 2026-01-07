@@ -1,6 +1,8 @@
 import { GoogleGenAI } from '@google/genai';
-import { enforceAiUsage } from './_usage.js';
-import { resolveProvider, callOpenAI, callAnthropic } from './_providers.js';
+// NOTE: Vercel compiles /api routes separately from Vite.
+// Use extensionless relative imports so the serverless bundler can resolve TS sources reliably.
+import { enforceAiUsage } from './_usage';
+import { resolveProvider, callOpenAI, callAnthropic } from './_providers';
 
 export default async function handler(request: any, response: any) {
   if (request.method !== 'POST') {
