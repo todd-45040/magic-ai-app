@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { getAiProvider, setAiProvider, type AIProvider } from '../services/aiProviderService';
 import type { User } from '../types';
 import { DatabaseIcon } from './icons';
 import DataManager from './DataManager';
@@ -10,10 +11,14 @@ interface AccountMenuProps {
 }
 
 const AccountMenu: React.FC<AccountMenuProps> = ({ user, onLogout }) => {
-    const [isDataManagerOpen, setIsDataManagerOpen] = useState(false);
-    const dispatch = useAppDispatch();
+        const [aiProvider, setAiProviderState] = useState<AIProvider>(getAiProvider());
 
-    const getMembershipDisplay = () => {
+    const handleProviderChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const next = e.target.value as AIProvider;
+        setAiProvider(next);
+        setAiProviderState(next);
+    };
+const getMembershipDisplay = () => {
         if (user.membership === 'trial' && user.trialEndDate) {
             const daysLeft = Math.ceil((user.trialEndDate - Date.now()) / (1000 * 60 * 60 * 24));
             if (daysLeft > 0) {
@@ -47,15 +52,20 @@ const AccountMenu: React.FC<AccountMenuProps> = ({ user, onLogout }) => {
                     {getMembershipDisplay()}
                 </p>
             </div>
-            <div className="flex items-center gap-2">
-                <button
-                    onClick={() => setIsDataManagerOpen(true)}
-                    className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-full transition-colors"
-                    title="Manage Data & Backups"
+            <div className="flex items-center gap-2">            <div className=\"menu-item\" style={{ marginTop: 8 }}>
+                <div style={{ fontSize: 12, opacity: 0.85, marginBottom: 4 }}>AI Provider</div>
+                <select
+                    value={aiProvider}
+                    onChange={handleProviderChange}
+                    style={{ width: '100%', padding: '8px 10px', borderRadius: 10 }}
+                    aria-label=\"AI Provider\"
                 >
-                    <DatabaseIcon className="w-5 h-5" />
-                </button>
-                <button
+                    <option value=\"gemini\">Gemini</option>
+                    <option value=\"openai\">OpenAI</option>
+                    <option value=\"anthropic\">Anthropic</option>
+                </select>
+            </div>
+<button
                     onClick={onLogout}
                     className="px-4 py-2 text-sm bg-slate-700 hover:bg-red-800/50 rounded-md text-slate-300 hover:text-red-300 transition-colors"
                     title="Logout"
