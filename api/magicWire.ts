@@ -1,3 +1,13 @@
+// api/magicWire.ts
+//
+// Magic Wire v2:
+// - Reliable RSS sources (Google News queries + Reddit RSS)
+// - Per-feed timeouts + “HTML/WAF page” detection
+// - Warm-lambda in-memory cache (10 min)
+// - CDN cache headers (s-maxage + stale-while-revalidate)
+// - Optional refresh bypass: ?refresh=1
+// - Always returns 200 JSON (never breaks UI)
+
 type WireItem = {
   category: string;
   headline: string;
@@ -6,6 +16,18 @@ type WireItem = {
   source: string;
   sourceUrl: string | null;
   publishedAt?: string;
+};
+
+type WireResponse = {
+  meta: {
+    count: number;
+    requested: number;
+    usedCache: boolean;
+    usedFallback: boolean;
+    refreshed: boolean;
+    ts: string;
+  };
+  items: WireItem[];
 };
 
 function sendJson(res: any, status: number, body: any) {
@@ -34,7 +56,6 @@ function extractTag(block: string, tag: string): string | null {
 }
 
 function extractAtomLink(block: string): string | null {
-  // Atom: <link href="..."/> (Google News is RSS, Reddit is RSS, but keep this anyway)
   const m = block.match(/<link[^>]*href=["']([^"']+)["'][^>]*\/?>/i);
   return m ? m[1] : null;
 }
@@ -61,9 +82,10 @@ async function fetchXml(url: string): Promise<string | null> {
     } as any);
 
     if (!r.ok) return null;
+
     const text = await r.text();
 
-    // If a site returns HTML (WAF page), ignore it.
+    // Many providers return HTML challenge/WAF pages to serverless clients.
     const head = text.slice(0, 2000).toLowerCase();
     if (head.includes("<html") || head.includes("<!doctype html")) return null;
 
@@ -86,7 +108,6 @@ function parseFeed(xml: string, source: string, category: string): WireItem[] {
     // RSS: <link>...</link>
     let link = extractTag(b, "link");
     if (link) link = stripTags(link);
-
     // Atom fallback
     if (!link) link = extractAtomLink(b) || undefined;
 
@@ -123,40 +144,60 @@ function parseFeed(xml: string, source: string, category: string): WireItem[] {
   });
 }
 
-// ---- simple in-memory cache (works well on warm lambdas) ----
+// ---------- warm-lambda cache ----------
 declare global {
   // eslint-disable-next-line no-var
-  var __mw_cache: { ts: number; items: WireItem[] } | undefined;
+  var __mw_cache_v2: { ts: number; items: WireItem[] } | undefined;
 }
 
 function getCached(maxAgeMs: number): WireItem[] | null {
-  const c = globalThis.__mw_cache;
+  const c = globalThis.__mw_cache_v2;
   if (!c) return null;
   if (Date.now() - c.ts > maxAgeMs) return null;
   return c.items;
 }
 
 function setCached(items: WireItem[]) {
-  globalThis.__mw_cache = { ts: Date.now(), items };
+  globalThis.__mw_cache_v2 = { ts: Date.now(), items };
 }
 
 export default async function handler(req: any, res: any) {
+  // CDN cache: 10 minutes fresh, allow stale while background refreshes for 1 day
+  // (This makes the feed fast + resilient.)
+  res.setHeader("Cache-Control", "s-maxage=600, stale-while-revalidate=86400");
+
   try {
     if (req?.method && req.method !== "GET") {
       return sendJson(res, 405, { error: "Method not allowed" });
     }
 
     const countRaw = String(req?.query?.count ?? "9");
-    const count = Math.max(1, Math.min(12, parseInt(countRaw, 10) || 9));
+    const requested = Math.max(1, Math.min(12, parseInt(countRaw, 10) || 9));
 
-    // Cache for 10 minutes (prevents slow feeds + stabilizes UI)
-    const cached = getCached(10 * 60 * 1000);
-    if (cached) {
-      return sendJson(res, 200, cached.slice(0, count));
+    // If caller passes refresh=1, bypass warm cache.
+    const refreshed = String(req?.query?.refresh ?? "0") === "1";
+
+    const cacheMs = 10 * 60 * 1000;
+
+    if (!refreshed) {
+      const cached = getCached(cacheMs);
+      if (cached) {
+        const response: WireResponse = {
+          meta: {
+            count: Math.min(requested, cached.length),
+            requested,
+            usedCache: true,
+            usedFallback: false,
+            refreshed: false,
+            ts: new Date().toISOString(),
+          },
+          items: cached.slice(0, requested),
+        };
+        return sendJson(res, 200, response);
+      }
     }
 
-    // ✅ Reliable feeds for serverless:
-    // Google News RSS queries (very stable)
+    // Reliable serverless-friendly sources
     const feeds: { url: string; source: string; category: string }[] = [
       {
         url: "https://news.google.com/rss/search?q=magic+trick+magician&hl=en-US&gl=US&ceid=US:en",
@@ -168,7 +209,6 @@ export default async function handler(req: any, res: any) {
         source: "Google News",
         category: "Shows & Events",
       },
-      // Reddit RSS tends to work well from serverless
       {
         url: "https://www.reddit.com/r/MagicTricks/.rss",
         source: "Reddit r/MagicTricks",
@@ -198,40 +238,64 @@ export default async function handler(req: any, res: any) {
       return true;
     });
 
-    // If still empty, provide stable fallback so UI always populates
     const fallback: WireItem[] = [
       {
         category: "Magic News",
-        headline: "Magic Wire is warming up feeds",
-        summary: "If sources throttle requests, feeds may take a moment to refresh. Try Refresh in a minute.",
-        body: "If sources throttle requests, feeds may take a moment to refresh. Try Refresh in a minute.",
+        headline: "Magic Wire is refreshing sources",
+        summary: "If a source throttles requests, try refresh again in a minute.",
+        body: "If a source throttles requests, try refresh again in a minute.",
         source: "Magic AI Wizard",
         sourceUrl: "https://www.magicaiwizard.com/app/",
       },
       {
         category: "Community",
-        headline: "Tip: Add more sources anytime",
-        summary: "You can add or swap RSS sources easily in api/magicWire.ts under the feeds list.",
-        body: "You can add or swap RSS sources easily in api/magicWire.ts under the feeds list.",
+        headline: "Tip: You can swap feeds anytime",
+        summary: "Edit api/magicWire.ts to add more RSS sources or adjust search terms.",
+        body: "Edit api/magicWire.ts to add more RSS sources or adjust search terms.",
         source: "Magic AI Wizard",
         sourceUrl: "https://www.magicaiwizard.com/app/",
       },
       {
         category: "Shows & Events",
-        headline: "Want dealer/event feeds too?",
-        summary: "We can add convention/event RSS sources next for a stronger Magic Wire.",
-        body: "We can add convention/event RSS sources next for a stronger Magic Wire.",
+        headline: "Want convention/dealer feeds next?",
+        summary: "We can add more sources once you pick the top sites you want to track.",
+        body: "We can add more sources once you pick the top sites you want to track.",
         source: "Magic AI Wizard",
         sourceUrl: "https://www.magicaiwizard.com/app/",
       },
     ];
 
-    const finalItems = deduped.length ? deduped : fallback;
+    const usedFallback = deduped.length === 0;
+    const finalItems = usedFallback ? fallback : deduped;
 
     setCached(finalItems);
-    return sendJson(res, 200, finalItems.slice(0, count));
+
+    const response: WireResponse = {
+      meta: {
+        count: Math.min(requested, finalItems.length),
+        requested,
+        usedCache: false,
+        usedFallback,
+        refreshed,
+        ts: new Date().toISOString(),
+      },
+      items: finalItems.slice(0, requested),
+    };
+
+    return sendJson(res, 200, response);
   } catch {
     // Never break the page
-    return sendJson(res, 200, []);
+    const response: WireResponse = {
+      meta: {
+        count: 0,
+        requested: 0,
+        usedCache: false,
+        usedFallback: true,
+        refreshed: false,
+        ts: new Date().toISOString(),
+      },
+      items: [],
+    };
+    return sendJson(res, 200, response);
   }
 }
