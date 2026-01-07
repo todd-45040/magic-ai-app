@@ -1,15 +1,13 @@
 import { GoogleGenAI } from '@google/genai';
 import { enforceAiUsage } from '../server/usage';
 import { resolveProvider } from '../server/providers';
+import { requireSupabaseAuth } from '../server/auth';
+import { getAppSettings } from '../server/settings';
+import { getGeminiApiKey } from '../server/gemini';
 
 export default async function handler(request: any, response: any) {
   if (request.method !== 'POST') {
     return response.status(405).json({ error: 'Method not allowed' });
-  }
-
-  const authHeader = request.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return response.status(401).json({ error: 'Unauthorized.' });
   }
 
   // AI cost protection (daily caps + per-minute burst limits)
@@ -27,7 +25,15 @@ export default async function handler(request: any, response: any) {
   }
 
   try {
-    const provider = resolveProvider(request);
+    let defaultProvider: any = 'gemini';
+    try {
+      const auth = await requireSupabaseAuth(request);
+      if (auth.ok) {
+        const settings = await getAppSettings((auth as any).admin);
+        defaultProvider = settings.aiProvider || defaultProvider;
+      }
+    } catch {}
+    const provider = resolveProvider(request, { allowHeader: false, defaultProvider });
     const { prompt, aspectRatio = '1:1' } = request.body || {};
 
     let result: any;
@@ -63,10 +69,8 @@ export default async function handler(request: any, response: any) {
     } else if (provider === 'anthropic') {
       return response.status(400).json({ error: 'Image generation is not supported for Anthropic provider.' });
     } else {
-      const apiKey = process.env.API_KEY;
-      if (!apiKey) {
-        return response.status(500).json({ error: 'API_KEY is not configured on the server.' });
-      }
+      const apiKey = getGeminiApiKey();
+      if (!apiKey) return response.status(503).json({ error: 'Gemini API key is not configured on the server.' });
 
       const ai = new GoogleGenAI({ apiKey });
       result = await ai.models.generateImages({

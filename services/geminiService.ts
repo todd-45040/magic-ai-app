@@ -1,7 +1,6 @@
 import { Type, Modality } from "@google/genai";
 import { supabase } from '../supabase';
 import type { ChatMessage, TrickIdentificationResult, User } from '../types';
-import { getAiProvider } from './aiProviderService';
 
 // Keep this type export for components that reference live sessions.
 // Live sessions are currently not enabled through the serverless proxy.
@@ -40,7 +39,7 @@ async function postJson<T>(url: string, body: any, currentUser?: User): Promise<
     headers: {
       'Content-Type': 'application/json',
       'Authorization': await getBearerToken(),
-      'X-AI-Provider': getAiProvider(),
+      // AI Provider is controlled server-side (Admin only).
     },
     body: JSON.stringify(body),
   });
@@ -118,7 +117,7 @@ export const generateResponse = async (
   })) || [];
 
   const body: GeminiGenerateBody = {
-    model: 'gemini-3-pro-preview',
+    model: 'gemini-1.5-pro',
     contents: [...apiHistory, { role: 'user', parts: [{ text: prompt }] }],
     config: { systemInstruction },
   };
@@ -139,7 +138,7 @@ export const generateStructuredResponse = async (
   currentUser?: User
 ): Promise<any> => {
   const body: GeminiGenerateBody = {
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-1.5-flash',
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
     config: {
       systemInstruction,
@@ -180,7 +179,7 @@ export const identifyTrickFromImage = async (
   };
 
   const body: GeminiGenerateBody = {
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-1.5-flash',
     contents: {
       parts: [
         { text: prompt },

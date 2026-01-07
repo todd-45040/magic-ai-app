@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import type { User } from '../types';
-import { getAiProvider, setAiProvider, type AIProvider } from '../services/aiProviderService';
 import { DatabaseIcon } from './icons';
 import DataManager from './DataManager';
 import { useAppDispatch, refreshAllData } from '../store';
+import AdminSettings from './AdminSettings';
 
 interface AccountMenuProps {
   user: User;
@@ -12,14 +12,8 @@ interface AccountMenuProps {
 
 const AccountMenu: React.FC<AccountMenuProps> = ({ user, onLogout }) => {
   const dispatch = useAppDispatch();
-  const [aiProvider, setAiProviderState] = useState<AIProvider>(getAiProvider());
   const [isDataManagerOpen, setIsDataManagerOpen] = useState(false);
-
-  const handleProviderChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const next = e.target.value as AIProvider;
-    setAiProvider(next);
-    setAiProviderState(next);
-  };
+  const [showAdminSettings, setShowAdminSettings] = useState(false);
 
   const getMembershipDisplay = () => {
     if (user.membership === 'trial' && user.trialEndDate) {
@@ -66,19 +60,18 @@ const AccountMenu: React.FC<AccountMenuProps> = ({ user, onLogout }) => {
       </div>
 
       <div className="flex items-center gap-2">
-        <div className="menu-item" style={{ marginTop: 8 }}>
-          <div style={{ fontSize: 12, opacity: 0.85, marginBottom: 4 }}>AI Provider</div>
-          <select
-            value={aiProvider}
-            onChange={handleProviderChange}
-            style={{ width: '100%', padding: '8px 10px', borderRadius: 10 }}
-            aria-label="AI Provider"
+        {showAdminSettings && <AdminSettings onClose={() => setShowAdminSettings(false)} />}
+
+        {user.isAdmin ? (
+          <button
+            onClick={() => setShowAdminSettings(true)}
+            className="px-3 py-2 text-sm bg-slate-800 hover:bg-slate-700 rounded-md text-slate-200 transition-colors"
+            title="Administrator Settings"
+            type="button"
           >
-            <option value="gemini">Gemini</option>
-            <option value="openai">OpenAI</option>
-            <option value="anthropic">Anthropic</option>
-          </select>
-        </div>
+            Admin
+          </button>
+        ) : null}
 
         <button
           onClick={() => setIsDataManagerOpen(true)}

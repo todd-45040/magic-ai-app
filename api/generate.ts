@@ -1,16 +1,13 @@
 import { GoogleGenAI } from '@google/genai';
 import { enforceAiUsage } from '../server/usage';
 import { resolveProvider, callOpenAI, callAnthropic } from '../server/providers';
+import { requireSupabaseAuth } from '../server/auth';
+import { getAppSettings } from '../server/settings';
+import { getGeminiApiKey, DEFAULT_GEMINI_TEXT_MODEL } from '../server/gemini';
 
 export default async function handler(request: any, response: any) {
   if (request.method !== 'POST') {
     return response.status(405).json({ error: 'Method not allowed' });
-  }
-
-  // Basic Auth Check (Simulated)
-  const authHeader = request.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return response.status(401).json({ error: 'Unauthorized. Please log in.' });
   }
 
   // AI cost protection (daily caps + per-minute burst limits)
@@ -28,7 +25,18 @@ export default async function handler(request: any, response: any) {
   }
 
   try {
-    const provider = resolveProvider(request);
+    // Default provider is controlled server-side (and via Admin Settings table if present).
+    // End-users do NOT get to pick the provider.
+    let defaultProvider: any = 'gemini';
+    try {
+      const auth = await requireSupabaseAuth(request);
+      if (auth.ok) {
+        const settings = await getAppSettings((auth as any).admin);
+        defaultProvider = settings.aiProvider || defaultProvider;
+      }
+    } catch {}
+
+    const provider = resolveProvider(request, { allowHeader: false, defaultProvider });
     const { model, contents, config } = request.body || {};
 
     let result: any;
@@ -38,14 +46,14 @@ export default async function handler(request: any, response: any) {
     } else if (provider === 'anthropic') {
       result = await callAnthropic({ model, contents, config });
     } else {
-      const apiKey = process.env.API_KEY;
+      const apiKey = getGeminiApiKey();
       if (!apiKey) {
-        return response.status(500).json({ error: 'API_KEY is not configured on the server.' });
+        return response.status(503).json({ error: 'Gemini API key is not configured on the server.' });
       }
 
       const ai = new GoogleGenAI({ apiKey });
       result = await ai.models.generateContent({
-        model: model || 'gemini-3-pro-preview',
+        model: model || DEFAULT_GEMINI_TEXT_MODEL,
         contents,
         config: {
           ...config,

@@ -103,6 +103,7 @@ export async function getAiUsageStatus(req: any): Promise<{
   remaining?: number;
   burstLimit?: number;
   burstRemaining?: number;
+  isAdmin?: boolean;
 }> {
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -122,7 +123,7 @@ export async function getAiUsageStatus(req: any): Promise<{
   const admin = (auth as any).admin as any;
   const { data: profile, error: profileErr } = await admin
     .from('users')
-    .select('id, membership, generation_count, last_reset_date')
+    .select('id, membership, generation_count, last_reset_date, is_admin')
     .eq('id', userId)
     .maybeSingle();
 
@@ -131,11 +132,13 @@ export async function getAiUsageStatus(req: any): Promise<{
   let membership: Membership = 'trial';
   let generationCount = 0;
   let lastResetDateISO = new Date().toISOString();
+  let isAdmin = false;
 
   if (profile) {
     membership = (profile.membership as Membership) || 'trial';
     generationCount = profile.generation_count ?? 0;
     lastResetDateISO = profile.last_reset_date ? new Date(profile.last_reset_date).toISOString() : lastResetDateISO;
+    isAdmin = !!profile.is_admin;
   } else {
     // If no profile exists yet, treat as trial until created
     membership = 'trial';
@@ -161,7 +164,7 @@ export async function getAiUsageStatus(req: any): Promise<{
   const usedBurst = map.get(key) || 0;
   const burstRemaining = Math.max(0, burstLimit - usedBurst);
 
-  return { ok: true, membership: tier as any, used: generationCount, limit, remaining, burstLimit, burstRemaining };
+  return { ok: true, membership: tier as any, used: generationCount, limit, remaining, burstLimit, burstRemaining, isAdmin };
 }
 
 export async function enforceAiUsage(req: any, costUnits: number): Promise<{
@@ -173,6 +176,7 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
   membership?: Membership;
   burstRemaining?: number;
   burstLimit?: number;
+  isAdmin?: boolean;
 }> {
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -219,7 +223,7 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
   // Authed user: enforce against public.users table
   const { data: profile, error: profileErr } = await admin
     .from('users')
-    .select('id, membership, generation_count, last_reset_date')
+    .select('id, membership, generation_count, last_reset_date, is_admin')
     .eq('id', userId)
     .maybeSingle();
 
@@ -227,6 +231,7 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
   let membership: Membership = 'trial';
   let generationCount = 0;
   let lastResetDateISO = new Date().toISOString();
+  let isAdmin = false;
 
   if (profileErr) {
     console.error('Usage lookup error:', profileErr);
@@ -236,6 +241,7 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
     membership = (profile.membership as Membership) || 'trial';
     generationCount = profile.generation_count ?? 0;
     lastResetDateISO = profile.last_reset_date ? new Date(profile.last_reset_date).toISOString() : lastResetDateISO;
+    isAdmin = !!profile.is_admin;
   } else {
     const { error: upsertErr } = await admin.from('users').upsert({
       id: userId,
@@ -268,6 +274,7 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
       status: 429,
       error: 'Rate limit: too many requests per minute.',
       membership,
+      isAdmin,
       burstRemaining: 0,
       burstLimit,
     };
@@ -284,6 +291,7 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
       remaining,
       limit,
       membership: tier as any,
+      isAdmin,
       burstRemaining: burst.remaining,
       burstLimit,
     };
@@ -307,6 +315,7 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
     remaining: Math.max(0, limit - newCount),
     limit,
     membership: tier as any,
+    isAdmin,
     burstRemaining: burst.remaining,
     burstLimit,
   };

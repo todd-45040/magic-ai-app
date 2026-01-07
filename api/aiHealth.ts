@@ -1,4 +1,5 @@
 import { requireSupabaseAuth } from '../server/auth';
+import { getGeminiApiKey } from '../server/gemini';
 
 /**
  * Lightweight server-side AI configuration check.
@@ -17,7 +18,7 @@ export default async function handler(request: any, response: any) {
     return response.status(auth.status).json({ error: auth.error });
   }
 
-const hasApiKey = !!process.env.API_KEY;
+  const hasApiKey = !!getGeminiApiKey();
   const hasSupabaseUrl = !!process.env.SUPABASE_URL;
   const hasServiceRole = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 
