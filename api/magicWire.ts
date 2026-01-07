@@ -1,4 +1,4 @@
-import { requireSupabaseAuth } from './lib/auth';
+import { requireSupabaseAuth } from './_auth';
 
 function json(res: any, status: number, body: any) {
   res.status(status).setHeader('Content-Type', 'application/json');
@@ -25,50 +25,74 @@ function extractTag(block: string, tag: string): string | null {
 }
 
 async function fetchRss(url: string, source: string) {
-  const r = await fetch(url, { headers: { 'User-Agent': 'MagicAIWizard/1.0 (+https://www.magicaiwizard.com)' } } as any);
-  const xml = await r.text();
+  // IMPORTANT: prevent Vercel function timeouts on slow RSS servers
+  const controller = new AbortController();
+  const timeoutMs = 6500;
+  const t = setTimeout(() => controller.abort(), timeoutMs);
 
-  // Prefer <item> (RSS) then <entry> (Atom)
-  const items = xml.match(/<item[\s\S]*?<\/item>/gi) || [];
-  const entries = xml.match(/<entry[\s\S]*?<\/entry>/gi) || [];
+  try {
+    const r = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'MagicAIWizard/1.0 (+https://www.magicaiwizard.com)',
+        'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',
+      },
+    } as any);
 
-  const blocks = items.length ? items : entries;
+    if (!r.ok) return [];
 
-  return blocks.slice(0, 15).map((b) => {
-    const title = decodeHtml(stripTags(extractTag(b, 'title') || ''));
-    let link = extractTag(b, 'link');
+    const xml = await r.text();
 
-    // Atom often uses <link href="..."/>
-    if (!link) {
-      const m = b.match(/<link[^>]*href=["']([^"']+)["'][^>]*\/>/i);
-      if (m) link = m[1];
-    } else {
-      link = stripTags(link);
-    }
+    // Prefer <item> (RSS) then <entry> (Atom)
+    const items = xml.match(/<item[\s\S]*?<\/item>/gi) || [];
+    const entries = xml.match(/<entry[\s\S]*?<\/entry>/gi) || [];
+    const blocks = items.length ? items : entries;
 
-    const desc = decodeHtml(stripTags(extractTag(b, 'description') || extractTag(b, 'summary') || ''));
-    const pub = extractTag(b, 'pubDate') || extractTag(b, 'updated') || extractTag(b, 'published') || '';
+    return blocks.slice(0, 15).map((b) => {
+      const title = decodeHtml(stripTags(extractTag(b, 'title') || ''));
+      let link = extractTag(b, 'link');
 
-    const summary = desc ? (desc.length > 180 ? desc.slice(0, 177) + '...' : desc) : 'Tap to read more.';
+      // Atom often uses <link href="..."/>
+      if (!link) {
+        const m = b.match(/<link[^>]*href=["']([^"']+)["'][^>]*\/>/i);
+        if (m) link = m[1];
+      } else {
+        link = stripTags(link);
+      }
 
-    return {
-      category: 'Community News',
-      headline: title || 'Magic News',
-      source,
-      sourceUrl: link || undefined,
-      summary,
-      body: desc || summary,
-      publishedAt: pub || undefined,
-    };
-  });
+      const desc = decodeHtml(stripTags(extractTag(b, 'description') || extractTag(b, 'summary') || ''));
+      const pub = extractTag(b, 'pubDate') || extractTag(b, 'updated') || extractTag(b, 'published') || '';
+
+      const summary = desc ? (desc.length > 180 ? desc.slice(0, 177) + '...' : desc) : 'Tap to read more.';
+
+      return {
+        category: 'Community News',
+        headline: title || 'Magic News',
+        source,
+        sourceUrl: link || undefined,
+        summary,
+        body: desc || summary,
+        publishedAt: pub || undefined,
+      };
+    });
+  } catch {
+    // Fail soft for this single feed
+    return [];
+  } finally {
+    clearTimeout(t);
+  }
 }
 
 export default async function handler(req: any, res: any) {
   try {
-    const auth = await requireSupabaseAuth(req as any);
+    if (req.method && req.method !== 'GET') {
+      return json(res, 405, { error: 'Method not allowed' });
+    }
+
+    const auth = await requireSupabaseAuth(req);
     if (!auth.ok) return json(res, auth.status, { error: auth.error });
 
-    const count = Math.max(1, Math.min(12, parseInt(String(req.query.count || '9'), 10) || 9));
+    const count = Math.max(1, Math.min(12, parseInt(String(req.query?.count || '9'), 10) || 9));
 
     const feeds = [
       { url: 'https://www.vanishingincmagic.com/rss/', source: 'Vanishing Inc.' },
@@ -77,12 +101,13 @@ export default async function handler(req: any, res: any) {
     ];
 
     const results = await Promise.allSettled(feeds.map((f) => fetchRss(f.url, f.source)));
+
     const merged: any[] = [];
     for (const r of results) {
-      if (r.status === 'fulfilled') merged.push(...r.value);
+      if (r.status === 'fulfilled' && Array.isArray(r.value)) merged.push(...r.value);
     }
 
-    // If all feeds fail, fail soft (return empty) rather than 500
+    // Fail soft (do NOT 500 the whole page)
     if (!merged.length) return json(res, 200, []);
 
     // Basic de-dupe by headline
@@ -96,7 +121,6 @@ export default async function handler(req: any, res: any) {
 
     return json(res, 200, deduped.slice(0, count));
   } catch (e: any) {
-    // Return JSON so UI can show meaningful error
     return json(res, 500, { error: e?.message || String(e) });
   }
 }
