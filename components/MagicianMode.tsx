@@ -1025,15 +1025,56 @@ useEffect(() => {
 }, [isDemoMode, shows?.length, ideas?.length, clients?.length, feedback?.length]);
 
   const [activeView, setActiveView] = useState<MagicianView>(() => {
+    // Landing view for the AI Assistant section should always be the dashboard/grid.
+    // We still *allow* deep-linking into tools, but we don't want the generic
+    // "chat" view to become a sticky landing state.
     try {
-        const savedView = localStorage.getItem(MAGICIAN_VIEW_STORAGE_KEY);
-        const validViews: MagicianView[] = ['dashboard', 'chat', 'effect-generator', 'identify', 'publications', 'community', 'live-rehearsal', 'video-rehearsal', 'visual-brainstorm', 'saved-ideas', 'prop-checklists', 'magic-archives', 'gospel-magic-assistant', 'member-management', 'show-planner', 'show-feedback', 'patter-engine', 'mentalism-assistant', 'magic-wire', 'marketing-campaign', 'contract-generator', 'assistant-studio', 'director-mode', 'persona-simulator', 'client-management', 'performance-analytics', 'illusion-blueprint', 'magic-theory-tutor', 'global-search', 'magic-dictionary'];
-        if (savedView && validViews.includes(savedView as MagicianView)) {
-            return savedView as MagicianView;
-        }
-        return 'dashboard';
+      const savedView = localStorage.getItem(MAGICIAN_VIEW_STORAGE_KEY) as MagicianView | null;
+
+      const validViews: MagicianView[] = [
+        'dashboard',
+        'chat',
+        'show-planner',
+        'effect-generator',
+        'magic-dictionary',
+        'identify',
+        'magic-wire',
+        'publications',
+        'community',
+        'patter-engine',
+        'live-rehearsal',
+        'video-rehearsal',
+        'visual-brainstorm',
+        'assistant-studio',
+        'refine-idea',
+        'saved-ideas',
+        'prop-checklists',
+        'magic-archives',
+        'gospel-magic-assistant',
+        'mentalism-assistant',
+        'magic-theory-tutor',
+        'global-search',
+        'client-management',
+        'contract-generator',
+        'marketing-campaign',
+        'draft-email',
+        'persona-simulator',
+        'director-mode',
+        'performance-analytics',
+        'show-feedback',
+        'member-management',
+      ];
+
+      if (savedView && validViews.includes(savedView)) {
+        // Treat "chat" as a tool view. If it was saved previously, we land on the
+        // dashboard instead, so the AI Assistant menu item always shows the grid.
+        if (savedView === 'chat') return 'dashboard';
+        return savedView;
+      }
+
+      return 'dashboard';
     } catch {
-        return 'dashboard';
+      return 'dashboard';
     }
   });
 
