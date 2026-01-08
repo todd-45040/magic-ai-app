@@ -3,31 +3,36 @@ import { enforceAiUsage } from './lib/usage';
 import { resolveProvider, callOpenAI, callAnthropic } from './lib/providers';
 
 export default async function handler(request: any, response: any) {
-  if (request.method !== 'POST') {
-    return response.status(405).json({ error: 'Method not allowed' });
-  }
-
-  // Basic Auth Check (Simulated)
-  const authHeader = request.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return response.status(401).json({ error: 'Unauthorized. Please log in.' });
-  }
-
-  // AI cost protection (daily caps + per-minute burst limits)
-  const usage = await enforceAiUsage(request, 1);
-  if (!usage.ok) {
-    return response
-      .status(usage.status || 429)
-      .json({
-        error: usage.error || 'AI usage limit reached.',
-        remaining: usage.remaining,
-        limit: usage.limit,
-        burstRemaining: usage.burstRemaining,
-        burstLimit: usage.burstLimit,
-      });
-  }
-
+  // IMPORTANT:
+  // Vercel will sometimes return a plain-text 500 "FUNCTION_INVOCATION_FAILED"
+  // when an exception occurs outside our try/catch. That makes the UI show the
+  // unhelpful message "Request failed (500)". To avoid that, keep *all* logic
+  // inside a single try/catch and always return JSON.
   try {
+    if (request.method !== 'POST') {
+      return response.status(405).json({ error: 'Method not allowed' });
+    }
+
+    // Basic Auth Check (Simulated)
+    const authHeader = request.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return response.status(401).json({ error: 'Unauthorized. Please log in.' });
+    }
+
+    // AI cost protection (daily caps + per-minute burst limits)
+    const usage = await enforceAiUsage(request, 1);
+    if (!usage.ok) {
+      return response
+        .status(usage.status || 429)
+        .json({
+          error: usage.error || 'AI usage limit reached.',
+          remaining: usage.remaining,
+          limit: usage.limit,
+          burstRemaining: usage.burstRemaining,
+          burstLimit: usage.burstLimit,
+        });
+    }
+
     const provider = resolveProvider(request);
     const { model, contents, config } = request.body || {};
 
@@ -63,6 +68,7 @@ export default async function handler(request: any, response: any) {
 
     return response.status(200).json(result);
   } catch (error: any) {
+    // Ensure we always return JSON so the client can show a helpful message.
     console.error('AI Provider Error:', error);
 
     if (error?.message?.includes('finishReason: SAFETY')) {
