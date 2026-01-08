@@ -3,29 +3,32 @@ import { enforceAiUsage } from './lib/usage';
 import { resolveProvider, callOpenAI, callAnthropic } from './lib/providers';
 
 export default async function handler(request: any, response: any) {
-  if (request.method !== 'POST') {
-    return response.status(405).json({ error: 'Method not allowed' });
-  }
-
-  const authHeader = request.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return response.status(401).json({ error: 'Unauthorized.' });
-  }
-
-  const usage = await enforceAiUsage(request, 1);
-  if (!usage.ok) {
-    return response
-      .status(usage.status || 429)
-      .json({
-        error: usage.error || 'AI usage limit reached.',
-        remaining: usage.remaining,
-        limit: usage.limit,
-        burstRemaining: usage.burstRemaining,
-        burstLimit: usage.burstLimit,
-      });
-  }
-
+  // IMPORTANT:
+  // Keep *all* logic inside a single try/catch so Vercel doesn't return a plain-text 500
+  // (FUNCTION_INVOCATION_FAILED) that the UI can't parse.
   try {
+    if (request.method !== 'POST') {
+      return response.status(405).json({ error: 'Method not allowed' });
+    }
+
+    const authHeader = request.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return response.status(401).json({ error: 'Unauthorized.' });
+    }
+
+    const usage = await enforceAiUsage(request, 1);
+    if (!usage.ok) {
+      return response
+        .status(usage.status || 429)
+        .json({
+          error: usage.error || 'AI usage limit reached.',
+          remaining: usage.remaining,
+          limit: usage.limit,
+          burstRemaining: usage.burstRemaining,
+          burstLimit: usage.burstLimit,
+        });
+    }
+
     const provider = resolveProvider(request);
     const body = request.body || {};
     let result: any;
@@ -100,6 +103,8 @@ export default async function handler(request: any, response: any) {
     return response.status(200).json(result);
   } catch (error: any) {
     console.error('AI Provider Error:', error);
-    return response.status(500).json({ error: error?.message || 'Request failed.' });
+    return response.status(500).json({
+      error: error?.message || 'An internal error occurred while processing your request.',
+    });
   }
 }
