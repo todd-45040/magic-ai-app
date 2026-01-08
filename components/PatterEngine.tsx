@@ -1,17 +1,13 @@
 
-import React, { useState } from 'react';
-import { generateResponse } from '../services/geminiService';
+import React, { useMemo, useState } from 'react';
 import { saveIdea } from '../services/ideasService';
 import { PATTER_ENGINE_SYSTEM_INSTRUCTION } from '../constants';
 import { BookIcon, WandIcon, SaveIcon, CheckIcon, CopyIcon, ShareIcon } from './icons';
 import ShareButton from './ShareButton';
-import { useAppState } from '../store';
-// FIX: Import User type for props
 import type { User } from '../types';
 
 interface PatterEngineProps {
     onIdeaSaved: () => void;
-    // FIX: Add user prop to interface
     user: User;
 }
 
@@ -39,6 +35,19 @@ const PatterEngine: React.FC<PatterEngineProps> = ({ onIdeaSaved, user }) => {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied'>('idle');
 
+  // Safely read an auth token from whatever shape your User object uses.
+  // (Supabase commonly provides session.access_token or access_token.)
+  const authToken = useMemo(() => {
+    const u: any = user as any;
+    return (
+      u?.access_token ||
+      u?.accessToken ||
+      u?.session?.access_token ||
+      u?.session?.accessToken ||
+      null
+    );
+  }, [user]);
+
   const handleToneToggle = (tone: string) => {
     setSelectedTones(prev => 
         prev.includes(tone) ? prev.filter(t => t !== tone) : [...prev, tone]
@@ -64,11 +73,56 @@ const PatterEngine: React.FC<PatterEngineProps> = ({ onIdeaSaved, user }) => {
     const prompt = `Generate patter for the effect "${effectDescription}" with the following tones: ${selectedTones.join(', ')}.`;
     
     try {
-      // FIX: pass user (from props) as the 3rd argument to generateResponse
-      const response = await generateResponse(prompt, PATTER_ENGINE_SYSTEM_INSTRUCTION, user);
-      setResult(response);
+      // Call the serverless endpoint directly with cache-busting and robust parsing.
+      // This avoids UI breakage if the SDK response shape changes.
+      const res = await fetch(`/api/generatePatter?ts=${Date.now()}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
+        body: JSON.stringify({
+          prompt,
+          systemInstruction: PATTER_ENGINE_SYSTEM_INSTRUCTION,
+        }),
+      });
+
+      const rawText = await res.text();
+      let data: any = null;
+      try {
+        data = rawText ? JSON.parse(rawText) : null;
+      } catch {
+        // Non-JSON response (should be rare); keep as text.
+        data = null;
+      }
+
+      if (!res.ok) {
+        const message =
+          data?.error?.error?.message || // Gemini-style nested error
+          data?.error?.message ||
+          data?.error ||
+          rawText ||
+          `Request failed (${res.status})`;
+        throw new Error(message);
+      }
+
+      // Gemini SDK response → candidates[0].content.parts[].text
+      const extracted =
+        data?.text ??
+        data?.output ??
+        data?.candidates?.[0]?.content?.parts
+          ?.map((p: any) => p?.text || '')
+          .join('') ??
+        '';
+
+      if (!extracted.trim()) {
+        throw new Error('No text returned from AI.');
+      }
+
+      setResult(extracted);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An unknown error occurred.");
+      console.error('Patter Engine generate error:', err);
+      setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
       setIsLoading(false);
     }
@@ -163,6 +217,23 @@ const PatterEngine: React.FC<PatterEngineProps> = ({ onIdeaSaved, user }) => {
                             <ShareIcon className="w-4 h-4" />
                             <span>Share</span>
                         </ShareButton>
+                        <button
+                            onClick={handleCopy}
+                            disabled={copyStatus === 'copied'}
+                            className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 disabled:cursor-default transition-colors"
+                        >
+                            {copyStatus === 'copied' ? (
+                                <>
+                                    <CheckIcon className="w-4 h-4 text-green-400" />
+                                    <span>Copied!</span>
+                                </>
+                            ) : (
+                                <>
+                                    <CopyIcon className="w-4 h-4" />
+                                    <span>Copy</span>
+                                </>
+                            )}
+                        </button>
                          <button
                             onClick={handleSave}
                             disabled={saveStatus === 'saved'}

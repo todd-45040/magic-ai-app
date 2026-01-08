@@ -18,7 +18,7 @@ export default async function handler(req: any, res: any) {
     const prompt = body.prompt || "Hello";
 
     const result = await ai.models.generateContent({
-      model: process.env.AI_MODEL || "gemini-1.5-pro",
+      model: process.env.AI_MODEL || "gemini-2.0-flash",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
     });
 
