@@ -136,7 +136,7 @@ export default function MagicWire() {
                   {c.publisher}
                 </div>
 
-                <h3 className="mt-2 font-bold text-lg text-yellow-400">
+                <h3 className="mt-2 font-bold text-lg text-yellow-500">
                   {c.headline}
                 </h3>
 
