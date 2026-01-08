@@ -1587,7 +1587,22 @@ useEffect(() => {
 
 
       <nav className="flex border-b border-slate-800 px-2 md:px-4 flex-wrap">
-        <TabButton label="AI Assistant" icon={WandIcon} isActive={activeTab === 'chat'} onClick={() => handleTabClick('chat')} />
+        {/*
+          "AI Assistant" is the *home* of the assistant area (the grid of feature cards).
+          Users expect this to act like a Home button.
+          If we route to 'chat' here, and a tool view is persisted, the app can feel "stuck".
+        */}
+        <TabButton
+          label="AI Assistant"
+          icon={WandIcon}
+          isActive={activeView === 'dashboard' || activeTab === 'chat'}
+          onClick={() => {
+            // Clear any persisted tool view so we always land on the grid.
+            try { localStorage.removeItem('magician_active_view'); } catch {}
+            resetInlineForms();
+            setActiveView('dashboard');
+          }}
+        />
         <TabButton label="Show Planner" icon={ChecklistIcon} isActive={activeTab === 'show-planner'} onClick={() => handleTabClick('show-planner')} isLocked={!hasAmateurAccess} />
         <TabButton label="Effect Generator" icon={LightbulbIcon} isActive={activeTab === 'effect-generator'} onClick={() => handleTabClick('effect-generator')} />
         <TabButton label="Dictionary" icon={TutorIcon} isActive={activeTab === 'magic-dictionary'} onClick={() => handleTabClick('magic-dictionary')} isLocked={!hasProfessionalAccess} />
