@@ -6,6 +6,12 @@ export const RabbitIcon: React.FC<{ className?: string }> = ({ className }) => (
   </svg>
 );
 
+export const UserIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-3.33 0-8 1.67-8 5v1h16v-1c0-3.33-4.67-5-8-5z" />
+  </svg>
+);
+
 export const TopHatWandIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="currentColor">
         <path d="M12 4C8.69 4 6 5.79 6 8v3h12V8c0-2.21-2.69-4-6-4zM4 12v2h16v-2c-2.21 0-4.4.4-6.32.95-.51.15-1.03.25-1.58.25s-1.07-.1-1.58-.25C8.4 12.4 6.21 12 4 12zm0 3v2h16v-2c-1.66 0-3.21.31-4.62.85C14.13 18.5 12.86 19 12 19s-2.13-.5-3.38-1.15C7.21 15.31 5.66 15 4 15zm19.9-10.7l-18 4.5c-.5.12-.8.64-.68 1.14s.64.8 1.14.68l18-4.5c.5-.12.8-.64.68-1.14s-.64-.8-1.14-.68z" />
