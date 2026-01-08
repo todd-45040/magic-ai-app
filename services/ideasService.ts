@@ -2,20 +2,21 @@ import { supabase } from '../supabase';
 import type { SavedIdea, IdeaType } from '../types';
 
 /**
- * Notes:
- * - This service assumes a Supabase table named: public.ideas
- * - Columns expected by the app (based on existing UI usage):
- *   id (uuid/text), user_id (uuid/text), type (text), content (text), timestamp (timestamptz)
+ * ideasService.ts (created_at version)
  *
- * If your schema uses created_at instead of timestamp, either:
- * - create a generated view/column named timestamp, or
- * - update the order() call below to use created_at.
+ * This service expects a Supabase table: public.ideas
+ * Minimum columns:
+ *   - id (uuid/text PK)
+ *   - user_id (uuid/text, references auth.users)
+ *   - type (text)
+ *   - content (text)
+ *   - created_at (timestamptz, default now())
  */
 
 async function requireUserId(): Promise<string> {
-  const { data: userData, error } = await supabase.auth.getUser();
+  const { data, error } = await supabase.auth.getUser();
   if (error) throw error;
-  const sbUser = userData?.user ?? null;
+  const sbUser = data?.user ?? null;
   if (!sbUser) throw new Error('Not authenticated');
   return sbUser.id;
 }
@@ -28,7 +29,7 @@ export const getSavedIdeas = async (): Promise<SavedIdea[]> => {
       .from('ideas')
       .select('*')
       .eq('user_id', userId)
-      .order('timestamp', { ascending: false });
+      .order('created_at', { ascending: false });
 
     if (error) throw error;
     return (data ?? []) as SavedIdea[];
@@ -45,8 +46,6 @@ export const saveIdea = async (type: IdeaType | 'text', content: string): Promis
     user_id: userId,
     type: type ?? 'text',
     content,
-    // Keep compatibility with existing code that orders by 'timestamp'
-    timestamp: new Date().toISOString(),
   };
 
   const { data, error } = await supabase.from('ideas').insert([payload]).select('*').single();

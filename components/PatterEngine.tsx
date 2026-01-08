@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { saveIdea } from "../services/ideasService";
-import ShareButton from "./ShareButton";
-import { BookIcon, WandIcon, SaveIcon, CheckIcon, CopyIcon, ShareIcon } from "./icons";
+import { BookIcon, WandIcon, SaveIcon, CheckIcon, CopyIcon } from "./icons";
 import type { User } from "../types";
 
 interface PatterEngineProps {
@@ -25,16 +24,9 @@ const LoadingIndicator: React.FC = () => (
 );
 
 function extractGeminiText(data: any): string {
-  // Gemini generateContent response format
   const parts = data?.candidates?.[0]?.content?.parts;
   if (Array.isArray(parts)) return parts.map((p: any) => p?.text || "").join("");
-  // Back-compat fallbacks (in case API changes later)
-  return (
-    data?.text ||
-    data?.output ||
-    (typeof data?.response?.text === "string" ? data.response.text : "") ||
-    ""
-  );
+  return data?.text || data?.output || "";
 }
 
 const PatterEngine: React.FC<PatterEngineProps> = ({ user, onIdeaSaved }) => {
@@ -75,11 +67,9 @@ const PatterEngine: React.FC<PatterEngineProps> = ({ user, onIdeaSaved }) => {
     setCopyStatus("idle");
 
     try {
-      // IMPORTANT: Call the hardened server endpoint (not client-side provider code)
       const res = await fetch(`/api/generatePatter?ts=${Date.now()}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // user is kept in props for future (auth/limits). API currently only needs prompt.
         body: JSON.stringify({ prompt }),
       });
 
@@ -179,7 +169,7 @@ const PatterEngine: React.FC<PatterEngineProps> = ({ user, onIdeaSaved }) => {
             />
           </div>
 
-          {/* Tone buttons (restored) */}
+          {/* Tone buttons */}
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-2">Select Tones</label>
             <div className="grid grid-cols-2 gap-2">
@@ -226,17 +216,8 @@ const PatterEngine: React.FC<PatterEngineProps> = ({ user, onIdeaSaved }) => {
               <pre className="whitespace-pre-wrap break-words text-slate-200 font-sans text-sm">{result}</pre>
             </div>
 
+            {/* Footer: Copy + Save only */}
             <div className="mt-auto p-2 bg-slate-900/50 flex justify-end gap-2 border-t border-slate-800">
-              <ShareButton
-                title={`Patter Variations for: ${effectDescription}`}
-                text={fullContentForCopy()}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 transition-colors"
-              >
-                <ShareIcon className="w-4 h-4" />
-                <span>Share</span>
-              </ShareButton>
-
-              {/* Single Copy button */}
               <button
                 type="button"
                 onClick={handleCopy}
