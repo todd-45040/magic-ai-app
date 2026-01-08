@@ -22,14 +22,12 @@ function domainFromUrl(url?: string | null) {
 }
 
 /**
- * Prefer a real publisher label over "news.google.com" (Google News wrapper URLs).
- * Falls back to domain if it's already a direct link.
+ * Prefer a real publisher label over "news.google.com"
  */
 function publisherFromItem(it: WireItem) {
   const host = domainFromUrl(it.sourceUrl);
   if (host && host !== "news.google.com") return host;
 
-  // Google News headlines often end with: "… - Publisher Name"
   const h = it.headline || "";
   const parts = h.split(" - ");
   if (parts.length > 1) return parts[parts.length - 1].trim();
@@ -147,12 +145,12 @@ export default function MagicWire() {
               title={c.url ? "Open original article" : undefined}
             >
               <div>
-                {/* Publisher */}
-                <div className="text-xs text-slate-300/80 tracking-wide">
+                {/* Publisher (improved styling) */}
+                <div className="text-[11px] uppercase tracking-wider text-slate-400/70">
                   {c.publisher}
                 </div>
 
-                {/* Headline (clamped to 2 lines) */}
+                {/* Headline */}
                 <h3 className="mt-2 font-bold text-lg text-amber-400 line-clamp-2">
                   {c.headline}
                 </h3>
@@ -173,9 +171,10 @@ export default function MagicWire() {
                     target="_blank"
                     rel="noreferrer noopener"
                     onClick={(e) => e.stopPropagation()}
-                    className="underline hover:text-white opacity-80 hover:opacity-100"
+                    className="inline-flex items-center gap-1 underline opacity-80 hover:opacity-100 hover:text-white transition-colors"
                   >
-                    Read original ↗
+                    Read original
+                    <span aria-hidden="true">↗</span>
                   </a>
                 )}
               </div>
