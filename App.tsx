@@ -213,6 +213,7 @@ function App() {
 
   const handleLogout = async () => {
     try {
+        try { localStorage.removeItem('magician_active_view'); } catch {}
         await supabase.auth.signOut();
     } catch (error) {
         console.error("Failed to sign out", error);
@@ -283,19 +284,28 @@ function App() {
       <div className="dust-pattern" />
 
       {mode !== 'selection' && mode !== 'auth' && mode !== 'live-feedback' && (
-        <header className="sticky top-0 z-20 w-full">
+        <header className="sticky top-0 z-50 w-full">
           <div className="backdrop-blur-md bg-black/50 border-b border-yellow-500/20">
             <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setMode('selection')}
+                  onClick={() => {
+                    try { localStorage.removeItem('magician_active_view'); } catch {}
+                    window.dispatchEvent(new CustomEvent('maw:go-dashboard'));
+                    setMode('selection');
+                  }}
                   className="px-3 py-2 rounded-lg bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-300 hover:text-yellow-200 transition-colors border border-yellow-500/20"
                 >
                   Main Menu
                 </button>
 
                 <button
-                  onClick={() => setMode(user ? 'magician' : 'auth')}
+                  onClick={() => {
+                    // Force the in-app tool view back to Dashboard (prevents "sticky" tool traps)
+                    try { localStorage.removeItem('magician_active_view'); } catch {}
+                    window.dispatchEvent(new CustomEvent('maw:go-dashboard'));
+                    setMode(user ? 'magician' : 'auth');
+                  }}
                   disabled={!user}
                   className={
                     user

@@ -1037,6 +1037,19 @@ useEffect(() => {
     }
   });
 
+// Global navigation escape hatch:
+// The top-level App header dispatches 'maw:go-dashboard' so we can reliably
+// exit any tool view (even if localStorage has a "sticky" view saved).
+useEffect(() => {
+  const handler = () => {
+    try { localStorage.removeItem(MAGICIAN_VIEW_STORAGE_KEY); } catch {}
+    setActiveView('dashboard');
+  };
+  window.addEventListener('maw:go-dashboard', handler as any);
+  return () => window.removeEventListener('maw:go-dashboard', handler as any);
+}, []);
+
+
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
