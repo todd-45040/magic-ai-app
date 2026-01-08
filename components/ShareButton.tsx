@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShareIcon, CheckIcon, CopyIcon } from './icons';
+import { ShareIcon, CheckIcon } from './icons';
 
 interface ShareButtonProps {
   title: string;
@@ -11,89 +11,84 @@ interface ShareButtonProps {
   'aria-label'?: string;
 }
 
+/**
+ * ShareButton
+ * - Renders a single button (no extra "Copy" button) to avoid duplicate UI actions.
+ * - Uses the Web Share API when available.
+ * - Fallback: copies share text to clipboard and briefly shows a confirmation state.
+ */
 const ShareButton: React.FC<ShareButtonProps> = (props) => {
   const { title, text, file, children, className, disabled, ...rest } = props;
-  const [status, setStatus] = useState<'idle' | 'copied'>('idle');
+  const [status, setStatus] = useState<'idle' | 'done'>('idle');
 
-  // Check if native sharing is available. For files, we need to be more specific.
-  const canShareNatively = typeof navigator !== 'undefined' && 
-                           !!navigator.share && 
-                           (!file || (!!navigator.canShare && navigator.canShare({ files: [file] })));
+  const doCopyFallback = async () => {
+    const payload = [title, text].filter(Boolean).join('\n\n').trim();
+    if (!payload) return;
 
-  const handleShare = async () => {
-    if (canShareNatively) {
-      const shareData: ShareData = { title };
-      if (text) shareData.text = text;
-      if (file) {
-        shareData.files = [file];
-      }
-      
-      try {
-        await navigator.share(shareData);
-      } catch (error) {
-        if ((error as DOMException).name !== 'AbortError') {
-          console.error('Error sharing:', error);
-        }
-      }
-    } else if (text) {
-      // Fallback to copying text to the clipboard
-      try {
-        await navigator.clipboard.writeText(text);
-        setStatus('copied');
-        setTimeout(() => setStatus('idle'), 2000);
-      } catch (error) {
-        console.error('Error copying to clipboard:', error);
-        alert('Could not copy text to clipboard.');
-      }
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(payload);
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = payload;
+      ta.style.position = 'fixed';
+      ta.style.top = '-9999px';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
     }
   };
 
-  const isActuallyDisabled = disabled || (!canShareNatively && !text);
-  const finalClassName = `${className ?? ''} ${isActuallyDisabled ? 'opacity-50 cursor-not-allowed' : ''}`.trim();
-  const tooltip = isActuallyDisabled && !disabled ? "Sharing is not available for this content on your browser." : undefined;
+  const handleShare = async () => {
+    if (disabled) return;
 
-  const getButtonContent = () => {
-    if (status === 'copied') {
-      return (
-        <>
-          <CheckIcon className="w-4 h-4 text-green-400" />
-          <span>Copied!</span>
-        </>
-      );
+    try {
+      if (navigator.share) {
+        // Most browsers ignore/limit files; include if provided.
+        const data: any = { title };
+        if (text) data.text = text;
+        if (file) data.files = [file];
+        await navigator.share(data);
+      } else {
+        // Fallback: copy (but still a single "Share" button in the UI)
+        await doCopyFallback();
+        setStatus('done');
+        setTimeout(() => setStatus('idle'), 1500);
+      }
+    } catch (err) {
+      // If user cancels share, it's not really an error. Quietly ignore.
+      // If share fails, try copy fallback once.
+      try {
+        await doCopyFallback();
+        setStatus('done');
+        setTimeout(() => setStatus('idle'), 1500);
+      } catch (e) {
+        console.error('Share failed:', err);
+      }
     }
-
-    if (!canShareNatively && text) {
-      // In fallback mode, replace "Share" with "Copy" and ShareIcon with CopyIcon
-      return React.Children.map(children, child => {
-        // FIX: Add a generic type to `React.isValidElement` to correctly infer the type of `child.props`, allowing safe access to its properties.
-        if (React.isValidElement<{ children?: React.ReactNode; className?: string; }>(child)) {
-          // Replace icon
-          if (child.type === ShareIcon) {
-            return <CopyIcon className={child.props.className} />;
-          }
-          // Replace text inside a span
-          if (child.type === 'span' && typeof child.props.children === 'string' && child.props.children.toLowerCase().includes('share')) {
-            return React.cloneElement(child, {
-              children: child.props.children.replace(/share/i, 'Copy')
-            });
-          }
-        }
-        return child;
-      });
-    }
-
-    return children;
   };
 
   return (
-    <button 
-      onClick={handleShare} 
-      disabled={isActuallyDisabled}
-      title={tooltip}
-      className={finalClassName}
+    <button
+      type="button"
+      onClick={handleShare}
+      disabled={disabled}
+      className={className}
       {...rest}
+      title={status === 'done' ? 'Copied to clipboard' : 'Share'}
     >
-      {getButtonContent()}
+      {status === 'done' ? (
+        <span className="inline-flex items-center gap-2">
+          <CheckIcon className="w-4 h-4 text-green-400" />
+          <span>Copied</span>
+        </span>
+      ) : (
+        <span className="inline-flex items-center gap-2">
+          <ShareIcon className="w-4 h-4" />
+          {children}
+        </span>
+      )}
     </button>
   );
 };
