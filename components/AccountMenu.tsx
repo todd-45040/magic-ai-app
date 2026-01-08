@@ -7,8 +7,8 @@ interface AccountMenuProps {
   onLogout: () => void;
 }
 
-export default function AccountMenu({ user, onLogout }: AccountMenuProps) {  const [openAdmin, setOpenAdmin] = useState(false);
-
+export default function AccountMenu({ user, onLogout }: AccountMenuProps) {
+  const [openAdmin, setOpenAdmin] = useState(false);
   const isAdmin = !!user.isAdmin;
 
   return (
@@ -21,10 +21,23 @@ export default function AccountMenu({ user, onLogout }: AccountMenuProps) {  con
 
         <div className="menu-item" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {isAdmin && (
-          <button onClick={onLogout} className="btn" aria-label="Logout">
+            <button
+              type="button"
+              onClick={() => setOpenAdmin(true)}
+              className="btn"
+              aria-label="Admin settings"
+            >
+              Admin
+            </button>
+          )}
+
+          <button type="button" onClick={onLogout} className="btn" aria-label="Logout">
             Logout
           </button>
-        </div>      </div>      <AdminSettingsModal open={openAdmin} onClose={() => setOpenAdmin(false)} />
+        </div>
+      </div>
+
+      <AdminSettingsModal open={openAdmin} onClose={() => setOpenAdmin(false)} />
     </>
   );
 }
