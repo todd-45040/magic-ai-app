@@ -1083,7 +1083,8 @@ useEffect(() => {
 // exit any tool view (even if localStorage has a "sticky" view saved).
 useEffect(() => {
   const handler = () => {
-    try { localStorage.removeItem(MAGICIAN_VIEW_STORAGE_KEY); } catch {}
+    try { localStorage.setItem(MAGICIAN_VIEW_STORAGE_KEY, 'dashboard'); } catch {}
+    resetInlineForms();
     setActiveView('dashboard');
   };
   window.addEventListener('maw:go-dashboard', handler as any);
@@ -1168,6 +1169,11 @@ useEffect(() => {
   }, [messages]);
   
   useEffect(() => {
+    // Persist the last *landing* view for the Magician section.
+    // Treat 'chat' as a tool view (not a landing view) so the AI Assistant tab
+    // always returns to the dashboard/grid instead of resuming chat.
+    if (activeView === 'chat') return;
+
     try {
         localStorage.setItem(MAGICIAN_VIEW_STORAGE_KEY, activeView);
     } catch (error) {
@@ -1639,7 +1645,7 @@ useEffect(() => {
           isActive={activeView === 'dashboard' || activeTab === 'chat'}
           onClick={() => {
             // Clear any persisted tool view so we always land on the grid.
-            try { localStorage.removeItem('magician_active_view'); } catch {}
+            try { localStorage.setItem('magician_active_view', 'dashboard'); } catch {}
             resetInlineForms();
             setActiveView('dashboard');
           }}
