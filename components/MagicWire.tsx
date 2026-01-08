@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 type WireItem = {
+  category?: string;
   headline: string;
   summary?: string;
   body?: string;
@@ -21,15 +22,14 @@ function domainFromUrl(url?: string | null) {
 }
 
 /**
- * Prefer real publisher names over "news.google.com"
+ * Prefer a real publisher label over "news.google.com" (Google News wrapper URLs).
+ * Falls back to domain if it's already a direct link.
  */
 function publisherFromItem(it: WireItem) {
   const host = domainFromUrl(it.sourceUrl);
-
-  // If not Google News, use the domain
   if (host && host !== "news.google.com") return host;
 
-  // Google News headlines usually end with " - Publisher"
+  // Google News headlines often end with: "… - Publisher Name"
   const h = it.headline || "";
   const parts = h.split(" - ");
   if (parts.length > 1) return parts[parts.length - 1].trim();
@@ -85,7 +85,7 @@ export default function MagicWire() {
   const cards = useMemo(
     () =>
       items.map((it, idx) => ({
-        key: idx,
+        key: `${idx}-${it.headline}`,
         headline: it.headline,
         summary: it.summary || it.body || "",
         publisher: publisherFromItem(it),
@@ -94,6 +94,11 @@ export default function MagicWire() {
       })),
     [items]
   );
+
+  const openOriginal = (url?: string | null) => {
+    if (!url) return;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
 
   return (
     <div className="w-full">
@@ -128,23 +133,37 @@ export default function MagicWire() {
           cards.map((c) => (
             <div
               key={c.key}
-              className="rounded-xl bg-slate-900/40 border border-slate-800 hover:border-purple-500 hover:shadow-lg hover:shadow-purple-900/20 p-4 flex flex-col justify-between"
+              role={c.url ? "link" : undefined}
+              tabIndex={c.url ? 0 : -1}
+              onClick={() => openOriginal(c.url)}
+              onKeyDown={(e) => {
+                if (!c.url) return;
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  openOriginal(c.url);
+                }
+              }}
+              className="cursor-pointer rounded-xl bg-slate-900/40 border border-slate-800 hover:bg-slate-900/50 hover:border-purple-500 hover:shadow-lg hover:shadow-purple-900/20 p-4 flex flex-col justify-between transition-colors transition-shadow duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/40"
+              title={c.url ? "Open original article" : undefined}
             >
               <div>
-                {/* Publisher (replaces news.google.com) */}
+                {/* Publisher */}
                 <div className="text-xs text-slate-300/80 tracking-wide">
                   {c.publisher}
                 </div>
 
-                <h3 className="mt-2 font-bold text-lg text-yellow-500">
+                {/* Headline (clamped to 2 lines) */}
+                <h3 className="mt-2 font-bold text-lg text-amber-400 line-clamp-2">
                   {c.headline}
                 </h3>
 
+                {/* Summary */}
                 <p className="mt-2 text-sm text-slate-300/80 line-clamp-3">
                   {c.summary}
                 </p>
               </div>
 
+              {/* Footer */}
               <div className="mt-3 text-xs text-slate-300/70 flex justify-between items-center">
                 <span>{c.when}</span>
 
@@ -152,8 +171,9 @@ export default function MagicWire() {
                   <a
                     href={c.url}
                     target="_blank"
-                    rel="noreferrer"
-                    className="underline hover:text-white"
+                    rel="noreferrer noopener"
+                    onClick={(e) => e.stopPropagation()}
+                    className="underline hover:text-white opacity-80 hover:opacity-100"
                   >
                     Read original ↗
                   </a>
