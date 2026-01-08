@@ -1,110 +1,32 @@
-import { GoogleGenAI } from '@google/genai';
-import { enforceAiUsage } from './lib/usage';
-import { resolveProvider, callOpenAI, callAnthropic } from './lib/providers';
-
-export default async function handler(request: any, response: any) {
-  // IMPORTANT:
-  // Keep *all* logic inside a single try/catch so Vercel doesn't return a plain-text 500
-  // (FUNCTION_INVOCATION_FAILED) that the UI can't parse.
+export default async function handler(req: any, res: any) {
   try {
-    if (request.method !== 'POST') {
-      return response.status(405).json({ error: 'Method not allowed' });
+    if (req.method !== "POST") {
+      return res.status(405).json({ error: "Method not allowed" });
     }
 
-    const authHeader = request.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return response.status(401).json({ error: 'Unauthorized.' });
-    }
-
-    const usage = await enforceAiUsage(request, 1);
-    if (!usage.ok) {
-      return response
-        .status(usage.status || 429)
-        .json({
-          error: usage.error || 'AI usage limit reached.',
-          remaining: usage.remaining,
-          limit: usage.limit,
-          burstRemaining: usage.burstRemaining,
-          burstLimit: usage.burstLimit,
-        });
-    }
-
-    const provider = resolveProvider(request);
-    const body = request.body || {};
-    let result: any;
-
-    if (provider === 'openai') {
-      // Accept either Gemini-style body (model/contents/config) or {prompt, systemInstruction}
-      const contents =
-        body.contents ||
-        [
-          { role: 'user', parts: [{ text: body.prompt || '' }] },
-        ];
-
-      const config = body.config || {
-        systemInstruction: body.systemInstruction,
-      };
-
-      result = await callOpenAI({
-        model: body.model || 'gemini-3-pro-preview',
-        contents,
-        config,
+    const apiKey = process.env.GOOGLE_API_KEY || process.env.API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({
+        error: "Missing GOOGLE_API_KEY (or legacy API_KEY) in server environment",
       });
-    } else if (provider === 'anthropic') {
-      const contents =
-        body.contents ||
-        [
-          { role: 'user', parts: [{ text: body.prompt || '' }] },
-        ];
-
-      const config = body.config || {
-        systemInstruction: body.systemInstruction,
-      };
-
-      result = await callAnthropic({
-        model: body.model || 'gemini-3-pro-preview',
-        contents,
-        config,
-      });
-    } else {
-      const apiKey = process.env.API_KEY;
-      if (!apiKey) {
-        return response.status(500).json({ error: 'API_KEY is not configured.' });
-      }
-
-      const ai = new GoogleGenAI({ apiKey });
-
-      if (body.prompt && body.systemInstruction) {
-        // For endpoints that send prompt/systemInstruction directly
-        result = await ai.models.generateContent({
-          model: body.model || 'gemini-3-pro-preview',
-          contents: [{ role: 'user', parts: [{ text: body.prompt }] }],
-          config: {
-            systemInstruction: body.systemInstruction,
-          },
-        });
-      } else {
-        // For endpoints that send model/contents/config
-        result = await ai.models.generateContent({
-          model: body.model || 'gemini-3-pro-preview',
-          contents: body.contents,
-          config: body.config,
-        });
-      }
     }
 
-    response.setHeader('X-AI-Remaining', String(usage.remaining ?? ''));
-    response.setHeader('X-AI-Limit', String(usage.limit ?? ''));
-    response.setHeader('X-AI-Membership', String(usage.membership ?? ''));
-    response.setHeader('X-AI-Burst-Remaining', String(usage.burstRemaining ?? ''));
-    response.setHeader('X-AI-Burst-Limit', String(usage.burstLimit ?? ''));
-    response.setHeader('X-AI-Provider-Used', provider);
+    const { GoogleGenAI } = await import("@google/genai");
+    const ai = new GoogleGenAI({ apiKey });
 
-    return response.status(200).json(result);
-  } catch (error: any) {
-    console.error('AI Provider Error:', error);
-    return response.status(500).json({
-      error: error?.message || 'An internal error occurred while processing your request.',
+    const body = req.body || {};
+    const prompt = body.prompt || "Hello";
+
+    const result = await ai.models.generateContent({
+      model: process.env.AI_MODEL || "gemini-1.5-pro",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+    });
+
+    return res.status(200).json(result);
+  } catch (err: any) {
+    console.error("generatePatter error:", err);
+    return res.status(500).json({
+      error: err?.message || "Internal server error",
     });
   }
 }
