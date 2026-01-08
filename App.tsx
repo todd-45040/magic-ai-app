@@ -197,6 +197,11 @@ function App() {
 
   const handleSelectMode = (selectedMode: Mode) => {
     if (selectedMode === 'magician') {
+      // Ensure entering Magician/AI Assistant mode always lands on the dashboard grid,
+      // not a previously persisted tool view.
+      try { localStorage.removeItem('magician_active_view'); } catch {}
+      try { window.dispatchEvent(new CustomEvent('maw:go-dashboard')); } catch {}
+
       if (user) {
         setMode('magician');
       } else {
