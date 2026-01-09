@@ -1,8 +1,29 @@
-import { createClient } from '@supabase/supabase-js';
+// NOTE:
+// Supabase JS is ESM in some configurations. Importing it at module load can
+// cause Vercel serverless functions to crash with FUNCTION_INVOCATION_FAILED.
+// We dynamically import createClient inside functions so all errors stay inside
+// our handlers' try/catch and return JSON to the client.
+type CreateClientFn = (...args: any[]) => any;
+
+async function getCreateClient(): Promise<CreateClientFn> {
+  const mod: any = await import('@supabase/supabase-js');
+  return mod.createClient;
+}
 
 // Canonical membership tiers used for usage enforcement.
 // Legacy tiers are accepted and normalized server-side.
 type Membership = 'free' | 'trial' | 'performer' | 'professional' | 'expired' | 'amateur' | 'semi-pro';
+
+async function makeSupabaseAdminClient(supabaseUrl: string, serviceKey: string) {
+  const mod: any = await import('@supabase/supabase-js');
+  const createClient = mod?.createClient as any;
+  if (typeof createClient !== 'function') {
+    throw new Error('Supabase client could not be loaded on the server.');
+  }
+  return createClient(supabaseUrl, serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
 
 function normalizeTier(m?: string | null): 'free' | 'trial' | 'performer' | 'professional' | 'expired' {
   switch (m) {
@@ -119,9 +140,7 @@ export async function getAiUsageStatus(req: any): Promise<{
     return { ok: false, status: 503, error: 'Server usage tracking is not configured.' };
   }
 
-  const admin = createClient(supabaseUrl, serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  const admin = await makeSupabaseAdminClient(supabaseUrl, serviceKey);
 
   let userId: string | null = null;
   if (token && token !== 'guest') {
@@ -235,9 +254,7 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
     return { ok: true, remaining: limit - (used + costUnits), limit, burstRemaining: burst.remaining, burstLimit: burst.limit };
   }
 
-  const admin = createClient(supabaseUrl, serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  const admin = await makeSupabaseAdminClient(supabaseUrl, serviceKey);
 
   // Determine user id (preferred) or fall back to IP-based identity
   let userId: string | null = null;

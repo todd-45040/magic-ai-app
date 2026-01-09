@@ -1,4 +1,3 @@
-import { GoogleGenAI } from '@google/genai';
 import { enforceAiUsage } from './lib/usage';
 import { resolveProvider, callOpenAI, callAnthropic } from './lib/providers';
 
@@ -48,6 +47,11 @@ export default async function handler(request: any, response: any) {
         return response.status(500).json({ error: 'API_KEY is not configured on the server.' });
       }
 
+      // IMPORTANT: @google/genai is ESM-only in some builds.
+      // Importing it at module load can crash the serverless function with
+      // FUNCTION_INVOCATION_FAILED (client sees a plain 500).
+      // Dynamic import keeps errors inside our try/catch and returns JSON.
+      const { GoogleGenAI } = await import('@google/genai');
       const ai = new GoogleGenAI({ apiKey });
       result = await ai.models.generateContent({
         model: model || 'gemini-3-pro-preview',
