@@ -1565,10 +1565,15 @@ useEffect(() => {
   }
 
   const TabButton: React.FC<{ label: string; icon: React.FC<{ className?: string }>; isActive: boolean; onClick: () => void; isLocked?: boolean; }> = ({ label, icon: Icon, isActive, onClick, isLocked }) => (
-    <button onClick={onClick} title={isLocked ? 'Upgrade to access this feature' : ''} className={`relative flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${ isActive ? 'border-b-2 border-purple-400 text-purple-300' : 'border-b-2 border-transparent text-slate-400 hover:text-white'} ${isLocked ? 'text-slate-600 hover:text-slate-600' : ''}`}>
-        <Icon className="w-5 h-5" />
-        <span>{label}</span>
-        {isLocked && <LockIcon className="absolute top-1 right-1 w-3 h-3 text-amber-400/80" />}
+    <button
+      onClick={onClick}
+      title={isLocked ? 'Upgrade to access this feature' : ''}
+      className={`relative flex items-center gap-2 whitespace-nowrap px-3 py-2 text-sm font-medium transition-colors ${isActive ? 'border-b-2 border-purple-400 text-purple-300' : 'border-b-2 border-transparent text-slate-400 hover:text-white'} ${isLocked ? 'text-slate-600 hover:text-slate-600' : ''}`}
+    >
+      <Icon className="w-4 h-4" />
+      <span className="hidden sm:inline">{label}</span>
+      <span className="sm:hidden text-[11px]">{label}</span>
+      {isLocked && <LockIcon className="absolute top-1 right-1 w-3 h-3 text-amber-400/80" />}
     </button>
   );
 
@@ -1579,15 +1584,15 @@ useEffect(() => {
     <div className="relative flex flex-col h-full rounded-lg border border-slate-800 shadow-2xl shadow-purple-900/20 overflow-hidden">
         {isUpgradeModalOpen && <UpgradeModal onClose={() => setIsUpgradeModalOpen(false)} onUpgrade={handleUpgrade} variant={isExpired ? 'trial-expired' : 'locked-tool'} />}
         {isHelpModalOpen && <HelpModal onClose={() => setIsHelpModalOpen(false)} />}
-      <header className="flex items-center p-4 border-b border-slate-800 brand-motif">
-        <button onClick={handleReturnToStudioHome} className="p-2 mr-4 rounded-full hover:bg-slate-700 transition-colors">
-          <BackIcon className="w-6 h-6 text-slate-300" />
+      <header className="flex items-center px-3 sm:px-4 py-2 border-b border-slate-800 brand-motif">
+        <button onClick={handleReturnToStudioHome} className="p-1.5 mr-2 rounded-full hover:bg-slate-700 transition-colors" aria-label="Back">
+          <BackIcon className="w-5 h-5 text-slate-300" />
         </button>
-        <picture className="mr-3">
-  <source media="(prefers-contrast: more)" srcSet="/images/nav-wand.png" />
-  <source media="(forced-colors: active)" srcSet="/images/nav-wand.png" />
-  <img src="/images/nav-wand.png" alt="Magic wand" className="h-10 w-auto wizard-nav-icon" />
-</picture>
+        <picture className="mr-2 flex-shrink-0">
+          <source media="(prefers-contrast: more)" srcSet="/images/nav-wand.png" />
+          <source media="(forced-colors: active)" srcSet="/images/nav-wand.png" />
+          <img src="/images/nav-wand.png" alt="Magic wand" className="h-8 w-auto wizard-nav-icon" />
+        </picture>
         <div className="ml-auto flex items-center gap-2">
             <UsageMeter />
             <button onClick={() => setIsHelpModalOpen(true)} className="p-2 rounded-full text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Help" aria-label="Open help center">
@@ -1642,7 +1647,7 @@ useEffect(() => {
 )}
 
 
-      <nav className="flex border-b border-slate-800 px-2 md:px-4 flex-wrap">
+      <nav className="flex items-center gap-1 border-b border-slate-800 px-2 md:px-4 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         {/*
           "AI Assistant" is the *home* of the assistant area (the grid of feature cards).
           Users expect this to act like a Home button.
