@@ -23,7 +23,7 @@ const COLLAPSED_WIDGETS_KEY = 'magician_dashboard_collapsed_widgets';
 const QuickActionsWidget: React.FC<{ onNavigate: (view: MagicianView) => void }> = ({ onNavigate }) => (
     <>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <button onClick={() => onNavigate('chat')} className="p-4 bg-slate-800 border border-slate-700 rounded-lg text-left h-full group transition-colors hover:bg-purple-900/50 hover:border-purple-500">
+            <button onClick={() => onNavigate('assistant-home')} className="p-4 bg-slate-800 border border-slate-700 rounded-lg text-left h-full group transition-colors hover:bg-purple-900/50 hover:border-purple-500">
                 <WandIcon className="w-8 h-8 mb-2 text-purple-400 group-hover:text-purple-300" />
                 <p className="font-bold text-slate-200">AI Assistant</p>
                 <p className="text-sm text-slate-400">Choose a tool or ask a question</p>

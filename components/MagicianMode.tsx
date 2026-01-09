@@ -880,6 +880,7 @@ interface MagicianModeProps {
 
 const VIEW_TO_TAB_MAP: Record<MagicianView, MagicianTab> = {
     'dashboard': 'chat',
+    'assistant-home': 'chat',
     'chat': 'chat',
     'live-rehearsal': 'chat',
     'video-rehearsal': 'chat',
@@ -1033,6 +1034,7 @@ useEffect(() => {
 
       const validViews: MagicianView[] = [
         'dashboard',
+        'assistant-home',
         'chat',
         'show-planner',
         'effect-generator',
@@ -1083,8 +1085,7 @@ useEffect(() => {
 // exit any tool view (even if localStorage has a "sticky" view saved).
 useEffect(() => {
   const handler = () => {
-    try { localStorage.setItem(MAGICIAN_VIEW_STORAGE_KEY, 'dashboard'); } catch {}
-    resetInlineForms();
+    try { localStorage.removeItem(MAGICIAN_VIEW_STORAGE_KEY); } catch {}
     setActiveView('dashboard');
   };
   window.addEventListener('maw:go-dashboard', handler as any);
@@ -1169,11 +1170,6 @@ useEffect(() => {
   }, [messages]);
   
   useEffect(() => {
-    // Persist the last *landing* view for the Magician section.
-    // Treat 'chat' as a tool view (not a landing view) so the AI Assistant tab
-    // always returns to the dashboard/grid instead of resuming chat.
-    if (activeView === 'chat') return;
-
     try {
         localStorage.setItem(MAGICIAN_VIEW_STORAGE_KEY, activeView);
     } catch (error) {
@@ -1420,6 +1416,13 @@ useEffect(() => {
         setActiveView('global-search');
         return;
     }
+    // AI Assistant should always land on the feature grid (prompt cards),
+    // not restore the last chat/tool session.
+    if (tab === 'chat') {
+        resetInlineForms();
+        setActiveView('assistant-home');
+        return;
+    }
     resetInlineForms();
     setActiveView(tab);
   };
@@ -1523,6 +1526,43 @@ useEffect(() => {
   const renderContent = () => {
     switch(activeView) {
         case 'dashboard': return <Dashboard user={user} shows={shows} feedback={feedback} ideas={ideas} onNavigate={handleNavigate} onShowsUpdate={handleShowsUpdate} onPromptClick={handlePromptClick} />;
+        case 'assistant-home':
+            return (
+                <div className="flex-1 overflow-y-auto p-4 md:p-6 animate-fade-in">
+                    <div className="max-w-6xl mx-auto">
+                        <div className="flex items-center justify-between gap-3 mb-4">
+                            <div>
+                                <h2 className="text-2xl font-bold text-slate-200 font-cinzel">AI Assistant</h2>
+                                <p className="text-slate-400">Pick a tool to generate ideas, scripts, rehearsal notes, and more.</p>
+                            </div>
+                            {messages.length > 0 && (
+                                <button
+                                    onClick={() => setActiveView('chat')}
+                                    className="px-3 py-2 rounded-lg text-sm bg-slate-800/60 border border-slate-700 text-slate-200 hover:bg-slate-800 hover:border-purple-500 transition-colors"
+                                    title="Return to your most recent chat session">
+                                    Resume last session
+                                </button>
+                            )}
+                        </div>
+
+                        <PromptGrid
+                            prompts={MAGICIAN_PROMPTS}
+                            user={user}
+                            hasAmateurAccess={hasAmateurAccess}
+                            hasSemiProAccess={hasSemiProAccess}
+                            hasProfessionalAccess={hasProfessionalAccess}
+                            onPromptClick={(p) => {
+                                // Always start from a clean assistant grid.
+                                // If the user wants history, they can use "Resume last session".
+                                setMessages([]);
+                                try { localStorage.removeItem(CHAT_HISTORY_KEY); } catch { /* ignore */ }
+                                resetInlineForms();
+                                handlePromptClick(p);
+                            }}
+                        />
+                    </div>
+                </div>
+            );
         case 'live-rehearsal': return <LiveRehearsal user={user} onReturnToStudio={handleReturnFromRehearsal} onIdeaSaved={() => handleIdeaSaved('Rehearsal saved!')} />;
         case 'video-rehearsal': return <VideoRehearsal onIdeaSaved={() => handleIdeaSaved('Video analysis saved!')} user={user} />;
         case 'visual-brainstorm': return <VisualBrainstorm onIdeaSaved={() => handleIdeaSaved('Image idea saved!')} user={user} />;
@@ -1645,7 +1685,7 @@ useEffect(() => {
           isActive={activeView === 'dashboard' || activeTab === 'chat'}
           onClick={() => {
             // Clear any persisted tool view so we always land on the grid.
-            try { localStorage.setItem('magician_active_view', 'dashboard'); } catch {}
+            try { localStorage.removeItem('magician_active_view'); } catch {}
             resetInlineForms();
             setActiveView('dashboard');
           }}

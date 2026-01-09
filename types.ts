@@ -263,4 +263,6 @@ export interface AppSuggestion {
 }
 
 export type MagicianTab = 'chat' | 'show-planner' | 'effect-generator' | 'identify' | 'publications' | 'community' | 'magic-wire' | 'search' | 'magic-dictionary';
-export type MagicianView = MagicianTab | 'live-rehearsal' | 'visual-brainstorm' | 'saved-ideas' | 'prop-checklists' | 'magic-archives' | 'gospel-magic-assistant' | 'member-management' | 'show-feedback' | 'patter-engine' | 'mentalism-assistant' | 'marketing-campaign' | 'contract-generator' | 'assistant-studio' | 'director-mode' | 'persona-simulator' | 'video-rehearsal' | 'client-management' | 'dashboard' | 'global-search' | 'performance-analytics' | 'illusion-blueprint' | 'magic-theory-tutor';
+// NOTE: 'assistant-home' is a dedicated landing view for the AI Assistant tab.
+// It always shows the feature grid (prompt cards) and never restores the last chat/tool session.
+export type MagicianView = MagicianTab | 'assistant-home' | 'live-rehearsal' | 'visual-brainstorm' | 'saved-ideas' | 'prop-checklists' | 'magic-archives' | 'gospel-magic-assistant' | 'member-management' | 'show-feedback' | 'patter-engine' | 'mentalism-assistant' | 'marketing-campaign' | 'contract-generator' | 'assistant-studio' | 'director-mode' | 'persona-simulator' | 'video-rehearsal' | 'client-management' | 'dashboard' | 'global-search' | 'performance-analytics' | 'illusion-blueprint' | 'magic-theory-tutor';
