@@ -1,40 +1,43 @@
-import { supabase } from '../supabase';
-import type { AppSuggestion } from '../types';
+// services/suggestionService.ts
+import { supabase } from "../supabase";
 
-// Supabase table: app_suggestions
-// Columns used by the app:
-//   id (text, pk), type (text), content (text), timestamp (bigint), status (text),
-//   user_id (uuid/text), user_email (text)
+export type SuggestionType = "bug" | "feature" | "general";
 
-export const addSuggestion = async (suggestionData: { type: 'bug' | 'feature' | 'general'; content: string; }): Promise<void> => {
-  const id = `suggestion-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+export interface AddSuggestionInput {
+  type: SuggestionType;
+  content: string;
+}
 
-  const { data: userData } = await supabase.auth.getUser();
-  const currentUser = userData?.user ?? null;
+export async function addSuggestion({ type, content }: AddSuggestionInput): Promise<void> {
+  const trimmed = (content ?? "").trim();
+  if (!trimmed) {
+    throw new Error("Suggestion content is empty.");
+  }
 
-  const newSuggestion: AppSuggestion = {
+  // Generate a stable text PK (matches your schema: id text primary key)
+  const id = `suggestion-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+  // Get authenticated user info (ok if null)
+  const userRes = await supabase.auth.getUser();
+  const user = userRes?.data?.user ?? null;
+
+  // Matches your table schema:
+  // (id, type, content, timestamp, status, user_id, user_email)
+  const payload = {
     id,
-    type: suggestionData.type,
-    content: suggestionData.content,
-    timestamp: Date.now(),
-    status: 'new',
-    userId: currentUser ? currentUser.id : undefined,
-    userEmail: currentUser ? (currentUser.email ?? undefined) : undefined
+    type,
+    content: trimmed,
+    timestamp: Date.now(), // bigint NOT NULL in your schema
+    status: "new",
+    user_id: user?.id ?? null,
+    user_email: user?.email ?? null,
   };
 
-  const { error } = await supabase
-    .from('app_suggestions')
-    .insert({
-      id: newSuggestion.id,
-      type: newSuggestion.type,
-      content: newSuggestion.content,
-      timestamp: newSuggestion.timestamp,
-      status: newSuggestion.status,
-      user_id: newSuggestion.userId ?? null,
-      user_email: newSuggestion.userEmail ?? null
-    });
+  const { error } = await supabase.from("app_suggestions").insert(payload);
 
+  // IMPORTANT: Throw on error so the UI can stop "sending..." and show feedback
   if (error) {
-    console.error('Failed to save app suggestion to Supabase', error);
+    console.error("Supabase insert failed: app_suggestions", error);
+    throw error;
   }
-};
+}
