@@ -3,13 +3,6 @@
 // cause Vercel serverless functions to crash with FUNCTION_INVOCATION_FAILED.
 // We dynamically import createClient inside functions so all errors stay inside
 // our handlers' try/catch and return JSON to the client.
-type CreateClientFn = (...args: any[]) => any;
-
-async function getCreateClient(): Promise<CreateClientFn> {
-  const mod: any = await import('@supabase/supabase-js');
-  return mod.createClient;
-}
-
 // Canonical membership tiers used for usage enforcement.
 // Legacy tiers are accepted and normalized server-side.
 type Membership = 'free' | 'trial' | 'performer' | 'professional' | 'expired' | 'amateur' | 'semi-pro';

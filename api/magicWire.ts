@@ -103,7 +103,7 @@ function parseFeed(xml: string, source: string, category: string): WireItem[] {
     if (link) link = stripTags(link);
 
     // Atom fallback
-    if (!link) link = extractAtomLink(b) || undefined;
+    if (!link) link = extractAtomLink(b) || null;
 
     const sourceUrl = link && link.length ? link : null;
 
