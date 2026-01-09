@@ -1,4 +1,4 @@
-import { requireAdmin } from './lib/auth.js';
+import { requireAdmin } from '../lib/server/auth.js';
 
 type AdminAIProvider = 'gemini' | 'openai' | 'anthropic';
 

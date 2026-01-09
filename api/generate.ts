@@ -6,8 +6,8 @@
 // Also: keep provider SDK imports *inside* the handler via dynamic import.
 // This avoids "FUNCTION_INVOCATION_FAILED" when a module has ESM/CJS quirks.
 
-import { enforceAiUsage } from './lib/usage.js';
-import { resolveProvider, callOpenAI, callAnthropic } from './lib/providers.js';
+import { enforceAiUsage } from '../lib/server/usage.js';
+import { resolveProvider, callOpenAI, callAnthropic } from '../lib/server/providers.js';
 
 export default async function handler(request: any, response: any) {
   // IMPORTANT:
