@@ -274,12 +274,31 @@ export const generateImage = async (
  * Keep the API surface so the app compiles, but fail gracefully.
  */
 export const editImageWithPrompt = async (
-  _base64ImageData: string,
-  _mimeType: string,
-  _prompt: string,
-  _currentUser?: User
+  base64ImageData: string,
+  mimeType: string,
+  prompt: string,
+  currentUser?: User
 ): Promise<string> => {
-  throw new Error('Image editing is not configured yet.');
+  const result = await postJson<any>(
+    '/api/edit-images',
+    { imageBase64: base64ImageData, mimeType, prompt },
+    currentUser
+  );
+
+  // Try common response shapes
+  const img = result?.generatedImages?.[0] || result?.images?.[0] || result?.data?.[0];
+  const base64 =
+    img?.image?.imageBytes ||
+    img?.imageBytes ||
+    img?.b64_json ||
+    img?.base64;
+  const mime = img?.mimeType || img?.mime || 'image/jpeg';
+
+  if (typeof base64 === 'string' && base64.length > 0) {
+    return `data:${mime};base64,${base64}`;
+  }
+
+  throw new Error('No image data returned from /api/edit-images.');
 };
 
 /**
