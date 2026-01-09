@@ -1,67 +1,30 @@
-import { useEffect, useRef, useState } from "react";
-import { useAuth } from "@/context/AuthContext";
+import React, { useEffect, useRef, useState } from "react";
+import type { User } from "../types";
+import AdminSettingsModal from "./AdminSettingsModal";
+import { exportData } from "../services/dataService";
+import { ChevronDownIcon, DatabaseIcon } from "./icons";
 
-/** Tiny inline icons (no lucide-react dependency) */
-function IconChevronDown(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" {...props}>
-      <path
-        fillRule="evenodd"
-        d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.17l3.71-3.94a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z"
-        clipRule="evenodd"
-      />
-    </svg>
-  );
+interface AccountMenuProps {
+  user: User;
+  onLogout: () => void;
 }
 
-function IconDatabase(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
-      <ellipse cx="12" cy="5" rx="7" ry="3" stroke="currentColor" strokeWidth="2" />
-      <path d="M5 5v6c0 1.66 3.13 3 7 3s7-1.34 7-3V5" stroke="currentColor" strokeWidth="2" />
-      <path d="M5 11v6c0 1.66 3.13 3 7 3s7-1.34 7-3v-6" stroke="currentColor" strokeWidth="2" />
-    </svg>
-  );
-}
-
-function IconLogOut(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
-      <path
-        d="M10 7V6a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2v-1"
-        stroke="currentColor"
-        strokeWidth="2"
-      />
-      <path d="M15 12H3" stroke="currentColor" strokeWidth="2" />
-      <path d="M6 9l-3 3 3 3" stroke="currentColor" strokeWidth="2" />
-    </svg>
-  );
-}
-
-export default function AccountMenu() {
-  const { user, signOut, exportUserData } = useAuth();
-  const [isOpen, setIsOpen] = useState(false);
+export default function AccountMenu({ user, onLogout }: AccountMenuProps) {
+  const [open, setOpen] = useState(false);
+  const [openAdmin, setOpenAdmin] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
-  if (!user) return null;
+  const isAdmin = !!user.isAdmin;
 
-  const handleBackup = async () => {
-    try {
-      await exportUserData?.();
-      setIsOpen(false);
-    } catch (err) {
-      console.error("Backup failed", err);
-    }
-  };
-
+  // Close on outside click + Escape
   useEffect(() => {
     const onMouseDown = (e: MouseEvent) => {
       if (!rootRef.current) return;
-      if (!rootRef.current.contains(e.target as Node)) setIsOpen(false);
+      if (!rootRef.current.contains(e.target as Node)) setOpen(false);
     };
 
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setIsOpen(false);
+      if (e.key === "Escape") setOpen(false);
     };
 
     document.addEventListener("mousedown", onMouseDown);
@@ -72,56 +35,96 @@ export default function AccountMenu() {
     };
   }, []);
 
+  const handleBackup = async () => {
+    try {
+      await exportData();
+      setOpen(false);
+    } catch (err) {
+      console.error("Export/backup failed:", err);
+    }
+  };
+
   return (
-    <div ref={rootRef} className="relative inline-block text-left">
-      <button
-        type="button"
-        onClick={() => setIsOpen((v) => !v)}
-        className="inline-flex items-center gap-2 rounded-full border border-purple-500/40 bg-purple-900/40 px-3 py-1.5 text-sm text-purple-100 hover:bg-purple-800/50 transition"
-        aria-haspopup="menu"
-        aria-expanded={isOpen}
-      >
-        <span className="truncate max-w-[180px]">{user.email}</span>
-        <IconChevronDown className="h-4 w-4 opacity-70" />
-      </button>
-
-      {isOpen && (
-        <div
-          role="menu"
-          className="absolute right-0 z-50 mt-2 w-64 origin-top-right rounded-xl border border-purple-500/30 bg-[#120a24] shadow-xl overflow-hidden"
+    <>
+      <div ref={rootRef} className="relative inline-block text-left">
+        {/* Compact pill trigger (keeps header slim) */}
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="inline-flex items-center gap-2 rounded-full border border-purple-500/30 bg-purple-900/30 px-3 py-1.5 text-sm text-purple-100 hover:bg-purple-800/40 transition"
+          aria-haspopup="menu"
+          aria-expanded={open}
+          title={user.email}
         >
-          <div className="px-4 py-3 border-b border-purple-500/20">
-            <p className="text-xs text-purple-400">Signed in as</p>
-            <p className="text-sm font-medium text-purple-100 truncate">{user.email}</p>
-            <p className="mt-1 text-xs text-purple-400">
-              Membership: <span className="text-purple-200">Trial</span>
-            </p>
+          <span className="truncate max-w-[160px]">{user.email}</span>
+          <ChevronDownIcon className="w-4 h-4 opacity-70" />
+        </button>
+
+        {open && (
+          <div
+            role="menu"
+            className="absolute right-0 z-50 mt-2 w-64 overflow-hidden rounded-xl border border-purple-500/25 bg-[#120a24] shadow-xl"
+          >
+            <div className="px-4 py-3 border-b border-purple-500/15">
+              <div className="text-xs text-purple-400">Signed in as</div>
+              <div className="text-sm font-semibold text-purple-100 truncate">
+                {user.email}
+              </div>
+              <div className="mt-1 text-xs text-purple-400">
+                Membership:{" "}
+                <span className="text-purple-200">{user.membership}</span>
+              </div>
+            </div>
+
+            {/* Backup / Export */}
+            <button
+              type="button"
+              onClick={handleBackup}
+              role="menuitem"
+              className="flex w-full items-center gap-2 px-4 py-2 text-sm text-purple-100 hover:bg-purple-800/35 transition"
+            >
+              <DatabaseIcon className="w-4 h-4 text-purple-300" />
+              Export / Backup Data
+            </button>
+
+            {/* Admin (optional) */}
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  setOpenAdmin(true);
+                }}
+                role="menuitem"
+                className="flex w-full items-center gap-2 px-4 py-2 text-sm text-purple-100 hover:bg-purple-800/35 transition"
+              >
+                <span className="inline-flex w-4 h-4 items-center justify-center text-xs font-bold text-amber-300">
+                  A
+                </span>
+                Admin Settings
+              </button>
+            )}
+
+            {/* Logout */}
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onLogout();
+              }}
+              role="menuitem"
+              className="flex w-full items-center gap-2 px-4 py-2 text-sm text-purple-100 hover:bg-purple-800/35 transition"
+            >
+              <span className="inline-flex w-4 h-4 items-center justify-center text-xs text-purple-300">
+                ⎋
+              </span>
+              Logout
+            </button>
           </div>
+        )}
+      </div>
 
-          <button
-            type="button"
-            onClick={handleBackup}
-            role="menuitem"
-            className="flex w-full items-center gap-2 px-4 py-2 text-sm text-purple-100 hover:bg-purple-800/40 transition"
-          >
-            <IconDatabase className="h-4 w-4 text-purple-400" />
-            Export / Backup Data
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setIsOpen(false);
-              signOut?.();
-            }}
-            role="menuitem"
-            className="flex w-full items-center gap-2 px-4 py-2 text-sm text-purple-100 hover:bg-purple-800/40 transition"
-          >
-            <IconLogOut className="h-4 w-4 text-purple-400" />
-            Logout
-          </button>
-        </div>
-      )}
-    </div>
+      <AdminSettingsModal open={openAdmin} onClose={() => setOpenAdmin(false)} />
+    </>
   );
 }
