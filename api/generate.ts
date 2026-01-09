@@ -1,68 +1,73 @@
 import { enforceAiUsage } from './lib/usage';
 import { resolveProvider, callOpenAI, callAnthropic } from './lib/providers';
 
+/**
+ * Text generation proxy.
+ *
+ * IMPORTANT:
+ * - Do NOT import '@google/genai' at module scope.
+ *   Some Vercel/Node runtimes treat it as ESM-only and will throw during
+ *   function initialization, producing FUNCTION_INVOCATION_FAILED (500).
+ * - Instead we dynamically import it inside the handler.
+ */
+
 export default async function handler(request: any, response: any) {
-  // IMPORTANT:
-  // Vercel will sometimes return a plain-text 500 "FUNCTION_INVOCATION_FAILED"
-  // when an exception occurs outside our try/catch. That makes the UI show the
-  // unhelpful message "Request failed (500)". To avoid that, keep *all* logic
-  // inside a single try/catch and always return JSON.
+  if (request.method !== 'POST') {
+    return response.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const authHeader = request.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return response.status(401).json({ error: 'Unauthorized.' });
+  }
+
+  // AI cost protection (daily caps + per-minute burst limits)
+  const usage = await enforceAiUsage(request, 1);
+  if (!usage.ok) {
+    return response.status(usage.status || 429).json({
+      error: usage.error || 'AI usage limit reached.',
+      remaining: usage.remaining,
+      limit: usage.limit,
+      burstRemaining: usage.burstRemaining,
+      burstLimit: usage.burstLimit,
+    });
+  }
+
   try {
-    if (request.method !== 'POST') {
-      return response.status(405).json({ error: 'Method not allowed' });
-    }
-
-    // Basic Auth Check (Simulated)
-    const authHeader = request.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return response.status(401).json({ error: 'Unauthorized. Please log in.' });
-    }
-
-    // AI cost protection (daily caps + per-minute burst limits)
-    const usage = await enforceAiUsage(request, 1);
-    if (!usage.ok) {
-      return response
-        .status(usage.status || 429)
-        .json({
-          error: usage.error || 'AI usage limit reached.',
-          remaining: usage.remaining,
-          limit: usage.limit,
-          burstRemaining: usage.burstRemaining,
-          burstLimit: usage.burstLimit,
-        });
-    }
-
     const provider = resolveProvider(request);
-    const { model, contents, config } = request.body || {};
+    const body = request.body || {};
+    const model = body.model || process.env.AI_MODEL || 'gemini-2.0-flash';
+    const contents = body.contents;
+    const config = body.config || {};
+    const tools = body.tools;
 
     let result: any;
 
     if (provider === 'openai') {
-      result = await callOpenAI({ model, contents, config });
+      result = await callOpenAI({ model, contents, config, tools });
     } else if (provider === 'anthropic') {
-      result = await callAnthropic({ model, contents, config });
+      result = await callAnthropic({ model, contents, config, tools });
     } else {
-      const apiKey = process.env.API_KEY;
+      // Gemini
+      const apiKey = process.env.GOOGLE_API_KEY || process.env.API_KEY;
       if (!apiKey) {
-        return response.status(500).json({ error: 'API_KEY is not configured on the server.' });
+        return response
+          .status(500)
+          .json({ error: 'Missing GOOGLE_API_KEY (or legacy API_KEY) in server environment.' });
       }
 
-      // IMPORTANT: @google/genai is ESM-only in some builds.
-      // Importing it at module load can crash the serverless function with
-      // FUNCTION_INVOCATION_FAILED (client sees a plain 500).
-      // Dynamic import keeps errors inside our try/catch and returns JSON.
       const { GoogleGenAI } = await import('@google/genai');
       const ai = new GoogleGenAI({ apiKey });
+
       result = await ai.models.generateContent({
-        model: model || 'gemini-3-pro-preview',
+        model,
         contents,
-        config: {
-          ...config,
-        },
+        config,
+        tools,
       });
     }
 
-    // Return usage headers for the Usage Meter UI (best-effort)
+    // Send headers for the Usage Meter UI
     response.setHeader('X-AI-Remaining', String(usage.remaining ?? ''));
     response.setHeader('X-AI-Limit', String(usage.limit ?? ''));
     response.setHeader('X-AI-Membership', String(usage.membership ?? ''));
@@ -72,15 +77,9 @@ export default async function handler(request: any, response: any) {
 
     return response.status(200).json(result);
   } catch (error: any) {
-    // Ensure we always return JSON so the client can show a helpful message.
     console.error('AI Provider Error:', error);
-
-    if (error?.message?.includes('finishReason: SAFETY')) {
-      return response.status(400).json({ error: 'The request was blocked by safety filters.' });
-    }
-
     return response.status(500).json({
-      error: error?.message || 'An internal error occurred while processing your request.',
+      error: error?.message || 'Failed to generate response. Please try again.',
     });
   }
 }

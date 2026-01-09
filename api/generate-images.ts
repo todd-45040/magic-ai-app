@@ -1,4 +1,3 @@
-import { GoogleGenAI } from '@google/genai';
 import { enforceAiUsage } from './lib/usage';
 import { resolveProvider } from './lib/providers';
 
@@ -63,11 +62,15 @@ export default async function handler(request: any, response: any) {
     } else if (provider === 'anthropic') {
       return response.status(400).json({ error: 'Image generation is not supported for Anthropic provider.' });
     } else {
-      const apiKey = process.env.API_KEY;
+      const apiKey = process.env.GOOGLE_API_KEY || process.env.API_KEY;
       if (!apiKey) {
-        return response.status(500).json({ error: 'API_KEY is not configured on the server.' });
+        return response
+          .status(500)
+          .json({ error: 'Missing GOOGLE_API_KEY (or legacy API_KEY) in server environment.' });
       }
 
+      // Avoid module-scope import to prevent FUNCTION_INVOCATION_FAILED in some runtimes.
+      const { GoogleGenAI } = await import('@google/genai');
       const ai = new GoogleGenAI({ apiKey });
       result = await ai.models.generateImages({
         model: 'imagen-4.0-generate-preview-06-06',
