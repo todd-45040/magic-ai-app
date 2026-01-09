@@ -697,13 +697,11 @@ const ChatView: React.FC<{
   hasSemiProAccess: boolean;
   hasProfessionalAccess: boolean;
   onPromptClick: (prompt: PredefinedPrompt) => void;
-  onClearSession: () => void;
 }> = (props) => {
   let content;
-  // IMPORTANT: Tool forms should take priority over restored chat history.
-  // Otherwise, a persisted (and possibly broken) chat session can block the user
-  // from accessing the tool form again.
-  if (props.showAngleRiskForm) {
+  if (props.messages.length > 0) {
+    content = <ChatMessages {...props} />;
+  } else if (props.showAngleRiskForm) {
     content = <AngleRiskForm
       trickName={props.trickName} setTrickName={props.setTrickName}
       audienceType={props.audienceType} setAudienceType={props.setAudienceType}
@@ -721,8 +719,6 @@ const ChatView: React.FC<{
       effectToInnovate={props.effectToInnovate} setEffectToInnovate={props.setEffectToInnovate}
       onCancel={props.onCancelInnovationEngine} onSubmit={props.handleInnovationEngineSubmit}
     />;
-  } else if (props.messages.length > 0) {
-    content = <ChatMessages {...props} />;
   } else {
     content = <PromptGrid 
       prompts={props.prompts}
@@ -735,18 +731,6 @@ const ChatView: React.FC<{
   }
   return (
     <div className={`flex-1 p-4 md:p-6 ${props.messages.length > 0 ? 'overflow-y-auto' : 'flex flex-col'}`}>
-      {(props.messages.length > 0 || props.showAngleRiskForm || props.showRehearsalForm || props.showInnovationEngineForm) && (
-        <div className="flex items-center justify-end mb-3">
-          <button
-            type="button"
-            onClick={props.onClearSession}
-            className="text-xs px-3 py-1.5 rounded-full bg-slate-900/60 border border-slate-700 text-slate-200 hover:bg-slate-800/70 transition-colors"
-            title="Clear the current AI Assistant session"
-          >
-            New Session
-          </button>
-        </div>
-      )}
       {content}
     </div>
   );
@@ -1154,62 +1138,8 @@ useEffect(() => {
       setIsUpgradeModalOpen(true);
     }
   }, [isExpired]);
-
-  useEffect(() => {
-    try {
-      const savedChat = localStorage.getItem(MAGICIAN_STORAGE_key);
-      if (savedChat) {
-        const parsedChat = JSON.parse(savedChat) as ChatMessage[];
-        const chatWithIds = parsedChat.map(msg => ({
-            ...msg,
-            id: msg.id || `msg-fallback-${Math.random()}`
-        }));
-        setMessages(chatWithIds);
-      }
-    } catch (error) {
-      console.error("Failed to load data from localStorage", error);
-    }
-  }, []);
-
-  /**
-   * Completely clears the AI Assistant chat session.
-   *
-   * Why: Some tools (Innovation Engine, Angle Risk, etc.) run inside the shared chat view.
-   * If an API call fails (500) or the user navigates away and back, restoring the old
-   * message history can make it feel like they are "stuck" in a broken prior session.
-   */
-  const clearChatSession = (opts?: { keepView?: boolean }) => {
-    try { localStorage.removeItem(MAGICIAN_STORAGE_key); } catch {}
-    setMessages([]);
-    setInput('');
-    setIsLoading(false);
-    setRecentlySaved(new Set());
-    // Reset any inline tool forms/state so the next entry is always clean.
-    setShowAngleRiskForm(false);
-    setShowRehearsalForm(false);
-    setShowInnovationEngineForm(false);
-    setTrickName('');
-    setAudienceType(null);
-    setRoutineDescription('');
-    setTargetDuration('');
-    setEffectToInnovate('');
-    if (!opts?.keepView) {
-      // Return to the AI Assistant grid (dashboard) after clearing.
-      setActiveView('dashboard');
-    }
-  };
-
-  useEffect(() => {
-    try {
-        if (messages.length > 0) {
-            localStorage.setItem(MAGICIAN_STORAGE_key, JSON.stringify(messages));
-        } else {
-            localStorage.removeItem(MAGICIAN_STORAGE_key);
-        }
-    } catch (error) {
-        console.error("Failed to save chat to localStorage", error);
-    }
-  }, [messages]);
+  // Chat history is intentionally NOT persisted across reloads to avoid stale sessions / auto-resume issues.
+  // (no persistence)
   
   useEffect(() => {
     try {
@@ -1224,21 +1154,58 @@ useEffect(() => {
   };
 
   useEffect(() => {
-    if (activeView === 'chat') {
+    if (VIEW_TO_TAB_MAP[activeView] === 'chat') {
         scrollToBottom();
     }
   }, [messages, activeView]);
 
+  const friendlyAiError = "The AI didn’t respond this time. Try again or start a new session.";
+
+  const normalizeAiReply = (replyText: string) => {
+    const t = (replyText || '').trim();
+    // Common failure strings we've seen surface into the UI
+    if (/^error\s*:/i.test(t)) return friendlyAiError;
+    if (/request failed\s*\(\s*5\d\d\s*\)/i.test(t)) return friendlyAiError;
+    if (/function_invocation_failed/i.test(t)) return friendlyAiError;
+    return replyText;
+  };
+
+  const clearChatSession = () => {
+    setMessages([]);
+    setInput('');
+    setIsLoading(false);
+    setRecentlySaved(new Set());
+    resetInlineForms();
+    try {
+      localStorage.removeItem(MAGICIAN_STORAGE_key);
+    } catch {
+      // ignore
+    }
+  };
+
+  // Auto-clear chat when switching between AI Assistant tools (prevents old errors/prompts persisting).
+  const lastChatToolRef = useRef<MagicianView | null>(null);
+  useEffect(() => {
+    const isChatTool = VIEW_TO_TAB_MAP[activeView] === 'chat' && activeView !== 'dashboard';
+    if (!isChatTool) return;
+
+    const prev = lastChatToolRef.current;
+    if (prev && prev !== activeView) {
+      clearChatSession();
+    }
+    lastChatToolRef.current = activeView;
+  }, [activeView]);
+
   const resetInlineForms = () => {
-      setShowAngleRiskForm(false);
-      setShowRehearsalForm(false);
-      setShowInnovationEngineForm(false);
-      setTrickName('');
-      setAudienceType(null);
-      setRoutineDescription('');
-      setTargetDuration('');
-      setEffectToInnovate('');
-  }
+    setShowAngleRiskForm(false);
+    setShowRehearsalForm(false);
+    setShowInnovationEngineForm(false);
+    setTrickName('');
+    setAudienceType(null);
+    setRoutineDescription('');
+    setTargetDuration('');
+    setEffectToInnovate('');
+  };
 
   const handleReturnToStudioHome = () => {
     setActiveView('dashboard');
@@ -1253,7 +1220,6 @@ useEffect(() => {
     const userMessageText = prompt || input;
     if (!userMessageText.trim()) return;
 
-    setActiveView('chat');
     setInput('');
     setIsLoading(true);
 
@@ -1270,10 +1236,10 @@ useEffect(() => {
           user,
           newHistoryForUI
         );
-        setMessages(prev => [...prev, createChatMessage('model', replyText)]);
+        setMessages(prev => [...prev, createChatMessage('model', normalizeAiReply(replyText))]);
     } catch (err) {
         console.error("Error in handleSend:", err);
-        setMessages(prev => [...prev, createChatMessage('model', "Sorry, something went wrong while processing that command.")]);
+        setMessages(prev => [...prev, createChatMessage('model', "The AI didn’t respond this time. Try again or start a new session.")]);
     } finally {
         setIsLoading(false);
     }
@@ -1305,6 +1271,10 @@ useEffect(() => {
   };
 
   const handlePromptClick = (prompt: PredefinedPrompt) => {
+    // Always start a clean session when entering a new AI Assistant tool.
+    if (['Angle/Risk Analysis','Rehearsal Coaching','Innovation Engine','Assistant's Studio','Director Mode','Illusion Blueprint Generator','Magic Theory Tutor','Persona Simulator','Gospel Magic Assistant','Mentalism Assistant'].includes(prompt.title)) {
+      clearChatSession();
+    }
     if (isExpired) {
       setIsUpgradeModalOpen(true);
       return;
@@ -1345,27 +1315,18 @@ useEffect(() => {
         case 'Global Search': setActiveView('global-search'); return;
         case 'Member Management': if (user.isAdmin) { setActiveView('member-management'); } return;
         case 'Angle/Risk Analysis':
-            // Always land on the form (do not auto-send) so returning users are never
-            // forced back into an old/broken chat session.
-            setActiveView('chat');
+            setActiveView('director-mode');
             setShowAngleRiskForm(true);
-            setTrickName('');
-            setAudienceType(null);
             break;
         case 'Rehearsal Coaching':
-            setActiveView('chat');
+            setActiveView('director-mode');
             setShowRehearsalForm(true);
-            setRoutineDescription('');
-            setTargetDuration('');
             break;
         case 'Innovation Engine':
-            // IMPORTANT: "chat" is a tool view, not the AI Assistant landing.
-            // Always show the Innovation Engine form instead of reusing/restoring a prior chat.
-            setActiveView('chat');
+            setActiveView('assistant-studio');
             setShowInnovationEngineForm(true);
-            setEffectToInnovate('');
             break;
-        default: handleSend(prompt.prompt);
+        default: clearChatSession(); handleSend(prompt.prompt);
     }
   };
 
@@ -1401,7 +1362,6 @@ useEffect(() => {
       const contextMessage: ChatMessage = createChatMessage('model', "Here's the transcript from your live rehearsal session. You can review it here or ask follow-up questions.");
       setMessages(prev => [...prev, contextMessage, ...newMessages]);
     }
-    setActiveView('chat');
   };
 
   const handleIdeaSaved = (message: string) => {
@@ -1548,7 +1508,6 @@ useEffect(() => {
             break;
         default: return;
     }
-    setActiveView('chat');
     handleSend(prompt);
   };
 
@@ -1601,7 +1560,7 @@ useEffect(() => {
         case 'identify': return <IdentifyTab imageFile={imageFile} imagePreview={imagePreview} identificationResult={identificationResult} isIdentifying={isIdentifying} identificationError={identificationError} fileInputRef={fileInputRef} handleImageUpload={handleImageUpload} handleIdentifyClick={handleIdentifyClick} />;
         case 'publications': return <PublicationsTab />;
         case 'community': return <CommunityTab />;
-        case 'chat': default: return <ChatView messages={messages} isLoading={isLoading} recentlySaved={recentlySaved} handleSaveIdea={handleSaveIdea} handleFeedback={handleFeedback} messagesEndRef={messagesEndRef} showAngleRiskForm={showAngleRiskForm} trickName={trickName} setTrickName={setTrickName} audienceType={audienceType} setAudienceType={setAudienceType} handleAngleRiskSubmit={handleAngleRiskSubmit} onCancelAngleRisk={() => { setShowAngleRiskForm(false); setTrickName(''); setAudienceType(null); }} showRehearsalForm={showRehearsalForm} routineDescription={routineDescription} setRoutineDescription={setRoutineDescription} targetDuration={targetDuration} setTargetDuration={setTargetDuration} handleRehearsalSubmit={handleRehearsalSubmit} onCancelRehearsal={() => { setShowRehearsalForm(false); setRoutineDescription(''); setTargetDuration(''); }} onFileChange={handleRoutineScriptUpload} showInnovationEngineForm={showInnovationEngineForm} effectToInnovate={effectToInnovate} setEffectToInnovate={setEffectToInnovate} handleInnovationEngineSubmit={handleInnovationEngineSubmit} onCancelInnovationEngine={() => { setShowInnovationEngineForm(false); setEffectToInnovate(''); }} prompts={MAGICIAN_PROMPTS} user={user} hasAmateurAccess={hasAmateurAccess} hasSemiProAccess={hasSemiProAccess} hasProfessionalAccess={hasProfessionalAccess} onPromptClick={handlePromptClick} onClearSession={() => clearChatSession()} />;
+        case 'chat': default: return <ChatView messages={messages} isLoading={isLoading} recentlySaved={recentlySaved} handleSaveIdea={handleSaveIdea} handleFeedback={handleFeedback} messagesEndRef={messagesEndRef} showAngleRiskForm={showAngleRiskForm} trickName={trickName} setTrickName={setTrickName} audienceType={audienceType} setAudienceType={setAudienceType} handleAngleRiskSubmit={handleAngleRiskSubmit} onCancelAngleRisk={() => { setShowAngleRiskForm(false); setTrickName(''); setAudienceType(null); }} showRehearsalForm={showRehearsalForm} routineDescription={routineDescription} setRoutineDescription={setRoutineDescription} targetDuration={targetDuration} setTargetDuration={setTargetDuration} handleRehearsalSubmit={handleRehearsalSubmit} onCancelRehearsal={() => { setShowRehearsalForm(false); setRoutineDescription(''); setTargetDuration(''); }} onFileChange={handleRoutineScriptUpload} showInnovationEngineForm={showInnovationEngineForm} effectToInnovate={effectToInnovate} setEffectToInnovate={setEffectToInnovate} handleInnovationEngineSubmit={handleInnovationEngineSubmit} onCancelInnovationEngine={() => { setShowInnovationEngineForm(false); setEffectToInnovate(''); }} prompts={MAGICIAN_PROMPTS} user={user} hasAmateurAccess={hasAmateurAccess} hasSemiProAccess={hasSemiProAccess} hasProfessionalAccess={hasProfessionalAccess} onPromptClick={handlePromptClick} />;
     }
   }
 
