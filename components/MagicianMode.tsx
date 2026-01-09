@@ -1323,7 +1323,7 @@ useEffect(() => {
             setShowRehearsalForm(true);
             break;
         case 'Innovation Engine':
-            setActiveView('assistant-studio');
+            setActiveView('chat');
             setShowInnovationEngineForm(true);
             break;
         default: clearChatSession(); handleSend(prompt.prompt);
