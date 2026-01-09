@@ -1272,7 +1272,7 @@ useEffect(() => {
 
   const handlePromptClick = (prompt: PredefinedPrompt) => {
     // Always start a clean session when entering a new AI Assistant tool.
-    if (['Angle/Risk Analysis','Rehearsal Coaching','Innovation Engine','Assistant's Studio','Director Mode','Illusion Blueprint Generator','Magic Theory Tutor','Persona Simulator','Gospel Magic Assistant','Mentalism Assistant'].includes(prompt.title)) {
+    if (["Angle/Risk Analysis","Rehearsal Coaching","Innovation Engine","Assistant's Studio","Director Mode","Illusion Blueprint Generator","Magic Theory Tutor","Persona Simulator","Gospel Magic Assistant","Mentalism Assistant"].includes(prompt.title)) {
       clearChatSession();
     }
     if (isExpired) {
