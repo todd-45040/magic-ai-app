@@ -697,11 +697,13 @@ const ChatView: React.FC<{
   hasSemiProAccess: boolean;
   hasProfessionalAccess: boolean;
   onPromptClick: (prompt: PredefinedPrompt) => void;
+  onClearSession: () => void;
 }> = (props) => {
   let content;
-  if (props.messages.length > 0) {
-    content = <ChatMessages {...props} />;
-  } else if (props.showAngleRiskForm) {
+  // IMPORTANT: Tool forms should take priority over restored chat history.
+  // Otherwise, a persisted (and possibly broken) chat session can block the user
+  // from accessing the tool form again.
+  if (props.showAngleRiskForm) {
     content = <AngleRiskForm
       trickName={props.trickName} setTrickName={props.setTrickName}
       audienceType={props.audienceType} setAudienceType={props.setAudienceType}
@@ -719,6 +721,8 @@ const ChatView: React.FC<{
       effectToInnovate={props.effectToInnovate} setEffectToInnovate={props.setEffectToInnovate}
       onCancel={props.onCancelInnovationEngine} onSubmit={props.handleInnovationEngineSubmit}
     />;
+  } else if (props.messages.length > 0) {
+    content = <ChatMessages {...props} />;
   } else {
     content = <PromptGrid 
       prompts={props.prompts}
@@ -731,6 +735,18 @@ const ChatView: React.FC<{
   }
   return (
     <div className={`flex-1 p-4 md:p-6 ${props.messages.length > 0 ? 'overflow-y-auto' : 'flex flex-col'}`}>
+      {(props.messages.length > 0 || props.showAngleRiskForm || props.showRehearsalForm || props.showInnovationEngineForm) && (
+        <div className="flex items-center justify-end mb-3">
+          <button
+            type="button"
+            onClick={props.onClearSession}
+            className="text-xs px-3 py-1.5 rounded-full bg-slate-900/60 border border-slate-700 text-slate-200 hover:bg-slate-800/70 transition-colors"
+            title="Clear the current AI Assistant session"
+          >
+            New Session
+          </button>
+        </div>
+      )}
       {content}
     </div>
   );
@@ -880,7 +896,6 @@ interface MagicianModeProps {
 
 const VIEW_TO_TAB_MAP: Record<MagicianView, MagicianTab> = {
     'dashboard': 'chat',
-    'assistant-home': 'chat',
     'chat': 'chat',
     'live-rehearsal': 'chat',
     'video-rehearsal': 'chat',
@@ -1034,7 +1049,6 @@ useEffect(() => {
 
       const validViews: MagicianView[] = [
         'dashboard',
-        'assistant-home',
         'chat',
         'show-planner',
         'effect-generator',
@@ -1156,6 +1170,34 @@ useEffect(() => {
       console.error("Failed to load data from localStorage", error);
     }
   }, []);
+
+  /**
+   * Completely clears the AI Assistant chat session.
+   *
+   * Why: Some tools (Innovation Engine, Angle Risk, etc.) run inside the shared chat view.
+   * If an API call fails (500) or the user navigates away and back, restoring the old
+   * message history can make it feel like they are "stuck" in a broken prior session.
+   */
+  const clearChatSession = (opts?: { keepView?: boolean }) => {
+    try { localStorage.removeItem(MAGICIAN_STORAGE_key); } catch {}
+    setMessages([]);
+    setInput('');
+    setIsLoading(false);
+    setRecentlySaved(new Set());
+    // Reset any inline tool forms/state so the next entry is always clean.
+    setShowAngleRiskForm(false);
+    setShowRehearsalForm(false);
+    setShowInnovationEngineForm(false);
+    setTrickName('');
+    setAudienceType(null);
+    setRoutineDescription('');
+    setTargetDuration('');
+    setEffectToInnovate('');
+    if (!opts?.keepView) {
+      // Return to the AI Assistant grid (dashboard) after clearing.
+      setActiveView('dashboard');
+    }
+  };
 
   useEffect(() => {
     try {
@@ -1303,13 +1345,25 @@ useEffect(() => {
         case 'Global Search': setActiveView('global-search'); return;
         case 'Member Management': if (user.isAdmin) { setActiveView('member-management'); } return;
         case 'Angle/Risk Analysis':
-            if (messages.length === 0) { setActiveView('chat'); setShowAngleRiskForm(true); } else { handleSend("I'd like to do an angle and risk analysis for one of my effects."); }
+            // Always land on the form (do not auto-send) so returning users are never
+            // forced back into an old/broken chat session.
+            setActiveView('chat');
+            setShowAngleRiskForm(true);
+            setTrickName('');
+            setAudienceType(null);
             break;
         case 'Rehearsal Coaching':
-            if (messages.length === 0) { setActiveView('chat'); setShowRehearsalForm(true); } else { handleSend("I'd like some rehearsal coaching for a routine."); }
+            setActiveView('chat');
+            setShowRehearsalForm(true);
+            setRoutineDescription('');
+            setTargetDuration('');
             break;
         case 'Innovation Engine':
-            if (messages.length === 0) { setActiveView('chat'); setShowInnovationEngineForm(true); } else { handleSend("I want to brainstorm some new presentations for an effect."); }
+            // IMPORTANT: "chat" is a tool view, not the AI Assistant landing.
+            // Always show the Innovation Engine form instead of reusing/restoring a prior chat.
+            setActiveView('chat');
+            setShowInnovationEngineForm(true);
+            setEffectToInnovate('');
             break;
         default: handleSend(prompt.prompt);
     }
@@ -1416,13 +1470,6 @@ useEffect(() => {
         setActiveView('global-search');
         return;
     }
-    // AI Assistant should always land on the feature grid (prompt cards),
-    // not restore the last chat/tool session.
-    if (tab === 'chat') {
-        resetInlineForms();
-        setActiveView('assistant-home');
-        return;
-    }
     resetInlineForms();
     setActiveView(tab);
   };
@@ -1526,43 +1573,6 @@ useEffect(() => {
   const renderContent = () => {
     switch(activeView) {
         case 'dashboard': return <Dashboard user={user} shows={shows} feedback={feedback} ideas={ideas} onNavigate={handleNavigate} onShowsUpdate={handleShowsUpdate} onPromptClick={handlePromptClick} />;
-        case 'assistant-home':
-            return (
-                <div className="flex-1 overflow-y-auto p-4 md:p-6 animate-fade-in">
-                    <div className="max-w-6xl mx-auto">
-                        <div className="flex items-center justify-between gap-3 mb-4">
-                            <div>
-                                <h2 className="text-2xl font-bold text-slate-200 font-cinzel">AI Assistant</h2>
-                                <p className="text-slate-400">Pick a tool to generate ideas, scripts, rehearsal notes, and more.</p>
-                            </div>
-                            {messages.length > 0 && (
-                                <button
-                                    onClick={() => setActiveView('chat')}
-                                    className="px-3 py-2 rounded-lg text-sm bg-slate-800/60 border border-slate-700 text-slate-200 hover:bg-slate-800 hover:border-purple-500 transition-colors"
-                                    title="Return to your most recent chat session">
-                                    Resume last session
-                                </button>
-                            )}
-                        </div>
-
-                        <PromptGrid
-                            prompts={MAGICIAN_PROMPTS}
-                            user={user}
-                            hasAmateurAccess={hasAmateurAccess}
-                            hasSemiProAccess={hasSemiProAccess}
-                            hasProfessionalAccess={hasProfessionalAccess}
-                            onPromptClick={(p) => {
-                                // Always start from a clean assistant grid.
-                                // If the user wants history, they can use "Resume last session".
-                                setMessages([]);
-                                try { localStorage.removeItem(CHAT_HISTORY_KEY); } catch { /* ignore */ }
-                                resetInlineForms();
-                                handlePromptClick(p);
-                            }}
-                        />
-                    </div>
-                </div>
-            );
         case 'live-rehearsal': return <LiveRehearsal user={user} onReturnToStudio={handleReturnFromRehearsal} onIdeaSaved={() => handleIdeaSaved('Rehearsal saved!')} />;
         case 'video-rehearsal': return <VideoRehearsal onIdeaSaved={() => handleIdeaSaved('Video analysis saved!')} user={user} />;
         case 'visual-brainstorm': return <VisualBrainstorm onIdeaSaved={() => handleIdeaSaved('Image idea saved!')} user={user} />;
@@ -1591,7 +1601,7 @@ useEffect(() => {
         case 'identify': return <IdentifyTab imageFile={imageFile} imagePreview={imagePreview} identificationResult={identificationResult} isIdentifying={isIdentifying} identificationError={identificationError} fileInputRef={fileInputRef} handleImageUpload={handleImageUpload} handleIdentifyClick={handleIdentifyClick} />;
         case 'publications': return <PublicationsTab />;
         case 'community': return <CommunityTab />;
-        case 'chat': default: return <ChatView messages={messages} isLoading={isLoading} recentlySaved={recentlySaved} handleSaveIdea={handleSaveIdea} handleFeedback={handleFeedback} messagesEndRef={messagesEndRef} showAngleRiskForm={showAngleRiskForm} trickName={trickName} setTrickName={setTrickName} audienceType={audienceType} setAudienceType={setAudienceType} handleAngleRiskSubmit={handleAngleRiskSubmit} onCancelAngleRisk={() => { setShowAngleRiskForm(false); setTrickName(''); setAudienceType(null); }} showRehearsalForm={showRehearsalForm} routineDescription={routineDescription} setRoutineDescription={setRoutineDescription} targetDuration={targetDuration} setTargetDuration={setTargetDuration} handleRehearsalSubmit={handleRehearsalSubmit} onCancelRehearsal={() => { setShowRehearsalForm(false); setRoutineDescription(''); setTargetDuration(''); }} onFileChange={handleRoutineScriptUpload} showInnovationEngineForm={showInnovationEngineForm} effectToInnovate={effectToInnovate} setEffectToInnovate={setEffectToInnovate} handleInnovationEngineSubmit={handleInnovationEngineSubmit} onCancelInnovationEngine={() => { setShowInnovationEngineForm(false); setEffectToInnovate(''); }} prompts={MAGICIAN_PROMPTS} user={user} hasAmateurAccess={hasAmateurAccess} hasSemiProAccess={hasSemiProAccess} hasProfessionalAccess={hasProfessionalAccess} onPromptClick={handlePromptClick} />;
+        case 'chat': default: return <ChatView messages={messages} isLoading={isLoading} recentlySaved={recentlySaved} handleSaveIdea={handleSaveIdea} handleFeedback={handleFeedback} messagesEndRef={messagesEndRef} showAngleRiskForm={showAngleRiskForm} trickName={trickName} setTrickName={setTrickName} audienceType={audienceType} setAudienceType={setAudienceType} handleAngleRiskSubmit={handleAngleRiskSubmit} onCancelAngleRisk={() => { setShowAngleRiskForm(false); setTrickName(''); setAudienceType(null); }} showRehearsalForm={showRehearsalForm} routineDescription={routineDescription} setRoutineDescription={setRoutineDescription} targetDuration={targetDuration} setTargetDuration={setTargetDuration} handleRehearsalSubmit={handleRehearsalSubmit} onCancelRehearsal={() => { setShowRehearsalForm(false); setRoutineDescription(''); setTargetDuration(''); }} onFileChange={handleRoutineScriptUpload} showInnovationEngineForm={showInnovationEngineForm} effectToInnovate={effectToInnovate} setEffectToInnovate={setEffectToInnovate} handleInnovationEngineSubmit={handleInnovationEngineSubmit} onCancelInnovationEngine={() => { setShowInnovationEngineForm(false); setEffectToInnovate(''); }} prompts={MAGICIAN_PROMPTS} user={user} hasAmateurAccess={hasAmateurAccess} hasSemiProAccess={hasSemiProAccess} hasProfessionalAccess={hasProfessionalAccess} onPromptClick={handlePromptClick} onClearSession={() => clearChatSession()} />;
     }
   }
 
