@@ -824,7 +824,7 @@ const PublicationsTab: React.FC = () => (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {publications.map(pub => (
                 <div key={pub.name} className="bg-slate-800/50 border border-slate-700 rounded-lg p-4 transition-all duration-200 hover:border-purple-500 hover:bg-slate-800">
-                    <h3 className="font-bold text-lg text-white">{pub.name}</h3>
+                    <h3 className="font-bold text-lg bg-gradient-to-r from-yellow-200 via-amber-300 to-yellow-200 bg-clip-text text-transparent">{pub.name}</h3>
                     <p className="text-slate-400 text-sm mt-1">{pub.description}</p>
                 </div>
             ))}
@@ -846,7 +846,7 @@ const CommunityTab: React.FC = () => (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {clubs.map(club => (
                       <div key={club.name} className="bg-slate-800/50 border border-slate-700 rounded-lg p-4 transition-all duration-200 hover:border-purple-500 hover:bg-slate-800">
-                          <h4 className="font-bold text-lg text-white">{club.name}</h4>
+                          <h4 className="font-bold text-lg bg-gradient-to-r from-yellow-200 via-amber-300 to-yellow-200 bg-clip-text text-transparent">{club.name}</h4>
                           <p className="text-slate-400 text-sm mt-1">{club.description}</p>
                       </div>
                   ))}
@@ -859,7 +859,7 @@ const CommunityTab: React.FC = () => (
                   {conventions.map(convention => (
                       <div key={convention.name} className="bg-slate-800/50 border border-slate-700 rounded-lg p-4 transition-all duration-200 hover:border-purple-500 hover:bg-slate-800">
                            <div className="flex justify-between items-baseline gap-4">
-                                <h4 className="font-bold text-lg text-white">{convention.name}</h4>
+                                <h4 className="font-bold text-lg bg-gradient-to-r from-yellow-200 via-amber-300 to-yellow-200 bg-clip-text text-transparent">{convention.name}</h4>
                                 {convention.date && <span className="text-sm font-semibold text-slate-400 flex-shrink-0">{convention.date}</span>}
                             </div>
                           <p className="text-slate-400 text-sm mt-1">{convention.description}</p>

@@ -505,7 +505,19 @@ export const publications = [
     { name: 'MAGIC Magazine', description: 'A legendary, now-archived monthly magazine known for its high-quality production and in-depth features on magicians.' },
     { name: 'The Linking Ring', description: 'The official monthly publication of the International Brotherhood of Magicians (I.B.M.).' },
     { name: 'M-U-M Magazine', description: 'The official monthly publication of the Society of American Magicians (S.A.M.).' }
-];
+  {
+    name: 'Reel Magic Magazine',
+    description: 'High-quality video magazine featuring interviews, tutorials, and performance pieces.'
+  },
+  {
+    name: 'Gibecière',
+    description: 'Scholarly journal from the Conjuring Arts Research Center covering magic history and research.'
+  },
+  {
+    name: 'MAGIC Magazine',
+    description: 'Classic industry magazine with decades of archived interviews and features.'
+  },
+ ];
 
 export const clubs = [
     { name: 'The Magic Circle (London)', description: 'One of the most famous and prestigious magic societies in the world, founded in London in 1905.' },
