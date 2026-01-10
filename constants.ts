@@ -552,21 +552,21 @@ export const publications = [
 ];
 
 export const clubs = [
-    { name: 'The Magic Circle (London)', description: 'One of the most famous and prestigious magic societies in the world, founded in London in 1905.' },
-    { name: 'Society of American Magicians (S.A.M.)', description: 'The oldest magical society, founded in 1902 in New York City, with assemblies worldwide.' },
-    { name: 'International Brotherhood of Magicians (I.B.M.)', description: 'The largest magical organization in the world, with members and local chapters (Rings) across the globe.' },
-    { name: 'The Academy of Magical Arts (The Magic Castle)', description: 'A world-famous private club for magicians and magic enthusiasts in Hollywood, California.' }
+    { name: 'The Magic Circle (London)', description: 'One of the most famous and prestigious magic societies in the world, founded in London in 1905.' , url: 'https://themagiccircle.co.uk/' },
+    { name: 'Society of American Magicians (S.A.M.)', description: 'The oldest magical society, founded in 1902 in New York City, with assemblies worldwide.' , url: 'https://www.magicsam.com/' },
+    { name: 'International Brotherhood of Magicians (I.B.M.)', description: 'The largest magical organization in the world, with members and local chapters (Rings) across the globe.' , url: 'https://www.magician.org/' },
+    { name: 'The Academy of Magical Arts (The Magic Castle)', description: 'A world-famous private club for magicians and magic enthusiasts in Hollywood, California.' , url: 'https://www.magiccastle.com/' }
 ];
 
 export const conventions = [
-    { name: 'Magi-Fest', date: 'Annually in January', description: 'A long-running, popular magic convention held annually in Columbus, Ohio, known for its friendly atmosphere and top-tier talent.' },
-    { name: 'Blackpool Magic Convention', date: 'Annually in February', description: 'The largest magic convention in the world, held annually in Blackpool, England, with thousands of attendees.' },
-    { name: 'Another Darn Magic Convention', date: 'Annually in April', description: 'An annual magic convention focused on fun, fellowship, and fantastic magic. Visit at www.admcmagic.com.' },
-    { name: 'The S.A.M. National Convention', date: 'Annually in July', description: 'The annual convention for the Society of American Magicians, held in a different North American city each year.' },
-    { name: 'International Brotherhood of Magicians (I.B.M.) Convention', date: 'Annually in July', description: "The annual gathering for members of the world's largest magical organization, featuring contests, lectures, and shows." },
-    { name: 'MAGIC Live!', date: 'Annually in August', description: 'An annual convention in Las Vegas known for its star-studded lineup of performers, lecturers, and innovative formats.' },
-    { name: 'Abbotts Magic Get-Together', date: 'Annually in August', description: "One of the oldest magic conventions, held annually in Colon, Michigan, the 'Magic Capital of the World'." },
-    { name: 'FISM World Championship of Magic', date: 'Every 3 Years', description: 'The "Olympics of Magic," held every three years in a different host country, featuring competitions and performances.' },
+    { name: 'Magi-Fest', date: 'Annually in January', description: 'A long-running, popular magic convention held annually in Columbus, Ohio, known for its friendly atmosphere and top-tier talent.' , url: 'https://www.vanishingincmagic.com/magic-conventions/magifest/' },
+    { name: 'Blackpool Magic Convention', date: 'Annually in February', description: 'The largest magic convention in the world, held annually in Blackpool, England, with thousands of attendees.' , url: 'https://www.blackpoolmagicconvention.com/' },
+    { name: 'Another Darn Magic Convention', date: 'Annually in April', description: 'An annual magic convention focused on fun, fellowship, and fantastic magic. Visit at www.admcmagic.com.' , url: 'https://www.admcmagic.com/index.html' },
+    { name: 'The S.A.M. National Convention', date: 'Annually in July', description: 'The annual convention for the Society of American Magicians, held in a different North American city each year.' , url: 'https://www.magicsam.com/page/annual_convention' },
+    { name: 'International Brotherhood of Magicians (I.B.M.) Convention', date: 'Annually in July', description: "The annual gathering for members of the world's largest magical organization, featuring contests, lectures, and shows." , url: 'https://www.magician.org/convention' },
+    { name: 'MAGIC Live!', date: 'Annually in August', description: 'An annual convention in Las Vegas known for its star-studded lineup of performers, lecturers, and innovative formats.' , url: 'https://magicconvention.com/' },
+    { name: 'Abbotts Magic Get-Together', date: 'Annually in August', description: "One of the oldest magic conventions, held annually in Colon, Michigan, the 'Magic Capital of the World'." , url: 'https://www.magicgettogether.com/' },
+    { name: 'FISM World Championship of Magic', date: 'Every 3 Years', description: 'The "Olympics of Magic," held every three years in a different host country, featuring competitions and performances.' , url: 'https://www.fism.org/championships/homepage/' },
 ];
 
 export const MAGIC_DICTIONARY_TERMS: MagicTerm[] = [
