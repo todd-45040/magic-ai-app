@@ -21,7 +21,9 @@ export default function AccountMenu({ user, onLogout }: AccountMenuProps) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const btnRef = useRef<HTMLButtonElement | null>(null);
 
-  const [pos, setPos] = useState({ top: 0, left: 0, width: 288 });
+  
+  const menuRef = useRef<HTMLDivElement | null>(null);
+const [pos, setPos] = useState({ top: 0, left: 0, width: 288 });
 
   const menuWidth = 288;
 
@@ -37,7 +39,8 @@ export default function AccountMenu({ user, onLogout }: AccountMenuProps) {
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
-      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (!wrapRef.current?.contains(t) && !menuRef.current?.contains(t)) setOpen(false);
     };
     const onEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
@@ -67,7 +70,7 @@ export default function AccountMenu({ user, onLogout }: AccountMenuProps) {
     return (
       <div
         role="menu"
-        className="fixed z-[9999] rounded-xl border border-slate-700/70 bg-slate-950/95 shadow-2xl"
+        ref={menuRef} className="fixed z-[9999] rounded-xl border border-slate-700/70 bg-slate-950/95 shadow-2xl"
         style={{ top: pos.top, left: pos.left, width: pos.width }}
       >
         <div className="px-4 py-3 border-b border-slate-800">
@@ -116,7 +119,10 @@ export default function AccountMenu({ user, onLogout }: AccountMenuProps) {
           )}
 
           <button
-            onClick={async () => {
+            type="button"
+            onClick={async (e) => {
+              e.preventDefault();
+              e.stopPropagation();
               setOpen(false);
               try {
                 await onLogout();
