@@ -1,7 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { supabase, isSupabaseConfigValid } from './supabase';
 import type { Mode, User } from './types';
-import { registerOrUpdateUser, checkAndUpdateUserTrialStatus, updateUserMembership, getUserProfile } from './services/usersService';
+import {
+  registerOrUpdateUser,
+  checkAndUpdateUserTrialStatus,
+  updateUserMembership,
+  getUserProfile,
+} from './services/usersService';
 import { ADMIN_EMAIL } from './constants';
 import { useAppDispatch, refreshAllData } from './store';
 import ModeSelector from './components/ModeSelector';
@@ -23,16 +28,18 @@ function App() {
   const [isSuggestionModalOpen, setIsSuggestionModalOpen] = useState(false);
   const [livePerformanceId, setLivePerformanceId] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+
   const dispatch = useAppDispatch();
 
   useEffect(() => {
     // Safety timeout for the loading screen
-    const loadingTimeout = setTimeout(() => {
-      if (authLoading) setAuthLoading(false);
+    const loadingTimeout = window.setTimeout(() => {
+      setAuthLoading(false);
     }, 5000);
 
     const urlParams = new URLSearchParams(window.location.search);
     const modeParam = urlParams.get('mode');
+    const perfId = urlParams.get('performanceId');
 
     // Helper: our SPA is commonly served under /app (vercel.json rewrites).
     const getAppBasePath = () => {
@@ -46,12 +53,12 @@ function App() {
     const cleanupAuthCallbackUrl = () => {
       try {
         const base = getAppBasePath();
-        // Strip auth callback query params and any hash fragments from Supabase.
         window.history.replaceState({}, document.title, `${base}/`);
       } catch {
         // noop
       }
     };
+
     // Demo Mode (for conventions / talks)
     const demoEnabled = (() => {
       try {
@@ -60,9 +67,15 @@ function App() {
         return false;
       }
     })();
+
     if (demoEnabled) {
-      try { enableDemo(); } catch {}
-      try { seedDemoData(); } catch {}
+      try {
+        enableDemo();
+      } catch {}
+      try {
+        seedDemoData();
+      } catch {}
+
       const demoUser = {
         email: 'demo@magicaiwizard.com',
         membership: 'professional',
@@ -70,205 +83,178 @@ function App() {
         generationCount: 0,
         lastResetDate: new Date().toISOString(),
       } as any;
+
       setUser(demoUser);
       refreshAllData(dispatch);
       setMode('magician');
       setAuthLoading(false);
-      clearTimeout(loadingTimeout);
+      window.clearTimeout(loadingTimeout);
       return;
     }
 
-    const perfId = urlParams.get('performanceId');
+    // Live Feedback mode bypasses auth/UI
     if (modeParam === 'live-feedback' && perfId) {
-        setLivePerformanceId(perfId);
-        setMode('live-feedback');
-        setAuthLoading(false);
-        clearTimeout(loadingTimeout);
-        return; 
+      setLivePerformanceId(perfId);
+      setMode('live-feedback');
+      setAuthLoading(false);
+      window.clearTimeout(loadingTimeout);
+      return;
     }
 
-    // When a user clicks the Supabase email verification link, we redirect back
-    // to /app/?mode=auth-callback (set in components/Auth.tsx). During this
-    // callback we keep the user in the auth flow while Supabase hydrates the session.
+    // During Supabase email verification callback, keep user on auth flow
     if (modeParam === 'auth-callback') {
       setMode('auth');
     }
 
-	    if (!isSupabaseConfigValid) {
-        setAuthLoading(false);
-        clearTimeout(loadingTimeout);
-        return;
+    if (!isSupabaseConfigValid) {
+      setAuthLoading(false);
+      window.clearTimeout(loadingTimeout);
+      return;
     }
 
-    // Initial session sync (Supabase)
-    const initialSync = async () => {
-        try {
-            const { data } = await supabase.auth.getSession();
-            const sbUser = data?.session?.user ?? null;
-            if (sbUser && sbUser.email) {
-                let appUser: User = {
-                    email: sbUser.email,
-                    membership: 'trial',
-                    isAdmin: sbUser.email === ADMIN_EMAIL,
-                    generationCount: 0,
-                    lastResetDate: new Date().toISOString()
-                };
-                const profile = await getUserProfile(sbUser.id);
-                if (profile) {
-                    appUser = { ...appUser, ...profile };
-                }
+    const applySessionToState = async (session: any) => {
+      try {
+        const sbUser = session?.user ?? null;
 
-                await registerOrUpdateUser(appUser, sbUser.id);
-                appUser = await checkAndUpdateUserTrialStatus(appUser, sbUser.id);
+        if (sbUser && sbUser.email) {
+          // Start with a reasonable baseline
+          let appUser: User = {
+            email: sbUser.email,
+            membership: 'trial',
+            isAdmin: sbUser.email === ADMIN_EMAIL,
+            generationCount: 0,
+            lastResetDate: new Date().toISOString(),
+          };
 
-                setUser(appUser);
-                refreshAllData(dispatch);
-                setMode(prev => (prev === 'auth' || prev === 'selection') ? 'magician' : prev);
-                if (modeParam === 'auth-callback') cleanupAuthCallbackUrl();
-            } else {
-                setUser(null);
-                setMode(prev => prev === 'magician' ? 'selection' : prev);
-                if (modeParam === 'auth-callback') cleanupAuthCallbackUrl();
-            }
-        } catch (error) {
-            console.error('Supabase initial auth sync error:', error);
-        } finally {
-            if (modeParam === 'auth-callback') {
-              cleanupAuthCallbackUrl();
-            }
-            setAuthLoading(false);
-            clearTimeout(loadingTimeout);
+          // Load profile (if you store additional fields in your table)
+          const profile = await getUserProfile(sbUser.id);
+          if (profile) {
+            appUser = { ...appUser, ...profile };
+          }
+
+          // Ensure we have a DB record + keep membership/trial status current
+          await registerOrUpdateUser(appUser, sbUser.id);
+          appUser = await checkAndUpdateUserTrialStatus(appUser, sbUser.id);
+
+          setUser(appUser);
+          refreshAllData(dispatch);
+
+          setMode((prev) =>
+            prev === 'auth' || prev === 'selection' ? 'magician' : prev
+          );
+
+          if (modeParam === 'auth-callback') cleanupAuthCallbackUrl();
+        } else {
+          setUser(null);
+          setMode((prev) => (prev === 'magician' ? 'selection' : prev));
+          if (modeParam === 'auth-callback') cleanupAuthCallbackUrl();
         }
+      } catch (error) {
+        console.error('Auth sync error:', error);
+        // Fail safe to logged-out state.
+        setUser(null);
+        setMode('selection');
+        if (modeParam === 'auth-callback') cleanupAuthCallbackUrl();
+      } finally {
+        setAuthLoading(false);
+        window.clearTimeout(loadingTimeout);
+      }
     };
 
-    
-initialSync();
-
-const applySessionToState = async (session: any) => {
-    try {
-        const sbUser = session?.user ?? null;
-        if (sbUser && sbUser.email) {
-            let appUser: User = { email: sbUser.email, membership: 'free' };
-            // Admin shortcut
-            if (sbUser.email === ADMIN_EMAIL) {
-                appUser.membership = 'professional';
-            }
-
-            await registerOrUpdateUser(appUser, sbUser.id);
-            appUser = await checkAndUpdateUserTrialStatus(appUser, sbUser.id);
-
-            setUser(appUser);
-            refreshAllData(dispatch);
-
-            setMode(prev => (prev === 'auth' || prev === 'selection') ? 'magician' : prev);
-        } else {
-            setUser(null);
-            setMode(prev => prev === 'magician' ? 'selection' : prev);
-        }
-    } catch (error) {
-        console.error("Auth sync error:", error);
-        // If something goes wrong during sync, fail safe to logged-out state.
-        setUser(null);
-        setMode('selection');
-    }
-};
-
-// 1) Initial session hydration (covers hard refresh / returning visitor)
-(async () => {
-    try {
-        if (!isSupabaseConfigValid) return;
+    // 1) Initial session hydration (covers hard refresh / returning visitor)
+    const initialHydrate = async () => {
+      try {
         const { data, error } = await supabase.auth.getSession();
-        if (error) {
-            console.warn("Supabase getSession error:", error);
-        }
+        if (error) console.warn('Supabase getSession error:', error);
         await applySessionToState(data?.session ?? null);
-    } catch (e) {
-        console.warn("Initial session hydration failed:", e);
-    }
-})();
+      } catch (e) {
+        console.warn('Initial session hydration failed:', e);
+        setAuthLoading(false);
+        window.clearTimeout(loadingTimeout);
+      }
+    };
 
-// 2) React to auth events (sign-in, sign-out, token refresh, etc.)
-const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-    // TOKEN_REFRESHED is the critical one for long-lived sessions.
-    // INITIAL_SESSION can also occur depending on your Supabase config.
-    if (event === 'SIGNED_OUT') {
-        setUser(null);
-        setMode('selection');
-        return;
-    }
-    await applySessionToState(session);
-});
-
-// 3) "Silent refresh" hardening: when tab regains focus / becomes visible,
-// re-check the session so expired tokens get refreshed (or we log out cleanly).
-const onVisibilityOrFocus = async () => {
-    try {
-        if (!isSupabaseConfigValid) return;
+    // 2) Silent refresh hardening (focus/visibility)
+    const onVisibilityOrFocus = async () => {
+      try {
         const { data, error } = await supabase.auth.getSession();
-        if (error) {
-            console.warn("Supabase getSession (focus/visibility) error:", error);
-        }
+        if (error) console.warn('Supabase getSession (focus/visibility) error:', error);
         await applySessionToState(data?.session ?? null);
-    } catch (e) {
-        console.warn("Session re-check failed:", e);
-    }
-};
+      } catch (e) {
+        console.warn('Session re-check failed:', e);
+      }
+    };
 
-window.addEventListener('focus', onVisibilityOrFocus);
-document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') onVisibilityOrFocus();
-});
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void onVisibilityOrFocus();
+      }
+    };
 
-// 4) Periodic session check (belt-and-suspenders for very long sessions)
-const sessionInterval = window.setInterval(onVisibilityOrFocus, 2 * 60 * 1000);
-if (profile) {
-                    appUser = { ...appUser, ...profile };
-                }
-
-                await registerOrUpdateUser(appUser, sbUser.id);
-                appUser = await checkAndUpdateUserTrialStatus(appUser, sbUser.id);
-
-                setUser(appUser);
-                refreshAllData(dispatch);
-
-                setMode(prev => (prev === 'auth' || prev === 'selection') ? 'magician' : prev);
-            } else {
-                setUser(null);
-                setMode(prev => prev === 'magician' ? 'selection' : prev);
-            }
-        } catch (error) {
-            console.error("Auth sync error:", error);
-        } finally {
-            setAuthLoading(false);
-            clearTimeout(loadingTimeout);
+    // 3) Auth events listener (sign-in, sign-out, token refresh)
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === 'SIGNED_OUT') {
+          setUser(null);
+          setMode('selection');
+          setAuthLoading(false);
+          window.clearTimeout(loadingTimeout);
+          return;
         }
-    });
-    
+        await applySessionToState(session);
+      }
+    );
+
+    // Start
+    void initialHydrate();
+
+    window.addEventListener('focus', onVisibilityOrFocus);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    // 4) Periodic session check (belt-and-suspenders)
+    const sessionInterval = window.setInterval(
+      onVisibilityOrFocus,
+      2 * 60 * 1000
+    );
+
+    // Disclaimer check
     try {
-        const hasAcknowledged = localStorage.getItem(DISCLAIMER_ACKNOWLEDGED_KEY);
-        if (hasAcknowledged !== 'true') {
-            setIsDisclaimerOpen(true);
-        }
-    } catch (error) {
-        console.error("Failed to check disclaimer status", error);
+      const hasAcknowledged = localStorage.getItem(DISCLAIMER_ACKNOWLEDGED_KEY);
+      if (hasAcknowledged !== 'true') {
         setIsDisclaimerOpen(true);
+      }
+    } catch (error) {
+      console.error('Failed to check disclaimer status', error);
+      setIsDisclaimerOpen(true);
     }
 
     return () => {
-  try { authListener?.subscription?.unsubscribe?.(); } catch {}
-  try { window.removeEventListener('focus', onVisibilityOrFocus); } catch {}
-  try { document.removeEventListener('visibilitychange', onVisibilityChange); } catch {}
-  try { window.clearInterval(sessionInterval); } catch {}
-  clearTimeout(loadingTimeout);
-};
+      try {
+        authListener?.subscription?.unsubscribe?.();
+      } catch {}
+      try {
+        window.removeEventListener('focus', onVisibilityOrFocus);
+      } catch {}
+      try {
+        document.removeEventListener('visibilitychange', onVisibilityChange);
+      } catch {}
+      try {
+        window.clearInterval(sessionInterval);
+      } catch {}
+      window.clearTimeout(loadingTimeout);
+    };
   }, [dispatch]);
 
   const handleSelectMode = (selectedMode: Mode) => {
     if (selectedMode === 'magician') {
       // Ensure entering Magician/AI Assistant mode always lands on the dashboard grid,
       // not a previously persisted tool view.
-      try { localStorage.removeItem('magician_active_view'); } catch {}
-      try { window.dispatchEvent(new CustomEvent('maw:go-dashboard')); } catch {}
+      try {
+        localStorage.removeItem('magician_active_view');
+      } catch {}
+      try {
+        window.dispatchEvent(new CustomEvent('maw:go-dashboard'));
+      } catch {}
 
       if (user) {
         setMode('magician');
@@ -279,60 +265,71 @@ if (profile) {
       setMode(selectedMode);
     }
   };
-  
+
   const handleBackToSelection = () => {
-    setMode('selection'); 
+    setMode('selection');
   };
 
   const handleLogout = async () => {
     // Make logout feel instant + prevent stale UI state if signOut is slow/fails.
-    try { localStorage.removeItem('magician_active_view'); } catch {}
+    try {
+      localStorage.removeItem('magician_active_view');
+    } catch {}
     setUser(null);
     setMode('selection');
 
     try {
-        await supabase.auth.signOut();
+      await supabase.auth.signOut();
     } catch (error) {
-        console.error("Failed to sign out", error);
+      console.error('Failed to sign out', error);
     }
   };
-  
+
   const handleUpgrade = async (toTier: 'performer' | 'professional') => {
     if (user && user.email) {
-        const upgradedUser = { ...user, membership: toTier };
-        if ('trialEndDate' in upgradedUser) {
-            delete (upgradedUser as any).trialEndDate;
-        }
-        setUser(upgradedUser);
-        await updateUserMembership(user.email, toTier as any);
+      const upgradedUser = { ...user, membership: toTier };
+      if ('trialEndDate' in upgradedUser) {
+        delete (upgradedUser as any).trialEndDate;
+      }
+      setUser(upgradedUser);
+      await updateUserMembership(user.email, toTier as any);
     }
-  }
+  };
 
   const handleDisclaimerAcknowledge = () => {
-      try {
-          localStorage.setItem(DISCLAIMER_ACKNOWLEDGED_KEY, 'true');
-      } catch (error) {
-          console.error("Failed to save disclaimer status", error);
-      }
-      setIsDisclaimerOpen(false);
+    try {
+      localStorage.setItem(DISCLAIMER_ACKNOWLEDGED_KEY, 'true');
+    } catch (error) {
+      console.error('Failed to save disclaimer status', error);
+    }
+    setIsDisclaimerOpen(false);
   };
 
   const renderContent = () => {
     if (authLoading) {
-        return (
-          <div className="flex flex-col items-center justify-center h-full">
-            <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-            <div className="text-white text-xl animate-pulse font-cinzel tracking-widest">Loading Magic...</div>
+      return (
+        <div className="flex flex-col items-center justify-center h-full">
+          <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+          <div className="text-white text-xl animate-pulse font-cinzel tracking-widest">
+            Loading Magic...
           </div>
-        );
+        </div>
+      );
     }
 
     if (mode === 'live-feedback' && livePerformanceId) {
-        return <LiveFeedbackView performanceId={livePerformanceId} />;
+      return <LiveFeedbackView performanceId={livePerformanceId} />;
     }
 
     if (mode === 'magician' && user) {
-        return <MagicianMode onBack={handleBackToSelection} user={user} onUpgrade={handleUpgrade} onLogout={handleLogout} />;
+      return (
+        <MagicianMode
+          onBack={handleBackToSelection}
+          user={user}
+          onUpgrade={handleUpgrade}
+          onLogout={handleLogout}
+        />
+      );
     }
 
     switch (mode) {
@@ -341,7 +338,16 @@ if (profile) {
       case 'audience':
         return <AudienceMode onBack={() => setMode('selection')} />;
       case 'auth':
-        return <Auth onLogin={(appUser) => { setUser(appUser); refreshAllData(dispatch); setMode('magician'); }} onBack={() => setMode('selection')} />;
+        return (
+          <Auth
+            onLogin={(appUser) => {
+              setUser(appUser);
+              refreshAllData(dispatch);
+              setMode('magician');
+            }}
+            onBack={() => setMode('selection')}
+          />
+        );
       case 'selection':
       default:
         return <ModeSelector onSelectMode={handleSelectMode} />;
@@ -350,9 +356,9 @@ if (profile) {
 
   if (mode === 'live-feedback') {
     return (
-        <div className="bg-slate-900 text-white min-h-screen flex flex-col items-center justify-center">
-            {renderContent()}
-        </div>
+      <div className="bg-slate-900 text-white min-h-screen flex flex-col items-center justify-center">
+        {renderContent()}
+      </div>
     );
   }
 
@@ -367,7 +373,9 @@ if (profile) {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => {
-                    try { localStorage.removeItem('magician_active_view'); } catch {}
+                    try {
+                      localStorage.removeItem('magician_active_view');
+                    } catch {}
                     window.dispatchEvent(new CustomEvent('maw:go-dashboard'));
                     setMode('selection');
                   }}
@@ -378,8 +386,9 @@ if (profile) {
 
                 <button
                   onClick={() => {
-                    // Force the in-app tool view back to Dashboard (prevents "sticky" tool traps)
-                    try { localStorage.removeItem('magician_active_view'); } catch {}
+                    try {
+                      localStorage.removeItem('magician_active_view');
+                    } catch {}
                     window.dispatchEvent(new CustomEvent('maw:go-dashboard'));
                     setMode(user ? 'magician' : 'auth');
                   }}
@@ -402,28 +411,39 @@ if (profile) {
           </div>
         </header>
       )}
-      
+
       {isDisclaimerOpen && <DisclaimerModal onClose={handleDisclaimerAcknowledge} />}
-      {isSuggestionModalOpen && <AppSuggestionModal onClose={() => setIsSuggestionModalOpen(false)} />}
-      
+      {isSuggestionModalOpen && (
+        <AppSuggestionModal onClose={() => setIsSuggestionModalOpen(false)} />
+      )}
+
       <div className="relative z-10 flex flex-col flex-1 w-full max-w-7xl mx-auto p-4 sm:p-6 md:p-8 justify-center">
-         {renderContent()}
+        {renderContent()}
       </div>
-      
+
       <footer className="relative z-10 w-full text-center p-4 text-xs text-slate-500">
-        <p>Copyright 2026 Magicians' AI Wizard, LLC - v0.8 Beta</p>
+        <p>Copyright 2026 Magicians&apos; AI Wizard, LLC - v0.8 Beta</p>
         <div className="flex justify-center items-center gap-4 mt-2">
-            <button onClick={() => setMode('about')} className="text-slate-400 hover:text-white transition-colors underline">
-                About Memberships
-            </button>
-            <span className="text-slate-600">|</span>
-            <button onClick={() => setIsDisclaimerOpen(true)} className="text-slate-400 hover:text-white transition-colors underline">
-                Disclaimer
-            </button>
-            <span className="text-slate-600">|</span>
-            <button onClick={() => setIsSuggestionModalOpen(true)} className="text-slate-400 hover:text-white transition-colors underline">
-                Submit App Feedback
-            </button>
+          <button
+            onClick={() => setMode('about')}
+            className="text-slate-400 hover:text-white transition-colors underline"
+          >
+            About Memberships
+          </button>
+          <span className="text-slate-600">|</span>
+          <button
+            onClick={() => setIsDisclaimerOpen(true)}
+            className="text-slate-400 hover:text-white transition-colors underline"
+          >
+            Disclaimer
+          </button>
+          <span className="text-slate-600">|</span>
+          <button
+            onClick={() => setIsSuggestionModalOpen(true)}
+            className="text-slate-400 hover:text-white transition-colors underline"
+          >
+            Submit App Feedback
+          </button>
         </div>
       </footer>
     </div>
