@@ -843,7 +843,16 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
             </div>
           </CollapsibleSection>
 
-          {/* Raw JSON */}
+          {/* Blueprint Data Info Box */}
+<div className="mb-4 rounded-md border border-slate-700/60 bg-slate-800/40 p-4 text-sm text-slate-300">
+  <div className="mb-1 font-semibold text-slate-200">Blueprint Data (Advanced)</div>
+  <p className="mb-1">
+    This JSON contains the complete technical blueprint for this illusion — including dimensions, cut list, materials, and assembly steps.
+  </p>
+  <p>Use it to export plans, share with builders, or feed into other design tools.</p>
+</div>
+
+{/* Raw JSON */}
           <CollapsibleSection id="json" title="Raw JSON" isOpen={openSections.json} onToggle={() => toggleSection('json')}>
                 <div className="flex items-center gap-2 mb-2">
                   <button
