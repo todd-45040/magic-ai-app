@@ -39,7 +39,15 @@ const isConfigValid = !!supabaseUrl && !!supabaseAnonKey && supabaseUrl !== "und
 export const isSupabaseConfigValid = isConfigValid;
 
 export const supabase = isConfigValid
-  ? createClient(supabaseUrl, supabaseAnonKey)
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        flowType: 'pkce',
+        storageKey: 'magic_ai_wizard_auth',
+      },
+    })
   : mockSupabase;
 
 if (!isConfigValid) {

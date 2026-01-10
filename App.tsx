@@ -141,22 +141,87 @@ function App() {
         }
     };
 
-    initialSync();
+    
+initialSync();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
-        try {
-            const sbUser = session?.user ?? null;
-            if (sbUser && sbUser.email) {
-                let appUser: User = {
-                    email: sbUser.email,
-                    membership: 'trial', 
-                    isAdmin: sbUser.email === ADMIN_EMAIL,
-                    generationCount: 0,
-                    lastResetDate: new Date().toISOString()
-                };
+const applySessionToState = async (session: any) => {
+    try {
+        const sbUser = session?.user ?? null;
+        if (sbUser && sbUser.email) {
+            let appUser: User = { email: sbUser.email, membership: 'free' };
+            // Admin shortcut
+            if (sbUser.email === ADMIN_EMAIL) {
+                appUser.membership = 'professional';
+            }
 
-                const profile = await getUserProfile(sbUser.id);
-                if (profile) {
+            await registerOrUpdateUser(appUser, sbUser.id);
+            appUser = await checkAndUpdateUserTrialStatus(appUser, sbUser.id);
+
+            setUser(appUser);
+            refreshAllData(dispatch);
+
+            setMode(prev => (prev === 'auth' || prev === 'selection') ? 'magician' : prev);
+        } else {
+            setUser(null);
+            setMode(prev => prev === 'magician' ? 'selection' : prev);
+        }
+    } catch (error) {
+        console.error("Auth sync error:", error);
+        // If something goes wrong during sync, fail safe to logged-out state.
+        setUser(null);
+        setMode('selection');
+    }
+};
+
+// 1) Initial session hydration (covers hard refresh / returning visitor)
+(async () => {
+    try {
+        if (!isSupabaseConfigValid) return;
+        const { data, error } = await supabase.auth.getSession();
+        if (error) {
+            console.warn("Supabase getSession error:", error);
+        }
+        await applySessionToState(data?.session ?? null);
+    } catch (e) {
+        console.warn("Initial session hydration failed:", e);
+    }
+})();
+
+// 2) React to auth events (sign-in, sign-out, token refresh, etc.)
+const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+    // TOKEN_REFRESHED is the critical one for long-lived sessions.
+    // INITIAL_SESSION can also occur depending on your Supabase config.
+    if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setMode('selection');
+        return;
+    }
+    await applySessionToState(session);
+});
+
+// 3) "Silent refresh" hardening: when tab regains focus / becomes visible,
+// re-check the session so expired tokens get refreshed (or we log out cleanly).
+const onVisibilityOrFocus = async () => {
+    try {
+        if (!isSupabaseConfigValid) return;
+        const { data, error } = await supabase.auth.getSession();
+        if (error) {
+            console.warn("Supabase getSession (focus/visibility) error:", error);
+        }
+        await applySessionToState(data?.session ?? null);
+    } catch (e) {
+        console.warn("Session re-check failed:", e);
+    }
+};
+
+window.addEventListener('focus', onVisibilityOrFocus);
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') onVisibilityOrFocus();
+});
+
+// 4) Periodic session check (belt-and-suspenders for very long sessions)
+const sessionInterval = window.setInterval(onVisibilityOrFocus, 2 * 60 * 1000);
+if (profile) {
                     appUser = { ...appUser, ...profile };
                 }
 
@@ -190,9 +255,12 @@ function App() {
     }
 
     return () => {
-      authListener?.subscription?.unsubscribe?.();
-      clearTimeout(loadingTimeout);
-    };
+  try { authListener?.subscription?.unsubscribe?.(); } catch {}
+  try { window.removeEventListener('focus', onVisibilityOrFocus); } catch {}
+  try { document.removeEventListener('visibilitychange', onVisibilityChange); } catch {}
+  try { window.clearInterval(sessionInterval); } catch {}
+  clearTimeout(loadingTimeout);
+};
   }, [dispatch]);
 
   const handleSelectMode = (selectedMode: Mode) => {
@@ -217,14 +285,13 @@ function App() {
   };
 
   const handleLogout = async () => {
-    try {
-        try { localStorage.removeItem('magician_active_view'); } catch {}
-        await supabase.auth.signOut();
+    // Make logout feel instant + prevent stale UI state if signOut is slow/fails.
+    try { localStorage.removeItem('magician_active_view'); } catch {}
+    setUser(null);
+    setMode('selection');
 
-        // In case the auth-state listener is slow (or blocked by a navigation),
-        // clear local UI state immediately.
-        setUser(null);
-        setMode('selection');
+    try {
+        await supabase.auth.signOut();
     } catch (error) {
         console.error("Failed to sign out", error);
     }
