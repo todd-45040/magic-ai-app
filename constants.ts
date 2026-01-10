@@ -501,54 +501,10 @@ export const MAGICIAN_CHAT_TOOLS = [{
 
 
 export const publications = [
-  {
-    name: 'Genii Magazine',
-    description: 'The leading print publication for magicians, published monthly since 1936, covering the art, history, and news of magic.',
-    type: 'Print/Digital',
-    url: 'https://geniimagazine.com/'
-  },
-  {
-    name: 'The Linking Ring',
-    description: 'The official monthly publication of the International Brotherhood of Magicians (I.B.M.).',
-    type: 'Print/Digital',
-    url: 'https://www.magician.org/the-linking-ring/'
-  },
-  {
-    name: 'M-U-M Magazine',
-    description: 'The official monthly publication of the Society of American Magicians (S.A.M.).',
-    type: 'Print/Digital',
-    url: 'https://www.magicsam.com/page/MUMMagazine'
-  },
-  {
-    name: 'Magicseen',
-    description: 'A modern magazine covering magic news, reviews, and interviews.',
-    type: 'Print/Digital',
-    url: 'https://www.magicseen.com/'
-  },
-  {
-    name: 'VANISH Magazine',
-    description: 'Digital magazine featuring articles, interviews, and community news.',
-    type: 'Digital',
-    url: 'https://www.vanishmagic.com/'
-  },
-  {
-    name: 'Reel Magic Magazine',
-    description: 'Video-based magazine featuring interviews, performances, and tutorials from top creators.',
-    type: 'Video',
-    url: 'https://www.reelmagicmagazine.com/'
-  },
-  {
-    name: 'Gibecière',
-    description: 'Scholarly journal from the Conjuring Arts Research Center focused on magic history and research.',
-    type: 'Research',
-    url: 'https://www.conjuringarts.org/gibeciere'
-  },
-  {
-    name: 'MAGIC Magazine',
-    description: 'A legendary, now-archived monthly magazine known for its high-quality production and in-depth features on magicians.',
-    type: 'Archive',
-    url: 'https://www.magicmagazine.com/'
-  }
+    { name: 'Genii Magazine', description: 'The leading print publication for magicians, published monthly since 1936, covering the art, history, and news of magic.' },
+    { name: 'MAGIC Magazine', description: 'A legendary, now-archived monthly magazine known for its high-quality production and in-depth features on magicians.' },
+    { name: 'The Linking Ring', description: 'The official monthly publication of the International Brotherhood of Magicians (I.B.M.).' },
+    { name: 'M-U-M Magazine', description: 'The official monthly publication of the Society of American Magicians (S.A.M.).' }
 ];
 
 export const clubs = [
