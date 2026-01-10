@@ -620,7 +620,6 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                     <p className="text-sm text-slate-400">{principle.description}</p>
                   </div>
                 ))}
-            </div>
           </CollapsibleSection>
 
           {/* Staging */}
