@@ -592,10 +592,23 @@ const AudienceMode: React.FC<AudienceModeProps> = ({ onBack }) => {
                       <h3 className="text-2xl font-bold text-slate-200 font-cinzel mb-4">Major Magic Clubs & Organizations</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {clubs.map(club => (
-                              <div key={club.name} className="bg-slate-800/50 border border-slate-700 rounded-lg p-4">
-                                  <h4 className="font-bold text-lg text-white">{club.name}</h4>
+                              <a
+                                key={club.name}
+                                href={(club as any).url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="group bg-slate-800/50 border border-slate-700 rounded-lg p-4 hover:bg-slate-800/70 hover:border-purple-500/40 transition-all"
+                                title={`Open ${club.name} website`}
+                              >
+                                  <div className="flex items-start justify-between gap-3">
+                                    <h4 className="font-bold text-lg text-white">{club.name}</h4>
+                                    <span className="text-slate-500 group-hover:text-slate-300 transition" aria-hidden="true">↗</span>
+                                  </div>
                                   <p className="text-slate-400 text-sm mt-1">{club.description}</p>
-                              </div>
+                                  <div className="mt-3 inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-md border border-slate-700/60 bg-slate-950/25 text-slate-200 group-hover:bg-slate-950/40 transition">
+                                    Visit <span aria-hidden="true">↗</span>
+                                  </div>
+                              </a>
                           ))}
                       </div>
                   </div>
@@ -604,13 +617,26 @@ const AudienceMode: React.FC<AudienceModeProps> = ({ onBack }) => {
                       <h3 className="text-2xl font-bold text-slate-200 font-cinzel mb-4">Popular Magic Conventions</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {conventions.map(convention => (
-                              <div key={convention.name} className="bg-slate-800/50 border border-slate-700 rounded-lg p-4">
-                                  <div className="flex justify-between items-baseline gap-4">
+                              <a
+                                key={convention.name}
+                                href={(convention as any).url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="group bg-slate-800/50 border border-slate-700 rounded-lg p-4 hover:bg-slate-800/70 hover:border-purple-500/40 transition-all"
+                                title={`Open ${convention.name} website`}
+                              >
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
                                       <h4 className="font-bold text-lg text-white">{convention.name}</h4>
                                       {convention.date && <span className="text-sm font-semibold text-slate-400 flex-shrink-0">{convention.date}</span>}
+                                    </div>
+                                    <span className="text-slate-500 group-hover:text-slate-300 transition" aria-hidden="true">↗</span>
                                   </div>
-                                  <p className="text-slate-400 text-sm mt-1">{convention.description}</p>
-                              </div>
+                                  <p className="text-slate-400 text-sm mt-2">{convention.description}</p>
+                                  <div className="mt-3 inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-md border border-slate-700/60 bg-slate-950/25 text-slate-200 group-hover:bg-slate-950/40 transition">
+                                    Visit <span aria-hidden="true">↗</span>
+                                  </div>
+                              </a>
                           ))}
                       </div>
                   </div>

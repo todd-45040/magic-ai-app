@@ -890,34 +890,6 @@ const CommunityTab: React.FC = () => {
           <p className="text-slate-400 mt-2">
             Connect with peers, explore organizations, and discover major conventions.
           </p>
-
-          <div className="mt-5 max-w-2xl mx-auto">
-            <div className="relative">
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search clubs and conventions…"
-                className="w-full rounded-xl bg-slate-950/40 border border-slate-700/60 px-4 py-3 pl-10 text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 focus:border-purple-500/50"
-              />
-              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
-                <span aria-hidden="true">🔎</span>
-              </div>
-              {query.trim().length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition"
-                  title="Clear"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
-
-            <div className="mt-2 text-xs text-slate-500">
-              Tip: try “IBM”, “SAM”, “Blackpool”, or “FISM”.
-            </div>
-          </div>
         </div>
 
         {/* Online communities */}
@@ -929,9 +901,13 @@ const CommunityTab: React.FC = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {onlineCommunities.map(item => (
-              <div
+              <a
                 key={item.name}
-                className="group bg-slate-900/35 border border-slate-700/60 rounded-xl p-4 shadow-sm hover:shadow-lg transition-all duration-200 hover:border-purple-500/40"
+                href={item.url}
+                target="_blank"
+                rel="noreferrer"
+                className="group bg-slate-900/35 border border-slate-700/60 rounded-xl p-4 shadow-sm hover:shadow-lg transition-all duration-200 hover:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                title={`Open ${item.name}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <h4 className="font-bold text-lg bg-gradient-to-r from-yellow-200 via-amber-300 to-yellow-200 bg-clip-text text-transparent">
@@ -942,17 +918,10 @@ const CommunityTab: React.FC = () => {
 
                 <p className="text-slate-400 text-sm mt-1 line-clamp-3">{item.description}</p>
 
-                <div className="mt-3">
-                  <a
-                    href={item.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg border border-slate-700/60 bg-slate-950/30 hover:bg-slate-950/60 text-slate-200 hover:text-white transition"
-                  >
-                    Visit <span aria-hidden="true">↗</span>
-                  </a>
+                <div className="mt-3 inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg border border-slate-700/60 bg-slate-950/30 group-hover:bg-slate-950/60 text-slate-200 group-hover:text-white transition">
+                  Visit <span aria-hidden="true">↗</span>
                 </div>
-              </div>
+              </a>
             ))}
           </div>
         </section>
@@ -966,19 +935,32 @@ const CommunityTab: React.FC = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {filteredClubs.map(club => (
-              <div
+              <a
                 key={club.name}
-                className="group bg-slate-900/35 border border-slate-700/60 rounded-xl p-4 shadow-sm hover:shadow-lg transition-all duration-200 hover:border-purple-500/40"
+                href={(club as any).url}
+                target="_blank"
+                rel="noreferrer"
+                className="group bg-slate-900/35 border border-slate-700/60 rounded-xl p-4 shadow-sm hover:shadow-lg transition-all duration-200 hover:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                title={`Open ${club.name} website`}
               >
-                <h4 className="font-bold text-lg bg-gradient-to-r from-yellow-200 via-amber-300 to-yellow-200 bg-clip-text text-transparent">
-                  {club.name}
-                </h4>
+                <div className="flex items-start justify-between gap-3">
+                  <h4 className="font-bold text-lg bg-gradient-to-r from-yellow-200 via-amber-300 to-yellow-200 bg-clip-text text-transparent">
+                    {club.name}
+                  </h4>
+                  <span className="text-slate-500 group-hover:text-slate-300 transition" aria-hidden="true">↗</span>
+                </div>
+
                 <p className="text-slate-400 text-sm mt-1 line-clamp-3">{club.description}</p>
 
-                <div className="mt-3 inline-flex items-center gap-2 text-[11px] px-2.5 py-1 rounded-full border border-slate-700/60 bg-slate-950/25 text-slate-300/90">
-                  Community
+                <div className="mt-3 flex items-center justify-between gap-3">
+                  <div className="inline-flex items-center gap-2 text-[11px] px-2.5 py-1 rounded-full border border-slate-700/60 bg-slate-950/25 text-slate-300/90">
+                    Club / Org
+                  </div>
+                  <div className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg border border-slate-700/60 bg-slate-950/30 group-hover:bg-slate-950/60 text-slate-200 group-hover:text-white transition">
+                    Visit <span aria-hidden="true">↗</span>
+                  </div>
                 </div>
-              </div>
+              </a>
             ))}
           </div>
 
@@ -998,27 +980,39 @@ const CommunityTab: React.FC = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {filteredConventions.map(convention => (
-              <div
+              <a
                 key={convention.name}
-                className="group bg-slate-900/35 border border-slate-700/60 rounded-xl p-4 shadow-sm hover:shadow-lg transition-all duration-200 hover:border-purple-500/40"
+                href={(convention as any).url}
+                target="_blank"
+                rel="noreferrer"
+                className="group bg-slate-900/35 border border-slate-700/60 rounded-xl p-4 shadow-sm hover:shadow-lg transition-all duration-200 hover:border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                title={`Open ${convention.name} website`}
               >
-                <div className="flex justify-between items-baseline gap-4">
-                  <h4 className="font-bold text-lg bg-gradient-to-r from-yellow-200 via-amber-300 to-yellow-200 bg-clip-text text-transparent">
-                    {convention.name}
-                  </h4>
-                  {convention.date && (
-                    <span className="text-xs font-semibold text-slate-400 flex-shrink-0">
-                      {convention.date}
-                    </span>
-                  )}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h4 className="font-bold text-lg bg-gradient-to-r from-yellow-200 via-amber-300 to-yellow-200 bg-clip-text text-transparent">
+                      {convention.name}
+                    </h4>
+                    {convention.date && (
+                      <div className="text-xs font-semibold text-slate-400 mt-0.5">
+                        {convention.date}
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-slate-500 group-hover:text-slate-300 transition" aria-hidden="true">↗</span>
                 </div>
 
-                <p className="text-slate-400 text-sm mt-1 line-clamp-3">{convention.description}</p>
+                <p className="text-slate-400 text-sm mt-2 line-clamp-3">{convention.description}</p>
 
-                <div className="mt-3 inline-flex items-center gap-2 text-[11px] px-2.5 py-1 rounded-full border border-slate-700/60 bg-slate-950/25 text-slate-300/90">
-                  Convention
+                <div className="mt-3 flex items-center justify-between gap-3">
+                  <div className="inline-flex items-center gap-2 text-[11px] px-2.5 py-1 rounded-full border border-slate-700/60 bg-slate-950/25 text-slate-300/90">
+                    Convention
+                  </div>
+                  <div className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg border border-slate-700/60 bg-slate-950/30 group-hover:bg-slate-950/60 text-slate-200 group-hover:text-white transition">
+                    Visit <span aria-hidden="true">↗</span>
+                  </div>
                 </div>
-              </div>
+              </a>
             ))}
           </div>
 
@@ -1027,6 +1021,43 @@ const CommunityTab: React.FC = () => {
               No conventions match “{query}”.
             </div>
           )}
+        </section>
+
+        {/* Search (moved to bottom) */}
+        <section className="pt-2">
+          <div className="max-w-2xl mx-auto">
+            <div className="bg-slate-900/30 border border-slate-700/60 rounded-2xl p-4 md:p-5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-slate-200">Search clubs and conventions</div>
+                  <div className="text-xs text-slate-500 mt-0.5">Tip: try “IBM”, “SAM”, “Blackpool”, or “FISM”.</div>
+                </div>
+                <div className="text-[11px] text-slate-500 hidden md:block">Filters results above</div>
+              </div>
+
+              <div className="mt-3 relative">
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Type to filter…"
+                  className="w-full rounded-xl bg-slate-950/40 border border-slate-700/60 px-4 py-3 pl-10 text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 focus:border-purple-500/50"
+                />
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
+                  <span aria-hidden="true">🔎</span>
+                </div>
+                {query.trim().length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition"
+                    title="Clear"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
         </section>
       </div>
     </div>
