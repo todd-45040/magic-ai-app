@@ -875,7 +875,7 @@ interface MagicianModeProps {
   onBack: () => void;
   user: User;
   onUpgrade: (tier: 'performer' | 'professional') => void;
-  onLogout: () => void;
+  onLogout: () => void | Promise<void>;
 }
 
 const VIEW_TO_TAB_MAP: Record<MagicianView, MagicianTab> = {

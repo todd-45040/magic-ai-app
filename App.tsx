@@ -220,6 +220,11 @@ function App() {
     try {
         try { localStorage.removeItem('magician_active_view'); } catch {}
         await supabase.auth.signOut();
+
+        // In case the auth-state listener is slow (or blocked by a navigation),
+        // clear local UI state immediately.
+        setUser(null);
+        setMode('selection');
     } catch (error) {
         console.error("Failed to sign out", error);
     }
