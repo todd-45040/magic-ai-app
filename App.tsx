@@ -366,7 +366,7 @@ function App() {
     <div className="magical-bg text-white min-h-screen flex flex-col relative">
       <div className="dust-pattern" />
 
-      {mode !== 'selection' && mode !== 'auth' && mode !== 'live-feedback' && (
+      {(mode === 'audience' || mode === 'about') && (
         <header className="sticky top-0 z-50 w-full">
           <div className="backdrop-blur-md bg-black/50 border-b border-yellow-500/20">
             <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2 flex items-center justify-between">
