@@ -828,20 +828,21 @@ const PublicationsTab: React.FC = () => (
                     <p className="text-slate-400 text-sm mt-1 line-clamp-3">{pub.description}</p>
 
                     <div className="mt-3 flex items-center justify-between gap-3">
-                        <div className="text-[11px] px-2 py-1 rounded-full border border-yellow-500/25 bg-yellow-500/10 text-yellow-200/80">
-                          {(pub as any).type ?? 'Publication'}
-                        </div>
+                      <div className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full border border-yellow-500/25 bg-yellow-500/10 text-yellow-100/80">
+                        {(pub as any).type ?? 'Publication'}
+                      </div>
 
-                        {(pub as any).url ? (
-                          <a
-                            href={(pub as any).url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-xs px-3 py-1.5 rounded-lg border border-slate-700/60 bg-slate-900/40 hover:bg-slate-900/70 text-slate-200 hover:text-white transition"
-                          >
-                            Visit site
-                          </a>
-                        ) : null}
+                      {(pub as any).url ? (
+                        <a
+                          href={(pub as any).url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-yellow-500/25 bg-slate-900/40 hover:bg-slate-900/70 text-yellow-200 hover:text-yellow-100 transition"
+                          title="Open in a new tab"
+                        >
+                          Visit site <span aria-hidden="true">↗</span>
+                        </a>
+                      ) : null}
                     </div>
                 </div>
             ))}
@@ -863,8 +864,8 @@ const CommunityTab: React.FC = () => (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {clubs.map(club => (
                       <div key={club.name} className="bg-slate-800/50 border border-slate-700 rounded-lg p-4 transition-all duration-200 hover:border-purple-500 hover:bg-slate-800">
-                          <h4 className="font-bold text-lg text-white">{club.name}</h4>
-                          <p className="text-slate-400 text-sm mt-1">{club.description}</p>
+                          <h4 className="font-bold text-lg bg-gradient-to-r from-yellow-200 via-amber-300 to-yellow-200 bg-clip-text text-transparent">{club.name}</h4>
+                          <p className="text-slate-400 text-sm mt-1 line-clamp-3">{club.description}</p>
                       </div>
                   ))}
               </div>
@@ -876,10 +877,10 @@ const CommunityTab: React.FC = () => (
                   {conventions.map(convention => (
                       <div key={convention.name} className="bg-slate-800/50 border border-slate-700 rounded-lg p-4 transition-all duration-200 hover:border-purple-500 hover:bg-slate-800">
                            <div className="flex justify-between items-baseline gap-4">
-                                <h4 className="font-bold text-lg text-white">{convention.name}</h4>
+                                <h4 className="font-bold text-lg bg-gradient-to-r from-yellow-200 via-amber-300 to-yellow-200 bg-clip-text text-transparent">{convention.name}</h4>
                                 {convention.date && <span className="text-sm font-semibold text-slate-400 flex-shrink-0">{convention.date}</span>}
                             </div>
-                          <p className="text-slate-400 text-sm mt-1">{convention.description}</p>
+                          <p className="text-slate-400 text-sm mt-1 line-clamp-3">{convention.description}</p>
                       </div>
                   ))}
               </div>
