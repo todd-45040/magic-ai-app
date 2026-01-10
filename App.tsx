@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { supabase, isSupabaseConfigValid } from './supabase';
 import type { Mode, User } from './types';
 import {
@@ -30,6 +30,8 @@ function App() {
   const [authLoading, setAuthLoading] = useState(true);
 
   const dispatch = useAppDispatch();
+
+  const loggingOutRef = useRef(false);
 
   useEffect(() => {
     // Safety timeout for the loading screen
@@ -113,6 +115,9 @@ function App() {
     }
 
     const applySessionToState = async (session: any) => {
+      if (loggingOutRef.current) {
+        return;
+      }
       try {
         const sbUser = session?.user ?? null;
 
@@ -194,6 +199,9 @@ function App() {
     // 3) Auth events listener (sign-in, sign-out, token refresh)
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        if (loggingOutRef.current && event !== 'SIGNED_OUT') {
+          return;
+        }
         if (event === 'SIGNED_OUT') {
           setUser(null);
           setMode('selection');
@@ -271,19 +279,29 @@ function App() {
   };
 
   const handleLogout = async () => {
-    // Make logout feel instant + prevent stale UI state if signOut is slow/fails.
-    try {
-      localStorage.removeItem('magician_active_view');
-    } catch {}
-    setUser(null);
-    setMode('selection');
+    // Prevent race conditions where session re-hydration runs while we are signing out.
+    loggingOutRef.current = true;
 
     try {
+      // Sign out first (clears local session). We still do a UI reset below.
       await supabase.auth.signOut();
     } catch (error) {
       console.error('Failed to sign out', error);
+    } finally {
+      try {
+        localStorage.removeItem('magician_active_view');
+      } catch {}
+
+      setUser(null);
+      setMode('selection');
+
+      // Allow auth hydration again after we have settled into logged-out UI.
+      window.setTimeout(() => {
+        loggingOutRef.current = false;
+      }, 250);
     }
   };
+
 
   const handleUpgrade = async (toTier: 'performer' | 'professional') => {
     if (user && user.email) {

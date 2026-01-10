@@ -8,7 +8,7 @@ import { ChevronDownIcon, DatabaseIcon } from "./icons";
 
 interface AccountMenuProps {
   user: User;
-  onLogout: () => void;
+  onLogout: () => void | Promise<void>;
 }
 
 export default function AccountMenu({ user, onLogout }: AccountMenuProps) {
@@ -116,9 +116,13 @@ export default function AccountMenu({ user, onLogout }: AccountMenuProps) {
           )}
 
           <button
-            onClick={() => {
+            onClick={async () => {
               setOpen(false);
-              onLogout();
+              try {
+                await onLogout();
+              } catch (e) {
+                console.error("Logout failed:", e);
+              }
             }}
             className="mt-1 w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-slate-200 hover:bg-slate-800/60"
           >
