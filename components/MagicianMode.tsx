@@ -61,6 +61,23 @@ const AngleRiskForm: React.FC<AngleRiskFormProps> = ({
         <MagicHatIcon className="w-16 h-16 text-slate-500 mb-4"/>
         <h2 className="text-xl font-bold text-slate-300 mb-2">Angle & Risk Analysis</h2>
         <p className="text-slate-400 max-w-md mb-6">Let's break down the effect for a specific performance environment.</p>
+
+                  <div className="mt-3 flex items-center justify-between gap-3">
+                    <div className="text-[11px] px-2 py-1 rounded-full border border-yellow-500/25 bg-yellow-500/10 text-yellow-200/80">
+                      {(pub as any).type ?? 'Publication'}
+                    </div>
+
+                    {(pub as any).url ? (
+                      <a
+                        href={(pub as any).url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs px-3 py-1.5 rounded-lg border border-slate-700/60 bg-slate-900/40 hover:bg-slate-900/70 text-slate-200 hover:text-white transition"
+                      >
+                        Visit site
+                      </a>
+                    ) : null}
+                  </div>
         <div className="w-full max-w-md space-y-4">
             <div>
                 <label htmlFor="trickName" className="block text-sm font-medium text-slate-300 text-left mb-1">Name of the Effect</label>
@@ -825,7 +842,7 @@ const PublicationsTab: React.FC = () => (
             {publications.map(pub => (
                 <div key={pub.name} className="bg-slate-800/50 border border-slate-700 rounded-lg p-4 transition-all duration-200 hover:border-purple-500 hover:bg-slate-800">
                     <h3 className="font-bold text-lg bg-gradient-to-r from-yellow-200 via-amber-300 to-yellow-200 bg-clip-text text-transparent">{pub.name}</h3>
-                    <p className="text-slate-400 text-sm mt-1">{pub.description}</p>
+                    <p className="text-slate-400 text-sm mt-1 line-clamp-3">{pub.description}</p>
                 </div>
             ))}
         </div>
