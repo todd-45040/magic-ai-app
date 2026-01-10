@@ -499,23 +499,6 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     });
   };
 
-  const toggleSection = (id: SectionId) => {
-    setOpenSections((prev) => ({ ...prev, [id]: !prev[id] }));
-  };
-
-  const setAllSections = (open: boolean) => {
-    setOpenSections({
-      concept: open,
-      principles: open,
-      staging: open,
-      buildpack: open,
-      cutlist: open,
-      assembly: open,
-      safety: open,
-      json: open,
-    });
-  };
-
   return (
     <div ref={containerRef} className="flex-1 flex flex-col overflow-y-auto p-4 md:p-6 animate-fade-in">
       <header className="mb-6">
