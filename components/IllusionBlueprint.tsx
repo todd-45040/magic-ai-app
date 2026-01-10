@@ -136,6 +136,8 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
   const [error, setError] = useState<string | null>(null);
 
   const [conceptArt, setConceptArt] = useState<string | null>(null);
+  const [lastArtPrompt, setLastArtPrompt] = useState<string | null>(null);
+  const [isConceptLoading, setIsConceptLoading] = useState(false);
   const [blueprintSheet, setBlueprintSheet] = useState<string | null>(null);
   const [isBlueprintLoading, setIsBlueprintLoading] = useState(false);
 
@@ -372,6 +374,8 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
 
     const artPrompt = `Dramatic, theatrical concept art for a grand illusion: ${prompt}. Focus on the magical moment from the audience's perspective. Cinematic lighting, professional digital painting style.`;
 
+    setLastArtPrompt(artPrompt);
+
     const stagingPrompt = `Generate a STAGING blueprint for an illusion concept: "${prompt}". Provide performance-facing principles and a clear staging description.`;
 
     const buildPrompt = `Create a BUILD BLUEPRINT PACK for this illusion concept: "${prompt}". Provide realistic dimensions and a cut list. Include 3 mechanism options (manual, assisted, motorized) with mechanism ids and tag parts/steps that differ by option.`;
@@ -434,6 +438,36 @@ const handleGenerateBlueprint = async () => {
     setIsBlueprintLoading(false);
   }
 };
+
+
+const handleRegenerateConceptArt = async () => {
+  if (!prompt.trim()) {
+    setError('Please describe your illusion concept first.');
+    return;
+  }
+
+  const base = lastArtPrompt
+    ? lastArtPrompt
+    : `Dramatic, theatrical concept art for a grand stage illusion prop based on: "${prompt}". Highly detailed, realistic, stage-ready, showing the prop on a theater stage with lighting. Include materials hints (wood/metal/fabric) visually. 16:9 composition. No text.`;
+
+  try {
+    setIsConceptLoading(true);
+    setError(null);
+    const variationHint = `\n\nCreate a DIFFERENT design variation (new silhouette, proportions, and detailing) while keeping the same illusion concept.`;
+    const img = await generateImage(base + variationHint, '16:9', user);
+    setConceptArt(img);
+    setOpenSections((prev) => ({ ...prev, concept: true }));
+    setActiveSection('concept');
+    setTimeout(() => {
+      document.getElementById('section-concept')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  } catch (e: any) {
+    setError(e?.message || 'Could not regenerate concept art.');
+  } finally {
+    setIsConceptLoading(false);
+  }
+};
+
 
   const toFiltered = <T extends { applies_to?: string[] }>(arr: T[]): T[] => {
     if (selectedMechanismId === 'all') return arr;
@@ -665,7 +699,18 @@ const handleGenerateBlueprint = async () => {
                 alt="Generated concept art for the illusion"
                 className="w-full rounded-lg border border-slate-700"
               />
-            </CollapsibleSection>
+            
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleRegenerateConceptArt}
+                  disabled={isConceptLoading || isLoading}
+                  className="px-3 py-1.5 rounded-md text-sm font-semibold border border-slate-700/60 bg-slate-900/40 text-slate-200 hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isConceptLoading ? 'Regenerating…' : 'Regenerate Concept Art'}
+                </button>
+              </div>
+</CollapsibleSection>
           ) : null}
 
           {/* Principles */}
