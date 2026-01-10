@@ -158,25 +158,25 @@ export const identifyTrickFromImage = async (
   mimeType: string,
   currentUser?: User
 ): Promise<TrickIdentificationResult> => {
-  const prompt = "Identify this magic trick based on the image provided and find 3 YouTube performance examples. Return as JSON.";
+  // IMPORTANT:
+  // Do NOT ask the model for direct YouTube URLs.
+  // Models frequently hallucinate links. Instead, request 3 *search queries*.
+  // We then look up real, current videos via the YouTube Data API.
+  const prompt =
+    "Identify this magic trick based on the image provided. " +
+    "Return JSON with: (1) trickName and (2) videoQueries: 3 concise YouTube search queries " +
+    "that will likely find real performance examples (no URLs).";
 
   const responseSchema = {
     type: Type.OBJECT,
     properties: {
       trickName: { type: Type.STRING },
-      videoExamples: {
+      videoQueries: {
         type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            title: { type: Type.STRING },
-            url: { type: Type.STRING }
-          },
-          required: ['title', 'url']
-        }
-      }
+        items: { type: Type.STRING },
+      },
     },
-    required: ['trickName', 'videoExamples']
+    required: ['trickName', 'videoQueries']
   };
 
   const body: GeminiGenerateBody = {
@@ -195,7 +195,47 @@ export const identifyTrickFromImage = async (
 
   const result = await postJson<any>('/api/generate', body, currentUser);
   const text = extractText(result);
-  return JSON.parse(text || '{}') as TrickIdentificationResult;
+  const parsed = JSON.parse(text || '{}') as any;
+
+  const trickName: string = String(parsed?.trickName || '').trim() || 'Unknown Trick';
+  const videoQueriesRaw: any[] = Array.isArray(parsed?.videoQueries) ? parsed.videoQueries : [];
+  const videoQueries: string[] = videoQueriesRaw
+    .map((q) => String(q || '').trim())
+    .filter(Boolean)
+    .slice(0, 3);
+
+  // Fallback queries if the model returns nothing useful.
+  const fallbackQueries = [
+    `${trickName} magic trick performance`,
+    `${trickName} illusion on stage performance`,
+    `${trickName} magic trick live show`,
+  ];
+
+  const queriesToUse = videoQueries.length ? videoQueries : fallbackQueries;
+
+  // Look up real YouTube videos. This does NOT consume AI quota.
+  let videos: Array<{ title: string; url: string }> = [];
+  try {
+    const yt = await postJson<any>(
+      '/api/videoSearch',
+      { queries: queriesToUse, maxResultsPerQuery: 3, safeSearch: 'strict' },
+      currentUser
+    );
+    const ytVideos = Array.isArray(yt?.videos) ? yt.videos : [];
+    videos = ytVideos
+      .map((v: any) => ({ title: String(v?.title || '').trim(), url: String(v?.url || '').trim() }))
+      .filter((v: any) => v.title && v.url)
+      .slice(0, 3);
+  } catch {
+    // If YouTube API fails (quota/network), keep a safe fallback:
+    // provide YouTube search links that will always work.
+    videos = queriesToUse.slice(0, 3).map((q) => ({
+      title: `Search YouTube: ${q}`,
+      url: `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
+    }));
+  }
+
+  return { trickName, videoExamples: videos } as TrickIdentificationResult;
 };
 
 export const startLiveSession = () => {
