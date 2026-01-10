@@ -828,7 +828,7 @@ const PublicationsTab: React.FC = () => (
                     <p className="text-slate-400 text-sm mt-1 line-clamp-3">{pub.description}</p>
 
                     <div className="mt-3 flex items-center justify-between gap-3">
-                      <div className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full border border-yellow-500/25 bg-yellow-500/10 text-white">
+                      <div className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full border border-yellow-500/25 bg-yellow-500/10 text-yellow-100/80">
                         {(pub as any).type ?? 'Publication'}
                       </div>
 
@@ -837,7 +837,7 @@ const PublicationsTab: React.FC = () => (
                           href={(pub as any).url}
                           target="_blank"
                           rel="noreferrer"
-                          className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-yellow-500/25 bg-slate-900/40 hover:bg-slate-900/70 text-white hover:text-white transition"
+                          className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-yellow-500/25 bg-slate-900/40 hover:bg-slate-900/70 text-yellow-200 hover:text-yellow-100 transition"
                           title="Open in a new tab"
                         >
                           Visit site <span aria-hidden="true">↗</span>
@@ -851,43 +851,188 @@ const PublicationsTab: React.FC = () => (
     </div>
 );
 
-const CommunityTab: React.FC = () => (
+const CommunityTab: React.FC = () => {
+  const [query, setQuery] = useState('');
+
+  const q = query.trim().toLowerCase();
+
+  const filteredClubs = q
+    ? clubs.filter(c => (c.name + ' ' + c.description).toLowerCase().includes(q))
+    : clubs;
+
+  const filteredConventions = q
+    ? conventions.filter(c => (c.name + ' ' + c.description + ' ' + (c.date ?? '')).toLowerCase().includes(q))
+    : conventions;
+
+  const onlineCommunities = [
+    {
+      name: 'The Magic Café',
+      description: 'The classic online forum with deep threads on sleights, theory, reviews, and pros-only topics.',
+      url: 'https://www.themagiccafe.com/'
+    },
+    {
+      name: 'r/Magic (Reddit)',
+      description: 'Active community for discussions, recommendations, and sharing resources.',
+      url: 'https://www.reddit.com/r/Magic/'
+    },
+    {
+      name: 'Genii Forum',
+      description: 'Discussion board connected to Genii Magazine, with thoughtful threads and industry news.',
+      url: 'https://forums.geniimagazine.com/'
+    }
+  ];
+
+  return (
     <div className="flex-1 overflow-y-auto p-4 md:p-6">
       <div className="animate-fade-in space-y-8">
-          <div className="text-center">
-              <h2 className="text-3xl font-bold text-slate-200 font-cinzel">Magic Community</h2>
-              <p className="text-slate-400 mt-2">Connect with peers, access exclusive resources, and discover major events.</p>
-          </div>
-          
-          <div>
-              <h3 className="text-2xl font-bold text-slate-200 font-cinzel mb-4">Major Magic Clubs & Organizations</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {clubs.map(club => (
-                      <div key={club.name} className="bg-slate-800/50 border border-slate-700 rounded-lg p-4 transition-all duration-200 hover:border-purple-500 hover:bg-slate-800">
-                          <h4 className="font-bold text-lg bg-gradient-to-r from-yellow-200 via-amber-300 to-yellow-200 bg-clip-text text-transparent">{club.name}</h4>
-                          <p className="text-slate-400 text-sm mt-1 line-clamp-3">{club.description}</p>
-                      </div>
-                  ))}
+        <div className="text-center">
+          <h2 className="text-3xl font-bold text-slate-200 font-cinzel">Magic Community</h2>
+          <p className="text-slate-400 mt-2">
+            Connect with peers, explore organizations, and discover major conventions.
+          </p>
+
+          <div className="mt-5 max-w-2xl mx-auto">
+            <div className="relative">
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search clubs and conventions…"
+                className="w-full rounded-xl bg-slate-950/40 border border-slate-700/60 px-4 py-3 pl-10 text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 focus:border-purple-500/50"
+              />
+              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
+                <span aria-hidden="true">🔎</span>
               </div>
+              {query.trim().length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition"
+                  title="Clear"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            <div className="mt-2 text-xs text-slate-500">
+              Tip: try “IBM”, “SAM”, “Blackpool”, or “FISM”.
+            </div>
+          </div>
+        </div>
+
+        {/* Online communities */}
+        <section className="space-y-4">
+          <div className="flex items-end justify-between gap-4">
+            <h3 className="text-2xl font-bold text-slate-200 font-cinzel">Online Communities</h3>
+            <div className="text-xs text-slate-500">Links open in a new tab</div>
           </div>
 
-          <div>
-              <h3 className="text-2xl font-bold text-slate-200 font-cinzel mb-4">Popular Magic Conventions</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {conventions.map(convention => (
-                      <div key={convention.name} className="bg-slate-800/50 border border-slate-700 rounded-lg p-4 transition-all duration-200 hover:border-purple-500 hover:bg-slate-800">
-                           <div className="flex justify-between items-baseline gap-4">
-                                <h4 className="font-bold text-lg bg-gradient-to-r from-yellow-200 via-amber-300 to-yellow-200 bg-clip-text text-transparent">{convention.name}</h4>
-                                {convention.date && <span className="text-sm font-semibold text-slate-400 flex-shrink-0">{convention.date}</span>}
-                            </div>
-                          <p className="text-slate-400 text-sm mt-1 line-clamp-3">{convention.description}</p>
-                      </div>
-                  ))}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {onlineCommunities.map(item => (
+              <div
+                key={item.name}
+                className="group bg-slate-900/35 border border-slate-700/60 rounded-xl p-4 shadow-sm hover:shadow-lg transition-all duration-200 hover:border-purple-500/40"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <h4 className="font-bold text-lg bg-gradient-to-r from-yellow-200 via-amber-300 to-yellow-200 bg-clip-text text-transparent">
+                    {item.name}
+                  </h4>
+                  <span className="text-slate-500 group-hover:text-slate-300 transition" aria-hidden="true">↗</span>
+                </div>
+
+                <p className="text-slate-400 text-sm mt-1 line-clamp-3">{item.description}</p>
+
+                <div className="mt-3">
+                  <a
+                    href={item.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg border border-slate-700/60 bg-slate-950/30 hover:bg-slate-950/60 text-slate-200 hover:text-white transition"
+                  >
+                    Visit <span aria-hidden="true">↗</span>
+                  </a>
+                </div>
               </div>
+            ))}
           </div>
+        </section>
+
+        {/* Clubs */}
+        <section className="space-y-4">
+          <div className="flex items-end justify-between gap-4">
+            <h3 className="text-2xl font-bold text-slate-200 font-cinzel">Major Magic Clubs & Organizations</h3>
+            <div className="text-xs text-slate-500">{filteredClubs.length} shown</div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {filteredClubs.map(club => (
+              <div
+                key={club.name}
+                className="group bg-slate-900/35 border border-slate-700/60 rounded-xl p-4 shadow-sm hover:shadow-lg transition-all duration-200 hover:border-purple-500/40"
+              >
+                <h4 className="font-bold text-lg bg-gradient-to-r from-yellow-200 via-amber-300 to-yellow-200 bg-clip-text text-transparent">
+                  {club.name}
+                </h4>
+                <p className="text-slate-400 text-sm mt-1 line-clamp-3">{club.description}</p>
+
+                <div className="mt-3 inline-flex items-center gap-2 text-[11px] px-2.5 py-1 rounded-full border border-slate-700/60 bg-slate-950/25 text-slate-300/90">
+                  Community
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {q && filteredClubs.length === 0 && (
+            <div className="text-center text-slate-500 text-sm py-6">
+              No clubs match “{query}”.
+            </div>
+          )}
+        </section>
+
+        {/* Conventions */}
+        <section className="space-y-4">
+          <div className="flex items-end justify-between gap-4">
+            <h3 className="text-2xl font-bold text-slate-200 font-cinzel">Popular Magic Conventions</h3>
+            <div className="text-xs text-slate-500">{filteredConventions.length} shown</div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {filteredConventions.map(convention => (
+              <div
+                key={convention.name}
+                className="group bg-slate-900/35 border border-slate-700/60 rounded-xl p-4 shadow-sm hover:shadow-lg transition-all duration-200 hover:border-purple-500/40"
+              >
+                <div className="flex justify-between items-baseline gap-4">
+                  <h4 className="font-bold text-lg bg-gradient-to-r from-yellow-200 via-amber-300 to-yellow-200 bg-clip-text text-transparent">
+                    {convention.name}
+                  </h4>
+                  {convention.date && (
+                    <span className="text-xs font-semibold text-slate-400 flex-shrink-0">
+                      {convention.date}
+                    </span>
+                  )}
+                </div>
+
+                <p className="text-slate-400 text-sm mt-1 line-clamp-3">{convention.description}</p>
+
+                <div className="mt-3 inline-flex items-center gap-2 text-[11px] px-2.5 py-1 rounded-full border border-slate-700/60 bg-slate-950/25 text-slate-300/90">
+                  Convention
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {q && filteredConventions.length === 0 && (
+            <div className="text-center text-slate-500 text-sm py-6">
+              No conventions match “{query}”.
+            </div>
+          )}
+        </section>
       </div>
     </div>
-);
+  );
+};
+
 
 interface MagicianModeProps {
   onBack: () => void;
