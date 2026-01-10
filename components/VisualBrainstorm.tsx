@@ -158,7 +158,7 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user }
                     </div>
                     <textarea
                         id="image-prompt"
-                        rows={9}
+                        rows={6}
                         value={prompt}
                         onChange={(e) => { setPrompt(e.target.value); setError(null); }}
                         placeholder={placeholderText}
