@@ -70,6 +70,7 @@ const LoadingIndicator: React.FC = () => (
 
 const SECTION_IDS = [
   { id: 'concept', label: 'Concept Art' },
+  { id: 'blueprint', label: 'Blueprint Sheet' },
   { id: 'principles', label: 'Principles' },
   { id: 'staging', label: 'Staging' },
   { id: 'buildpack', label: 'Build Pack' },
@@ -135,6 +136,9 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
   const [error, setError] = useState<string | null>(null);
 
   const [conceptArt, setConceptArt] = useState<string | null>(null);
+  const [blueprintSheet, setBlueprintSheet] = useState<string | null>(null);
+  const [isBlueprintLoading, setIsBlueprintLoading] = useState(false);
+
   const [stagingBlueprint, setStagingBlueprint] = useState<StagingBlueprint | null>(null);
   const [buildPack, setBuildPack] = useState<BuildBlueprintPack | null>(null);
 
@@ -145,6 +149,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
 
   const [openSections, setOpenSections] = useState<Record<SectionId, boolean>>({
     concept: true,
+    blueprint: true,
     principles: true,
     staging: true,
     buildpack: true,
@@ -345,6 +350,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     setIsLoading(true);
     setError(null);
     setConceptArt(null);
+    setBlueprintSheet(null);
     setStagingBlueprint(null);
     setBuildPack(null);
     setSelectedMechanismId('all');
@@ -352,6 +358,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     setOpenSections((prev) => ({
       ...prev,
       concept: true,
+      blueprint: true,
       principles: true,
       staging: true,
       buildpack: true,
@@ -385,6 +392,48 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
       setIsLoading(false);
     }
   };
+
+
+const handleGenerateBlueprint = async () => {
+  if (!prompt.trim()) {
+    setError('Please describe your illusion concept first.');
+    return;
+  }
+  if (!buildPack?.overall_dimensions) {
+    setError('Generate an illusion first so we have dimensions for the blueprint sheet.');
+    return;
+  }
+
+  setIsBlueprintLoading(true);
+  setError(null);
+
+  const d = buildPack.overall_dimensions;
+  const dimsLine = `Overall dimensions: W ${d.width_in} in (${d.width_mm} mm) × D ${d.depth_in} in (${d.depth_mm} mm) × H ${d.height_in} in (${d.height_mm} mm).`;
+
+  const blueprintPrompt = [
+    'Create a clean TECHNICAL BLUEPRINT SHEET for a theatrical stage illusion prop.',
+    'Style: orthographic blueprint drawing, crisp white line-art on a blueprint background, no shading, no perspective.',
+    'Include FRONT, SIDE, and TOP views on the same sheet, with dimension lines, arrows, and labeled measurements.',
+    'Include a simple title block with the illusion name and the overall dimensions.',
+    'Keep it readable and print-friendly.',
+    '',
+    `Illusion concept: ${prompt}`,
+    dimsLine,
+  ].join('\n');
+
+  try {
+    const img = await generateImage(blueprintPrompt);
+    setBlueprintSheet(img);
+    setOpenSections((prev) => ({ ...prev, blueprint: true }));
+    setActiveSection('blueprint');
+    // Scroll after the image renders
+    setTimeout(() => scrollToSection('blueprint'), 50);
+  } catch (err) {
+    setError(err instanceof Error ? err.message : 'Failed to generate blueprint sheet. Please try again.');
+  } finally {
+    setIsBlueprintLoading(false);
+  }
+};
 
   const toFiltered = <T extends { applies_to?: string[] }>(arr: T[]): T[] => {
     if (selectedMechanismId === 'all') return arr;
@@ -425,6 +474,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
   const handleStartOver = () => {
     setPrompt('');
     setConceptArt(null);
+    setBlueprintSheet(null);
     setStagingBlueprint(null);
     setBuildPack(null);
     setError(null);
@@ -488,6 +538,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
   const setAllSections = (open: boolean) => {
     setOpenSections({
       concept: open,
+      blueprint: open,
       principles: open,
       staging: open,
       buildpack: open,
@@ -568,6 +619,17 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                     </option>
                   ))}
                 </select>
+
+{/* Blueprint sheet quick action */}
+<button
+  type="button"
+  onClick={handleGenerateBlueprint}
+  disabled={!buildPack || isBlueprintLoading}
+  className="px-3 py-1.5 rounded-md text-[11px] font-semibold border border-slate-700 bg-slate-900/60 text-slate-200 hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+  title={!buildPack ? "Generate an illusion first" : "Generate blueprint-style orthographic plan image"}
+>
+  {isBlueprintLoading ? "Generating Blueprint…" : "Generate Blueprint Sheet"}
+</button>
               </div>
 
               {/* Expand/collapse controls */}
@@ -607,7 +669,57 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
           ) : null}
 
           {/* Principles */}
-          <CollapsibleSection
+          
+
+{/* Blueprint Sheet (quick win) */}
+{buildPack ? (
+  <CollapsibleSection
+    id="blueprint"
+    title="Blueprint Sheet"
+    isOpen={openSections.blueprint}
+    onToggle={() => toggleSection('blueprint')}
+  >
+    {!blueprintSheet ? (
+      <div className="rounded-md border border-slate-700/60 bg-slate-900/40 p-4">
+        <p className="text-sm text-slate-200 font-semibold mb-1">Blueprint-style plan image</p>
+        <p className="text-sm text-slate-300">
+          Generate an orthographic “blueprint sheet” (front/side/top views) for quick planning and sharing.
+          Measurements are based on the Build Pack dimensions — always verify before cutting.
+        </p>
+        <div className="mt-3">
+          <button
+            type="button"
+            onClick={handleGenerateBlueprint}
+            disabled={isBlueprintLoading}
+            className="px-4 py-2 rounded-md font-semibold bg-yellow-600 hover:bg-yellow-500 text-black disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isBlueprintLoading ? 'Generating Blueprint…' : 'Generate Blueprint Sheet'}
+          </button>
+        </div>
+      </div>
+    ) : (
+      <div>
+        <img
+          src={blueprintSheet}
+          alt="Generated blueprint sheet for the illusion"
+          className="w-full rounded-lg border border-slate-700"
+        />
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={handleGenerateBlueprint}
+            disabled={isBlueprintLoading}
+            className="px-3 py-1.5 rounded-md text-sm font-semibold border border-slate-700 bg-slate-900/60 text-slate-200 hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isBlueprintLoading ? 'Regenerating…' : 'Regenerate Blueprint'}
+          </button>
+        </div>
+      </div>
+    )}
+  </CollapsibleSection>
+) : null}
+
+<CollapsibleSection
             id="principles"
             title="Potential Principles"
             isOpen={openSections.principles}
