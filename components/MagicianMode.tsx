@@ -828,7 +828,7 @@ const PublicationsTab: React.FC = () => (
                     <p className="text-slate-400 text-sm mt-1 line-clamp-3">{pub.description}</p>
 
                     <div className="mt-3 flex items-center justify-between gap-3">
-                      <div className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full border border-yellow-500/25 bg-yellow-500/10 text-yellow-100/80">
+                      <div className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full border border-yellow-500/25 bg-yellow-500/10 text-white">
                         {(pub as any).type ?? 'Publication'}
                       </div>
 
@@ -837,7 +837,7 @@ const PublicationsTab: React.FC = () => (
                           href={(pub as any).url}
                           target="_blank"
                           rel="noreferrer"
-                          className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-yellow-500/25 bg-slate-900/40 hover:bg-slate-900/70 text-yellow-200 hover:text-yellow-100 transition"
+                          className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-yellow-500/25 bg-slate-900/40 hover:bg-slate-900/70 text-white hover:text-white transition"
                           title="Open in a new tab"
                         >
                           Visit site <span aria-hidden="true">↗</span>
