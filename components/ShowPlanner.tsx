@@ -656,7 +656,7 @@ const ShowListItem: React.FC<{show: Show, clients: Client[], onSelect: () => voi
 
 
 const FinanceTracker: React.FC<{ show: Show; onUpdate: (updates: Partial<Show>) => void }> = ({ show, onUpdate }) => {
-    type MoneyEntry = { id: string; description: string; amount: number };
+    type MoneyEntry = { id: string; description: string; amount: number; createdAt?: number };
 
     const finances = useMemo(
         () =>
@@ -672,7 +672,7 @@ const FinanceTracker: React.FC<{ show: Show; onUpdate: (updates: Partial<Show>) 
     const expenses: MoneyEntry[] = Array.isArray(finances.expenses) ? finances.expenses : [];
     const income: MoneyEntry[] = Array.isArray(finances.income) ? finances.income : [];
 
-    const [fee, setFee] = useState<number>(performanceFee);
+    const [fee, setFee] = useState<string>(String(performanceFee ?? 0));
 
     // Add/Edit modal state
     const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
@@ -688,6 +688,23 @@ const FinanceTracker: React.FC<{ show: Show; onUpdate: (updates: Partial<Show>) 
 
     const formatMoney = (value: number) =>
         value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+
+    const formatToFixed2 = (raw: string) => {
+        const n = parseFloat(raw);
+        if (!Number.isFinite(n)) return '';
+        return n.toFixed(2);
+    };
+
+    const getEntryTs = (entry: MoneyEntry) => {
+        if (typeof entry.createdAt === 'number') return entry.createdAt;
+        const match = String(entry.id).match(/-(\d{10,})$/);
+        if (match) return parseInt(match[1], 10);
+        return 0;
+    };
+
+    const sortedExpenses = useMemo(() => [...expenses].sort((a, b) => getEntryTs(b) - getEntryTs(a)), [expenses]);
+    const sortedIncome = useMemo(() => [...income].sort((a, b) => getEntryTs(b) - getEntryTs(a)), [income]);
 
     const openAddEntry = (type: 'income' | 'expense') => {
         setEntryMode('add');
@@ -715,21 +732,25 @@ const FinanceTracker: React.FC<{ show: Show; onUpdate: (updates: Partial<Show>) 
     };
 
     const handleFeeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setFee(parseFloat(e.target.value) || 0);
+        setFee(e.target.value);
     };
 
     const handleFeeUpdate = () => {
-        onUpdate({ finances: { ...finances, performanceFee: fee } });
+        const n = parseFloat(fee);
+        onUpdate({ finances: { ...finances, performanceFee: Number.isFinite(n) ? n : 0 } });
     };
 
     const saveEntry = () => {
         const amount = parseFloat(entryAmount);
         if (!entryDesc.trim() || !Number.isFinite(amount)) return;
 
+        const now = Date.now();
+
         const newEntry: MoneyEntry = {
-            id: entryMode === 'edit' && editingEntryId ? editingEntryId : `${entryType}-${Date.now()}`,
+            id: entryMode === 'edit' && editingEntryId ? editingEntryId : `${entryType}-${now}`,
             description: entryDesc.trim(),
-            amount
+            amount,
+            createdAt: entryMode === 'edit' ? (getEntryTs({ id: editingEntryId || '', description: '', amount } as any) || now) : now
         };
 
         if (entryType === 'expense') {
@@ -875,8 +896,8 @@ const FinanceTracker: React.FC<{ show: Show; onUpdate: (updates: Partial<Show>) 
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 space-y-6">
-                    <EntryList type="expense" title="Expenses" items={expenses} />
-                    <EntryList type="income" title="Additional Income" items={income} />
+                    <EntryList type="expense" title="Expenses" items={sortedExpenses} />
+                    <EntryList type="income" title="Additional Income" items={sortedIncome} />
                 </div>
 
                 <div className="space-y-6">
@@ -885,10 +906,13 @@ const FinanceTracker: React.FC<{ show: Show; onUpdate: (updates: Partial<Show>) 
                         <p className="text-sm text-slate-400 mb-3">Your primary fee for performing this show.</p>
                         <div className="flex items-center gap-2">
                             <input
-                                type="number"
+                                type="text"
+                                inputMode="decimal"
                                 value={fee}
                                 onChange={handleFeeChange}
+                                onBlur={() => setFee((prev) => (prev.trim() === "" ? "" : formatToFixed2(prev)))}
                                 className="flex-1 bg-slate-900 border border-slate-600 rounded-md px-3 py-2 text-sm text-white"
+                                placeholder="0.00"
                             />
                             <button
                                 type="button"
@@ -956,9 +980,11 @@ const FinanceTracker: React.FC<{ show: Show; onUpdate: (updates: Partial<Show>) 
                             <div>
                                 <label className="block text-sm font-semibold text-slate-300">Amount</label>
                                 <input
-                                    type="number"
+                                    type="text"
+                                    inputMode="decimal"
                                     value={entryAmount}
                                     onChange={(e) => setEntryAmount(e.target.value)}
+                                    onBlur={() => setEntryAmount((prev) => (prev.trim() === "" ? "" : formatToFixed2(prev)))}
                                     className="mt-1 w-full bg-slate-900 border border-slate-600 rounded-md px-3 py-2 text-sm text-white"
                                     placeholder="0.00"
                                 />
