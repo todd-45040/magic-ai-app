@@ -31,12 +31,13 @@ const MagicDictionary: React.FC = () => {
   const [skillFilter, setSkillFilter] = useState<'All' | SkillLevel>('All');
 
   const sortedTerms = useMemo(() => {
-    return [...(MAGIC_DICTIONARY_TERMS as DictionaryTerm[])].sort((a, b) => a.term.localeCompare(b.term));
+    return [...(MAGIC_DICTIONARY_TERMS as DictionaryTerm[])].filter(Boolean).sort((a, b) => a.term.localeCompare(b.term));
   }, []);
 
   const categories = useMemo(() => {
     const set = new Set<string>();
     for (const t of sortedTerms) {
+      if (!t) continue;
       if (t.category && t.category.trim()) set.add(t.category.trim());
     }
     return ['All', ...Array.from(set).sort((a, b) => a.localeCompare(b))];
@@ -46,6 +47,7 @@ const MagicDictionary: React.FC = () => {
     const q = searchTerm.trim().toLowerCase();
 
     return sortedTerms.filter((item) => {
+      if (!item) return false;
       const matchesSearch =
         !q ||
         item.term.toLowerCase().includes(q) ||
@@ -261,7 +263,7 @@ const MagicDictionary: React.FC = () => {
       <div className="mt-4">
         {filteredTerms.length > 0 ? (
           <div className="grid grid-cols-1 gap-3">
-            {filteredTerms.map((item) => {
+            {filteredTerms.filter(Boolean).map((item) => {
               const isExpanded = expandedTerm === item.term;
 
               return (
@@ -282,7 +284,7 @@ const MagicDictionary: React.FC = () => {
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="font-bold text-lg text-amber-300 tracking-wide">{item.term}</h3>
+                          <h3 className="font-bold text-lg text-white tracking-wide">{item.term}</h3>
                           <CategoryBadge category={item.category} />
                           <SkillBadge skill={item.skillLevel} />
                         </div>
