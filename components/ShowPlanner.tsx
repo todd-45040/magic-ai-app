@@ -425,26 +425,65 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
 
     const ShowListView = () => (
         <div className="flex flex-col h-full animate-fade-in">
-            <header className="p-4 md:px-6 md:pt-6">
+            {/* Top toolbar (outside the list card) */}
+            <div className="p-4 md:px-6 md:pt-6">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                     <div className="flex items-center gap-3">
                         <ChecklistIcon className="w-8 h-8 text-purple-400" />
-                        <h2 className="text-2xl font-bold text-slate-200 font-cinzel">All Shows</h2>
+                        <div>
+                            <h2 className="text-2xl font-bold text-slate-200 font-cinzel">All Shows</h2>
+                            <p className="text-sm text-slate-400">
+                                Create a show, then plan tasks, finances, and live performance.
+                            </p>
+                        </div>
                     </div>
-                    <button onClick={() => setIsShowModalOpen(true)} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors flex items-center gap-2 text-sm"><WandIcon className="w-4 h-4" /><span>Create New Show</span></button>
+
+                    <button
+                        onClick={() => setIsShowModalOpen(true)}
+                        className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors flex items-center gap-2 text-sm"
+                    >
+                        <WandIcon className="w-4 h-4" />
+                        <span>Create New Show</span>
+                    </button>
                 </div>
-            </header>
-            <main className="flex-1 overflow-y-auto p-4 md:p-6">
-                {shows.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {shows.map(show => <ShowListItem key={show.id} show={show} clients={clients} onSelect={() => setSelectedShow(show)} onDelete={() => handleDeleteShow(show.id)} />)}
-                    </div>
-                ) : (
-                    <div className="text-center py-12"><StageCurtainsIcon className="w-16 h-16 mx-auto text-slate-600 mb-4" /><h3 className="text-lg font-bold text-slate-400">Your Stage is Bare</h3><p className="text-slate-500">Click "Create New Show" to start planning your next masterpiece.</p></div>
-                )}
-            </main>
+            </div>
+
+            {/* All Shows “card/area” */}
+            <div className="flex-1 overflow-y-auto px-4 md:px-6 pb-6">
+                <div className="bg-slate-900/40 border border-slate-700 rounded-xl p-4 md:p-6">
+                    {shows.length > 0 ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {shows.map(show => (
+                                <ShowListItem
+                                    key={show.id}
+                                    show={show}
+                                    clients={clients}
+                                    onSelect={() => setSelectedShow(show)}
+                                    onDelete={() => handleDeleteShow(show.id)}
+                                />
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="text-center py-12">
+                            <StageCurtainsIcon className="w-16 h-16 mx-auto text-slate-600 mb-4" />
+                            <h3 className="text-lg font-bold text-slate-300">Your Stage is Bare</h3>
+                            <p className="text-slate-500 mb-5">
+                                Create your first show to start planning your next masterpiece.
+                            </p>
+                            <button
+                                onClick={() => setIsShowModalOpen(true)}
+                                className="px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors inline-flex items-center gap-2"
+                            >
+                                <WandIcon className="w-5 h-5" />
+                                <span>Create New Show</span>
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </div>
         </div>
     );
+
     
     const ShowDetailView = () => {
         if (!selectedShow) return null;
