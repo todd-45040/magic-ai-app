@@ -127,7 +127,18 @@ const TaskModal: React.FC<{
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in" onClick={onClose}>
             <div className="w-full max-w-lg bg-slate-800 border border-purple-500 rounded-lg shadow-2xl flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
                 <h2 className="text-xl font-bold text-white p-6 border-b border-slate-700 flex-shrink-0">{modalTitle}</h2>
-                <form id="task-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
+                <form id="task-form" onSubmit={handleSubmit} onKeyDown={(e) => {
+                        if (e.key !== "Enter") return;
+                        const target = e.target as HTMLElement;
+                        const tag = target.tagName.toLowerCase();
+                        const isTextArea = tag === "textarea";
+                        const canSubmit = !!title.trim();
+                        if (!canSubmit) return;
+                        // Allow normal Enter behavior in textarea unless Ctrl/Cmd is held.
+                        if (isTextArea && !(e.ctrlKey || e.metaKey)) return;
+                        e.preventDefault();
+                        handleSubmit(e as any);
+                    }} className="flex-1 overflow-y-auto p-6 space-y-4">
                     <div>
                         <label htmlFor="title" className="block text-sm font-medium text-slate-300 mb-1">Task Title</label>
                         <input id="title" type="text" value={title} onChange={e => setTitle(e.target.value)} required autoFocus className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500" />
@@ -180,17 +191,7 @@ const TaskModal: React.FC<{
                                     <button type="button" onClick={() => handleRemoveSubtask(index)} className="p-1 text-slate-400 hover:text-red-400 flex-shrink-0"><TrashIcon className="w-4 h-4" /></button>
                                 </div>
                             )) : (
-                                <div className="flex flex-col items-center justify-center py-2">
-  <p className="text-xs text-slate-500 text-center">No sub-tasks yet.</p>
-  <button
-    type="button"
-    onClick={() => setSubtasks([...subtasks, { text: '', completed: false }])}
-    className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-slate-600/60 bg-slate-800/50 text-xs font-semibold text-purple-300 hover:text-white hover:bg-purple-600/20 hover:border-purple-500/60 transition-colors"
-  >
-    <span className="text-base leading-none">+</span>
-    <span>Add Sub-Task</span>
-  </button>
-</div>
+                                <p className="text-xs text-slate-500 text-center py-2">No sub-tasks yet.</p>
                             )}
                         </div>
                         <div className="flex items-center gap-2 mt-2">
@@ -201,7 +202,8 @@ const TaskModal: React.FC<{
                 </form>
                 <div className="flex gap-3 p-6 flex-shrink-0 bg-slate-800 border-t border-slate-700">
                     <button type="button" onClick={onClose} className="w-full py-2 px-4 bg-slate-600/50 hover:bg-slate-700 rounded-md text-slate-300 font-bold transition-colors">Cancel</button>
-                    <button type="submit" form="task-form" className="w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors">{buttonText}</button>
+                    <button type="submit" form="task-form" disabled={!title.trim()} title={!title.trim() ? "Task title required" : undefined} className={`w-full py-2 px-4 rounded-md text-white font-bold transition-colors ${!title.trim() ? "bg-slate-600 cursor-not-allowed opacity-70" : "bg-purple-600 hover:bg-purple-700"}`}>{buttonText}</button>
+                    {!title.trim() && <p className="text-xs text-slate-400 mt-2 text-center">Task title required</p>}
                 </div>
             </div>
         </div>
@@ -253,10 +255,6 @@ interface ShowPlannerProps {
 
 const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAnalytics, initialShowId, initialTaskId }) => {
     const [shows, setShows] = useState<Show[]>([]);
-    const [isLoadingShows, setIsLoadingShows] = useState(true);
-    const [loadShowsError, setLoadShowsError] = useState<string | null>(null);
-    const [isSavingShow, setIsSavingShow] = useState(false);
-    const [saveShowError, setSaveShowError] = useState<string | null>(null);
     const [selectedShow, setSelectedShow] = useState<Show | null>(null);
     const [viewMode, setViewMode] = useState<ViewMode>('board');
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -268,22 +266,43 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
     const [sortBy, setSortBy] = useState<SortBy>('dueDate');
     const taskRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
 
+     // Keyboard shortcuts:
+     // Esc: close modal / back to All Shows
+     // Cmd/Ctrl+N: new task (when a show is open)
+     useEffect(() => {
+         const onKeyDown = (e: KeyboardEvent) => {
+             if (e.key === 'Escape') {
+                 if (isTaskModalOpen) { setIsTaskModalOpen(false); setTaskToEdit(null); return; }
+                 if (isScriptModalOpen) { setIsScriptModalOpen(false); return; }
+                 if (isShowModalOpen) { setIsShowModalOpen(false); return; }
+                 if (isLiveModalOpen) { setIsLiveModalOpen(false); return; }
+                 if (selectedShow) { setSelectedShow(null); return; }
+             }
+             const isCmdOrCtrl = e.metaKey || e.ctrlKey;
+             if (isCmdOrCtrl && (e.key === 'n' || e.key === 'N')) {
+                 if (!selectedShow) return;
+                 // Don't steal the shortcut when typing in inputs/textareas.
+                 const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
+                 if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+                 e.preventDefault();
+                 setTaskToEdit(null);
+                 setIsTaskModalOpen(true);
+             }
+         };
+         window.addEventListener('keydown', onKeyDown);
+         return () => window.removeEventListener('keydown', onKeyDown);
+     }, [isTaskModalOpen, isScriptModalOpen, isShowModalOpen, isLiveModalOpen, selectedShow]);
+
+
     useEffect(() => {
         const fetchShows = async () => {
-            setIsLoadingShows(true);
-            setLoadShowsError(null);
-            try {
-                const allShows = await getShows();
-                setShows(allShows);
-                if (initialShowId) {
-                    const show = allShows.find(s => s.id === initialShowId);
-                    if (show) setSelectedShow(show);
+            const allShows = await getShows();
+            setShows(allShows);
+            if (initialShowId) {
+                const show = allShows.find(s => s.id === initialShowId);
+                if (show) {
+                    setSelectedShow(show);
                 }
-            } catch (err: any) {
-                console.error('Failed to load shows:', err);
-                setLoadShowsError(err?.message || 'Failed to load shows.');
-            } finally {
-                setIsLoadingShows(false);
             }
         };
         fetchShows();
@@ -306,18 +325,9 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
 
     // Show handlers
     const handleAddShow = async (title: string, description?: string, clientId?: string) => {
-        setIsSavingShow(true);
-        setSaveShowError(null);
-        try {
-            const newShows = await addShow(title, description, clientId);
-            setShows(newShows);
-            setIsShowModalOpen(false);
-        } catch (err: any) {
-            console.error('Failed to create show:', err);
-            setSaveShowError(err?.message || 'Could not create the show. Please try again.');
-        } finally {
-            setIsSavingShow(false);
-        }
+        const newShows = await addShow(title, description, clientId);
+        setShows(newShows);
+        setIsShowModalOpen(false);
     };
     const handleDeleteShow = async (id: string) => {
         if (window.confirm('Are you sure you want to delete this entire show? This cannot be undone.')) {
@@ -421,16 +431,16 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
         const progress = totalSubtasks > 0 ? (completedSubtasks / totalSubtasks) * 100 : 0;
         
         return (
-             <div ref={el => { taskRefs.current.set(task.id, el); }} className={`p-3 rounded-lg border flex flex-col gap-3 transition-all ${isOverdue ? 'bg-red-900/20 border-red-500/50' : `bg-slate-800 border-slate-700 border-l-4 ${priorityBorders[task.priority]}`}`}>
+             <div ref={el => { taskRefs.current.set(task.id, el); }} className={`p-3 rounded-lg border flex flex-col gap-3 transition-all ${isOverdue ? 'bg-red-900/20 border-red-500/50' : `bg-slate-800 border-slate-700 border-l-4 ${priorityBorders[task.priority]}`}` onClick={() => openEditModal(task)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openEditModal(task); } }}}>
                 <div className="flex items-start gap-3">
-                    <input type="checkbox" checked={task.status === 'Completed'} onChange={() => handleToggleStatus(task)} className="mt-1 w-5 h-5 accent-purple-500 bg-slate-900 flex-shrink-0" />
+                    <input type="checkbox" checked={task.status === 'Completed'} onChange={() => handleToggleStatus(task)} className="mt-1 w-5 h-5 accent-purple-500 bg-slate-900 flex-shrink-0"  onClick={(e) => e.stopPropagation()} />
                     <div className="flex-1">
                         <p className={`font-semibold text-slate-200 ${isOverdue ? '!text-red-300' : ''}`}>{task.title}</p>
-                        {task.notes && <p className="text-sm text-slate-400 mt-1 whitespace-pre-wrap break-words">{task.notes}</p>}
+                        {task.notes && <p className="text-sm text-slate-400 mt-1 whitespace-pre-line break-words line-clamp-3 max-h-16 overflow-hidden">{task.notes}</p>}
                     </div>
                     <div className="flex items-center gap-1">
-                        <button onClick={() => openEditModal(task)} className="p-2 text-slate-400 hover:text-amber-300 rounded-full hover:bg-slate-700 transition-colors"><PencilIcon className="w-5 h-5"/></button>
-                        <button onClick={() => handleDeleteTask(task.id)} className="p-2 text-slate-400 hover:text-red-400 rounded-full hover:bg-slate-700 transition-colors"><TrashIcon className="w-5 h-5"/></button>
+                        <button onClick={(e) => { e.stopPropagation(); openEditModal(task); }} className="p-2 text-slate-400 hover:text-amber-300 rounded-full hover:bg-slate-700 transition-colors"><PencilIcon className="w-5 h-5"/></button>
+                        <button onClick={(e) => { e.stopPropagation(); handleDeleteTask(task.id); }} className="p-2 text-slate-400 hover:text-red-400 rounded-full hover:bg-slate-700 transition-colors"><TrashIcon className="w-5 h-5"/></button>
                     </div>
                 </div>
                 {task.subtasks && task.subtasks.length > 0 && (
@@ -454,94 +464,27 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
     };
 
     const ShowListView = () => (
-        <div className="flex flex-col h-full">
-            {/* Top toolbar (outside the list card) */}
-            <div className="p-4 md:px-6 md:pt-6">
+        <div className="flex flex-col h-full animate-fade-in">
+            <header className="p-4 md:px-6 md:pt-6">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                     <div className="flex items-center gap-3">
                         <ChecklistIcon className="w-8 h-8 text-purple-400" />
-                        <div>
-                            <h2 className="text-2xl font-bold text-slate-200 font-cinzel">All Shows</h2>
-                            <p className="text-sm text-slate-400">
-                                Create a show, then plan tasks, finances, and live performance.
-                            </p>
-                        </div>
+                        <h2 className="text-2xl font-bold text-slate-200 font-cinzel">All Shows</h2>
                     </div>
-
-                    <button
-                        onClick={() => setIsShowModalOpen(true)}
-                        className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors flex items-center gap-2 text-sm"
-                    >
-                        <WandIcon className="w-4 h-4" />
-                        <span>Create New Show</span>
-                    </button>
+                    <button onClick={() => setIsShowModalOpen(true)} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors flex items-center gap-2 text-sm"><WandIcon className="w-4 h-4" /><span>Create New Show</span></button>
                 </div>
-            </div>
-
-            {/* All Shows “card/area” */}
-            <div className="flex-1 overflow-y-auto px-4 md:px-6 pb-6">
-                <div className="bg-slate-900/40 border border-slate-700 rounded-xl p-4 md:p-6">
-                    {isLoadingShows ? (
-                        <div className="space-y-3">
-                            <div className="h-5 w-40 bg-slate-700/60 rounded animate-pulse" />
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {Array.from({ length: 6 }).map((_, i) => (
-                                    <div key={i} className="bg-slate-800/50 border border-slate-700 rounded-lg p-4">
-                                        <div className="h-4 w-2/3 bg-slate-700/60 rounded animate-pulse mb-3" />
-                                        <div className="h-3 w-full bg-slate-700/50 rounded animate-pulse mb-2" />
-                                        <div className="h-3 w-5/6 bg-slate-700/40 rounded animate-pulse mb-4" />
-                                        <div className="flex justify-between items-center">
-                                            <div className="h-3 w-24 bg-slate-700/40 rounded animate-pulse" />
-                                            <div className="h-8 w-28 bg-slate-700/50 rounded animate-pulse" />
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    ) : loadShowsError ? (
-                        <div className="text-center py-12">
-                            <h3 className="text-lg font-bold text-slate-300">Couldn&apos;t load your shows</h3>
-                            <p className="text-slate-500 mt-2 mb-5">{loadShowsError}</p>
-                            <button
-                                onClick={() => window.location.reload()}
-                                className="px-5 py-2 bg-slate-700 hover:bg-slate-600 rounded-md text-white font-bold transition-colors"
-                            >
-                                Retry
-                            </button>
-                        </div>
-                    ) : shows.length > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {shows.map(show => (
-                                <ShowListItem
-                                    key={show.id}
-                                    show={show}
-                                    clients={clients}
-                                    onSelect={() => setSelectedShow(show)}
-                                    onDelete={() => handleDeleteShow(show.id)}
-                                />
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="text-center py-12">
-                            <StageCurtainsIcon className="w-16 h-16 mx-auto text-slate-600 mb-4" />
-                            <h3 className="text-lg font-bold text-slate-300">Your Stage is Bare</h3>
-                            <p className="text-slate-500 mb-5">
-                                Create your first show to start planning your next masterpiece.
-                            </p>
-                            <button
-                                onClick={() => setIsShowModalOpen(true)}
-                                className="px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors inline-flex items-center gap-2"
-                            >
-                                <WandIcon className="w-5 h-5" />
-                                <span>Create New Show</span>
-                            </button>
-                        </div>
-                    )}
-                </div>
-            </div>
+            </header>
+            <main className="flex-1 overflow-y-auto p-4 md:p-6">
+                {shows.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {shows.map(show => <ShowListItem key={show.id} show={show} clients={clients} onSelect={() => setSelectedShow(show)} onDelete={() => handleDeleteShow(show.id)} />)}
+                    </div>
+                ) : (
+                    <div className="text-center py-12"><StageCurtainsIcon className="w-16 h-16 mx-auto text-slate-600 mb-4" /><h3 className="text-lg font-bold text-slate-400">Your Stage is Bare</h3><p className="text-slate-500">Click "Create New Show" to start planning your next masterpiece.</p></div>
+                )}
+            </main>
         </div>
     );
-
     
     const ShowDetailView = () => {
         if (!selectedShow) return null;
@@ -639,7 +582,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
         );
         
         return (
-             <div className="flex flex-col h-full">
+             <div className="flex flex-col h-full animate-fade-in">
                 <header className="p-4 md:px-6 md:pt-6">
                     <button onClick={() => setSelectedShow(null)} className="flex items-center gap-2 mb-4 text-slate-300 hover:text-white transition-colors"><BackIcon className="w-5 h-5" /><span>Back to All Shows</span></button>
                     <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
@@ -679,19 +622,15 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
         );
     };
     
-    const ShowModal: React.FC<{ onSave: (title: string, description?: string, clientId?: string) => Promise<void>; onClose: () => void; isSaving: boolean; error: string | null }> = ({ onSave, onClose, isSaving, error }) => {
+    const ShowModal: React.FC<{ onSave: (title: string, description?: string, clientId?: string) => void, onClose: () => void }> = ({ onSave, onClose }) => {
         const [title, setTitle] = useState('');
         const [description, setDescription] = useState('');
         const [clientId, setClientId] = useState('');
         
-        const handleSubmit = async (e: React.FormEvent) => {
+        const handleSubmit = (e: React.FormEvent) => {
             e.preventDefault();
-            if (!title.trim() || isSaving) return;
-            try {
-                await onSave(title.trim(), description.trim(), clientId || undefined);
-            } catch {
-                // error displayed from parent state
-            }
+            if (!title.trim()) return;
+            onSave(title, description, clientId || undefined);
         };
 
         return (
@@ -699,11 +638,6 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                 <div className="w-full max-w-md bg-slate-800 border border-purple-500 rounded-lg shadow-2xl" onClick={(e) => e.stopPropagation()}>
                     <form onSubmit={handleSubmit} className="p-6 space-y-4">
                         <h2 className="text-xl font-bold text-white">Create New Show</h2>
-                        {error && (
-                            <div className="text-sm text-red-300 bg-red-900/20 border border-red-700/50 rounded-md px-3 py-2">
-                                {error}
-                            </div>
-                        )}
                         <div><label htmlFor="show-title" className="block text-sm font-medium text-slate-300 mb-1">Show Title</label><input id="show-title" type="text" value={title} onChange={e => setTitle(e.target.value)} required autoFocus className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white" /></div>
                         <div><label htmlFor="show-desc" className="block text-sm font-medium text-slate-300 mb-1">Description (Optional)</label><textarea id="show-desc" rows={2} value={description} onChange={e => setDescription(e.target.value)} className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white" /></div>
                         <div><label htmlFor="show-client" className="block text-sm font-medium text-slate-300 mb-1">Client (Optional)</label>
@@ -712,23 +646,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                 {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                             </select>
                         </div>
-                        <div className="flex gap-3 pt-2">
-                            <button
-                                type="button"
-                                onClick={onClose}
-                                disabled={isSaving}
-                                className="w-full py-2 bg-slate-700 hover:bg-slate-600 rounded-md text-white font-bold disabled:opacity-50"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="submit"
-                                disabled={isSaving || !title.trim()}
-                                className="w-full py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold disabled:opacity-50"
-                            >
-                                {isSaving ? 'Creating…' : 'Create Show'}
-                            </button>
-                        </div>
+                        <div className="flex gap-3 pt-2"><button type="button" onClick={onClose} className="w-full py-2 bg-slate-600/50 hover:bg-slate-700 rounded-md text-slate-300 font-bold">Cancel</button><button type="submit" className="w-full py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold">Create Show</button></div>
                     </form>
                 </div>
             </div>
@@ -739,7 +657,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
         <>
             {isTaskModalOpen && <TaskModal onClose={() => { setIsTaskModalOpen(false); setTaskToEdit(null); }} onSave={taskToEdit ? handleUpdateTask : handleAddTask} taskToEdit={taskToEdit} user={user} />}
             {isScriptModalOpen && <ScriptGuideModal script={generatedScript} onClose={() => setIsScriptModalOpen(false)} />}
-            {isShowModalOpen && <ShowModal onClose={() => { if (!isSavingShow) setIsShowModalOpen(false); }} onSave={handleAddShow} isSaving={isSavingShow} error={saveShowError} />}
+            {isShowModalOpen && <ShowModal onClose={() => setIsShowModalOpen(false)} onSave={handleAddShow} />}
             {isLiveModalOpen && selectedShow && <LivePerformanceModal show={selectedShow} onClose={() => setIsLiveModalOpen(false)} onEnd={(id) => { setIsLiveModalOpen(false); onNavigateToAnalytics(id); }} />}
             {selectedShow ? <ShowDetailView /> : <ShowListView />}
         </>
