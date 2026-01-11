@@ -127,18 +127,7 @@ const TaskModal: React.FC<{
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in" onClick={onClose}>
             <div className="w-full max-w-lg bg-slate-800 border border-purple-500 rounded-lg shadow-2xl flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
                 <h2 className="text-xl font-bold text-white p-6 border-b border-slate-700 flex-shrink-0">{modalTitle}</h2>
-                <form id="task-form" onSubmit={handleSubmit} onKeyDown={(e) => {
-                        if (e.key !== "Enter") return;
-                        const target = e.target as HTMLElement;
-                        const tag = target.tagName.toLowerCase();
-                        const isTextArea = tag === "textarea";
-                        const canSubmit = !!title.trim();
-                        if (!canSubmit) return;
-                        // Allow normal Enter behavior in textarea unless Ctrl/Cmd is held.
-                        if (isTextArea && !(e.ctrlKey || e.metaKey)) return;
-                        e.preventDefault();
-                        handleSubmit(e as any);
-                    }} className="flex-1 overflow-y-auto p-6 space-y-4">
+                <form id="task-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
                     <div>
                         <label htmlFor="title" className="block text-sm font-medium text-slate-300 mb-1">Task Title</label>
                         <input id="title" type="text" value={title} onChange={e => setTitle(e.target.value)} required autoFocus className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500" />
@@ -202,8 +191,7 @@ const TaskModal: React.FC<{
                 </form>
                 <div className="flex gap-3 p-6 flex-shrink-0 bg-slate-800 border-t border-slate-700">
                     <button type="button" onClick={onClose} className="w-full py-2 px-4 bg-slate-600/50 hover:bg-slate-700 rounded-md text-slate-300 font-bold transition-colors">Cancel</button>
-                    <button type="submit" form="task-form" disabled={!title.trim()} title={!title.trim() ? "Task title required" : undefined} className={`w-full py-2 px-4 rounded-md text-white font-bold transition-colors ${!title.trim() ? "bg-slate-600 cursor-not-allowed opacity-70" : "bg-purple-600 hover:bg-purple-700"}`}>{buttonText}</button>
-                    {!title.trim() && <p className="text-xs text-slate-400 mt-2 text-center">Task title required</p>}
+                    <button type="submit" form="task-form" className="w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors">{buttonText}</button>
                 </div>
             </div>
         </div>
@@ -265,34 +253,6 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
     const [taskToEdit, setTaskToEdit] = useState<Task | null>(null);
     const [sortBy, setSortBy] = useState<SortBy>('dueDate');
     const taskRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
-
-     // Keyboard shortcuts:
-     // Esc: close modal / back to All Shows
-     // Cmd/Ctrl+N: new task (when a show is open)
-     useEffect(() => {
-         const onKeyDown = (e: KeyboardEvent) => {
-             if (e.key === 'Escape') {
-                 if (isTaskModalOpen) { setIsTaskModalOpen(false); setTaskToEdit(null); return; }
-                 if (isScriptModalOpen) { setIsScriptModalOpen(false); return; }
-                 if (isShowModalOpen) { setIsShowModalOpen(false); return; }
-                 if (isLiveModalOpen) { setIsLiveModalOpen(false); return; }
-                 if (selectedShow) { setSelectedShow(null); return; }
-             }
-             const isCmdOrCtrl = e.metaKey || e.ctrlKey;
-             if (isCmdOrCtrl && (e.key === 'n' || e.key === 'N')) {
-                 if (!selectedShow) return;
-                 // Don't steal the shortcut when typing in inputs/textareas.
-                 const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
-                 if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
-                 e.preventDefault();
-                 setTaskToEdit(null);
-                 setIsTaskModalOpen(true);
-             }
-         };
-         window.addEventListener('keydown', onKeyDown);
-         return () => window.removeEventListener('keydown', onKeyDown);
-     }, [isTaskModalOpen, isScriptModalOpen, isShowModalOpen, isLiveModalOpen, selectedShow]);
-
 
     useEffect(() => {
         const fetchShows = async () => {
@@ -431,36 +391,16 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
         const progress = totalSubtasks > 0 ? (completedSubtasks / totalSubtasks) * 100 : 0;
         
         return (
-            <div
-              ref={(el) => {
-                if (el) taskRefs.current.set(task.id, el);
-                else taskRefs.current.delete(task.id);
-              }}
-              className={`p-3 rounded-lg border flex flex-col gap-3 transition-all ${
-                isOverdue
-                  ? 'bg-red-900/20 border-red-500/50'
-                  : `bg-slate-800 border-slate-700 border-l-4 ${priorityBorders[task.priority]}`
-              }`}
-              onClick={() => openEditModal(task)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  openEditModal(task);
-                }
-              }}
-            >
-              <div className="flex items-start gap-3">
-                
-                    <input type="checkbox" checked={task.status === 'Completed'} onChange={() => handleToggleStatus(task)} className="mt-1 w-5 h-5 accent-purple-500 bg-slate-900 flex-shrink-0"  onClick={(e) => e.stopPropagation()} />
+             <div ref={el => { taskRefs.current.set(task.id, el); }} className={`p-3 rounded-lg border flex flex-col gap-3 transition-all ${isOverdue ? 'bg-red-900/20 border-red-500/50' : `bg-slate-800 border-slate-700 border-l-4 ${priorityBorders[task.priority]}`}`}>
+                <div className="flex items-start gap-3">
+                    <input type="checkbox" checked={task.status === 'Completed'} onChange={() => handleToggleStatus(task)} className="mt-1 w-5 h-5 accent-purple-500 bg-slate-900 flex-shrink-0" />
                     <div className="flex-1">
                         <p className={`font-semibold text-slate-200 ${isOverdue ? '!text-red-300' : ''}`}>{task.title}</p>
-                        {task.notes && <p className="text-sm text-slate-400 mt-1 whitespace-pre-line break-words line-clamp-3 max-h-16 overflow-hidden">{task.notes}</p>}
+                        {task.notes && <p className="text-sm text-slate-400 mt-1 whitespace-pre-wrap break-words">{task.notes}</p>}
                     </div>
                     <div className="flex items-center gap-1">
-                        <button onClick={(e) => { e.stopPropagation(); openEditModal(task); }} className="p-2 text-slate-400 hover:text-amber-300 rounded-full hover:bg-slate-700 transition-colors"><PencilIcon className="w-5 h-5"/></button>
-                        <button onClick={(e) => { e.stopPropagation(); handleDeleteTask(task.id); }} className="p-2 text-slate-400 hover:text-red-400 rounded-full hover:bg-slate-700 transition-colors"><TrashIcon className="w-5 h-5"/></button>
+                        <button onClick={() => openEditModal(task)} className="p-2 text-slate-400 hover:text-amber-300 rounded-full hover:bg-slate-700 transition-colors"><PencilIcon className="w-5 h-5"/></button>
+                        <button onClick={() => handleDeleteTask(task.id)} className="p-2 text-slate-400 hover:text-red-400 rounded-full hover:bg-slate-700 transition-colors"><TrashIcon className="w-5 h-5"/></button>
                     </div>
                 </div>
                 {task.subtasks && task.subtasks.length > 0 && (
@@ -714,14 +654,65 @@ const ShowListItem: React.FC<{show: Show, clients: Client[], onSelect: () => voi
     );
 };
 
-const FinanceTracker: React.FC<{ show: Show, onUpdate: (updates: Partial<Show>) => void }> = ({ show, onUpdate }) => {
-    const finances = useMemo(() => show.finances || { performanceFee: 0, expenses: [] }, [show.finances]);
-    const [fee, setFee] = useState(finances.performanceFee);
-    const [newExpenseDesc, setNewExpenseDesc] = useState('');
-    const [newExpenseAmount, setNewExpenseAmount] = useState('');
 
-    const totalExpenses = useMemo(() => finances.expenses.reduce((sum, exp) => sum + exp.amount, 0), [finances.expenses]);
-    const netProfit = fee - totalExpenses;
+const FinanceTracker: React.FC<{ show: Show; onUpdate: (updates: Partial<Show>) => void }> = ({ show, onUpdate }) => {
+    type MoneyEntry = { id: string; description: string; amount: number };
+
+    const finances = useMemo(
+        () =>
+            (show.finances as any) || {
+                performanceFee: 0,
+                expenses: [],
+                income: []
+            },
+        [show.finances]
+    );
+
+    const performanceFee = Number(finances.performanceFee || 0);
+    const expenses: MoneyEntry[] = Array.isArray(finances.expenses) ? finances.expenses : [];
+    const income: MoneyEntry[] = Array.isArray(finances.income) ? finances.income : [];
+
+    const [fee, setFee] = useState<number>(performanceFee);
+
+    // Add/Edit modal state
+    const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
+    const [entryMode, setEntryMode] = useState<'add' | 'edit'>('add');
+    const [entryType, setEntryType] = useState<'income' | 'expense'>('expense');
+    const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
+    const [entryDesc, setEntryDesc] = useState('');
+    const [entryAmount, setEntryAmount] = useState('');
+
+    const totalExpenses = useMemo(() => expenses.reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0), [expenses]);
+    const totalIncome = useMemo(() => income.reduce((sum, inc) => sum + (Number(inc.amount) || 0), 0) + performanceFee, [income, performanceFee]);
+    const netProfit = useMemo(() => totalIncome - totalExpenses, [totalIncome, totalExpenses]);
+
+    const formatMoney = (value: number) =>
+        value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    const openAddEntry = (type: 'income' | 'expense') => {
+        setEntryMode('add');
+        setEntryType(type);
+        setEditingEntryId(null);
+        setEntryDesc('');
+        setEntryAmount('');
+        setIsEntryModalOpen(true);
+    };
+
+    const openEditEntry = (type: 'income' | 'expense', entry: MoneyEntry) => {
+        setEntryMode('edit');
+        setEntryType(type);
+        setEditingEntryId(entry.id);
+        setEntryDesc(entry.description || '');
+        setEntryAmount(String(entry.amount ?? ''));
+        setIsEntryModalOpen(true);
+    };
+
+    const closeEntryModal = () => {
+        setIsEntryModalOpen(false);
+        setEntryDesc('');
+        setEntryAmount('');
+        setEditingEntryId(null);
+    };
 
     const handleFeeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setFee(parseFloat(e.target.value) || 0);
@@ -731,63 +722,272 @@ const FinanceTracker: React.FC<{ show: Show, onUpdate: (updates: Partial<Show>) 
         onUpdate({ finances: { ...finances, performanceFee: fee } });
     };
 
-    const handleAddExpense = () => {
-        if (!newExpenseDesc.trim() || !newExpenseAmount) return;
-        const newExpense: Expense = {
-            id: `exp-${Date.now()}`,
-            description: newExpenseDesc,
-            amount: parseFloat(newExpenseAmount)
+    const saveEntry = () => {
+        const amount = parseFloat(entryAmount);
+        if (!entryDesc.trim() || !Number.isFinite(amount)) return;
+
+        const newEntry: MoneyEntry = {
+            id: entryMode === 'edit' && editingEntryId ? editingEntryId : `${entryType}-${Date.now()}`,
+            description: entryDesc.trim(),
+            amount
         };
-        onUpdate({ finances: { ...finances, expenses: [...finances.expenses, newExpense] } });
-        setNewExpenseDesc('');
-        setNewExpenseAmount('');
+
+        if (entryType === 'expense') {
+            const next = entryMode === 'edit'
+                ? expenses.map(e => (e.id === newEntry.id ? newEntry : e))
+                : [...expenses, newEntry];
+            onUpdate({ finances: { ...finances, expenses: next } });
+        } else {
+            const next = entryMode === 'edit'
+                ? income.map(i => (i.id === newEntry.id ? newEntry : i))
+                : [...income, newEntry];
+            onUpdate({ finances: { ...finances, income: next } });
+        }
+
+        closeEntryModal();
     };
 
-    const handleDeleteExpense = (expenseId: string) => {
-        onUpdate({ finances: { ...finances, expenses: finances.expenses.filter(e => e.id !== expenseId) } });
+    const deleteEntry = (type: 'income' | 'expense', id: string) => {
+        if (type === 'expense') {
+            onUpdate({ finances: { ...finances, expenses: expenses.filter(e => e.id !== id) } });
+        } else {
+            onUpdate({ finances: { ...finances, income: income.filter(i => i.id !== id) } });
+        }
     };
+
+    const SummaryCard = (
+        <div className="bg-slate-900/40 border border-slate-700 rounded-xl p-4 md:p-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                    <h3 className="text-lg font-bold text-white">Finances</h3>
+                    <p className="text-sm text-slate-400">Track income, expenses, and profit for this show.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={() => openAddEntry('income')}
+                        className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-md text-white font-semibold text-sm transition-colors"
+                    >
+                        + Add Income
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => openAddEntry('expense')}
+                        className="px-3 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-semibold text-sm transition-colors"
+                    >
+                        + Add Expense
+                    </button>
+                </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="bg-slate-800/70 border border-slate-700 rounded-lg p-3 flex items-center justify-between">
+                    <span className="text-sm text-slate-300">Total Income</span>
+                    <span className="text-sm font-bold text-slate-100">${formatMoney(totalIncome)}</span>
+                </div>
+                <div className="bg-slate-800/70 border border-slate-700 rounded-lg p-3 flex items-center justify-between">
+                    <span className="text-sm text-slate-300">Total Expenses</span>
+                    <span className="text-sm font-bold text-slate-100">${formatMoney(totalExpenses)}</span>
+                </div>
+                <div className="bg-slate-800/70 border border-slate-700 rounded-lg p-3 flex items-center justify-between">
+                    <span className="text-sm text-slate-300">Net</span>
+                    <span className={`text-sm font-bold ${netProfit >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>
+                        {netProfit >= 0 ? '+' : '-'}${formatMoney(Math.abs(netProfit))}
+                    </span>
+                </div>
+            </div>
+        </div>
+    );
+
+    const EntryList = ({ type, title, items }: { type: 'income' | 'expense'; title: string; items: MoneyEntry[] }) => (
+        <div className="bg-slate-900/40 border border-slate-700 rounded-xl">
+            <div className="p-4 flex items-center justify-between">
+                <h4 className="text-base font-bold text-white">{title}</h4>
+                <button
+                    type="button"
+                    onClick={() => openAddEntry(type)}
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md text-slate-100 text-sm font-semibold transition-colors"
+                >
+                    + Add
+                </button>
+            </div>
+
+            <div className="border-t border-slate-700">
+                {items.length === 0 ? (
+                    <div className="p-6 text-center">
+                        <p className="text-sm text-slate-400">
+                            No {type === 'income' ? 'income' : 'expense'} entries yet.
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => openAddEntry(type)}
+                            className="mt-3 px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-semibold text-sm transition-colors"
+                        >
+                            + Add {type === 'income' ? 'Income' : 'Expense'}
+                        </button>
+                    </div>
+                ) : (
+                    <div className="max-h-80 overflow-y-auto">
+                        {items.map((entry) => (
+                            <div
+                                key={entry.id}
+                                onClick={() => openEditEntry(type, entry)}
+                                role="button"
+                                tabIndex={0}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault();
+                                        openEditEntry(type, entry);
+                                    }
+                                }}
+                                className="p-3 flex items-center justify-between gap-3 border-b border-slate-800 hover:bg-slate-800/60 transition-colors cursor-pointer"
+                            >
+                                <div className="min-w-0">
+                                    <p className="text-sm font-semibold text-slate-200 truncate">{entry.description}</p>
+                                </div>
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                    <span className={`text-sm font-bold ${type === 'income' ? 'text-emerald-300' : 'text-red-300'}`}>
+                                        {type === 'income' ? '+' : '-'}${formatMoney(Math.abs(Number(entry.amount) || 0))}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            deleteEntry(type, entry.id);
+                                        }}
+                                        className="p-2 rounded-md text-slate-400 hover:text-red-300 hover:bg-slate-900/60 transition-colors"
+                                        aria-label="Delete entry"
+                                    >
+                                        <TrashIcon className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-6">
-                <div>
-                    <h3 className="text-lg font-bold text-white mb-2">Expenses</h3>
-                    <div className="bg-slate-800 border border-slate-700 rounded-lg">
-                        <div className="p-3 flex items-center gap-3">
-                            <input type="text" value={newExpenseDesc} onChange={e => setNewExpenseDesc(e.target.value)} placeholder="Expense description (e.g., Props, Travel)" className="flex-1 bg-slate-900 border border-slate-600 rounded-md px-3 py-2 text-sm" />
-                            <input type="number" value={newExpenseAmount} onChange={e => setNewExpenseAmount(e.target.value)} placeholder="Amount ($)" className="w-32 bg-slate-900 border border-slate-600 rounded-md px-3 py-2 text-sm" />
-                            <button onClick={handleAddExpense} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-semibold text-sm">Add</button>
-                        </div>
-                        <div className="max-h-64 overflow-y-auto border-t border-slate-700">
-                            {finances.expenses.length > 0 ? finances.expenses.map(exp => (
-                                <div key={exp.id} className="p-3 flex items-center justify-between border-b border-slate-700/50">
-                                    <span className="text-slate-300">{exp.description}</span>
-                                    <div className="flex items-center gap-3">
-                                        <span className="text-slate-400">${exp.amount.toLocaleString()}</span>
-                                        <button onClick={() => handleDeleteExpense(exp.id)} className="p-1 text-slate-500 hover:text-red-400"><TrashIcon className="w-4 h-4" /></button>
-                                    </div>
-                                </div>
-                            )) : <p className="text-center text-sm text-slate-500 p-6">No expenses logged yet.</p>}
-                        </div>
-                    </div>
+        <div className="space-y-6">
+            {SummaryCard}
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 space-y-6">
+                    <EntryList type="expense" title="Expenses" items={expenses} />
+                    <EntryList type="income" title="Additional Income" items={income} />
                 </div>
-            </div>
-            <div className="space-y-4">
-                <h3 className="text-lg font-bold text-white mb-2">Financial Summary</h3>
-                <div className="space-y-3 bg-slate-800 border border-slate-700 rounded-lg p-4">
-                    <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-1">Performance Fee</label>
+
+                <div className="space-y-6">
+                    <div className="bg-slate-900/40 border border-slate-700 rounded-xl p-4">
+                        <h4 className="text-base font-bold text-white mb-3">Performance Fee</h4>
+                        <p className="text-sm text-slate-400 mb-3">Your primary fee for performing this show.</p>
                         <div className="flex items-center gap-2">
-                            <span className="text-lg text-slate-400">$</span>
-                            <input type="number" value={fee} onChange={handleFeeChange} onBlur={handleFeeUpdate} className="flex-1 bg-slate-900 border border-slate-600 rounded-md px-3 py-2 text-lg font-bold" />
+                            <input
+                                type="number"
+                                value={fee}
+                                onChange={handleFeeChange}
+                                className="flex-1 bg-slate-900 border border-slate-600 rounded-md px-3 py-2 text-sm text-white"
+                            />
+                            <button
+                                type="button"
+                                onClick={handleFeeUpdate}
+                                className="px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md text-white font-semibold text-sm transition-colors"
+                            >
+                                Save
+                            </button>
                         </div>
                     </div>
-                    <div className="border-t border-slate-700 pt-3 space-y-2">
-                        <div className="flex justify-between items-center"><span className="text-slate-400">Total Expenses:</span><span className="font-semibold text-red-300">-${totalExpenses.toLocaleString()}</span></div>
-                        <div className={`flex justify-between items-center text-lg font-bold border-t border-slate-600 pt-2 ${netProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}><span>Net Profit:</span><span>${netProfit.toLocaleString()}</span></div>
+
+                    <div className="bg-slate-900/40 border border-slate-700 rounded-xl p-4">
+                        <h4 className="text-base font-bold text-white mb-2">At a Glance</h4>
+                        <div className="space-y-2 text-sm">
+                            <div className="flex justify-between text-slate-300">
+                                <span>Income</span>
+                                <span className="text-slate-100 font-semibold">${formatMoney(totalIncome)}</span>
+                            </div>
+                            <div className="flex justify-between text-slate-300">
+                                <span>Expenses</span>
+                                <span className="text-slate-100 font-semibold">${formatMoney(totalExpenses)}</span>
+                            </div>
+                            <div className={`flex justify-between font-bold ${netProfit >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>
+                                <span>Net</span>
+                                <span>{netProfit >= 0 ? '+' : '-'}${formatMoney(Math.abs(netProfit))}</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
+
+            {isEntryModalOpen && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
+                    <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-lg p-5">
+                        <div className="flex items-start justify-between gap-3">
+                            <div>
+                                <h3 className="text-lg font-bold text-white">
+                                    {entryMode === 'add' ? 'Add' : 'Edit'} {entryType === 'income' ? 'Income' : 'Expense'}
+                                </h3>
+                                <p className="text-sm text-slate-400">
+                                    {entryType === 'income' ? 'Record additional income for this show.' : 'Track a cost related to this show.'}
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={closeEntryModal}
+                                className="p-2 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                                aria-label="Close"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <div className="mt-4 space-y-3">
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-300">Description</label>
+                                <input
+                                    type="text"
+                                    value={entryDesc}
+                                    onChange={(e) => setEntryDesc(e.target.value)}
+                                    className="mt-1 w-full bg-slate-900 border border-slate-600 rounded-md px-3 py-2 text-sm text-white"
+                                    placeholder={entryType === 'income' ? 'Ticket sales, merch, add-on…' : 'Props, travel, marketing…'}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-300">Amount</label>
+                                <input
+                                    type="number"
+                                    value={entryAmount}
+                                    onChange={(e) => setEntryAmount(e.target.value)}
+                                    className="mt-1 w-full bg-slate-900 border border-slate-600 rounded-md px-3 py-2 text-sm text-white"
+                                    placeholder="0.00"
+                                />
+                                <p className="text-xs text-slate-400 mt-1">Enter the amount in dollars. Use positive numbers.</p>
+                            </div>
+                        </div>
+
+                        <div className="mt-5 flex items-center justify-end gap-2">
+                            <button
+                                type="button"
+                                onClick={closeEntryModal}
+                                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md text-white font-semibold text-sm transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={saveEntry}
+                                disabled={!entryDesc.trim() || !entryAmount}
+                                className={`px-4 py-2 rounded-md text-white font-semibold text-sm transition-colors ${
+                                    !entryDesc.trim() || !entryAmount ? 'bg-slate-700 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'
+                                }`}
+                            >
+                                {entryMode === 'add' ? 'Add' : 'Save'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
