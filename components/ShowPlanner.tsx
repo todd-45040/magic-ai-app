@@ -593,11 +593,14 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
             onSave(title, description, clientId || undefined);
         };
 
-        return (
-            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in" onClick={onClose}>
-                <div className="w-full max-w-md bg-slate-800 border border-purple-500 rounded-lg shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                    <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                        <h2 className="text-xl font-bold text-white">Create New Show</h2>
+        return typeof document === 'undefined'
+            ? null
+            : createPortal(
+                  <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-[999] animate-fade-in" onClick={onClose}>
+                      <div className="w-full max-w-md bg-slate-800 border border-purple-500 rounded-lg shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                          <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                              <h2 className="text-xl font-bold text-white">Create New Show</h2>
+
                         <div><label htmlFor="show-title" className="block text-sm font-medium text-slate-300 mb-1">Show Title</label><input id="show-title" type="text" value={title} onChange={e => setTitle(e.target.value)} required autoFocus className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white" /></div>
                         <div><label htmlFor="show-desc" className="block text-sm font-medium text-slate-300 mb-1">Description (Optional)</label><textarea id="show-desc" rows={2} value={description} onChange={e => setDescription(e.target.value)} className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white" /></div>
                         <div><label htmlFor="show-client" className="block text-sm font-medium text-slate-300 mb-1">Client (Optional)</label>
@@ -607,11 +610,13 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                             </select>
                         </div>
                         <div className="flex gap-3 pt-2"><button type="button" onClick={onClose} className="w-full py-2 bg-slate-600/50 hover:bg-slate-700 rounded-md text-slate-300 font-bold">Cancel</button><button type="submit" className="w-full py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold">Create Show</button></div>
-                    </form>
-                </div>
-            </div>
-        );
-    };
+                    
+                          </form>
+                      </div>
+                  </div>,
+                  document.body
+              );
+};
 
     return (
         <>
