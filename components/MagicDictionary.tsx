@@ -282,7 +282,7 @@ const MagicDictionary: React.FC = () => {
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="font-bold text-lg text-white tracking-wide">{item.term}</h3>
+                          <h3 className="font-bold text-lg text-amber-300 tracking-wide">{item.term}</h3>
                           <CategoryBadge category={item.category} />
                           <SkillBadge skill={item.skillLevel} />
                         </div>
