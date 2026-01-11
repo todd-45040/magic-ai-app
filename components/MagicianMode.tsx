@@ -918,7 +918,7 @@ const CommunityTab: React.FC = () => {
 
                 <p className="text-slate-400 text-sm mt-1 line-clamp-3">{item.description}</p>
 
-                <div className="mt-3 inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg border border-slate-700/60 bg-slate-950/30 group-hover:bg-slate-950/60 text-slate-200 group-hover:text-white transition">
+                <div className="mt-3 inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg border border-slate-700/60 bg-slate-950/30 group-hover:bg-slate-950/60 text-purple-400 group-hover:text-white transition">
                   Visit <span aria-hidden="true">↗</span>
                 </div>
               </a>
@@ -953,10 +953,10 @@ const CommunityTab: React.FC = () => {
                 <p className="text-slate-400 text-sm mt-1 line-clamp-3">{club.description}</p>
 
                 <div className="mt-3 flex items-center justify-between gap-3">
-                  <div className="inline-flex items-center gap-2 text-[11px] px-2.5 py-1 rounded-full border border-slate-700/60 bg-slate-950/25 text-slate-300/90">
+                  <div className="inline-flex items-center gap-2 text-[11px] px-2.5 py-1 rounded-full border border-slate-700/60 bg-slate-950/25 text-purple-400">
                     Club / Org
                   </div>
-                  <div className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg border border-slate-700/60 bg-slate-950/30 group-hover:bg-slate-950/60 text-slate-200 group-hover:text-white transition">
+                  <div className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg border border-slate-700/60 bg-slate-950/30 group-hover:bg-slate-950/60 text-purple-400 group-hover:text-white transition">
                     Visit <span aria-hidden="true">↗</span>
                   </div>
                 </div>
@@ -1005,10 +1005,10 @@ const CommunityTab: React.FC = () => {
                 <p className="text-slate-400 text-sm mt-2 line-clamp-3">{convention.description}</p>
 
                 <div className="mt-3 flex items-center justify-between gap-3">
-                  <div className="inline-flex items-center gap-2 text-[11px] px-2.5 py-1 rounded-full border border-slate-700/60 bg-slate-950/25 text-slate-300/90">
+                  <div className="inline-flex items-center gap-2 text-[11px] px-2.5 py-1 rounded-full border border-slate-700/60 bg-slate-950/25 text-purple-400">
                     Convention
                   </div>
-                  <div className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg border border-slate-700/60 bg-slate-950/30 group-hover:bg-slate-950/60 text-slate-200 group-hover:text-white transition">
+                  <div className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg border border-slate-700/60 bg-slate-950/30 group-hover:bg-slate-950/60 text-purple-400 group-hover:text-white transition">
                     Visit <span aria-hidden="true">↗</span>
                   </div>
                 </div>

@@ -605,7 +605,7 @@ const AudienceMode: React.FC<AudienceModeProps> = ({ onBack }) => {
                                     <span className="text-slate-500 group-hover:text-slate-300 transition" aria-hidden="true">↗</span>
                                   </div>
                                   <p className="text-slate-400 text-sm mt-1">{club.description}</p>
-                                  <div className="mt-3 inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-md border border-slate-700/60 bg-slate-950/25 text-slate-200 group-hover:bg-slate-950/40 transition">
+                                  <div className="mt-3 inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-md border border-slate-700/60 bg-slate-950/25 text-purple-400 group-hover:text-white group-hover:bg-slate-950/40 transition">
                                     Visit <span aria-hidden="true">↗</span>
                                   </div>
                               </a>
@@ -633,7 +633,7 @@ const AudienceMode: React.FC<AudienceModeProps> = ({ onBack }) => {
                                     <span className="text-slate-500 group-hover:text-slate-300 transition" aria-hidden="true">↗</span>
                                   </div>
                                   <p className="text-slate-400 text-sm mt-2">{convention.description}</p>
-                                  <div className="mt-3 inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-md border border-slate-700/60 bg-slate-950/25 text-slate-200 group-hover:bg-slate-950/40 transition">
+                                  <div className="mt-3 inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-md border border-slate-700/60 bg-slate-950/25 text-purple-400 group-hover:text-white group-hover:bg-slate-950/40 transition">
                                     Visit <span aria-hidden="true">↗</span>
                                   </div>
                               </a>
