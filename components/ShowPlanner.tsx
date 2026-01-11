@@ -431,8 +431,28 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
         const progress = totalSubtasks > 0 ? (completedSubtasks / totalSubtasks) * 100 : 0;
         
         return (
-             <div ref={el => { taskRefs.current.set(task.id, el); }} className={`p-3 rounded-lg border flex flex-col gap-3 transition-all ${isOverdue ? 'bg-red-900/20 border-red-500/50' : `bg-slate-800 border-slate-700 border-l-4 ${priorityBorders[task.priority]}`}`} onClick={() => openEditModal(task)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openEditModal(task); } }}}>
-                <div className="flex items-start gap-3">
+            <div
+              ref={(el) => {
+                if (el) taskRefs.current.set(task.id, el);
+                else taskRefs.current.delete(task.id);
+              }}
+              className={`p-3 rounded-lg border flex flex-col gap-3 transition-all ${
+                isOverdue
+                  ? 'bg-red-900/20 border-red-500/50'
+                  : `bg-slate-800 border-slate-700 border-l-4 ${priorityBorders[task.priority]}`
+              }`}
+              onClick={() => openEditModal(task)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  openEditModal(task);
+                }
+              }}
+            >
+              <div className="flex items-start gap-3"> openEditModal(task)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openEditModal(task); } }}}>
+                
                     <input type="checkbox" checked={task.status === 'Completed'} onChange={() => handleToggleStatus(task)} className="mt-1 w-5 h-5 accent-purple-500 bg-slate-900 flex-shrink-0"  onClick={(e) => e.stopPropagation()} />
                     <div className="flex-1">
                         <p className={`font-semibold text-slate-200 ${isOverdue ? '!text-red-300' : ''}`}>{task.title}</p>
