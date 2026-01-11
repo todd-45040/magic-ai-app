@@ -330,7 +330,7 @@ const AudienceMode: React.FC<AudienceModeProps> = ({ onBack }) => {
         className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${
             isActive
                 ? 'border-b-2 border-sky-400 text-sky-300'
-                : 'border-b-2 border-transparent text-slate-400 hover:text-white'
+                : 'border-b-2 border-transparent text-slate-400 hover:text-purple-400'
         }`}
     >
         <Icon className="w-5 h-5" />
@@ -358,13 +358,13 @@ const AudienceMode: React.FC<AudienceModeProps> = ({ onBack }) => {
                                 value={storyKeywords}
                                 onChange={(e) => setStoryKeywords(e.target.value)}
                                 placeholder="e.g., a lost compass, a talking raven, a secret map"
-                                className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
+                                className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-purple-400 placeholder-slate-500 focus:outline-none focus:border-sky-500"
                             />
                         </div>
                         <button
                             type="submit"
                             disabled={isGeneratingStory || !storyKeywords.trim()}
-                            className="w-full py-3 px-4 bg-sky-600 hover:bg-sky-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            className="w-full py-3 px-4 bg-sky-600 hover:bg-sky-700 rounded-md text-purple-400 font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                         >
                             <WandIcon className="w-5 h-5" />
                             <span>{isGeneratingStory ? 'Weaving a Tale...' : 'Create My Story'}</span>
@@ -418,7 +418,7 @@ const AudienceMode: React.FC<AudienceModeProps> = ({ onBack }) => {
                                     value={question}
                                     onChange={(e) => setQuestion(e.target.value)}
                                     placeholder="e.g., How long have you been performing magic?"
-                                    className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
+                                    className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-purple-400 placeholder-slate-500 focus:outline-none focus:border-sky-500"
                                 />
                             </div>
                              <div>
@@ -429,13 +429,13 @@ const AudienceMode: React.FC<AudienceModeProps> = ({ onBack }) => {
                                     value={questionerName}
                                     onChange={(e) => setQuestionerName(e.target.value)}
                                     placeholder="John Doe"
-                                    className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
+                                    className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-purple-400 placeholder-slate-500 focus:outline-none focus:border-sky-500"
                                 />
                             </div>
                             <button
                                 type="submit"
                                 disabled={isAnswering || !question.trim()}
-                                className="w-full py-3 px-4 bg-sky-600 hover:bg-sky-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
+                                className="w-full py-3 px-4 bg-sky-600 hover:bg-sky-700 rounded-md text-purple-400 font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
                             >
                                 Ask Question
                             </button>
@@ -455,7 +455,7 @@ const AudienceMode: React.FC<AudienceModeProps> = ({ onBack }) => {
                         <div className="animate-fade-in bg-slate-800/50 border border-slate-700 rounded-lg p-4 space-y-4">
                             <div>
                                 <p className="text-sm text-slate-400 mb-1">You asked:</p>
-                                <p className="font-semibold text-white">"{lastQuestion.question}"</p>
+                                <p className="font-semibold text-purple-400">"{lastQuestion.question}"</p>
                             </div>
                              <div className="border-t border-slate-700/50 pt-4">
                                 <p className="text-sm text-slate-400 mb-1">The Magician's Assistant replies:</p>
@@ -509,7 +509,7 @@ const AudienceMode: React.FC<AudienceModeProps> = ({ onBack }) => {
                                 <button onClick={() => fileInputRef.current?.click()} className="flex-1 w-full py-2 px-4 bg-slate-600/50 hover:bg-slate-700 rounded-md text-slate-300 font-bold transition-colors">
                                     Change Image
                                 </button>
-                                <button onClick={handleIdentifyClick} disabled={isIdentifying} className="flex-1 w-full py-2 px-4 bg-sky-600 hover:bg-sky-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed">
+                                <button onClick={handleIdentifyClick} disabled={isIdentifying} className="flex-1 w-full py-2 px-4 bg-sky-600 hover:bg-sky-700 rounded-md text-purple-400 font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed">
                                     {isIdentifying ? 'Analyzing...' : 'Identify Trick'}
                                 </button>
                             </div>
@@ -531,7 +531,7 @@ const AudienceMode: React.FC<AudienceModeProps> = ({ onBack }) => {
                         <div className="animate-fade-in bg-slate-800/50 border border-slate-700 rounded-lg p-4 space-y-3">
                             <div>
                                 <h3 className="font-cinzel text-lg text-slate-300">Identified Effect</h3>
-                                <p className="text-2xl font-bold text-white">{identificationResult.trickName}</p>
+                                <p className="text-2xl font-bold text-purple-400">{identificationResult.trickName}</p>
                             </div>
                            
                            {identificationResult.videoExamples?.length > 0 && (
@@ -571,7 +571,7 @@ const AudienceMode: React.FC<AudienceModeProps> = ({ onBack }) => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {publications.map(pub => (
                       <div key={pub.name} className="bg-slate-800/50 border border-slate-700 rounded-lg p-4">
-                          <h3 className="font-bold text-lg text-white">{pub.name}</h3>
+                          <h3 className="font-bold text-lg text-purple-400">{pub.name}</h3>
                           <p className="text-slate-400 text-sm mt-1">{pub.description}</p>
                       </div>
                   ))}
@@ -601,7 +601,7 @@ const AudienceMode: React.FC<AudienceModeProps> = ({ onBack }) => {
                                 title={`Open ${club.name} website`}
                               >
                                   <div className="flex items-start justify-between gap-3">
-                                    <h4 className="font-bold text-lg text-white">{club.name}</h4>
+                                    <h4 className="font-bold text-lg text-purple-400">{club.name}</h4>
                                     <span className="text-slate-500 group-hover:text-slate-300 transition" aria-hidden="true">↗</span>
                                   </div>
                                   <p className="text-slate-400 text-sm mt-1">{club.description}</p>
@@ -627,7 +627,7 @@ const AudienceMode: React.FC<AudienceModeProps> = ({ onBack }) => {
                               >
                                   <div className="flex items-start justify-between gap-3">
                                     <div className="min-w-0">
-                                      <h4 className="font-bold text-lg text-white">{convention.name}</h4>
+                                      <h4 className="font-bold text-lg text-purple-400">{convention.name}</h4>
                                       {convention.date && <span className="text-sm font-semibold text-slate-400 flex-shrink-0">{convention.date}</span>}
                                     </div>
                                     <span className="text-slate-500 group-hover:text-slate-300 transition" aria-hidden="true">↗</span>
@@ -687,7 +687,7 @@ const AudienceMode: React.FC<AudienceModeProps> = ({ onBack }) => {
                                     onClick={() => handleTagToggle(tag)}
                                     className={`px-3 py-1.5 text-sm font-semibold rounded-full transition-colors ${
                                         selectedTags.includes(tag)
-                                            ? 'bg-sky-600 text-white'
+                                            ? 'bg-sky-600 text-purple-400'
                                             : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
                                     }`}
                                 >
@@ -707,7 +707,7 @@ const AudienceMode: React.FC<AudienceModeProps> = ({ onBack }) => {
                                 value={showTitle}
                                 onChange={(e) => setShowTitle(e.target.value)}
                                 placeholder="e.g., An Evening of Wonder"
-                                className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
+                                className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-purple-400 placeholder-slate-500 focus:outline-none focus:border-sky-500"
                             />
                         </div>
                         <div>
@@ -718,7 +718,7 @@ const AudienceMode: React.FC<AudienceModeProps> = ({ onBack }) => {
                                 value={magicianName}
                                 onChange={(e) => setMagicianName(e.target.value)}
                                 placeholder="e.g., The Great Prestini"
-                                className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
+                                className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-purple-400 placeholder-slate-500 focus:outline-none focus:border-sky-500"
                             />
                         </div>
                         <div>
@@ -729,7 +729,7 @@ const AudienceMode: React.FC<AudienceModeProps> = ({ onBack }) => {
                                 value={location}
                                 onChange={(e) => setLocation(e.target.value)}
                                 placeholder="e.g., The Grand Theatre"
-                                className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
+                                className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-purple-400 placeholder-slate-500 focus:outline-none focus:border-sky-500"
                             />
                         </div>
                         <div>
@@ -739,7 +739,7 @@ const AudienceMode: React.FC<AudienceModeProps> = ({ onBack }) => {
                                 type="date"
                                 value={performanceDate}
                                 onChange={(e) => setPerformanceDate(e.target.value)}
-                                className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
+                                className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-purple-400 placeholder-slate-500 focus:outline-none focus:border-sky-500"
                             />
                         </div>
                     </div>
@@ -754,7 +754,7 @@ const AudienceMode: React.FC<AudienceModeProps> = ({ onBack }) => {
                             value={comment}
                             onChange={(e) => setComment(e.target.value)}
                             placeholder="Tell us more about your experience..."
-                            className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
+                            className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-purple-400 placeholder-slate-500 focus:outline-none focus:border-sky-500"
                         />
                     </div>
                      
@@ -767,7 +767,7 @@ const AudienceMode: React.FC<AudienceModeProps> = ({ onBack }) => {
                             value={name}
                             onChange={(e) => setName(e.target.value)}
                             placeholder="John Doe"
-                            className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
+                            className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-purple-400 placeholder-slate-500 focus:outline-none focus:border-sky-500"
                         />
                     </div>
                     
@@ -775,7 +775,7 @@ const AudienceMode: React.FC<AudienceModeProps> = ({ onBack }) => {
                     <button
                         type="submit"
                         disabled={rating === 0}
-                        className="w-full py-3 px-4 bg-sky-600 hover:bg-sky-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
+                        className="w-full py-3 px-4 bg-sky-600 hover:bg-sky-700 rounded-md text-purple-400 font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
                     >
                         Submit Feedback
                     </button>
@@ -850,7 +850,7 @@ const AudienceMode: React.FC<AudienceModeProps> = ({ onBack }) => {
                             </div>
                         </>
                         ) : (
-                            <div className="max-w-lg px-4 py-2 rounded-xl bg-sky-800 text-white">
+                            <div className="max-w-lg px-4 py-2 rounded-xl bg-sky-800 text-purple-400">
                                 <p className="whitespace-pre-wrap break-words">{msg.text}</p>
                             </div>
                         )}
@@ -897,7 +897,7 @@ const AudienceMode: React.FC<AudienceModeProps> = ({ onBack }) => {
           <BackIcon className="w-6 h-6 text-slate-300" />
         </button>
         <AudienceIcon className="w-8 h-8 text-sky-400 mr-3" />
-        <h1 className="font-cinzel text-2xl font-bold text-white">Audience Mode</h1>
+        <h1 className="font-cinzel text-2xl font-bold text-purple-400">Audience Mode</h1>
         <div className="ml-auto">
         </div>
       </header>
@@ -934,7 +934,7 @@ const AudienceMode: React.FC<AudienceModeProps> = ({ onBack }) => {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !isLoading && handleSend()}
               placeholder="Ask a question about the show..."
-              className="flex-1 w-full bg-transparent pr-3 py-3 text-white placeholder-slate-400 focus:outline-none"
+              className="flex-1 w-full bg-transparent pr-3 py-3 text-purple-400 placeholder-slate-400 focus:outline-none"
               disabled={isLoading}
             />
             <button onClick={() => handleSend()} disabled={isLoading || !input.trim()} className="p-3 text-sky-400 hover:text-sky-300 disabled:text-slate-600 transition-colors">

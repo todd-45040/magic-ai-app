@@ -68,7 +68,7 @@ const AngleRiskForm: React.FC<AngleRiskFormProps> = ({
                     id="trickName" type="text" value={trickName}
                     onChange={(e) => setTrickName(e.target.value)}
                     placeholder="e.g., Ambitious Card"
-                    className="w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500 transition-colors"
+                    className="w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-md text-purple-400 focus:outline-none focus:border-purple-500 transition-colors"
                     autoFocus
                 />
             </div>
@@ -77,7 +77,7 @@ const AngleRiskForm: React.FC<AngleRiskFormProps> = ({
                 <div className="grid grid-cols-3 gap-2">
                     {(['Close-up', 'Stage', 'Surrounded'] as const).map(type => (
                         <button key={type} onClick={() => setAudienceType(type)}
-                            className={`py-2 px-3 rounded-md transition-colors text-sm font-semibold ${ audienceType === type ? 'bg-purple-600 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-300' }`}
+                            className={`py-2 px-3 rounded-md transition-colors text-sm font-semibold ${ audienceType === type ? 'bg-purple-600 text-purple-400' : 'bg-slate-700 hover:bg-slate-600 text-slate-300' }`}
                         >{type}</button>
                     ))}
                 </div>
@@ -87,7 +87,7 @@ const AngleRiskForm: React.FC<AngleRiskFormProps> = ({
                     className="w-full py-2 px-4 bg-slate-600/50 hover:bg-slate-700 rounded-md text-slate-300 font-bold transition-colors"
                 >Cancel</button>
                 <button onClick={onSubmit} disabled={!trickName.trim() || !audienceType}
-                    className="w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
+                    className="w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-purple-400 font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
                 >Get Analysis</button>
             </div>
         </div>
@@ -124,18 +124,18 @@ const RehearsalCoachingForm: React.FC<RehearsalCoachingFormProps> = ({
                         <input type="file" ref={fileInputRef} onChange={onFileChange} className="hidden" accept=".txt,.md" />
                     </div>
                     <textarea id="routineDescription" rows={4} value={routineDescription} onChange={(e) => setRoutineDescription(e.target.value)} placeholder="Describe your routine, paste your script, or upload a file..."
-                        className="w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500 transition-colors" autoFocus />
+                        className="w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-md text-purple-400 focus:outline-none focus:border-purple-500 transition-colors" autoFocus />
                 </div>
                 <div>
                     <label htmlFor="targetDuration" className="block text-sm font-medium text-slate-300 text-left mb-1">Target Duration (minutes)</label>
                     <input id="targetDuration" type="number" value={targetDuration} onChange={(e) => setTargetDuration(e.target.value)} placeholder="e.g., 3"
-                        className="w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500 transition-colors" />
+                        className="w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-md text-purple-400 focus:outline-none focus:border-purple-500 transition-colors" />
                 </div>
                 <div className="flex gap-3 pt-2">
                     <button onClick={onCancel}
                         className="w-full py-2 px-4 bg-slate-600/50 hover:bg-slate-700 rounded-md text-slate-300 font-bold transition-colors">Cancel</button>
                     <button onClick={onSubmit} disabled={!routineDescription.trim() || !targetDuration.trim()}
-                        className="w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed">Get Feedback</button>
+                        className="w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-purple-400 font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed">Get Feedback</button>
                 </div>
             </div>
         </div>
@@ -160,13 +160,13 @@ const InnovationEngineForm: React.FC<InnovationEngineFormProps> = ({
             <div>
                 <label htmlFor="effectToInnovate" className="block text-sm font-medium text-slate-300 text-left mb-1">Effect Description</label>
                 <textarea id="effectToInnovate" rows={4} value={effectToInnovate} onChange={(e) => setEffectToInnovate(e.target.value)} placeholder="e.g., A signed card is found inside a lemon."
-                    className="w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500 transition-colors" autoFocus />
+                    className="w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-md text-purple-400 focus:outline-none focus:border-purple-500 transition-colors" autoFocus />
             </div>
             <div className="flex gap-3 pt-2">
                 <button onClick={onCancel}
                     className="w-full py-2 px-4 bg-slate-600/50 hover:bg-slate-700 rounded-md text-slate-300 font-bold transition-colors">Cancel</button>
                 <button onClick={onSubmit} disabled={!effectToInnovate.trim()}
-                    className="w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed">Generate Ideas</button>
+                    className="w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-purple-400 font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed">Generate Ideas</button>
             </div>
         </div>
     </div>
@@ -594,7 +594,7 @@ const ChatMessages: React.FC<{
           </div>
         )}
         {msg.role === 'user' ? (
-          <div className="max-w-2xl px-4 py-2 rounded-xl bg-purple-800 text-white">
+          <div className="max-w-2xl px-4 py-2 rounded-xl bg-purple-800 text-purple-400">
             <p className="whitespace-pre-wrap break-words">{msg.text}</p>
           </div>
         ) : (
@@ -766,7 +766,7 @@ const IdentifyTab: React.FC<{
                         <button onClick={() => fileInputRef.current?.click()} className="flex-1 w-full py-2 px-4 bg-slate-600/50 hover:bg-slate-700 rounded-md text-slate-300 font-bold transition-colors">
                             Change Image
                         </button>
-                        <button onClick={handleIdentifyClick} disabled={isIdentifying} className="flex-1 w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed">
+                        <button onClick={handleIdentifyClick} disabled={isIdentifying} className="flex-1 w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-purple-400 font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed">
                             {isIdentifying ? 'Analyzing...' : 'Identify Trick'}
                         </button>
                     </div>
@@ -785,7 +785,7 @@ const IdentifyTab: React.FC<{
                 <div className="animate-fade-in bg-slate-800/50 border border-slate-700 rounded-lg p-4 space-y-3">
                     <div>
                         <h3 className="font-cinzel text-lg text-slate-300">Identified Effect</h3>
-                        <p className="text-2xl font-bold text-white">{identificationResult.trickName}</p>
+                        <p className="text-2xl font-bold text-purple-400">{identificationResult.trickName}</p>
                     </div>
                    {identificationResult.videoExamples?.length > 0 && (
                      <div>
@@ -918,7 +918,7 @@ const CommunityTab: React.FC = () => {
 
                 <p className="text-slate-400 text-sm mt-1 line-clamp-3">{item.description}</p>
 
-                <div className="mt-3 inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg border border-slate-700/60 bg-slate-950/30 group-hover:bg-slate-950/60 text-slate-200 group-hover:text-white transition">
+                <div className="mt-3 inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg border border-slate-700/60 bg-slate-950/30 group-hover:bg-slate-950/60 text-slate-200 group-hover:text-purple-400 transition">
                   Visit <span aria-hidden="true">↗</span>
                 </div>
               </a>
@@ -956,7 +956,7 @@ const CommunityTab: React.FC = () => {
                   <div className="inline-flex items-center gap-2 text-[11px] px-2.5 py-1 rounded-full border border-slate-700/60 bg-slate-950/25 text-slate-300/90">
                     Club / Org
                   </div>
-                  <div className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg border border-slate-700/60 bg-slate-950/30 group-hover:bg-slate-950/60 text-slate-200 group-hover:text-white transition">
+                  <div className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg border border-slate-700/60 bg-slate-950/30 group-hover:bg-slate-950/60 text-slate-200 group-hover:text-purple-400 transition">
                     Visit <span aria-hidden="true">↗</span>
                   </div>
                 </div>
@@ -1008,7 +1008,7 @@ const CommunityTab: React.FC = () => {
                   <div className="inline-flex items-center gap-2 text-[11px] px-2.5 py-1 rounded-full border border-slate-700/60 bg-slate-950/25 text-slate-300/90">
                     Convention
                   </div>
-                  <div className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg border border-slate-700/60 bg-slate-950/30 group-hover:bg-slate-950/60 text-slate-200 group-hover:text-white transition">
+                  <div className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg border border-slate-700/60 bg-slate-950/30 group-hover:bg-slate-950/60 text-slate-200 group-hover:text-purple-400 transition">
                     Visit <span aria-hidden="true">↗</span>
                   </div>
                 </div>
@@ -1049,7 +1049,7 @@ const CommunityTab: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setQuery('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-purple-400 transition"
                     title="Clear"
                   >
                     ✕
@@ -1762,7 +1762,7 @@ useEffect(() => {
     <button
       onClick={onClick}
       title={isLocked ? 'Upgrade to access this feature' : ''}
-      className={`relative flex items-center gap-2 whitespace-nowrap px-3 py-2 text-sm font-medium transition-colors ${isActive ? 'border-b-2 border-purple-400 text-purple-300' : 'border-b-2 border-transparent text-slate-400 hover:text-white'} ${isLocked ? 'text-slate-600 hover:text-slate-600' : ''}`}
+      className={`relative flex items-center gap-2 whitespace-nowrap px-3 py-2 text-sm font-medium transition-colors ${isActive ? 'border-b-2 border-purple-400 text-purple-300' : 'border-b-2 border-transparent text-slate-400 hover:text-purple-400'} ${isLocked ? 'text-slate-600 hover:text-slate-600' : ''}`}
     >
       <Icon className="w-4 h-4" />
       <span className="hidden sm:inline">{label}</span>
@@ -1789,7 +1789,7 @@ useEffect(() => {
         </picture>
         <div className="ml-auto flex items-center gap-2">
             <UsageMeter />
-            <button onClick={() => setIsHelpModalOpen(true)} className="p-2 rounded-full text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Help" aria-label="Open help center">
+            <button onClick={() => setIsHelpModalOpen(true)} className="p-2 rounded-full text-slate-400 hover:text-purple-400 hover:bg-slate-700 transition-colors" title="Help" aria-label="Open help center">
                 <QuestionMarkIcon className="w-6 h-6" />
             </button>
             <AccountMenu user={user} onLogout={onLogout} />
@@ -1804,13 +1804,13 @@ useEffect(() => {
           <div className="flex items-center gap-2">
             <button
               onClick={handleResetDemoData}
-              className="text-sm px-3 py-1 rounded-md border border-amber-400/30 text-amber-200 hover:text-white hover:border-amber-400/60 hover:bg-amber-500/10 transition-colors"
+              className="text-sm px-3 py-1 rounded-md border border-amber-400/30 text-amber-200 hover:text-purple-400 hover:border-amber-400/60 hover:bg-amber-500/10 transition-colors"
               title="Reset the demo show, client, ideas, and feedback to the default sample data">
               Reset Demo Data
             </button>
             <button
               onClick={handleExitDemo}
-              className="text-sm px-3 py-1 rounded-md border border-amber-400/30 text-amber-200 hover:text-white hover:border-amber-400/60 hover:bg-amber-500/10 transition-colors">
+              className="text-sm px-3 py-1 rounded-md border border-amber-400/30 text-amber-200 hover:text-purple-400 hover:border-amber-400/60 hover:bg-amber-500/10 transition-colors">
               Exit Demo
             </button>
           </div>
@@ -1826,13 +1826,13 @@ useEffect(() => {
     <div className="flex items-center gap-2">
       <button
         onClick={handleExportBackup}
-        className="text-sm px-3 py-1 rounded-md border border-sky-400/30 text-sky-200 hover:text-white hover:border-sky-400/60 hover:bg-sky-500/10 transition-colors"
+        className="text-sm px-3 py-1 rounded-md border border-sky-400/30 text-sky-200 hover:text-purple-400 hover:border-sky-400/60 hover:bg-sky-500/10 transition-colors"
         title="Download a backup file of your shows, ideas, clients, and history">
         Export Backup
       </button>
       <button
         onClick={handleDismissBackupReminder}
-        className="text-sm px-3 py-1 rounded-md border border-sky-400/20 text-sky-200/80 hover:text-white hover:border-sky-400/50 hover:bg-sky-500/10 transition-colors"
+        className="text-sm px-3 py-1 rounded-md border border-sky-400/20 text-sky-200/80 hover:text-purple-400 hover:border-sky-400/50 hover:bg-sky-500/10 transition-colors"
         title="Hide this reminder for 7 days">
         Dismiss
       </button>
@@ -1884,7 +1884,7 @@ useEffect(() => {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !isLoading && handleSend()}
               placeholder="Describe the effect you're working on..."
-              className="flex-1 w-full bg-transparent px-4 py-3 text-white placeholder-slate-400 focus:outline-none"
+              className="flex-1 w-full bg-transparent px-4 py-3 text-purple-400 placeholder-slate-400 focus:outline-none"
               disabled={isLoading}
             />
             <button onClick={() => handleSend()} disabled={isLoading || !input.trim()} className="p-3 text-purple-400 hover:text-purple-300 disabled:text-slate-600 transition-colors">
