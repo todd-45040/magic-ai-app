@@ -635,6 +635,17 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                     <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
                         <div>
                             <h2 className="text-2xl font-bold text-slate-200 font-cinzel truncate">{selectedShow.title}</h2>
+                            <div className="mt-1 text-sm text-slate-400">
+                              <button
+                                onClick={() => setSelectedShow(null)}
+                                className="hover:text-purple-400 transition-colors"
+                              >
+                                All Shows
+                              </button>
+                              <span className="mx-2">/</span>
+                              <span className="text-slate-300">{selectedShow.title}</span>
+                            </div>
+
                             {client && <p className="text-sm text-slate-400 flex items-center gap-2"><UsersIcon className="w-4 h-4" /> {client.name}</p>}
                         </div>
                         <div className="flex items-center gap-2">
