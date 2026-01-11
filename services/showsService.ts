@@ -40,7 +40,9 @@ export const addShow = async (title: string, description?: string, clientId?: st
   const { data: userData } = await supabase.auth.getUser();
   if (!userData?.user) return [];
 
-  await supabase
+  const userId = userData.user.id;
+
+  const { error } = await supabase
     .from('shows')
     .insert([{
       title,
@@ -50,6 +52,8 @@ export const addShow = async (title: string, description?: string, clientId?: st
       performance_fee: 0,
       expenses: []
     }]);
+
+  if (error) throw error;
 
   return getShows();
 };
