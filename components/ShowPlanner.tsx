@@ -3,8 +3,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Type } from '@google/genai';
 import QRCode from 'qrcode';
-import type { Show, Task, Subtask, TaskPriority
-              <p className="text-xs text-slate-400 mt-1">How critical this task is to the show.</p>, Client, Finances, Expense, Performance, User } from '../types';
+import type { Show, Task, Subtask, TaskPriority, Client, Finances, Expense, Performance, User } from '../types';
 import { getShows, addShow, updateShow, deleteShow, addTaskToShow, updateTaskInShow, deleteTaskFromShow, toggleSubtask, addTasksToShow } from '../services/showsService';
 import { startPerformance, endPerformance, getPerformancesByShowId } from '../services/performanceService';
 import { generateResponse, generateStructuredResponse } from '../services/geminiService';
@@ -15,15 +14,13 @@ import { useAppState } from '../store';
 type ViewMode = 'list' | 'board';
 type SortBy = 'dueDate' | 'priority' | 'createdAt';
 
-const PRIORITY_STYLES: Record<TaskPriority
-              <p className="text-xs text-slate-400 mt-1">How critical this task is to the show.</p>, string> = {
+const PRIORITY_STYLES: Record<TaskPriority, string> = {
     'High': 'bg-red-500/20 text-red-300 border-red-500/30',
     'Medium': 'bg-amber-500/20 text-amber-300 border-amber-500/30',
     'Low': 'bg-green-500/20 text-green-300 border-green-500/30',
 };
 
-const PRIORITY_ORDER: Record<TaskPriority
-              <p className="text-xs text-slate-400 mt-1">How critical this task is to the show.</p>, number> = {
+const PRIORITY_ORDER: Record<TaskPriority, number> = {
     'High': 1,
     'Medium': 2,
     'Low': 3,
@@ -31,9 +28,7 @@ const PRIORITY_ORDER: Record<TaskPriority
 
 // --- Helper Components ---
 
-const Priority
-              <p className="text-xs text-slate-400 mt-1">How critical this task is to the show.</p>Badge: React.FC<{ priority: TaskPriority
-              <p className="text-xs text-slate-400 mt-1">How critical this task is to the show.</p> }> = ({ priority }) => (
+const PriorityBadge: React.FC<{ priority: TaskPriority }> = ({ priority }) => (
     <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${PRIORITY_STYLES[priority]}`}>
         {priority}
     </span>
@@ -47,9 +42,7 @@ const TaskModal: React.FC<{
 }> = ({ onClose, onSave, taskToEdit, user }) => {
     const [title, setTitle] = useState('');
     const [notes, setNotes] = useState('');
-    const [priority, setPriority
-              <p className="text-xs text-slate-400 mt-1">How critical this task is to the show.</p>] = useState<TaskPriority
-              <p className="text-xs text-slate-400 mt-1">How critical this task is to the show.</p>>('Medium');
+    const [priority, setPriority] = useState<TaskPriority>('Medium');
     const [dueDate, setDueDate] = useState('');
     const [musicCue, setMusicCue] = useState('');
     const [subtasks, setSubtasks] = useState<Partial<Subtask>[]>([]);
@@ -60,8 +53,7 @@ const TaskModal: React.FC<{
     useEffect(() => {
         if (taskToEdit) {
             setTitle(taskToEdit.title);
-            setPriority
-              <p className="text-xs text-slate-400 mt-1">How critical this task is to the show.</p>(taskToEdit.priority);
+            setPriority(taskToEdit.priority);
             setNotes(taskToEdit.notes || '');
             setMusicCue(taskToEdit.musicCue || '');
             setSubtasks(taskToEdit.subtasks || []);
@@ -137,14 +129,12 @@ const TaskModal: React.FC<{
                 <h2 className="text-xl font-bold text-white p-6 border-b border-slate-700 flex-shrink-0">{modalTitle}</h2>
                 <form id="task-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
                     <div>
-                        <label htmlFor="title" className="block text-sm font-medium text-slate-300 mb-1">Task Title
-              <p className="text-xs text-slate-400 mt-1">Short name for the routine, cue, or preparation step.</p></label>
+                        <label htmlFor="title" className="block text-sm font-medium text-slate-300 mb-1">Task Title</label>
                         <input id="title" type="text" value={title} onChange={e => setTitle(e.target.value)} required autoFocus className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500" />
                     </div>
                     <div>
                         <div className="flex justify-between items-center mb-1">
-                            <label htmlFor="notes" className="block text-sm font-medium text-slate-300">Notes / Patter (Optional)
-              <p className="text-xs text-slate-400 mt-1">Use this for props, blocking notes, or performance patter.</p></label>
+                            <label htmlFor="notes" className="block text-sm font-medium text-slate-300">Notes / Patter (Optional)</label>
                             <button
                                 type="button"
                                 onClick={handleGeneratePatter}
@@ -159,28 +149,22 @@ const TaskModal: React.FC<{
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label htmlFor="priority" className="block text-sm font-medium text-slate-300 mb-1">Priority
-              <p className="text-xs text-slate-400 mt-1">How critical this task is to the show.</p></label>
-                            <select id="priority" value={priority} onChange={e => setPriority
-              <p className="text-xs text-slate-400 mt-1">How critical this task is to the show.</p>(e.target.value as TaskPriority
-              <p className="text-xs text-slate-400 mt-1">How critical this task is to the show.</p>)} className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500">
+                            <label htmlFor="priority" className="block text-sm font-medium text-slate-300 mb-1">Priority</label>
+                            <select id="priority" value={priority} onChange={e => setPriority(e.target.value as TaskPriority)} className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500">
                                 <option>High</option><option>Medium</option><option>Low</option>
                             </select>
                         </div>
                         <div>
-                            <label htmlFor="due-date" className="block text-sm font-medium text-slate-300 mb-1">Due Date (Optional)
-              <p className="text-xs text-slate-400 mt-1">Helpful for rehearsal or performance deadlines.</p></label>
+                            <label htmlFor="due-date" className="block text-sm font-medium text-slate-300 mb-1">Due Date (Optional)</label>
                             <input id="due-date" type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500" />
                         </div>
                     </div>
                     <div>
-                        <label htmlFor="music-cue" className="block text-sm font-medium text-slate-300 mb-1">Music Cue (Optional)
-              <p className="text-xs text-slate-400 mt-1">Track name or cue point for this moment.</p></label>
+                        <label htmlFor="music-cue" className="block text-sm font-medium text-slate-300 mb-1">Music Cue (Optional)</label>
                         <input id="music-cue" type="text" value={musicCue} onChange={e => setMusicCue(e.target.value)} placeholder="e.g., 'Mysterious Fanfare' at 0:32" className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500" />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-1">Sub-Tasks
-              <p className="text-xs text-slate-400 mt-1">Break this task into smaller, actionable steps.</p></label>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">Sub-Tasks</label>
                         <div className="max-h-32 overflow-y-auto space-y-2 pr-2 border border-slate-700/50 bg-slate-900/50 rounded-md p-2">
                             {subtasks.length > 0 ? subtasks.map((subtask, index) => (
                                 <div key={index} className="flex items-center gap-2">
@@ -420,8 +404,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
 
     const TaskItem: React.FC<{task: Task}> = ({ task }) => {
         const isOverdue = task.status === 'To-Do' && task.dueDate && task.dueDate < new Date(new Date().toDateString()).getTime();
-        const priorityBorders: Record<TaskPriority
-              <p className="text-xs text-slate-400 mt-1">How critical this task is to the show.</p>, string> = { 'High': 'border-l-red-500', 'Medium': 'border-l-amber-400', 'Low': 'border-l-green-500' };
+        const priorityBorders: Record<TaskPriority, string> = { 'High': 'border-l-red-500', 'Medium': 'border-l-amber-400', 'Low': 'border-l-green-500' };
         
         const completedSubtasks = task.subtasks?.filter(st => st.completed).length || 0;
         const totalSubtasks = task.subtasks?.length || 0;
@@ -452,8 +435,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                     </div>
                 )}
                 <div className="flex items-center flex-wrap gap-x-4 gap-y-1 mt-2 text-sm pl-8">
-                    <Priority
-              <p className="text-xs text-slate-400 mt-1">How critical this task is to the show.</p>Badge priority={task.priority} />
+                    <PriorityBadge priority={task.priority} />
                     {task.dueDate && <div className="flex items-center gap-1.5"><CalendarIcon className={`w-4 h-4 ${isOverdue ? 'text-red-400' : 'text-slate-500'}`} /><span className={`font-medium ${isOverdue ? 'text-red-400' : 'text-slate-400'}`}>{formatRelativeDate(task.dueDate)}</span></div>}
                     {task.musicCue && <div className="flex items-center gap-1.5"><MusicNoteIcon className="w-4 h-4 text-slate-500" /><span className="text-slate-400">{task.musicCue}</span></div>}
                 </div>
@@ -622,17 +604,11 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
 
         const BoardView = () => {
             const columns: Record<string, Task[]> = {
-                'High Priority
-              <p className="text-xs text-slate-400 mt-1">How critical this task is to the show.</p>': processedTasks.activeTasks.filter(t => t.priority === 'High'),
-                'Medium Priority
-              <p className="text-xs text-slate-400 mt-1">How critical this task is to the show.</p>': processedTasks.activeTasks.filter(t => t.priority === 'Medium'),
-                'Low Priority
-              <p className="text-xs text-slate-400 mt-1">How critical this task is to the show.</p>': processedTasks.activeTasks.filter(t => t.priority === 'Low'),
+                'High Priority': processedTasks.activeTasks.filter(t => t.priority === 'High'),
+                'Medium Priority': processedTasks.activeTasks.filter(t => t.priority === 'Medium'),
+                'Low Priority': processedTasks.activeTasks.filter(t => t.priority === 'Low'),
             };
-            const columnStyles: Record<string, string> = { 'High Priority
-              <p className="text-xs text-slate-400 mt-1">How critical this task is to the show.</p>': 'border-t-red-500', 'Medium Priority
-              <p className="text-xs text-slate-400 mt-1">How critical this task is to the show.</p>': 'border-t-amber-400', 'Low Priority
-              <p className="text-xs text-slate-400 mt-1">How critical this task is to the show.</p>': 'border-t-green-500' };
+            const columnStyles: Record<string, string> = { 'High Priority': 'border-t-red-500', 'Medium Priority': 'border-t-amber-400', 'Low Priority': 'border-t-green-500' };
             return (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                     {Object.entries(columns).map(([title, tasksInColumn]) => (
@@ -676,8 +652,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                             <TabButton icon={AnalyticsIcon} label="Performance History" isActive={activeTab === 'history'} onClick={() => setActiveTab('history')} />
                         </div>
                         {activeTab === 'tasks' && <div className="bg-slate-700 p-1 rounded-md flex items-center"><button onClick={() => setViewMode('board')} className={`flex items-center gap-2 px-3 py-1 text-sm font-medium rounded transition-colors ${viewMode === 'board' ? 'bg-purple-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}><ViewGridIcon className="w-4 h-4" />Board</button><button onClick={() => setViewMode('list')} className={`flex items-center gap-2 px-3 py-1 text-sm font-medium rounded transition-colors ${viewMode === 'list' ? 'bg-purple-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}><ViewListIcon className="w-4 h-4" />List</button></div>}
-                        {activeTab === 'tasks' && viewMode === 'list' && (<div className="flex items-center gap-2"><label htmlFor="sort-by" className="text-sm font-medium text-slate-400">Sort By</label><select id="sort-by" value={sortBy} onChange={e => setSortBy(e.target.value as any)} className="bg-slate-700 text-white text-sm rounded-md py-1 px-2 border border-slate-600"><option value="dueDate">Due Date</option><option value="priority">Priority
-              <p className="text-xs text-slate-400 mt-1">How critical this task is to the show.</p></option><option value="createdAt">Created Date</option></select></div>)}
+                        {activeTab === 'tasks' && viewMode === 'list' && (<div className="flex items-center gap-2"><label htmlFor="sort-by" className="text-sm font-medium text-slate-400">Sort By</label><select id="sort-by" value={sortBy} onChange={e => setSortBy(e.target.value as any)} className="bg-slate-700 text-white text-sm rounded-md py-1 px-2 border border-slate-600"><option value="dueDate">Due Date</option><option value="priority">Priority</option><option value="createdAt">Created Date</option></select></div>)}
                     </div>
                 </header>
                 <div className="flex-1 overflow-y-auto px-4 md:px-6 pb-4 pt-4">
