@@ -451,7 +451,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                 }
               }}
             >
-              <div className="flex items-start gap-3"> openEditModal(task)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openEditModal(task); } }}}>
+              <div className="flex items-start gap-3">
                 
                     <input type="checkbox" checked={task.status === 'Completed'} onChange={() => handleToggleStatus(task)} className="mt-1 w-5 h-5 accent-purple-500 bg-slate-900 flex-shrink-0"  onClick={(e) => e.stopPropagation()} />
                     <div className="flex-1">
