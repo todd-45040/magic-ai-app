@@ -617,188 +617,217 @@ export const conventions = [
     description: "One of the oldest magic conventions, held annually in Colon, Michigan, the 'Magic Capital of the World'.",
     url: 'https://www.magicgettogether.com/'
   },
-  ({
-      term: 'Angles',
-      category: 'Stagecraft',
-      skillLevel: 'Beginner',
-      definition: 'The lines of sight from the audience to the performer. An effect is said to have "bad angles" if its secret can be seen from certain viewpoints.',
-      whyItMatters: 'Angle issues are one of the fastest ways to lose trust. If someone on the side sees something that feels “off,” the mystery collapses for everyone. Planning angles upfront lets you choose the right material for the room, the lighting, and the seating.',
-      beginnerMistakes: [
-        'Practicing only from your own viewpoint (mirror ≠ audience).',
-        'Ignoring side seating or standing spectators during walk-around.',
-        'Assuming lighting doesn’t change what can be seen.',
-        'Not adjusting blocking when the venue layout changes.',
-      ],
-      relatedTerms: [
-        'Blocking',
-        'Sightlines',
-        'Misdirection',
-        'Flash',
-      ],
-      usedInWizard: [
-        { feature: 'Video Rehearsal Studio', note: 'Review your handling from different camera angles and distances.' },
-        { feature: 'Director Mode', note: 'Plan staging and audience layout so the effect stays clean.' },
-        { feature: 'Show Planner', note: 'Tag routines by angle sensitivity so you pick the right set for each venue.' },
-      ],
-      references: [{ title: 'Strong Magic by Darwin Ortiz', url: 'https://www.vanishingincmagic.com/magic-books/strong-magic/' }]
-    } as any),
-    { term: 'Cold Deck', definition: 'A pre-arranged deck of cards secretly switched into play, replacing the one the audience believes is in use.', references: [{ title: 'The Expert at the Card Table by S.W. Erdnase', url: 'https://www.vanishingincmagic.com/magic-books/expert-at-the-card-table/' }] },
-    { term: 'Crimp', definition: 'A secret bend or indentation placed in a playing card (or corner of a deck) to locate it later by touch.', references: [({
-      term: 'Double Lift',
-      category: 'Technique',
-      skillLevel: 'Beginner',
-      definition: 'A foundational sleight-of-hand technique where two cards are handled as if they were a single card.',
-      whyItMatters: 'A double lift is a display that must read as casual and fair. The audience believes what you show them because it appears unimportant. Confidence and consistency matter more than the move itself.',
-      beginnerMistakes: [
-        'Overhandling the card(s) and drawing attention to the display.',
-        'Changing grip or tension compared to normal card handling.',
-        'Repeating the same display too often.',
-        'Turning the ‘moment’ into a challenge instead of a story beat.',
-      ],
-      relatedTerms: [
-        'Conviction',
-        'Naturalness',
-        'Misdirection',
-        'Beat',
-      ],
-      usedInWizard: [
-        { feature: 'Video Rehearsal Studio', note: 'Compare your ‘normal’ turnover to your double lift for consistency.' },
-        { feature: 'Live Rehearsal', note: 'Work on confident, relaxed delivery that keeps the moment small.' },
-        { feature: 'Patter Engine', note: 'Write lines that justify the action and keep it casual.' },
-      ],
-      references: [{ title: 'The Royal Road to Card Magic by Hugard & Braue', url: 'https://www.vanishingincmagic.com/magic-books/royal-road-to-card-magic/' }]
-    } as any),
-        { feature: 'Live Rehearsal', note: 'Reduce ‘nervous speed’ that often causes sloppy handling.' },
-      ],
-      references: [{ title: 'The Books of Wonder by Tommy Wonder', url: 'https://www.vanishingincmagic.com/magic-books/the-books-of-wonder/' }]
-    } as any),
-        { feature: 'Live Rehearsal', note: 'Helps you remove verbal tells and hesitant phrasing.' },
-        { feature: 'Persona Simulator', note: 'Test the moment against skeptical or analytical audience types.' },
-      ],
-      references: [({
-      term: 'Gimmick',
-      category: 'Props',
-      skillLevel: 'Beginner',
-      definition: 'A secret device or object used to accomplish a magical effect.',
-      whyItMatters: 'A gimmick is only as strong as its justification. The audience shouldn’t think about the prop—they should think about the impossibility. Good presentation makes special props feel ordinary and motivated.',
-      beginnerMistakes: [
-        'Treating the gimmick as the trick instead of building a routine around it.',
-        'Introducing a prop without context or motivation.',
-        'Letting handling look careful or precious (signals “special”).',
-        'Ignoring reset and pocket management for real gigs.',
-      ],
-      relatedTerms: [
-        'Framing',
-        'Conviction',
-        'Reset Time',
-        'Angles',
-      ],
-      usedInWizard: [
-        { feature: 'Innovation Engine', note: 'Develop fresh presentations that make props feel motivated and modern.' },
-        { feature: 'Show Planner', note: 'Track reset needs and prop logistics per routine.' },
-        { feature: 'Visual Brainstorm Studio', note: 'Concept art for staging/prop aesthetics (non-method).' },
-      ],
-      references: [{ title: 'The Tarbell Course in Magic', url: 'https://www.vanishingincmagic.com/magic-books/tarbell-course-in-magic/' }]
-    } as any),
-    { term: 'Lapping', definition: 'A technique for secretly disposing of an object by dropping it into the performer\'s lap while seated at a table.', references: [({
-      term: 'Misdirection',
-      category: 'Theory',
-      skillLevel: 'Beginner',
-      definition: 'The art of diverting the audience\'s attention from a secret action. It is a core psychological principle of magic.',
-      whyItMatters: 'Magic lives and dies by attention. Strong misdirection makes moments feel effortless and fair; weak misdirection makes people “burn the hands,” suspect specific instants, and mentally rewind the sequence.',
-      beginnerMistakes: [
-        'Treating misdirection as “look over there” instead of purposeful focus.',
-        'Overusing big gestures or movement that actually attracts attention.',
-        'Forgetting that words and timing can misdirect better than hands.',
-        'Rushing the critical beat instead of letting the moment land.',
-      ],
-      relatedTerms: [
-        'Time Misdirection',
-        'Beat',
-        'Framing',
-        'Conviction',
-      ],
-      usedInWizard: [
-        { feature: 'Patter Engine', note: 'Writes lines that naturally steer attention and meaning.' },
-        { feature: 'Live Rehearsal', note: 'Helps you hear rushed beats or emphasis that highlights the wrong moment.' },
-        { feature: 'Director Mode', note: 'Encourages clean attention flow across the routine.' },
-      ],
-      references: [({
-      term: 'Palm',
-      category: 'Technique',
-      skillLevel: 'Beginner',
-      definition: 'A sleight-of-hand technique for secretly holding an object, such as a coin or card, in the hand so that it is not visible to the audience.',
-      whyItMatters: 'Palming works when it feels like your hands are relaxed and empty. The audience reads tension, symmetry changes, and ‘careful’ movement. A good palm is supported by posture, timing, and casual actions.',
-      beginnerMistakes: [
-        'Freezing the hand (unnatural stillness) or over-proving emptiness.',
-        'Walking or turning with a stiff shoulder/arm.',
-        'Rushing immediately into the next action.',
-        'Looking at the palmed hand or protecting it too much.',
-      ],
-      relatedTerms: [
-        'Naturalness',
-        'Misdirection',
-        'Angles',
-        'Offbeat',
-      ],
-      usedInWizard: [
-        { feature: 'Video Rehearsal Studio', note: 'Check for tension cues and unnatural arm positioning.' },
-        { feature: 'Director Mode', note: 'Plan beats so the hand has natural tasks and relaxed moments.' },
-        { feature: 'Live Rehearsal', note: 'Practice the patter timing that creates an offbeat.' },
-      ],
-      references: [{ title: 'Expert Coin Magic by David Roth', url: 'https://www.vanishingincmagic.com/magic-books/expert-coin-magic/' }]
-    } as any),
-        { feature: 'Live Rehearsal', note: 'Practice pacing, pauses, and emphasis so lines land confidently.' },
-        { feature: 'Saved Ideas', note: 'Store, tag, and refine scripts per routine.' },
-      ],
-      references: [({
-      term: 'Sleight of Hand',
-      category: 'Technique',
-      skillLevel: 'Beginner',
-      definition: 'The use of dexterity and manual skill to perform secret manipulations, typically with objects like cards or coins.',
-      whyItMatters: 'Sleights are invisible when they look natural. The goal isn’t ‘speed’—it’s timing, posture, and motivation so actions read as ordinary. Clean sleight work supports the story instead of competing with it.',
-      beginnerMistakes: [
-        'Trying to be fast instead of being natural.',
-        'Practicing moves without integrating them into beats and script.',
-        'Staring at your hands (audience follows your eyes).',
-        'Neglecting audience management and pacing.',
-      ],
-      relatedTerms: [
-        'Naturalness',
-        'Misdirection',
-        'Beat',
-        'Practice',
-      ],
-      usedInWizard: [
-        { feature: 'Live Rehearsal', note: 'Rehearse the script and cadence that supports natural handling.' },
-        { feature: 'Video Rehearsal Studio', note: 'Review posture, eye-line, and timing under real speed.' },
-        { feature: 'Saved Ideas', note: 'Store practice notes and checkpoints per move/routine.' },
-      ],
-      references: [{ title: 'The Expert at the Card Table by S.W. Erdnase', url: 'https://www.vanishingincmagic.com/magic-books/expert-at-the-card-table/' }]
-    } as any),
-    { term: 'Stooge / Plant', definition: 'A member of the audience who appears to be a random spectator but is secretly assisting the magician.', references: [({
-      term: 'Topit',
-      category: 'Props',
-      skillLevel: 'Pro',
-      definition: 'A large, hidden pocket inside a magician\'s jacket, designed to secretly vanish or retrieve large objects.',
-      whyItMatters: 'A topit is most effective when it’s invisible in both action and motivation. It should look like a natural gesture or posture change. When integrated well, it enables strong vanishes and transitions without drawing heat.',
-      beginnerMistakes: [
-        'Trying to ‘ditch’ too obviously instead of using natural actions.',
-        'Relying on it without rehearsing body mechanics and timing.',
-        'Ignoring wardrobe considerations (fit and movement).',
-        'Using it when angles or audience proximity make it risky.',
-      ],
-      relatedTerms: [
-        'Angles',
-        'Offbeat',
-        'Naturalness',
-        'Blocking',
-      ],
-      usedInWizard: [
-        { feature: 'Director Mode', note: 'Plan blocking and body turns so actions look natural and motivated.' },
-        { feature: 'Video Rehearsal Studio', note: 'Review the gesture under real speed and real angles.' },
-        { feature: 'Show Planner', note: 'Mark routines that require specific wardrobe or staging.' },
-      ],
-      references: [{ title: 'Topit Book by Michael Ammar', url: 'https://www.penguinmagic.com/p/1063' }]
-    } as any),
 ];
+
+export const MAGIC_DICTIONARY_TERMS = [
+  {
+    term: 'Misdirection',
+    category: 'Theory',
+    skillLevel: 'Beginner',
+    definition:
+      'Guiding an audience’s attention and thoughts so they focus on what matters and overlook what doesn’t.',
+    whyItMatters:
+      'Magic lives and dies by attention. Strong misdirection makes effects feel effortless and fair. Weak misdirection makes audiences burn the hands, rewind moments, and feel suspicious.',
+    beginnerMistakes: [
+      'Treating misdirection as “look over there” instead of purposeful focus.',
+      'Overusing movement or big gestures that actually draw attention.',
+      'Forgetting that words and timing misdirect as much as hands.',
+      'Rushing the critical moment instead of controlling the beat.',
+    ],
+    relatedTerms: ['Time Misdirection', 'Beat', 'Framing', 'Conviction'],
+    usedInWizard: [
+      { feature: 'Patter Engine', note: 'Builds lines that naturally steer attention and meaning.' },
+      { feature: 'Live Rehearsal', note: 'Helps you spot rushed beats or emphasis that highlights the wrong moment.' },
+      { feature: 'Director Mode', note: 'Structures routines so attention flows cleanly from moment to moment.' },
+    ],
+    references: [],
+  },
+  {
+    term: 'Time Misdirection',
+    category: 'Theory',
+    skillLevel: 'Pro',
+    definition:
+      'Creating a time gap between an important moment and the audience’s suspicion of it.',
+    whyItMatters:
+      'Time misdirection lowers “heat.” Actions feel like they happened long ago, reducing suspicion and making the final reveal feel more impossible in hindsight.',
+    beginnerMistakes: [
+      'Placing the important moment immediately before the reveal.',
+      'Not giving the audience a natural reason to relax after a key beat.',
+      'Telegraphing that something “must have happened” at a specific instant.',
+    ],
+    relatedTerms: ['Misdirection', 'Offbeat', 'Beat', 'Conditioning'],
+    usedInWizard: [
+      { feature: 'Show Planner', note: 'Helps you space beats and transitions.' },
+      { feature: 'Director Mode', note: 'Encourages pacing that protects critical moments.' },
+      { feature: 'Patter Engine', note: 'Creates meaningful “time-fill” lines that still entertain.' },
+    ],
+    references: [],
+  },
+  {
+    term: 'Beat',
+    category: 'Performance',
+    skillLevel: 'Beginner',
+    definition: 'A small unit of action or meaning in a routine—one clear moment the audience can follow.',
+    whyItMatters:
+      'Clean beats create clarity. When beats blur together, routines feel rushed or confusing, and audiences become suspicious because they can’t track what changed.',
+    beginnerMistakes: [
+      'Stacking actions without pauses for comprehension.',
+      'Over-explaining instead of letting a moment land visually.',
+      'Failing to clearly mark the “moment of magic.”',
+    ],
+    relatedTerms: ['Pacing', 'Offbeat', 'Clarity', 'Time Misdirection'],
+    usedInWizard: [
+      { feature: 'Live Rehearsal', note: 'Helps you identify rushed delivery and unclear transitions.' },
+      { feature: 'Patter Engine', note: 'Formats scripts into crisp beat-by-beat structure.' },
+      { feature: 'Show Planner', note: 'Supports building routines with clear phases and transitions.' },
+    ],
+    references: [],
+  },
+  {
+    term: 'Offbeat',
+    category: 'Performance',
+    skillLevel: 'Pro',
+    definition:
+      'A relaxed moment when attention naturally drops—often right after a laugh, applause, or completed action.',
+    whyItMatters:
+      'The offbeat is a natural “low attention” moment. It’s useful for resetting focus, changing gears, and transitioning without feeling sneaky.',
+    beginnerMistakes: [
+      'Trying to force an offbeat instead of earning it with entertainment.',
+      'Using the offbeat while still under heat (audience still tracking).',
+      'Moving too quickly out of the offbeat instead of letting it breathe.',
+    ],
+    relatedTerms: ['Beat', 'Time Misdirection', 'Applause Cue', 'Pacing'],
+    usedInWizard: [
+      { feature: 'Live Rehearsal', note: 'Helps you build natural pauses and cadence.' },
+      { feature: 'Director Mode', note: 'Supports reaction-friendly show flow and pacing.' },
+    ],
+    references: [],
+  },
+  {
+    term: 'Angle Sensitivity',
+    category: 'Stagecraft',
+    skillLevel: 'Beginner',
+    definition:
+      'How dependent an effect is on audience viewpoint (sightlines) to look clean and fair.',
+    whyItMatters:
+      'Angle issues are one of the fastest ways to lose trust. If spectators see something “off” from the side, the mystery collapses—even if the front view looks perfect.',
+    beginnerMistakes: [
+      'Practicing only from the performer’s viewpoint.',
+      'Ignoring side seating or standing spectators.',
+      'Assuming lighting doesn’t affect what angles reveal.',
+      'Not adjusting staging when the room layout changes.',
+    ],
+    relatedTerms: ['Sightlines', 'Blocking', 'Risk Management', 'Lighting'],
+    usedInWizard: [
+      { feature: 'Video Rehearsal Studio', note: 'Review routines from different viewpoints and camera angles.' },
+      { feature: 'Director Mode', note: 'Plan staging and audience layout for clean sightlines.' },
+    ],
+    references: [],
+  },
+  {
+    term: 'Reset Time',
+    category: 'Business',
+    skillLevel: 'Beginner',
+    definition:
+      'How long it takes to get an effect ready to perform again after it’s done.',
+    whyItMatters:
+      'Reset time determines what’s practical for real gigs—especially walk-around, table-hopping, and repeat sets. Low-reset material makes shows smoother and more bookable.',
+    beginnerMistakes: [
+      'Choosing slow-reset effects for walk-around work.',
+      'Forgetting to rehearse the reset as part of the routine.',
+      'Not having a pocket/case layout plan for quick reset.',
+    ],
+    relatedTerms: ['Set List', 'Packing', 'Walk-around', 'Practicality'],
+    usedInWizard: [
+      { feature: 'Show Planner', note: 'Plan set order based on reset needs and transitions.' },
+      { feature: 'Saved Ideas', note: 'Store reset notes and checklists with each routine.' },
+    ],
+    references: [],
+  },
+  {
+    term: 'Out',
+    category: 'Performance',
+    skillLevel: 'Pro',
+    definition:
+      'A planned recovery option that keeps the routine entertaining and credible if something doesn’t go as expected.',
+    whyItMatters:
+      'Outs protect confidence and audience trust. A strong out keeps momentum moving and prevents a minor issue from becoming a show-stopper.',
+    beginnerMistakes: [
+      'Freezing because no backup plan exists.',
+      'Over-apologizing or admitting failure too directly.',
+      'Using an out that feels unrelated or confusing.',
+      'Not rehearsing the out so it looks natural.',
+    ],
+    relatedTerms: ['Risk Management', 'Contingency', 'Pacing', 'Framing'],
+    usedInWizard: [
+      { feature: 'Patter Engine', note: 'Generates alternate lines and recovery transitions.' },
+      { feature: 'Live Rehearsal', note: 'Practice recovery lines so they sound confident.' },
+      { feature: 'Show Planner', note: 'Track outs in routine notes for consistency under pressure.' },
+    ],
+    references: [],
+  },
+  {
+    term: 'Framing',
+    category: 'Psychology',
+    skillLevel: 'Beginner',
+    definition:
+      'How you present an action or moment so the audience interprets it the way you intend.',
+    whyItMatters:
+      'Framing shapes meaning. The same action can feel suspicious or natural depending on the story, motivation, and persona behind it.',
+    beginnerMistakes: [
+      'Doing actions with no motivation or context.',
+      'Over-explaining and making the audience focus too hard.',
+      'Using frames that don’t match your character or venue.',
+      'Switching frames mid-routine and confusing the audience.',
+    ],
+    relatedTerms: ['Motivation', 'Conviction', 'Misdirection', 'Clarity'],
+    usedInWizard: [
+      { feature: 'Patter Engine', note: 'Build motivations and stories that justify actions.' },
+      { feature: 'Director Mode', note: 'Align routine framing with show theme and persona.' },
+    ],
+    references: [],
+  },
+  {
+    term: 'Dual Reality',
+    category: 'Mentalism',
+    skillLevel: 'Pro',
+    definition:
+      'A performance approach where different audience members experience different versions of the same moment.',
+    whyItMatters:
+      'Dual reality can create massive impact by leveraging perspective and interpretation. It must be handled ethically so audiences feel amazed—not confused or excluded.',
+    beginnerMistakes: [
+      'Creating confusion instead of clarity.',
+      'Not managing the volunteer experience respectfully.',
+      'Letting the crowd feel left out rather than included.',
+      'Using it without understanding audience dynamics.',
+    ],
+    relatedTerms: ['Framing', 'Volunteer Selection', 'Audience Management', 'Clarity'],
+    usedInWizard: [
+      { feature: 'Director Mode', note: 'Plan audience perspective and volunteer handling.' },
+      { feature: 'Persona Simulator', note: 'Test how different audiences interpret the same moment.' },
+    ],
+    references: [],
+  },
+  {
+    term: 'Volunteer Selection',
+    category: 'Audience Management',
+    skillLevel: 'Beginner',
+    definition:
+      'Choosing the right spectator to participate so the routine stays safe, clear, and entertaining.',
+    whyItMatters:
+      'The right volunteer keeps pacing strong and protects the audience vibe. The wrong volunteer can derail clarity, timing, and confidence.',
+    beginnerMistakes: [
+      'Picking the first raised hand without reading the room.',
+      'Choosing someone who is combative, intoxicated, or distracted.',
+      'Giving unclear instructions that create awkwardness.',
+      'Forgetting to make the volunteer look good.',
+    ],
+    relatedTerms: ['Heckler Management', 'Clarity', 'Pacing', 'Framing'],
+    usedInWizard: [
+      { feature: 'Persona Simulator', note: 'Practice handling different volunteer types.' },
+      { feature: 'Live Rehearsal', note: 'Refine instruction clarity and confident tone.' },
+    ],
+    references: [],
+  },
+] as any[];
+
