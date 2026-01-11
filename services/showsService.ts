@@ -4,8 +4,9 @@ import type { Show, Task, TaskPriority } from '../types';
 
 export const getShows = async (): Promise<Show[]> => {
   const { data: userData } = await supabase.auth.getUser();
-  const sbUser = userData?.user ?? null;
-  if (!sbUser) return [];
+  const user = userData?.user ?? null;
+  const userId = user?.id;
+  if (!userId) return [];
 
   const { data, error } = await supabase
     .from('shows')
@@ -13,7 +14,7 @@ export const getShows = async (): Promise<Show[]> => {
       *,
       tasks (*)
     `)
-    .eq('user_id', sbUser.id)
+    .eq('user_id', userId)
     .order('updated_at', { ascending: false });
 
   if (error) {
@@ -45,7 +46,7 @@ export const addShow = async (title: string, description?: string, clientId?: st
       title,
       description,
       client_id: clientId,
-      user_id: sbUser.id,
+      user_id: userId,
       performance_fee: 0,
       expenses: []
     }]);
