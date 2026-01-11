@@ -829,5 +829,194 @@ export const MAGIC_DICTIONARY_TERMS = [
     ],
     references: [],
   },
+,
+  // --- Expanded Dictionary Terms (Batch 2) ---
+  {
+    term: 'Conviction',
+    category: 'Performance',
+    skillLevel: 'Beginner',
+    definition: 'The performer’s ability to make every action look justified, natural, and confident.',
+    whyItMatters:
+      'When you look convinced, the audience relaxes. When you look unsure, they become detectives. Conviction often determines whether an effect feels like magic or a puzzle.',
+    beginnerMistakes: [
+      'Hesitating during key moments',
+      'Over-explaining to prove fairness',
+      'Telegraphing that an action is important when it shouldn’t be',
+    ],
+    relatedTerms: ['Framing', 'Clarity', 'Misdirection'],
+    usedInWizard: [
+      { feature: 'Live Rehearsal', note: 'Practice confident delivery and eliminate verbal tells.' },
+      { feature: 'Patter Engine', note: 'Add motivations that make actions feel natural.' },
+    ],
+    references: [],
+  },
+  {
+    term: 'Clarity',
+    category: 'Performance',
+    skillLevel: 'Beginner',
+    definition: 'How easily the audience can follow what is happening and what the effect is supposed to be.',
+    whyItMatters:
+      'If the audience is confused, they can’t be amazed. Clear structure and clear language create stronger reactions and cleaner memories of the impossible moment.',
+    beginnerMistakes: [
+      'Overcomplicating the premise',
+      'Introducing too many conditions at once',
+      'Failing to clearly signal the moment of impossibility',
+    ],
+    relatedTerms: ['Beat', 'Framing', 'Effect'],
+    usedInWizard: [
+      { feature: 'Patter Engine', note: 'Simplifies wording and strengthens the premise.' },
+      { feature: 'Live Rehearsal', note: 'Helps you hear confusing phrasing or rushed steps.' },
+    ],
+    references: [],
+  },
+  {
+    term: 'Pacing',
+    category: 'Performance',
+    skillLevel: 'Beginner',
+    definition: 'The speed and rhythm of your routine—how quickly moments happen and how long you let them land.',
+    whyItMatters:
+      'Good pacing keeps attention locked. Poor pacing either drags (people drift) or rushes (people suspect or miss key moments).',
+    beginnerMistakes: [
+      'Rushing through the important beat',
+      'Not pausing for laughter or applause',
+      'Talking over moments that should be visual',
+    ],
+    relatedTerms: ['Beat', 'Offbeat', 'Applause Cue'],
+    usedInWizard: [
+      { feature: 'Live Rehearsal', note: 'Spot tempo problems and rushed cadence.' },
+      { feature: 'Director Mode', note: 'Encourage clean show flow and spacing.' },
+    ],
+    references: [],
+  },
+  {
+    term: 'Applause Cue',
+    category: 'Performance',
+    skillLevel: 'Pro',
+    definition: 'A subtle signal that tells the audience “this is the moment” and invites a reaction.',
+    whyItMatters:
+      'Audiences often need permission to react. A clean cue increases applause and makes the ending feel stronger without begging for it.',
+    beginnerMistakes: [
+      'Moving immediately to the next line before the reaction can happen',
+      'Undercutting the moment with extra explanation',
+      'Not giving the audience a clear button at the end',
+    ],
+    relatedTerms: ['Button', 'Pacing', 'Beat'],
+    usedInWizard: [
+      { feature: 'Patter Engine', note: 'Adds strong “button” lines for endings.' },
+      { feature: 'Live Rehearsal', note: 'Practice holding space after a climax.' },
+    ],
+    references: [],
+  },
+  {
+    term: 'Button',
+    category: 'Performance',
+    skillLevel: 'Beginner',
+    definition: 'A final punchline or closing line that cleanly ends a moment or routine.',
+    whyItMatters:
+      'A button makes the audience feel the routine is complete. It prevents awkward trailing off and strengthens reactions.',
+    beginnerMistakes: [
+      'Adding extra lines after the best moment',
+      'Ending with a weak or unclear final line',
+      'Not practicing the ending as deliberately as the middle',
+    ],
+    relatedTerms: ['Applause Cue', 'Clarity', 'Closer'],
+    usedInWizard: [{ feature: 'Patter Engine', note: 'Generates tag lines and clean closers.' }],
+    references: [],
+  },
+  {
+    term: 'Show Flow',
+    category: 'Stagecraft',
+    skillLevel: 'Beginner',
+    definition: 'The overall order and energy arc of a performance from opener to closer.',
+    whyItMatters:
+      'A great show feels like a journey. Strong flow prevents dead spots, balances energy, and helps the audience remember the best moments.',
+    beginnerMistakes: [
+      'Starting too slow',
+      'Placing similar effects back-to-back',
+      'Not planning transitions or reset needs between routines',
+    ],
+    relatedTerms: ['Opener', 'Closer', 'Transition'],
+    usedInWizard: [
+      { feature: 'Director Mode', note: 'Helps structure a strong arc for the audience.' },
+      { feature: 'Show Planner', note: 'Organizes set order with transitions and reset time in mind.' },
+    ],
+    references: [],
+  },
+  {
+    term: 'Blocking',
+    category: 'Stagecraft',
+    skillLevel: 'Beginner',
+    definition: 'Where you stand, move, and position props/people so the audience sees what you want them to see.',
+    whyItMatters:
+      'Good blocking increases clarity and reduces angle issues. It also makes you look more confident and professional.',
+    beginnerMistakes: [
+      'Turning away from the audience at key moments',
+      'Moving without purpose',
+      'Ignoring sightlines for side seating',
+    ],
+    relatedTerms: ['Sightlines', 'Angle Sensitivity', 'Stage Picture'],
+    usedInWizard: [
+      { feature: 'Video Rehearsal Studio', note: 'Review body positions and movement choices.' },
+      { feature: 'Director Mode', note: 'Plan staging for visibility and clarity.' },
+    ],
+    references: [],
+  },
+  {
+    term: 'Sightlines',
+    category: 'Stagecraft',
+    skillLevel: 'Beginner',
+    definition: 'The angles from which the audience can see you, your hands, and the action.',
+    whyItMatters:
+      'Even perfect technique can fail if someone has the wrong view. Planning sightlines protects the illusion and audience trust.',
+    beginnerMistakes: [
+      'Not checking side and front-row angles',
+      'Ignoring lighting and shadows',
+      'Assuming every venue matches your practice space',
+    ],
+    relatedTerms: ['Angle Sensitivity', 'Blocking', 'Lighting'],
+    usedInWizard: [
+      { feature: 'Director Mode', note: 'Encourages venue-aware staging decisions.' },
+      { feature: 'Video Rehearsal Studio', note: 'Test routines from alternate viewpoints.' },
+    ],
+    references: [],
+  },
+  {
+    term: 'Reset Time',
+    category: 'Business',
+    skillLevel: 'Beginner',
+    definition: 'How long it takes to get an effect ready to perform again after it’s done.',
+    whyItMatters:
+      'Reset determines what’s practical for walk-around, repeat shows, and encores. Lower reset time usually means smoother shows and higher booking value.',
+    beginnerMistakes: [
+      'Choosing slow-reset material for table-hopping',
+      'Forgetting to rehearse the reset as part of the routine',
+      'Not having a reset plan (pockets, case layout, checklist)',
+    ],
+    relatedTerms: ['Set List', 'Transition', 'Practicality'],
+    usedInWizard: [
+      { feature: 'Show Planner', note: 'Plan set order based on reset needs.' },
+      { feature: 'Saved Ideas', note: 'Attach reset checklists to routines.' },
+    ],
+    references: [],
+  },
+  {
+    term: 'Heckler Management',
+    category: 'Audience Management',
+    skillLevel: 'Pro',
+    definition: 'Responding to interruptions in a way that maintains control and keeps the room on your side.',
+    whyItMatters:
+      'The goal is control, not confrontation. A calm redirect protects momentum and makes you look professional.',
+    beginnerMistakes: [
+      'Escalating and making it personal',
+      'Over-roasting and making the room uncomfortable',
+      'Ignoring it when the room needs direction',
+    ],
+    relatedTerms: ['Authority', 'Audience Management', 'Framing'],
+    usedInWizard: [
+      { feature: 'Persona Simulator', note: 'Practice handling skeptical or combative audience types.' },
+      { feature: 'Patter Engine', note: 'Generate polite, confident redirect lines.' },
+    ],
+    references: [],
+  },
 ] as any[];
 
