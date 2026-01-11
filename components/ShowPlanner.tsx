@@ -527,13 +527,6 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                             </button>
                         </div>
                     )}
-                                className="px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors inline-flex items-center gap-2"
-                            >
-                                <WandIcon className="w-5 h-5" />
-                                <span>Create New Show</span>
-                            </button>
-                        </div>
-                    )}
                 </div>
             </div>
         </div>
