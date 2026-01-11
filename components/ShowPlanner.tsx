@@ -582,43 +582,107 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
         );
     };
     
-    const ShowModal: React.FC<{ onSave: (title: string, description?: string, clientId?: string) => void, onClose: () => void }> = ({ onSave, onClose }) => {
-        const [title, setTitle] = useState('');
-        const [description, setDescription] = useState('');
-        const [clientId, setClientId] = useState('');
-        
-        const handleSubmit = (e: React.FormEvent) => {
-            e.preventDefault();
-            if (!title.trim()) return;
-            onSave(title, description, clientId || undefined);
-        };
+    
+const ShowModal: React.FC<{
+    onSave: (title: string, description?: string, clientId?: string) => void;
+    onClose: () => void;
+}> = ({ onSave, onClose }) => {
+    const [title, setTitle] = useState('');
+    const [description, setDescription] = useState('');
+    const [clientId, setClientId] = useState('');
 
-        return typeof document === 'undefined'
-            ? null
-            : createPortal(
-                  <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-[999] animate-fade-in" onClick={onClose}>
-                      <div className="w-full max-w-md bg-slate-800 border border-purple-500 rounded-lg shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                          <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                              <h2 className="text-xl font-bold text-white">Create New Show</h2>
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!title.trim()) return;
+        onSave(title.trim(), description.trim() || undefined, clientId || undefined);
+    };
 
-                        <div><label htmlFor="show-title" className="block text-sm font-medium text-slate-300 mb-1">Show Title</label><input id="show-title" type="text" value={title} onChange={e => setTitle(e.target.value)} required autoFocus className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white" /></div>
-                        <div><label htmlFor="show-desc" className="block text-sm font-medium text-slate-300 mb-1">Description (Optional)</label><textarea id="show-desc" rows={2} value={description} onChange={e => setDescription(e.target.value)} className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white" /></div>
-                        <div><label htmlFor="show-client" className="block text-sm font-medium text-slate-300 mb-1">Client (Optional)</label>
-                            <select id="show-client" value={clientId} onChange={e => setClientId(e.target.value)} className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white">
-                                <option value="">No Client</option>
-                                {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                            </select>
-                        </div>
-                        <div className="flex gap-3 pt-2"><button type="button" onClick={onClose} className="w-full py-2 bg-slate-600/50 hover:bg-slate-700 rounded-md text-slate-300 font-bold">Cancel</button><button type="submit" className="w-full py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold">Create Show</button></div>
-                    
-                          </form>
-                      </div>
-                  </div>,
-                  document.body
-              );
+    if (typeof document === 'undefined') return null;
+
+    return createPortal(
+        <div
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-[999] animate-fade-in"
+            onClick={onClose}
+        >
+            <div
+                className="w-full max-w-md bg-slate-800 border border-purple-500 rounded-lg shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                    <h2 className="text-xl font-bold text-white">Create New Show</h2>
+
+                    <div>
+                        <label htmlFor="show-title" className="block text-sm font-medium text-slate-300 mb-1">
+                            Show Title
+                        </label>
+                        <input
+                            id="show-title"
+                            value={title}
+                            onChange={(e) => setTitle(e.target.value)}
+                            className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white"
+                            placeholder="e.g., Birthday Party Show"
+                            autoFocus
+                        />
+                    </div>
+
+                    <div>
+                        <label htmlFor="show-desc" className="block text-sm font-medium text-slate-300 mb-1">
+                            Description (Optional)
+                        </label>
+                        <textarea
+                            id="show-desc"
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white h-24"
+                            placeholder="Notes about this show..."
+                        />
+                    </div>
+
+                    <div>
+                        <label htmlFor="show-client" className="block text-sm font-medium text-slate-300 mb-1">
+                            Client (Optional)
+                        </label>
+                        <select
+                            id="show-client"
+                            value={clientId}
+                            onChange={(e) => setClientId(e.target.value)}
+                            className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white"
+                        >
+                            <option value="">No Client</option>
+                            {clients.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                    {c.name}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="flex gap-3 pt-2">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-md text-white font-bold"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={!title.trim()}
+                            className={`flex-1 px-4 py-2 rounded-md text-white font-bold ${
+                                !title.trim() ? 'bg-slate-700 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'
+                            }`}
+                            title={!title.trim() ? 'Show title required' : undefined}
+                        >
+                            Create Show
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>,
+        document.body
+    );
 };
-
-    return (
+return (
         <>
             {isTaskModalOpen && <TaskModal onClose={() => { setIsTaskModalOpen(false); setTaskToEdit(null); }} onSave={taskToEdit ? handleUpdateTask : handleAddTask} taskToEdit={taskToEdit} user={user} />}
             {isScriptModalOpen && <ScriptGuideModal script={generatedScript} onClose={() => setIsScriptModalOpen(false)} />}
