@@ -180,7 +180,17 @@ const TaskModal: React.FC<{
                                     <button type="button" onClick={() => handleRemoveSubtask(index)} className="p-1 text-slate-400 hover:text-red-400 flex-shrink-0"><TrashIcon className="w-4 h-4" /></button>
                                 </div>
                             )) : (
-                                <p className="text-xs text-slate-500 text-center py-2">No sub-tasks yet.</p>
+                                <div className="flex flex-col items-center justify-center py-2">
+  <p className="text-xs text-slate-500 text-center">No sub-tasks yet.</p>
+  <button
+    type="button"
+    onClick={() => setSubtasks([...subtasks, { text: '', completed: false }])}
+    className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-slate-600/60 bg-slate-800/50 text-xs font-semibold text-purple-300 hover:text-white hover:bg-purple-600/20 hover:border-purple-500/60 transition-colors"
+  >
+    <span className="text-base leading-none">+</span>
+    <span>Add Sub-Task</span>
+  </button>
+</div>
                             )}
                         </div>
                         <div className="flex items-center gap-2 mt-2">
