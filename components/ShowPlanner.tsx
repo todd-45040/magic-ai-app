@@ -8,7 +8,7 @@ import { getShows, addShow, updateShow, deleteShow, addTaskToShow, updateTaskInS
 import { startPerformance, endPerformance, getPerformancesByShowId } from '../services/performanceService';
 import { generateResponse, generateStructuredResponse } from '../services/geminiService';
 import { AI_TASK_SUGGESTER_SYSTEM_INSTRUCTION, IN_TASK_PATTER_SYSTEM_INSTRUCTION } from '../constants';
-import { ChecklistIcon, TrashIcon, WandIcon, PencilIcon, CalendarIcon, DollarSignIcon, UsersIcon, QrCodeIcon, AnalyticsIcon, ViewListIcon, ViewGridIcon, StageCurtainsIcon, FileTextIcon, CopyIcon, MusicNoteIcon, CheckIcon, BackIcon } from './icons';
+import { ChecklistIcon, TrashIcon, WandIcon, PencilIcon, CalendarIcon, ViewGridIcon, ViewListIcon, FileTextIcon, CopyIcon, CheckIcon, MusicNoteIcon, BackIcon, StageCurtainsIcon, DollarSignIcon, UsersIcon, QrCodeIcon, AnalyticsIcon } from './icons';
 import { useAppState } from '../store';
 
 type ViewMode = 'list' | 'board';
@@ -26,6 +26,9 @@ const PRIORITY_ORDER: Record<TaskPriority, number> = {
     'Low': 3,
 };
 
+type ToastKind = 'success' | 'error';
+type ToastState = { message: string; kind: ToastKind };
+
 // --- Helper Components ---
 
 const PriorityBadge: React.FC<{ priority: TaskPriority }> = ({ priority }) => (
@@ -34,12 +37,43 @@ const PriorityBadge: React.FC<{ priority: TaskPriority }> = ({ priority }) => (
     </span>
 );
 
+const Toast: React.FC<{ toast: ToastState | null; onDismiss: () => void }> = ({ toast, onDismiss }) => {
+    if (!toast) return null;
+
+    const base =
+        'fixed bottom-6 left-1/2 -translate-x-1/2 z-[1000] px-4 py-3 rounded-lg shadow-2xl border backdrop-blur-md max-w-[90vw] w-[420px]';
+    const style =
+        toast.kind === 'success'
+            ? 'bg-emerald-900/30 border-emerald-500/40 text-emerald-100'
+            : 'bg-red-900/30 border-red-500/40 text-red-100';
+
+    return (
+        <div className={`${base} ${style}`} role="status" aria-live="polite">
+            <div className="flex items-start gap-3">
+                <div className="mt-0.5">{toast.kind === 'success' ? <CheckIcon className="w-5 h-5" /> : <TrashIcon className="w-5 h-5" />}</div>
+                <div className="flex-1">
+                    <p className="text-sm font-semibold">{toast.message}</p>
+                </div>
+                <button
+                    type="button"
+                    onClick={onDismiss}
+                    className="text-slate-200/70 hover:text-white transition-colors"
+                    aria-label="Dismiss"
+                >
+                    ×
+                </button>
+            </div>
+        </div>
+    );
+};
+
 const TaskModal: React.FC<{
     onClose: () => void;
     onSave: (data: any) => void;
     taskToEdit?: Task | null;
     user: User;
-}> = ({ onClose, onSave, taskToEdit, user }) => {
+    isSaving?: boolean;
+}> = ({ onClose, onSave, taskToEdit, user, isSaving = false }) => {
     const [title, setTitle] = useState('');
     const [notes, setNotes] = useState('');
     const [priority, setPriority] = useState<TaskPriority>('Medium');
@@ -192,8 +226,28 @@ const TaskModal: React.FC<{
                     </div>
                 </form>
                 <div className="flex gap-3 p-6 flex-shrink-0 bg-slate-800 border-t border-slate-700">
-                    <button type="button" onClick={onClose} className="w-full py-2 px-4 bg-slate-600/50 hover:bg-slate-700 rounded-md text-slate-300 font-bold transition-colors">Cancel</button>
-                    <button type="submit" form="task-form" className="w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors">{buttonText}</button>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        disabled={isSaving}
+                        className={`w-full py-2 px-4 rounded-md font-bold transition-colors ${
+                            isSaving
+                                ? 'bg-slate-700/50 text-slate-400 cursor-not-allowed'
+                                : 'bg-slate-600/50 hover:bg-slate-700 text-slate-300'
+                        }`}
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="submit"
+                        form="task-form"
+                        disabled={isSaving}
+                        className={`w-full py-2 px-4 rounded-md text-white font-bold transition-colors ${
+                            isSaving ? 'bg-purple-700/60 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'
+                        }`}
+                    >
+                        {isSaving ? 'Saving…' : buttonText}
+                    </button>
                 </div>
             </div>
         </div>
@@ -256,7 +310,24 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
     const [generatedScript, setGeneratedScript] = useState('');
     const [taskToEdit, setTaskToEdit] = useState<Task | null>(null);
     const [sortBy, setSortBy] = useState<SortBy>('dueDate');
+	const [isTaskSaving, setIsTaskSaving] = useState(false);
+	const [toast, setToast] = useState<ToastState | null>(null);
+	const toastTimerRef = useRef<number | null>(null);
     const taskRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
+
+	const showToast = (message: string, kind: ToastKind) => {
+		setToast({ message, kind });
+		if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+		toastTimerRef.current = window.setTimeout(() => setToast(null), 2200);
+	};
+
+	useEffect(() => {
+		return () => {
+			if (toastTimerRef.current) {
+				window.clearTimeout(toastTimerRef.current);
+			}
+		};
+	}, []);
 
     useEffect(() => {
         let isMounted = true;
@@ -329,24 +400,36 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
     // Task handlers
     const handleAddTask = async (data: any) => {
         if (!selectedShow) return;
-        try {
-            const newShows = await addTaskToShow(selectedShow.id, data);
-            setShows(newShows);
-            setSelectedShow(newShows.find(s => s.id === selectedShow.id) || null);
-            setIsTaskModalOpen(false);
-        } catch (err: any) {
-            console.error('Add task failed:', err);
-            const msg = err?.message ? String(err.message) : 'Failed to add task.';
-            alert(msg);
-        }
+		setIsTaskSaving(true);
+		try {
+			const newShows = await addTaskToShow(selectedShow.id, data);
+			setShows(newShows);
+			setSelectedShow(newShows.find(s => s.id === selectedShow.id) || null);
+			setIsTaskModalOpen(false);
+			showToast('Task saved.', 'success');
+		} catch (err) {
+			console.error('Failed to add task:', err);
+			showToast("Couldn't save task. Please try again.", 'error');
+		} finally {
+			setIsTaskSaving(false);
+		}
     };
     const handleUpdateTask = async (data: Omit<Task, 'createdAt'>) => {
         if (!selectedShow) return;
-        const newShows = await updateTaskInShow(selectedShow.id, data.id, data);
-        setShows(newShows);
-        setSelectedShow(newShows.find(s => s.id === selectedShow.id) || null);
-        setIsTaskModalOpen(false);
-        setTaskToEdit(null);
+		setIsTaskSaving(true);
+		try {
+			const newShows = await updateTaskInShow(selectedShow.id, data.id, data);
+			setShows(newShows);
+			setSelectedShow(newShows.find(s => s.id === selectedShow.id) || null);
+			setIsTaskModalOpen(false);
+			setTaskToEdit(null);
+			showToast('Task updated.', 'success');
+		} catch (err) {
+			console.error('Failed to update task:', err);
+			showToast("Couldn't save changes. Please try again.", 'error');
+		} finally {
+			setIsTaskSaving(false);
+		}
     };
     const handleToggleStatus = async (task: Task) => {
         if (!selectedShow) return;
@@ -744,7 +827,19 @@ const ShowModal: React.FC<{
 };
 return (
         <>
-            {isTaskModalOpen && <TaskModal onClose={() => { setIsTaskModalOpen(false); setTaskToEdit(null); }} onSave={taskToEdit ? handleUpdateTask : handleAddTask} taskToEdit={taskToEdit} user={user} />}
+			<Toast toast={toast} onDismiss={() => setToast(null)} />
+			{isTaskModalOpen && (
+				<TaskModal
+					onClose={() => {
+						setIsTaskModalOpen(false);
+						setTaskToEdit(null);
+					}}
+					onSave={taskToEdit ? handleUpdateTask : handleAddTask}
+					taskToEdit={taskToEdit}
+					user={user}
+					isSaving={isTaskSaving}
+				/>
+			)}
             {isScriptModalOpen && <ScriptGuideModal script={generatedScript} onClose={() => setIsScriptModalOpen(false)} />}
             {isShowModalOpen && <ShowModal onClose={() => setIsShowModalOpen(false)} onSave={handleAddShow} />}
             {isLiveModalOpen && selectedShow && <LivePerformanceModal show={selectedShow} onClose={() => setIsLiveModalOpen(false)} onEnd={(id) => { setIsLiveModalOpen(false); onNavigateToAnalytics(id); }} />}
