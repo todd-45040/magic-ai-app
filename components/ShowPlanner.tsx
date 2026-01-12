@@ -45,8 +45,6 @@ const TaskModal: React.FC<{
     const [notes, setNotes] = useState('');
     const [priority, setPriority] = useState<TaskPriority>('Medium');
     const [isSaving, setIsSaving] = useState(false);
-        return () => window.clearTimeout(t);
-    }, [toastMsg]);
     const [dueDate, setDueDate] = useState('');
     const [musicCue, setMusicCue] = useState('');
     const [subtasks, setSubtasks] = useState<Partial<Subtask>[]>([]);
