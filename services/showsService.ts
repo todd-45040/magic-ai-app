@@ -48,7 +48,9 @@ const mapTaskToDb = (showId: string, userId: string, task: Partial<Task>) => {
   const status = (task as any).status ?? 'To-Do';
   const subtasks = (task as any).subtasks ?? [];
 
-  return {
+  // Build payload cautiously: some deployments may not have newer columns (e.g., subtasks, music_cue)
+  // and Supabase will throw schema-cache errors. We'll retry inserts/updates with reduced payloads.
+  const payload: any = {
     show_id: showId,
     user_id: userId,
     title,
@@ -57,8 +59,81 @@ const mapTaskToDb = (showId: string, userId: string, task: Partial<Task>) => {
     due_date: toIsoOrNull(dueDate),
     music_cue: musicCue || null,
     status,
-    subtasks
+    // Only include subtasks if present; avoids failing on older schemas.
+    ...(Array.isArray(subtasks) && subtasks.length ? { subtasks } : {})
   };
+
+  return payload;
+};
+
+// If a column doesn't exist in the current Supabase schema cache, retry without it.
+// Protects against schema drift (e.g., some envs missing "subtasks" or "music_cue").
+const safeInsert = async (table: string, payload: any) => {
+  // payload can be an object or an array of objects
+  let current: any = Array.isArray(payload) ? payload.map((p: any) => ({ ...p })) : { ...payload };
+  // Try a few times in case multiple columns are missing.
+  for (let i = 0; i < 6; i++) {
+    const { error } = await supabase.from(table).insert(current);
+    if (!error) return;
+    const msg = String((error as any)?.message ?? error ?? '');
+    const m = msg.match(/Could not find the '([^']+)' column of '([^']+)'/i);
+    const missingCol = m?.[1];
+    const missingTable = m?.[2];
+    if (missingCol && (!missingTable || missingTable === table)) {
+      if (Array.isArray(current)) {
+        let removed = false;
+        current = current.map((row: any) => {
+          if (row && Object.prototype.hasOwnProperty.call(row, missingCol)) {
+            const next = { ...row };
+            delete (next as any)[missingCol];
+            removed = true;
+            return next;
+          }
+          return row;
+        });
+        if (removed) continue;
+      } else if (Object.prototype.hasOwnProperty.call(current, missingCol)) {
+        delete (current as any)[missingCol];
+        continue;
+      }
+    }
+    throw error;
+  }
+  throw new Error(`Insert into ${table} failed after retries (schema drift).`);
+};
+
+const safeUpdate = async (table: string, payload: Record<string, any>, match: Record<string, any>) => {
+  let current = { ...payload };
+  for (let i = 0; i < 6; i++) {
+    let q: any = supabase.from(table).update(current);
+    for (const [k, v] of Object.entries(match)) q = q.eq(k, v);
+    const { error } = await q;
+    if (!error) return;
+    const msg = String((error as any)?.message ?? error ?? '');
+    const m = msg.match(/Could not find the '([^']+)' column of '([^']+)'/i);
+    const missingCol = m?.[1];
+    const missingTable = m?.[2];
+    if (missingCol && (!missingTable || missingTable === table)) {
+      if (Array.isArray(current)) {
+        // remove the missing column from every payload row
+        let removed = false;
+        current = current.map((row: any) => {
+          if (row && Object.prototype.hasOwnProperty.call(row, missingCol)) {
+            const { [missingCol]: _omit, ...rest } = row;
+            removed = true;
+            return rest;
+          }
+          return row;
+        });
+        if (removed) continue;
+      } else if (Object.prototype.hasOwnProperty.call(current, missingCol)) {
+        delete (current as any)[missingCol];
+        continue;
+      }
+    }
+    throw error;
+  }
+  throw new Error(`Update ${table} failed after retries (schema drift).`);
 };
 
 export const getShows = async (): Promise<Show[]> => {
@@ -176,8 +251,7 @@ export const addTaskToShow = async (showId: string, task: Partial<Task>): Promis
     throw new Error('Task title required');
   }
 
-  const { error } = await supabase.from('tasks').insert(payload);
-  if (error) throw error;
+  await safeInsert('tasks', payload);
 
   return getShows();
 };
@@ -191,8 +265,19 @@ export const addTasksToShow = async (showId: string, tasks: Partial<Task>[]): Pr
 
   if (payloads.length === 0) return getShows();
 
+  // Batch insert: try once; if schema drift, fall back to per-row safeInsert.
   const { error } = await supabase.from('tasks').insert(payloads);
-  if (error) throw error;
+  if (error) {
+    // If this looks like a schema-cache/missing-column error, retry per item to strip missing cols.
+    const msg = String((error as any)?.message ?? error ?? '');
+    if (/Could not find the '.+?' column of 'tasks' in the schema cache/i.test(msg)) {
+      for (const p of payloads) {
+        await safeInsert('tasks', p);
+      }
+    } else {
+      throw error;
+    }
+  }
 
   return getShows();
 };
@@ -219,14 +304,7 @@ export const updateTaskInShow = async (showId: string, taskId: string, updates: 
     dbUpdates.due_date = toIsoOrNull((updates as any).due_date);
   }
 
-  const { error } = await supabase
-    .from('tasks')
-    .update(dbUpdates)
-    .eq('id', taskId)
-    .eq('show_id', showId)
-    .eq('user_id', userId);
-
-  if (error) throw error;
+  await safeUpdate('tasks', dbUpdates, { id: taskId, show_id: showId, user_id: userId });
 
   return getShows();
 };
