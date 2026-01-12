@@ -1401,6 +1401,92 @@ useEffect(() => {
     };
   })();
 
+  // Dashboard: Insight Tiles ("Make the dashboard talk back")
+  type DashboardInsight = { key: string; icon: React.FC<{ className?: string }>; title: string; message: string };
+
+  const insights: DashboardInsight[] = (() => {
+    const result: DashboardInsight[] = [];
+
+    const safeText = (v: any) => (typeof v === 'string' ? v : '');
+    const clamp = (s: string, max = 120) => (s.length > max ? s.slice(0, max - 1).trimEnd() + '…' : s);
+
+    // Flatten tasks (best-effort; schema varies across builds)
+    const allTasks: any[] = (shows || []).flatMap((s: any) => (Array.isArray(s.tasks) ? s.tasks : Array.isArray(s.show_tasks) ? s.show_tasks : []));
+    const openTasks = allTasks.filter((t: any) => !t?.completed && !t?.isCompleted && t?.status !== 'done' && t?.status !== 'completed');
+
+    const dueSoonMs = Date.now() + 7 * 24 * 60 * 60 * 1000;
+    const dueSoonCount = openTasks.filter((t: any) => {
+      const ms = Math.max(parseDateToMs(t?.due_at), parseDateToMs(t?.dueDate), parseDateToMs(t?.due_date));
+      return ms > 0 && ms <= dueSoonMs;
+    }).length;
+
+    if (latestShow?.title && openTasks.length > 0) {
+      const title = dueSoonCount > 0 ? 'Upcoming tasks due soon' : 'Open tasks for your next show';
+      const message = dueSoonCount > 0
+        ? `You have ${dueSoonCount} task${dueSoonCount === 1 ? '' : 's'} due within a week for “${latestShow.title}”. Knock out one small task today to stay ahead.`
+        : `You have ${openTasks.length} open task${openTasks.length === 1 ? '' : 's'} connected to your shows. Pick one quick win and keep momentum.`;
+
+      result.push({
+        key: 'tasks',
+        icon: ChecklistIcon,
+        title,
+        message,
+      });
+    }
+
+    // Audience feedback insight (keyword/ratings heuristic)
+    const fb = Array.isArray(feedback) ? feedback : [];
+    const fbText = fb
+      .map((f: any) => safeText(f?.comment) || safeText(f?.text) || safeText(f?.message) || safeText(f?.feedback))
+      .filter(Boolean)
+      .join(' | ')
+      .toLowerCase();
+
+    const interactiveHit = /(interactive|volunteer|participation|audience|kids|laughter|laughed|funny|engage|engaging)/i.test(fbText);
+    const numericRatings = fb.map((f: any) => Number(f?.rating ?? f?.score ?? f?.stars)).filter((n: number) => Number.isFinite(n));
+    const avgRating = numericRatings.length ? numericRatings.reduce((a: number, b: number) => a + b, 0) / numericRatings.length : null;
+
+    if (fb.length > 0) {
+      if (interactiveHit) {
+        result.push({
+          key: 'feedback-interactive',
+          icon: StarIcon,
+          title: 'Audience engagement insight',
+          message: 'Audience reactions trend strongest during interactive moments. Consider adding one extra volunteer beat or callback tonight.',
+        });
+      } else if (avgRating !== null) {
+        result.push({
+          key: 'feedback-rating',
+          icon: StarIcon,
+          title: 'Audience feedback snapshot',
+          message: `Your recent audience feedback averages ${avgRating.toFixed(1)} / 5. Review one note and make a single targeted tweak.`,
+        });
+      } else {
+        result.push({
+          key: 'feedback-generic',
+          icon: StarIcon,
+          title: 'Audience feedback',
+          message: 'You’ve collected audience feedback recently. Review it before your next rehearsal and reinforce what landed best.',
+        });
+      }
+    }
+
+    // Rehearsal/pacing coaching (simple heuristic)
+    const hasRehearsalTasks = openTasks.some((t: any) => /(rehears|patter|script|timing|run[- ]?through)/i.test(safeText(t?.title) || safeText(t?.name) || ''));
+    if (hasRehearsalTasks || (ideas && ideas.length > 0)) {
+      result.push({
+        key: 'pacing',
+        icon: ClockIcon,
+        title: 'Performance pacing tip',
+        message: 'Try a deliberate pause right before your final reveal line. One beat of silence can make the climax feel twice as strong.',
+      });
+    }
+
+    // Keep it tight: 3 tiles max
+    return result.slice(0, 3).map((i) => ({ ...i, message: clamp(i.message, 140) }));
+  })();
+
+
   useEffect(() => {
     if (isExpired) {
       setIsUpgradeModalOpen(true);
@@ -1838,6 +1924,30 @@ useEffect(() => {
                 </div>
               </div>
             </div>
+
+
+            {/* Insight Tiles */}
+            {insights.length > 0 && (
+              <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+                {insights.map((insight) => (
+                  <div
+                    key={insight.key}
+                    className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] p-4"
+                  >
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-purple-500/10 via-transparent to-transparent" />
+                    <div className="relative flex items-start gap-3">
+                      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-purple-400/20 bg-purple-500/15 text-purple-200">
+                        <insight.icon className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-white">{insight.title}</p>
+                        <p className="mt-1 text-sm text-white/65">{insight.message}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <Dashboard
               user={user}
