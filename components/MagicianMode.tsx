@@ -1327,6 +1327,86 @@ useEffect(() => {
   const hasSemiProAccess = hasAmateurAccess; // kept for existing prop wiring
   const hasProfessionalAccess = (tier === 'professional' || isTrialActive) as boolean;
 
+
+  // Dashboard: Primary Action ("Today's Focus")
+  const parseDateToMs = (v: any): number => {
+    if (!v) return 0;
+    const d = new Date(v);
+    const ms = d.getTime();
+    return Number.isFinite(ms) ? ms : 0;
+  };
+
+  const latestIdea = (() => {
+    if (!ideas || ideas.length === 0) return null as any;
+    const sorted = [...ideas].sort((a: any, b: any) => {
+      const aMs = Math.max(parseDateToMs(a.updated_at), parseDateToMs(a.created_at), parseDateToMs(a.timestamp));
+      const bMs = Math.max(parseDateToMs(b.updated_at), parseDateToMs(b.created_at), parseDateToMs(b.timestamp));
+      return bMs - aMs;
+    });
+    return sorted[0] ?? null;
+  })();
+
+  const latestShow = (() => {
+    if (!shows || shows.length === 0) return null as any;
+    const sorted = [...shows].sort((a: any, b: any) => {
+      const aMs = Math.max(parseDateToMs(a.updated_at), parseDateToMs(a.created_at), parseDateToMs(a.date), parseDateToMs(a.show_date));
+      const bMs = Math.max(parseDateToMs(b.updated_at), parseDateToMs(b.created_at), parseDateToMs(b.date), parseDateToMs(b.show_date));
+      return bMs - aMs;
+    });
+    return sorted[0] ?? null;
+  })();
+
+  const isNewUser = (!shows || shows.length === 0) && (!ideas || ideas.length === 0) && (!feedback || feedback.length === 0);
+
+  const todaysFocus = (() => {
+    // New user: guide into first "win"
+    if (isNewUser) {
+      return {
+        label: "Today’s Focus",
+        title: "Generate Your First Effect",
+        subtitle: "Start with the Effect Generator and save your first idea — it only takes a minute.",
+        ctaLabel: "Open Effect Generator",
+        route: "effect-generator" as const,
+        icon: "hat" as const,
+      };
+    }
+
+    // Pro (or trial): emphasize next show planning
+    if (hasProfessionalAccess && latestShow?.title) {
+      return {
+        label: "Today’s Focus",
+        title: "Prepare for Your Upcoming Show",
+        subtitle: `Open Show Planner for “${latestShow.title}”.`,
+        ctaLabel: "Open Show Planner",
+        route: "show-planner" as const,
+        icon: "planner" as const,
+      };
+    }
+
+    // Returning user: continue latest saved work
+    if (latestIdea?.title || latestIdea?.name) {
+      const t = (latestIdea.title || latestIdea.name || "your latest idea") as string;
+      return {
+        label: "Today’s Focus",
+        title: "Continue Last Project",
+        subtitle: `Continue working on “${t}”.`,
+        ctaLabel: "View Saved Ideas",
+        route: "saved-ideas" as const,
+        icon: "idea" as const,
+      };
+    }
+
+    // Fallback
+    return {
+      label: "Today’s Focus",
+      title: "Pick Up Where You Left Off",
+      subtitle: "Jump into your tools and keep building your act.",
+      ctaLabel: "Open AI Assistant",
+      route: "assistant" as const,
+      icon: "assistant" as const,
+    };
+  })();
+
   useEffect(() => {
     if (isExpired) {
       setIsUpgradeModalOpen(true);
@@ -1737,6 +1817,32 @@ useEffect(() => {
               <p className="mt-2 text-sm text-white/60">
                 Welcome back, {user.name || (user.email ? user.email.split('@')[0] : 'magician')}.
               </p>
+            </div>
+
+            {/* Primary Action */}
+            <div className="mb-6">
+              <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] p-5 md:p-6">
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-purple-500/10 via-transparent to-yellow-500/10" />
+                <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-purple-400/20 bg-purple-500/15 text-purple-200">
+                      <MagicHatIcon className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-purple-200/90">{todaysFocus.label}</p>
+                      <h2 className="mt-1 text-lg font-semibold text-white md:text-xl">{todaysFocus.title}</h2>
+                      <p className="mt-1 text-sm text-white/65">{todaysFocus.subtitle}</p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => handleNavigate(todaysFocus.route)}
+                    className="inline-flex items-center justify-center rounded-xl border border-purple-400/25 bg-purple-500/15 px-4 py-2 text-sm font-medium text-purple-100 transition hover:bg-purple-500/25 hover:text-white focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                  >
+                    {todaysFocus.ctaLabel}
+                  </button>
+                </div>
+              </div>
             </div>
 
             <Dashboard
