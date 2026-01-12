@@ -1,14 +1,77 @@
 import type { Feedback } from '../types';
-import { supabase } from '../supabaseClient';
 
+// Local-first storage key (keeps UI snappy even if network/RLS blocks remote insert)
 const FEEDBACK_STORAGE_KEY = 'magician_audience_feedback';
-const SUPABASE_TABLE = 'app_suggestions';
-const SUPABASE_TYPE = 'audience_feedback';
 
-/**
- * Local-first: read cached feedback immediately.
- * Source of truth: Supabase (app_suggestions.type = 'audience_feedback') when available.
- */
+// Supabase table that stores app-wide suggestions/feedback
+const SUGGESTIONS_TABLE = 'app_suggestions';
+
+function getSupabaseConfig(): { url?: string; anonKey?: string } {
+  // Vite exposes env at import.meta.env
+  const env = (import.meta as any).env ?? {};
+  return {
+    url: env.VITE_SUPABASE_URL as string | undefined,
+    anonKey: env.VITE_SUPABASE_ANON_KEY as string | undefined,
+  };
+}
+
+function safeJsonStringify(value: unknown): string {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+async function insertSuggestionRow(args: {
+  id: string;
+  type: string;
+  content: string;
+  timestamp: number;
+  status?: string;
+  user_id?: string | null;
+  user_email?: string | null;
+}): Promise<void> {
+  const { url, anonKey } = getSupabaseConfig();
+  if (!url || !anonKey) return;
+
+  const endpoint = `${url.replace(/\/$/, '')}/rest/v1/${SUGGESTIONS_TABLE}`;
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      apikey: anonKey,
+      Authorization: `Bearer ${anonKey}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal',
+    },
+    body: JSON.stringify(args),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    console.error('Supabase insert failed:', res.status, text);
+  }
+}
+
+function getSessionUser(): { user_id?: string; user_email?: string } {
+  // Best-effort: avoid coupling to a specific auth implementation.
+  try {
+    const raw = localStorage.getItem('magician_ai_user');
+    if (raw) {
+      const u = JSON.parse(raw);
+      const user_id = u?.id || u?.user?.id || u?.uid;
+      const user_email = u?.email || u?.user?.email;
+      return {
+        user_id: typeof user_id === 'string' ? user_id : undefined,
+        user_email: typeof user_email === 'string' ? user_email : undefined,
+      };
+    }
+  } catch {
+    // ignore
+  }
+  return {};
+}
+
 export const getFeedback = (): Feedback[] => {
   try {
     const savedData = localStorage.getItem(FEEDBACK_STORAGE_KEY);
@@ -22,108 +85,40 @@ export const getFeedback = (): Feedback[] => {
   return [];
 };
 
-const saveFeedbackLocal = (feedback: Feedback[]) => {
-  try {
-    localStorage.setItem(FEEDBACK_STORAGE_KEY, JSON.stringify(feedback));
-  } catch (error) {
-    console.error('Failed to save feedback to localStorage', error);
-  }
-};
-
-const toSupabaseRow = async (fb: Feedback) => {
-  // Optional attribution
-  let user_id: string | null = null;
-  let user_email: string | null = null;
-  try {
-    const { data } = await supabase.auth.getSession();
-    user_id = data.session?.user?.id ?? null;
-    user_email = (data.session?.user?.email as string | undefined) ?? null;
-  } catch {
-    // ignore (anon / auth not initialized)
-  }
-
-  return {
-    id: fb.id,                 // app_suggestions.id is text (no default)
-    type: SUPABASE_TYPE,       // required text
-    content: JSON.stringify(fb), // required text
-    timestamp: fb.timestamp,   // required bigint
-    status: 'new',             // optional
-    user_id,                   // optional uuid
-    user_email,                // optional text
-  };
-};
-
-/**
- * Adds feedback locally immediately, then attempts to persist to Supabase.
- * Returns the created Feedback object (callers may ignore the Promise).
- */
-export const addFeedback = async (
-  feedbackData: Omit<Feedback, 'id' | 'timestamp'>
-): Promise<Feedback> => {
+export const addFeedback = (feedbackData: {
+  rating: number;
+  tags: string[];
+  comment: string;
+  name?: string;
+  showTitle?: string;
+  magicianName?: string;
+  location?: string;
+  performanceDate?: number;
+}): void => {
   const allFeedback = getFeedback();
 
   const newFeedback: Feedback = {
-    id: `feedback-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
+    id: `feedback-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
     ...feedbackData,
     timestamp: Date.now(),
   };
 
-  // 1) Local-first save so the UI updates even if network/RLS fails
   const updatedFeedback = [newFeedback, ...allFeedback];
-  saveFeedbackLocal(updatedFeedback);
 
-  // 2) Best-effort Supabase persistence (never blocks UI)
   try {
-    const row = await toSupabaseRow(newFeedback);
-
-    const { error } = await supabase
-      .from(SUPABASE_TABLE)
-      .insert(row);
-
-    if (error) {
-      console.error('Failed to save feedback to Supabase', error);
-    }
+    localStorage.setItem(FEEDBACK_STORAGE_KEY, JSON.stringify(updatedFeedback));
   } catch (error) {
-    console.error('Failed to save feedback to Supabase', error);
+    console.error('Failed to save feedback to localStorage', error);
   }
 
-  return newFeedback;
-};
-
-/**
- * Optional helper: refresh local cache from Supabase.
- * Safe to call on page load if you want the latest across devices.
- */
-export const syncFeedbackFromSupabase = async (): Promise<Feedback[]> => {
-  try {
-    const { data, error } = await supabase
-      .from(SUPABASE_TABLE)
-      .select('content, timestamp')
-      .eq('type', SUPABASE_TYPE)
-      .order('timestamp', { ascending: false })
-      .limit(200);
-
-    if (error) throw error;
-
-    const parsed: Feedback[] =
-      (data ?? [])
-        .map((r: any) => {
-          try {
-            const fb = JSON.parse(r.content) as Feedback;
-            // Ensure timestamp exists (fallback to row timestamp)
-            if (!fb.timestamp && r.timestamp) fb.timestamp = Number(r.timestamp);
-            return fb;
-          } catch {
-            return null;
-          }
-        })
-        .filter(Boolean) as Feedback[];
-
-    // update local cache
-    saveFeedbackLocal(parsed);
-    return parsed;
-  } catch (e) {
-    console.error('Failed to sync feedback from Supabase', e);
-    return getFeedback();
-  }
+  const { user_id, user_email } = getSessionUser();
+  void insertSuggestionRow({
+    id: newFeedback.id,
+    type: 'audience_feedback',
+    content: safeJsonStringify(newFeedback),
+    timestamp: newFeedback.timestamp,
+    status: 'new',
+    user_id: user_id ?? null,
+    user_email: user_email ?? null,
+  });
 };
