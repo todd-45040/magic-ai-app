@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { getSavedIdeas, deleteIdea, updateIdea } from '../services/ideasService';
 import type { SavedIdea, Transcription, IdeaType, AiSparkAction } from '../types';
-import { BookmarkIcon, TrashIcon, ShareIcon, MicrophoneIcon, PrintIcon, FileTextIcon, ImageIcon, PencilIcon, WandIcon } from './icons';
+import { BookmarkIcon, TrashIcon, ShareIcon, MicrophoneIcon, PrintIcon, FileTextIcon, ImageIcon, PencilIcon, WandIcon, CrossIcon } from './icons';
 import ShareButton from './ShareButton';
 
 interface SavedIdeasProps {
