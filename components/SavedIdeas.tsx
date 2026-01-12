@@ -130,8 +130,13 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
 
     // FIX: handler should be async to await deleteIdea
     const handleDelete = async (id: string) => {
-        const updatedIdeas = await deleteIdea(id);
-        setIdeas(updatedIdeas);
+        try {
+            await deleteIdea(id);
+            setIdeas((prev) => prev.filter((i) => i.id !== id));
+        } catch (e) {
+            // fail silently; console will show if needed
+            console.error('Failed to delete idea', e);
+        }
     };
 
     const handlePrint = (idea: SavedIdea) => {
@@ -198,21 +203,28 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
     const handleSaveTags = async (ideaId: string) => {
         setIsSavingTags(true);
         setTagSaveError(null);
+
         try {
-            const newTags = editText
-                .split(',')
-                .map((t) => t.trim())
-                .filter(Boolean);
+            if (!ideaId) throw new Error('Missing idea id.');
 
-            await updateIdea(ideaId, { tags: newTags });
+            const newTags = Array.from(
+                new Set(
+                    editText
+                        .split(',')
+                        .map((t) => t.trim().toLowerCase())
+                        .filter(Boolean)
+                )
+            );
 
-            // Re-fetch to ensure UI matches persisted state
-            const refreshed = await getSavedIdeas();
-            setIdeas(refreshed);
+            const updated = await updateIdea(ideaId, { tags: newTags });
+
+            // Update only the affected card (fast + reliable)
+            setIdeas((prev) =>
+                prev.map((i) => (i.id === ideaId ? { ...i, tags: (updated as any).tags ?? newTags } : i))
+            );
 
             handleCancelEdit();
         } catch (e: any) {
-            // Most common cause: "tags" column missing in Supabase table
             setTagSaveError(e?.message ?? 'Failed to save tags.');
         } finally {
             setIsSavingTags(false);

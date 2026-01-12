@@ -1,69 +1,76 @@
 import { supabase } from '../supabase';
-import type { SavedIdea, IdeaType } from '../types';
+import type { SavedIdea } from '../types';
 
 /**
- * ideasService.ts (created_at version)
+ * ideasService.ts
  *
- * This service expects a Supabase table: public.ideas
- * Minimum columns:
+ * Supabase table: public.ideas
+ * Expected columns (minimum):
  *   - id (uuid/text PK)
  *   - user_id (uuid/text, references auth.users)
- *   - type (text)
+ *   - type (text)              // e.g., 'text' | 'image' | 'rehearsal'
  *   - content (text)
  *   - created_at (timestamptz, default now())
+ *
+ * Optional (recommended):
+ *   - tags (text[], default '{}')
  */
 
 async function requireUserId(): Promise<string> {
   const { data, error } = await supabase.auth.getUser();
   if (error) throw error;
-  const sbUser = data?.user ?? null;
-  if (!sbUser) throw new Error('Not authenticated');
-  return sbUser.id;
+  const uid = data?.user?.id;
+  if (!uid) throw new Error('Not authenticated.');
+  return uid;
 }
 
-export const getSavedIdeas = async (): Promise<SavedIdea[]> => {
-  try {
-    const userId = await requireUserId();
+export async function getSavedIdeas(): Promise<SavedIdea[]> {
+  const uid = await requireUserId();
+  const { data, error } = await supabase
+    .from('ideas')
+    .select('*')
+    .eq('user_id', uid)
+    .order('created_at', { ascending: false });
 
-    const { data, error } = await supabase
-      .from('ideas')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as SavedIdea[];
+}
 
-    if (error) throw error;
-    return (data ?? []) as SavedIdea[];
-  } catch (err) {
-    console.error('getSavedIdeas failed:', err);
-    return [];
-  }
-};
-
-export const saveIdea = async (type: IdeaType | 'text', content: string): Promise<SavedIdea> => {
-  const userId = await requireUserId();
-
-  const payload: any = {
-    user_id: userId,
-    type: type ?? 'text',
-    content,
-  };
-
-  const { data, error } = await supabase.from('ideas').insert([payload]).select('*').single();
+export async function saveIdea(idea: Omit<SavedIdea, 'id' | 'user_id' | 'created_at'>): Promise<SavedIdea> {
+  const uid = await requireUserId();
+  const { data, error } = await supabase
+    .from('ideas')
+    .insert({ ...idea, user_id: uid })
+    .select('*')
+    .single();
 
   if (error) throw error;
   return data as SavedIdea;
-};
+}
 
-export const updateIdea = async (id: string, updates: Partial<SavedIdea>): Promise<SavedIdea[]> => {
+/**
+ * Update a single idea row and return the updated row.
+ * IMPORTANT: This throws on Supabase errors (including RLS denial).
+ */
+export async function updateIdea(id: string, updates: Partial<SavedIdea>): Promise<SavedIdea> {
+  if (!id) throw new Error('updateIdea: missing id');
   await requireUserId();
-  const { error } = await supabase.from('ideas').update(updates).eq('id', id);
+
+  const { data, error } = await supabase
+    .from('ideas')
+    .update(updates)
+    .eq('id', id)
+    .select('*')
+    .single();
+
   if (error) throw error;
-  return getSavedIdeas();
-};
+  return data as SavedIdea;
+}
 
-export const deleteIdea = async (id: string): Promise<SavedIdea[]> => {
+export async function deleteIdea(id: string): Promise<void> {
+  if (!id) throw new Error('deleteIdea: missing id');
   await requireUserId();
+
   const { error } = await supabase.from('ideas').delete().eq('id', id);
   if (error) throw error;
-  return getSavedIdeas();
-};
+}
