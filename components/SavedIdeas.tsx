@@ -94,6 +94,7 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
     const [tagFilter, setTagFilter] = useState<string | null>(null);
     const [editingIdeaId, setEditingIdeaId] = useState<string | null>(null);
     const [editText, setEditText] = useState('');
+    const [lightboxImg, setLightboxImg] = useState<string | null>(null);
     const ideaRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
 
 
