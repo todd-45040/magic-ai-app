@@ -1725,7 +1725,31 @@ useEffect(() => {
 
   const renderContent = () => {
     switch(activeView) {
-        case 'dashboard': return <Dashboard user={user} shows={shows} feedback={feedback} ideas={ideas} onNavigate={handleNavigate} onShowsUpdate={handleShowsUpdate} onPromptClick={handlePromptClick} />;
+        case 'dashboard': return (
+          <>
+            <div className="px-4 md:px-6 pt-6">
+              <p className="text-sm uppercase tracking-wider text-purple-400/80">
+                Magic AI Wizard Dashboard
+              </p>
+              <h1 className="mt-2 text-2xl md:text-3xl font-semibold text-white leading-tight">
+                Your AI Assistant for Creating, Rehearsing, and Running Better Magic Shows
+              </h1>
+              <p className="mt-2 text-sm text-white/60">
+                Welcome back, {user.name || (user.email ? user.email.split('@')[0] : 'magician')}.
+              </p>
+            </div>
+
+            <Dashboard
+              user={user}
+              shows={shows}
+              feedback={feedback}
+              ideas={ideas}
+              onNavigate={handleNavigate}
+              onShowsUpdate={handleShowsUpdate}
+              onPromptClick={handlePromptClick}
+            />
+          </>
+        );
         case 'live-rehearsal': return <LiveRehearsal user={user} onReturnToStudio={handleReturnFromRehearsal} onIdeaSaved={() => handleIdeaSaved('Rehearsal saved!')} />;
         case 'video-rehearsal': return <VideoRehearsal onIdeaSaved={() => handleIdeaSaved('Video analysis saved!')} user={user} />;
         case 'visual-brainstorm': return <VisualBrainstorm onIdeaSaved={() => handleIdeaSaved('Image idea saved!')} user={user} />;
