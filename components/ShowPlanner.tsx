@@ -243,6 +243,8 @@ interface ShowPlannerProps {
 
 const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAnalytics, initialShowId, initialTaskId }) => {
     const [shows, setShows] = useState<Show[]>([]);
+    const [isLoadingShows, setIsLoadingShows] = useState(true);
+    const [showsError, setShowsError] = useState<string | null>(null);
     const [selectedShow, setSelectedShow] = useState<Show | null>(null);
     const [viewMode, setViewMode] = useState<ViewMode>('board');
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -255,17 +257,32 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
     const taskRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
 
     useEffect(() => {
+        let isMounted = true;
         const fetchShows = async () => {
-            const allShows = await getShows();
-            setShows(allShows);
-            if (initialShowId) {
-                const show = allShows.find(s => s.id === initialShowId);
-                if (show) {
-                    setSelectedShow(show);
+            try {
+                setShowsError(null);
+                setIsLoadingShows(true);
+                const allShows = await getShows();
+                if (!isMounted) return;
+                setShows(allShows);
+
+                if (initialShowId) {
+                    const show = allShows.find((s) => s.id === initialShowId);
+                    if (show) setSelectedShow(show);
                 }
+            } catch (err: any) {
+                if (!isMounted) return;
+                console.error('Failed to load shows:', err);
+                setShowsError(err?.message ?? 'Failed to load shows.');
+            } finally {
+                if (!isMounted) return;
+                setIsLoadingShows(false);
             }
         };
         fetchShows();
+        return () => {
+            isMounted = false;
+        };
     }, [initialShowId]);
 
     useEffect(() => {
@@ -285,7 +302,13 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
 
     // Show handlers
     const handleAddShow = async (title: string, description?: string, clientId?: string) => {
-        const newShows = await addShow(title, description, clientId);
+        // NOTE: showsService.addShow expects a Partial<Show> object.
+        // We intentionally do NOT persist clientId unless your DB schema supports it.
+        const newShows = await addShow({
+            title,
+            description: description || null,
+            finances: { performanceFee: 0, expenses: [], income: [] }
+        } as any);
         setShows(newShows);
         setIsShowModalOpen(false);
     };
@@ -435,7 +458,14 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                 </div>
             </header>
             <main className="flex-1 overflow-y-auto p-4 md:p-6">
-                {shows.length > 0 ? (
+                {showsError && (
+                    <div className="mb-4 p-3 rounded-md bg-red-900/30 border border-red-500/40 text-red-200 text-sm">
+                        {showsError}
+                    </div>
+                )}
+                {isLoadingShows ? (
+                    <div className="text-center py-12 text-slate-300">Loading shows…</div>
+                ) : shows.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {shows.map(show => <ShowListItem key={show.id} show={show} clients={clients} onSelect={() => setSelectedShow(show)} onDelete={() => handleDeleteShow(show.id)} />)}
                     </div>
@@ -584,17 +614,33 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
     
     
 const ShowModal: React.FC<{
-    onSave: (title: string, description?: string, clientId?: string) => void;
+    onSave: (title: string, description?: string, clientId?: string) => Promise<void>;
     onClose: () => void;
 }> = ({ onSave, onClose }) => {
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [clientId, setClientId] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!title.trim()) return;
-        onSave(title.trim(), description.trim() || undefined, clientId || undefined);
+    const handleSubmit = async (e?: React.FormEvent) => {
+        e?.preventDefault();
+        e?.stopPropagation();
+        setError(null);
+        if (!title.trim()) {
+            setError('Show title is required.');
+            return;
+        }
+        try {
+            setIsSaving(true);
+            await onSave(title.trim(), description.trim() || undefined, clientId || undefined);
+        } catch (err: any) {
+            console.error('Create show failed:', err);
+            setError(err?.message ?? 'Create show failed.');
+            return;
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     if (typeof document === 'undefined') return null;
@@ -610,6 +656,12 @@ const ShowModal: React.FC<{
             >
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
                     <h2 className="text-xl font-bold text-white">Create New Show</h2>
+
+                    {error && (
+                        <div className="p-3 rounded-md bg-red-900/30 border border-red-500/40 text-red-200 text-sm">
+                            {error}
+                        </div>
+                    )}
 
                     <div>
                         <label htmlFor="show-title" className="block text-sm font-medium text-slate-300 mb-1">
@@ -667,9 +719,9 @@ const ShowModal: React.FC<{
                         </button>
                         <button
                             type="submit"
-                            disabled={!title.trim()}
+                            disabled={isSaving || !title.trim()}
                             className={`flex-1 px-4 py-2 rounded-md text-white font-bold ${
-                                !title.trim() ? 'bg-slate-700 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'
+                                (isSaving || !title.trim()) ? 'bg-slate-700 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'
                             }`}
                             title={!title.trim() ? 'Show title required' : undefined}
                         >
