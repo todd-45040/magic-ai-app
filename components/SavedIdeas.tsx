@@ -192,11 +192,19 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
         setEditText('');
     };
 
-    // FIX: handler should be async to await updateIdea
+    // FIX: handler should be async and should refresh ideas after update (updateIdea may not return the full list)
     const handleSaveTags = async (ideaId: string) => {
-        const newTags = editText.split(',').map(t => t.trim()).filter(Boolean);
-        const updatedIdeas = await updateIdea(ideaId, { tags: newTags });
-        setIdeas(updatedIdeas);
+        const newTags = editText
+            .split(',')
+            .map((t) => t.trim())
+            .filter(Boolean);
+
+        await updateIdea(ideaId, { tags: newTags });
+
+        // Re-fetch to ensure UI matches persisted state
+        const refreshed = await getSavedIdeas();
+        setIdeas(refreshed);
+
         handleCancelEdit();
     };
     
