@@ -208,7 +208,7 @@ const TaskModal: React.FC<{
                     </div>
                 </form>
                 <div className="flex gap-3 p-6 flex-shrink-0 bg-slate-800 border-t border-slate-700">
-                    <button type="button" onClick={onClose} disabled={isSaving}} className="w-full py-2 px-4 bg-slate-600/50 hover:bg-slate-700 rounded-md text-slate-300 font-bold transition-colors">Cancel</button>
+                    <button type="button" onClick={onClose} disabled={isSaving} className="w-full py-2 px-4 bg-slate-600/50 hover:bg-slate-700 rounded-md text-slate-300 font-bold transition-colors">Cancel</button>
                     <button type="submit" form="task-form" disabled={isSaving} className="w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors">{isSaving ? 'Saving...' : buttonText}</button>
                 </div>
             </div>
