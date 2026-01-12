@@ -768,7 +768,7 @@ return (
             {selectedShow ? <ShowDetailView /> : <ShowListView />}
 
             {toastMsg && (
-                <div className=\"fixed bottom-6 right-6 z-[9999] bg-slate-900/95 text-white px-4 py-2 rounded-lg shadow-lg border border-white/10\">
+                <div className="fixed bottom-6 right-6 z-[9999] bg-slate-900/95 text-white px-4 py-2 rounded-lg shadow-lg border border-white/10">
                     {toastMsg}
                 </div>
             )}
