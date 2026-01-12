@@ -94,6 +94,8 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
     const [tagFilter, setTagFilter] = useState<string | null>(null);
     const [editingIdeaId, setEditingIdeaId] = useState<string | null>(null);
     const [editText, setEditText] = useState('');
+    const [isSavingTags, setIsSavingTags] = useState(false);
+    const [tagSaveError, setTagSaveError] = useState<string | null>(null);
     const [lightboxImg, setLightboxImg] = useState<string | null>(null);
     const ideaRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
 
@@ -194,18 +196,27 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
 
     // FIX: handler should be async and should refresh ideas after update (updateIdea may not return the full list)
     const handleSaveTags = async (ideaId: string) => {
-        const newTags = editText
-            .split(',')
-            .map((t) => t.trim())
-            .filter(Boolean);
+        setIsSavingTags(true);
+        setTagSaveError(null);
+        try {
+            const newTags = editText
+                .split(',')
+                .map((t) => t.trim())
+                .filter(Boolean);
 
-        await updateIdea(ideaId, { tags: newTags });
+            await updateIdea(ideaId, { tags: newTags });
 
-        // Re-fetch to ensure UI matches persisted state
-        const refreshed = await getSavedIdeas();
-        setIdeas(refreshed);
+            // Re-fetch to ensure UI matches persisted state
+            const refreshed = await getSavedIdeas();
+            setIdeas(refreshed);
 
-        handleCancelEdit();
+            handleCancelEdit();
+        } catch (e: any) {
+            // Most common cause: "tags" column missing in Supabase table
+            setTagSaveError(e?.message ?? 'Failed to save tags.');
+        } finally {
+            setIsSavingTags(false);
+        }
     };
     
     const allTags = useMemo(() => {
@@ -252,6 +263,8 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
                 <button
                     onClick={() => handleSaveTags(idea.id)}
                     className="flex-1 py-1 px-3 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-semibold text-xs transition-colors"
+                    disabled={isSavingTags}
+                    aria-disabled={isSavingTags}
                 >
                     Save Tags
                 </button>
@@ -262,6 +275,9 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
                     Cancel
                 </button>
             </div>
+            {tagSaveError ? (
+                <div className="text-xs text-rose-300">{tagSaveError}</div>
+            ) : null}
         </div>
     );
 
