@@ -4,11 +4,11 @@ import { createPortal } from 'react-dom';
 import { Type } from '@google/genai';
 import QRCode from 'qrcode';
 import type { Show, Task, Subtask, TaskPriority, Client, Finances, Expense, Performance, User } from '../types';
-import { getShows, addShow, updateShow, deleteShow, addTaskToShow, updateTaskInShow, deleteTaskFromShow, toggleSubtask, addTasksToShow } from '../services/showsService';
+import { getShows, addShow, updateShow, deleteShow, addTaskToShow, addTasksToShow, updateTaskInShow, deleteTaskFromShow, toggleSubtask } from '../services/showsService';
 import { startPerformance, endPerformance, getPerformancesByShowId } from '../services/performanceService';
 import { generateResponse, generateStructuredResponse } from '../services/geminiService';
 import { AI_TASK_SUGGESTER_SYSTEM_INSTRUCTION, IN_TASK_PATTER_SYSTEM_INSTRUCTION } from '../constants';
-import { ChecklistIcon, TrashIcon, WandIcon, PencilIcon, CalendarIcon, ViewGridIcon, ViewListIcon, FileTextIcon, CopyIcon, CheckIcon, MusicNoteIcon, BackIcon, StageCurtainsIcon, DollarSignIcon, UsersIcon, QrCodeIcon, AnalyticsIcon } from './icons';
+import { AnalyticsIcon, BackIcon, CalendarIcon, CheckIcon, ChecklistIcon, CopyIcon, DollarSignIcon, FileTextIcon, MusicNoteIcon, PencilIcon, QrCodeIcon, StageCurtainsIcon, TrashIcon, UsersIcon, ViewGridIcon, ViewListIcon, WandIcon } from './icons';
 import { useAppState } from '../store';
 
 type ViewMode = 'list' | 'board';
@@ -36,13 +36,17 @@ const PriorityBadge: React.FC<{ priority: TaskPriority }> = ({ priority }) => (
 
 const TaskModal: React.FC<{
     onClose: () => void;
-    onSave: (data: any) => void;
+    onSave: (data: any) => Promise<void> | void;
     taskToEdit?: Task | null;
     user: User;
-}> = ({ onClose, onSave, taskToEdit, user }) => {
+    onToast?: (msg: string) => void;
+}> = ({ onClose, onSave, taskToEdit, user, onToast }) => {
     const [title, setTitle] = useState('');
     const [notes, setNotes] = useState('');
     const [priority, setPriority] = useState<TaskPriority>('Medium');
+    const [isSaving, setIsSaving] = useState(false);
+        return () => window.clearTimeout(t);
+    }, [toastMsg]);
     const [dueDate, setDueDate] = useState('');
     const [musicCue, setMusicCue] = useState('');
     const [subtasks, setSubtasks] = useState<Partial<Subtask>[]>([]);
@@ -92,7 +96,7 @@ const TaskModal: React.FC<{
         }
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!title.trim()) return;
 
@@ -115,10 +119,17 @@ const TaskModal: React.FC<{
             dueDate: dueDate ? new Date(dueDate + 'T00:00:00').getTime() : undefined
         };
 
-        if (taskToEdit) {
-            onSave({ ...taskData, id: taskToEdit.id });
-        } else {
-            onSave(taskData);
+        try {
+            setIsSaving(true);
+            const payload = taskToEdit ? { ...taskData, id: taskToEdit.id } : taskData;
+            console.log('Saving task priority:', payload.priority);
+            await Promise.resolve(onSave(payload));
+            onToast?.(taskToEdit ? 'Task updated.' : 'Task saved.');
+        } catch (err) {
+            console.error(err);
+            onToast?.("Couldn't save task.");
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -147,7 +158,7 @@ const TaskModal: React.FC<{
                                 {isGeneratingPatter ? 'Generating...' : 'Generate Patter'}
                             </button>
                         </div>
-                        <textarea id="notes" rows={3} value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g., Prop list, patter cues..." className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500" />
+                        <textarea id="notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full bg-slate-900/50 border border-slate-700 rounded-md p-2 text-white focus:outline-none focus:border-purple-500" />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
@@ -193,14 +204,14 @@ const TaskModal: React.FC<{
                             )}
                         </div>
                         <div className="flex items-center gap-2 mt-2">
-                            <input type="text" value={newSubtaskText} onChange={e => setNewSubtaskText(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} placeholder="Add a new sub-task..." className="flex-1 w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500" />
+                            <input type="text" value={newSubtaskText} onChange={(e) => setNewSubtaskText(e.target.value)} placeholder="New subtask..." className="flex-1 bg-slate-900/50 border border-slate-700 rounded-md p-2 text-white focus:outline-none focus:border-purple-500" />
                             <button type="button" onClick={handleAddSubtask} className="px-4 py-2 bg-slate-600 hover:bg-slate-700 rounded-md text-white font-semibold text-sm">Add</button>
                         </div>
                     </div>
                 </form>
                 <div className="flex gap-3 p-6 flex-shrink-0 bg-slate-800 border-t border-slate-700">
-                    <button type="button" onClick={onClose} className="w-full py-2 px-4 bg-slate-600/50 hover:bg-slate-700 rounded-md text-slate-300 font-bold transition-colors">Cancel</button>
-                    <button type="submit" form="task-form" className="w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors">{buttonText}</button>
+                    <button type="button" onClick={onClose} disabled={isSaving}} className="w-full py-2 px-4 bg-slate-600/50 hover:bg-slate-700 rounded-md text-slate-300 font-bold transition-colors">Cancel</button>
+                    <button type="submit" form="task-form" disabled={isSaving} className="w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors">{isSaving ? 'Saving...' : buttonText}</button>
                 </div>
             </div>
         </div>
@@ -254,6 +265,13 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
     const [shows, setShows] = useState<Show[]>([]);
     const [isLoadingShows, setIsLoadingShows] = useState(true);
     const [showsError, setShowsError] = useState<string | null>(null);
+    const [toastMsg, setToastMsg] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!toastMsg) return;
+        const t = window.setTimeout(() => setToastMsg(null), 2200);
+        return () => window.clearTimeout(t);
+    }, [toastMsg]);
     const [selectedShow, setSelectedShow] = useState<Show | null>(null);
     const [viewMode, setViewMode] = useState<ViewMode>('board');
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -591,7 +609,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                         </div>
                         <div className="flex items-center gap-2">
                             <button onClick={() => setIsLiveModalOpen(true)} className="px-3 py-2 bg-green-600 hover:bg-green-700 rounded-md text-white font-semibold transition-colors flex items-center gap-2 text-sm"><QrCodeIcon className="w-4 h-4" /><span>Start Live Show</span></button>
-                            <button onClick={handleAiSuggestTasks} disabled={isSuggesting} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 font-semibold transition-colors flex items-center gap-2 text-sm disabled:opacity-50"><WandIcon className="w-4 h-4" /><span>{isSuggesting ? 'Thinking...' : 'AI-Suggest Tasks'}</span></button>
+                            <button onClick={handleAiSuggestTasks} disabled={isSuggesting} className="px-3 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold flex items-center gap-2 transition-colors"><WandIcon className="w-4 h-4" /><span>{isSuggesting ? 'Thinking...' : 'AI-Suggest Tasks'}</span></button>
                             <button onClick={generateScriptGuide} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 font-semibold transition-colors flex items-center gap-2 text-sm"><FileTextIcon className="w-4 h-4" /><span>Script Guide</span></button>
                             <button onClick={() => { setTaskToEdit(null); setIsTaskModalOpen(true); }} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors flex items-center gap-2 text-sm"><ChecklistIcon className="w-4 h-4" /><span>Add Task</span></button>
                         </div>
@@ -609,8 +627,8 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                 </header>
                 <div className="flex-1 overflow-y-auto px-4 md:px-6 pb-4 pt-4">
                     {activeTab === 'tasks' ? (
-                        tasks.length === 0 ? <div className="text-center py-12"><ChecklistIcon className="w-16 h-16 mx-auto text-slate-600 mb-4" /><h3 className="text-lg font-bold text-slate-400">This Show is Empty</h3><p className="text-slate-500 mb-4">Click "Add Task" to start planning manually, or let the AI help.</p><button onClick={handleAiSuggestTasks} disabled={isSuggesting} className="px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors flex items-center gap-2 text-base mx-auto"><WandIcon className="w-5 h-5" /><span>{isSuggesting ? 'Thinking...' : 'AI-Suggest Tasks'}</span></button></div>
-                        : viewMode === 'list' ? <ListView /> : <BoardView />
+                        tasks.length === 0 ? <div className="text-center py-10 text-slate-400"><p className="mb-3">No tasks yet. Click <span className="text-slate-200 font-semibold">Add Task</span> to get started.</p><button onClick={handleAiSuggestTasks} disabled={isSuggesting} className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold transition-colors"><WandIcon className="w-4 h-4" /><span>{isSuggesting ? 'Thinking...' : 'AI-Suggest Tasks'}</span></button></div> : viewMode === 'list' ? <ListView /> : <BoardView />
+
                     ) : activeTab === 'finances' ? (
                         <FinanceTracker show={selectedShow} onUpdate={(updates) => handleUpdateShow(selectedShow.id, updates)} />
                     ) : (
@@ -750,6 +768,12 @@ return (
             {isShowModalOpen && <ShowModal onClose={() => setIsShowModalOpen(false)} onSave={handleAddShow} />}
             {isLiveModalOpen && selectedShow && <LivePerformanceModal show={selectedShow} onClose={() => setIsLiveModalOpen(false)} onEnd={(id) => { setIsLiveModalOpen(false); onNavigateToAnalytics(id); }} />}
             {selectedShow ? <ShowDetailView /> : <ShowListView />}
+
+            {toastMsg && (
+                <div className=\"fixed bottom-6 right-6 z-[9999] bg-slate-900/95 text-white px-4 py-2 rounded-lg shadow-lg border border-white/10\">
+                    {toastMsg}
+                </div>
+            )}
         </>
     );
 };
