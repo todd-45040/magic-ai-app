@@ -11,38 +11,24 @@ const getUserIdOrThrow = async (): Promise<string> => {
 };
 
 const toIsoOrNull = (value?: string | number | Date | null) => {
-  if (!value) return null;
-  const d = new Date(value);
+  if (value === undefined || value === null || value === '') return null;
+  const d = new Date(value as any);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 };
 
-
-
-// Retry inserts/updates when the schema cache complains about a missing column.
-const withMissingColumnFallback = async <T extends Record<string, any>>(
-  op: (payload: T) => Promise<{ error: any }>,
-  payload: T,
-  maxRetries: number = 3
-) => {
-  let current: any = { ...payload };
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const { error } = await op(current);
-    if (!error) return { error: null as any, payload: current as T };
-    const msg = String(error?.message ?? error);
-    const m =
-      msg.match(/Could not find the '([^']+)' column/) ||
-      msg.match(/column ([a-zA-Z0-9_]+) of relation .* does not exist/) ||
-      msg.match(/column "?([a-zA-Z0-9_]+)"? does not exist/);
-    if (m && m[1] && current && Object.prototype.hasOwnProperty.call(current, m[1])) {
-      // Drop the missing column and retry.
-      const { [m[1]]: _dropped, ...rest } = current;
-      current = rest;
-      continue;
-    }
-    return { error, payload: current as T };
-  }
-  return { error: new Error('Insert/update failed after retries'), payload: current as T };
+// Normalize priority values coming from UI/DB to the canonical set used by the app.
+// Protects against older data like "high"/"LOW" or labels like "High Priority".
+const normalizePriority = (value: any): 'High' | 'Medium' | 'Low' => {
+  const raw = String(value ?? '').trim();
+  if (!raw) return 'Medium';
+  const lowered = raw.toLowerCase();
+  if (lowered.startsWith('high')) return 'High';
+  if (lowered.startsWith('low')) return 'Low';
+  if (lowered.startsWith('med')) return 'Medium';
+  // fallback (keeps UI stable)
+  return 'Medium';
 };
+
 const mapTaskToDb = (showId: string, userId: string, task: Partial<Task>) => {
   // Support a few possible field names that exist in your app over time.
   const title = (task as any).title ?? (task as any).taskTitle ?? '';
@@ -53,11 +39,12 @@ const mapTaskToDb = (showId: string, userId: string, task: Partial<Task>) => {
     (task as any).notes_patter ??
     '';
 
-  const priority = (task as any).priority ?? 'Medium';
+  // Priority sometimes arrives in different shapes (older UI fields, differing casing).
+  // Normalize to the canonical values used by the board filters.
+  const priority = normalizePriority((task as any).priority ?? (task as any).taskPriority ?? (task as any).priorityLevel);
   const dueDate = (task as any).dueDate ?? (task as any).due_date ?? null;
   const musicCue = (task as any).musicCue ?? (task as any).music_cue ?? '';
-  // The UI expects tasks to be either 'To-Do' or 'Completed'.
-  // Defaulting to 'To-Do' ensures newly created tasks show up immediately.
+  // The planner UI expects 'To-Do' or 'Completed'. Default to 'To-Do' so new tasks appear immediately.
   const status = (task as any).status ?? 'To-Do';
   const subtasks = (task as any).subtasks ?? [];
 
@@ -72,42 +59,6 @@ const mapTaskToDb = (showId: string, userId: string, task: Partial<Task>) => {
     status,
     subtasks
   };
-};
-
-// --- Normalizers (DB snake_case -> app camelCase) ---
-const normalizeTask = (row: any): Task => {
-  if (!row) return row as Task;
-  const createdAtMs = row.created_at ? new Date(row.created_at).getTime() : (row.createdAt ?? Date.now());
-  const dueAtMs = row.due_date ? new Date(row.due_date).getTime() : row.dueDate;
-  return {
-    ...row,
-    // Canonical app fields
-    id: row.id,
-    title: row.title,
-    notes: row.notes ?? row.patter ?? '',
-    priority: row.priority ?? 'Medium',
-    status: row.status ?? 'To-Do',
-    musicCue: row.music_cue ?? row.musicCue ?? null,
-    dueDate: dueAtMs ?? undefined,
-    createdAt: createdAtMs,
-    subtasks: Array.isArray(row.subtasks) ? row.subtasks : [],
-    // Optional convenience fields
-    showId: row.show_id ?? row.showId,
-    userId: row.user_id ?? row.userId
-  } as Task;
-};
-
-const normalizeShow = (row: any): Show => {
-  if (!row) return row as Show;
-  return {
-    ...row,
-    id: row.id,
-    title: row.title,
-    description: row.description ?? null,
-    clientId: row.client_id ?? row.clientId ?? null,
-    finances: row.finances ?? { performanceFee: 0, expenses: [], income: [] },
-    tasks: Array.isArray(row.tasks) ? row.tasks.map(normalizeTask) : []
-  } as Show;
 };
 
 export const getShows = async (): Promise<Show[]> => {
@@ -126,7 +77,17 @@ export const getShows = async (): Promise<Show[]> => {
     .order('created_at', { foreignTable: 'tasks', ascending: true });
 
   if (error) throw error;
-  return ((data as any[]) ?? []).map(normalizeShow);
+  // Normalize task fields to keep UI grouping/filtering stable across older rows.
+  return (((data as any[]) ?? []) as any[]).map((show) => ({
+    ...show,
+    tasks: Array.isArray(show.tasks)
+      ? show.tasks.map((t: any) => ({
+          ...t,
+          priority: normalizePriority(t.priority),
+          status: t.status ?? 'To-Do'
+        }))
+      : []
+  })) as Show[];
 };
 
 export const getShowById = async (id: string): Promise<Show | undefined> => {
@@ -145,7 +106,7 @@ export const getShowById = async (id: string): Promise<Show | undefined> => {
     .single();
 
   if (error) throw error;
-  return normalizeShow(data);
+  return data as unknown as Show;
 };
 
 export const addShow = async (show: Partial<Show>): Promise<Show[]> => {
@@ -215,11 +176,8 @@ export const addTaskToShow = async (showId: string, task: Partial<Task>): Promis
     throw new Error('Task title required');
   }
 
-  const result = await withMissingColumnFallback(
-    (p) => supabase.from('tasks').insert(p),
-    payload
-  );
-  if (result.error) throw result.error;
+  const { error } = await supabase.from('tasks').insert(payload);
+  if (error) throw error;
 
   return getShows();
 };
@@ -233,14 +191,8 @@ export const addTasksToShow = async (showId: string, tasks: Partial<Task>[]): Pr
 
   if (payloads.length === 0) return getShows();
 
-  // Insert one-by-one with fallback so a single missing optional column doesn't block all inserts.
-  for (const payload of payloads) {
-    const result = await withMissingColumnFallback(
-      (p) => supabase.from('tasks').insert(p),
-      payload
-    );
-    if (result.error) throw result.error;
-  }
+  const { error } = await supabase.from('tasks').insert(payloads);
+  if (error) throw error;
 
   return getShows();
 };
@@ -253,7 +205,9 @@ export const updateTaskInShow = async (showId: string, taskId: string, updates: 
   if ((updates as any).title !== undefined) dbUpdates.title = (updates as any).title;
   if ((updates as any).notes !== undefined) dbUpdates.notes = (updates as any).notes;
   if ((updates as any).patter !== undefined) dbUpdates.notes = (updates as any).patter;
-  if ((updates as any).priority !== undefined) dbUpdates.priority = (updates as any).priority;
+  if ((updates as any).priority !== undefined) dbUpdates.priority = normalizePriority((updates as any).priority);
+  if ((updates as any).taskPriority !== undefined) dbUpdates.priority = normalizePriority((updates as any).taskPriority);
+  if ((updates as any).priorityLevel !== undefined) dbUpdates.priority = normalizePriority((updates as any).priorityLevel);
   if ((updates as any).musicCue !== undefined) dbUpdates.music_cue = (updates as any).musicCue;
   if ((updates as any).status !== undefined) dbUpdates.status = (updates as any).status;
   if ((updates as any).subtasks !== undefined) dbUpdates.subtasks = (updates as any).subtasks;
