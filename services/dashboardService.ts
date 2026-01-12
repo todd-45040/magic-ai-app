@@ -6,9 +6,9 @@ const LAYOUT_STORAGE_KEY = 'magician_dashboard_layout';
 
 export const WIDGETS: DashboardWidget[] = [
     { id: 'quick-actions', title: 'Quick Actions', icon: RabbitIcon },
-    { id: 'upcoming-tasks', title: 'Upcoming Tasks', icon: ClockIcon },
-    { id: 'latest-feedback', title: 'Latest Feedback', icon: StarIcon },
-    { id: 'recent-idea', title: 'Last Saved Idea', icon: BookmarkIcon },
+    { id: 'upcoming-tasks', title: 'My Next Show', icon: ClockIcon },
+    { id: 'latest-feedback', title: 'Audience Reactions', icon: StarIcon },
+    { id: 'recent-idea', title: 'My Current Work', icon: BookmarkIcon },
     { id: 'featured-tools', title: 'Featured Tools', icon: WandIcon },
 ];
 
