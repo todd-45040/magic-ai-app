@@ -43,6 +43,34 @@ const IdeaShareWrapper: React.FC<{ idea: SavedIdea }> = ({ idea }) => {
     );
 };
 
+function splitLeadingHeading(content: string): { heading?: string; rest: string } {
+    const text = (content ?? '').toString();
+    const lines = text.split(/\r?\n/);
+    if (lines.length === 0) return { rest: text };
+
+    const firstNonEmptyIdx = lines.findIndex((l) => l.trim().length > 0);
+    if (firstNonEmptyIdx === -1) return { rest: '' };
+
+    const first = lines[firstNonEmptyIdx].trim();
+    const m = first.match(/^#{1,3}\s+(.*)$/);
+    if (!m) return { rest: text };
+
+    const heading = (m[1] || '').trim();
+    const restLines = lines.slice(0, firstNonEmptyIdx).concat(lines.slice(firstNonEmptyIdx + 1));
+    const rest = restLines.join('\n').trimStart();
+    return { heading, rest };
+}
+
+function formatSavedOn(idea: SavedIdea): string {
+    const anyIdea = idea as any;
+    const raw = anyIdea.created_at ?? anyIdea.createdAt ?? idea.timestamp;
+    if (!raw) return '—';
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString();
+}
+
+
 const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => {
     const [ideas, setIdeas] = useState<SavedIdea[]>([]);
     const [typeFilter, setTypeFilter] = useState<'all' | IdeaType>('all');
@@ -263,8 +291,8 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-slate-900 rounded-lg flex items-center justify-center flex-shrink-0"><MicrophoneIcon className="w-6 h-6 text-purple-400" /></div>
                             <div>
-                                <h3 className="font-bold text-white pr-20">{idea.title || 'Untitled Rehearsal'}</h3>
-                                <p className="text-xs text-slate-400">Saved on {new Date(idea.timestamp).toLocaleDateString()}</p>
+                                <h3 className="font-bold text-yellow-300 pr-20">{idea.title || 'Untitled Rehearsal'}</h3>
+                                <p className="text-xs text-slate-400">Saved on {formatSavedOn(idea)}</p>
                             </div>
                         </div>
                     </div>
@@ -349,8 +377,8 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
                                         <div className="flex items-center gap-2">
                                             <div className="w-8 h-8 bg-slate-900/70 rounded-lg flex items-center justify-center flex-shrink-0 backdrop-blur-sm"><ImageIcon className="w-5 h-5 text-purple-400" /></div>
                                             <div>
-                                                <h3 className="font-bold text-white text-sm">Image Idea</h3>
-                                                <p className="text-xs text-slate-400">{new Date(idea.timestamp).toLocaleDateString()}</p>
+                                                <h3 className="font-bold text-yellow-300 text-sm">Image Idea</h3>
+                                                <p className="text-xs text-slate-400">{formatSavedOn(idea)}</p>
                                             </div>
                                         </div>
                                          {editingIdeaId === idea.id ? <TagEditor idea={idea} /> : <TagDisplay idea={idea} />}
@@ -372,12 +400,20 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
                                         <div className="flex items-center gap-3">
                                             <div className="w-10 h-10 bg-slate-900 rounded-lg flex items-center justify-center flex-shrink-0"><FileTextIcon className="w-6 h-6 text-purple-400" /></div>
                                             <div>
-                                                <h3 className="font-bold text-white pr-20">{idea.title || 'Saved Note'}</h3>
-                                                <p className="text-xs text-slate-400">Saved on {new Date(idea.timestamp).toLocaleDateString()}</p>
+                                                <h3 className="font-bold text-yellow-300 pr-20">{idea.title || splitLeadingHeading(idea.content).heading || 'Saved Note'}</h3>
+                                                <p className="text-xs text-slate-400">Saved on {formatSavedOn(idea)}</p>
                                             </div>
                                         </div>
                                     </div>
-                                    <p className="text-sm text-slate-300 whitespace-pre-wrap break-words line-clamp-6">{idea.content}</p>
+                                    {(() => {
+                                        const { heading, rest } = splitLeadingHeading(idea.content);
+                                        return (
+                                            <div className="text-sm text-slate-300 whitespace-pre-wrap break-words line-clamp-6">
+                                                {heading ? <div className="text-yellow-300 font-semibold mb-1">{heading}</div> : null}
+                                                <div>{rest}</div>
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                                 {editingIdeaId === idea.id ? <TagEditor idea={idea} /> : <TagDisplay idea={idea} />}
                                  <div className="absolute top-3 right-3 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
