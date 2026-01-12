@@ -124,7 +124,7 @@ const TaskModal: React.FC<{
     const buttonText = taskToEdit ? 'Save Changes' : 'Add Task';
     
     const modalContent = (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in" onClick={onClose}>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 motion-reduce:animate-none animate-fade-in" onClick={onClose}>
             <div className="w-full max-w-lg bg-slate-800 border border-purple-500 rounded-lg shadow-2xl flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
                 <h2 className="text-xl font-bold text-white p-6 border-b border-slate-700 flex-shrink-0">{modalTitle}</h2>
                 <form id="task-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
@@ -210,7 +210,7 @@ const ScriptGuideModal: React.FC<{ script: string; onClose: () => void }> = ({ s
     };
 
     return (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in" onClick={onClose}>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 motion-reduce:animate-none animate-fade-in" onClick={onClose}>
             <div className="w-full max-w-2xl h-[90vh] max-h-[700px] bg-slate-800 border border-purple-500 rounded-lg shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
                 <header className="p-4 border-b border-slate-700 flex items-center justify-between flex-shrink-0">
                     <h2 className="text-xl font-bold text-white">Show Script & Cue Sheet</h2>
@@ -447,7 +447,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
     };
 
     const ShowListView = () => (
-        <div className="flex flex-col h-full animate-fade-in">
+        <div className="flex flex-col h-full">
             <header className="p-4 md:px-6 md:pt-6">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                     <div className="flex items-center gap-3">
@@ -572,7 +572,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
         );
         
         return (
-             <div className="flex flex-col h-full animate-fade-in">
+             <div className="flex flex-col h-full">
                 <header className="p-4 md:px-6 md:pt-6">
                     <button onClick={() => setSelectedShow(null)} className="flex items-center gap-2 mb-4 text-slate-300 hover:text-white transition-colors"><BackIcon className="w-5 h-5" /><span>Back to All Shows</span></button>
                     <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
@@ -647,7 +647,7 @@ const ShowModal: React.FC<{
 
     return createPortal(
         <div
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-[999] animate-fade-in"
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-[999] motion-reduce:animate-none animate-fade-in"
             onClick={onClose}
         >
             <div
