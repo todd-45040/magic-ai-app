@@ -309,9 +309,9 @@ const PromptGrid: React.FC<{
     titles: string[];
   }> = [
     {
-      key: 'creative',
+      key: 'create',
       icon: '🎨',
-      title: 'Creative & Writing Tools',
+      title: 'Create',
       description: 'Generate effects, write scripts, and develop visual concepts.',
       titles: [
         'Effect Generator',
@@ -322,43 +322,35 @@ const PromptGrid: React.FC<{
       ],
     },
     {
-      key: 'rehearsal',
+      key: 'rehearse',
       icon: '🎙️',
-      title: 'Rehearsal & Performance Coaching',
-      description: 'Practice delivery and timing, and spot angle or reset risks.',
+      title: 'Rehearse',
+      description: 'Practice delivery, timing, and audience management before you step on stage.',
       titles: [
         'Rehearsal Coaching',
         'Live Patter Rehearsal',
         'Video Rehearsal Studio',
         'Angle/Risk Analysis',
         'Persona Simulator',
+        'Director Mode',
       ],
     },
     {
-      key: 'business',
-      icon: '💼',
-      title: 'Business & Show Management',
-      description: 'Plan shows, manage clients, and create contracts and marketing.',
+      key: 'perform_manage',
+      icon: '🎭',
+      title: 'Perform & Manage',
+      description: 'Plan shows, stay organized, and handle the business side of performing.',
       titles: [
-        'Director Mode',
         'Show Planner',
-        'Prop Checklist Generator',
+        'Show Feedback',
         'Client Management',
         'Contract Generator',
+        'Prop Checklist Generator',
         'Marketing Campaign',
       ],
     },
-    {
-      key: 'learning',
-      icon: '📚',
-      title: 'Learning & Reference',
-      description: 'Learn theory, look up terms, and research history.',
-      titles: [
-        'Magic Theory Tutor',
-        'Magic Dictionary',
-        'Magic Archives',
-      ],
-    },
+
+    // --- Everything below stays accessible, but is “secondary” to the main flow above. ---
     {
       key: 'library',
       icon: '🗂️',
@@ -370,6 +362,17 @@ const PromptGrid: React.FC<{
       ],
     },
     {
+      key: 'learning',
+      icon: '📚',
+      title: 'Learn & Reference',
+      description: 'Study fundamentals and look up terms, history, and theory.',
+      titles: [
+        'Magic Theory Tutor',
+        'Magic Dictionary',
+        'Magic Archives',
+      ],
+    },
+    {
       key: 'specialty',
       icon: '✨',
       title: 'Specialty Assistants',
@@ -378,15 +381,6 @@ const PromptGrid: React.FC<{
         "Assistant's Studio",
         'Mentalism Assistant',
         'Gospel Magic Assistant',
-      ],
-    },
-    {
-      key: 'audience',
-      icon: '📱',
-      title: 'Audience & Engagement',
-      description: 'Review audience feedback and performance notes.',
-      titles: [
-        'Show Feedback',
       ],
     },
   ];
