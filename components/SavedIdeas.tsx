@@ -71,6 +71,18 @@ function formatSavedOn(idea: SavedIdea): string {
 }
 
 
+
+function extractFirstDataImage(markdown: string): { imgSrc: string | null; cleaned: string } {
+    const text = (markdown ?? '').toString();
+    // Matches: ![Alt](data:image/<type>;base64,....)
+    const re = /!\[[^\]]*\]\((data:image\/[a-zA-Z0-9.+-]+;base64,[^)]+)\)/m;
+    const m = text.match(re);
+    const imgSrc = m?.[1] ?? null;
+    const cleaned = text.replace(re, '').trim();
+    return { imgSrc, cleaned };
+}
+
+
 const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => {
     const [ideas, setIdeas] = useState<SavedIdea[]>([]);
     const [typeFilter, setTypeFilter] = useState<'all' | IdeaType>('all');
@@ -407,10 +419,21 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
                                     </div>
                                     {(() => {
                                         const { heading, rest } = splitLeadingHeading(idea.content);
+                                        const { imgSrc, cleaned } = extractFirstDataImage(rest);
                                         return (
                                             <div className="text-sm text-slate-300 whitespace-pre-wrap break-words line-clamp-6">
                                                 {heading ? <div className="text-yellow-300 font-semibold mb-1 overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">{heading}</div> : null}
-                                                <div>{rest}</div>
+                                                {imgSrc ? (
+                                                    <div className="mt-2 mb-2">
+                                                        <img
+                                                            src={imgSrc}
+                                                            alt="Concept art"
+                                                            loading="lazy"
+                                                            className="w-full h-36 object-cover rounded-lg border border-slate-700 bg-slate-950/20"
+                                                        />
+                                                    </div>
+                                                ) : null}
+                                                <div className="overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:6]">{cleaned}</div>
                                             </div>
                                         );
                                     })()}
