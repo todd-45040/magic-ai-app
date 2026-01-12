@@ -1402,7 +1402,14 @@ useEffect(() => {
   })();
 
   // Dashboard: Insight Tiles ("Make the dashboard talk back")
-  type DashboardInsight = { key: string; icon: React.FC<{ className?: string }>; title: string; message: string };
+  // Accent adds a subtle gold/purple balance across the page.
+  type DashboardInsight = {
+    key: string;
+    icon: React.FC<{ className?: string }>;
+    title: string;
+    message: string;
+    accent?: 'purple' | 'gold';
+  };
 
   const insights: DashboardInsight[] = (() => {
     const result: DashboardInsight[] = [];
@@ -1431,6 +1438,7 @@ useEffect(() => {
         icon: ChecklistIcon,
         title,
         message,
+        accent: 'purple',
       });
     }
 
@@ -1453,6 +1461,7 @@ useEffect(() => {
           icon: StarIcon,
           title: 'Audience engagement insight',
           message: 'Audience reactions trend strongest during interactive moments. Consider adding one extra volunteer beat or callback tonight.',
+          accent: 'gold',
         });
       } else if (avgRating !== null) {
         result.push({
@@ -1460,6 +1469,7 @@ useEffect(() => {
           icon: StarIcon,
           title: 'Audience feedback snapshot',
           message: `Your recent audience feedback averages ${avgRating.toFixed(1)} / 5. Review one note and make a single targeted tweak.`,
+          accent: 'gold',
         });
       } else {
         result.push({
@@ -1467,6 +1477,7 @@ useEffect(() => {
           icon: StarIcon,
           title: 'Audience feedback',
           message: 'You’ve collected audience feedback recently. Review it before your next rehearsal and reinforce what landed best.',
+          accent: 'gold',
         });
       }
     }
@@ -1479,6 +1490,7 @@ useEffect(() => {
         icon: ClockIcon,
         title: 'Performance pacing tip',
         message: 'Try a deliberate pause right before your final reveal line. One beat of silence can make the climax feel twice as strong.',
+        accent: 'gold',
       });
     }
 
@@ -1900,7 +1912,7 @@ useEffect(() => {
             </div>
 
             {/* Primary Action */}
-            <div className="mb-6">
+            <div className="px-4 md:px-6 mb-6">
               <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] p-5 md:p-6">
                 <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-purple-500/10 via-transparent to-yellow-500/10" />
                 <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -1928,24 +1940,36 @@ useEffect(() => {
 
             {/* Insight Tiles */}
             {insights.length > 0 && (
-              <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
-                {insights.map((insight) => (
-                  <div
-                    key={insight.key}
-                    className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] p-4"
-                  >
-                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-purple-500/10 via-transparent to-transparent" />
-                    <div className="relative flex items-start gap-3">
-                      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-purple-400/20 bg-purple-500/15 text-purple-200">
-                        <insight.icon className="h-4 w-4" />
+              <div className="px-4 md:px-6 mb-6">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                  {insights.map((insight) => {
+                    const isGold = insight.accent === 'gold';
+                    const iconClasses = isGold
+                      ? 'border-yellow-400/25 bg-yellow-500/10 text-yellow-200'
+                      : 'border-purple-400/20 bg-purple-500/15 text-purple-200';
+                    const glowClasses = isGold
+                      ? 'bg-gradient-to-br from-yellow-500/12 via-transparent to-transparent'
+                      : 'bg-gradient-to-br from-purple-500/10 via-transparent to-transparent';
+
+                    return (
+                      <div
+                        key={insight.key}
+                        className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] p-4"
+                      >
+                        <div className={`pointer-events-none absolute inset-0 ${glowClasses}`} />
+                        <div className="relative flex items-start gap-3">
+                          <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border ${iconClasses}`}>
+                            <insight.icon className="h-4 w-4" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-white">{insight.title}</p>
+                            <p className="mt-1 text-sm text-white/65">{insight.message}</p>
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-semibold text-white">{insight.title}</p>
-                        <p className="mt-1 text-sm text-white/65">{insight.message}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                    );
+                  })}
+                </div>
               </div>
             )}
 
