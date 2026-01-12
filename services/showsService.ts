@@ -56,6 +56,9 @@ const mapTaskToDb = (showId: string, userId: string, task: Partial<Task>) => {
     title,
     notes,
     priority,
+    // Compatibility: some schemas use different column names for priority
+    priority_level: priority,
+    task_priority: priority,
     due_date: toIsoOrNull(dueDate),
     music_cue: musicCue || null,
     status,
@@ -158,7 +161,7 @@ export const getShows = async (): Promise<Show[]> => {
     tasks: Array.isArray(show.tasks)
       ? show.tasks.map((t: any) => ({
           ...t,
-          priority: normalizePriority(t.priority),
+          priority: normalizePriority((t as any).priority ?? (t as any).priority_level ?? (t as any).task_priority ?? (t as any).priorityLevel),
           status: t.status ?? 'To-Do'
         }))
       : []
@@ -290,9 +293,15 @@ export const updateTaskInShow = async (showId: string, taskId: string, updates: 
   if ((updates as any).title !== undefined) dbUpdates.title = (updates as any).title;
   if ((updates as any).notes !== undefined) dbUpdates.notes = (updates as any).notes;
   if ((updates as any).patter !== undefined) dbUpdates.notes = (updates as any).patter;
-  if ((updates as any).priority !== undefined) dbUpdates.priority = normalizePriority((updates as any).priority);
-  if ((updates as any).taskPriority !== undefined) dbUpdates.priority = normalizePriority((updates as any).taskPriority);
-  if ((updates as any).priorityLevel !== undefined) dbUpdates.priority = normalizePriority((updates as any).priorityLevel);
+  if ((updates as any).priority !== undefined || (updates as any).taskPriority !== undefined || (updates as any).priorityLevel !== undefined) {
+    const p = normalizePriority(
+      (updates as any).priority ?? (updates as any).taskPriority ?? (updates as any).priorityLevel
+    );
+    // Compatibility: some schemas use different column names for priority
+    dbUpdates.priority = p;
+    dbUpdates.priority_level = p;
+    dbUpdates.task_priority = p;
+  }
   if ((updates as any).musicCue !== undefined) dbUpdates.music_cue = (updates as any).musicCue;
   if ((updates as any).status !== undefined) dbUpdates.status = (updates as any).status;
   if ((updates as any).subtasks !== undefined) dbUpdates.subtasks = (updates as any).subtasks;
