@@ -1494,6 +1494,42 @@ useEffect(() => {
       });
     }
 
+    // Ensure we always fill 3 slots (avoids empty space on wide screens)
+    if (result.length < 3) {
+      const hasIdeas = Array.isArray(ideas) && ideas.length > 0;
+      result.push(
+        hasIdeas
+          ? {
+              key: 'creative-spark',
+              icon: LightbulbIcon,
+              title: 'Creative spark',
+              message:
+                'Pick one saved idea and add a stronger opener line, a callback, or a cleaner ending beat. Small upgrades compound fast.',
+              accent: 'gold',
+            }
+          : {
+              key: 'first-create',
+              icon: WandIcon,
+              title: 'Start a new effect',
+              message:
+                'Generate one fresh idea in Effect Generator using 2–3 everyday objects. Save the best version and build from there.',
+              accent: 'gold',
+            }
+      );
+    }
+
+    if (result.length < 3) {
+      result.push({
+        key: 'rehearsal-quick-win',
+        icon: ClockIcon,
+        title: 'Rehearsal quick win',
+        message:
+          'Do a 3‑minute run of your opener at “performance volume.” Aim for slower, cleaner beats—then repeat once with a deliberate pause.',
+        accent: 'purple',
+      });
+    }
+
+
     // Keep it tight: 3 tiles max
     return result.slice(0, 3).map((i) => ({ ...i, message: clamp(i.message, 140) }));
   })();
@@ -1900,11 +1936,11 @@ useEffect(() => {
         case 'dashboard': return (
           <>
             <div className="px-4 md:px-6 pt-6">
-              <p className="text-sm uppercase tracking-wider text-purple-400/80">
+              <p className="text-sm uppercase tracking-wider text-yellow-300/80">
                 Magic AI Wizard Dashboard
               </p>
               <h1 className="mt-2 text-2xl md:text-3xl font-semibold text-white leading-tight">
-                Your AI Assistant for Creating, Rehearsing, and Running Better Magic Shows
+                Your AI Assistant for Creating, Rehearsing, and Running <span className="text-yellow-200">Better Magic Shows</span>
               </h1>
               <p className="mt-2 text-sm text-white/60">
                 Welcome back, {user.name || (user.email ? user.email.split('@')[0] : 'magician')}.
@@ -1962,7 +1998,7 @@ useEffect(() => {
                             <insight.icon className="h-4 w-4" />
                           </div>
                           <div>
-                            <p className="text-sm font-semibold text-white">{insight.title}</p>
+                            <p className={isGold ? 'text-sm font-semibold text-yellow-100' : 'text-sm font-semibold text-white'}>{insight.title}</p>
                             <p className="mt-1 text-sm text-white/65">{insight.message}</p>
                           </div>
                         </div>
