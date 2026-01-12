@@ -263,7 +263,7 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-slate-900 rounded-lg flex items-center justify-center flex-shrink-0"><MicrophoneIcon className="w-6 h-6 text-purple-400" /></div>
                             <div>
-                                <h3 className="font-bold text-yellow-300 pr-20"">{idea.title || 'Untitled Rehearsal'}</h3>
+                                <h3 className="font-bold text-white pr-20">{idea.title || 'Untitled Rehearsal'}</h3>
                                 <p className="text-xs text-slate-400">Saved on {new Date(idea.timestamp).toLocaleDateString()}</p>
                             </div>
                         </div>
@@ -349,7 +349,7 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
                                         <div className="flex items-center gap-2">
                                             <div className="w-8 h-8 bg-slate-900/70 rounded-lg flex items-center justify-center flex-shrink-0 backdrop-blur-sm"><ImageIcon className="w-5 h-5 text-purple-400" /></div>
                                             <div>
-                                                <h3 className="font-bold text-yellow-300 text-sm"">Image Idea</h3>
+                                                <h3 className="font-bold text-white text-sm">Image Idea</h3>
                                                 <p className="text-xs text-slate-400">{new Date(idea.timestamp).toLocaleDateString()}</p>
                                             </div>
                                         </div>
@@ -372,7 +372,7 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
                                         <div className="flex items-center gap-3">
                                             <div className="w-10 h-10 bg-slate-900 rounded-lg flex items-center justify-center flex-shrink-0"><FileTextIcon className="w-6 h-6 text-purple-400" /></div>
                                             <div>
-                                                <h3 className="font-bold text-yellow-300 pr-20">{idea.title || 'Saved Note'}</h3>
+                                                <h3 className="font-bold text-white pr-20">{idea.title || 'Saved Note'}</h3>
                                                 <p className="text-xs text-slate-400">Saved on {new Date(idea.timestamp).toLocaleDateString()}</p>
                                             </div>
                                         </div>
