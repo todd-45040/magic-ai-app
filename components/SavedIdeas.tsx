@@ -291,7 +291,7 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-slate-900 rounded-lg flex items-center justify-center flex-shrink-0"><MicrophoneIcon className="w-6 h-6 text-purple-400" /></div>
                             <div>
-                                <h3 className="font-bold text-yellow-300 pr-20">{idea.title || 'Untitled Rehearsal'}</h3>
+                                <h3 className="font-bold text-yellow-300 pr-20 overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">{idea.title || 'Untitled Rehearsal'}</h3>
                                 <p className="text-xs text-slate-400">Saved on {formatSavedOn(idea)}</p>
                             </div>
                         </div>
@@ -400,7 +400,7 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
                                         <div className="flex items-center gap-3">
                                             <div className="w-10 h-10 bg-slate-900 rounded-lg flex items-center justify-center flex-shrink-0"><FileTextIcon className="w-6 h-6 text-purple-400" /></div>
                                             <div>
-                                                <h3 className="font-bold text-yellow-300 pr-20">{idea.title || splitLeadingHeading(idea.content).heading || 'Saved Note'}</h3>
+                                                <h3 className="font-bold text-yellow-300 pr-20 overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">{idea.title || splitLeadingHeading(idea.content).heading || 'Saved Note'}</h3>
                                                 <p className="text-xs text-slate-400">Saved on {formatSavedOn(idea)}</p>
                                             </div>
                                         </div>
@@ -409,7 +409,7 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
                                         const { heading, rest } = splitLeadingHeading(idea.content);
                                         return (
                                             <div className="text-sm text-slate-300 whitespace-pre-wrap break-words line-clamp-6">
-                                                {heading ? <div className="text-yellow-300 font-semibold mb-1">{heading}</div> : null}
+                                                {heading ? <div className="text-yellow-300 font-semibold mb-1 overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">{heading}</div> : null}
                                                 <div>{rest}</div>
                                             </div>
                                         );
