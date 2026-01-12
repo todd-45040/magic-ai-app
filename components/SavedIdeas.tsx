@@ -319,7 +319,12 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
                             <div>
                                 <h3 className="font-bold text-yellow-300 pr-20 overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">{idea.title || 'Untitled Rehearsal'}</h3>
                                                 <div className="flex items-center gap-2 mt-1">
+                                                    <div className="flex items-center gap-2 mt-1">
                                                     <p className="text-xs text-slate-400">Saved on {formatSavedOn(idea)}</p>
+                                                    <span className="text-[10px] px-2 py-0.5 rounded-full border border-slate-600 bg-slate-900/40 text-slate-300 uppercase tracking-wide">
+                                                        {idea.type}
+                                                    </span>
+                                                </div>
                                                     <span className="text-[10px] px-2 py-0.5 rounded-full border border-slate-600 bg-slate-900/40 text-slate-300 uppercase tracking-wide">
                                                         {idea.type}
                                                     </span>
@@ -411,7 +416,7 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
                                                 <h3 className="font-bold text-yellow-300 text-sm">Image Idea</h3>
                                             <div className="flex items-center gap-2 mt-1">
                                                 <p className="text-xs text-slate-400">{formatSavedOn(idea)}</p>
-                                                <span className="text-[10px] px-2 py-0.5 rounded-full border border-slate-600 bg-slate-900/40 text-slate-300 uppercase tracking-wide">image</span>
+                                                <span className="text-[10px] px-2 py-0.5 rounded-full border border-slate-600 bg-slate-900/40 text-slate-300 uppercase tracking-wide">{idea.type}</span>
                                             </div>
                                             </div>
                                         </div>
