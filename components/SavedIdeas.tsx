@@ -72,6 +72,11 @@ function formatSavedOn(idea: SavedIdea): string {
 
 
 
+function isErrorIdea(content: string): boolean {
+    const t = (content ?? '').toString().toLowerCase();
+    return t.includes('request failed') || t.includes('error:') || t.includes('function_invocation_failed');
+}
+
 function extractFirstDataImage(markdown: string): { imgSrc: string | null; cleaned: string } {
     const text = (markdown ?? '').toString();
     // Matches: ![Alt](data:image/<type>;base64,....)
@@ -95,6 +100,14 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
     useEffect(() => {
         // FIX: getSavedIdeas() is async, resolve with .then()
         getSavedIdeas().then(setIdeas);
+    }, []);
+
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key === "Escape") setLightboxImg(null);
+        };
+        window.addEventListener("keydown", onKeyDown);
+        return () => window.removeEventListener("keydown", onKeyDown);
     }, []);
     
     useEffect(() => {
@@ -304,7 +317,12 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
                             <div className="w-10 h-10 bg-slate-900 rounded-lg flex items-center justify-center flex-shrink-0"><MicrophoneIcon className="w-6 h-6 text-purple-400" /></div>
                             <div>
                                 <h3 className="font-bold text-yellow-300 pr-20 overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">{idea.title || 'Untitled Rehearsal'}</h3>
-                                <p className="text-xs text-slate-400">Saved on {formatSavedOn(idea)}</p>
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    <p className="text-xs text-slate-400">Saved on {formatSavedOn(idea)}</p>
+                                                    <span className="text-[10px] px-2 py-0.5 rounded-full border border-slate-600 bg-slate-900/40 text-slate-300 uppercase tracking-wide">
+                                                        {idea.type}
+                                                    </span>
+                                                </div>
                             </div>
                         </div>
                     </div>
@@ -390,7 +408,10 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
                                             <div className="w-8 h-8 bg-slate-900/70 rounded-lg flex items-center justify-center flex-shrink-0 backdrop-blur-sm"><ImageIcon className="w-5 h-5 text-purple-400" /></div>
                                             <div>
                                                 <h3 className="font-bold text-yellow-300 text-sm">Image Idea</h3>
+                                            <div className="flex items-center gap-2 mt-1">
                                                 <p className="text-xs text-slate-400">{formatSavedOn(idea)}</p>
+                                                <span className="text-[10px] px-2 py-0.5 rounded-full border border-slate-600 bg-slate-900/40 text-slate-300 uppercase tracking-wide">image</span>
+                                            </div>
                                             </div>
                                         </div>
                                          {editingIdeaId === idea.id ? <TagEditor idea={idea} /> : <TagDisplay idea={idea} />}
@@ -418,22 +439,37 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
                                         </div>
                                     </div>
                                     {(() => {
+                                        const isError = isErrorIdea(idea.content);
                                         const { heading, rest } = splitLeadingHeading(idea.content);
                                         const { imgSrc, cleaned } = extractFirstDataImage(rest);
                                         return (
                                             <div className="text-sm text-slate-300 whitespace-pre-wrap break-words line-clamp-6">
-                                                {heading ? <div className="text-yellow-300 font-semibold mb-1 overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">{heading}</div> : null}
-                                                {imgSrc ? (
-                                                    <div className="mt-2 mb-2">
-                                                        <img
-                                                            src={imgSrc}
-                                                            alt="Concept art"
-                                                            loading="lazy"
-                                                            className="w-full h-36 object-cover rounded-lg border border-slate-700 bg-slate-950/20"
-                                                        />
+                                                {isError ? (
+                                                    <div className="text-sm text-slate-300">
+                                                        <div className="font-semibold text-slate-200">This item failed to load.</div>
+                                                        <div className="text-slate-400 mt-1 overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3]">
+                                                            {idea.content}
+                                                        </div>
+                                                        <div className="text-slate-500 mt-2">You can safely delete it.</div>
                                                     </div>
-                                                ) : null}
-                                                <div className="overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:6]">{cleaned}</div>
+                                                ) : (
+                                                    <>
+                                                        {heading ? <div className="text-yellow-300 font-semibold mb-1 overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">{heading}</div> : null}
+                                                        {imgSrc ? (
+                                                            <div className="mt-2 mb-2">
+                                                                <button type="button" onClick={() => setLightboxImg(imgSrc)} className="block w-full" aria-label="Open concept art">
+                                                                    <img
+                                                                        src={imgSrc}
+                                                                        alt="Concept art"
+                                                                        loading="lazy"
+                                                                        className="w-full h-36 object-cover rounded-lg border border-slate-700 bg-slate-950/20 cursor-zoom-in"
+                                                                    />
+                                                                </button>
+                                                            </div>
+                                                        ) : null}
+                                                        <div className="overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:6]">{cleaned}</div>
+                                                    </>
+                                                )}
                                             </div>
                                         );
                                     })()}
@@ -459,6 +495,33 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
                     {tagFilter && <button onClick={() => setTagFilter(null)} className="mt-4 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-md text-white font-semibold">Clear Tag Filter</button>}
                 </div>
             )}
+
+            {lightboxImg ? (
+                <div
+                    className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+                    onClick={() => setLightboxImg(null)}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Concept art preview"
+                >
+                    <div className="relative max-w-5xl w-full" onClick={(e) => e.stopPropagation()}>
+                        <button
+                            type="button"
+                            onClick={() => setLightboxImg(null)}
+                            className="absolute -top-3 -right-3 w-10 h-10 rounded-full bg-slate-900/80 border border-slate-600 text-slate-200 hover:bg-slate-900 transition-colors flex items-center justify-center"
+                            aria-label="Close image"
+                        >
+                            <CrossIcon className="w-5 h-5" />
+                        </button>
+                        <img
+                            src={lightboxImg}
+                            alt="Concept art preview"
+                            className="w-full max-h-[80vh] object-contain rounded-xl border border-slate-700 bg-slate-950/30"
+                        />
+                    </div>
+                </div>
+            ) : null}
+
         </div>
     );
 };
