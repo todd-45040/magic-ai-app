@@ -16,6 +16,33 @@ const toIsoOrNull = (value?: string | number | Date | null) => {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 };
 
+
+
+// Retry inserts/updates when the schema cache complains about a missing column.
+const withMissingColumnFallback = async <T extends Record<string, any>>(
+  op: (payload: T) => Promise<{ error: any }>,
+  payload: T,
+  maxRetries: number = 3
+) => {
+  let current: any = { ...payload };
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const { error } = await op(current);
+    if (!error) return { error: null as any, payload: current as T };
+    const msg = String(error?.message ?? error);
+    const m =
+      msg.match(/Could not find the '([^']+)' column/) ||
+      msg.match(/column ([a-zA-Z0-9_]+) of relation .* does not exist/) ||
+      msg.match(/column "?([a-zA-Z0-9_]+)"? does not exist/);
+    if (m && m[1] && current && Object.prototype.hasOwnProperty.call(current, m[1])) {
+      // Drop the missing column and retry.
+      const { [m[1]]: _dropped, ...rest } = current;
+      current = rest;
+      continue;
+    }
+    return { error, payload: current as T };
+  }
+  return { error: new Error('Insert/update failed after retries'), payload: current as T };
+};
 const mapTaskToDb = (showId: string, userId: string, task: Partial<Task>) => {
   // Support a few possible field names that exist in your app over time.
   const title = (task as any).title ?? (task as any).taskTitle ?? '';
@@ -188,8 +215,11 @@ export const addTaskToShow = async (showId: string, task: Partial<Task>): Promis
     throw new Error('Task title required');
   }
 
-  const { error } = await supabase.from('tasks').insert(payload);
-  if (error) throw error;
+  const result = await withMissingColumnFallback(
+    (p) => supabase.from('tasks').insert(p),
+    payload
+  );
+  if (result.error) throw result.error;
 
   return getShows();
 };
@@ -203,8 +233,14 @@ export const addTasksToShow = async (showId: string, tasks: Partial<Task>[]): Pr
 
   if (payloads.length === 0) return getShows();
 
-  const { error } = await supabase.from('tasks').insert(payloads);
-  if (error) throw error;
+  // Insert one-by-one with fallback so a single missing optional column doesn't block all inserts.
+  for (const payload of payloads) {
+    const result = await withMissingColumnFallback(
+      (p) => supabase.from('tasks').insert(p),
+      payload
+    );
+    if (result.error) throw result.error;
+  }
 
   return getShows();
 };

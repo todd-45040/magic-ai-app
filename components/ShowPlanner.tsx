@@ -8,7 +8,7 @@ import { getShows, addShow, updateShow, deleteShow, addTaskToShow, updateTaskInS
 import { startPerformance, endPerformance, getPerformancesByShowId } from '../services/performanceService';
 import { generateResponse, generateStructuredResponse } from '../services/geminiService';
 import { AI_TASK_SUGGESTER_SYSTEM_INSTRUCTION, IN_TASK_PATTER_SYSTEM_INSTRUCTION } from '../constants';
-import { ChecklistIcon, TrashIcon, WandIcon, PencilIcon, CalendarIcon, ViewGridIcon, ViewListIcon, FileTextIcon, CopyIcon, CheckIcon, MusicNoteIcon, BackIcon, StageCurtainsIcon, DollarSignIcon, UsersIcon, QrCodeIcon, AnalyticsIcon } from './icons';
+import { ChecklistIcon, TrashIcon, WandIcon, PencilIcon, CalendarIcon, DollarSignIcon, UsersIcon, QrCodeIcon, AnalyticsIcon, ViewListIcon, ViewGridIcon, StageCurtainsIcon, FileTextIcon, CopyIcon, MusicNoteIcon, CheckIcon, BackIcon } from './icons';
 import { useAppState } from '../store';
 
 type ViewMode = 'list' | 'board';
@@ -329,10 +329,16 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
     // Task handlers
     const handleAddTask = async (data: any) => {
         if (!selectedShow) return;
-        const newShows = await addTaskToShow(selectedShow.id, data);
-        setShows(newShows);
-        setSelectedShow(newShows.find(s => s.id === selectedShow.id) || null);
-        setIsTaskModalOpen(false);
+        try {
+            const newShows = await addTaskToShow(selectedShow.id, data);
+            setShows(newShows);
+            setSelectedShow(newShows.find(s => s.id === selectedShow.id) || null);
+            setIsTaskModalOpen(false);
+        } catch (err: any) {
+            console.error('Add task failed:', err);
+            const msg = err?.message ? String(err.message) : 'Failed to add task.';
+            alert(msg);
+        }
     };
     const handleUpdateTask = async (data: Omit<Task, 'createdAt'>) => {
         if (!selectedShow) return;
