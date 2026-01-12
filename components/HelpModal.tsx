@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
     WandIcon, LightbulbIcon, MicrophoneIcon, ImageIcon, BookmarkIcon, ChecklistIcon,
     StarIcon, SearchIcon, CrossIcon, CameraIcon, QuestionMarkIcon, UsersCogIcon, UsersIcon,
@@ -22,6 +22,8 @@ interface HelpModalProps {
     onClose: () => void;
     /** Optional: lets Help open a tool directly (MagicianMode can pass setActiveView wrapper). */
     onNavigate?: (view: string) => void;
+    /** Optional: current tool view so Help can open pre-filtered. */
+    contextView?: string;
 }
 
 type HelpFeature = {
@@ -257,7 +259,7 @@ const workflows = [
     }
 ] as const;
 
-const HelpModal: React.FC<HelpModalProps> = ({ onClose, onNavigate }) => {
+const HelpModal: React.FC<HelpModalProps> = ({ onClose, onNavigate, contextView }) => {
     const [query, setQuery] = useState('');
     const enriched = useMemo<EnrichedFeature[]>(() => {
         return features.map((f) => ({ ...f, ...inferCategory(f.title) }));
@@ -293,6 +295,16 @@ const HelpModal: React.FC<HelpModalProps> = ({ onClose, onNavigate }) => {
     }, [enriched, query, activeCategory]);
 
     const canNavigate = typeof onNavigate === 'function';
+
+    // Context-aware Help: if the caller provides a current tool view, pre-filter Help to that tool.
+    useEffect(() => {
+        if (!contextView) return;
+        const match = enriched.find((f) => f.view === contextView);
+        if (!match) return;
+        setActiveCategory(match.category);
+        setQuery(match.title);
+    }, [contextView, enriched]);
+
 
     return (
         <div

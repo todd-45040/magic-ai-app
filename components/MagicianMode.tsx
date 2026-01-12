@@ -1777,16 +1777,14 @@ useEffect(() => {
   return (
     <div className="relative flex flex-col h-full rounded-lg border border-slate-800 shadow-2xl shadow-purple-900/20 overflow-hidden">
         {isUpgradeModalOpen && <UpgradeModal onClose={() => setIsUpgradeModalOpen(false)} onUpgrade={handleUpgrade} variant={isExpired ? 'trial-expired' : 'locked-tool'} />}
-        {isHelpModalOpen && (
-            <HelpModal
-                onClose={() => setIsHelpModalOpen(false)}
-                onNavigate={(view) => {
-                    // view matches MagicianTab/MagicianView string unions (types.ts)
-                    setActiveView(view as any);
-                    setIsHelpModalOpen(false);
-                }}
-            />
-        )}
+        {isHelpModalOpen && <HelpModal
+            onClose={() => setIsHelpModalOpen(false)}
+            onNavigate={(view) => {
+              setActiveView(view);
+              setIsHelpModalOpen(false);
+            }}
+            contextView={activeView}
+          />}
       <header className="flex items-center px-3 sm:px-4 py-2 border-b border-slate-800 brand-motif">
         <button onClick={handleReturnToStudioHome} className="p-1.5 mr-2 rounded-full hover:bg-slate-700 transition-colors" aria-label="Back">
           <BackIcon className="w-5 h-5 text-slate-300" />
