@@ -10,7 +10,7 @@ const getUserIdOrThrow = async (): Promise<string> => {
   return userId;
 };
 
-const toIsoOrNull = (value?: string | null) => {
+const toIsoOrNull = (value?: string | number | Date | null) => {
   if (!value) return null;
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
@@ -29,7 +29,9 @@ const mapTaskToDb = (showId: string, userId: string, task: Partial<Task>) => {
   const priority = (task as any).priority ?? 'Medium';
   const dueDate = (task as any).dueDate ?? (task as any).due_date ?? null;
   const musicCue = (task as any).musicCue ?? (task as any).music_cue ?? '';
-  const status = (task as any).status ?? 'Pending';
+  // The UI expects tasks to be either 'To-Do' or 'Completed'.
+  // Defaulting to 'To-Do' ensures newly created tasks show up immediately.
+  const status = (task as any).status ?? 'To-Do';
   const subtasks = (task as any).subtasks ?? [];
 
   return {
@@ -43,6 +45,42 @@ const mapTaskToDb = (showId: string, userId: string, task: Partial<Task>) => {
     status,
     subtasks
   };
+};
+
+// --- Normalizers (DB snake_case -> app camelCase) ---
+const normalizeTask = (row: any): Task => {
+  if (!row) return row as Task;
+  const createdAtMs = row.created_at ? new Date(row.created_at).getTime() : (row.createdAt ?? Date.now());
+  const dueAtMs = row.due_date ? new Date(row.due_date).getTime() : row.dueDate;
+  return {
+    ...row,
+    // Canonical app fields
+    id: row.id,
+    title: row.title,
+    notes: row.notes ?? row.patter ?? '',
+    priority: row.priority ?? 'Medium',
+    status: row.status ?? 'To-Do',
+    musicCue: row.music_cue ?? row.musicCue ?? null,
+    dueDate: dueAtMs ?? undefined,
+    createdAt: createdAtMs,
+    subtasks: Array.isArray(row.subtasks) ? row.subtasks : [],
+    // Optional convenience fields
+    showId: row.show_id ?? row.showId,
+    userId: row.user_id ?? row.userId
+  } as Task;
+};
+
+const normalizeShow = (row: any): Show => {
+  if (!row) return row as Show;
+  return {
+    ...row,
+    id: row.id,
+    title: row.title,
+    description: row.description ?? null,
+    clientId: row.client_id ?? row.clientId ?? null,
+    finances: row.finances ?? { performanceFee: 0, expenses: [], income: [] },
+    tasks: Array.isArray(row.tasks) ? row.tasks.map(normalizeTask) : []
+  } as Show;
 };
 
 export const getShows = async (): Promise<Show[]> => {
@@ -61,7 +99,7 @@ export const getShows = async (): Promise<Show[]> => {
     .order('created_at', { foreignTable: 'tasks', ascending: true });
 
   if (error) throw error;
-  return (data as unknown as Show[]) ?? [];
+  return ((data as any[]) ?? []).map(normalizeShow);
 };
 
 export const getShowById = async (id: string): Promise<Show | undefined> => {
@@ -80,7 +118,7 @@ export const getShowById = async (id: string): Promise<Show | undefined> => {
     .single();
 
   if (error) throw error;
-  return data as unknown as Show;
+  return normalizeShow(data);
 };
 
 export const addShow = async (show: Partial<Show>): Promise<Show[]> => {

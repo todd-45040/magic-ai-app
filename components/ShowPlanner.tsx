@@ -110,6 +110,8 @@ const TaskModal: React.FC<{
             priority,
             musicCue,
             subtasks: finalSubtasks,
+            // Ensure newly created tasks are immediately visible in the planner.
+            status: taskToEdit?.status ?? 'To-Do',
             dueDate: dueDate ? new Date(dueDate + 'T00:00:00').getTime() : undefined
         };
 
