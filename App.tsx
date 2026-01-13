@@ -440,7 +440,10 @@ function App() {
       </div>
 
       <footer className="relative z-10 w-full text-center p-4 text-xs text-slate-500">
-        <p>Copyright 2026 Magicians&apos; AI Wizard, LLC - v0.9.2 Beta</p>
+        <p className="text-yellow-300/80 mb-1">
+          Magic AI Wizard v0.92 Beta — Actively evolving with the magic community
+        </p>
+        <p>Copyright 2026 Magicians&apos; AI Wizard, LLC - v0.92 Beta</p>
         <div className="flex justify-center items-center gap-4 mt-2">
           <button
             onClick={() => setMode('about')}
