@@ -81,7 +81,7 @@ const [pos, setPos] = useState({ top: 0, left: 0, width: 288 });
         </div>
 
         <div className="p-2">
-          <button
+          <button type="button"
             onClick={async () => {
               await exportData();
               setOpen(false);
@@ -93,7 +93,7 @@ const [pos, setPos] = useState({ top: 0, left: 0, width: 288 });
           </button>
 
           {isAdmin && (
-            <button
+            <button type="button"
               onClick={() => {
                 setOpen(false);
                 setOpenSuggestions(true);
@@ -106,7 +106,7 @@ const [pos, setPos] = useState({ top: 0, left: 0, width: 288 });
           )}
 
           {isAdmin && (
-            <button
+            <button type="button"
               onClick={() => {
                 setOpen(false);
                 setOpenAdmin(true);
@@ -137,12 +137,12 @@ const [pos, setPos] = useState({ top: 0, left: 0, width: 288 });
         </div>
       </div>
     );
-  }, [open, pos, user, isAdmin]);
+  }, [open, pos, user, isAdmin, onLogout]);
 
   return (
     <>
       <div ref={wrapRef}>
-        <button
+        <button type="button"
           ref={btnRef}
           onClick={() => setOpen((v) => !v)}
           className="flex items-center gap-2 px-2.5 py-1.5 rounded-full bg-slate-900/60 border border-slate-700 text-slate-200"
