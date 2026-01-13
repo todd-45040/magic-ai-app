@@ -29,6 +29,18 @@ const normalizePriority = (value: any): 'High' | 'Medium' | 'Low' => {
   return 'Medium';
 };
 
+// Read priority from whichever column exists (schema drift safe)
+const getPriorityFromRow = (t: any): 'High' | 'Medium' | 'Low' => {
+  return normalizePriority(
+    t?.priority ??
+      t?.priority_level ??
+      t?.task_priority ??
+      t?.taskPriority ??
+      t?.priorityLevel
+  );
+};
+
+
 const mapTaskToDb = (showId: string, userId: string, task: Partial<Task>) => {
   // Support a few possible field names that exist in your app over time.
   const title = (task as any).title ?? (task as any).taskTitle ?? '';
@@ -56,7 +68,7 @@ const mapTaskToDb = (showId: string, userId: string, task: Partial<Task>) => {
     title,
     notes,
     priority,
-    // Compatibility: some schemas use different column names for priority
+    // schema-drift safe aliases (whichever exists will be kept by safeInsert)
     priority_level: priority,
     task_priority: priority,
     due_date: toIsoOrNull(dueDate),
@@ -161,7 +173,7 @@ export const getShows = async (): Promise<Show[]> => {
     tasks: Array.isArray(show.tasks)
       ? show.tasks.map((t: any) => ({
           ...t,
-          priority: normalizePriority((t as any).priority ?? (t as any).priority_level ?? (t as any).task_priority ?? (t as any).priorityLevel),
+          priority: getPriorityFromRow(t),
           status: t.status ?? 'To-Do'
         }))
       : []
@@ -293,14 +305,23 @@ export const updateTaskInShow = async (showId: string, taskId: string, updates: 
   if ((updates as any).title !== undefined) dbUpdates.title = (updates as any).title;
   if ((updates as any).notes !== undefined) dbUpdates.notes = (updates as any).notes;
   if ((updates as any).patter !== undefined) dbUpdates.notes = (updates as any).patter;
-  if ((updates as any).priority !== undefined || (updates as any).taskPriority !== undefined || (updates as any).priorityLevel !== undefined) {
-    const p = normalizePriority(
-      (updates as any).priority ?? (updates as any).taskPriority ?? (updates as any).priorityLevel
-    );
-    // Compatibility: some schemas use different column names for priority
+  if ((updates as any).priority !== undefined) {
+    const p = normalizePriority((updates as any).priority);
     dbUpdates.priority = p;
-    dbUpdates.priority_level = p;
-    dbUpdates.task_priority = p;
+    (dbUpdates as any).priority_level = p;
+    (dbUpdates as any).task_priority = p;
+  }
+  if ((updates as any).taskPriority !== undefined) {
+    const p = normalizePriority((updates as any).taskPriority);
+    dbUpdates.priority = p;
+    (dbUpdates as any).priority_level = p;
+    (dbUpdates as any).task_priority = p;
+  }
+  if ((updates as any).priorityLevel !== undefined) {
+    const p = normalizePriority((updates as any).priorityLevel);
+    dbUpdates.priority = p;
+    (dbUpdates as any).priority_level = p;
+    (dbUpdates as any).task_priority = p;
   }
   if ((updates as any).musicCue !== undefined) dbUpdates.music_cue = (updates as any).musicCue;
   if ((updates as any).status !== undefined) dbUpdates.status = (updates as any).status;
