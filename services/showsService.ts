@@ -36,7 +36,9 @@ const getPriorityFromRow = (t: any): 'High' | 'Medium' | 'Low' => {
 
 
 const mapTaskToDb = (showId: string, userId: string, task: Partial<Task>) => {
-  // Support a few possible field names that exist in your app over time.
+  // Current Supabase schema for public.tasks only includes:
+  // id, user_id, show_id, title, notes, created_at, updated_at
+  // Keep the payload minimal to avoid schema drift breaking inserts.
   const title = (task as any).title ?? (task as any).taskTitle ?? '';
   const notes =
     (task as any).notes ??
@@ -45,31 +47,12 @@ const mapTaskToDb = (showId: string, userId: string, task: Partial<Task>) => {
     (task as any).notes_patter ??
     '';
 
-  // Priority sometimes arrives in different shapes (older UI fields, differing casing).
-  // Normalize to the canonical values used by the board filters.
-  const priority = normalizePriority((task as any).priority ?? (task as any).taskPriority ?? (task as any).priorityLevel);
-  const dueDate = (task as any).dueDate ?? (task as any).due_date ?? null;
-  const musicCue = (task as any).musicCue ?? (task as any).music_cue ?? '';
-  // The planner UI expects 'To-Do' or 'Completed'. Default to 'To-Do' so new tasks appear immediately.
-  const status = (task as any).status ?? 'To-Do';
-  const subtasks = (task as any).subtasks ?? [];
-
-  // Build payload cautiously: some deployments may not have newer columns (e.g., subtasks, music_cue)
-  // and Supabase will throw schema-cache errors. We'll retry inserts/updates with reduced payloads.
-  const payload: any = {
+  return {
     show_id: showId,
     user_id: userId,
     title,
     notes,
-    priority,
-    due_date: toIsoOrNull(dueDate),
-    music_cue: musicCue || null,
-    status,
-    // Only include subtasks if present; avoids failing on older schemas.
-    ...(Array.isArray(subtasks) && subtasks.length ? { subtasks } : {})
   };
-
-  return payload;
 };
 
 // If a column doesn't exist in the current Supabase schema cache, retry without it.

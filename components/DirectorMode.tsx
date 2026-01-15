@@ -161,6 +161,7 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
     // FIX: Marked handleAddToPlanner as async to resolve the missing await error on addShow().
     const handleAddToPlanner = async () => {
         if (!showPlan) return;
+        try {
         // FIX: Added await to correctly resolve the Promise returned by addShow() and resolve the Property 'find' does not exist error.
         const newShows = await addShow(showPlan.show_title, showPlan.show_description);
         const newShow = newShows.find(s => s.title === showPlan.show_title);
@@ -174,13 +175,18 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
             for (const effect of segment.suggested_effects) {
                 const taskData = {
                     title: `${segment.title}: ${effect.type}`,
-                    notes: effect.rationale,
-                    priority: 'Medium' as const
+                    notes: effect.rationale
                 };
                 // FIX: Added await for sequential task creation in a loop.
                 showsWithTasks = await addTaskToShow(newShow.id, taskData);
             }
         }
+        } catch (e: any) {
+            console.error('Add to Show Planner failed:', e);
+            setError(e?.message ?? 'Failed to add to Show Planner.');
+            return;
+        }
+
         setIsAddedToPlanner(true);
         onIdeaSaved();
     };
