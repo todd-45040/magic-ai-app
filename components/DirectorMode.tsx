@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Type } from "@google/genai";
 import { saveIdea } from '../services/ideasService';
-import {addShow, addTaskToShow , createShow} from '../services/showsService';
+import { addShow, addTaskToShow } from '../services/showsService';
 import { DIRECTOR_MODE_SYSTEM_INSTRUCTION } from '../constants';
 import type { DirectorModeResponse } from '../types';
 import { StageCurtainsIcon, WandIcon, SaveIcon, CheckIcon, ShareIcon, ChecklistIcon } from './icons';
@@ -51,6 +51,9 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
     const [error, setError] = useState<string | null>(null);
     const [showPlan, setShowPlan] = useState<DirectorModeResponse | null>(null);
     const [isAddedToPlanner, setIsAddedToPlanner] = useState(false);
+    const [isAddingToPlanner, setIsAddingToPlanner] = useState(false);
+    const [isSavingIdea, setIsSavingIdea] = useState(false);
+    const [isSavedToIdeas, setIsSavedToIdeas] = useState(false);
     
     const computedAudience = (() => {
         const picked = audienceChips.join(', ');
@@ -129,6 +132,7 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
         setError(null);
         setShowPlan(null);
         setIsAddedToPlanner(false);
+        setIsSavedToIdeas(false);
 
         const prompt = `
             Please generate a show plan with the following details:
@@ -159,24 +163,88 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
     };
   
     // FIX: Marked handleAddToPlanner as async to resolve the missing await error on addShow().
-    const handleAddToPlanner = async () => {
+    
+    const buildIdeaFromShowPlan = (plan: DirectorModeResponse) => {
+        const summaryLines: string[] = [];
+        summaryLines.push(`Show Title: ${plan.show_title}`);
+        if (plan.show_description?.trim()) summaryLines.push(`Show Description: ${plan.show_description.trim()}`);
+        summaryLines.push('');
+        summaryLines.push('Segments:');
+        plan.segments.forEach((seg, idx) => {
+            summaryLines.push(`  ${idx + 1}. ${seg.title}`);
+            if (seg.description?.trim()) summaryLines.push(`     - ${seg.description.trim()}`);
+            if (Array.isArray(seg.suggested_effects) && seg.suggested_effects.length) {
+                summaryLines.push(`     - Suggested effects:`);
+                seg.suggested_effects.forEach((e) => {
+                    const label = e?.type ? e.type : 'Effect';
+                    const why = e?.rationale ? ` — ${e.rationale}` : '';
+                    summaryLines.push(`       • ${label}${why}`);
+                });
+            }
+        });
+
+        const prettyJson = JSON.stringify(plan, null, 2);
+
+        const content =
+`${summaryLines.join('\n')}
+
+--- JSON (for reuse / export) ---
+${prettyJson}
+`;
+        const title = `Director Mode — ${plan.show_title}`;
+        const tags = ['director-mode', 'show-plan'];
+        return { title, content, tags };
+    };
+
+    const handleSaveToIdeas = async () => {
+        if (!showPlan || isSavingIdea || isSavedToIdeas) return;
+        try {
+            setIsSavingIdea(true);
+            setError(null);
+
+            const { title, content, tags } = buildIdeaFromShowPlan(showPlan);
+
+            await saveIdea({
+                type: 'text',
+                title,
+                content,
+                tags,
+            } as any);
+
+            setIsSavedToIdeas(true);
+            onIdeaSaved?.();
+        } catch (e: any) {
+            console.error('Save to Ideas failed:', e);
+            setError(e?.message ?? 'Unable to save to Saved Ideas.');
+        } finally {
+            setIsSavingIdea(false);
+        }
+    };
+
+const handleAddToPlanner = async () => {
         if (!showPlan) return;
         // FIX: Added await to correctly resolve the Promise returned by addShow() and resolve the Property 'find' does not exist error.
-        const newShow = await createShow(showPlan.show_title, showPlan.show_description);
-        if (!newShow?.id) {
+        const newShows = await addShow(showPlan.show_title, showPlan.show_description);
+        const newShow = newShows.find(s => s.title === showPlan.show_title);
+        if (!newShow) {
             setError("Failed to create the new show in the planner.");
             return;
         }
 
+        let showsWithTasks = newShows;
         for (const segment of showPlan.segments) {
             for (const effect of segment.suggested_effects) {
                 const taskData = {
                     title: `${segment.title}: ${effect.type}`,
                     notes: effect.rationale,
                     priority: 'Medium' as const
-                };
+                
+        finally {
+            setIsAddingToPlanner(false);
+        }
+};
                 // FIX: Added await for sequential task creation in a loop.
-                await addTaskToShow(newShow.id, taskData);
+                showsWithTasks = await addTaskToShow(newShow.id, taskData);
             }
         }
         setIsAddedToPlanner(true);
@@ -186,6 +254,7 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
     const handleStartOver = () => {
         setShowPlan(null);
         setIsAddedToPlanner(false);
+        setIsSavedToIdeas(false);
         setError(null);
         // Optional: clear form fields
         // setShowTitle(''); setShowLength(''); setAudienceType(''); setTheme('');
@@ -220,7 +289,19 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
 
                 <div className="mt-6 flex flex-wrap items-center justify-center gap-4">
                     <button onClick={handleStartOver} className="px-6 py-2 bg-slate-600 hover:bg-slate-700 rounded-md text-white font-bold transition-colors">Start Over</button>
-                    <button onClick={handleAddToPlanner} disabled={isAddedToPlanner} className="px-6 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-green-700 disabled:cursor-not-allowed flex items-center gap-2">
+                    <button
+                        onClick={handleSaveToIdeas}
+                        disabled={isSavingIdea || isSavedToIdeas}
+                        className="px-4 py-2 rounded-md bg-slate-700/60 hover:bg-slate-700 border border-slate-600 text-white font-bold transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
+                        title="Save a snapshot of this plan to your Saved Ideas"
+                    >
+                        {isSavedToIdeas ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
+                        <span>
+                            {isSavedToIdeas ? 'Saved to Ideas!' : (isSavingIdea ? 'Saving…' : 'Save to Ideas')}
+                        </span>
+                    </button>
+
+                    <button onClick={handleAddToPlanner} disabled={isAddedToPlanner || isAddingToPlanner} className="px-6 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-green-700 disabled:cursor-not-allowed flex items-center gap-2">
                         {isAddedToPlanner ? <CheckIcon className="w-5 h-5" /> : <ChecklistIcon className="w-5 h-5" />}
                         <span>{isAddedToPlanner ? 'Added to Show Planner!' : 'Add to Show Planner'}</span>
                     </button>
