@@ -2091,9 +2091,42 @@ useEffect(() => {
           <img src="/images/nav-wand.png" alt="Magic wand" className="h-8 w-auto wizard-nav-icon" />
         </picture>
         <div className="ml-auto flex items-center gap-2">
-            {daysRemaining != null && (
-              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/60 border border-slate-700">
-                <span className="text-xs font-semibold text-slate-200">{tierLabel}: {daysRemaining} day{daysRemaining === 1 ? '' : 's'} left</span>
+            {(daysRemaining != null || tier !== 'trial') && (
+              <div
+                className={[
+                  'hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full border transition-colors',
+                  tier === 'trial'
+                    ? 'bg-yellow-500/10 border-yellow-500/25'
+                    : (tier === 'performer' || tier === 'professional')
+                      ? 'bg-purple-500/10 border-purple-500/25'
+                      : 'bg-slate-900/60 border-slate-700',
+                ].join(' ')}
+              >
+                <StarIcon
+                  className={[
+                    'w-3.5 h-3.5',
+                    tier === 'trial'
+                      ? 'text-[#E6C77A]'
+                      : (tier === 'performer' || tier === 'professional')
+                        ? 'text-purple-300'
+                        : 'text-slate-300',
+                  ].join(' ')}
+                  aria-hidden="true"
+                />
+                <span
+                  className={[
+                    'text-xs font-semibold tracking-wide',
+                    tier === 'trial'
+                      ? 'text-[#E6C77A] hover:text-[#F2D98D]'
+                      : (tier === 'performer' || tier === 'professional')
+                        ? 'text-purple-200 hover:text-purple-100'
+                        : 'text-slate-200',
+                  ].join(' ')}
+                >
+                  {daysRemaining != null
+                    ? `${tierLabel}: ${daysRemaining} day${daysRemaining === 1 ? '' : 's'} left`
+                    : `${tierLabel} Member`}
+                </span>
               </div>
             )}
             <UsageMeter />
