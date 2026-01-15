@@ -422,7 +422,7 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
                         className="w-full py-3 mt-4 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
                     >
                         <WandIcon className="w-5 h-5" />
-                        <span>✨ Create My Show Blueprint</span>
+                        <span>✨ ✨ Create My Show Blueprint ✨</span>
                     </button>
                     <p className="text-center text-xs text-slate-400 -mt-2">Typically takes 10–15 seconds.</p>
 
