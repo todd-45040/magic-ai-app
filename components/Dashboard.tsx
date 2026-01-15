@@ -25,17 +25,17 @@ const QuickActionsWidget: React.FC<{ onNavigate: (view: MagicianView) => void }>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <button onClick={() => onNavigate('assistant-home')} className="p-4 bg-slate-800 border border-slate-700 rounded-lg text-left h-full group transition-colors hover:bg-purple-900/50 hover:border-purple-500">
                 <WandIcon className="w-8 h-8 mb-2 text-purple-400 group-hover:text-purple-300" />
-                <p className="font-bold text-slate-200">AI Assistant</p>
+                <p className="font-bold text-yellow-200 group-hover:text-yellow-100 transition-colors">AI Assistant</p>
                 <p className="text-sm text-slate-400">Choose a tool or ask a question</p>
             </button>
             <button onClick={() => onNavigate('live-rehearsal')} className="p-4 bg-slate-800 border border-slate-700 rounded-lg text-left h-full group transition-colors hover:bg-purple-900/50 hover:border-purple-500">
                 <MicrophoneIcon className="w-8 h-8 mb-2 text-purple-400 group-hover:text-purple-300" />
-                <p className="font-bold text-slate-200">Live Rehearsal</p>
+                <p className="font-bold text-yellow-200 group-hover:text-yellow-100 transition-colors">Live Rehearsal</p>
                 <p className="text-sm text-slate-400">Start a rehearsal session</p>
             </button>
             <button onClick={() => onNavigate('show-planner')} className="p-4 bg-slate-800 border border-slate-700 rounded-lg text-left h-full group transition-colors hover:bg-purple-900/50 hover:border-purple-500">
                 <ChecklistIcon className="w-8 h-8 mb-2 text-purple-400 group-hover:text-purple-300" />
-                <p className="font-bold text-slate-200">Show Planner</p>
+                <p className="font-bold text-yellow-200 group-hover:text-yellow-100 transition-colors">Show Planner</p>
                 <p className="text-sm text-slate-400">Plan routines and tasks</p>
             </button>
         </div>
@@ -160,19 +160,19 @@ const FeaturedToolsWidget: React.FC<{ onNavigate: (view: MagicianView) => void }
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <button onClick={() => onNavigate('effect-generator')} className="p-3 bg-slate-800 border border-slate-700 rounded-lg text-left h-full group transition-colors hover:bg-purple-900/50 hover:border-purple-500">
                 <LightbulbIcon className="w-6 h-6 mb-1 text-purple-400" />
-                <p className="font-semibold text-slate-200 text-sm">Effect Generator</p>
+                <p className="font-semibold text-yellow-200 text-sm">Effect Generator</p>
             </button>
             <button onClick={() => onNavigate('director-mode')} className="p-3 bg-slate-800 border border-slate-700 rounded-lg text-left h-full group transition-colors hover:bg-purple-900/50 hover:border-purple-500">
                 <StageCurtainsIcon className="w-6 h-6 mb-1 text-purple-400" />
-                <p className="font-semibold text-slate-200 text-sm">Director Mode</p>
+                <p className="font-semibold text-yellow-200 text-sm">Director Mode</p>
             </button>
             <button onClick={() => onNavigate('persona-simulator')} className="p-3 bg-slate-800 border border-slate-700 rounded-lg text-left h-full group transition-colors hover:bg-purple-900/50 hover:border-purple-500">
                 <UsersCogIcon className="w-6 h-6 mb-1 text-purple-400" />
-                <p className="font-semibold text-slate-200 text-sm">Persona Simulator</p>
+                <p className="font-semibold text-yellow-200 text-sm">Persona Simulator</p>
             </button>
             <button onClick={() => onNavigate('patter-engine')} className="p-3 bg-slate-800 border border-slate-700 rounded-lg text-left h-full group transition-colors hover:bg-purple-900/50 hover:border-purple-500">
                 <BookIcon className="w-6 h-6 mb-1 text-purple-400" />
-                <p className="font-semibold text-slate-200 text-sm">Patter Engine</p>
+                <p className="font-semibold text-yellow-200 text-sm">Patter Engine</p>
             </button>
         </div>
     </>
@@ -281,7 +281,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, shows, feedback, ideas, onN
                 >
                     <div className="flex items-center gap-2">
                          <widgetInfo.icon className="w-5 h-5 text-purple-400" />
-                         <h2 className="font-bold text-white">{widgetInfo.title}</h2>
+                         <h2 className="font-bold text-yellow-200 tracking-wide">{widgetInfo.title}</h2>
                     </div>
                     <ChevronDownIcon className={`w-6 h-6 text-slate-400 transition-transform duration-300 ${isCollapsed ? '-rotate-180' : ''}`} />
                 </button>
@@ -323,7 +323,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, shows, feedback, ideas, onN
 
             <header className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-3xl font-bold text-white font-cinzel">Welcome, {user.email.split('@')[0]}</h1>
+                    <h1 className="text-3xl font-bold text-yellow-200 font-cinzel">Welcome, {user.email.split('@')[0]}</h1>
                     <p className="text-slate-400">Here's your magic dashboard for today.</p>
                 </div>
                 {hasProAccess && (
@@ -344,7 +344,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, shows, feedback, ideas, onN
             
             {hasProAccess && isCustomizeMode && (
                 <div className="mt-8 pt-6 border-t border-slate-700">
-                    <h2 className="font-bold text-slate-400 mb-3">Hidden Widgets</h2>
+                    <h2 className="font-bold text-yellow-200/80 mb-3">Hidden Widgets</h2>
                     {layout.hidden.length > 0 ? (
                         <div className="flex flex-wrap gap-2">
                             {layout.hidden.map(widgetId => (
