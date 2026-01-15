@@ -27,7 +27,9 @@ function createBlob(data: Float32Array): Blob {
   const l = data.length;
   const int16 = new Int16Array(l);
   for (let i = 0; i < l; i++) {
-    int16[i] = data[i] * 32768;
+    // Clamp to [-1, 1] before converting to PCM16.
+    const s = Math.max(-1, Math.min(1, data[i]));
+    int16[i] = s < 0 ? s * 32768 : s * 32767;
   }
   return {
     data: encode(new Uint8Array(int16.buffer)),
@@ -121,7 +123,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
                 }
             });
 
-            // Setup output audio context
+            // Setup output audio context (often starts "suspended" in Firefox until resumed inside a user gesture)
             const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
             outputAudioContextRef.current = audioCtx;
             outputNodeRef.current = audioCtx.createGain();
@@ -131,11 +133,23 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
             const inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
             let source: MediaStreamAudioSourceNode | null = null;
             let scriptProcessor: ScriptProcessorNode | null = null;
+            // Route the ScriptProcessor to a muted gain node to keep it "alive" without feeding mic audio to speakers.
+            const muteGain = inputAudioContext.createGain();
+            muteGain.gain.value = 0;
+            muteGain.connect(inputAudioContext.destination);
 
             const sessionPromise = startLiveSession(
                 MAGICIAN_LIVE_REHEARSAL_SYSTEM_INSTRUCTION,
                 {
                     onopen: () => { 
+                        // Ensure contexts are running (Firefox frequently starts them suspended).
+                        try {
+                            if (audioCtx.state === 'suspended') audioCtx.resume();
+                            if (inputAudioContext.state === 'suspended') inputAudioContext.resume();
+                        } catch {
+                            // best-effort
+                        }
+
                         // Setup microphone streaming once the connection is open
                         source = inputAudioContext.createMediaStreamSource(stream);
                         scriptProcessor = inputAudioContext.createScriptProcessor(4096, 1, 1);
@@ -175,7 +189,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
                         };
 
                         source.connect(scriptProcessor);
-                        scriptProcessor.connect(inputAudioContext.destination);
+                        scriptProcessor.connect(muteGain);
 
                         setStatus('listening');
                         setView('rehearsing');
@@ -231,6 +245,9 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
             errorOccurred.current = true;
             if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
                 setErrorMessage('Microphone permission denied. Please allow microphone access in your browser settings.');
+            } else if (typeof error?.message === 'string' && error.message.trim()) {
+                // Surface actionable setup errors (e.g., missing VITE_GEMINI_LIVE_API_KEY)
+                setErrorMessage(error.message);
             } else {
                 setErrorMessage('Failed to connect. Please check your connection and microphone, then try again.');
             }

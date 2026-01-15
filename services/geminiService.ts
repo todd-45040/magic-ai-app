@@ -1,10 +1,20 @@
 import { Type, Modality } from "@google/genai";
+// NOTE: We intentionally DO NOT instantiate GoogleGenAI at module load.
+// For Live Rehearsal we lazy-load and lazy-init the client only when needed
+// so a missing key cannot crash the whole app at startup.
 import { supabase } from '../supabase';
 import type { ChatMessage, TrickIdentificationResult, User } from '../types';
 import { getAiProvider } from './aiProviderService';
 
 // Keep this type export for components that reference live sessions.
-// Live sessions are currently not enabled through the serverless proxy.
+// Live sessions cannot be proxied through a simple HTTP /api route because they
+// require a persistent WebSocket connection.
+//
+// In Beta we support Live Rehearsal by connecting DIRECTLY from the browser
+// using a *separate* public (client) Gemini key.
+// IMPORTANT: This is acceptable for Beta, but for production you should mint
+// short-lived tokens server-side (or use a dedicated relay) to avoid exposing
+// a long-lived key in the client bundle.
 export type LiveSession = any;
 
 /**
@@ -238,10 +248,69 @@ export const identifyTrickFromImage = async (
   return { trickName, videoExamples: videos } as TrickIdentificationResult;
 };
 
-export const startLiveSession = () => {
-  // Live sessions are not supported through the simple /api proxy yet.
-  // Keep the API surface so the app compiles, but fail gracefully.
-  throw new Error('Live sessions are not configured for production yet.');
+/**
+ * Start a Gemini Live (realtime audio) session.
+ *
+ * Why this exists: Live Rehearsal needs WebSockets and cannot go through the
+ * basic Vercel /api proxy used for text generation.
+ *
+ * Requirements:
+ * - A client-side Gemini key must be provided as VITE_GEMINI_LIVE_API_KEY
+ *   (recommended) or VITE_GEMINI_API_KEY.
+ *
+ * If no key is present, we throw a descriptive error so the UI can show a
+ * helpful message instead of a generic "Failed to connect".
+ */
+export const startLiveSession = async (
+  systemInstruction: string,
+  handlers: {
+    onopen?: () => void;
+    onmessage?: (msg: any) => void;
+    onerror?: (err: any) => void;
+    onclose?: () => void;
+  },
+  tools?: any
+): Promise<LiveSession> => {
+  // Prefer a dedicated client key for Live Rehearsal.
+  const liveKey =
+    (import.meta as any)?.env?.VITE_GEMINI_LIVE_API_KEY ||
+    (import.meta as any)?.env?.VITE_GEMINI_API_KEY;
+
+  if (!liveKey || String(liveKey).trim().length < 10) {
+    throw new Error(
+      'Live Rehearsal is not configured: missing VITE_GEMINI_LIVE_API_KEY. ' +
+        'Add it to your Vercel env and redeploy.'
+    );
+  }
+
+  // Lazy import so the SDK cannot crash the app at initial load.
+  const mod = await import('@google/genai');
+  const GoogleGenAI = (mod as any).GoogleGenAI;
+  if (!GoogleGenAI) {
+    throw new Error('Live Rehearsal failed to initialize: GoogleGenAI not found in @google/genai.');
+  }
+
+  const ai = new GoogleGenAI({ apiKey: liveKey });
+
+  // Model: use the native audio preview you were targeting.
+  // If Google changes the name, you will see an auth/model error in the console.
+  const model = 'gemini-2.5-flash-native-audio-preview';
+
+  // The SDK live API uses WebSockets under the hood.
+  // We forward the UI handlers so LiveRehearsal.tsx can wire mic streaming.
+  const session = await ai.live.connect({
+    model,
+    config: {
+      systemInstruction,
+      // Request both transcription + audio.
+      responseModalities: ['AUDIO'],
+    },
+    // Tools are optional (for timers, etc.)
+    tools,
+    ...handlers,
+  });
+
+  return session as LiveSession;
 };
 
 // Minimal helper used by LiveRehearsal.tsx. This implementation assumes raw PCM16.
