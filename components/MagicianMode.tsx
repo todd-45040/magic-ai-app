@@ -23,7 +23,7 @@ import ShareButton from './ShareButton';
 import FormattedText from './FormattedText';
 import AccountMenu from './AccountMenu';
 import UsageMeter from './UsageMeter';
-import { normalizeTier } from '../services/membershipService';
+import { normalizeTier, getMembershipDaysRemaining, formatTierLabel } from '../services/membershipService';
 import UpgradeModal from './UpgradeModal';
 import MemberManagement from './MemberManagement';
 import ShowPlanner from './ShowPlanner';
@@ -1315,6 +1315,8 @@ useEffect(() => {
   const isTrialActive = tier === 'trial' && user.trialEndDate ? user.trialEndDate > Date.now() : false;
   const isTrialExpired = tier === 'trial' && user.trialEndDate ? user.trialEndDate <= Date.now() : false;
   const isExpired = tier === 'expired' || isTrialExpired;
+  const daysRemaining = getMembershipDaysRemaining(user);
+  const tierLabel = formatTierLabel(tier);
 
   // Access mapping
   const hasAmateurAccess = (['performer', 'professional'].includes(tier) || isTrialActive) as boolean;
@@ -2089,6 +2091,11 @@ useEffect(() => {
           <img src="/images/nav-wand.png" alt="Magic wand" className="h-8 w-auto wizard-nav-icon" />
         </picture>
         <div className="ml-auto flex items-center gap-2">
+            {daysRemaining != null && (
+              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/60 border border-slate-700">
+                <span className="text-xs font-semibold text-slate-200">{tierLabel}: {daysRemaining} day{daysRemaining === 1 ? '' : 's'} left</span>
+              </div>
+            )}
             <UsageMeter />
             <button onClick={() => setIsHelpModalOpen(true)} className="p-2 rounded-full text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Help" aria-label="Open help center">
                 <QuestionMarkIcon className="w-6 h-6" />
