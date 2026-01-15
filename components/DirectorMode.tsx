@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Type } from "@google/genai";
 import { saveIdea } from '../services/ideasService';
-import { addShow, addTaskToShow } from '../services/showsService';
+import {addShow, addTaskToShow , createShow} from '../services/showsService';
 import { DIRECTOR_MODE_SYSTEM_INSTRUCTION } from '../constants';
 import type { DirectorModeResponse } from '../types';
 import { StageCurtainsIcon, WandIcon, SaveIcon, CheckIcon, ShareIcon, ChecklistIcon } from './icons';
@@ -161,32 +161,24 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
     // FIX: Marked handleAddToPlanner as async to resolve the missing await error on addShow().
     const handleAddToPlanner = async () => {
         if (!showPlan) return;
-        try {
         // FIX: Added await to correctly resolve the Promise returned by addShow() and resolve the Property 'find' does not exist error.
-        const newShows = await addShow(showPlan.show_title, showPlan.show_description);
-        const newShow = newShows.find(s => s.title === showPlan.show_title);
-        if (!newShow) {
+        const newShow = await createShow(showPlan.show_title, showPlan.show_description);
+        if (!newShow?.id) {
             setError("Failed to create the new show in the planner.");
             return;
         }
 
-        let showsWithTasks = newShows;
         for (const segment of showPlan.segments) {
             for (const effect of segment.suggested_effects) {
                 const taskData = {
                     title: `${segment.title}: ${effect.type}`,
-                    notes: effect.rationale
+                    notes: effect.rationale,
+                    priority: 'Medium' as const
                 };
                 // FIX: Added await for sequential task creation in a loop.
-                showsWithTasks = await addTaskToShow(newShow.id, taskData);
+                await addTaskToShow(newShow.id, taskData);
             }
         }
-        } catch (e: any) {
-            console.error('Add to Show Planner failed:', e);
-            setError(e?.message ?? 'Failed to add to Show Planner.');
-            return;
-        }
-
         setIsAddedToPlanner(true);
         onIdeaSaved();
     };

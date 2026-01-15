@@ -36,9 +36,7 @@ const getPriorityFromRow = (t: any): 'High' | 'Medium' | 'Low' => {
 
 
 const mapTaskToDb = (showId: string, userId: string, task: Partial<Task>) => {
-  // Current Supabase schema for public.tasks only includes:
-  // id, user_id, show_id, title, notes, created_at, updated_at
-  // Keep the payload minimal to avoid schema drift breaking inserts.
+  // Support a few possible field names that exist in your app over time.
   const title = (task as any).title ?? (task as any).taskTitle ?? '';
   const notes =
     (task as any).notes ??
@@ -47,12 +45,31 @@ const mapTaskToDb = (showId: string, userId: string, task: Partial<Task>) => {
     (task as any).notes_patter ??
     '';
 
-  return {
+  // Priority sometimes arrives in different shapes (older UI fields, differing casing).
+  // Normalize to the canonical values used by the board filters.
+  const priority = normalizePriority((task as any).priority ?? (task as any).taskPriority ?? (task as any).priorityLevel);
+  const dueDate = (task as any).dueDate ?? (task as any).due_date ?? null;
+  const musicCue = (task as any).musicCue ?? (task as any).music_cue ?? '';
+  // The planner UI expects 'To-Do' or 'Completed'. Default to 'To-Do' so new tasks appear immediately.
+  const status = (task as any).status ?? 'To-Do';
+  const subtasks = (task as any).subtasks ?? [];
+
+  // Build payload cautiously: some deployments may not have newer columns (e.g., subtasks, music_cue)
+  // and Supabase will throw schema-cache errors. We'll retry inserts/updates with reduced payloads.
+  const payload: any = {
     show_id: showId,
     user_id: userId,
     title,
     notes,
+    priority,
+    due_date: toIsoOrNull(dueDate),
+    music_cue: musicCue || null,
+    status,
+    // Only include subtasks if present; avoids failing on older schemas.
+    ...(Array.isArray(subtasks) && subtasks.length ? { subtasks } : {})
   };
+
+  return payload;
 };
 
 // If a column doesn't exist in the current Supabase schema cache, retry without it.
@@ -173,18 +190,16 @@ export const getShowById = async (id: string): Promise<Show | undefined> => {
   return data as unknown as Show;
 };
 
-export const addShow = async (show: Partial<Show>): Promise<Show[]> => {
-  const userId = await getUserIdOrThrow();
 
-  const title = (show as any).title ?? (show as any).showTitle ?? '';
-  if (!title.trim()) throw new Error('Show title required');
+export const createShow = async (title: string, description?: string | null): Promise<Show> => {
+  const userId = await getUserIdOrThrow();
 
   const payload: any = {
     user_id: userId,
-    title: title.trim(),
-    description: (show as any).description ?? null,
-    // Keep finances in a single JSON object (this avoids schema-cache column errors)
-    finances: (show as any).finances ?? {
+    title: String(title ?? '').trim(),
+    description: description ?? null,
+    // Keep finances in a single JSON object (safe for current schema)
+    finances: {
       performanceFee: 0,
       expenses: [],
       income: []
@@ -192,15 +207,24 @@ export const addShow = async (show: Partial<Show>): Promise<Show[]> => {
     updated_at: new Date().toISOString()
   };
 
-  // If your DB has client columns, they can be included; otherwise they’ll be ignored if not present
-  // but Supabase will error if column truly does not exist. So we only include if provided and non-empty.
-  const maybeClient = (show as any).client ?? null;
-  if (maybeClient && typeof maybeClient === 'string' && maybeClient.trim()) {
-    payload.client = maybeClient.trim();
-  }
+  if (!payload.title) throw new Error('Show title required');
 
-  const { error } = await supabase.from('shows').insert(payload);
+  // Insert and return the created row (most reliable for downstream task inserts)
+  const { data, error } = await supabase
+    .from('shows')
+    .insert(payload)
+    .select('*')
+    .single();
+
   if (error) throw error;
+  return data as unknown as Show;
+};
+
+export const addShow = async (show: Partial<Show>): Promise<Show[]> => {
+  const title = (show as any).title ?? (show as any).showTitle ?? '';
+  const description = (show as any).description ?? (show as any).show_description ?? null;
+
+  await createShow(String(title ?? ''), description);
 
   return getShows();
 };
