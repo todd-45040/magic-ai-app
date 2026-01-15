@@ -223,33 +223,37 @@ ${prettyJson}
 
 const handleAddToPlanner = async () => {
         if (!showPlan) return;
-        // FIX: Added await to correctly resolve the Promise returned by addShow() and resolve the Property 'find' does not exist error.
-        const newShows = await addShow(showPlan.show_title, showPlan.show_description);
-        const newShow = newShows.find(s => s.title === showPlan.show_title);
-        if (!newShow) {
-            setError("Failed to create the new show in the planner.");
-            return;
-        }
+        if (isAddedToPlanner || isAddingToPlanner) return;
 
-        let showsWithTasks = newShows;
-        for (const segment of showPlan.segments) {
-            for (const effect of segment.suggested_effects) {
-                const taskData = {
-                    title: `${segment.title}: ${effect.type}`,
-                    notes: effect.rationale,
-                    priority: 'Medium' as const
-                
-        finally {
+        try {
+            setIsAddingToPlanner(true);
+            setError(null);
+
+            // Create the show (returns created show row / object)
+            const createdShow: any = await addShow({
+                title: showPlan.show_title,
+                description: showPlan.show_description ?? ''
+            } as any);
+
+            const showId = Array.isArray(createdShow) ? createdShow[0]?.id : createdShow?.id;
+            if (!showId) throw new Error('Could not determine created show ID.');
+
+            // Insert tasks aligned with current public.tasks schema (title, notes, show_id, user_id)
+            for (const seg of showPlan.segments) {
+                await addTaskToShow(showId, {
+                    title: seg.title,
+                    notes: seg.description ?? ''
+                } as any);
+            }
+
+            setIsAddedToPlanner(true);
+        } catch (e: any) {
+            console.error('Add to Show Planner failed:', e);
+            setError(e?.message ?? 'Unable to add the plan to Show Planner.');
+        } finally {
             setIsAddingToPlanner(false);
         }
-};
-                // FIX: Added await for sequential task creation in a loop.
-                showsWithTasks = await addTaskToShow(newShow.id, taskData);
-            }
-        }
-        setIsAddedToPlanner(true);
-        onIdeaSaved();
-    };
+    };;
 
     const handleStartOver = () => {
         setShowPlan(null);
