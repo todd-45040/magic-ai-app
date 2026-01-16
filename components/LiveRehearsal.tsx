@@ -41,6 +41,25 @@ function createBlob(data: Float32Array): GenaiInlineBlob {
     mimeType: 'audio/pcm;rate=16000',
   };
 }
+function getBestAudioMimeType(): string | undefined {
+  const candidates = [
+    'audio/webm;codecs=opus',
+    'audio/ogg;codecs=opus',
+    'audio/webm',
+    'audio/ogg',
+  ];
+  // @ts-ignore
+  const mr = typeof MediaRecorder !== 'undefined' ? MediaRecorder : undefined;
+  if (!mr || typeof mr.isTypeSupported !== 'function') return undefined;
+  for (const t of candidates) {
+    try {
+      if (mr.isTypeSupported(t)) return t;
+    } catch {
+      // ignore
+    }
+  }
+  return undefined;
+}
 
 
 const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, onIdeaSaved }) => {
@@ -55,6 +74,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
 
     // MediaRecorder fallback (server-side transcription)
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const recorderMimeTypeRef = useRef<string | undefined>(undefined);
     const recordedChunksRef = useRef<BlobPart[]>([]);
     const recordedMimeTypeRef = useRef<string>('');
 
@@ -450,7 +470,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
             (t) => t.source === 'user' && t.text.trim().length > 0
         );
 
-        if (!hasUserSpeech && audioBlob && audioBlob.size > 2000) {
+        if (!hasUserSpeech && audioBlob && audioBlob.size > 200) {
             try {
                 const audioBase64 = await blobToBase64(audioBlob);
                 const resp = await fetch('/api/transcribe', {
@@ -630,9 +650,14 @@ const ReviewView: React.FC<{
             <div className="flex-1 flex flex-col items-center justify-center text-center p-4">
                 <MicrophoneIcon className="w-16 h-16 text-slate-600 mb-4" />
                 <h3 className="text-xl font-bold text-slate-300">Rehearsal Complete</h3>
-                <p className="text-slate-400 mt-2 mb-6">No speech was transcribed during the session.</p>
+                <p className="text-slate-400 mt-2 mb-6">No speech was transcribed during the session.
+              {typeof window !== "undefined" && (window as any).__REHEARSAL_AUDIO__?.size ? (
+                <span className="block mt-2 text-sm opacity-80">
+                  Audio captured: {(window as any).__REHEARSAL_AUDIO__.size} bytes ({(window as any).__REHEARSAL_AUDIO__.type || "unknown type"}).
+                </span>
+              ) : null}</p>
                 <button
-                    onClick={() => onReturnToStudio()}
+                    type="button" onClick={() => onReturnToStudio()}
                     className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 font-bold transition-colors"
                 >
                     <BackIcon className="w-5 h-5" />
@@ -718,7 +743,7 @@ const ReviewView: React.FC<{
                             <span>Discuss with AI</span>
                         </button>
                         <button
-                            onClick={() => onReturnToStudio()}
+                            type="button" onClick={() => onReturnToStudio()}
                             className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-sm text-slate-400 hover:text-white transition-colors"
                         >
                             <TrashIcon className="w-5 h-5" />
