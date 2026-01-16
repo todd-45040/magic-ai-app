@@ -250,4 +250,6 @@ console.log("BUILD ENV CHECK:", {
   gemini: import.meta.env.VITE_GEMINI_API_KEY,
 });
 
+console.log("GEMINI KEY PRESENT?", Boolean(import.meta.env.VITE_GEMINI_API_KEY), Boolean(import.meta.env.VITE_GEMINI_LIVE_API_KEY));
+
 export default App;
