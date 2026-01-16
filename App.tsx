@@ -159,7 +159,16 @@ function App() {
 
     void initialHydrate();
 
+    // Keep the UI in sync with auth changes (sign-in / sign-out) without requiring a hard refresh.
+    // Without this, a successful login can leave the user stuck on the Auth screen until reload.
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      void applySessionToState(session);
+    });
+
     return () => {
+      subscription?.unsubscribe();
       window.clearTimeout(loadingTimeout);
     };
   }, [dispatch]);
@@ -203,7 +212,16 @@ function App() {
       case 'audience':
         return <AudienceMode onBack={() => setMode('selection')} />;
       case 'auth':
-        return <Auth onLogin={setUser} onBack={() => setMode('selection')} />;
+        return (
+          <Auth
+            onLogin={(u) => {
+              // Optimistically set the user so the UI feels instant.
+              // The onAuthStateChange handler will hydrate the full profile and route correctly.
+              setUser(u);
+            }}
+            onBack={() => setMode('selection')}
+          />
+        );
       default:
         return <ModeSelector onSelectMode={setMode} />;
     }
