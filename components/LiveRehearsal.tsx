@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { LiveServerMessage, Blob, FunctionCall } from '@google/genai';
+import { LiveServerMessage, FunctionCall } from '@google/genai';
 import { startLiveSession, decode, decodeAudioData, type LiveSession } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
 import type { Transcription, TimerState, User } from '../types';
@@ -13,6 +13,13 @@ interface LiveRehearsalProps {
   onIdeaSaved: () => void;
 }
 
+// The browser build of `@google/genai` doesn't export a `Blob` type. For live audio
+// input we only need the inline "blob" shape: `{ data, mimeType }`.
+type GenaiInlineBlob = {
+  data: string;
+  mimeType: string;
+};
+
 // Helper functions for audio processing, moved from geminiService
 function encode(bytes: Uint8Array): string {
   let binary = '';
@@ -23,7 +30,7 @@ function encode(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-function createBlob(data: Float32Array): Blob {
+function createBlob(data: Float32Array): GenaiInlineBlob {
   const l = data.length;
   const int16 = new Int16Array(l);
   for (let i = 0; i < l; i++) {
@@ -63,84 +70,11 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
 
     const transcriptEndRef = useRef<HTMLDivElement>(null);
 
-    // Server-side transcription fallback recorder
-    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-    const recordedBlobsRef = useRef<Blob[]>([]);
-    const stoppingRef = useRef(false);
-    const [isStopping, setIsStopping] = useState(false);
-
     useEffect(() => {
         transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [transcriptionHistory]);
 
-    const blobToBase64 = async (blob: Blob): Promise<string> => {
-        const buf = await blob.arrayBuffer();
-        const bytes = new Uint8Array(buf);
-        let binary = '';
-        const chunkSize = 0x8000;
-        for (let i = 0; i < bytes.length; i += chunkSize) {
-            const chunk = bytes.subarray(i, i + chunkSize);
-            binary += String.fromCharCode(...chunk);
-        }
-        return btoa(binary);
-    };
-
-    const stopMediaRecorderAndGetBlob = async (): Promise<Blob | null> => {
-        const mr = mediaRecorderRef.current;
-        if (!mr) return null;
-
-        return new Promise((resolve) => {
-            const finalize = () => {
-                const parts = recordedBlobsRef.current;
-                recordedBlobsRef.current = [];
-                mediaRecorderRef.current = null;
-                if (!parts.length) {
-                    resolve(null);
-                    return;
-                }
-                // Prefer recorded mimeType, fall back to audio/webm
-                const mt = (mr as any).mimeType || parts[0].type || 'audio/webm';
-                resolve(new Blob(parts, { type: mt }));
-            };
-
-            // If already inactive, just finalize.
-            if (mr.state === 'inactive') {
-                finalize();
-                return;
-            }
-
-            mr.addEventListener('stop', finalize, { once: true });
-            try {
-                mr.stop();
-            } catch {
-                finalize();
-            }
-        });
-    };
-
-    const transcribeOnServer = async (audioBlob: Blob): Promise<string> => {
-        const audioBase64 = await blobToBase64(audioBlob);
-        const res = await fetch('/api/transcribe', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ audioBase64, mimeType: audioBlob.type || 'audio/webm' }),
-        });
-        if (!res.ok) {
-            const text = await res.text().catch(() => '');
-            throw new Error(`Transcribe failed (${res.status}): ${text || 'Unknown error'}`);
-        }
-        const data = await res.json();
-        return (data?.transcript || '').trim();
-    };
-
     const cleanupSession = () => {
-        // Stop local recorder if it is still running
-        try {
-            const mr = mediaRecorderRef.current;
-            if (mr && mr.state !== 'inactive') mr.stop();
-        } catch {}
-        mediaRecorderRef.current = null;
-
         if (sessionRef.current) {
             sessionRef.current.close();
             sessionRef.current = null;
@@ -182,8 +116,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         setStatus('connecting');
         setErrorMessage('');
         setTranscriptionHistory([]);
-        stoppingRef.current = false;
-        setIsStopping(false);
         errorOccurred.current = false;
         try {
             // FIX: Request audio without a specific sample rate to ensure compatibility.
@@ -195,29 +127,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
                     autoGainControl: true,
                 }
             });
-
-            // Start local recording as a reliable fallback for server-side transcription.
-            // This does NOT upload audio unless the session ends and we need fallback transcription.
-            recordedBlobsRef.current = [];
-            try {
-                const preferredTypes = [
-                    'audio/webm;codecs=opus',
-                    'audio/webm',
-                    'audio/ogg;codecs=opus',
-                    'audio/ogg'
-                ];
-                const mimeType = preferredTypes.find(t => (window as any).MediaRecorder?.isTypeSupported?.(t)) || '';
-                const mr = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
-                mediaRecorderRef.current = mr;
-                mr.ondataavailable = (ev) => {
-                    if (ev.data && ev.data.size > 0) recordedBlobsRef.current.push(ev.data);
-                };
-                mr.start(250); // collect chunks every 250ms
-            } catch (e) {
-                // It's okay if MediaRecorder isn't available; live mode may still work.
-                console.warn('MediaRecorder not available; server transcription fallback disabled.', e);
-                mediaRecorderRef.current = null;
-            }
 
             // Setup output audio context
             const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
@@ -303,7 +212,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
                         setView('rehearsing');
                     },
                     onclose: () => {
-                        if (stoppingRef.current) return;
                         if (!errorOccurred.current) {
                            // A clean close (e.g., user stops talking) should go to the review screen
                            setStatus('idle');
@@ -430,7 +338,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         }
     };
 
-    const handleStopRehearsal = async (reason?: string) => {
+    const handleStopRehearsal = (reason?: string) => {
         // Record minutes used for the current session.
         const start = sessionStartRef.current;
         if (start) {
@@ -441,34 +349,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         if (reason) {
             setErrorMessage(reason);
         }
-
-        // Stop live session first, but keep mic stream alive long enough to finalize the recorder.
-        stoppingRef.current = true;
-        setIsStopping(true);
-
-        let audioBlob: Blob | null = null;
-        try {
-            audioBlob = await stopMediaRecorderAndGetBlob();
-        } catch (e) {
-            console.warn('Failed to finalize MediaRecorder blob', e);
-        }
-
-        // If live transcription produced nothing, fall back to server-side transcription.
-        const hasFinalUserText = transcriptionHistory.some(t => t.source === 'user' && t.isFinal && t.text.trim().length > 0);
-        if (!hasFinalUserText && audioBlob && audioBlob.size > 0) {
-            try {
-                const transcript = await transcribeOnServer(audioBlob);
-                if (transcript) {
-                    setTranscriptionHistory(prev => [...prev, { source: 'user', text: transcript, isFinal: true }]);
-                }
-            } catch (e) {
-                console.warn('Server-side transcription failed', e);
-            }
-        }
-
         cleanupSession();
-        setIsStopping(false);
-        stoppingRef.current = false;
         setView('reviewing');
     };
     
