@@ -46,9 +46,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
     const sessionPromiseRef = useRef<Promise<LiveSession> | null>(null);
     const cleanupMicStreamRef = useRef<(() => void) | null>(null);
     const errorOccurred = useRef(false);
-    // Buffer of PCM16 chunks (16kHz) for server-side transcription fallback
-    const recordedPcm16Ref = useRef<Int16Array[]>([]);
-
 
     // Audio playback refs
     const outputAudioContextRef = useRef<AudioContext | null>(null);
@@ -65,6 +62,19 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
     const usageIntervalRef = useRef<number | null>(null);
 
     const transcriptEndRef = useRef<HTMLDivElement>(null);
+
+    // Prevent indefinite UI hangs if the browser never resolves/rejects the mic prompt.
+    const withTimeout = async <T,>(promise: Promise<T>, ms: number, message: string): Promise<T> => {
+        let timer: number | undefined;
+        const timeoutPromise = new Promise<never>((_, reject) => {
+            timer = window.setTimeout(() => reject(new Error(message)), ms);
+        });
+        try {
+            return await Promise.race([promise, timeoutPromise]);
+        } finally {
+            if (timer) window.clearTimeout(timer);
+        }
+    };
 
     useEffect(() => {
         transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -101,84 +111,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
     }, []);
 
 
-    const float32ToInt16 = (input: Float32Array): Int16Array => {
-        const out = new Int16Array(input.length);
-        for (let i = 0; i < input.length; i++) {
-            let s = Math.max(-1, Math.min(1, input[i]));
-            out[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-        }
-        return out;
-    };
-
-    const concatInt16 = (chunks: Int16Array[]): Int16Array => {
-        const total = chunks.reduce((n, c) => n + c.length, 0);
-        const out = new Int16Array(total);
-        let off = 0;
-        for (const c of chunks) {
-            out.set(c, off);
-            off += c.length;
-        }
-        return out;
-    };
-
-    const pcm16ToWav = (pcm: Int16Array, sampleRate = 16000): Uint8Array => {
-        const numChannels = 1;
-        const bitsPerSample = 16;
-        const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
-        const blockAlign = numChannels * (bitsPerSample / 8);
-        const dataSize = pcm.length * 2;
-        const buffer = new ArrayBuffer(44 + dataSize);
-        const view = new DataView(buffer);
-        const writeStr = (off: number, str: string) => {
-            for (let i = 0; i < str.length; i++) view.setUint8(off + i, str.charCodeAt(i));
-        };
-        writeStr(0, 'RIFF');
-        view.setUint32(4, 36 + dataSize, true);
-        writeStr(8, 'WAVE');
-        writeStr(12, 'fmt ');
-        view.setUint32(16, 16, true);
-        view.setUint16(20, 1, true);
-        view.setUint16(22, numChannels, true);
-        view.setUint32(24, sampleRate, true);
-        view.setUint32(28, byteRate, true);
-        view.setUint16(32, blockAlign, true);
-        view.setUint16(34, bitsPerSample, true);
-        writeStr(36, 'data');
-        view.setUint32(40, dataSize, true);
-        // PCM samples
-        let offset = 44;
-        for (let i = 0; i < pcm.length; i++, offset += 2) {
-            view.setInt16(offset, pcm[i], true);
-        }
-        return new Uint8Array(buffer);
-    };
-
-    const transcribeOnServer = async (): Promise<string> => {
-        const chunks = recordedPcm16Ref.current;
-        if (!chunks || chunks.length === 0) return '';
-        const pcm = concatInt16(chunks);
-        // Guard: if extremely short, treat as empty
-        if (pcm.length < 1600) return ''; // <0.1s @16k
-        const wavBytes = pcm16ToWav(pcm, 16000);
-        const wavBlob = new window.Blob([wavBytes], { type: 'audio/wav' });
-        const form = new FormData();
-        form.append('audio', wavBlob, 'rehearsal.wav');
-        try {
-            const res = await fetch('/api/transcribe', { method: 'POST', body: form });
-            if (!res.ok) {
-                const txt = await res.text().catch(() => '');
-                console.error('Transcribe failed:', res.status, txt);
-                return '';
-            }
-            const json = await res.json().catch(() => null);
-            return (json?.text || '').toString();
-        } catch (e) {
-            console.error('Transcribe request error:', e);
-            return '';
-        }
-    };
-
-
     const handleStartSession = async () => {
         // Client-side cap for live rehearsal minutes (daily). Server-side usage enforcement still applies to text requests.
         const cur = getUsage(user, 'live_minutes');
@@ -190,28 +122,33 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         setStatus('connecting');
         setErrorMessage('');
         setTranscriptionHistory([]);
-        recordedPcm16Ref.current = [];
-        setIsProcessingStop(false);
         errorOccurred.current = false;
         try {
-            // FIX: Request audio without a specific sample rate to ensure compatibility.
-            // The audio will be resampled later if needed.
-            const stream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true,
-                }
-            });
+            // Microphone capture: wrap in a timeout so the UI can't hang forever.
+            // Some browsers/extensions can cause getUserMedia() to never resolve.
+            const stream = await withTimeout(
+                navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true,
+                    },
+                }),
+                10000,
+                'Microphone request timed out. Please check browser mic permissions and try again.'
+            );
 
             // Setup output audio context
             const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
             outputAudioContextRef.current = audioCtx;
             outputNodeRef.current = audioCtx.createGain();
             outputNodeRef.current.connect(audioCtx.destination);
+            // Ensure the AudioContext is actually running (required on some browsers).
+            try { await audioCtx.resume(); } catch { /* ignore */ }
             
             // FIX: Create input audio context with the stream's native sample rate to avoid mismatches.
             const inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+            try { await inputAudioContext.resume(); } catch { /* ignore */ }
             let source: MediaStreamAudioSourceNode | null = null;
             let scriptProcessor: ScriptProcessorNode | null = null;
 
@@ -249,9 +186,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
                                     offsetBuffer = nextOffsetBuffer;
                                 }
                             }
-
-                            // Buffer PCM16 for server-side transcription fallback
-                            recordedPcm16Ref.current.push(float32ToInt16(resampledData));
 
                             const pcmBlob = createBlob(resampledData);
                             // Use the session promise to send data, preventing race conditions
@@ -302,7 +236,12 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
             );
             
             sessionPromiseRef.current = sessionPromise;
-            sessionRef.current = await sessionPromise;
+            // Also time out the Live socket handshake so we don't hang on "Connecting..." forever.
+            sessionRef.current = await withTimeout(
+                sessionPromise,
+                15000,
+                'Live session connection timed out. Please try again, or use Basic Rehearsal.'
+            );
 
             // Define the cleanup function for all audio resources
             cleanupMicStreamRef.current = () => {
@@ -417,7 +356,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         }
     };
 
-    const handleStopRehearsal = async (reason?: string) => {
+    const handleStopRehearsal = (reason?: string) => {
         // Record minutes used for the current session.
         const start = sessionStartRef.current;
         if (start) {
@@ -428,17 +367,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         if (reason) {
             setErrorMessage(reason);
         }
-        // If Gemini Live produced no usable user transcript, run server-side transcription fallback.
-        const hasUserSpeech = transcriptionHistory.some(t => t.source === 'user' && (t.text || '').trim().length > 0);
-        if (!hasUserSpeech) {
-            setIsProcessingStop(true);
-            const serverText = await transcribeOnServer();
-            setIsProcessingStop(false);
-            if (serverText && serverText.trim().length > 0) {
-                setTranscriptionHistory([{ source: 'user', text: serverText.trim(), isFinal: true }]);
-            }
-        }
-
         cleanupSession();
         setView('reviewing');
     };
@@ -455,17 +383,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
     const renderContent = () => {
         switch(view) {
             case 'reviewing':
-                if (isProcessingStop) {
-                    return (
-                        <div className="flex-1 flex items-center justify-center p-6 text-center">
-                            <div>
-                                <MicrophoneIcon className="w-14 h-14 text-slate-500 mx-auto mb-4" />
-                                <h3 className="text-xl font-bold text-slate-300">Processing audio…</h3>
-                                <p className="text-slate-400 mt-2">Transcribing your rehearsal. This can take a few seconds.</p>
-                            </div>
-                        </div>
-                    );
-                }
                 return <ReviewView 
                     transcription={transcriptionHistory}
                     onIdeaSaved={onIdeaSaved}
@@ -491,7 +408,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
                                 <div ref={transcriptEndRef} />
                             </div>
                         ) : (
-                            <div className="flex-1 flex items-start justify-start pt-8">
+                            <div className="flex-1 flex items-center justify-center">
                                 <StatusIndicator status={status} errorMessage={errorMessage} onStart={handleStartSession} />
                             </div>
                         )}
@@ -602,7 +519,7 @@ const ReviewView: React.FC<{
 
     if (transcription.length === 0) {
         return (
-            <div className="flex-1 flex flex-col items-center justify-start text-center p-4 pt-10">
+            <div className="flex-1 flex flex-col items-center justify-center text-center p-4">
                 <MicrophoneIcon className="w-16 h-16 text-slate-600 mb-4" />
                 <h3 className="text-xl font-bold text-slate-300">Rehearsal Complete</h3>
                 <p className="text-slate-400 mt-2 mb-6">No speech was transcribed during the session.</p>
