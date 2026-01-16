@@ -46,6 +46,9 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
     const sessionPromiseRef = useRef<Promise<LiveSession> | null>(null);
     const cleanupMicStreamRef = useRef<(() => void) | null>(null);
     const errorOccurred = useRef(false);
+    // Buffer of PCM16 chunks (16kHz) for server-side transcription fallback
+    const recordedPcm16Ref = useRef<Int16Array[]>([]);
+
 
     // Audio playback refs
     const outputAudioContextRef = useRef<AudioContext | null>(null);
