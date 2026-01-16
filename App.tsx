@@ -246,4 +246,8 @@ function App() {
 // footer.tsx
 const BUILD_TAG = "live-rehearsal-env-fix-1";
 
+console.log("BUILD ENV CHECK:", {
+  gemini: import.meta.env.VITE_GEMINI_API_KEY,
+});
+
 export default App;
