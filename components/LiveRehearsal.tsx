@@ -52,6 +52,65 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
     const sessionRef = useRef<LiveSession | null>(null);
     const sessionPromiseRef = useRef<Promise<LiveSession> | null>(null);
     const cleanupMicStreamRef = useRef<(() => void) | null>(null);
+
+    // MediaRecorder fallback (server-side transcription)
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const recordedChunksRef = useRef<BlobPart[]>([]);
+    const recordedMimeTypeRef = useRef<string>('');
+
+    const stopRecorderAndGetBlob = async (): Promise<Blob | null> => {
+        const rec = mediaRecorderRef.current;
+        if (!rec) return null;
+        if (rec.state === 'inactive') {
+            // already stopped; if we have chunks return them
+            const chunks = recordedChunksRef.current;
+            if (!chunks.length) return null;
+            return new Blob(chunks, { type: recordedMimeTypeRef.current || 'audio/webm' });
+        }
+
+        return await new Promise((resolve) => {
+            const onStop = () => {
+                try {
+                    const chunks = recordedChunksRef.current;
+                    if (!chunks.length) return resolve(null);
+                    resolve(new Blob(chunks, { type: recordedMimeTypeRef.current || rec.mimeType || 'audio/webm' }));
+                } catch {
+                    resolve(null);
+                }
+            };
+            rec.addEventListener('stop', onStop, { once: true });
+            try { rec.stop(); } catch { resolve(null); }
+        });
+    };
+
+    const blobToBase64 = (blob: Blob): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onerror = () => reject(new Error('Failed to read audio blob'));
+            reader.onload = () => {
+                const res = String(reader.result || '');
+                // data:<mime>;base64,<data>
+                const idx = res.indexOf('base64,');
+                resolve(idx >= 0 ? res.slice(idx + 7) : res);
+            };
+            reader.readAsDataURL(blob);
+        });
+    };
+
+    const pickRecorderMimeType = (): string => {
+        const candidates = [
+            'audio/webm;codecs=opus',
+            'audio/webm',
+            'audio/ogg;codecs=opus',
+            'audio/ogg',
+        ];
+        for (const c of candidates) {
+            // @ts-ignore
+            if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported?.(c)) return c;
+        }
+        return '';
+    };
+
     const errorOccurred = useRef(false);
 
     // Audio playback refs
@@ -95,6 +154,15 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
             clearInterval(usageIntervalRef.current);
             usageIntervalRef.current = null;
         }
+        if (mediaRecorderRef.current) {
+            try {
+                if (mediaRecorderRef.current.state !== 'inactive') mediaRecorderRef.current.stop();
+            } catch {}
+            mediaRecorderRef.current = null;
+        }
+        recordedChunksRef.current = [];
+        recordedMimeTypeRef.current = '';
+
         sessionStartRef.current = null;
         setTimer({ startTime: null, duration: null, isRunning: false });
         setStatus('idle');
@@ -127,6 +195,24 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
                     autoGainControl: true,
                 }
             });
+
+            // MediaRecorder fallback: record full session audio for server-side transcription
+            recordedChunksRef.current = [];
+            const mimeType = pickRecorderMimeType();
+            recordedMimeTypeRef.current = mimeType;
+            try {
+                const rec = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+                mediaRecorderRef.current = rec;
+                rec.addEventListener('dataavailable', (e) => {
+                    if (e.data && e.data.size > 0) recordedChunksRef.current.push(e.data);
+                });
+                // Request periodic data to avoid losing blobs on some browsers
+                rec.start(500);
+            } catch (e) {
+                console.warn('MediaRecorder unavailable; server transcription fallback disabled', e);
+                mediaRecorderRef.current = null;
+            }
+
 
             // Setup output audio context
             const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
@@ -338,7 +424,9 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         }
     };
 
-    const handleStopRehearsal = (reason?: string) => {
+    const handleStopRehearsal = async (reason?: string) => {
+        setStatus('processing');
+
         // Record minutes used for the current session.
         const start = sessionStartRef.current;
         if (start) {
@@ -346,16 +434,54 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
             consumeLiveMinutes(user, minutes);
             sessionStartRef.current = null;
         }
-        if (reason) {
-            setErrorMessage(reason);
+
+        if (reason) setErrorMessage(reason);
+
+        // Stop MediaRecorder and capture the audio blob (if enabled).
+        let audioBlob: Blob | null = null;
+        try {
+            audioBlob = await stopRecorderAndGetBlob();
+        } catch (e) {
+            console.warn('Failed to stop MediaRecorder', e);
         }
+
+        // If we didn't receive any user transcript from the live session, fall back to server transcription.
+        const hasUserSpeech = transcriptionHistory.some(
+            (t) => t.source === 'user' && t.text.trim().length > 0
+        );
+
+        if (!hasUserSpeech && audioBlob && audioBlob.size > 2000) {
+            try {
+                const audioBase64 = await blobToBase64(audioBlob);
+                const resp = await fetch('/api/transcribe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        audioBase64,
+                        mimeType: audioBlob.type || recordedMimeTypeRef.current || 'audio/webm',
+                    }),
+                });
+
+                const data = await resp.json().catch(() => ({} as any));
+                const transcript = String((data as any).transcript || '').trim();
+
+                if (transcript) {
+                    setTranscriptionHistory([{ source: 'user', text: transcript, isFinal: true }]);
+                    setErrorMessage('');
+                }
+            } catch (e) {
+                console.warn('Server transcription failed', e);
+            }
+        }
+
         cleanupSession();
         setView('reviewing');
+        setStatus('idle');
     };
-    
+
     const handleHeaderButtonClick = () => {
         if (view === 'rehearsing') {
-            handleStopRehearsal();
+            void handleStopRehearsal();
         } else {
             cleanupSession();
             onReturnToStudio();
