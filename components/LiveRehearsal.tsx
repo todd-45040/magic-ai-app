@@ -35,75 +35,12 @@ function createBlob(data: Float32Array): Blob {
   };
 }
 
-// Convert float audio samples (-1..1) to 16-bit PCM.
-function floatToInt16(data: Float32Array): Int16Array {
-  const out = new Int16Array(data.length);
-  for (let i = 0; i < data.length; i++) {
-    const s = Math.max(-1, Math.min(1, data[i]));
-    out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
-  }
-  return out;
-}
-
-// Build a mono 16-bit PCM WAV blob.
-function pcm16ToWavBlob(pcm: Int16Array, sampleRate = 16000): globalThis.Blob {
-  const numChannels = 1;
-  const bytesPerSample = 2;
-  const blockAlign = numChannels * bytesPerSample;
-  const byteRate = sampleRate * blockAlign;
-  const dataSize = pcm.length * bytesPerSample;
-
-  const buffer = new ArrayBuffer(44 + dataSize);
-  const view = new DataView(buffer);
-
-  const writeString = (offset: number, str: string) => {
-    for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
-  };
-
-  writeString(0, 'RIFF');
-  view.setUint32(4, 36 + dataSize, true);
-  writeString(8, 'WAVE');
-  writeString(12, 'fmt ');
-  view.setUint32(16, 16, true); // PCM fmt chunk size
-  view.setUint16(20, 1, true); // audio format = PCM
-  view.setUint16(22, numChannels, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, byteRate, true);
-  view.setUint16(32, blockAlign, true);
-  view.setUint16(34, 16, true); // bits per sample
-  writeString(36, 'data');
-  view.setUint32(40, dataSize, true);
-
-  // PCM samples
-  let offset = 44;
-  for (let i = 0; i < pcm.length; i++, offset += 2) {
-    view.setInt16(offset, pcm[i], true);
-  }
-
-  return new globalThis.Blob([buffer], { type: 'audio/wav' });
-}
-
-async function blobToBase64(blob: globalThis.Blob): Promise<string> {
-  return await new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('Failed to read audio blob'));
-    reader.onload = () => {
-      const result = String(reader.result || '');
-      // result is data:<mime>;base64,<data>
-      const idx = result.indexOf(',');
-      resolve(idx >= 0 ? result.slice(idx + 1) : result);
-    };
-    reader.readAsDataURL(blob);
-  });
-}
-
 
 const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, onIdeaSaved }) => {
     const [view, setView] = useState<'idle' | 'rehearsing' | 'reviewing'>('idle');
     const [status, setStatus] = useState<'idle' | 'connecting' | 'listening' | 'error'>('idle');
     const [errorMessage, setErrorMessage] = useState('');
     const [transcriptionHistory, setTranscriptionHistory] = useState<Transcription[]>([]);
-    const [isFinalizing, setIsFinalizing] = useState(false);
     
     const sessionRef = useRef<LiveSession | null>(null);
     const sessionPromiseRef = useRef<Promise<LiveSession> | null>(null);
@@ -126,108 +63,11 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
 
     const transcriptEndRef = useRef<HTMLDivElement>(null);
 
-    // --- Optional browser-side transcription fallback (Web Speech API) ---
-    // Gemini Live transcription can fail depending on audio format/model access.
-    // We run browser speech recognition in parallel and only use it if Gemini returns no user transcript.
-    const speechRecRef = useRef<any>(null);
-    const speechTextRef = useRef<string>('');
-
-    // --- Server-side transcription fallback buffer ---
-    // We buffer the 16kHz PCM16 samples we already send to Gemini Live,
-    // then (if Gemini returns no transcript) we send the buffered audio
-    // to a serverless endpoint for transcription.
-    const pcm16ChunksRef = useRef<Int16Array[]>([]);
-
-    const startBrowserTranscription = () => {
-        try {
-            if (speechRecRef.current) return;
-            const SpeechRec: any = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-            if (!SpeechRec) return;
-            const rec = new SpeechRec();
-            rec.lang = 'en-US';
-            rec.continuous = true;
-            rec.interimResults = false;
-            speechTextRef.current = '';
-            rec.onresult = (e: any) => {
-                for (let i = e.resultIndex; i < e.results.length; i++) {
-                    if (e.results[i].isFinal) {
-                        speechTextRef.current += (e.results[i][0]?.transcript || '') + ' ';
-                    }
-                }
-            };
-            rec.onerror = () => {
-                // Ignore — fallback is best-effort.
-            };
-            rec.onend = () => {
-                // Some browsers end automatically; keep reference so we can stop explicitly.
-            };
-            rec.start();
-            speechRecRef.current = rec;
-        } catch {
-            // Ignore — fallback is best-effort.
-        }
-    };
-
-    const stopBrowserTranscription = () => {
-        try {
-            if (speechRecRef.current) {
-                speechRecRef.current.stop?.();
-            }
-        } catch {
-            // Ignore
-        } finally {
-            speechRecRef.current = null;
-        }
-    };
-
-    const transcribeOnServer = async (): Promise<string> => {
-        // Combine buffered PCM chunks and send as WAV to /api/transcribe
-        const chunks = pcm16ChunksRef.current;
-        if (!chunks || chunks.length === 0) return '';
-
-        const totalLen = chunks.reduce((sum, c) => sum + c.length, 0);
-        if (totalLen <= 0) return '';
-
-        const combined = new Int16Array(totalLen);
-        let offset = 0;
-        for (const c of chunks) {
-            combined.set(c, offset);
-            offset += c.length;
-        }
-
-        const wavBlob = pcm16ToWavBlob(combined, 16000);
-        const audioBase64 = await blobToBase64(wavBlob);
-
-        const res = await fetch('/api/transcribe', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ audioBase64, mimeType: 'audio/wav' }),
-        });
-
-        if (!res.ok) {
-            const t = await res.text().catch(() => '');
-            throw new Error(t || `Transcription failed (${res.status})`);
-        }
-        const json = await res.json();
-        return String(json?.transcript || '').trim();
-    };
-
-    const safeReturnToStudio = (transcriptToDiscuss?: Transcription[]) => {
-        cleanupSession();
-        setView('idle');
-        setStatus('idle');
-        setErrorMessage('');
-        setTranscriptionHistory([]);
-        onReturnToStudio(transcriptToDiscuss);
-    };
-
     useEffect(() => {
         transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [transcriptionHistory]);
 
     const cleanupSession = () => {
-        // Stop any browser-side fallback transcription.
-        stopBrowserTranscription();
         if (sessionRef.current) {
             sessionRef.current.close();
             sessionRef.current = null;
@@ -258,6 +98,84 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
     }, []);
 
 
+    const float32ToInt16 = (input: Float32Array): Int16Array => {
+        const out = new Int16Array(input.length);
+        for (let i = 0; i < input.length; i++) {
+            let s = Math.max(-1, Math.min(1, input[i]));
+            out[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+        return out;
+    };
+
+    const concatInt16 = (chunks: Int16Array[]): Int16Array => {
+        const total = chunks.reduce((n, c) => n + c.length, 0);
+        const out = new Int16Array(total);
+        let off = 0;
+        for (const c of chunks) {
+            out.set(c, off);
+            off += c.length;
+        }
+        return out;
+    };
+
+    const pcm16ToWav = (pcm: Int16Array, sampleRate = 16000): Uint8Array => {
+        const numChannels = 1;
+        const bitsPerSample = 16;
+        const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
+        const blockAlign = numChannels * (bitsPerSample / 8);
+        const dataSize = pcm.length * 2;
+        const buffer = new ArrayBuffer(44 + dataSize);
+        const view = new DataView(buffer);
+        const writeStr = (off: number, str: string) => {
+            for (let i = 0; i < str.length; i++) view.setUint8(off + i, str.charCodeAt(i));
+        };
+        writeStr(0, 'RIFF');
+        view.setUint32(4, 36 + dataSize, true);
+        writeStr(8, 'WAVE');
+        writeStr(12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true);
+        view.setUint16(22, numChannels, true);
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, byteRate, true);
+        view.setUint16(32, blockAlign, true);
+        view.setUint16(34, bitsPerSample, true);
+        writeStr(36, 'data');
+        view.setUint32(40, dataSize, true);
+        // PCM samples
+        let offset = 44;
+        for (let i = 0; i < pcm.length; i++, offset += 2) {
+            view.setInt16(offset, pcm[i], true);
+        }
+        return new Uint8Array(buffer);
+    };
+
+    const transcribeOnServer = async (): Promise<string> => {
+        const chunks = recordedPcm16Ref.current;
+        if (!chunks || chunks.length === 0) return '';
+        const pcm = concatInt16(chunks);
+        // Guard: if extremely short, treat as empty
+        if (pcm.length < 1600) return ''; // <0.1s @16k
+        const wavBytes = pcm16ToWav(pcm, 16000);
+        const wavBlob = new window.Blob([wavBytes], { type: 'audio/wav' });
+        const form = new FormData();
+        form.append('audio', wavBlob, 'rehearsal.wav');
+        try {
+            const res = await fetch('/api/transcribe', { method: 'POST', body: form });
+            if (!res.ok) {
+                const txt = await res.text().catch(() => '');
+                console.error('Transcribe failed:', res.status, txt);
+                return '';
+            }
+            const json = await res.json().catch(() => null);
+            return (json?.text || '').toString();
+        } catch (e) {
+            console.error('Transcribe request error:', e);
+            return '';
+        }
+    };
+
+
     const handleStartSession = async () => {
         // Client-side cap for live rehearsal minutes (daily). Server-side usage enforcement still applies to text requests.
         const cur = getUsage(user, 'live_minutes');
@@ -269,11 +187,8 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         setStatus('connecting');
         setErrorMessage('');
         setTranscriptionHistory([]);
-        setIsFinalizing(false);
-        pcm16ChunksRef.current = [];
-        // Start best-effort browser transcription in parallel.
-        // We'll only use it if Gemini returns no user transcript.
-        startBrowserTranscription();
+        recordedPcm16Ref.current = [];
+        setIsProcessingStop(false);
         errorOccurred.current = false;
         try {
             // FIX: Request audio without a specific sample rate to ensure compatibility.
@@ -332,20 +247,10 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
                                 }
                             }
 
+                            // Buffer PCM16 for server-side transcription fallback
+                            recordedPcm16Ref.current.push(float32ToInt16(resampledData));
+
                             const pcmBlob = createBlob(resampledData);
-                            // Buffer PCM16 for server-side transcription fallback.
-                            // Keep up to ~10 minutes to avoid unbounded memory.
-                            try {
-                                pcm16ChunksRef.current.push(floatToInt16(resampledData));
-                                const maxSamples = 16000 * 60 * 10; // 10 minutes
-                                let currentSamples = pcm16ChunksRef.current.reduce((s, c) => s + c.length, 0);
-                                while (currentSamples > maxSamples && pcm16ChunksRef.current.length > 1) {
-                                    const dropped = pcm16ChunksRef.current.shift();
-                                    currentSamples -= dropped ? dropped.length : 0;
-                                }
-                            } catch {
-                                // Ignore buffering errors
-                            }
                             // Use the session promise to send data, preventing race conditions
                             sessionPromise.then((session) => {
                                 session.sendRealtimeInput({ media: pcmBlob });
@@ -510,11 +415,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
     };
 
     const handleStopRehearsal = async (reason?: string) => {
-        // Stop browser fallback transcription first.
-        stopBrowserTranscription();
-        setIsFinalizing(true);
-        setView('reviewing');
-
         // Record minutes used for the current session.
         const start = sessionStartRef.current;
         if (start) {
@@ -522,50 +422,51 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
             consumeLiveMinutes(user, minutes);
             sessionStartRef.current = null;
         }
-
-        // Close live session + mic now (we already buffered PCM).
-        cleanupSession();
-
-        // Fallback 1: If Gemini produced no user transcription, use browser transcript if available.
-        const browserFallback = (speechTextRef.current || '').trim();
-        const hadUserTranscript = transcriptionHistory.some(t => t.source === 'user' && (t.text || '').trim().length > 0);
-        if (!hadUserTranscript && browserFallback) {
-            setTranscriptionHistory(prev => [...prev, { source: 'user', text: browserFallback, isFinal: true }]);
+        if (reason) {
+            setErrorMessage(reason);
         }
-
-        // Fallback 2 (recommended): Server-side transcription from buffered audio.
-        const hadUserAfterBrowser = hadUserTranscript || (!!browserFallback);
-        if (!hadUserAfterBrowser) {
-            try {
-                const transcript = await transcribeOnServer();
-                if (transcript) {
-                    setTranscriptionHistory(prev => [...prev, { source: 'user', text: transcript, isFinal: true }]);
-                }
-            } catch (e: any) {
-                console.warn('Server transcription fallback failed:', e);
+        // If Gemini Live produced no usable user transcript, run server-side transcription fallback.
+        const hasUserSpeech = transcriptionHistory.some(t => t.source === 'user' && (t.text || '').trim().length > 0);
+        if (!hasUserSpeech) {
+            setIsProcessingStop(true);
+            const serverText = await transcribeOnServer();
+            setIsProcessingStop(false);
+            if (serverText && serverText.trim().length > 0) {
+                setTranscriptionHistory([{ source: 'user', text: serverText.trim(), isFinal: true }]);
             }
         }
 
-        if (reason) setErrorMessage(reason);
-        setIsFinalizing(false);
+        cleanupSession();
+        setView('reviewing');
     };
     
     const handleHeaderButtonClick = () => {
         if (view === 'rehearsing') {
             handleStopRehearsal();
         } else {
-            safeReturnToStudio();
+            cleanupSession();
+            onReturnToStudio();
         }
     };
     
     const renderContent = () => {
         switch(view) {
             case 'reviewing':
+                if (isProcessingStop) {
+                    return (
+                        <div className="flex-1 flex items-center justify-center p-6 text-center">
+                            <div>
+                                <MicrophoneIcon className="w-14 h-14 text-slate-500 mx-auto mb-4" />
+                                <h3 className="text-xl font-bold text-slate-300">Processing audio…</h3>
+                                <p className="text-slate-400 mt-2">Transcribing your rehearsal. This can take a few seconds.</p>
+                            </div>
+                        </div>
+                    );
+                }
                 return <ReviewView 
                     transcription={transcriptionHistory}
-                    isFinalizing={isFinalizing}
                     onIdeaSaved={onIdeaSaved}
-                    onReturnToStudio={safeReturnToStudio}
+                    onReturnToStudio={onReturnToStudio}
                 />;
             case 'rehearsing':
             case 'idle':
@@ -587,7 +488,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
                                 <div ref={transcriptEndRef} />
                             </div>
                         ) : (
-                            <div className="flex-1 flex items-center justify-center">
+                            <div className="flex-1 flex items-start justify-start pt-8">
                                 <StatusIndicator status={status} errorMessage={errorMessage} onStart={handleStartSession} />
                             </div>
                         )}
@@ -674,10 +575,9 @@ const StatusIndicator: React.FC<{status: string, errorMessage: string, onStart: 
 
 const ReviewView: React.FC<{
     transcription: Transcription[];
-    isFinalizing?: boolean;
     onIdeaSaved: () => void;
     onReturnToStudio: (transcriptToDiscuss?: Transcription[]) => void;
-}> = ({ transcription, isFinalizing = false, onIdeaSaved, onReturnToStudio }) => {
+}> = ({ transcription, onIdeaSaved, onReturnToStudio }) => {
     const transcriptEndRef = useRef<HTMLDivElement>(null);
     const [showSaveForm, setShowSaveForm] = useState(false);
     const [title, setTitle] = useState(`Rehearsal - ${new Date().toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`);
@@ -699,12 +599,10 @@ const ReviewView: React.FC<{
 
     if (transcription.length === 0) {
         return (
-            <div className="flex-1 flex flex-col items-center justify-center text-center p-4">
+            <div className="flex-1 flex flex-col items-center justify-start text-center p-4 pt-10">
                 <MicrophoneIcon className="w-16 h-16 text-slate-600 mb-4" />
                 <h3 className="text-xl font-bold text-slate-300">Rehearsal Complete</h3>
-                <p className="text-slate-400 mt-2 mb-6">
-                    {isFinalizing ? 'Processing your audio…' : 'No speech was transcribed during the session.'}
-                </p>
+                <p className="text-slate-400 mt-2 mb-6">No speech was transcribed during the session.</p>
                 <button
                     onClick={() => onReturnToStudio()}
                     className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 font-bold transition-colors"
