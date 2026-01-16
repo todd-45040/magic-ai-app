@@ -18,7 +18,9 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({ onSelectMode }) => {
       <p className="text-slate-300 mb-12 text-lg text-center">Choose your experience</p>
       <div className="flex flex-col md:flex-row gap-8 w-full max-w-4xl px-4">
         <button
-          onClick={() => onSelectMode('magician')}
+          // If the user isn't authenticated yet, route them into the Auth flow.
+          // App.tsx will switch to Magician Mode after a successful login.
+          onClick={() => onSelectMode('auth')}
           className="group w-full p-8 rounded-lg border border-slate-700 hover:bg-purple-900/50 hover:border-purple-500 transition-all duration-300 transform hover:scale-105 text-center"
         >
           <RabbitIcon className="w-16 h-16 mx-auto mb-4 text-purple-400 group-hover:text-purple-300 transition-colors" />

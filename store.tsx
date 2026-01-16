@@ -1,6 +1,7 @@
 
 import React, { createContext, useReducer, useContext, useEffect, Dispatch, ReactNode } from 'react';
 import type { Show, Client, Feedback, SavedIdea } from './types';
+import { supabase, isSupabaseConfigValid } from './supabase';
 import * as showsService from './services/showsService';
 import * as clientsService from './services/clientsService';
 import * as feedbackService from './services/feedbackService';
@@ -64,6 +65,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const loadInitialData = async () => {
             if (!state.isLoaded) {
                 try {
+                    // If Supabase isn't configured (or the user is logged out), don't treat it as an error.
+                    // Clearing browser cache removes the auth session; in that case we should simply
+                    // mark the store as loaded with empty datasets and let the UI show the login flow.
+                    if (!isSupabaseConfigValid) {
+                        dispatch({
+                            type: 'SET_ALL_DATA',
+                            payload: { shows: [], clients: [], feedback: [], ideas: [] }
+                        });
+                        return;
+                    }
+
+                    const { data: sessionData } = await supabase.auth.getSession();
+                    const hasSession = Boolean(sessionData?.session?.user);
+                    if (!hasSession) {
+                        dispatch({
+                            type: 'SET_ALL_DATA',
+                            payload: { shows: [], clients: [], feedback: [], ideas: [] }
+                        });
+                        return;
+                    }
+
                     const [shows, ideas, feedback] = await Promise.all([
                         showsService.getShows(),
                         ideasService.getSavedIdeas(),
@@ -76,6 +98,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                         payload: { shows, clients, feedback, ideas } 
                     });
                 } catch (error) {
+                    // If the session is missing, treat as logged-out (not a fatal startup error)
+                    const msg = String((error as any)?.message ?? error ?? '');
+                    if (msg.toLowerCase().includes('auth session missing') || msg.toLowerCase().includes('not authenticated')) {
+                        dispatch({
+                            type: 'SET_ALL_DATA',
+                            payload: { shows: [], clients: [], feedback: [], ideas: [] }
+                        });
+                        return;
+                    }
+
                     console.error("Failed to load initial data:", error);
                 }
             }
