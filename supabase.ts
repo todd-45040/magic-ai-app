@@ -5,6 +5,16 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
+// DEBUG (safe): expose whether Vite injected required Supabase env vars.
+// This does NOT expose the key values.
+if (typeof window !== 'undefined') {
+  (window as any).__SUPABASE_ENV_CHECK__ = {
+    hasUrl: Boolean(import.meta.env.VITE_SUPABASE_URL),
+    hasAnonKey: Boolean(import.meta.env.VITE_SUPABASE_ANON_KEY),
+    ts: Date.now(),
+  };
+}
+
 // Chainable mock for Supabase to prevent crashes during development/preview without keys
 const mockSupabase = {
   from: () => ({

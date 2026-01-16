@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { supabase } from '../supabase';
+import { supabase, isSupabaseConfigValid } from '../supabase';
 import type { User } from '../types';
 import { ADMIN_EMAIL } from '../constants';
 import { getUserProfile, registerOrUpdateUser, checkAndUpdateUserTrialStatus } from '../services/usersService';
@@ -43,6 +43,11 @@ const Auth: React.FC<AuthProps> = ({ onBack, onLogin }) => {
   setIsLoading(true);
 
   try {
+    if (!isSupabaseConfigValid) {
+      throw new Error(
+        'Login is unavailable because Supabase is not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Vercel (Production) and redeploy.'
+      );
+    }
 const { data: signInData, error: authError } = await supabase.auth.signInWithPassword({ email, password });
 if (authError) throw authError;
 
