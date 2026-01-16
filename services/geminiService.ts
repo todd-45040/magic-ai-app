@@ -3,15 +3,19 @@ import { supabase } from '../supabase';
 import type { ChatMessage, TrickIdentificationResult, User } from '../types';
 import { getAiProvider } from './aiProviderService';
 
-// DEBUG (temporary): expose which Vite env vars are compiled into the client bundle.
+// DEBUG (temporary): expose which Vite env vars were baked into the client bundle.
 // Safe: does NOT reveal the API key value.
 // After deploying, open DevTools console and run:
 //   window.__LIVE_ENV_CHECK__
-// Remove this block once you confirm env injection.
+// IMPORTANT: Use *static* access (import.meta.env.VITE_*) so Vite can inline values at build time.
+// If you access import.meta.env dynamically (via `as any` / optional chaining), Vite may not inline,
+// and you'll see false negatives in Production.
+const __LIVE_KEY_PRESENT__ = Boolean(import.meta.env.VITE_GEMINI_LIVE_API_KEY);
+const __FALLBACK_KEY_PRESENT__ = Boolean(import.meta.env.VITE_GEMINI_API_KEY);
 if (typeof window !== 'undefined') {
   (window as any).__LIVE_ENV_CHECK__ = {
-    hasLiveKey: Boolean((import.meta as any)?.env?.VITE_GEMINI_LIVE_API_KEY),
-    hasFallbackKey: Boolean((import.meta as any)?.env?.VITE_GEMINI_API_KEY),
+    hasLiveKey: __LIVE_KEY_PRESENT__,
+    hasFallbackKey: __FALLBACK_KEY_PRESENT__,
     ts: Date.now(),
   };
 }
@@ -265,8 +269,9 @@ const LIVE_MODEL_CANDIDATES = [
 ];
 
 function getLiveApiKey(): string {
-  const liveKey = (import.meta as any)?.env?.VITE_GEMINI_LIVE_API_KEY;
-  const fallbackKey = (import.meta as any)?.env?.VITE_GEMINI_API_KEY;
+  // IMPORTANT: Use static access so Vite can inline these at build time.
+  const liveKey = import.meta.env.VITE_GEMINI_LIVE_API_KEY;
+  const fallbackKey = import.meta.env.VITE_GEMINI_API_KEY;
   const key = String(liveKey || fallbackKey || '').trim();
 
   if (!key) {
