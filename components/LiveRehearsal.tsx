@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { LiveServerMessage, Blob, FunctionCall } from '@google/genai';
-import { startLiveSession, decode, decodeAudioData, generateResponse, type LiveSession } from '../services/geminiService';
+import { startLiveSession, decode, decodeAudioData, type LiveSession } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
 import type { Transcription, TimerState, User } from '../types';
 import { canConsume, consumeLiveMinutes, getUsage } from '../services/usageTracker';
@@ -41,12 +41,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
     const [status, setStatus] = useState<'idle' | 'connecting' | 'listening' | 'error'>('idle');
     const [errorMessage, setErrorMessage] = useState('');
     const [transcriptionHistory, setTranscriptionHistory] = useState<Transcription[]>([]);
-    const [mode, setMode] = useState<'live' | 'basic'>('live');
-
-    // Basic (non-live) rehearsal fallback
-    const [basicScript, setBasicScript] = useState('');
-    const [basicFeedback, setBasicFeedback] = useState('');
-    const [basicBusy, setBasicBusy] = useState(false);
     
     const sessionRef = useRef<LiveSession | null>(null);
     const sessionPromiseRef = useRef<Promise<LiveSession> | null>(null);
@@ -69,11 +63,70 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
 
     const transcriptEndRef = useRef<HTMLDivElement>(null);
 
+    // --- Optional browser-side transcription fallback (Web Speech API) ---
+    // Gemini Live transcription can fail depending on audio format/model access.
+    // We run browser speech recognition in parallel and only use it if Gemini returns no user transcript.
+    const speechRecRef = useRef<any>(null);
+    const speechTextRef = useRef<string>('');
+
+    const startBrowserTranscription = () => {
+        try {
+            if (speechRecRef.current) return;
+            const SpeechRec: any = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+            if (!SpeechRec) return;
+            const rec = new SpeechRec();
+            rec.lang = 'en-US';
+            rec.continuous = true;
+            rec.interimResults = false;
+            speechTextRef.current = '';
+            rec.onresult = (e: any) => {
+                for (let i = e.resultIndex; i < e.results.length; i++) {
+                    if (e.results[i].isFinal) {
+                        speechTextRef.current += (e.results[i][0]?.transcript || '') + ' ';
+                    }
+                }
+            };
+            rec.onerror = () => {
+                // Ignore — fallback is best-effort.
+            };
+            rec.onend = () => {
+                // Some browsers end automatically; keep reference so we can stop explicitly.
+            };
+            rec.start();
+            speechRecRef.current = rec;
+        } catch {
+            // Ignore — fallback is best-effort.
+        }
+    };
+
+    const stopBrowserTranscription = () => {
+        try {
+            if (speechRecRef.current) {
+                speechRecRef.current.stop?.();
+            }
+        } catch {
+            // Ignore
+        } finally {
+            speechRecRef.current = null;
+        }
+    };
+
+    const safeReturnToStudio = (transcriptToDiscuss?: Transcription[]) => {
+        cleanupSession();
+        setView('idle');
+        setStatus('idle');
+        setErrorMessage('');
+        setTranscriptionHistory([]);
+        onReturnToStudio(transcriptToDiscuss);
+    };
+
     useEffect(() => {
         transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [transcriptionHistory]);
 
     const cleanupSession = () => {
+        // Stop any browser-side fallback transcription.
+        stopBrowserTranscription();
         if (sessionRef.current) {
             sessionRef.current.close();
             sessionRef.current = null;
@@ -105,10 +158,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
 
 
     const handleStartSession = async () => {
-        if (mode !== 'live') {
-            // In basic mode, do not attempt to open mic or Live API.
-            return;
-        }
         // Client-side cap for live rehearsal minutes (daily). Server-side usage enforcement still applies to text requests.
         const cur = getUsage(user, 'live_minutes');
         if (cur.limit > 0 && cur.remaining <= 0) {
@@ -119,6 +168,9 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         setStatus('connecting');
         setErrorMessage('');
         setTranscriptionHistory([]);
+        // Start best-effort browser transcription in parallel.
+        // We'll only use it if Gemini returns no user transcript.
+        startBrowserTranscription();
         errorOccurred.current = false;
         try {
             // FIX: Request audio without a specific sample rate to ensure compatibility.
@@ -242,56 +294,10 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
             if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
                 setErrorMessage('Microphone permission denied. Please allow microphone access in your browser settings.');
             } else {
-                const msg = String(error?.message || error || 'Failed to connect');
-                // If Live API is not configured / accessible, offer a graceful fallback.
-                if (/missing\s+VITE_GEMINI_LIVE_API_KEY/i.test(msg) || /Unable to start Live Rehearsal session/i.test(msg) || /403|permission|not\s+authorized|model/i.test(msg)) {
-                    setErrorMessage(msg);
-                } else {
-                    setErrorMessage('Failed to connect. Please check your connection and microphone, then try again.');
-                }
+                setErrorMessage('Failed to connect. Please check your connection and microphone, then try again.');
             }
             setStatus('error');
             setView('rehearsing');
-        }
-    };
-
-    const handleSwitchToBasic = () => {
-        cleanupSession();
-        setMode('basic');
-        setView('idle');
-        setStatus('idle');
-        setErrorMessage('');
-        setTranscriptionHistory([]);
-    };
-
-    const handleTryLiveAgain = () => {
-        setMode('live');
-        setBasicFeedback('');
-        setBasicBusy(false);
-        setErrorMessage('');
-        setStatus('idle');
-    };
-
-    const handleBasicAnalyze = async () => {
-        const text = basicScript.trim();
-        if (!text) {
-            setBasicFeedback('Paste or type your rehearsal script above, then click “Get Feedback”.');
-            return;
-        }
-        setBasicBusy(true);
-        setBasicFeedback('');
-        try {
-            const prompt =
-                `Here is my rehearsal script/patter:\n\n"""\n${text}\n"""\n\n` +
-                `Please coach me like a supportive, practical stage director.\n` +
-                `Give: (1) clarity & pacing notes, (2) stronger wording suggestions, (3) audience engagement beats, ` +
-                `(4) where to pause, smile, or gesture, and (5) a short revised version of the script. Keep it family-friendly.`;
-            const out = await generateResponse(prompt, MAGICIAN_LIVE_REHEARSAL_SYSTEM_INSTRUCTION, user);
-            setBasicFeedback(out);
-        } catch (e: any) {
-            setBasicFeedback(`Error: ${e?.message || 'Failed to generate feedback.'}`);
-        } finally {
-            setBasicBusy(false);
         }
     };
     
@@ -388,6 +394,8 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
     };
 
     const handleStopRehearsal = (reason?: string) => {
+        // Stop browser fallback transcription first.
+        stopBrowserTranscription();
         // Record minutes used for the current session.
         const start = sessionStartRef.current;
         if (start) {
@@ -395,6 +403,15 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
             consumeLiveMinutes(user, minutes);
             sessionStartRef.current = null;
         }
+        // If Gemini produced no user transcription, use browser transcript if available.
+        setTranscriptionHistory(prev => {
+            const hasUser = prev.some(t => t.source === 'user' && (t.text || '').trim().length > 0);
+            const fallback = (speechTextRef.current || '').trim();
+            if (!hasUser && fallback) {
+                return [...prev, { source: 'user', text: fallback, isFinal: true }];
+            }
+            return prev;
+        });
         if (reason) {
             setErrorMessage(reason);
         }
@@ -406,8 +423,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         if (view === 'rehearsing') {
             handleStopRehearsal();
         } else {
-            cleanupSession();
-            onReturnToStudio();
+            safeReturnToStudio();
         }
     };
     
@@ -417,7 +433,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
                 return <ReviewView 
                     transcription={transcriptionHistory}
                     onIdeaSaved={onIdeaSaved}
-                    onReturnToStudio={onReturnToStudio}
+                    onReturnToStudio={safeReturnToStudio}
                 />;
             case 'rehearsing':
             case 'idle':
@@ -440,29 +456,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
                             </div>
                         ) : (
                             <div className="flex-1 flex items-center justify-center">
-                                {mode === 'basic' ? (
-                                    <BasicRehearsal
-                                        script={basicScript}
-                                        setScript={setBasicScript}
-                                        feedback={basicFeedback}
-                                        busy={basicBusy}
-                                        onAnalyze={handleBasicAnalyze}
-                                        onTryLiveAgain={handleTryLiveAgain}
-                                        onSave={() => {
-                                            const title = `Rehearsal (Basic) - ${new Date().toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`;
-                                            const content = JSON.stringify({ script: basicScript, feedback: basicFeedback });
-                                            saveIdea('rehearsal', content, title);
-                                            onIdeaSaved();
-                                        }}
-                                    />
-                                ) : (
-                                    <StatusIndicator
-                                        status={status}
-                                        errorMessage={errorMessage}
-                                        onStart={handleStartSession}
-                                        onSwitchToBasic={handleSwitchToBasic}
-                                    />
-                                )}
+                                <StatusIndicator status={status} errorMessage={errorMessage} onStart={handleStartSession} />
                             </div>
                         )}
                     </div>
@@ -502,7 +496,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
 };
 
 
-const StatusIndicator: React.FC<{status: string, errorMessage: string, onStart: () => void, onSwitchToBasic: () => void}> = ({status, errorMessage, onStart, onSwitchToBasic}) => {
+const StatusIndicator: React.FC<{status: string, errorMessage: string, onStart: () => void}> = ({status, errorMessage, onStart}) => {
     switch (status) {
         case 'connecting':
             return <p className="text-slate-300 text-lg">Connecting and requesting microphone...</p>;
@@ -522,17 +516,9 @@ const StatusIndicator: React.FC<{status: string, errorMessage: string, onStart: 
             return (
                 <div className="text-center">
                     <p className="text-red-400 text-lg mb-4">{errorMessage}</p>
-                    <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-                        <button onClick={onStart} className="px-6 py-3 bg-slate-600 hover:bg-slate-700 rounded-full text-white font-bold transition-colors">
-                            Try Again
-                        </button>
-                        <button
-                            onClick={onSwitchToBasic}
-                            className="px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-full text-white font-bold transition-colors"
-                        >
-                            Use Basic Rehearsal
-                        </button>
-                    </div>
+                     <button onClick={onStart} className="px-6 py-3 bg-slate-600 hover:bg-slate-700 rounded-full text-white font-bold transition-colors">
+                        Try Again
+                    </button>
                 </div>
             );
         case 'idle':
@@ -552,69 +538,6 @@ const StatusIndicator: React.FC<{status: string, errorMessage: string, onStart: 
                 </div>
             );
     }
-};
-
-const BasicRehearsal: React.FC<{
-    script: string;
-    setScript: (v: string) => void;
-    feedback: string;
-    busy: boolean;
-    onAnalyze: () => void;
-    onTryLiveAgain: () => void;
-    onSave: () => void;
-}> = ({ script, setScript, feedback, busy, onAnalyze, onTryLiveAgain, onSave }) => {
-    return (
-        <div className="w-full max-w-3xl">
-            <div className="text-center mb-6">
-                <h2 className="text-2xl font-bold text-slate-200">Basic Rehearsal (No Live Audio)</h2>
-                <p className="text-slate-400 mt-2">
-                    If Live Audio isn’t available (model access / env / token issues), you can still paste your script and get high-quality coaching.
-                </p>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-3">
-                        <h3 className="font-bold text-slate-200">Your Script / Patter</h3>
-                        <button
-                            onClick={onTryLiveAgain}
-                            className="text-sm text-purple-300 hover:text-purple-200 underline"
-                        >
-                            Try Live Audio again
-                        </button>
-                    </div>
-                    <textarea
-                        value={script}
-                        onChange={(e) => setScript(e.target.value)}
-                        placeholder="Paste your rehearsal script here..."
-                        className="w-full min-h-[260px] p-3 rounded-md bg-slate-900 border border-slate-700 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600"
-                    />
-                    <div className="mt-3 flex flex-col sm:flex-row gap-3">
-                        <button
-                            onClick={onAnalyze}
-                            disabled={busy}
-                            className="flex-1 px-5 py-3 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:hover:bg-purple-600 rounded-md text-white font-bold transition-colors"
-                        >
-                            {busy ? 'Getting feedback…' : 'Get Feedback'}
-                        </button>
-                        <button
-                            onClick={onSave}
-                            className="px-5 py-3 bg-slate-700 hover:bg-slate-600 rounded-md text-slate-100 font-bold transition-colors"
-                        >
-                            Save
-                        </button>
-                    </div>
-                </div>
-
-                <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4">
-                    <h3 className="font-bold text-slate-200 mb-3">AI Coach Feedback</h3>
-                    <div className="min-h-[260px] whitespace-pre-wrap text-slate-200 bg-slate-900 border border-slate-700 rounded-md p-3">
-                        {feedback || 'Your feedback will appear here.'}
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
 };
 
 const ReviewView: React.FC<{
