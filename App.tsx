@@ -243,4 +243,7 @@ function App() {
   );
 }
 
+// footer.tsx
+const BUILD_TAG = "live-rehearsal-env-fix-1";
+
 export default App;
