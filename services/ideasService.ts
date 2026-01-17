@@ -1,5 +1,28 @@
 import { supabase } from '../supabase';
-import type { SavedIdea } from '../types';
+import type { IdeaType, SavedIdea } from '../types';
+
+// --- DB row shape (maps to SavedIdea used by the UI) ---
+type DbIdeaRow = {
+  id: string;
+  user_id: string;
+  type: IdeaType;
+  title: string | null;
+  content: string;
+  tags: string[] | null;
+  created_at: string | null;
+};
+
+function mapRowToIdea(row: DbIdeaRow): SavedIdea {
+  const ts = row.created_at ? Date.parse(row.created_at) : Date.now();
+  return {
+    id: row.id,
+    type: row.type,
+    title: row.title ?? undefined,
+    content: row.content,
+    tags: row.tags ?? undefined,
+    timestamp: Number.isFinite(ts) ? ts : Date.now(),
+  };
+}
 
 /**
  * ideasService.ts
@@ -33,19 +56,47 @@ export async function getSavedIdeas(): Promise<SavedIdea[]> {
     .order('created_at', { ascending: false });
 
   if (error) throw error;
-  return (data ?? []) as SavedIdea[];
+  return (data ?? []).map((r: unknown) => mapRowToIdea(r as DbIdeaRow));
 }
 
-export async function saveIdea(idea: Omit<SavedIdea, 'id' | 'user_id' | 'created_at'>): Promise<SavedIdea> {
+/**
+ * Backward-compatible saveIdea.
+ *
+ * New usage (preferred):
+ *   saveIdea({ type: 'text', content: '...', title?: '...', tags?: [...] })
+ *
+ * Legacy usage (still supported):
+ *   saveIdea('text', 'content', 'optional title')
+ */
+export function saveIdea(type: IdeaType, content: string, title?: string, tags?: string[]): Promise<SavedIdea>;
+export function saveIdea(idea: { type: IdeaType; content: string; title?: string; tags?: string[] }): Promise<SavedIdea>;
+export async function saveIdea(
+  a: IdeaType | { type: IdeaType; content: string; title?: string; tags?: string[] },
+  b?: string,
+  c?: string,
+  d?: string[]
+): Promise<SavedIdea> {
   const uid = await requireUserId();
+
+  const payload =
+    typeof a === 'string'
+      ? ({ type: a, content: b ?? '', title: c, tags: d } as const)
+      : a;
+
   const { data, error } = await supabase
     .from('ideas')
-    .insert({ ...idea, user_id: uid })
+    .insert({
+      user_id: uid,
+      type: payload.type,
+      content: payload.content,
+      title: payload.title ?? null,
+      tags: payload.tags ?? null,
+    })
     .select('*')
     .single();
 
   if (error) throw error;
-  return data as SavedIdea;
+  return mapRowToIdea(data as DbIdeaRow);
 }
 
 /**
@@ -56,15 +107,22 @@ export async function updateIdea(id: string, updates: Partial<SavedIdea>): Promi
   if (!id) throw new Error('updateIdea: missing id');
   await requireUserId();
 
+  // Map UI model -> DB columns (ignore timestamp; created_at is managed by DB)
+  const dbUpdates: Partial<DbIdeaRow> = {};
+  if (typeof updates.type !== 'undefined') dbUpdates.type = updates.type as IdeaType;
+  if (typeof updates.title !== 'undefined') dbUpdates.title = updates.title ?? null;
+  if (typeof updates.content !== 'undefined') dbUpdates.content = updates.content;
+  if (typeof updates.tags !== 'undefined') dbUpdates.tags = updates.tags ?? null;
+
   const { data, error } = await supabase
     .from('ideas')
-    .update(updates)
+    .update(dbUpdates)
     .eq('id', id)
     .select('*')
     .single();
 
   if (error) throw error;
-  return data as SavedIdea;
+  return mapRowToIdea(data as DbIdeaRow);
 }
 
 export async function deleteIdea(id: string): Promise<void> {

@@ -1776,8 +1776,21 @@ useEffect(() => {
         "Here's the transcript from your live rehearsal session. Ask me to analyze pacing, clarity, and delivery, or to rewrite sections for stronger impact."
       );
 
-      setMessages((prev) => [...prev, contextMessage, ...newMessages]);
+      // Start a fresh chat context for the rehearsal analysis.
+      setMessages([contextMessage, ...newMessages]);
       setActiveView('chat');
+
+      // Auto-trigger analysis so the user doesn't land on Chat with no response.
+      // (Delay one tick so state updates apply before the send.)
+      window.setTimeout(() => {
+        try {
+          handleSend(
+            'Please analyze the rehearsal transcript above. Give actionable feedback on pacing, clarity, audience engagement, and suggested rewrites for stronger impact. Provide a short prioritized checklist at the end.'
+          );
+        } catch {
+          // ignore
+        }
+      }, 0);
       return;
     }
 

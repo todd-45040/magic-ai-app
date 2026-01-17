@@ -690,19 +690,33 @@ const ReviewView: React.FC<{
     const [showSaveForm, setShowSaveForm] = useState(false);
     const [title, setTitle] = useState(`Rehearsal - ${new Date().toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`);
     const [notes, setNotes] = useState('');
+    const [saveError, setSaveError] = useState<string>('');
+    const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
         transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [transcription]);
     
-    const handleConfirmSave = () => {
-        const content = {
-            transcript: transcription,
-            notes: notes
-        };
-        saveIdea('rehearsal', JSON.stringify(content), title);
-        onIdeaSaved();
-        onReturnToStudio(); // Exit after saving
+    const handleConfirmSave = async () => {
+        setSaveError('');
+        setIsSaving(true);
+        try {
+            const content = {
+                transcript: transcription,
+                notes: notes,
+            };
+
+            // Backward-compatible ideasService supports both signatures.
+            // Prefer object form to match the DB schema (created_at-based).
+            await saveIdea({ type: 'rehearsal', content: JSON.stringify(content), title });
+            onIdeaSaved();
+            onReturnToStudio(); // Exit after saving
+        } catch (err: any) {
+            const msg = String(err?.message || err || 'Failed to save rehearsal.');
+            setSaveError(msg);
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     if (transcription.length === 0) {
@@ -744,6 +758,11 @@ const ReviewView: React.FC<{
                 {showSaveForm ? (
                     <div className="w-full max-w-lg mx-auto space-y-4 p-4 bg-slate-900/50 rounded-lg border border-slate-700 animate-fade-in">
                         <h4 className="font-bold text-white text-lg">Save Rehearsal Session</h4>
+                        {saveError && (
+                            <div className="text-sm text-red-300 bg-red-900/20 border border-red-700/40 rounded-md px-3 py-2">
+                                {saveError}
+                            </div>
+                        )}
                         <div>
                             <label htmlFor="rehearsal-title" className="block text-sm font-medium text-slate-300 mb-1">Title</label>
                             <input
@@ -774,10 +793,11 @@ const ReviewView: React.FC<{
                             </button>
                              <button
                                 onClick={handleConfirmSave}
-                                className="w-full flex items-center justify-center gap-2 px-6 py-2 text-sm bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors"
+                                disabled={isSaving}
+                                className={`w-full flex items-center justify-center gap-2 px-6 py-2 text-sm rounded-md text-white font-bold transition-colors ${isSaving ? 'bg-purple-700/60 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'}`}
                             >
                                 <SaveIcon className="w-5 h-5" />
-                                <span>Confirm Save & Exit</span>
+                                <span>{isSaving ? 'Saving…' : 'Confirm Save & Exit'}</span>
                             </button>
                         </div>
                     </div>
