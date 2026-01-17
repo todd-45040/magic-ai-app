@@ -9,6 +9,41 @@ import { canConsume, consumeLiveMinutes, getUsage } from '../services/usageTrack
 import { MAGICIAN_LIVE_REHEARSAL_SYSTEM_INSTRUCTION, LIVE_REHEARSAL_TOOLS } from '../constants';
 import { BackIcon, MicrophoneIcon, StopIcon, SaveIcon, WandIcon, TrashIcon, TimerIcon } from './icons';
 
+// ---- Debug instrumentation (enabled via ?debugRehearsal=1 or localStorage MAW_DEBUG_REHEARSAL=1) ----
+type DebugEvent = { ts: number; event: string; data?: any };
+
+function isDebugEnabled(): boolean {
+  try {
+    const qs = new URLSearchParams(window.location.search);
+    if (qs.get('debugRehearsal') === '1') return true;
+    return localStorage.getItem('MAW_DEBUG_REHEARSAL') === '1';
+  } catch {
+    return false;
+  }
+}
+
+function pushDebug(event: string, data?: any) {
+  try {
+    const w = window as any;
+    if (!w.__REHEARSAL_DEBUG__) {
+      w.__REHEARSAL_DEBUG__ = { enabled: isDebugEnabled(), buildTs: Date.now(), events: [] as DebugEvent[], summary: {} as any };
+    }
+    if (!w.__REHEARSAL_DEBUG__.enabled) return;
+    w.__REHEARSAL_DEBUG__.events.push({ ts: Date.now(), event, data });
+    w.__REHEARSAL_DEBUG__.summary.lastEvent = { ts: Date.now(), event, data };
+  } catch {
+    // ignore
+  }
+}
+
+async function blobToBase64(blob: Blob): Promise<string> {
+  const buf = await blob.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
 interface LiveRehearsalProps {
   user: User;
   onReturnToStudio: (transcriptToDiscuss?: Transcription[]) => void;
@@ -53,6 +88,11 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
     const sessionPromiseRef = useRef<Promise<LiveSession> | null>(null);
     const cleanupMicStreamRef = useRef<(() => void) | null>(null);
     const errorOccurred = useRef(false);
+
+    // Ground-truth recording (for server-side transcription fallback)
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const recordedChunksRef = useRef<BlobPart[]>([]);
+    const recordedMimeTypeRef = useRef<string>('audio/webm');
 
     // Audio playback refs
     const outputAudioContextRef = useRef<AudioContext | null>(null);
@@ -103,6 +143,15 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
     }, [transcriptionHistory]);
 
     const cleanupSession = () => {
+        // Stop recorder if still running (best-effort)
+        try {
+            if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+                mediaRecorderRef.current.stop();
+            }
+        } catch {
+            // ignore
+        }
+        mediaRecorderRef.current = null;
         if (sessionRef.current) {
             sessionRef.current.close();
             sessionRef.current = null;
@@ -155,6 +204,45 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
                     autoGainControl: true,
                 }
             });
+
+            pushDebug('mic_acquired', {
+                trackCount: stream.getAudioTracks().length,
+                settings: stream.getAudioTracks()[0]?.getSettings?.(),
+                constraints: stream.getAudioTracks()[0]?.getConstraints?.(),
+            });
+
+            // Start a parallel MediaRecorder capture so we can always transcribe server-side
+            // even when Live inputTranscription doesn't come through.
+            try {
+                const preferred = 'audio/webm;codecs=opus';
+                const mimeType = (window as any).MediaRecorder?.isTypeSupported?.(preferred)
+                    ? preferred
+                    : ((window as any).MediaRecorder?.isTypeSupported?.('audio/webm') ? 'audio/webm' : '');
+                recordedChunksRef.current = [];
+                const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+                recordedMimeTypeRef.current = mimeType || recorder.mimeType || 'audio/webm';
+                recorder.ondataavailable = (e) => {
+                    if (e.data && e.data.size > 0) recordedChunksRef.current.push(e.data);
+                };
+                recorder.onerror = (e: any) => {
+                    pushDebug('media_recorder_error', { message: String(e?.error?.message || e?.message || e) });
+                };
+                recorder.onstart = () => {
+                    pushDebug('media_recorder_start', { mimeType: recorder.mimeType });
+                };
+                recorder.onstop = () => {
+                    pushDebug('media_recorder_stop', {
+                        chunks: recordedChunksRef.current.length,
+                        bytes: recordedChunksRef.current.reduce((sum: number, c: any) => sum + (c?.size || 0), 0),
+                    });
+                };
+                mediaRecorderRef.current = recorder;
+                // timeslice ensures we always get dataavailable events
+                recorder.start(250);
+            } catch (err: any) {
+                pushDebug('media_recorder_failed', { message: String(err?.message || err) });
+                // continue; Live session can still work without this
+            }
 
             // Setup output audio context
             const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
@@ -227,7 +315,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
                             const cur2 = getUsage(user, 'live_minutes');
                             // When elapsed session time reaches remaining daily minutes, stop.
                             if (cur2.limit > 0 && elapsedMin >= cur2.remaining) {
-                                handleStopRehearsal('Daily live rehearsal minutes reached. Upgrade to continue.');
+                                void handleStopRehearsal('Daily live rehearsal minutes reached. Upgrade to continue.');
                             }
                         }, 5000);
                     },
@@ -366,7 +454,108 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         }
     };
 
-    const handleStopRehearsal = (reason?: string) => {
+    const getUserText = (items: Transcription[]) =>
+        items
+            .filter((t) => t.source === 'user')
+            .map((t) => t.text)
+            .join(' ')
+            .trim();
+
+    const transcribeOnServerIfNeeded = async () => {
+        // Only attempt server transcription if we have no user transcript.
+        const existing = getUserText(transcriptionHistory);
+        if (existing) {
+            pushDebug('transcribe_skipped', { reason: 'existing_user_transcript', len: existing.length });
+            return;
+        }
+
+        const chunks = recordedChunksRef.current;
+        const mimeType = (recordedMimeTypeRef.current || 'audio/webm').split(';')[0];
+        const bytes = chunks.reduce((sum: number, c: any) => sum + (c?.size || 0), 0);
+
+        if (!chunks.length || bytes < 1024) {
+            pushDebug('transcribe_skipped', { reason: 'no_audio_chunks', chunks: chunks.length, bytes });
+            return;
+        }
+
+        const blob = new Blob(chunks, { type: mimeType });
+        try {
+            const w = window as any;
+            w.__REHEARSAL_AUDIO__ = { size: blob.size, type: blob.type, ts: Date.now() };
+            w.__REHEARSAL_AUDIO_URL__ = URL.createObjectURL(blob);
+        } catch {
+            // ignore
+        }
+
+        pushDebug('audio_finalized', { chunks: chunks.length, bytes: blob.size, type: blob.type });
+
+        const audioBase64 = await blobToBase64(blob);
+        pushDebug('transcribe_request', { bytes: blob.size, mimeType: blob.type, base64Len: audioBase64.length });
+
+        try {
+            const res = await fetch('/api/transcribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ audioBase64, mimeType: blob.type }),
+            });
+            const json = await res.json().catch(() => ({}));
+            const transcript = String(json?.transcript || '').trim();
+
+            const w = window as any;
+            w.__REHEARSAL_TRANSCRIBE__ = {
+                status: res.status,
+                ok: res.ok,
+                error: json?.error ? String(json.error) : '',
+                len: transcript.length,
+                preview: transcript.slice(0, 160),
+                ts: Date.now(),
+            };
+
+            pushDebug('transcribe_response', {
+                status: res.status,
+                ok: res.ok,
+                len: transcript.length,
+                error: json?.error ? String(json.error).slice(0, 200) : '',
+            });
+
+            if (res.ok && transcript) {
+                setTranscriptionHistory([{ source: 'user', text: transcript, isFinal: true } as any]);
+            }
+        } catch (err: any) {
+            pushDebug('transcribe_error', { message: String(err?.message || err) });
+            try {
+                (window as any).__REHEARSAL_TRANSCRIBE__ = { status: 0, ok: false, error: String(err?.message || err), len: 0, preview: '', ts: Date.now() };
+            } catch {
+                // ignore
+            }
+        }
+    };
+
+    const stopRecorderAndFlush = async () => {
+        const recorder = mediaRecorderRef.current;
+        if (!recorder || recorder.state === 'inactive') return;
+        try {
+            recorder.requestData?.();
+        } catch {
+            // ignore
+        }
+
+        await new Promise<void>((resolve) => {
+            const onStop = () => {
+                recorder.removeEventListener('stop', onStop);
+                resolve();
+            };
+            recorder.addEventListener('stop', onStop);
+            try {
+                recorder.stop();
+            } catch {
+                recorder.removeEventListener('stop', onStop);
+                resolve();
+            }
+        });
+    };
+
+    const handleStopRehearsal = async (reason?: string) => {
         // Record minutes used for the current session.
         const start = sessionStartRef.current;
         if (start) {
@@ -374,16 +563,21 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
             consumeLiveMinutes(user, minutes);
             sessionStartRef.current = null;
         }
-        if (reason) {
-            setErrorMessage(reason);
-        }
+        if (reason) setErrorMessage(reason);
+
+        // Stop recording and flush last chunks BEFORE we tear down tracks.
+        await stopRecorderAndFlush();
+
+        // Try to transcribe server-side if Live inputTranscription didn't arrive.
+        await transcribeOnServerIfNeeded();
+
         cleanupSession();
         setView('reviewing');
     };
     
     const handleHeaderButtonClick = () => {
         if (view === 'rehearsing') {
-            handleStopRehearsal();
+            void handleStopRehearsal();
         } else {
             cleanupSession();
             safeReturnToStudio();
