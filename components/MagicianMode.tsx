@@ -1589,11 +1589,21 @@ useEffect(() => {
 
   // Auto-clear chat when switching between AI Assistant tools (prevents old errors/prompts persisting).
   const lastChatToolRef = useRef<MagicianView | null>(null);
+  const skipNextChatClearRef = useRef(false);
   useEffect(() => {
     const isChatTool = VIEW_TO_TAB_MAP[activeView] === 'chat' && activeView !== 'dashboard';
     if (!isChatTool) return;
 
     const prev = lastChatToolRef.current;
+
+    // Live Rehearsal (and other flows) may programmatically inject messages into Chat.
+    // In that case, we must not immediately clear the chat session on view switch.
+    if (skipNextChatClearRef.current) {
+      skipNextChatClearRef.current = false;
+      lastChatToolRef.current = activeView;
+      return;
+    }
+
     if (prev && prev !== activeView) {
       clearChatSession();
     }
@@ -1777,6 +1787,9 @@ useEffect(() => {
       );
 
       // Start a fresh chat context for the rehearsal analysis.
+      // Prevent the chat auto-clear effect from wiping the transcript handoff.
+      skipNextChatClearRef.current = true;
+
       setMessages([contextMessage, ...newMessages]);
       setActiveView('chat');
 
