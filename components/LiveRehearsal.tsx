@@ -525,15 +525,36 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
           try {
             const buf = await blob.arrayBuffer();
             const audioBase64 = arrayBufferToBase64(buf);
-            dbg('transcribe_request', { bytes: blob.size, type: blob.type });
+            dbg('transcribe_request', { bytes: blob.size, type: blob.type, base64Len: audioBase64.length });
+            const cleanMime = (blob.type || 'audio/webm').split(';')[0];
             const res = await fetch('/api/transcribe', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ audioBase64, mimeType: blob.type }),
+              body: JSON.stringify({ audioBase64, mimeType: cleanMime }),
             });
             const json = await res.json().catch(() => ({} as any));
             const transcript = String((json as any)?.transcript || '').trim();
-            dbg('transcribe_response', { status: res.status, len: transcript.length, keys: Object.keys(json || {}) });
+            const err = (json as any)?.error;
+            const preview = transcript ? transcript.slice(0, 120) : '';
+            (window as any).__REHEARSAL_TRANSCRIBE__ = {
+              status: res.status,
+              ok: res.ok,
+              error: err || null,
+              len: transcript.length,
+              preview,
+              ts: Date.now(),
+            };
+            dbg('transcribe_response', {
+              status: res.status,
+              ok: res.ok,
+              len: transcript.length,
+              error: err || null,
+              preview,
+              keys: Object.keys(json || {}),
+            });
+            if (!res.ok) {
+              setErrorMessage(`Transcribe failed (${res.status}): ${err || 'Unknown error'}`);
+            }
             if (res.ok && transcript) {
               finalUserText = transcript;
             }
