@@ -17,7 +17,28 @@ function getApiKey(): string | undefined {
 }
 
 function getModel(): string {
-  return process.env.GEMINI_TRANSCRIBE_MODEL || 'gemini-1.5-flash';
+  // NOTE: "gemini-1.5-flash" is returning NOT_FOUND for many projects on v1beta.
+  // Use a modern multimodal model that supports audio inputs.
+  return process.env.GEMINI_TRANSCRIBE_MODEL || 'gemini-2.0-flash';
+}
+
+async function generateWithFallback(
+  ai: GoogleGenAI,
+  models: string[],
+  args: Parameters<GoogleGenAI['models']['generateContent']>[0]
+) {
+  let lastErr: any = null;
+  for (const model of models) {
+    try {
+      return await ai.models.generateContent({ ...args, model });
+    } catch (err: any) {
+      lastErr = err;
+      const msg = String(err?.message || '');
+      // Only fall back on model-not-found / not-supported errors.
+      if (!/(NOT_FOUND|404|not found|not supported)/i.test(msg)) throw err;
+    }
+  }
+  throw lastErr;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -46,10 +67,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const ai = new GoogleGenAI({ apiKey });
-    const model = getModel();
+    const preferred = getModel();
+    // Try preferred model first, then common modern fallbacks.
+    const modelFallbacks = Array.from(
+      new Set([preferred, 'gemini-2.5-flash', 'gemini-2.0-flash'])
+    );
 
-    const result = await ai.models.generateContent({
-      model,
+    const result = await generateWithFallback(ai, modelFallbacks, {
       contents: [
         {
           role: 'user',
