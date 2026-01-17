@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+// NOTE: This project does not depend on react-router-dom. Navigation is handled
+// by the parent App shell (props callback) and/or a simple location redirect.
 import { LiveServerMessage, FunctionCall } from '@google/genai';
 import { startLiveSession, decode, decodeAudioData, type LiveSession } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
@@ -43,9 +44,6 @@ function createBlob(data: Float32Array): GeminiBlob {
 
 
 const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, onIdeaSaved }) => {
-    const navigate = useNavigate();
-    const location = useLocation();
-
     const [view, setView] = useState<'idle' | 'rehearsing' | 'reviewing'>('idle');
     const [status, setStatus] = useState<'idle' | 'connecting' | 'listening' | 'error'>('idle');
     const [errorMessage, setErrorMessage] = useState('');
@@ -72,21 +70,22 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
      * also navigate to a sensible default.
      */
     const safeReturnToStudio = (transcriptToDiscuss?: Transcription[]) => {
+        // Primary: ask the parent shell to switch views.
         try {
             onReturnToStudio?.(transcriptToDiscuss);
         } catch {
             // ignore
         }
 
-        // If we're still on this page, force a navigation.
-        // Prefer history back when available; otherwise go to /app.
+        // Fallback: this app does not use react-router. If the parent callback
+        // is ignored for any reason, hard-navigate back to the app root.
+        // (This guarantees the user isn't stuck.)
         setTimeout(() => {
             try {
-                const path = location?.pathname || window.location.pathname;
+                const path = window.location.pathname;
                 const looksLikeLivePage = /rehearsal|live/i.test(path);
                 if (!looksLikeLivePage) return;
-                if (window.history.length > 1) navigate(-1);
-                else navigate('/app');
+                window.location.assign('/app/');
             } catch {
                 // ignore
             }
