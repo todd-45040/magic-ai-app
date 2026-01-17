@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { LiveServerMessage, Blob, FunctionCall } from '@google/genai';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { LiveServerMessage, FunctionCall } from '@google/genai';
 import { startLiveSession, decode, decodeAudioData, type LiveSession } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
 import type { Transcription, TimerState, User } from '../types';
@@ -14,6 +15,11 @@ interface LiveRehearsalProps {
 }
 
 // Helper functions for audio processing, moved from geminiService
+type GeminiBlob = {
+  data: string;
+  mimeType: string;
+};
+
 function encode(bytes: Uint8Array): string {
   let binary = '';
   const len = bytes.byteLength;
@@ -23,7 +29,7 @@ function encode(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-function createBlob(data: Float32Array): Blob {
+function createBlob(data: Float32Array): GeminiBlob {
   const l = data.length;
   const int16 = new Int16Array(l);
   for (let i = 0; i < l; i++) {
