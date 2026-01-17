@@ -19,9 +19,14 @@ function mapRowToIdea(row: DbIdeaRow): SavedIdea {
     type: row.type,
     title: row.title ?? undefined,
     content: row.content,
-    tags: row.tags ?? undefined,
+    // Most deployments enforce NOT NULL on tags; still guard for legacy rows.
+    tags: Array.isArray(row.tags) ? row.tags : [],
     timestamp: Number.isFinite(ts) ? ts : Date.now(),
   };
+}
+
+function normalizeTags(tags: unknown): string[] {
+  return Array.isArray(tags) ? (tags.filter((t) => typeof t === 'string') as string[]) : [];
 }
 
 /**
@@ -83,6 +88,10 @@ export async function saveIdea(
       ? ({ type: a, content: b ?? '', title: c, tags: d } as const)
       : a;
 
+  // IMPORTANT: public.ideas.tags is NOT NULL in your schema.
+  // Never send null; always send an array (empty is fine).
+  const safeTags = normalizeTags((payload as any).tags);
+
   const { data, error } = await supabase
     .from('ideas')
     .insert({
@@ -90,7 +99,7 @@ export async function saveIdea(
       type: payload.type,
       content: payload.content,
       title: payload.title ?? null,
-      tags: payload.tags ?? null,
+      tags: safeTags,
     })
     .select('*')
     .single();
@@ -112,7 +121,7 @@ export async function updateIdea(id: string, updates: Partial<SavedIdea>): Promi
   if (typeof updates.type !== 'undefined') dbUpdates.type = updates.type as IdeaType;
   if (typeof updates.title !== 'undefined') dbUpdates.title = updates.title ?? null;
   if (typeof updates.content !== 'undefined') dbUpdates.content = updates.content;
-  if (typeof updates.tags !== 'undefined') dbUpdates.tags = updates.tags ?? null;
+  if (typeof updates.tags !== 'undefined') dbUpdates.tags = normalizeTags((updates as any).tags) as any;
 
   const { data, error } = await supabase
     .from('ideas')
