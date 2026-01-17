@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { fetchUsageStatus, type UsageStatus } from '../services/usageStatusService';
+import { getUsage } from '../services/usageTracker';
+import type { User } from '../types';
 
 type UsageDetail = UsageStatus & { ts?: number };
 
@@ -9,8 +11,9 @@ function formatMembership(m?: string) {
   return m.charAt(0).toUpperCase() + m.slice(1);
 }
 
-export default function UsageMeter() {
+export default function UsageMeter({ user }: { user?: User | null }) {
   const [status, setStatus] = useState<UsageDetail>({ ok: true });
+  const [live, setLive] = useState<{ used: number; limit: number; remaining: number } | null>(null);
 
   const percentUsed = useMemo(() => {
     const used = status.used ?? (status.limit != null && status.remaining != null ? status.limit - status.remaining : undefined);
@@ -33,42 +36,77 @@ export default function UsageMeter() {
     return `${mem}: ${remaining}/${limit}`;
   }, [status.remaining, status.limit, status.membership]);
 
-  const burst = useMemo(() => {
-    if (status.burstRemaining == null || status.burstLimit == null) return null;
-    return `${status.burstRemaining}/${status.burstLimit} min`;
-  }, [status.burstRemaining, status.burstLimit]);
+  const liveLabel = useMemo(() => {
+    if (!live || !live.limit) return null;
+    return `Live: ${live.remaining}/${live.limit} min`;
+  }, [live]);
 
   useEffect(() => {
     let mounted = true;
 
-    const load = async () => {
-      const s = await fetchUsageStatus();
-      if (mounted && s?.ok) setStatus(s);
+    const loadServer = async () => {
+      try {
+        const s = await fetchUsageStatus();
+        if (mounted && s?.ok) setStatus(s);
+      } catch {
+        // ignore
+      }
     };
 
-    load();
-    const interval = window.setInterval(load, 60000);
+    const loadLocal = () => {
+      if (!user) {
+        setLive(null);
+        return;
+      }
+      try {
+        setLive(getUsage(user, 'live_minutes'));
+      } catch {
+        setLive(null);
+      }
+    };
 
-    const onUsageUpdate = (e: Event) => {
+    loadServer();
+    loadLocal();
+
+    const interval = window.setInterval(() => {
+      loadServer();
+      loadLocal();
+    }, 60000);
+
+    const onServerUsageUpdate = (e: Event) => {
       const ce = e as CustomEvent;
       const detail = (ce.detail || {}) as UsageDetail;
 
       // Merge partial updates from headers
-      setStatus(prev => ({
+      setStatus((prev) => ({
         ...prev,
         ...detail,
         ok: true,
       }));
     };
 
-    window.addEventListener('ai-usage-update', onUsageUpdate);
+    const onLocalUsageUpdate = (e: Event) => {
+      const ce = e as CustomEvent;
+      const detail = (ce.detail || {}) as any;
+      if (detail.metric !== 'live_minutes') return;
+      if (!mounted) return;
+      setLive({
+        used: Number(detail.used ?? 0),
+        limit: Number(detail.limit ?? 0),
+        remaining: Number(detail.remaining ?? 0),
+      });
+    };
+
+    window.addEventListener('ai-usage-update', onServerUsageUpdate);
+    window.addEventListener('maw-usage-local-update', onLocalUsageUpdate);
 
     return () => {
       mounted = false;
       window.clearInterval(interval);
-      window.removeEventListener('ai-usage-update', onUsageUpdate);
+      window.removeEventListener('ai-usage-update', onServerUsageUpdate);
+      window.removeEventListener('maw-usage-local-update', onLocalUsageUpdate);
     };
-  }, []);
+  }, [user]);
 
   // If we have no data yet, keep it subtle
   const showBar = status.limit != null && status.limit > 0 && status.remaining != null;
@@ -78,7 +116,7 @@ export default function UsageMeter() {
       <div className="flex flex-col leading-tight">
         <div className="flex items-center gap-2">
           <span className="text-xs font-semibold text-slate-200">{label}</span>
-          {burst && <span className="text-[10px] text-slate-400">• {burst}</span>}
+          {liveLabel && <span className="text-[10px] text-slate-400">• {liveLabel}</span>}
         </div>
         {showBar && (
           <div className="mt-1 h-1.5 w-36 rounded-full bg-slate-800 overflow-hidden">

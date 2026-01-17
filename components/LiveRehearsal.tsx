@@ -105,31 +105,15 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
     const timerIntervalRef = useRef<number | null>(null);
 
     /**
-     * "Back to Studio" should always work, even if the parent callback is a no-op.
-     * We first call the parent callback (so upstream state can refresh), then we
-     * also navigate to a sensible default.
+     * "Back to Studio" navigation is handled by the MagicianMode shell.
+     * (This project does not use react-router.)
      */
     const safeReturnToStudio = (transcriptToDiscuss?: Transcription[]) => {
-        // Primary: ask the parent shell to switch views.
         try {
             onReturnToStudio?.(transcriptToDiscuss);
         } catch {
             // ignore
         }
-
-        // Fallback: this app does not use react-router. If the parent callback
-        // is ignored for any reason, hard-navigate back to the app root.
-        // (This guarantees the user isn't stuck.)
-        setTimeout(() => {
-            try {
-                const path = window.location.pathname;
-                const looksLikeLivePage = /rehearsal|live/i.test(path);
-                if (!looksLikeLivePage) return;
-                window.location.assign('/app/');
-            } catch {
-                // ignore
-            }
-        }, 0);
     };
 
     // Usage tracking (client-side, per-day)

@@ -1761,11 +1761,27 @@ useEffect(() => {
   };
   
   const handleReturnFromRehearsal = (transcriptToDiscuss?: Transcription[]) => {
+    // "Back to Studio" should always leave Live Rehearsal.
+    // - If the user chose "Discuss with AI", route them straight to Chat with the transcript loaded.
+    // - Otherwise, return them to the Assistant Studio tool hub.
     if (transcriptToDiscuss && transcriptToDiscuss.length > 0) {
-      const newMessages: ChatMessage[] = transcriptToDiscuss.map(t => createChatMessage(t.source, `**${t.source === 'user' ? 'You' : 'AI Coach'}:** ${t.text}`));
-      const contextMessage: ChatMessage = createChatMessage('model', "Here's the transcript from your live rehearsal session. You can review it here or ask follow-up questions.");
-      setMessages(prev => [...prev, contextMessage, ...newMessages]);
+      const newMessages: ChatMessage[] = transcriptToDiscuss.map((t) =>
+        createChatMessage(
+          t.source,
+          `**${t.source === 'user' ? 'You' : 'AI Coach'}:** ${t.text}`
+        )
+      );
+      const contextMessage: ChatMessage = createChatMessage(
+        'model',
+        "Here's the transcript from your live rehearsal session. Ask me to analyze pacing, clarity, and delivery, or to rewrite sections for stronger impact."
+      );
+
+      setMessages((prev) => [...prev, contextMessage, ...newMessages]);
+      setActiveView('chat');
+      return;
     }
+
+    setActiveView('assistant-studio');
   };
 
   const handleIdeaSaved = (message: string) => {
@@ -2129,7 +2145,7 @@ useEffect(() => {
                 </span>
               </div>
             )}
-            <UsageMeter />
+            <UsageMeter user={user} />
             <button onClick={() => setIsHelpModalOpen(true)} className="p-2 rounded-full text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Help" aria-label="Open help center">
                 <QuestionMarkIcon className="w-6 h-6" />
             </button>

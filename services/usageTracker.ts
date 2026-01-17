@@ -58,6 +58,21 @@ function save(user: User | null, s: Stored) {
   }
 }
 
+function emitLocalUsageUpdate(user: User | null, metric: UsageMetric) {
+  try {
+    if (typeof window === 'undefined') return;
+    if (!user) return;
+    const cur = getUsage(user, metric);
+    window.dispatchEvent(
+      new CustomEvent('maw-usage-local-update', {
+        detail: { metric, ...cur, ts: Date.now() },
+      })
+    );
+  } catch {
+    // ignore
+  }
+}
+
 export function getDailyLimits(user: User): Limits {
   const tier = normalizeTier(user.membership);
   return DAILY_LIMITS[tier] ?? DAILY_LIMITS.trial;
@@ -84,7 +99,9 @@ export function consume(user: User, metric: UsageMetric, amount = 1): { ok: bool
   const s = load(user);
   (s as any)[metric] = Math.max(0, Math.round(((s as any)[metric] ?? 0) + amount));
   save(user, s);
-  return getUsage(user, metric) as any;
+  const cur = getUsage(user, metric) as any;
+  emitLocalUsageUpdate(user, metric);
+  return cur;
 }
 
 export function consumeLiveMinutes(user: User, minutes: number): { ok: boolean; remaining: number; limit: number; used: number } {
