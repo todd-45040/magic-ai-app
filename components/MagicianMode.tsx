@@ -1659,6 +1659,39 @@ useEffect(() => {
     }
   };
 
+  // Send a message using an explicit base history.
+  // This prevents "stale state" issues when a flow (like Live Rehearsal) injects
+  // transcript messages and immediately triggers an AI analysis.
+  const handleSendWithHistory = async (userMessageText: string, baseHistory: ChatMessage[]) => {
+    if (isExpired) {
+      setIsUpgradeModalOpen(true);
+      return;
+    }
+    if (!userMessageText.trim()) return;
+
+    setInput('');
+    setIsLoading(true);
+
+    const userMessage = createChatMessage('user', userMessageText);
+    const newHistoryForUI = [...baseHistory, userMessage];
+    setMessages(newHistoryForUI);
+
+    try {
+      const replyText = await generateResponse(
+        userMessageText,
+        MAGICIAN_SYSTEM_INSTRUCTION,
+        user,
+        newHistoryForUI
+      );
+      setMessages(prev => [...prev, createChatMessage('model', normalizeAiReply(replyText))]);
+    } catch (err) {
+      console.error('Error in handleSendWithHistory:', err);
+      setMessages(prev => [...prev, createChatMessage('model', friendlyAiError)]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
 
   const handleFeedback = (messageId: string, feedback: 'good' | 'bad') => {
     setMessages(prevMessages => {
@@ -1775,34 +1808,37 @@ useEffect(() => {
     // - If the user chose "Discuss with AI", route them straight to Chat with the transcript loaded.
     // - Otherwise, return them to the Assistant Studio tool hub.
     if (transcriptToDiscuss && transcriptToDiscuss.length > 0) {
-      const newMessages: ChatMessage[] = transcriptToDiscuss.map((t) =>
-        createChatMessage(
-          t.source,
-          `**${t.source === 'user' ? 'You' : 'AI Coach'}:** ${t.text}`
-        )
-      );
+      // Build a readable transcript block for the AI (and show it in the chat log).
+      const transcriptLines = transcriptToDiscuss.map((t) => {
+        const who = t.source === 'user' ? 'You' : 'AI Coach';
+        return `${who}: ${t.text}`;
+      });
+
+      const transcriptBlock = transcriptLines.join('\n');
+
       const contextMessage: ChatMessage = createChatMessage(
         'model',
-        "Here's the transcript from your live rehearsal session. Ask me to analyze pacing, clarity, and delivery, or to rewrite sections for stronger impact."
+        "I've loaded your Live Rehearsal transcript below. I'll analyze it for pacing, clarity, audience engagement, and suggest rewrites."
       );
 
-      // Start a fresh chat context for the rehearsal analysis.
+      const transcriptMessage: ChatMessage = createChatMessage(
+        'user',
+        `Live Rehearsal Transcript:\n\n${transcriptBlock}`
+      );
+
+      const baseHistory: ChatMessage[] = [contextMessage, transcriptMessage];
+
       // Prevent the chat auto-clear effect from wiping the transcript handoff.
       skipNextChatClearRef.current = true;
-
-      setMessages([contextMessage, ...newMessages]);
+      setMessages(baseHistory);
       setActiveView('chat');
 
-      // Auto-trigger analysis so the user doesn't land on Chat with no response.
-      // (Delay one tick so state updates apply before the send.)
+      // Auto-trigger the analysis using the explicit history to avoid stale state.
       window.setTimeout(() => {
-        try {
-          handleSend(
-            'Please analyze the rehearsal transcript above. Give actionable feedback on pacing, clarity, audience engagement, and suggested rewrites for stronger impact. Provide a short prioritized checklist at the end.'
-          );
-        } catch {
-          // ignore
-        }
+        handleSendWithHistory(
+          'Please analyze the Live Rehearsal transcript I just provided. Give actionable feedback on pacing, clarity, audience engagement, and suggested rewrites for stronger impact. Provide a short prioritized checklist at the end.',
+          baseHistory
+        );
       }, 0);
       return;
     }
