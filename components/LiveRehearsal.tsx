@@ -13,23 +13,10 @@ interface LiveRehearsalProps {
   onIdeaSaved: () => void;
 }
 
-type PcmBlob = {
-  data: string;
-  mimeType: string;
-};
+type PcmBlob = { data: string; mimeType: string };
 
-type RehearsalDebugEvent = {
-  ts: number;
-  event: string;
-  data?: any;
-};
-
-type RehearsalDebugState = {
-  enabled: boolean;
-  buildTs: number;
-  events: RehearsalDebugEvent[];
-  summary: Record<string, any>;
-};
+type RehearsalDebugEvent = { ts: number; event: string; data?: any };
+type RehearsalDebugState = { enabled: boolean; buildTs: number; events: RehearsalDebugEvent[]; summary: Record<string, any> };
 
 function isRehearsalDebugEnabled(): boolean {
   try {
@@ -41,6 +28,7 @@ function isRehearsalDebugEnabled(): boolean {
     return false;
   }
 }
+
 
 // Helper functions for audio processing, moved from geminiService
 function encode(bytes: Uint8Array): string {
@@ -75,37 +63,85 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
     const sessionPromiseRef = useRef<Promise<LiveSession> | null>(null);
     const cleanupMicStreamRef = useRef<(() => void) | null>(null);
     const errorOccurred = useRef(false);
-	    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-	    const mediaRecorderChunksRef = useRef<Blob[]>([]);
-	const debugRef = useRef<RehearsalDebugState>({
-		enabled: isRehearsalDebugEnabled(),
-		buildTs: Date.now(),
-		events: [],
-		summary: {},
-	});
 
-	const dbg = (event: string, data?: any) => {
-		const d = debugRef.current;
-		if (!d.enabled) return;
-		const e: RehearsalDebugEvent = { ts: Date.now(), event, data };
-		d.events.push(e);
-		if (d.events.length > 400) d.events.splice(0, d.events.length - 400);
-		d.summary.lastEvent = e;
-		try {
-			(window as any).__REHEARSAL_DEBUG__ = d;
-			(window as any).__REHEARSAL_STATE__ = d.summary;
-		} catch {}
-		// Keep logs low-noise; detailed events are in window.__REHEARSAL_DEBUG__
-		console.debug('[RehearsalDBG]', event, data ?? '');
-	};
+    const [isProcessingStop, setIsProcessingStop] = useState(false);
 
-	useEffect(() => {
-		try {
-			(window as any).__REHEARSAL_DEBUG__ = debugRef.current;
-			(window as any).__REHEARSAL_STATE__ = debugRef.current.summary;
-		} catch {}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, []);
+    // MediaRecorder fallback (ground-truth recording)
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const mediaRecorderChunksRef = useRef<Blob[]>([]);
+    const mediaRecorderMimeTypeRef = useRef<string>('');
+
+    // Debug
+    const debugRef = useRef<RehearsalDebugState>({
+      enabled: isRehearsalDebugEnabled(),
+      buildTs: Date.now(),
+      events: [],
+      summary: {},
+    });
+
+    const dbg = (event: string, data?: any) => {
+      const d = debugRef.current;
+      if (!d.enabled) return;
+      const e: RehearsalDebugEvent = { ts: Date.now(), event, data };
+      d.events.push(e);
+      if (d.events.length > 400) d.events.splice(0, d.events.length - 400);
+      d.summary.lastEvent = e;
+      try {
+        (window as any).__REHEARSAL_DEBUG__ = d;
+        (window as any).__REHEARSAL_STATE__ = d.summary;
+      } catch {}
+      console.debug('[RehearsalDBG]', event, data ?? '');
+    };
+
+    useEffect(() => {
+      // Always install a marker so we can confirm the deployed code is loaded
+      try {
+        (window as any).__REHEARSAL_DEBUG__ = debugRef.current;
+        (window as any).__REHEARSAL_STATE__ = debugRef.current.summary;
+        (window as any).__REHEARSAL_AUDIO__ = { installed: true, ts: Date.now() };
+      } catch {}
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const arrayBufferToBase64 = (buf: ArrayBuffer): string => {
+      const bytes = new Uint8Array(buf);
+      let binary = '';
+      const chunk = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunk) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+      }
+      return btoa(binary);
+    };
+
+    const stopRecorderAndGetBlob = async (): Promise<Blob | null> => {
+      const rec = mediaRecorderRef.current;
+      if (!rec) return null;
+      if (rec.state === 'inactive') {
+        const chunks = mediaRecorderChunksRef.current;
+        if (!chunks || chunks.length === 0) return null;
+        return new Blob(chunks, { type: mediaRecorderMimeTypeRef.current || 'audio/webm' });
+      }
+      return await new Promise((resolve) => {
+        const onStop = () => {
+          try {
+            const chunks = mediaRecorderChunksRef.current;
+            const blob = new Blob(chunks, { type: mediaRecorderMimeTypeRef.current || rec.mimeType || 'audio/webm' });
+            resolve(blob);
+          } catch {
+            resolve(null);
+          }
+        };
+        rec.addEventListener('stop', onStop, { once: true });
+        try {
+          // Force a final dataavailable event in some browsers
+          try { rec.requestData(); } catch {}
+          rec.stop();
+        } catch {
+          resolve(null);
+        }
+      });
+    };
+
 
     // Audio playback refs
     const outputAudioContextRef = useRef<AudioContext | null>(null);
@@ -159,7 +195,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
 
 
     const handleStartSession = async () => {
-		dbg('start_session_click', { path: typeof window !== 'undefined' ? window.location.pathname : '' });
         // Client-side cap for live rehearsal minutes (daily). Server-side usage enforcement still applies to text requests.
         const cur = getUsage(user, 'live_minutes');
         if (cur.limit > 0 && cur.remaining <= 0) {
@@ -182,14 +217,50 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
                 }
             });
 
-			try {
-				const tracks = stream.getAudioTracks();
-				const settings = tracks[0]?.getSettings?.() ?? {};
-				const constraints = tracks[0]?.getConstraints?.() ?? {};
-				dbg('mic_acquired', { trackCount: tracks.length, settings, constraints });
-				debugRef.current.summary.mic = { trackCount: tracks.length, settings, constraints };
-				(window as any).__REHEARSAL_STATE__ = debugRef.current.summary;
-			} catch {}
+            // Debug: mic track settings
+            try {
+              const tracks = stream.getAudioTracks();
+              const settings = tracks[0]?.getSettings?.() ?? {};
+              const constraints = tracks[0]?.getConstraints?.() ?? {};
+              dbg('mic_acquired', { trackCount: tracks.length, settings, constraints });
+              debugRef.current.summary.mic = { trackCount: tracks.length, settings, constraints };
+            } catch {}
+
+            // MediaRecorder ground-truth capture (used for server-side transcription fallback)
+            try {
+              const preferred = [
+                'audio/webm;codecs=opus',
+                'audio/webm',
+                'audio/ogg;codecs=opus',
+                'audio/ogg',
+              ];
+              const supported = preferred.find((t) => (window as any).MediaRecorder?.isTypeSupported?.(t));
+              const mimeType = supported || '';
+              const rec = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+              mediaRecorderRef.current = rec;
+              mediaRecorderMimeTypeRef.current = mimeType || rec.mimeType || 'audio/webm';
+              mediaRecorderChunksRef.current = [];
+              rec.ondataavailable = (e) => {
+                if (e.data && e.data.size > 0) {
+                  mediaRecorderChunksRef.current.push(e.data);
+                }
+              };
+              rec.onstart = () => dbg('media_recorder_start', { mimeType: mediaRecorderMimeTypeRef.current });
+              rec.onstop = () => {
+                const bytes = mediaRecorderChunksRef.current.reduce((sum, b) => sum + b.size, 0);
+                debugRef.current.summary.recorder = {
+                  mimeType: mediaRecorderMimeTypeRef.current,
+                  chunks: mediaRecorderChunksRef.current.length,
+                  bytes,
+                };
+                dbg('media_recorder_stop', debugRef.current.summary.recorder);
+              };
+              // timeslice forces periodic chunks so stop always has data
+              rec.start(250);
+            } catch (e) {
+              dbg('media_recorder_error', { message: String((e as any)?.message || e) });
+            }
+
 
             // Setup output audio context
             const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
@@ -205,47 +276,10 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
             const sessionPromise = startLiveSession(
                 MAGICIAN_LIVE_REHEARSAL_SYSTEM_INSTRUCTION,
                 {
-                    onopen: () => { 
-						dbg('live_session_open');
-						debugRef.current.summary.ws = { openTs: Date.now() };
-						try { (window as any).__REHEARSAL_STATE__ = debugRef.current.summary; } catch {}
+                    onopen: () => {
+                        dbg('live_session_open'); 
                         // Setup microphone streaming once the connection is open
                         source = inputAudioContext.createMediaStreamSource(stream);
-
-							// Parallel "ground truth" recording (MediaRecorder) so we can verify audio capture and
-							// send it to a server-side transcription endpoint if needed.
-							try {
-								if (typeof window !== 'undefined' && 'MediaRecorder' in window) {
-									const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus'];
-									let mimeType: string | undefined;
-									for (const mt of candidates) {
-										if ((window as any).MediaRecorder?.isTypeSupported?.(mt)) {
-											mimeType = mt;
-											break;
-										}
-									}
-									const mr = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
-									mediaRecorderChunksRef.current = [];
-									mr.ondataavailable = (e: BlobEvent) => {
-										if (e.data && e.data.size > 0) {
-											mediaRecorderChunksRef.current.push(e.data);
-											debugRef.current.summary.mediaRecorder = {
-												mimeType: mr.mimeType,
-												chunks: mediaRecorderChunksRef.current.length,
-												bytes: mediaRecorderChunksRef.current.reduce((acc, b) => acc + b.size, 0),
-											};
-											try { (window as any).__REHEARSAL_STATE__ = debugRef.current.summary; } catch {}
-										}
-									};
-									mr.onstart = () => dbg('media_recorder_start', { mimeType: mr.mimeType });
-									mr.onerror = (e: any) => dbg('media_recorder_error', { error: String(e?.error || e) });
-									mr.onstop = () => dbg('media_recorder_stop', { chunks: mediaRecorderChunksRef.current.length });
-									mr.start(750);
-									mediaRecorderRef.current = mr;
-								}
-							} catch (e) {
-								dbg('media_recorder_setup_failed', { error: String(e) });
-							}
                         scriptProcessor = inputAudioContext.createScriptProcessor(4096, 1, 1);
 
                         // FIX: Implement audio resampling within the audio processor
@@ -327,34 +361,12 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
             sessionRef.current = await sessionPromise;
 
             // Define the cleanup function for all audio resources
-	            cleanupMicStreamRef.current = () => {
-	                // Stop MediaRecorder (debug / fallback capture)
-	                try {
-	                    const mr = mediaRecorderRef.current;
-	                    if (mr && mr.state !== 'inactive') mr.stop();
-	                } catch {}
-	
-	                // Persist any captured chunks for inspection
-	                try {
-	                    const chunks = mediaRecorderChunksRef.current;
-	                    const size = chunks.reduce((acc, b) => acc + (b?.size ?? 0), 0);
-	                    (window as any).__REHEARSAL_AUDIO__ = {
-	                        blob: chunks.length ? new Blob(chunks, { type: chunks[0]?.type || 'audio/webm' }) : null,
-	                        chunks: chunks.length,
-	                        bytes: size,
-	                        mimeType: chunks[0]?.type || null,
-	                        ts: Date.now(),
-	                    };
-	                } catch {}
-
-	                try { (window as any).__REHEARSAL_STATE__ = debugRef.current.summary; } catch {}
-
-	                // Stop mic + audio graph
-	                stream.getTracks().forEach(track => track.stop());
-	                if(scriptProcessor) scriptProcessor.disconnect();
-	                if(source) source.disconnect();
-	                if(inputAudioContext.state !== 'closed') inputAudioContext.close();
-	            };
+            cleanupMicStreamRef.current = () => {
+                stream.getTracks().forEach(track => track.stop());
+                if(scriptProcessor) scriptProcessor.disconnect();
+                if(source) source.disconnect();
+                if(inputAudioContext.state !== 'closed') inputAudioContext.close();
+            };
 
         } catch (error: any) {
             console.error('Failed to start session or get microphone:', error);
@@ -406,18 +418,8 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
     };
 
     const handleServerMessage = async (message: LiveServerMessage) => {
-	        try {
-	            const sc: any = (message as any).serverContent;
-	            dbg('server_message', {
-	                keys: Object.keys(message as any),
-	                hasToolCall: Boolean((message as any).toolCall),
-	                hasInputTranscription: Boolean(sc?.inputTranscription?.text),
-	                hasOutputTranscription: Boolean(sc?.outputTranscription?.text),
-	                turnComplete: Boolean(sc?.turnComplete),
-	                hasModelAudio: Boolean(sc?.modelTurn?.parts?.[0]?.inlineData?.data),
-	            });
-	            debugRef.current.summary.lastServerTs = Date.now();
-	        } catch {}
+        dbg('server_message', { hasInput: Boolean(message.serverContent?.inputTranscription), hasOutput: Boolean(message.serverContent?.outputTranscription), turnComplete: Boolean(message.serverContent?.turnComplete) });
+        debugRef.current.summary.lastServerTs = Date.now();
         if (message.toolCall) {
             for (const fc of message.toolCall.functionCalls) {
                 handleToolCall(fc);
@@ -426,7 +428,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
 
         if (message.serverContent?.inputTranscription) {
             const text = message.serverContent.inputTranscription.text;
-	            dbg('input_transcription', { chars: text?.length ?? 0, preview: (text ?? '').slice(0, 80) });
             setTranscriptionHistory(prev => {
                 const last = prev[prev.length - 1];
                 if (last?.source === 'user' && !last.isFinal) {
@@ -438,7 +439,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         }
         if (message.serverContent?.outputTranscription) {
             const text = message.serverContent.outputTranscription.text;
-	            dbg('output_transcription', { chars: text?.length ?? 0, preview: (text ?? '').slice(0, 80) });
             setTranscriptionHistory(prev => {
                 const last = prev[prev.length - 1];
                 if (last?.source === 'model' && !last.isFinal) {
@@ -449,7 +449,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
             });
         }
         if (message.serverContent?.turnComplete) {
-	            dbg('turn_complete');
             setTranscriptionHistory(prev => prev.map(t => ({...t, isFinal: true})));
         }
 
@@ -476,12 +475,8 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         }
     };
 
-    const handleStopRehearsal = (reason?: string) => {
-	        dbg('stop_rehearsal', {
-	            reason: reason ?? 'user',
-	            transcriptionCount: transcriptionHistory.length,
-	            micStatus: status,
-	        });
+    const handleStopRehearsal = async (reason?: string) => {
+        dbg('stop_rehearsal', { reason });
         // Record minutes used for the current session.
         const start = sessionStartRef.current;
         if (start) {
@@ -492,8 +487,72 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         if (reason) {
             setErrorMessage(reason);
         }
-        cleanupSession();
+
+        // Move to review immediately, but show a processing state while we transcribe.
         setView('reviewing');
+        setIsProcessingStop(true);
+
+        // Stop live session + audio playback quickly to avoid more incoming messages during processing
+        try { sessionRef.current?.close(); } catch {}
+        sessionRef.current = null;
+
+        let finalUserText = transcriptionHistory
+          .filter(t => t.source === 'user')
+          .map(t => t.text)
+          .join(' ')
+          .trim();
+
+        // Stop MediaRecorder and build a blob
+        let blob: Blob | null = null;
+        try {
+          blob = await stopRecorderAndGetBlob();
+        } catch (e) {
+          dbg('media_recorder_stop_error', { message: String((e as any)?.message || e) });
+        }
+
+        if (blob) {
+          try {
+            (window as any).__REHEARSAL_AUDIO__ = { size: blob.size, type: blob.type, ts: Date.now() };
+            (window as any).__REHEARSAL_AUDIO_URL__ = URL.createObjectURL(blob);
+          } catch {}
+          dbg('audio_finalized', { bytes: blob.size, type: blob.type });
+        } else {
+          dbg('audio_finalized', { bytes: 0, type: null });
+        }
+
+        // Server-side transcription fallback if live input transcription is empty
+        if (!finalUserText && blob && blob.size > 1024) {
+          try {
+            const buf = await blob.arrayBuffer();
+            const audioBase64 = arrayBufferToBase64(buf);
+            dbg('transcribe_request', { bytes: blob.size, type: blob.type });
+            const res = await fetch('/api/transcribe', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ audioBase64, mimeType: blob.type }),
+            });
+            const json = await res.json().catch(() => ({} as any));
+            const transcript = String((json as any)?.transcript || '').trim();
+            dbg('transcribe_response', { status: res.status, len: transcript.length, keys: Object.keys(json || {}) });
+            if (res.ok && transcript) {
+              finalUserText = transcript;
+            }
+          } catch (e) {
+            dbg('transcribe_error', { message: String((e as any)?.message || e) });
+          }
+        }
+
+        // Update history to show transcript on the review screen
+        if (finalUserText) {
+          setTranscriptionHistory([{ source: 'user', text: finalUserText, isFinal: true } as any]);
+        } else {
+          // Keep whatever we have, but mark final
+          setTranscriptionHistory(prev => prev.map(t => ({ ...t, isFinal: true })));
+        }
+
+        // Clean up mic stream and contexts
+        cleanupSession();
+        setIsProcessingStop(false);
     };
     
     const handleHeaderButtonClick = () => {
@@ -508,6 +567,17 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
     const renderContent = () => {
         switch(view) {
             case 'reviewing':
+                if (isProcessingStop) {
+                    return (
+                        <div className="flex-1 flex items-center justify-center p-6 text-center">
+                            <div>
+                                <MicrophoneIcon className="w-14 h-14 text-slate-500 mx-auto mb-4" />
+                                <h3 className="text-xl font-bold text-slate-300">Processing audio…</h3>
+                                <p className="text-slate-400 mt-2">Transcribing your rehearsal. This can take a few seconds.</p>
+                            </div>
+                        </div>
+                    );
+                }
                 return <ReviewView 
                     transcription={transcriptionHistory}
                     onIdeaSaved={onIdeaSaved}
@@ -649,6 +719,7 @@ const ReviewView: React.FC<{
                 <h3 className="text-xl font-bold text-slate-300">Rehearsal Complete</h3>
                 <p className="text-slate-400 mt-2 mb-6">No speech was transcribed during the session.</p>
                 <button
+                    type="button"
                     onClick={() => onReturnToStudio()}
                     className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 font-bold transition-colors"
                 >
@@ -704,12 +775,14 @@ const ReviewView: React.FC<{
                         </div>
                         <div className="flex gap-3 pt-2">
                              <button
+                                type="button"
                                 onClick={() => setShowSaveForm(false)}
                                 className="w-full flex items-center justify-center gap-2 px-6 py-2 text-sm bg-slate-600 hover:bg-slate-700 rounded-md text-slate-200 font-bold transition-colors"
                             >
                                 Cancel
                             </button>
                              <button
+                                type="button"
                                 onClick={handleConfirmSave}
                                 className="w-full flex items-center justify-center gap-2 px-6 py-2 text-sm bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors"
                             >
@@ -721,6 +794,7 @@ const ReviewView: React.FC<{
                 ) : (
                     <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                         <button
+                            type="button"
                             onClick={() => setShowSaveForm(true)}
                             className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-sm bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors"
                         >
@@ -728,6 +802,7 @@ const ReviewView: React.FC<{
                             <span>Save & Exit</span>
                         </button>
                         <button
+                            type="button"
                             onClick={() => onReturnToStudio(transcription)}
                             className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 font-bold transition-colors"
                         >
@@ -735,6 +810,7 @@ const ReviewView: React.FC<{
                             <span>Discuss with AI</span>
                         </button>
                         <button
+                            type="button"
                             onClick={() => onReturnToStudio()}
                             className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-sm text-slate-400 hover:text-white transition-colors"
                         >
