@@ -172,11 +172,6 @@ const InnovationEngineForm: React.FC<InnovationEngineFormProps> = ({
     </div>
 );
 
-// ---- Live Rehearsal -> Chat return affordance ----
-// When a user clicks “Discuss with AI” from Live Rehearsal, they land in Chat.
-// Provide a clear, one-click way to return back to Live Rehearsal (reset screen)
-// after reviewing AI feedback.
-
 const PromptGrid: React.FC<{
   prompts: PredefinedPrompt[];
   user: User;
@@ -1271,10 +1266,6 @@ useEffect(() => {
     }
   });
 
-  // If the user arrived in Chat from Live Rehearsal ("Discuss with AI"),
-  // show a clear return button so they can jump back to a reset rehearsal screen.
-  const [chatReturnView, setChatReturnView] = useState<MagicianView | null>(null);
-
 // Global navigation escape hatch:
 // The top-level App header dispatches 'maw:go-dashboard' so we can reliably
 // exit any tool view (even if localStorage has a "sticky" view saved).
@@ -1598,13 +1589,18 @@ useEffect(() => {
 
   // Auto-clear chat when switching between AI Assistant tools (prevents old errors/prompts persisting).
   const lastChatToolRef = useRef<MagicianView | null>(null);
+  const skipNextChatClearRef = useRef(false);
   useEffect(() => {
     const isChatTool = VIEW_TO_TAB_MAP[activeView] === 'chat' && activeView !== 'dashboard';
     if (!isChatTool) return;
 
     const prev = lastChatToolRef.current;
     if (prev && prev !== activeView) {
-      clearChatSession();
+      if (skipNextChatClearRef.current) {
+        skipNextChatClearRef.current = false;
+      } else {
+        clearChatSession();
+      }
     }
     lastChatToolRef.current = activeView;
   }, [activeView]);
@@ -1618,6 +1614,37 @@ useEffect(() => {
     setRoutineDescription('');
     setTargetDuration('');
     setEffectToInnovate('');
+  };
+
+  const handleSendWithHistory = async (messageText: string, baseHistory: ChatMessage[]) => {
+    if (isExpired) {
+      setIsUpgradeModalOpen(true);
+      return;
+    }
+    const userMessageText = messageText;
+    if (!userMessageText.trim()) return;
+
+    setInput('');
+    setIsLoading(true);
+
+    const userMessage = createChatMessage('user', userMessageText);
+    const historyForUI = [...baseHistory, userMessage];
+    setMessages(historyForUI);
+
+    try {
+      const replyText = await generateResponse(
+        userMessageText,
+        MAGICIAN_SYSTEM_INSTRUCTION,
+        user,
+        historyForUI
+      );
+      setMessages(prev => [...prev, createChatMessage('model', normalizeAiReply(replyText))]);
+    } catch (err) {
+      console.error('Error in handleSendWithHistory:', err);
+      setMessages(prev => [...prev, createChatMessage('model', friendlyAiError)]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleReturnToStudioHome = () => {
@@ -1774,39 +1801,33 @@ useEffect(() => {
     // - If the user chose "Discuss with AI", route them straight to Chat with the transcript loaded.
     // - Otherwise, return them to the Assistant Studio tool hub.
     if (transcriptToDiscuss && transcriptToDiscuss.length > 0) {
-      // Mark Chat as having a return path back to Live Rehearsal.
-      setChatReturnView('live-rehearsal');
-      const newMessages: ChatMessage[] = transcriptToDiscuss.map((t) =>
+      const transcriptMessages: ChatMessage[] = transcriptToDiscuss.map((t) =>
         createChatMessage(
           t.source,
           `**${t.source === 'user' ? 'You' : 'AI Coach'}:** ${t.text}`
         )
       );
+
       const contextMessage: ChatMessage = createChatMessage(
         'model',
-        "Here's the transcript from your live rehearsal session. Ask me to analyze pacing, clarity, and delivery, or to rewrite sections for stronger impact."
+        "Here's the transcript from your live rehearsal session. Please analyze it and provide actionable feedback."
       );
 
-      // Start a fresh chat context for the rehearsal analysis.
-      setMessages([contextMessage, ...newMessages]);
-      setActiveView('chat');
+      const baseHistory: ChatMessage[] = [contextMessage, ...transcriptMessages];
 
-      // Auto-trigger analysis so the user doesn't land on Chat with no response.
-      // (Delay one tick so state updates apply before the send.)
-      window.setTimeout(() => {
-        try {
-          handleSend(
-            'Please analyze the rehearsal transcript above. Give actionable feedback on pacing, clarity, audience engagement, and suggested rewrites for stronger impact. Provide a short prioritized checklist at the end.'
-          );
-        } catch {
-          // ignore
-        }
-      }, 0);
+      // Prevent the chat auto-clear effect from wiping the transcript when switching tools.
+      skipNextChatClearRef.current = true;
+
+      // Switch to Chat and send the analysis prompt using an explicit history array
+      // (avoids React state timing issues).
+      setActiveView('chat');
+      handleSendWithHistory(
+        'Please analyze the rehearsal transcript above. Give actionable feedback on pacing, clarity, audience engagement, and suggested rewrites for stronger impact. Provide a short prioritized checklist at the end.',
+        baseHistory
+      );
       return;
     }
 
-    // Normal return (no transcript) goes back to the tool hub.
-    setChatReturnView(null);
     setActiveView('assistant-studio');
   };
 
@@ -1877,8 +1898,6 @@ useEffect(() => {
         return;
     }
     resetInlineForms();
-    // Leaving the Chat view should clear any "return to rehearsal" affordance.
-    setChatReturnView(null);
     setActiveView(tab);
   };
   
@@ -1924,8 +1943,6 @@ useEffect(() => {
       return;
     }
 
-    // Navigating elsewhere clears any pending "return to rehearsal" state.
-    setChatReturnView(null);
     setActiveView(view);
   };
 
@@ -1942,7 +1959,6 @@ useEffect(() => {
     } else if (view === 'saved-ideas') {
         setInitialIdeaId(primaryId);
     }
-    setChatReturnView(null);
     setActiveView(view);
   };
 
@@ -2265,23 +2281,6 @@ useEffect(() => {
       
       {showFooter && (
         <footer className="p-4 border-t border-slate-800">
-          {chatReturnView === 'live-rehearsal' && (
-            <div className="mb-2 flex items-center justify-end">
-              <button
-                type="button"
-                onClick={() => {
-                  // Return to a fresh Live Rehearsal screen.
-                  setChatReturnView(null);
-                  setActiveView('live-rehearsal');
-                }}
-                className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-slate-700 bg-slate-900/40 text-slate-200 hover:text-white hover:bg-slate-800 transition-colors"
-                title="Return to Live Rehearsal Studio"
-              >
-                <BackIcon className="w-4 h-4" />
-                Back to Live Rehearsal
-              </button>
-            </div>
-          )}
           <div className="flex items-center bg-slate-800 rounded-lg">
             <input
               type="text"
