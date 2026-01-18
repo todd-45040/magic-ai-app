@@ -238,17 +238,31 @@ function App() {
         {renderContent()}
       </div>
 
-      {/* Global modals (so footer links work from any screen) */}
-      <DisclaimerModalAny
-        isOpen={isDisclaimerOpen}
-        onClose={() => setIsDisclaimerOpen(false)}
-        onAcknowledge={() => {
-          try {
-            localStorage.setItem(DISCLAIMER_ACKNOWLEDGED_KEY, 'true');
-          } catch {}
-          setIsDisclaimerOpen(false);
-        }}
-      />
+      {/*
+        Only mount the Disclaimer modal when the user explicitly opens it.
+        This prevents it from blocking the app if the modal component's prop
+        API changes (e.g., it expects `open` instead of `isOpen`) or defaults to open.
+      */}
+      {isDisclaimerOpen ? (
+        <DisclaimerModalAny
+          isOpen={true}
+          open={true}
+          onClose={() => setIsDisclaimerOpen(false)}
+          onOpenChange={(next: boolean) => setIsDisclaimerOpen(Boolean(next))}
+          onAcknowledge={() => {
+            try {
+              localStorage.setItem(DISCLAIMER_ACKNOWLEDGED_KEY, 'true');
+            } catch {}
+            setIsDisclaimerOpen(false);
+          }}
+          onAccept={() => {
+            try {
+              localStorage.setItem(DISCLAIMER_ACKNOWLEDGED_KEY, 'true');
+            } catch {}
+            setIsDisclaimerOpen(false);
+          }}
+        />
+      ) : null}
 
       {/*
         Only mount the Feedback modal when the user explicitly opens it.
