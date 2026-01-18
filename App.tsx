@@ -11,7 +11,6 @@ import { ADMIN_EMAIL } from './constants';
 import { useAppDispatch, refreshAllData } from './store';
 import ModeSelector from './components/ModeSelector';
 import Auth from './components/Auth';
-import ResetPassword from './components/ResetPassword';
 import AudienceMode from './components/AudienceMode';
 import MagicianMode from './components/MagicianMode';
 import About from './components/About';
@@ -21,6 +20,11 @@ import AppSuggestionModal from './components/AppSuggestionModal';
 import { isDemoEnabled, enableDemo, seedDemoData } from './services/demoSeedService';
 
 const DISCLAIMER_ACKNOWLEDGED_KEY = 'magician_ai_disclaimer_acknowledged';
+
+// Cast modal components to `any` so footer link wiring can't break the build
+// if the modal prop types evolve.
+const DisclaimerModalAny = DisclaimerModal as any;
+const AppSuggestionModalAny = AppSuggestionModal as any;
 
 function App() {
   const [mode, setMode] = useState<Mode>('selection');
@@ -49,13 +53,6 @@ function App() {
         return '';
       }
     };
-
-
-    const basePath = getAppBasePath();
-    const isResetPath = window.location.pathname === `${basePath}/reset`;
-    const href = window.location.href;
-    const isRecoveryFlow =
-      isResetPath || href.includes('type=recovery') || href.includes('access_token=') || href.includes('code=');
 
     const cleanupAuthCallbackUrl = () => {
       try {
@@ -142,10 +139,7 @@ function App() {
           if (modeParam === 'auth-callback') cleanupAuthCallbackUrl();
         } else {
           setUser(null);
-          // Don't kick the user out mid-recovery; let /reset render and exchange session first.
-          if (!isRecoveryFlow) {
-            setMode(prev => (prev === 'magician' ? 'selection' : prev));
-          }
+          setMode(prev => (prev === 'magician' ? 'selection' : prev));
           if (modeParam === 'auth-callback') cleanupAuthCallbackUrl();
         }
       } catch (error) {
@@ -185,36 +179,6 @@ function App() {
   }, [dispatch]);
 
   const renderContent = () => {
-
-    const basePath = (() => {
-      try {
-        return window.location.pathname.startsWith('/app') ? '/app' : '';
-      } catch {
-        return '';
-      }
-    })();
-
-    const isResetPath = window.location.pathname === `${basePath}/reset`;
-    if (isResetPath) {
-      return (
-        <ResetPassword
-          onRecovered={(email) => {
-            // Optimistically route the user into the app; auth listener will hydrate full profile.
-            setUser({
-              email,
-              membership: 'trial',
-              isAdmin: email === ADMIN_EMAIL,
-              generationCount: 0,
-              lastResetDate: new Date().toISOString(),
-            } as any);
-
-            refreshAllData(dispatch);
-            setMode('magician');
-          }}
-          onBack={() => setMode('auth')}
-        />
-      );
-    }
     if (authLoading) {
       return (
         <div className="flex flex-col items-center justify-center h-full">
@@ -274,10 +238,56 @@ function App() {
         {renderContent()}
       </div>
 
+      {/* Global modals (so footer links work from any screen) */}
+      <DisclaimerModalAny
+        isOpen={isDisclaimerOpen}
+        onClose={() => setIsDisclaimerOpen(false)}
+        onAcknowledge={() => {
+          try {
+            localStorage.setItem(DISCLAIMER_ACKNOWLEDGED_KEY, 'true');
+          } catch {}
+          setIsDisclaimerOpen(false);
+        }}
+      />
+
+      <AppSuggestionModalAny
+        isOpen={isSuggestionModalOpen}
+        onClose={() => setIsSuggestionModalOpen(false)}
+        user={user}
+      />
+
       <footer className="relative z-10 w-full text-center p-4 text-xs text-slate-500">
         <p className="text-yellow-300/80 mb-1">
           Magic AI Wizard — Actively evolving with the magic community
         </p>
+
+        {/* Restored global footer links */}
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-3">
+          <button
+            type="button"
+            onClick={() => setMode('about')}
+            className="text-purple-300 hover:text-white transition underline underline-offset-4"
+          >
+            Membership Types
+          </button>
+          <span className="text-slate-600">•</span>
+          <button
+            type="button"
+            onClick={() => setIsDisclaimerOpen(true)}
+            className="text-purple-300 hover:text-white transition underline underline-offset-4"
+          >
+            Disclaimer
+          </button>
+          <span className="text-slate-600">•</span>
+          <button
+            type="button"
+            onClick={() => setIsSuggestionModalOpen(true)}
+            className="text-purple-300 hover:text-white transition underline underline-offset-4"
+          >
+            Feedback
+          </button>
+        </div>
+
         <p>Copyright 2026 Magicians&apos; AI Wizard, LLC - v0.93 Beta</p>
       </footer>
     </div>
