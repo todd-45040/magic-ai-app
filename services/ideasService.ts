@@ -19,14 +19,11 @@ function mapRowToIdea(row: DbIdeaRow): SavedIdea {
     type: row.type,
     title: row.title ?? undefined,
     content: row.content,
-    // Most deployments enforce NOT NULL on tags; still guard for legacy rows.
-    tags: Array.isArray(row.tags) ? row.tags : [],
+    // The DB enforces tags as NOT NULL with default {} but older rows or
+    // mismatched inserts can still surface null in API responses.
+    tags: row.tags ?? [],
     timestamp: Number.isFinite(ts) ? ts : Date.now(),
   };
-}
-
-function normalizeTags(tags: unknown): string[] {
-  return Array.isArray(tags) ? (tags.filter((t) => typeof t === 'string') as string[]) : [];
 }
 
 /**
@@ -65,6 +62,24 @@ export async function getSavedIdeas(): Promise<SavedIdea[]> {
 }
 
 /**
+ * Fetch only rehearsal sessions (type='rehearsal') for the current user.
+ * Keeps payload small vs. fetching all ideas and filtering client-side.
+ */
+export async function getRehearsalSessions(limit = 50): Promise<SavedIdea[]> {
+  const uid = await requireUserId();
+  const { data, error } = await supabase
+    .from('ideas')
+    .select('*')
+    .eq('user_id', uid)
+    .eq('type', 'rehearsal')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return (data ?? []).map((r: unknown) => mapRowToIdea(r as DbIdeaRow));
+}
+
+/**
  * Backward-compatible saveIdea.
  *
  * New usage (preferred):
@@ -88,10 +103,6 @@ export async function saveIdea(
       ? ({ type: a, content: b ?? '', title: c, tags: d } as const)
       : a;
 
-  // IMPORTANT: public.ideas.tags is NOT NULL in your schema.
-  // Never send null; always send an array (empty is fine).
-  const safeTags = normalizeTags((payload as any).tags);
-
   const { data, error } = await supabase
     .from('ideas')
     .insert({
@@ -99,7 +110,8 @@ export async function saveIdea(
       type: payload.type,
       content: payload.content,
       title: payload.title ?? null,
-      tags: safeTags,
+      // DB requires tags NOT NULL; never send null.
+      tags: Array.isArray(payload.tags) ? payload.tags : [],
     })
     .select('*')
     .single();
@@ -121,7 +133,7 @@ export async function updateIdea(id: string, updates: Partial<SavedIdea>): Promi
   if (typeof updates.type !== 'undefined') dbUpdates.type = updates.type as IdeaType;
   if (typeof updates.title !== 'undefined') dbUpdates.title = updates.title ?? null;
   if (typeof updates.content !== 'undefined') dbUpdates.content = updates.content;
-  if (typeof updates.tags !== 'undefined') dbUpdates.tags = normalizeTags((updates as any).tags) as any;
+  if (typeof updates.tags !== 'undefined') dbUpdates.tags = Array.isArray(updates.tags) ? updates.tags : [];
 
   const { data, error } = await supabase
     .from('ideas')
