@@ -22,7 +22,7 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
   const allProFeatures = ['All Amateur Features', ...PROFESSIONAL_FEATURES];
 
   return (
-    <div className="w-full max-w-5xl animate-fade-in">
+    <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 md:px-8 animate-fade-in">
         <button onClick={onBack} className="flex items-center gap-2 mb-6 text-slate-300 hover:text-white transition-colors">
             <BackIcon className="w-5 h-5" />
             <span>Back to Main Screen</span>
@@ -40,49 +40,51 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
         </div>
 
         {/* Centered 3-up layout (Trial / Amateur / Professional) */}
-        <div className="mx-auto grid max-w-6xl grid-cols-1 gap-6 text-left justify-items-center md:grid-cols-2 lg:grid-cols-3">
-            {/* Trial Card */}
-            <div className="w-full max-w-sm p-6 bg-slate-800/50 border border-green-500/50 rounded-lg flex flex-col">
-                <h3 className="text-2xl font-bold text-green-300 font-cinzel mb-4">14-Day Trial</h3>
-                 <div className="min-h-[10rem] flex flex-col">
-                    <p className="text-slate-400 mb-4">New users automatically start here. Get full access to all Professional features for two weeks.</p>
-                    <div className="text-center">
-                        <p className="text-3xl font-bold text-green-300">Free</p>
+        <div className="mt-12 flex justify-center">
+            <div className="grid w-full max-w-5xl grid-cols-1 gap-6 text-left justify-items-center md:grid-cols-2 lg:grid-cols-3">
+                {/* Trial Card */}
+                <div className="w-full max-w-sm p-6 bg-slate-800/50 border border-green-500/50 rounded-lg flex flex-col">
+                    <h3 className="text-2xl font-bold text-green-300 font-cinzel mb-4">14-Day Trial</h3>
+                    <div className="min-h-[10rem] flex flex-col">
+                        <p className="text-slate-400 mb-4">New users automatically start here. Get full access to all Professional features for two weeks.</p>
+                        <div className="text-center">
+                            <p className="text-3xl font-bold text-green-300">Free</p>
+                        </div>
                     </div>
+                    <hr className="border-slate-700 my-4" />
+                    <FeatureList features={['Full Professional Access']} />
+                    <div className="flex-grow" />
                 </div>
-                <hr className="border-slate-700 my-4" />
-                <FeatureList features={['Full Professional Access']} />
-                <div className="flex-grow" />
-            </div>
 
-            {/* Amateur Plan */}
-            <div className="w-full max-w-sm p-6 bg-slate-800/50 border border-sky-500/50 rounded-lg flex flex-col">
-                <h3 className="text-2xl font-bold text-sky-300 font-cinzel mb-4">Amateur</h3>
-                <div className="min-h-[10rem] flex flex-col">
-                    <p className="text-slate-400 mb-4">Perfect for honing your craft and creative process.</p>
-                    <div className="text-center">
-                        <p className="text-3xl font-bold text-sky-300">$9.95<span className="text-base font-normal text-slate-400">/month</span></p>
-                        <p className="text-sm text-slate-400">or $99.00/year</p>
+                {/* Amateur Plan */}
+                <div className="w-full max-w-sm p-6 bg-slate-800/50 border border-sky-500/50 rounded-lg flex flex-col">
+                    <h3 className="text-2xl font-bold text-sky-300 font-cinzel mb-4">Amateur</h3>
+                    <div className="min-h-[10rem] flex flex-col">
+                        <p className="text-slate-400 mb-4">Perfect for honing your craft and creative process.</p>
+                        <div className="text-center">
+                            <p className="text-3xl font-bold text-sky-300">$9.95<span className="text-base font-normal text-slate-400">/month</span></p>
+                            <p className="text-sm text-slate-400">or $99.00/year</p>
+                        </div>
                     </div>
+                    <hr className="border-slate-700 my-4" />
+                    <FeatureList features={['Includes Trial Tools', ...AMATEUR_FEATURES]} />
+                    <div className="flex-grow" />
                 </div>
-                <hr className="border-slate-700 my-4" />
-                <FeatureList features={['Includes Trial Tools', ...AMATEUR_FEATURES]} />
-                <div className="flex-grow" />
-            </div>
 
-            {/* Professional Plan */}
-            <div className="w-full max-w-sm p-6 bg-slate-800/50 border border-amber-400/50 rounded-lg flex flex-col">
-                <h3 className="text-2xl font-bold text-amber-300 font-cinzel mb-4">Professional</h3>
-                <div className="min-h-[10rem] flex flex-col">
-                    <p className="text-slate-400 mb-4">The ultimate toolkit for the performing artist.</p>
-                     <div className="text-center">
-                        <p className="text-3xl font-bold text-amber-300">$29.95<span className="text-base font-normal text-slate-400">/month</span></p>
-                        <p className="text-sm text-slate-400">or $299.00/year</p>
+                {/* Professional Plan */}
+                <div className="w-full max-w-sm p-6 bg-slate-800/50 border border-amber-400/50 rounded-lg flex flex-col">
+                    <h3 className="text-2xl font-bold text-amber-300 font-cinzel mb-4">Professional</h3>
+                    <div className="min-h-[10rem] flex flex-col">
+                        <p className="text-slate-400 mb-4">The ultimate toolkit for the performing artist.</p>
+                        <div className="text-center">
+                            <p className="text-3xl font-bold text-amber-300">$29.95<span className="text-base font-normal text-slate-400">/month</span></p>
+                            <p className="text-sm text-slate-400">or $299.00/year</p>
+                        </div>
                     </div>
+                    <hr className="border-slate-700 my-4" />
+                    <FeatureList features={allProFeatures} />
+                    <div className="flex-grow" />
                 </div>
-                <hr className="border-slate-700 my-4" />
-                <FeatureList features={allProFeatures} />
-                <div className="flex-grow" />
             </div>
         </div>
     </div>
