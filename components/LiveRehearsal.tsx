@@ -136,18 +136,52 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
             // ignore
         }
         mediaRecorderRef.current = null;
-        if (sessionRef.current) {
-            sessionRef.current.close();
-            sessionRef.current = null;
+
+        // Close live session (best-effort)
+        try {
+            sessionRef.current?.close?.();
+        } catch {
+            // ignore
         }
-        if (cleanupMicStreamRef.current) {
-            cleanupMicStreamRef.current();
-            cleanupMicStreamRef.current = null;
+        sessionRef.current = null;
+        sessionPromiseRef.current = null;
+
+        // Stop mic stream (best-effort)
+        try {
+            cleanupMicStreamRef.current?.();
+        } catch {
+            // ignore
         }
-        if (outputAudioContextRef.current) {
-            outputAudioContextRef.current.close();
-            outputAudioContextRef.current = null;
+        cleanupMicStreamRef.current = null;
+
+        // Stop any queued audio buffers (best-effort)
+        try {
+            sourcesRef.current.forEach((s) => {
+                try { s.stop(); } catch { /* ignore */ }
+            });
+            sourcesRef.current.clear();
+        } catch {
+            // ignore
         }
+        nextStartTimeRef.current = 0;
+        outputNodeRef.current = null;
+
+        // Close output audio context (best-effort). close() returns a Promise.
+        try {
+            const ctx = outputAudioContextRef.current;
+            if (ctx) {
+                // Avoid throwing if already closed
+                if ((ctx as any).state === 'closed') {
+                    // no-op
+                } else {
+                    void ctx.close().catch(() => {});
+                }
+            }
+        } catch {
+            // ignore
+        }
+        outputAudioContextRef.current = null;
+
         if (timerIntervalRef.current) {
             clearInterval(timerIntervalRef.current);
             timerIntervalRef.current = null;
@@ -161,8 +195,17 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         setStatus('idle');
     };
 
+    // Never allow cleanup errors to crash navigation (Back to Studio).
+    const safeCleanupSession = () => {
+        try {
+            cleanupSession();
+        } catch (err) {
+            try { console.error('LiveRehearsal cleanupSession failed:', err); } catch {}
+        }
+    };
+
     useEffect(() => {
-        return () => cleanupSession();
+        return () => safeCleanupSession();
     }, []);
 
 
@@ -563,7 +606,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         if (view === 'rehearsing') {
             void handleStopRehearsal();
         } else {
-            cleanupSession();
+            safeCleanupSession();
             safeReturnToStudio();
         }
     };
