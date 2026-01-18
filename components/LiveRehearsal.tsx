@@ -882,14 +882,27 @@ const ReviewView: React.FC<{
             // Backward-compatible ideasService supports both signatures.
             // Prefer object form to match the DB schema (created_at-based).
             await saveIdea({ type: 'rehearsal', content: JSON.stringify(content), title });
-            onIdeaSaved();
+
+            // Parent callbacks should never be allowed to crash the app.
+            // If something throws, surface it as a saveError and keep the user on this screen.
+            try {
+                onIdeaSaved();
+            } catch (cbErr: any) {
+                console.error('onIdeaSaved callback failed:', cbErr);
+            }
             // Notify Live Rehearsal History panels to refresh immediately.
             try {
                 window.dispatchEvent(new CustomEvent('maw-rehearsal-saved'));
             } catch {
                 // ignore
             }
-            onReturnToStudio(); // Exit after saving
+            try {
+                onReturnToStudio(); // Exit after saving
+            } catch (navErr: any) {
+                console.error('onReturnToStudio callback failed:', navErr);
+                setSaveError('Saved, but could not navigate back to the studio. Please use the Back button.');
+                return;
+            }
         } catch (err: any) {
             const msg = String(err?.message || err || 'Failed to save rehearsal.');
             setSaveError(msg);
