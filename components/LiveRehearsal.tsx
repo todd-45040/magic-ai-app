@@ -69,7 +69,9 @@ function createBlob(data: Float32Array): GeminiBlob {
   const l = data.length;
   const int16 = new Int16Array(l);
   for (let i = 0; i < l; i++) {
-    int16[i] = data[i] * 32768;
+    // Clamp to [-1, 1] and use asymmetric scaling to avoid overflow/wrap distortion.
+    const s = Math.max(-1, Math.min(1, data[i]));
+    int16[i] = s < 0 ? s * 32768 : s * 32767;
   }
   return {
     data: encode(new Uint8Array(int16.buffer)),
@@ -270,6 +272,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
             const inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
             let source: MediaStreamAudioSourceNode | null = null;
             let scriptProcessor: ScriptProcessorNode | null = null;
+            let zeroGain: GainNode | null = null;
 
             const sessionPromise = startLiveSession(
                 MAGICIAN_LIVE_REHEARSAL_SYSTEM_INSTRUCTION,
@@ -314,7 +317,11 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
                         };
 
                         source.connect(scriptProcessor);
-                        scriptProcessor.connect(inputAudioContext.destination);
+                        // Keep the ScriptProcessorNode alive without routing audible audio to speakers.
+                        zeroGain = inputAudioContext.createGain();
+                        zeroGain.gain.value = 0;
+                        scriptProcessor.connect(zeroGain);
+                        zeroGain.connect(inputAudioContext.destination);
 
                         setStatus('listening');
                         setView('rehearsing');
@@ -361,6 +368,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
             cleanupMicStreamRef.current = () => {
                 stream.getTracks().forEach(track => track.stop());
                 if(scriptProcessor) scriptProcessor.disconnect();
+                if(zeroGain) zeroGain.disconnect();
                 if(source) source.disconnect();
                 if(inputAudioContext.state !== 'closed') inputAudioContext.close();
             };
@@ -447,7 +455,13 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
             setTranscriptionHistory(prev => prev.map(t => ({...t, isFinal: true})));
         }
 
-        const base64Audio = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
+        // Some model turns include multiple parts (text + audio). Scan all parts for inline audio.
+        const parts = message.serverContent?.modelTurn?.parts || [];
+        const audioPart = parts.find((p: any) => {
+            const mime = String(p?.inlineData?.mimeType || '');
+            return Boolean(p?.inlineData?.data) && mime.startsWith('audio/');
+        });
+        const base64Audio = audioPart?.inlineData?.data;
         if (base64Audio && outputAudioContextRef.current && outputNodeRef.current) {
             const ctx = outputAudioContextRef.current;
             nextStartTimeRef.current = Math.max(nextStartTimeRef.current, ctx.currentTime);
