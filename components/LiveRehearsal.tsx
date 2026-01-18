@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 // by the parent App shell (props callback) and/or a simple location redirect.
 import { LiveServerMessage, FunctionCall } from '@google/genai';
 import { startLiveSession, decode, decodeAudioData, type LiveSession } from '../services/geminiService';
-import { deleteIdea, getRehearsalSessions, saveIdea } from '../services/ideasService';
+import { saveIdea, getRehearsalSessions } from '../services/ideasService';
 import type { Transcription, TimerState, User } from '../types';
 import { canConsume, consumeLiveMinutes, getUsage } from '../services/usageTracker';
 import { MAGICIAN_LIVE_REHEARSAL_SYSTEM_INSTRUCTION, LIVE_REHEARSAL_TOOLS } from '../constants';
@@ -83,13 +83,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
     const [status, setStatus] = useState<'idle' | 'connecting' | 'listening' | 'error'>('idle');
     const [errorMessage, setErrorMessage] = useState('');
     const [transcriptionHistory, setTranscriptionHistory] = useState<Transcription[]>([]);
-
-    // Rehearsal History (saved sessions)
-    const [historyOpen, setHistoryOpen] = useState(true);
-    const [historyLoading, setHistoryLoading] = useState(false);
-    const [historyError, setHistoryError] = useState<string>('');
-    const [rehearsalHistory, setRehearsalHistory] = useState<Array<{ id: string; title?: string; createdAt: string; transcriptCount: number; notesPreview: string; raw: string }>>([]);
-    const [historyModal, setHistoryModal] = useState<null | { id: string; title?: string; createdAt: string; transcript: Transcription[]; notes: string }>(null);
     
     const sessionRef = useRef<LiveSession | null>(null);
     const sessionPromiseRef = useRef<Promise<LiveSession> | null>(null);
@@ -133,60 +126,9 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [transcriptionHistory]);
 
-    // ---- Rehearsal History helpers ----
-    const parseRehearsalContent = (content: string): { transcript: Transcription[]; notes: string } => {
-        try {
-            const parsed = JSON.parse(content || '{}');
-            const t = Array.isArray(parsed?.transcript) ? parsed.transcript : [];
-            const transcript: Transcription[] = t
-                .map((x: any) => ({
-                    source: x?.source === 'ai' ? 'ai' : 'user',
-                    text: String(x?.text ?? ''),
-                }))
-                .filter((x: Transcription) => x.text.trim().length > 0);
-            const notes = typeof parsed?.notes === 'string' ? parsed.notes : '';
-            return { transcript, notes };
-        } catch {
-            return { transcript: [], notes: '' };
-        }
-    };
-
-    const loadHistory = async () => {
-        setHistoryLoading(true);
-        setHistoryError('');
-        try {
-            const rows = await getRehearsalSessions(50);
-            const mapped = rows.map((r) => {
-                const createdAt = r.timestamp ? new Date(r.timestamp).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '';
-                const parsed = parseRehearsalContent(r.content);
-                const notesPreview = (parsed.notes || '').trim().slice(0, 140);
-                return {
-                    id: r.id,
-                    title: r.title,
-                    createdAt,
-                    transcriptCount: parsed.transcript.length,
-                    notesPreview,
-                    raw: r.content,
-                };
-            });
-            setRehearsalHistory(mapped);
-        } catch (e: any) {
-            setHistoryError(String(e?.message || e || 'Failed to load rehearsal history.'));
-        } finally {
-            setHistoryLoading(false);
-        }
-    };
-
-    // Load history when landing on the idle screen.
-    useEffect(() => {
-        if (view === 'idle') {
-            loadHistory();
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [view]);
-
-    const cleanupSession = () => {
-        // Stop recorder if still running (best-effort)
+    const safeCleanupSession = async () => {
+        // Best-effort cleanup: never allow cleanup errors to crash navigation.
+        // Stop recorder if still running
         try {
             if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
                 mediaRecorderRef.current.stop();
@@ -195,33 +137,64 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
             // ignore
         }
         mediaRecorderRef.current = null;
-        if (sessionRef.current) {
-            sessionRef.current.close();
-            sessionRef.current = null;
+
+        try {
+            if (sessionRef.current) {
+                sessionRef.current.close();
+                sessionRef.current = null;
+            }
+        } catch {
+            // ignore
         }
-        if (cleanupMicStreamRef.current) {
-            cleanupMicStreamRef.current();
-            cleanupMicStreamRef.current = null;
+
+        try {
+            if (cleanupMicStreamRef.current) {
+                cleanupMicStreamRef.current();
+                cleanupMicStreamRef.current = null;
+            }
+        } catch {
+            // ignore
         }
-        if (outputAudioContextRef.current) {
-            outputAudioContextRef.current.close();
-            outputAudioContextRef.current = null;
+
+        try {
+            if (outputAudioContextRef.current) {
+                const ctx = outputAudioContextRef.current;
+                outputAudioContextRef.current = null;
+                if ((ctx as any).state !== 'closed') {
+                    await ctx.close().catch(() => void 0);
+                }
+            }
+        } catch {
+            // ignore
         }
-        if (timerIntervalRef.current) {
-            clearInterval(timerIntervalRef.current);
-            timerIntervalRef.current = null;
+
+        try {
+            if (timerIntervalRef.current) {
+                clearInterval(timerIntervalRef.current);
+                timerIntervalRef.current = null;
+            }
+        } catch {
+            // ignore
         }
-        if (usageIntervalRef.current) {
-            clearInterval(usageIntervalRef.current);
-            usageIntervalRef.current = null;
+
+        try {
+            if (usageIntervalRef.current) {
+                clearInterval(usageIntervalRef.current);
+                usageIntervalRef.current = null;
+            }
+        } catch {
+            // ignore
         }
+
         sessionStartRef.current = null;
         setTimer({ startTime: null, duration: null, isRunning: false });
         setStatus('idle');
     };
 
     useEffect(() => {
-        return () => cleanupSession();
+        return () => {
+            void safeCleanupSession();
+        };
     }, []);
 
 
@@ -614,7 +587,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         // Try to transcribe server-side if Live inputTranscription didn't arrive.
         await transcribeOnServerIfNeeded();
 
-        cleanupSession();
+        await safeCleanupSession();
         setView('reviewing');
     };
     
@@ -622,7 +595,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         if (view === 'rehearsing') {
             void handleStopRehearsal();
         } else {
-            cleanupSession();
+            void safeCleanupSession();
             safeReturnToStudio();
         }
     };
@@ -655,109 +628,11 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
                                 <div ref={transcriptEndRef} />
                             </div>
                         ) : (
-                            <div className="flex-1 flex flex-col items-center justify-center gap-10">
+                            <div className="flex-1 flex flex-col items-center justify-center gap-6">
                                 <StatusIndicator status={status} errorMessage={errorMessage} onStart={handleStartSession} />
-
-                                {/* Rehearsal History */}
-                                {view === 'idle' && (
-                                    <div className="w-full max-w-3xl mx-auto">
-                                        <div className="bg-slate-900/40 border border-slate-700 rounded-lg overflow-hidden">
-                                            <button
-                                                type="button"
-                                                onClick={() => setHistoryOpen((v) => !v)}
-                                                className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-800/40 transition-colors"
-                                            >
-                                                <div>
-                                                    <div className="text-slate-200 font-bold">Rehearsal History</div>
-                                                    <div className="text-xs text-slate-400">Your saved Live Rehearsal sessions (most recent first)</div>
-                                                </div>
-                                                <div className="text-slate-400 text-sm font-semibold">
-                                                    {historyOpen ? 'Hide' : 'Show'}
-                                                </div>
-                                            </button>
-
-                                            {historyOpen && (
-                                                <div className="px-4 pb-4">
-                                                    <div className="flex items-center justify-between gap-3 pt-3">
-                                                        <div className="text-xs text-slate-400">
-                                                            {historyLoading ? 'Loading sessions…' : `${rehearsalHistory.length} session${rehearsalHistory.length === 1 ? '' : 's'}`}
-                                                        </div>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => loadHistory()}
-                                                            className="text-xs px-3 py-1 rounded-md bg-slate-700 hover:bg-slate-600 text-slate-100 font-semibold transition-colors"
-                                                        >
-                                                            Refresh
-                                                        </button>
-                                                    </div>
-
-                                                    {historyError && (
-                                                        <div className="mt-3 text-sm text-red-300 bg-red-900/20 border border-red-700/40 rounded-md px-3 py-2">
-                                                            {historyError}
-                                                        </div>
-                                                    )}
-
-                                                    {!historyLoading && rehearsalHistory.length === 0 && !historyError && (
-                                                        <div className="mt-4 text-sm text-slate-400">
-                                                            No saved sessions yet. After you stop a rehearsal, choose <span className="text-slate-200 font-semibold">Save & Exit</span> to add it here.
-                                                        </div>
-                                                    )}
-
-                                                    <div className="mt-4 space-y-3">
-                                                        {rehearsalHistory.map((s) => (
-                                                            <div key={s.id} className="flex flex-col sm:flex-row sm:items-center gap-3 bg-slate-800/40 border border-slate-700 rounded-lg p-3">
-                                                                <div className="flex-1 min-w-0">
-                                                                    <div className="flex items-center gap-2">
-                                                                        <div className="text-slate-100 font-semibold truncate">{s.title || 'Untitled rehearsal'}</div>
-                                                                        <div className="text-xs text-slate-400 whitespace-nowrap">· {s.createdAt}</div>
-                                                                    </div>
-                                                                    <div className="text-xs text-slate-400 mt-1">
-                                                                        {s.transcriptCount} line{s.transcriptCount === 1 ? '' : 's'}{s.notesPreview ? ` · Notes: ${s.notesPreview}${s.notesPreview.length >= 140 ? '…' : ''}` : ''}
-                                                                    </div>
-                                                                </div>
-                                                                <div className="flex items-center gap-2">
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => {
-                                                                            const parsed = parseRehearsalContent(s.raw);
-                                                                            setHistoryModal({ id: s.id, title: s.title, createdAt: s.createdAt, transcript: parsed.transcript, notes: parsed.notes });
-                                                                        }}
-                                                                        className="px-3 py-2 text-xs rounded-md bg-slate-700 hover:bg-slate-600 text-slate-100 font-semibold transition-colors"
-                                                                    >
-                                                                        View
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => {
-                                                                            const parsed = parseRehearsalContent(s.raw);
-                                                                            safeReturnToStudio(parsed.transcript);
-                                                                        }}
-                                                                        className="px-3 py-2 text-xs rounded-md bg-purple-600 hover:bg-purple-700 text-white font-semibold transition-colors"
-                                                                    >
-                                                                        Discuss with AI
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={async () => {
-                                                                            if (!confirm('Delete this rehearsal session? This cannot be undone.')) return;
-                                                                            try {
-                                                                                await deleteIdea(s.id);
-                                                                                await loadHistory();
-                                                                            } catch (e: any) {
-                                                                                setHistoryError(String(e?.message || e || 'Failed to delete session.'));
-                                                                            }
-                                                                        }}
-                                                                        className="px-3 py-2 text-xs rounded-md text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
-                                                                    >
-                                                                        Delete
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
+                                {view === 'idle' && status !== 'connecting' && (
+                                    <div className="w-full max-w-3xl">
+                                        <RehearsalHistory onDiscuss={(t) => safeReturnToStudio(t)} />
                                     </div>
                                 )}
                             </div>
@@ -787,60 +662,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
                 </button>
             </header>
             {renderContent()}
-
-            {historyModal && (
-                <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
-                    <div className="w-full max-w-4xl bg-slate-900 border border-slate-700 rounded-lg shadow-xl overflow-hidden">
-                        <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
-                            <div className="min-w-0">
-                                <div className="text-slate-100 font-bold truncate">{historyModal.title || 'Untitled rehearsal'}</div>
-                                <div className="text-xs text-slate-400">{historyModal.createdAt}</div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => safeReturnToStudio(historyModal.transcript)}
-                                    className="px-3 py-2 text-xs rounded-md bg-purple-600 hover:bg-purple-700 text-white font-semibold transition-colors"
-                                >
-                                    Discuss with AI
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setHistoryModal(null)}
-                                    className="px-3 py-2 text-xs rounded-md bg-slate-700 hover:bg-slate-600 text-slate-100 font-semibold transition-colors"
-                                >
-                                    Close
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="p-4 md:p-6 max-h-[75vh] overflow-y-auto">
-                            {historyModal.notes && (
-                                <div className="mb-4">
-                                    <div className="text-xs text-slate-400 font-semibold mb-1">Notes</div>
-                                    <div className="text-sm text-slate-200 bg-slate-800/40 border border-slate-700 rounded-lg p-3 whitespace-pre-wrap">
-                                        {historyModal.notes}
-                                    </div>
-                                </div>
-                            )}
-
-                            <div className="text-xs text-slate-400 font-semibold mb-2">Transcript</div>
-                            <div className="space-y-4 bg-slate-800/30 border border-slate-700 rounded-lg p-4">
-                                {historyModal.transcript.length === 0 ? (
-                                    <div className="text-sm text-slate-400">No transcript text was found for this session.</div>
-                                ) : (
-                                    historyModal.transcript.map((t, i) => (
-                                        <div key={i} className={`flex flex-col ${t.source === 'user' ? 'items-end' : 'items-start'}`}>
-                                            <span className="text-xs text-slate-400 px-2 mb-0.5 font-semibold">{t.source === 'user' ? 'You' : 'AI Coach'}</span>
-                                            <p className={`max-w-3xl px-4 py-2 rounded-lg ${t.source === 'user' ? 'bg-purple-800 text-white' : 'bg-slate-700 text-slate-200'}`}>{t.text}</p>
-                                        </div>
-                                    ))
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
             
             {(timer.isRunning || timer.duration) && view === 'rehearsing' && (
                 <div className={`absolute bottom-4 right-4 flex items-center gap-2 px-4 py-2 rounded-lg border text-lg font-mono font-semibold transition-colors ${timer.isRunning ? 'bg-green-900/50 border-green-500/50 text-green-300' : 'bg-slate-800 border-slate-600 text-slate-300'}`}>
@@ -897,6 +718,142 @@ const StatusIndicator: React.FC<{status: string, errorMessage: string, onStart: 
     }
 };
 
+type RehearsalHistoryItem = {
+    id: string;
+    title: string;
+    createdAt: string;
+    transcript: Transcription[];
+    notes: string;
+};
+
+const RehearsalHistory: React.FC<{ onDiscuss: (transcript: Transcription[]) => void }> = ({ onDiscuss }) => {
+    const [expanded, setExpanded] = useState(true);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string>('');
+    const [items, setItems] = useState<RehearsalHistoryItem[]>([]);
+
+    const load = async () => {
+        setError('');
+        setLoading(true);
+        try {
+            const rows = await getRehearsalSessions(25);
+            const parsed: RehearsalHistoryItem[] = (rows ?? []).map((r) => {
+                const createdAt = new Date(r.timestamp).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+                let transcript: Transcription[] = [];
+                let notes = '';
+                try {
+                    const obj = JSON.parse(String(r.content || ''));
+                    if (Array.isArray(obj?.transcript)) transcript = obj.transcript as any;
+                    if (typeof obj?.notes === 'string') notes = obj.notes;
+                } catch {
+                    // If content isn't JSON, treat it as plain transcript text
+                    const t = String(r.content || '').trim();
+                    transcript = t ? ([{ source: 'user', text: t, isFinal: true }] as any) : [];
+                }
+                return {
+                    id: r.id,
+                    title: r.title || 'Rehearsal',
+                    createdAt,
+                    transcript,
+                    notes,
+                };
+            });
+            setItems(parsed);
+        } catch (e: any) {
+            setError(String(e?.message || e || 'Failed to load rehearsal history.'));
+            setItems([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        void load();
+        const onSaved = () => void load();
+        window.addEventListener('maw-rehearsal-saved', onSaved as any);
+        return () => window.removeEventListener('maw-rehearsal-saved', onSaved as any);
+    }, []);
+
+    if (!expanded) {
+        return (
+            <div className="w-full bg-slate-900/30 border border-slate-700 rounded-lg px-4 py-3 flex items-center justify-between">
+                <div>
+                    <div className="text-slate-200 font-semibold">Rehearsal History</div>
+                    <div className="text-xs text-slate-400">Your saved Live Rehearsal sessions (most recent first)</div>
+                </div>
+                <button
+                    onClick={() => setExpanded(true)}
+                    className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-md text-slate-100 text-sm font-semibold transition-colors"
+                >
+                    Show
+                </button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="w-full bg-slate-900/30 border border-slate-700 rounded-lg p-4">
+            <div className="flex items-center justify-between gap-4">
+                <div>
+                    <div className="text-slate-200 font-semibold">Rehearsal History</div>
+                    <div className="text-xs text-slate-400">Your saved Live Rehearsal sessions (most recent first)</div>
+                </div>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => void load()}
+                        className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-md text-slate-100 text-sm font-semibold transition-colors"
+                    >
+                        {loading ? 'Loading…' : 'Refresh'}
+                    </button>
+                    <button
+                        onClick={() => setExpanded(false)}
+                        className="px-3 py-1.5 bg-transparent hover:bg-slate-800/40 rounded-md text-slate-300 text-sm font-semibold transition-colors"
+                    >
+                        Hide
+                    </button>
+                </div>
+            </div>
+
+            {error && (
+                <div className="mt-3 text-sm text-red-300 bg-red-900/20 border border-red-700/40 rounded-md px-3 py-2">
+                    {error}
+                </div>
+            )}
+
+            <div className="mt-4 text-sm text-slate-300">
+                <div className="mb-2">{items.length} session{items.length === 1 ? '' : 's'}</div>
+                {items.length === 0 ? (
+                    <div className="text-slate-400">No saved sessions yet. After you stop a rehearsal, choose <span className="text-slate-200 font-semibold">Save &amp; Exit</span> to add it here.</div>
+                ) : (
+                    <div className="space-y-3">
+                        {items.map((it) => (
+                            <div key={it.id} className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-800/30 border border-slate-700 rounded-lg px-4 py-3">
+                                <div className="min-w-0">
+                                    <div className="text-slate-100 font-semibold truncate">{it.title}</div>
+                                    <div className="text-xs text-slate-400">
+                                        {it.createdAt} • {it.transcript.filter(t => t?.source === 'user').length} user segment{it.transcript.filter(t => t?.source === 'user').length === 1 ? '' : 's'}
+                                    </div>
+                                    {it.notes ? (
+                                        <div className="text-xs text-slate-300/80 mt-1 line-clamp-2">{it.notes}</div>
+                                    ) : null}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => onDiscuss(it.transcript)}
+                                        className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 rounded-md text-white text-sm font-semibold transition-colors"
+                                    >
+                                        Discuss with AI
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
 const ReviewView: React.FC<{
     transcription: Transcription[];
     onIdeaSaved: () => void;
@@ -926,6 +883,12 @@ const ReviewView: React.FC<{
             // Prefer object form to match the DB schema (created_at-based).
             await saveIdea({ type: 'rehearsal', content: JSON.stringify(content), title });
             onIdeaSaved();
+            // Notify Live Rehearsal History panels to refresh immediately.
+            try {
+                window.dispatchEvent(new CustomEvent('maw-rehearsal-saved'));
+            } catch {
+                // ignore
+            }
             onReturnToStudio(); // Exit after saving
         } catch (err: any) {
             const msg = String(err?.message || err || 'Failed to save rehearsal.');

@@ -19,9 +19,9 @@ function mapRowToIdea(row: DbIdeaRow): SavedIdea {
     type: row.type,
     title: row.title ?? undefined,
     content: row.content,
-    // The DB enforces tags as NOT NULL with default {} but older rows or
-    // mismatched inserts can still surface null in API responses.
-    tags: row.tags ?? [],
+    // DB schema enforces tags NOT NULL (default '{}'), but older rows or stale
+    // schema cache can still yield null. Normalize to an array for safety.
+    tags: Array.isArray(row.tags) ? row.tags : [],
     timestamp: Number.isFinite(ts) ? ts : Date.now(),
   };
 }
@@ -62,10 +62,10 @@ export async function getSavedIdeas(): Promise<SavedIdea[]> {
 }
 
 /**
- * Fetch only rehearsal sessions (type='rehearsal') for the current user.
- * Keeps payload small vs. fetching all ideas and filtering client-side.
+ * Fetch only rehearsal sessions (stored as ideas with type='rehearsal').
+ * Used by Live Rehearsal History UI.
  */
-export async function getRehearsalSessions(limit = 50): Promise<SavedIdea[]> {
+export async function getRehearsalSessions(limit = 25): Promise<SavedIdea[]> {
   const uid = await requireUserId();
   const { data, error } = await supabase
     .from('ideas')
@@ -110,7 +110,7 @@ export async function saveIdea(
       type: payload.type,
       content: payload.content,
       title: payload.title ?? null,
-      // DB requires tags NOT NULL; never send null.
+      // DB constraint: tags is NOT NULL. Always send an array.
       tags: Array.isArray(payload.tags) ? payload.tags : [],
     })
     .select('*')
@@ -133,7 +133,9 @@ export async function updateIdea(id: string, updates: Partial<SavedIdea>): Promi
   if (typeof updates.type !== 'undefined') dbUpdates.type = updates.type as IdeaType;
   if (typeof updates.title !== 'undefined') dbUpdates.title = updates.title ?? null;
   if (typeof updates.content !== 'undefined') dbUpdates.content = updates.content;
-  if (typeof updates.tags !== 'undefined') dbUpdates.tags = Array.isArray(updates.tags) ? updates.tags : [];
+  if (typeof updates.tags !== 'undefined') {
+    dbUpdates.tags = Array.isArray(updates.tags) ? updates.tags : [];
+  }
 
   const { data, error } = await supabase
     .from('ideas')
