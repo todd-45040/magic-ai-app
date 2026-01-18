@@ -11,6 +11,7 @@ import { ADMIN_EMAIL } from './constants';
 import { useAppDispatch, refreshAllData } from './store';
 import ModeSelector from './components/ModeSelector';
 import Auth from './components/Auth';
+import ResetPassword from './components/ResetPassword';
 import AudienceMode from './components/AudienceMode';
 import MagicianMode from './components/MagicianMode';
 import About from './components/About';
@@ -48,6 +49,13 @@ function App() {
         return '';
       }
     };
+
+
+    const basePath = getAppBasePath();
+    const isResetPath = window.location.pathname === `${basePath}/reset`;
+    const href = window.location.href;
+    const isRecoveryFlow =
+      isResetPath || href.includes('type=recovery') || href.includes('access_token=') || href.includes('code=');
 
     const cleanupAuthCallbackUrl = () => {
       try {
@@ -134,7 +142,10 @@ function App() {
           if (modeParam === 'auth-callback') cleanupAuthCallbackUrl();
         } else {
           setUser(null);
-          setMode(prev => (prev === 'magician' ? 'selection' : prev));
+          // Don't kick the user out mid-recovery; let /reset render and exchange session first.
+          if (!isRecoveryFlow) {
+            setMode(prev => (prev === 'magician' ? 'selection' : prev));
+          }
           if (modeParam === 'auth-callback') cleanupAuthCallbackUrl();
         }
       } catch (error) {
@@ -174,6 +185,36 @@ function App() {
   }, [dispatch]);
 
   const renderContent = () => {
+
+    const basePath = (() => {
+      try {
+        return window.location.pathname.startsWith('/app') ? '/app' : '';
+      } catch {
+        return '';
+      }
+    })();
+
+    const isResetPath = window.location.pathname === `${basePath}/reset`;
+    if (isResetPath) {
+      return (
+        <ResetPassword
+          onRecovered={(email) => {
+            // Optimistically route the user into the app; auth listener will hydrate full profile.
+            setUser({
+              email,
+              membership: 'trial',
+              isAdmin: email === ADMIN_EMAIL,
+              generationCount: 0,
+              lastResetDate: new Date().toISOString(),
+            } as any);
+
+            refreshAllData(dispatch);
+            setMode('magician');
+          }}
+          onBack={() => setMode('auth')}
+        />
+      );
+    }
     if (authLoading) {
       return (
         <div className="flex flex-col items-center justify-center h-full">
