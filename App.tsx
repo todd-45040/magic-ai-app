@@ -250,11 +250,21 @@ function App() {
         }}
       />
 
-      <AppSuggestionModalAny
-        isOpen={isSuggestionModalOpen}
-        onClose={() => setIsSuggestionModalOpen(false)}
-        user={user}
-      />
+      {/*
+        Only mount the Feedback modal when the user explicitly opens it.
+        This prevents accidental auto-open behavior if the modal component's
+        prop API changes (e.g., it expects `open` instead of `isOpen`).
+      */}
+      {isSuggestionModalOpen ? (
+        <AppSuggestionModalAny
+          isOpen={true}
+          open={true}
+          onClose={() => setIsSuggestionModalOpen(false)}
+          onSubmitted={() => setIsSuggestionModalOpen(false)}
+          onSuccess={() => setIsSuggestionModalOpen(false)}
+          user={user}
+        />
+      ) : null}
 
       <footer className="relative z-10 w-full text-center p-4 text-xs text-slate-500">
         <p className="text-yellow-300/80 mb-1">
