@@ -89,6 +89,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
     const [status, setStatus] = useState<'idle' | 'connecting' | 'listening' | 'error'>('idle');
     const [errorMessage, setErrorMessage] = useState('');
     const [transcriptionHistory, setTranscriptionHistory] = useState<Transcription[]>([]);
+    const transcriptionHistoryRef = useRef<Transcription[]>([]);
     // Multi-turn rehearsal: each time the user records again, we increment the take number
     // and keep appending to the same transcription history.
     const [takeNumber, setTakeNumber] = useState<number>(1);
@@ -133,10 +134,29 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
     const sessionStartRef = useRef<number | null>(null);
     const usageIntervalRef = useRef<number | null>(null);
 
+    // Auto-transition to the Review screen when the AI finishes a take.
+    // In practice, some live sessions don't reliably emit `turnComplete` and may keep the websocket open.
+    // We treat a short period of "model output" inactivity as the end of the take.
+    const reviewTransitionedRef = useRef(false);
+    const modelIdleTimeoutRef = useRef<number | null>(null);
+    const viewRef = useRef(view);
+
+    useEffect(() => {
+        viewRef.current = view;
+    }, [view]);
+
     const transcriptEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [transcriptionHistory]);
+
+    useEffect(() => {
+        transcriptionHistoryRef.current = transcriptionHistory;
+    }, [transcriptionHistory]);
+
+    useEffect(() => {
+        transcriptionHistoryRef.current = transcriptionHistory;
     }, [transcriptionHistory]);
 
     useEffect(() => {
@@ -220,6 +240,35 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         };
     }, []);
 
+    const clearModelIdleTimer = () => {
+        if (modelIdleTimeoutRef.current) {
+            clearTimeout(modelIdleTimeoutRef.current);
+            modelIdleTimeoutRef.current = null;
+        }
+    };
+
+    const scheduleAutoReview = () => {
+        // Only relevant while actively rehearsing.
+        if (viewRef.current !== 'rehearsing') return;
+        if (reviewTransitionedRef.current) return;
+        clearModelIdleTimer();
+
+        // After a short pause in model output, assume the take is complete and show the review actions.
+        modelIdleTimeoutRef.current = window.setTimeout(async () => {
+            if (reviewTransitionedRef.current) return;
+            if (viewRef.current !== 'rehearsing') return;
+
+            // Require that we actually have some model output before transitioning.
+            const hasModelOutput = transcriptionHistoryRef.current.some((t) => t.source === 'model' && !isTakeMarker(t) && (t.text || '').trim());
+            if (!hasModelOutput) return;
+
+            reviewTransitionedRef.current = true;
+            setTranscriptionHistory((prev) => prev.map((t) => ({ ...t, isFinal: true })));
+            await safeCleanupSession();
+            setView('reviewing');
+        }, 1200);
+    };
+
 
     const handleStartSession = async (opts?: { resetHistory?: boolean }) => {
         // Client-side cap for live rehearsal minutes (daily). Server-side usage enforcement still applies to text requests.
@@ -235,6 +284,8 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
             setTranscriptionHistory([]);
             setTakeNumber(1);
         }
+        reviewTransitionedRef.current = false;
+        clearModelIdleTimer();
         errorOccurred.current = false;
         autoStopRequestedRef.current = false;
         try {
@@ -475,6 +526,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
                 }
                 return [...prev, { source: 'model', text, isFinal: false }];
             });
+            scheduleAutoReview();
         }
         if (message.serverContent?.turnComplete) {
             setTranscriptionHistory(prev => prev.map(t => ({...t, isFinal: true})));
@@ -491,8 +543,26 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
             }
         }
 
-        // Audio chunks may appear in any part; scan parts rather than assuming parts[0]
+        // Model output can arrive as text parts and/or audio parts.
+        // Scan all parts rather than assuming parts[0].
         const parts = message.serverContent?.modelTurn?.parts || [];
+
+        // Text chunks (some configs stream critique here rather than outputTranscription)
+        const textChunk = (parts as any[])
+            .map((p) => (typeof p?.text === 'string' ? p.text : ''))
+            .join('');
+        if (textChunk) {
+            setTranscriptionHistory((prev) => {
+                const last = prev[prev.length - 1];
+                if (last?.source === 'model' && !last.isFinal) {
+                    const updatedLast = { ...last, text: last.text + textChunk };
+                    return [...prev.slice(0, -1), updatedLast];
+                }
+                return [...prev, { source: 'model', text: textChunk, isFinal: false }];
+            });
+            scheduleAutoReview();
+        }
+
         const audioPart = (parts as any[]).find(
             (p) => p?.inlineData?.data && String(p?.inlineData?.mimeType || '').startsWith('audio/')
         );
