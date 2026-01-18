@@ -99,6 +99,9 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
     const cleanupMicStreamRef = useRef<(() => void) | null>(null);
     const errorOccurred = useRef(false);
 
+    // turnComplete can fire more than once; only auto-stop once per take.
+    const autoStopRequestedRef = useRef(false);
+
     // Ground-truth recording (for server-side transcription fallback)
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const recordedChunksRef = useRef<BlobPart[]>([]);
@@ -233,6 +236,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
             setTakeNumber(1);
         }
         errorOccurred.current = false;
+        autoStopRequestedRef.current = false;
         try {
             // FIX: Request audio without a specific sample rate to ensure compatibility.
             // The audio will be resampled later if needed.
@@ -474,6 +478,17 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         }
         if (message.serverContent?.turnComplete) {
             setTranscriptionHistory(prev => prev.map(t => ({...t, isFinal: true})));
+
+            // Auto-transition to the review screen after the model finishes its critique.
+            // This ensures the post-critique action buttons (Continue / Save / Discuss) are visible
+            // without the user needing to manually press Stop.
+            if (!autoStopRequestedRef.current && view === 'rehearsing') {
+                autoStopRequestedRef.current = true;
+                // Give the UI a brief moment to render the final text/audio before cleanup.
+                window.setTimeout(() => {
+                    void handleStopRehearsal();
+                }, 250);
+            }
         }
 
         // Audio chunks may appear in any part; scan parts rather than assuming parts[0]
