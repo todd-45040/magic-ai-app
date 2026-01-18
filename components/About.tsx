@@ -39,9 +39,10 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
             <p className="text-slate-300 text-sm">Lock in these special rates now! Prices will increase after the beta period.</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-left">
+        {/* Centered 3-up layout (Trial / Amateur / Professional) */}
+        <div className="mx-auto grid max-w-6xl grid-cols-1 gap-6 text-left justify-items-center md:grid-cols-2 lg:grid-cols-3">
             {/* Trial Card */}
-            <div className="p-6 bg-slate-800/50 border border-green-500/50 rounded-lg flex flex-col">
+            <div className="w-full max-w-sm p-6 bg-slate-800/50 border border-green-500/50 rounded-lg flex flex-col">
                 <h3 className="text-2xl font-bold text-green-300 font-cinzel mb-4">14-Day Trial</h3>
                  <div className="min-h-[10rem] flex flex-col">
                     <p className="text-slate-400 mb-4">New users automatically start here. Get full access to all Professional features for two weeks.</p>
@@ -54,22 +55,8 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
                 <div className="flex-grow" />
             </div>
 
-            {/* Free Card */}
-            <div className="p-6 bg-slate-800/50 border border-slate-700 rounded-lg flex flex-col">
-                <h3 className="text-2xl font-bold text-slate-300 font-cinzel mb-4">Free</h3>
-                <div className="min-h-[10rem] flex flex-col">
-                    <p className="text-slate-400 mb-4">The essentials to get you started on your creative journey.</p>
-                    <div className="text-center">
-                        <p className="text-3xl font-bold text-slate-300">Free</p>
-                    </div>
-                </div>
-                <hr className="border-slate-700 my-4" />
-                <FeatureList features={['Basic AI Assistant', 'Save Text & Image Ideas']} />
-                <div className="flex-grow" />
-            </div>
-
             {/* Amateur Plan */}
-            <div className="p-6 bg-slate-800/50 border border-sky-500/50 rounded-lg flex flex-col">
+            <div className="w-full max-w-sm p-6 bg-slate-800/50 border border-sky-500/50 rounded-lg flex flex-col">
                 <h3 className="text-2xl font-bold text-sky-300 font-cinzel mb-4">Amateur</h3>
                 <div className="min-h-[10rem] flex flex-col">
                     <p className="text-slate-400 mb-4">Perfect for honing your craft and creative process.</p>
@@ -79,12 +66,12 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
                     </div>
                 </div>
                 <hr className="border-slate-700 my-4" />
-                <FeatureList features={['All Free Features', ...AMATEUR_FEATURES]} />
+                <FeatureList features={['Includes Trial Tools', ...AMATEUR_FEATURES]} />
                 <div className="flex-grow" />
             </div>
 
             {/* Professional Plan */}
-            <div className="p-6 bg-slate-800/50 border border-amber-400/50 rounded-lg flex flex-col">
+            <div className="w-full max-w-sm p-6 bg-slate-800/50 border border-amber-400/50 rounded-lg flex flex-col">
                 <h3 className="text-2xl font-bold text-amber-300 font-cinzel mb-4">Professional</h3>
                 <div className="min-h-[10rem] flex flex-col">
                     <p className="text-slate-400 mb-4">The ultimate toolkit for the performing artist.</p>
