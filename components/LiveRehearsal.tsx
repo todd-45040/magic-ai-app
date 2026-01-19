@@ -1093,15 +1093,27 @@ const ReviewView: React.FC<{
                             <span>Continue Rehearsal</span>
                         </button>
                         <button
+                            onClick={() => onReturnToStudio(transcription)}
+                            disabled={!transcription.trim()}
+                            className={`w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-sm rounded-md font-bold transition-colors ${
+                                transcription.trim()
+                                    ? 'bg-slate-700 hover:bg-slate-600 text-slate-200'
+                                    : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                            }`}
+                        >
+                            <WandIcon className="w-5 h-5" />
+                            <span>Discuss with AI</span>
+                        </button>
+                        <button
                             onClick={() => setShowSaveForm(true)}
                             className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 font-bold transition-colors"
                         >
                             <SaveIcon className="w-5 h-5" />
                             <span>Save & Exit</span>
                         </button>
-                        {/* Intentionally removed "Open in AI Assistant" from the footer.
-                            Users kept clicking it and thought the rehearsal footer controls disappeared.
-                            Live Rehearsal should remain self-contained so takes can continue reliably. */}
+                        {/* "Discuss with AI" keeps the UI consistent with the Studio's chat workflow,
+                            but we keep takes self-contained inside Live Rehearsal by not moving controls
+                            into the AI Assistant message pipeline. */}
                         <button
                             onClick={() => onReturnToStudio()}
                             className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-sm text-slate-400 hover:text-white transition-colors"
