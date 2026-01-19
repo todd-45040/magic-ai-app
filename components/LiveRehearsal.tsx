@@ -36,6 +36,18 @@ function pushDebug(event: string, data?: any) {
   }
 }
 
+// Some browsers can leave AudioContexts suspended after start/stop or tab focus changes.
+// If suspended, ScriptProcessor/AudioWorklet callbacks won't fire and no PCM will stream.
+async function resumeAudioContext(ctx?: AudioContext | null): Promise<void> {
+  try {
+    if (!ctx) return;
+    if (ctx.state === "suspended") await ctx.resume();
+  } catch {
+    // ignore
+  }
+}
+
+
 async function blobToBase64(blob: Blob): Promise<string> {
   const buf = await blob.arrayBuffer();
   const bytes = new Uint8Array(buf);
