@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 // NOTE: This project does not depend on react-router-dom. Navigation is handled
 // by the parent App shell (props callback) and/or a simple location redirect.
 import { LiveServerMessage, FunctionCall } from '@google/genai';
-import { startLiveSession, decode, decodeAudioData, type LiveSession } from '../services/geminiService';
+import { startLiveSession, decode, decodeAudioData, type LiveSession, generateResponse } from '../services/geminiService';
 import { saveIdea, getRehearsalSessions } from '../services/ideasService';
 import type { Transcription, TimerState, User } from '../types';
 import { canConsume, consumeLiveMinutes, getUsage } from '../services/usageTracker';
@@ -99,6 +99,9 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
 
     // Multi-take support
     const [takeNumber, setTakeNumber] = useState(1);
+    const [analysisText, setAnalysisText] = useState<string>('');
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [analysisError, setAnalysisError] = useState('');
     const takeCompletionGuardRef = useRef(false);
     const modelIdleTimerRef = useRef<number | null>(null);
     
@@ -674,6 +677,33 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         await handleStartSession({ resetHistory: false, nextTakeNumber: nextTake, stayOnReviewOnError: true });
     };
     
+
+
+    const handleAnalyzeRehearsal = async () => {
+        if (isAnalyzing) return;
+        setAnalysisError('');
+        setIsAnalyzing(true);
+        try {
+            const transcriptText = transcriptionHistory
+                .filter(t => (t.text || '').trim())
+                .map(t => `${t.source === 'user' ? 'You' : 'AI Coach'}: ${t.text}`)
+                .join('\n');
+
+            const prompt = `Here is the transcript from my live rehearsal session:
+
+${transcriptText}
+
+Please analyze it and provide actionable feedback. Focus on pacing, clarity, audience engagement, and suggested rewrites for stronger impact. Provide a short prioritized checklist at the end.`;
+            const reply = await generateResponse(prompt, MAGICIAN_LIVE_REHEARSAL_SYSTEM_INSTRUCTION, user);
+            setAnalysisText(reply);
+        } catch (err: any) {
+            const msg = String(err?.message || err || 'The AI did not respond.');
+            setAnalysisError(msg);
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
+
     const handleHeaderButtonClick = () => {
         if (view === 'rehearsing') {
             void handleStopRehearsal();
@@ -691,6 +721,10 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
                     onIdeaSaved={onIdeaSaved}
                     onReturnToStudio={safeReturnToStudio}
                     onContinueRehearsal={handleContinueRehearsal}
+                    onAnalyzeRehearsal={handleAnalyzeRehearsal}
+                    analysisText={analysisText}
+                    isAnalyzing={isAnalyzing}
+                    analysisError={analysisError}
                     takeNumber={takeNumber}
                 />;
             case 'rehearsing':
@@ -952,8 +986,12 @@ const ReviewView: React.FC<{
     onIdeaSaved: () => void;
     onReturnToStudio: (transcriptToDiscuss?: Transcription[]) => void;
     onContinueRehearsal: () => void;
+    onAnalyzeRehearsal: () => void;
+    analysisText: string;
+    isAnalyzing: boolean;
+    analysisError: string;
     takeNumber: number;
-}> = ({ transcription, onIdeaSaved, onReturnToStudio, onContinueRehearsal, takeNumber }) => {
+}> = ({ transcription, onIdeaSaved, onReturnToStudio, onContinueRehearsal, onAnalyzeRehearsal, analysisText, isAnalyzing, analysisError, takeNumber }) => {
     const transcriptEndRef = useRef<HTMLDivElement>(null);
     const [showSaveForm, setShowSaveForm] = useState(false);
     const [title, setTitle] = useState(`Rehearsal - ${new Date().toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`);
@@ -972,6 +1010,7 @@ const ReviewView: React.FC<{
             const content = {
                 transcript: transcription,
                 notes: notes,
+                analysis: analysisText,
             };
 
             // Backward-compatible ideasService supports both signatures.
@@ -1027,6 +1066,36 @@ const ReviewView: React.FC<{
         <div className="flex-1 flex flex-col overflow-hidden">
             <div className="p-4 md:p-6 flex-1 overflow-y-auto">
                 <h3 className="text-xl font-bold text-slate-200 font-cinzel mb-4">Rehearsal Transcript</h3>
+
+                <div className="mb-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div className="text-slate-300 text-sm">
+                            <span className="font-semibold">AI Coach Analysis</span>
+                            <span className="text-slate-400"> — run this on each take to get coaching, then hit Continue.</span>
+                        </div>
+                        <button
+                            onClick={onAnalyzeRehearsal}
+                            disabled={isAnalyzing}
+                            className={"w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-sm rounded-md font-bold transition-colors " + (isAnalyzing ? "bg-slate-700/60 text-slate-300 cursor-not-allowed" : "bg-slate-700 hover:bg-slate-600 text-slate-200")}
+                        >
+                            <WandIcon className="w-5 h-5" />
+                            <span>{isAnalyzing ? 'Analyzing…' : 'Analyze with AI'}</span>
+                        </button>
+                    </div>
+
+                    {analysisError ? (
+                        <div className="mt-3 text-sm text-red-300 bg-red-900/20 border border-red-700/40 rounded-md px-3 py-2">
+                            {analysisError}
+                        </div>
+                    ) : null}
+
+                    {analysisText ? (
+                        <div className="mt-3 bg-slate-800/50 border border-slate-700 rounded-lg p-4">
+                            <div className="text-xs text-slate-400 font-semibold mb-2">AI Coach</div>
+                            <div className="prose prose-invert max-w-none prose-p:leading-relaxed">{analysisText}</div>
+                        </div>
+                    ) : null}
+                </div>
                 <div className="space-y-4 bg-slate-800/50 border border-slate-700 rounded-lg p-4">
                     {transcription.map((t, i) => (
                         <div key={i} className={`flex flex-col ${t.source === 'user' ? 'items-end' : 'items-start'}`}>
