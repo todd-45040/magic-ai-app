@@ -216,12 +216,13 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
     }, []);
 
 
-    const handleStartSession = async (opts?: { resetHistory?: boolean }) => {
+    const handleStartSession = async (opts?: { resetHistory?: boolean; nextTakeNumber?: number; stayOnReviewOnError?: boolean }) => {
         // Client-side cap for live rehearsal minutes (daily). Server-side usage enforcement still applies to text requests.
         const cur = getUsage(user, 'live_minutes');
         if (cur.limit > 0 && cur.remaining <= 0) {
             setStatus('error');
             setErrorMessage(`Daily live rehearsal limit reached (${cur.used}/${cur.limit} min). Upgrade to continue.`);
+            if (opts?.stayOnReviewOnError) setView('reviewing');
             return;
         }
         setStatus('connecting');
@@ -342,6 +343,19 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
                         scriptProcessor.connect(zeroGain);
                         zeroGain.connect(inputAudioContext.destination);
 
+                        // If this is a continuation, advance the take number and insert a marker.
+                        if (typeof opts?.nextTakeNumber === 'number' && opts.nextTakeNumber > 1) {
+                            const nextTake = opts.nextTakeNumber;
+                            setTakeNumber(nextTake);
+                            setTranscriptionHistory((prev) => {
+                                // Avoid duplicate markers if user clicks twice.
+                                const last = prev[prev.length - 1];
+                                const markerText = `AI Coach: [TAKE ${nextTake}]`;
+                                if (last?.source === 'model' && String(last.text || '') === markerText) return prev;
+                                return [...prev.map((t) => ({ ...t, isFinal: true })), { source: 'model', text: markerText, isFinal: true } as any];
+                            });
+                        }
+
                         setStatus('listening');
                         setView('rehearsing');
 
@@ -367,7 +381,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
                         errorOccurred.current = true;
                         setErrorMessage('A live session error occurred. The connection may have been interrupted.');
                         setStatus('error');
-                        setView('rehearsing');
+                        setView(opts?.stayOnReviewOnError ? 'reviewing' : 'rehearsing');
                     },
                     onclose: () => {
                         if (!errorOccurred.current) {
@@ -400,7 +414,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
                 setErrorMessage('Failed to connect. Please check your connection and microphone, then try again.');
             }
             setStatus('error');
-            setView('rehearsing');
+            setView(opts?.stayOnReviewOnError ? 'reviewing' : 'rehearsing');
         }
     };
 
@@ -652,17 +666,12 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         clearModelIdleTimer();
         takeCompletionGuardRef.current = false;
 
-        // Add a marker between takes for clarity.
-        const nextTake = takeNumber + 1;
-        setTakeNumber(nextTake);
-        setTranscriptionHistory((prev) => [
-            ...prev.map((t) => ({ ...t, isFinal: true })),
-            { source: 'model', text: `AI Coach: [TAKE ${nextTake}]`, isFinal: true } as any,
-        ]);
-
         // Fully teardown previous take resources, then start a new live session without clearing history.
+        // NOTE: We only advance the take number and insert the TAKE marker after the socket opens,
+        // otherwise repeated clicks (or a failed start) can create phantom takes.
+        const nextTake = takeNumber + 1;
         await safeCleanupSession();
-        await handleStartSession({ resetHistory: false });
+        await handleStartSession({ resetHistory: false, nextTakeNumber: nextTake, stayOnReviewOnError: true });
     };
     
     const handleHeaderButtonClick = () => {
@@ -691,6 +700,14 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
                     <div className="flex-1 overflow-y-auto p-4 md:p-6 flex flex-col">
                         {transcriptionHistory.length > 0 ? (
                             <div className="space-y-4">
+                                {(status === 'connecting' || status === 'error') && (
+                                    <div className={`w-full max-w-3xl rounded-lg border px-4 py-3 text-sm ${status === 'connecting' ? 'bg-slate-800/60 border-slate-600 text-slate-200' : 'bg-red-900/30 border-red-600/50 text-red-200'}`}>
+                                        <div className="font-semibold">
+                                            {status === 'connecting' ? 'Connecting and requesting microphone…' : 'Unable to start a new take'}
+                                        </div>
+                                        {errorMessage && <div className="mt-1 opacity-90">{errorMessage}</div>}
+                                    </div>
+                                )}
                                 {transcriptionHistory.map((t, i) => (
                                     <div key={i} className={`flex flex-col ${t.source === 'user' ? 'items-end' : 'items-start'}`}>
                                         <span className="text-xs text-slate-400 px-2 mb-0.5 font-semibold">
