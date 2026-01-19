@@ -69,7 +69,7 @@ function createBlob(data: Float32Array): GeminiBlob {
   const l = data.length;
   const int16 = new Int16Array(l);
   for (let i = 0; i < l; i++) {
-    // Clamp to avoid overflow distortion (samples can occasionally exceed [-1, 1])
+    // Clamp to [-1, 1] and use asymmetric scaling to avoid overflow/wrap distortion.
     const s = Math.max(-1, Math.min(1, data[i]));
     int16[i] = s < 0 ? s * 32768 : s * 32767;
   }
@@ -79,41 +79,17 @@ function createBlob(data: Float32Array): GeminiBlob {
   };
 }
 
-function isTakeMarker(t: Transcription): boolean {
-    return t?.source === 'model' && /^\[TAKE\s+\d+\]$/.test(String(t.text || '').trim());
-}
-
-// Safely resumes an AudioContext (some browsers start it suspended until a user gesture).
-// Never throws.
-async function resumeAudioContext(ctx: AudioContext | null | undefined) {
-  try {
-    if (!ctx) return;
-    if (ctx.state === 'suspended') {
-      await ctx.resume();
-    }
-  } catch {
-    // no-op
-  }
-}
-
 
 const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, onIdeaSaved }) => {
     const [view, setView] = useState<'idle' | 'rehearsing' | 'reviewing'>('idle');
     const [status, setStatus] = useState<'idle' | 'connecting' | 'listening' | 'error'>('idle');
     const [errorMessage, setErrorMessage] = useState('');
     const [transcriptionHistory, setTranscriptionHistory] = useState<Transcription[]>([]);
-    // Multi-turn rehearsal: each time the user records again, we increment the take number
-    // and keep appending to the same transcription history.
-    const [takeNumber, setTakeNumber] = useState<number>(1);
-    const takeNumberRef = useRef<number>(1);
     
     const sessionRef = useRef<LiveSession | null>(null);
     const sessionPromiseRef = useRef<Promise<LiveSession> | null>(null);
     const cleanupMicStreamRef = useRef<(() => void) | null>(null);
     const errorOccurred = useRef(false);
-
-    // turnComplete can fire more than once; only auto-stop once per take.
-    const autoStopRequestedRef = useRef(false);
 
     // Ground-truth recording (for server-side transcription fallback)
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -151,16 +127,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
     useEffect(() => {
         transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [transcriptionHistory]);
-
-    useEffect(() => {
-        takeNumberRef.current = takeNumber;
-    }, [takeNumber]);
-
-    useEffect(() => {
-        takeNumberRef.current = takeNumber;
-    }, [takeNumber]);
-
-    const isTakeMarker = (t: Transcription) => t.source === 'model' && /^\[TAKE\s+\d+\]/.test(t.text);
 
     const safeCleanupSession = async () => {
         // Best-effort cleanup: never allow cleanup errors to crash navigation.
@@ -234,7 +200,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
     }, []);
 
 
-    const handleStartSession = async (opts?: { resetHistory?: boolean }) => {
+    const handleStartSession = async () => {
         // Client-side cap for live rehearsal minutes (daily). Server-side usage enforcement still applies to text requests.
         const cur = getUsage(user, 'live_minutes');
         if (cur.limit > 0 && cur.remaining <= 0) {
@@ -244,12 +210,8 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         }
         setStatus('connecting');
         setErrorMessage('');
-        if (opts?.resetHistory !== false) {
-            setTranscriptionHistory([]);
-            setTakeNumber(1);
-        }
+        setTranscriptionHistory([]);
         errorOccurred.current = false;
-        autoStopRequestedRef.current = false;
         try {
             // FIX: Request audio without a specific sample rate to ensure compatibility.
             // The audio will be resampled later if needed.
@@ -305,10 +267,8 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
             outputAudioContextRef.current = audioCtx;
             outputNodeRef.current = audioCtx.createGain();
             outputNodeRef.current.connect(audioCtx.destination);
-
-            // Ensure output context is running (some browsers start it suspended)
-            await resumeAudioContext(audioCtx);
-// FIX: Create input audio context with the stream's native sample rate to avoid mismatches.
+            
+            // FIX: Create input audio context with the stream's native sample rate to avoid mismatches.
             const inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
             let source: MediaStreamAudioSourceNode | null = null;
             let scriptProcessor: ScriptProcessorNode | null = null;
@@ -319,9 +279,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
                 {
                     onopen: () => { 
                         // Setup microphone streaming once the connection is open
-                        void resumeAudioContext(audioCtx);
-                        void resumeAudioContext(inputAudioContext);
-
                         source = inputAudioContext.createMediaStreamSource(stream);
                         scriptProcessor = inputAudioContext.createScriptProcessor(4096, 1, 1);
 
@@ -359,8 +316,8 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
                             });
                         };
 
-                        // Keep ScriptProcessor alive without routing audio to speakers (avoids self-monitoring/echo).
                         source.connect(scriptProcessor);
+                        // Keep the ScriptProcessorNode alive without routing audible audio to speakers.
                         zeroGain = inputAudioContext.createGain();
                         zeroGain.gain.value = 0;
                         scriptProcessor.connect(zeroGain);
@@ -496,24 +453,14 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         }
         if (message.serverContent?.turnComplete) {
             setTranscriptionHistory(prev => prev.map(t => ({...t, isFinal: true})));
-
-            // Auto-transition to the review screen after the model finishes its critique.
-            // This ensures the post-critique action buttons (Continue / Save / Discuss) are visible
-            // without the user needing to manually press Stop.
-            if (!autoStopRequestedRef.current && view === 'rehearsing') {
-                autoStopRequestedRef.current = true;
-                // Give the UI a brief moment to render the final text/audio before cleanup.
-                window.setTimeout(() => {
-                    void handleStopRehearsal();
-                }, 250);
-            }
         }
 
-        // Audio chunks may appear in any part; scan parts rather than assuming parts[0]
+        // Some model turns include multiple parts (text + audio). Scan all parts for inline audio.
         const parts = message.serverContent?.modelTurn?.parts || [];
-        const audioPart = (parts as any[]).find(
-            (p) => p?.inlineData?.data && String(p?.inlineData?.mimeType || '').startsWith('audio/')
-        );
+        const audioPart = parts.find((p: any) => {
+            const mime = String(p?.inlineData?.mimeType || '');
+            return Boolean(p?.inlineData?.data) && mime.startsWith('audio/');
+        });
         const base64Audio = audioPart?.inlineData?.data;
         if (base64Audio && outputAudioContextRef.current && outputNodeRef.current) {
             const ctx = outputAudioContextRef.current;
@@ -602,7 +549,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
             });
 
             if (res.ok && transcript) {
-                setTranscriptionHistory((prev) => prev?.length ? [...prev, { source: 'user', text: transcript, isFinal: true } as any] : [{ source: 'user', text: transcript, isFinal: true } as any]);
+                setTranscriptionHistory([{ source: 'user', text: transcript, isFinal: true } as any]);
             }
         } catch (err: any) {
             pushDebug('transcribe_error', { message: String(err?.message || err) });
@@ -658,12 +605,20 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         setView('reviewing');
     };
     
-    const handleHeaderButtonClick = () => {
-        if (view === 'rehearsing') {
-            void handleStopRehearsal();
-        } else {
-            void safeCleanupSession();
-            safeReturnToStudio();
+    const handleHeaderButtonClick = async () => {
+        try {
+            if (view === 'rehearsing') {
+                // Stop & Review button in header
+                await handleStopRehearsal();
+            } else {
+                // Back to Studio button in header
+                await safeCleanupSession();
+                safeReturnToStudio();
+            }
+        } catch (err) {
+            console.error('Header action failed:', err);
+            setError('Something went wrong. Please refresh and try again.');
+            setView('error');
         }
     };
     
@@ -674,12 +629,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
                     transcription={transcriptionHistory}
                     onIdeaSaved={onIdeaSaved}
                     onReturnToStudio={safeReturnToStudio}
-                    onContinueRehearsal={() => {
-                        const next = takeNumberRef.current + 1;
-                        setTakeNumber(next);
-                        setTranscriptionHistory((prev) => [...prev, { source: 'model', text: `[TAKE ${next}]`, isFinal: true } as any]);
-                        void handleStartSession({ resetHistory: false });
-                    }}
                 />;
             case 'rehearsing':
             case 'idle':
@@ -689,28 +638,20 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
                         {transcriptionHistory.length > 0 ? (
                             <div className="space-y-4">
                                 {transcriptionHistory.map((t, i) => (
-                                    isTakeMarker(t) ? (
-                                        <div key={i} className="flex justify-center">
-                                            <div className="text-xs font-semibold tracking-wider text-purple-200/90 bg-purple-900/30 border border-purple-700/40 rounded-full px-3 py-1">
-                                                {t.text.replace('[', '').replace(']', '')}
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div key={i} className={`flex flex-col ${t.source === 'user' ? 'items-end' : 'items-start'}`}>
-                                            <span className="text-xs text-slate-400 px-2 mb-0.5 font-semibold">
-                                                {t.source === 'user' ? 'You' : 'AI Coach'}
-                                            </span>
-                                            <p className={`max-w-xl px-4 py-2 rounded-lg ${t.source === 'user' ? 'bg-purple-800 text-white' : 'bg-slate-700 text-slate-200'} ${!t.isFinal ? 'opacity-70' : ''}`}>
-                                                {t.text}
-                                            </p>
-                                        </div>
-                                    )
+                                    <div key={i} className={`flex flex-col ${t.source === 'user' ? 'items-end' : 'items-start'}`}>
+                                        <span className="text-xs text-slate-400 px-2 mb-0.5 font-semibold">
+                                            {t.source === 'user' ? 'You' : 'AI Coach'}
+                                        </span>
+                                        <p className={`max-w-xl px-4 py-2 rounded-lg ${t.source === 'user' ? 'bg-purple-800 text-white' : 'bg-slate-700 text-slate-200'} ${!t.isFinal ? 'opacity-70' : ''}`}>
+                                            {t.text}
+                                        </p>
+                                    </div>
                                 ))}
                                 <div ref={transcriptEndRef} />
                             </div>
                         ) : (
                             <div className="flex-1 flex flex-col items-center justify-center gap-6">
-                                <StatusIndicator status={status} errorMessage={errorMessage} onStart={() => handleStartSession({ resetHistory: true })} />
+                                <StatusIndicator status={status} errorMessage={errorMessage} onStart={handleStartSession} />
                                 {view === 'idle' && status !== 'connecting' && (
                                     <div className="w-full max-w-3xl">
                                         <RehearsalHistory onDiscuss={(t) => safeReturnToStudio(t)} />
@@ -939,13 +880,13 @@ const ReviewView: React.FC<{
     transcription: Transcription[];
     onIdeaSaved: () => void;
     onReturnToStudio: (transcriptToDiscuss?: Transcription[]) => void;
-    onContinueRehearsal: () => void;
-}> = ({ transcription, onIdeaSaved, onReturnToStudio, onContinueRehearsal }) => {
+}> = ({ transcription, onIdeaSaved, onReturnToStudio }) => {
     const transcriptEndRef = useRef<HTMLDivElement>(null);
     const [showSaveForm, setShowSaveForm] = useState(false);
     const [title, setTitle] = useState(`Rehearsal - ${new Date().toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`);
     const [notes, setNotes] = useState('');
     const [saveError, setSaveError] = useState<string>('');
+    const [saveSuccess, setSaveSuccess] = useState<string>('');
     const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
@@ -954,6 +895,7 @@ const ReviewView: React.FC<{
     
     const handleConfirmSave = async () => {
         setSaveError('');
+        setSaveSuccess('');
         setIsSaving(true);
         try {
             const content = {
@@ -978,13 +920,10 @@ const ReviewView: React.FC<{
             } catch {
                 // ignore
             }
-            try {
-                onReturnToStudio(); // Exit after saving
-            } catch (navErr: any) {
-                console.error('onReturnToStudio callback failed:', navErr);
-                setSaveError('Saved, but could not navigate back to the studio. Please use the Back button.');
-                return;
-            }
+            // Do NOT auto-navigate after saving.
+            // This avoids hard crashes if another route throws during navigation.
+            setShowSaveForm(false);
+            setSaveSuccess('Saved successfully. You can continue rehearsing or return to the studio when ready.');
         } catch (err: any) {
             const msg = String(err?.message || err || 'Failed to save rehearsal.');
             setSaveError(msg);
@@ -1015,24 +954,16 @@ const ReviewView: React.FC<{
             <div className="p-4 md:p-6 flex-1 overflow-y-auto">
                 <h3 className="text-xl font-bold text-slate-200 font-cinzel mb-4">Rehearsal Transcript</h3>
                 <div className="space-y-4 bg-slate-800/50 border border-slate-700 rounded-lg p-4">
-                    {transcription.map((t, i) =>
-                        isTakeMarker(t) ? (
-                            <div key={i} className="flex justify-center">
-                                <div className="text-xs font-semibold tracking-wider text-purple-200/90 bg-purple-900/30 border border-purple-700/40 rounded-full px-3 py-1">
-                                    {t.text.replace('[', '').replace(']', '')}
-                                </div>
-                            </div>
-                        ) : (
-                            <div key={i} className={`flex flex-col ${t.source === 'user' ? 'items-end' : 'items-start'}`}>
-                                <span className="text-xs text-slate-400 px-2 mb-0.5 font-semibold">
-                                    {t.source === 'user' ? 'You' : 'AI Coach'}
-                                </span>
-                                <p className={`max-w-xl px-4 py-2 rounded-lg ${t.source === 'user' ? 'bg-purple-800 text-white' : 'bg-slate-700 text-slate-200'}`}>
-                                    {t.text}
-                                </p>
-                            </div>
-                        )
-                    )}
+                    {transcription.map((t, i) => (
+                        <div key={i} className={`flex flex-col ${t.source === 'user' ? 'items-end' : 'items-start'}`}>
+                            <span className="text-xs text-slate-400 px-2 mb-0.5 font-semibold">
+                                {t.source === 'user' ? 'You' : 'AI Coach'}
+                            </span>
+                            <p className={`max-w-xl px-4 py-2 rounded-lg ${t.source === 'user' ? 'bg-purple-800 text-white' : 'bg-slate-700 text-slate-200'}`}>
+                                {t.text}
+                            </p>
+                        </div>
+                    ))}
                     <div ref={transcriptEndRef} />
                 </div>
             </div>
@@ -1079,41 +1010,32 @@ const ReviewView: React.FC<{
                                 className={`w-full flex items-center justify-center gap-2 px-6 py-2 text-sm rounded-md text-white font-bold transition-colors ${isSaving ? 'bg-purple-700/60 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'}`}
                             >
                                 <SaveIcon className="w-5 h-5" />
-                                <span>{isSaving ? 'Saving…' : 'Confirm Save & Exit'}</span>
+                                <span>{isSaving ? 'Saving…' : 'Confirm Save'}</span>
                             </button>
                         </div>
                     </div>
-                ) : (
+                 ) : (
+                    <>
+                        {saveSuccess && (
+                            <div className="w-full max-w-xl mx-auto text-sm text-emerald-200 bg-emerald-900/20 border border-emerald-700/40 rounded-md px-3 py-2">
+                                {saveSuccess}
+                            </div>
+                        )}
                     <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                         <button
-                            onClick={onContinueRehearsal}
+                            onClick={() => { setSaveError(''); setSaveSuccess(''); setShowSaveForm(true); }}
                             className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-sm bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors"
-                        >
-                            <MicrophoneIcon className="w-5 h-5" />
-                            <span>Continue Rehearsal</span>
-                        </button>
-                        <button
-                            onClick={() => onReturnToStudio(transcription)}
-                            disabled={!transcription.trim()}
-                            className={`w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-sm rounded-md font-bold transition-colors ${
-                                transcription.trim()
-                                    ? 'bg-slate-700 hover:bg-slate-600 text-slate-200'
-                                    : 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                            }`}
-                        >
-                            <WandIcon className="w-5 h-5" />
-                            <span>Discuss with AI</span>
-                        </button>
-                        <button
-                            onClick={() => setShowSaveForm(true)}
-                            className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 font-bold transition-colors"
                         >
                             <SaveIcon className="w-5 h-5" />
                             <span>Save & Exit</span>
                         </button>
-                        {/* "Discuss with AI" keeps the UI consistent with the Studio's chat workflow,
-                            but we keep takes self-contained inside Live Rehearsal by not moving controls
-                            into the AI Assistant message pipeline. */}
+                        <button
+                            onClick={() => onReturnToStudio(transcription)}
+                            className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 font-bold transition-colors"
+                        >
+                            <WandIcon className="w-5 h-5" />
+                            <span>Discuss with AI</span>
+                        </button>
                         <button
                             onClick={() => onReturnToStudio()}
                             className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-sm text-slate-400 hover:text-white transition-colors"
@@ -1122,6 +1044,7 @@ const ReviewView: React.FC<{
                             <span>Discard & Exit</span>
                         </button>
                     </div>
+                    </>
                 )}
             </footer>
         </div>
