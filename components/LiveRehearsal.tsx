@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 // NOTE: This project does not depend on react-router-dom. Navigation is handled
 // by the parent App shell (props callback) and/or a simple location redirect.
 import { LiveServerMessage, FunctionCall } from '@google/genai';
-import { startLiveSession, decode, decodeAudioData, type LiveSession } from '../services/geminiService';
+import { startLiveSession, decode, decodeAudioData, generateResponse, type LiveSession } from '../services/geminiService';
 import { saveIdea, getRehearsalSessions } from '../services/ideasService';
 import type { Transcription, TimerState, User } from '../types';
 import { canConsume, consumeLiveMinutes, getUsage } from '../services/usageTracker';
@@ -672,9 +672,14 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         switch(view) {
             case 'reviewing':
                 return <ReviewView 
+                    user={user}
                     transcription={transcriptionHistory}
                     onIdeaSaved={onIdeaSaved}
                     onReturnToStudio={safeReturnToStudio}
+                    currentTake={takeNumberRef.current}
+                    onAppendToTranscription={(items) => {
+                        setTranscriptionHistory((prev) => [...prev, ...items]);
+                    }}
                     onContinueRehearsal={() => {
                         const next = takeNumberRef.current + 1;
                         setTakeNumber(next);
@@ -937,17 +942,55 @@ const RehearsalHistory: React.FC<{ onDiscuss: (transcript: Transcription[]) => v
 };
 
 const ReviewView: React.FC<{
+    user: User | null;
     transcription: Transcription[];
     onIdeaSaved: () => void;
     onReturnToStudio: (transcriptToDiscuss?: Transcription[]) => void;
     onContinueRehearsal: () => void;
-}> = ({ transcription, onIdeaSaved, onReturnToStudio, onContinueRehearsal }) => {
+    currentTake: number;
+    onAppendToTranscription: (items: Transcription[]) => void;
+}> = ({ user, transcription, onIdeaSaved, onReturnToStudio, onContinueRehearsal, currentTake, onAppendToTranscription }) => {
     const transcriptEndRef = useRef<HTMLDivElement>(null);
     const [showSaveForm, setShowSaveForm] = useState(false);
     const [title, setTitle] = useState(`Rehearsal - ${new Date().toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`);
     const [notes, setNotes] = useState('');
     const [saveError, setSaveError] = useState<string>('');
     const [isSaving, setIsSaving] = useState(false);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [analyzeError, setAnalyzeError] = useState<string>('');
+
+    const getLatestUserSnippet = (): string => {
+        // Collect the user lines from the most recent take (from last [TAKE X] marker to the end).
+        const lines: string[] = [];
+        for (let i = transcription.length - 1; i >= 0; i--) {
+            const t = transcription[i] as any;
+            if (isTakeMarker(t)) break;
+            if (t?.source === 'user' && typeof t?.text === 'string' && t.text.trim()) {
+                lines.push(t.text.trim());
+            }
+        }
+        return lines.reverse().join('\n');
+    };
+
+    const handleAnalyzeInPage = async () => {
+        setAnalyzeError('');
+        const snippet = getLatestUserSnippet();
+        if (!snippet) {
+            setAnalyzeError('No user transcript found to analyze for this take.');
+            return;
+        }
+        setIsAnalyzing(true);
+        try {
+            const prompt = `Here is the transcript from TAKE ${currentTake} of my live rehearsal.\n\nTRANSCRIPT:\n${snippet}\n\nPlease analyze the rehearsal transcript. Give actionable feedback on pacing, clarity, audience engagement, and suggested rewrites for stronger impact. Provide a short prioritized checklist at the end.`;
+            const response = await generateResponse(prompt, MAGICIAN_LIVE_REHEARSAL_SYSTEM_INSTRUCTION, user as any);
+            onAppendToTranscription([{ source: 'model', text: response, isFinal: true } as any]);
+        } catch (err: any) {
+            const msg = String(err?.message || err || 'AI analysis failed.');
+            setAnalyzeError(msg);
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
 
     useEffect(() => {
         transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -1085,13 +1128,27 @@ const ReviewView: React.FC<{
                         </div>
                     </div>
                 ) : (
-                    <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                    <div className="flex flex-col items-center justify-center gap-3">
+                        {analyzeError && (
+                            <div className="w-full max-w-2xl text-sm text-red-300 bg-red-900/20 border border-red-700/40 rounded-md px-3 py-2">
+                                {analyzeError}
+                            </div>
+                        )}
+                        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                         <button
                             onClick={onContinueRehearsal}
                             className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-sm bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors"
                         >
                             <MicrophoneIcon className="w-5 h-5" />
-                            <span>Continue Rehearsal</span>
+                            <span>Continue Rehearsal (Take {currentTake + 1})</span>
+                        </button>
+                        <button
+                            onClick={handleAnalyzeInPage}
+                            disabled={isAnalyzing}
+                            className={`w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-sm rounded-md font-bold transition-colors ${isAnalyzing ? 'bg-slate-700/60 text-slate-300 cursor-not-allowed' : 'bg-slate-700 hover:bg-slate-600 text-slate-200'}`}
+                        >
+                            <WandIcon className="w-5 h-5" />
+                            <span>{isAnalyzing ? 'Analyzing…' : 'Analyze with AI'}</span>
                         </button>
                         <button
                             onClick={() => setShowSaveForm(true)}
@@ -1117,6 +1174,7 @@ const ReviewView: React.FC<{
                             <TrashIcon className="w-5 h-5" />
                             <span>Discard & Exit</span>
                         </button>
+                        </div>
                     </div>
                 )}
             </footer>
