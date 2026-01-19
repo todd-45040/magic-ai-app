@@ -299,16 +299,18 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
                 // continue; Live session can still work without this
             }
 
-            // Setup output audio context
+            // Setup output audio context (model playback)
             const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
             outputAudioContextRef.current = audioCtx;
             outputNodeRef.current = audioCtx.createGain();
             outputNodeRef.current.connect(audioCtx.destination);
-            
-                        await resumeAudioContext(audioCtx);
-            await resumeAudioContext(inputAudioContext);
-// FIX: Create input audio context with the stream's native sample rate to avoid mismatches.
+
+            // FIX: Create input audio context before trying to resume it.
+            // Some browsers leave AudioContexts suspended between takes; resuming ensures ScriptProcessor fires.
             const inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+
+            await resumeAudioContext(audioCtx);
+            await resumeAudioContext(inputAudioContext);
             let source: MediaStreamAudioSourceNode | null = null;
             let scriptProcessor: ScriptProcessorNode | null = null;
             let zeroGain: GainNode | null = null;
