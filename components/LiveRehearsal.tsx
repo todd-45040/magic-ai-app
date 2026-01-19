@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 // NOTE: This project does not depend on react-router-dom. Navigation is handled
 // by the parent App shell (props callback) and/or a simple location redirect.
 import { LiveServerMessage, FunctionCall } from '@google/genai';
-import { startLiveSession, decode, decodeAudioData, type LiveSession } from '../services/geminiService';
+import { startLiveSession, decode, decodeAudioData, generateResponse, type LiveSession } from '../services/geminiService';
 import { saveIdea, getRehearsalSessions } from '../services/ideasService';
 import type { Transcription, TimerState, User } from '../types';
 import { canConsume, consumeLiveMinutes, getUsage } from '../services/usageTracker';
@@ -69,7 +69,9 @@ function createBlob(data: Float32Array): GeminiBlob {
   const l = data.length;
   const int16 = new Int16Array(l);
   for (let i = 0; i < l; i++) {
-    int16[i] = data[i] * 32768;
+    // Clamp to [-1, 1] to prevent overflow/wrap distortion.
+    const s = Math.max(-1, Math.min(1, data[i]));
+    int16[i] = s < 0 ? (s * 32768) : (s * 32767);
   }
   return {
     data: encode(new Uint8Array(int16.buffer)),
@@ -83,20 +85,27 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
     const [status, setStatus] = useState<'idle' | 'connecting' | 'listening' | 'error'>('idle');
     const [errorMessage, setErrorMessage] = useState('');
     const [transcriptionHistory, setTranscriptionHistory] = useState<Transcription[]>([]);
-    const [takeIndex, setTakeIndex] = useState<number>(1);
+
+    // IMPORTANT: startLiveSession keeps the callbacks from the moment the session starts.
+    // Use refs for view/transcript so auto-review logic doesn't read stale state.
+    const viewRef = useRef(view);
+    const transcriptLenRef = useRef(0);
+    useEffect(() => {
+        viewRef.current = view;
+    }, [view]);
+    useEffect(() => {
+        transcriptLenRef.current = transcriptionHistory.length;
+    }, [transcriptionHistory.length]);
+
+    // Multi-take support
+    const [takeNumber, setTakeNumber] = useState(1);
+    const takeCompletionGuardRef = useRef(false);
+    const modelIdleTimerRef = useRef<number | null>(null);
     
     const sessionRef = useRef<LiveSession | null>(null);
     const sessionPromiseRef = useRef<Promise<LiveSession> | null>(null);
     const cleanupMicStreamRef = useRef<(() => void) | null>(null);
     const errorOccurred = useRef(false);
-
-    // --- Multi-take / long-lived callback safety ---
-    // Gemini Live holds onto the callbacks you pass; use refs so callback logic
-    // always sees the latest state (prevents "stuck" UI after Take 1).
-    const viewRef = useRef<'idle' | 'rehearsing' | 'reviewing'>(view);
-    const transcriptLenRef = useRef<number>(0);
-    const autoReviewTimerRef = useRef<number | null>(null);
-    const takeIndexRef = useRef<number>(1);
 
     // Ground-truth recording (for server-side transcription fallback)
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -134,14 +143,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
     useEffect(() => {
         transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [transcriptionHistory]);
-
-    useEffect(() => {
-        viewRef.current = view;
-    }, [view]);
-
-    useEffect(() => {
-        transcriptLenRef.current = transcriptionHistory.length;
-    }, [transcriptionHistory.length]);
 
     const safeCleanupSession = async () => {
         // Best-effort cleanup: never allow cleanup errors to crash navigation.
@@ -195,15 +196,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         }
 
         try {
-            if (autoReviewTimerRef.current) {
-                clearTimeout(autoReviewTimerRef.current);
-                autoReviewTimerRef.current = null;
-            }
-        } catch {
-            // ignore
-        }
-
-        try {
             if (usageIntervalRef.current) {
                 clearInterval(usageIntervalRef.current);
                 usageIntervalRef.current = null;
@@ -224,9 +216,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
     }, []);
 
 
-    const handleStartSession = async (opts?: { preserveHistory?: boolean }) => {
-        const preserveHistory = !!opts?.preserveHistory;
-        const pendingTake = preserveHistory ? (takeIndexRef.current + 1) : 1;
+    const handleStartSession = async (opts?: { resetHistory?: boolean }) => {
         // Client-side cap for live rehearsal minutes (daily). Server-side usage enforcement still applies to text requests.
         const cur = getUsage(user, 'live_minutes');
         if (cur.limit > 0 && cur.remaining <= 0) {
@@ -236,11 +226,11 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         }
         setStatus('connecting');
         setErrorMessage('');
-        if (!preserveHistory) {
+        if (opts?.resetHistory !== false) {
             setTranscriptionHistory([]);
-            takeIndexRef.current = 1;
-            setTakeIndex(1);
+            setTakeNumber(1);
         }
+        takeCompletionGuardRef.current = false;
         errorOccurred.current = false;
         try {
             // FIX: Request audio without a specific sample rate to ensure compatibility.
@@ -290,15 +280,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
             } catch (err: any) {
                 pushDebug('media_recorder_failed', { message: String(err?.message || err) });
                 // continue; Live session can still work without this
-            }
-
-            // If this is a continuation, insert a visible marker once we successfully started.
-            if (preserveHistory) {
-                setTranscriptionHistory(prev => ([
-                    ...prev,
-                    { source: 'model', text: `— TAKE ${pendingTake} —`, isFinal: true }
-                ]));
-                takeIndexRef.current = pendingTake;
             }
 
             // Setup output audio context
@@ -355,19 +336,14 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
                         };
 
                         source.connect(scriptProcessor);
-                        scriptProcessor.connect(inputAudioContext.destination);
+                        // Keep the processor alive without routing audio to speakers.
+                        const zeroGain = inputAudioContext.createGain();
+                        zeroGain.gain.value = 0;
+                        scriptProcessor.connect(zeroGain);
+                        zeroGain.connect(inputAudioContext.destination);
 
                         setStatus('listening');
                         setView('rehearsing');
-
-                        if (preserveHistory) {
-                            takeIndexRef.current = pendingTake;
-                            setTakeIndex(pendingTake);
-                            setTranscriptionHistory(prev => ([
-                                ...prev,
-                                { source: 'model', text: `— TAKE ${pendingTake} —`, isFinal: true },
-                            ]));
-                        }
 
                         // Start usage timer
                         sessionStartRef.current = Date.now();
@@ -427,6 +403,26 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
             setView('rehearsing');
         }
     };
+
+    const clearModelIdleTimer = () => {
+        if (modelIdleTimerRef.current) {
+            clearTimeout(modelIdleTimerRef.current);
+            modelIdleTimerRef.current = null;
+        }
+    };
+
+    const scheduleAutoReview = () => {
+        // If Gemini doesn't send turnComplete reliably, treat "model idle" as completion.
+        clearModelIdleTimer();
+        modelIdleTimerRef.current = window.setTimeout(() => {
+            if (takeCompletionGuardRef.current) return;
+            if (viewRef.current !== 'rehearsing') return;
+            // Only auto-stop if we have *some* content.
+            if (transcriptLenRef.current === 0) return;
+            takeCompletionGuardRef.current = true;
+            void handleStopRehearsal();
+        }, 1200);
+    };
     
     const handleToolCall = (fc: FunctionCall) => {
         let result: any;
@@ -464,29 +460,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         });
     };
 
-    const scheduleAutoReview = (why: string) => {
-        // We want Live Rehearsal to end in the Review screen (with footer controls)
-        // after the model finishes coaching. Relying solely on turnComplete is unreliable
-        // across browsers, so we also schedule on output activity.
-        try {
-            if (autoReviewTimerRef.current) {
-                clearTimeout(autoReviewTimerRef.current);
-                autoReviewTimerRef.current = null;
-            }
-        } catch {
-            // ignore
-        }
-
-        autoReviewTimerRef.current = window.setTimeout(() => {
-            const curView = viewRef.current;
-            if (curView !== 'rehearsing') return;
-            if (transcriptLenRef.current <= 0) return;
-            pushDebug('auto_review_fire', { why });
-            void handleStopRehearsal();
-        }, 1200);
-        pushDebug('auto_review_scheduled', { why });
-    };
-
     const handleServerMessage = async (message: LiveServerMessage) => {
         if (message.toolCall) {
             for (const fc of message.toolCall.functionCalls) {
@@ -515,14 +488,21 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
                 }
                 return [...prev, { source: 'model', text, isFinal: false }];
             });
-            scheduleAutoReview('outputTranscription');
+            scheduleAutoReview();
         }
         if (message.serverContent?.turnComplete) {
             setTranscriptionHistory(prev => prev.map(t => ({...t, isFinal: true})));
-            scheduleAutoReview('turnComplete');
+            // Some sessions emit turnComplete but do not close the socket; auto-stop once per take.
+            if (!takeCompletionGuardRef.current) {
+                takeCompletionGuardRef.current = true;
+                void handleStopRehearsal();
+            }
         }
 
-        const base64Audio = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
+        // Model audio may appear in any part, not just parts[0]
+        const parts: any[] = (message.serverContent?.modelTurn as any)?.parts || [];
+        const audioPart = parts.find((p: any) => p?.inlineData?.data && String(p?.inlineData?.mimeType || '').startsWith('audio/'));
+        const base64Audio = audioPart?.inlineData?.data;
         if (base64Audio && outputAudioContextRef.current && outputNodeRef.current) {
             const ctx = outputAudioContextRef.current;
             nextStartTimeRef.current = Math.max(nextStartTimeRef.current, ctx.currentTime);
@@ -534,6 +514,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
             source.start(nextStartTimeRef.current);
             nextStartTimeRef.current += audioBuffer.duration;
             sourcesRef.current.add(source);
+            scheduleAutoReview();
         }
 
         if (message.serverContent?.interrupted) {
@@ -665,6 +646,24 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         await safeCleanupSession();
         setView('reviewing');
     };
+
+    const handleContinueRehearsal = async () => {
+        // Stay inside Live Rehearsal; do not hand off to the AI Assistant pipeline.
+        clearModelIdleTimer();
+        takeCompletionGuardRef.current = false;
+
+        // Add a marker between takes for clarity.
+        const nextTake = takeNumber + 1;
+        setTakeNumber(nextTake);
+        setTranscriptionHistory((prev) => [
+            ...prev.map((t) => ({ ...t, isFinal: true })),
+            { source: 'model', text: `AI Coach: [TAKE ${nextTake}]`, isFinal: true } as any,
+        ]);
+
+        // Fully teardown previous take resources, then start a new live session without clearing history.
+        await safeCleanupSession();
+        await handleStartSession({ resetHistory: false });
+    };
     
     const handleHeaderButtonClick = () => {
         if (view === 'rehearsing') {
@@ -679,11 +678,12 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         switch(view) {
             case 'reviewing':
                 return <ReviewView 
+                    user={user}
                     transcription={transcriptionHistory}
                     onIdeaSaved={onIdeaSaved}
                     onReturnToStudio={safeReturnToStudio}
-                    onContinueRehearsal={() => void handleStartSession({ preserveHistory: true })}
-                    nextTakeNumber={takeIndex + 1}
+                    onContinueRehearsal={handleContinueRehearsal}
+                    takeNumber={takeNumber}
                 />;
             case 'rehearsing':
             case 'idle':
@@ -932,18 +932,24 @@ const RehearsalHistory: React.FC<{ onDiscuss: (transcript: Transcription[]) => v
 };
 
 const ReviewView: React.FC<{
+    user: User;
     transcription: Transcription[];
     onIdeaSaved: () => void;
     onReturnToStudio: (transcriptToDiscuss?: Transcription[]) => void;
     onContinueRehearsal: () => void;
-    nextTakeNumber: number;
-}> = ({ transcription, onIdeaSaved, onReturnToStudio, onContinueRehearsal, nextTakeNumber }) => {
+    takeNumber: number;
+}> = ({ user, transcription, onIdeaSaved, onReturnToStudio, onContinueRehearsal, takeNumber }) => {
     const transcriptEndRef = useRef<HTMLDivElement>(null);
     const [showSaveForm, setShowSaveForm] = useState(false);
     const [title, setTitle] = useState(`Rehearsal - ${new Date().toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`);
     const [notes, setNotes] = useState('');
     const [saveError, setSaveError] = useState<string>('');
     const [isSaving, setIsSaving] = useState(false);
+
+    // Keep AI analysis inside Live Rehearsal (do NOT route to the global AI Assistant chat).
+    const [analysisText, setAnalysisText] = useState<string>('');
+    const [analysisError, setAnalysisError] = useState<string>('');
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
 
     useEffect(() => {
         transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -956,6 +962,7 @@ const ReviewView: React.FC<{
             const content = {
                 transcript: transcription,
                 notes: notes,
+                analysis: analysisText,
             };
 
             // Backward-compatible ideasService supports both signatures.
@@ -987,6 +994,37 @@ const ReviewView: React.FC<{
             setSaveError(msg);
         } finally {
             setIsSaving(false);
+        }
+    };
+
+    const buildAnalysisPrompt = () => {
+        const lines = transcription
+            .map((t) => `${t.source === 'user' ? 'PERFORMER' : 'AI_COACH'}: ${t.text}`)
+            .join('\n');
+
+        return [
+            'You are a professional rehearsal coach for stage magicians.',
+            'Analyze the performer transcript and provide actionable feedback on pacing, clarity, audience engagement, and suggested rewrites for stronger impact.',
+            'Provide a short prioritized checklist at the end.',
+            '',
+            'TRANSCRIPT:',
+            lines,
+        ].join('\n');
+    };
+
+    const handleAnalyzeWithAI = async () => {
+        setAnalysisError('');
+        setIsAnalyzing(true);
+        try {
+            const prompt = buildAnalysisPrompt();
+            const system = 'You are an expert performance director and magic consultant. Be direct, practical, and specific. Use clear headings and bullet points.';
+            const res = await generateResponse(prompt, system, user);
+            setAnalysisText(res);
+        } catch (err: any) {
+            const msg = String(err?.message || err || 'AI analysis failed.');
+            setAnalysisError(msg);
+        } finally {
+            setIsAnalyzing(false);
         }
     };
 
@@ -1023,6 +1061,25 @@ const ReviewView: React.FC<{
                         </div>
                     ))}
                     <div ref={transcriptEndRef} />
+                </div>
+
+                {/* AI Analysis (kept inside Live Rehearsal so footer controls remain visible) */}
+                <div className="mt-6">
+                    <h4 className="text-lg font-bold text-slate-200 mb-2">AI Coach Analysis</h4>
+                    {analysisError && (
+                        <div className="text-sm text-red-300 bg-red-900/20 border border-red-700/40 rounded-md px-3 py-2 mb-3">
+                            {analysisError}
+                        </div>
+                    )}
+                    {analysisText ? (
+                        <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4 text-slate-200 whitespace-pre-wrap leading-relaxed">
+                            {analysisText}
+                        </div>
+                    ) : (
+                        <div className="text-sm text-slate-400">
+                            Run an in-page critique so you can continue with Take {takeNumber + 1} without leaving Live Rehearsal.
+                        </div>
+                    )}
                 </div>
             </div>
             <footer className="p-4 border-t border-slate-800 flex flex-col items-center justify-center gap-4">
@@ -1076,24 +1133,36 @@ const ReviewView: React.FC<{
                     <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                         <button
                             onClick={onContinueRehearsal}
-                            className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-sm bg-purple-500/20 hover:bg-purple-500/30 border border-purple-400/30 rounded-md text-purple-100 font-bold transition-colors"
+                            className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-sm bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors"
                         >
                             <MicrophoneIcon className="w-5 h-5" />
-                            <span>Continue Rehearsal (Take {nextTakeNumber})</span>
+                            <span>Continue Rehearsal (Take {takeNumber + 1})</span>
                         </button>
+
+                        <button
+                            onClick={handleAnalyzeWithAI}
+                            disabled={isAnalyzing}
+                            className={`w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-sm rounded-md font-bold transition-colors ${isAnalyzing ? 'bg-slate-700/60 text-slate-300 cursor-not-allowed' : 'bg-slate-700 hover:bg-slate-600 text-slate-200'}`}
+                        >
+                            <WandIcon className="w-5 h-5" />
+                            <span>{isAnalyzing ? 'Analyzing…' : (analysisText ? 'Re-run AI Analysis' : 'Analyze with AI')}</span>
+                        </button>
+
                         <button
                             onClick={() => setShowSaveForm(true)}
-                            className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-sm bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors"
+                            className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 font-bold transition-colors"
                         >
                             <SaveIcon className="w-5 h-5" />
                             <span>Save & Exit</span>
                         </button>
+                        {/* Optional: open the full AI Assistant chat (leaves Live Rehearsal) */}
                         <button
                             onClick={() => onReturnToStudio(transcription)}
-                            className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 font-bold transition-colors"
+                            className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-sm bg-slate-800 hover:bg-slate-700 rounded-md text-slate-300 font-bold transition-colors"
+                            title="Opens the transcript in AI Assistant (this leaves Live Rehearsal)"
                         >
                             <WandIcon className="w-5 h-5" />
-                            <span>Discuss with AI</span>
+                            <span>Open in AI Assistant</span>
                         </button>
                         <button
                             onClick={() => onReturnToStudio()}
