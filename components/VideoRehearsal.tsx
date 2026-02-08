@@ -91,6 +91,10 @@ const VideoRehearsal: React.FC<VideoRehearsalProps> = ({
     const [videoFile, setVideoFile] = useState<File | null>(null);
     const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
     const [prompt, setPrompt] = useState('');
+    // Phase 5: remember last analysis focus + saved focus templates (per user)
+    const [focusTemplates, setFocusTemplates] = useState<string[]>([]);
+    const focusSaveTimer = useRef<number | null>(null);
+
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [analysisResult, setAnalysisResult] = useState<string | null>(null);
@@ -113,6 +117,120 @@ const VideoRehearsal: React.FC<VideoRehearsalProps> = ({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+
+// Phase 5: load persisted focus + templates
+const focusKey = `maw_video_last_focus_${user.id}`;
+const templatesKey = `maw_video_focus_templates_${user.id}`;
+
+useEffect(() => {
+    try {
+        const last = localStorage.getItem(focusKey);
+        if (last && !prompt) setPrompt(last);
+    } catch {
+        // ignore
+    }
+    try {
+        const raw = localStorage.getItem(templatesKey);
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+                setFocusTemplates(parsed.filter((s) => typeof s === 'string').slice(0, 10));
+            }
+        }
+    } catch {
+        // ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
+
+// Phase 5: persist last focus (debounced)
+useEffect(() => {
+    try {
+        if (focusSaveTimer.current) window.clearTimeout(focusSaveTimer.current);
+        focusSaveTimer.current = window.setTimeout(() => {
+            try {
+                localStorage.setItem(focusKey, prompt || '');
+            } catch {
+                // ignore
+            }
+        }, 250);
+    } catch {
+        // ignore
+    }
+    return () => {
+        if (focusSaveTimer.current) window.clearTimeout(focusSaveTimer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [prompt]);
+
+const persistTemplates = (next: string[]) => {
+    setFocusTemplates(next);
+    try {
+        localStorage.setItem(templatesKey, JSON.stringify(next));
+    } catch {
+        // ignore
+    }
+};
+
+const saveCurrentFocusAsTemplate = () => {
+    const t = (prompt || '').trim();
+    if (!t) return;
+    const exists = focusTemplates.some((x) => x.toLowerCase() === t.toLowerCase());
+    if (exists) return;
+    const next = [t, ...focusTemplates].slice(0, 8);
+    persistTemplates(next);
+};
+
+const removeTemplate = (t: string) => {
+    const next = focusTemplates.filter((x) => x !== t);
+    persistTemplates(next);
+};
+
+// Phase 5: keyboard shortcuts
+// - Ctrl/Cmd+O: Upload video
+// - Ctrl/Cmd+Enter: Analyze (when ready)
+// - Esc: close info modal
+useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+        const target = e.target as HTMLElement | null;
+        const isTyping =
+            !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || (target as any).isContentEditable);
+
+        const isMac = navigator.platform.toUpperCase().includes('MAC');
+        const mod = isMac ? e.metaKey : e.ctrlKey;
+
+        if (e.key === 'Escape' && isInfoOpen) {
+            e.preventDefault();
+            setIsInfoOpen(false);
+            return;
+        }
+
+        if (!mod) return;
+
+        // Ctrl/Cmd+O opens file picker (prevent default browser open dialog)
+        if (e.key.toLowerCase() === 'o') {
+            e.preventDefault();
+            fileInputRef.current?.click();
+            return;
+        }
+
+        // Ctrl/Cmd+Enter triggers Analyze (even if textarea focused)
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+            if (videoFile && !isLoading) {
+                e.preventDefault();
+                handleAnalyze();
+            }
+            return;
+        }
+
+        // If user is typing, don't steal other shortcuts.
+        if (isTyping) return;
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [videoFile, isLoading, isInfoOpen]);
     // Phase 2: Guided intent chips that help users provide better analysis focus prompts.
     const focusChips = [
         'Check angles during sleights',
@@ -241,11 +359,25 @@ const VideoRehearsal: React.FC<VideoRehearsalProps> = ({
         }
     };
   
+const deriveAutoTags = (): string[] => {
+    const tags: string[] = ['video-rehearsal', 'analysis'];
+    const p = (prompt || '').toLowerCase();
+
+    // Keyword-based tags (kept simple and predictable)
+    if (p.includes('angle')) tags.push('angles');
+    if (p.includes('timing') || p.includes('pace') || p.includes('pause')) tags.push('timing');
+    if (p.includes('posture') || p.includes('tension') || p.includes('stance')) tags.push('posture');
+    if (p.includes('block') || p.includes('staging') || p.includes('frame')) tags.push('blocking');
+
+    // If user clicked chips, these keywords are usually present. Avoid duplicates.
+    return Array.from(new Set(tags));
+};
+
     const handleSave = () => {
         if (analysisResult) {
             const title = `Video Analysis for ${videoFile?.name || 'rehearsal'}`;
             const content = `## Analysis for: ${videoFile?.name}\n\n**Focus Prompt:** ${prompt || 'None'}\n\n---\n\n${analysisResult}`;
-            saveIdea('text', content, title);
+            saveIdea({ type: 'text', content, title, tags: deriveAutoTags() });
             onIdeaSaved();
             setSaveStatus('saved');
             setTimeout(() => setSaveStatus('idle'), 2000);
@@ -419,6 +551,51 @@ const VideoRehearsal: React.FC<VideoRehearsalProps> = ({
                     <div>
                         <label htmlFor="analysis-prompt" className="block text-sm font-medium text-slate-300 mb-1">Analysis Focus (Optional)</label>
                         <textarea id="analysis-prompt" rows={3} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="e.g., Check my posture and hand movements during the vanish." className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500" />
+
+{/* Phase 5: saved focus templates */}
+<div className="mt-2 flex items-center justify-between gap-2">
+    <p className="text-xs text-slate-500">
+        Shortcuts: <span className="text-slate-400">Ctrl/Cmd+O</span> upload, <span className="text-slate-400">Ctrl/Cmd+Enter</span> analyze
+    </p>
+    <button
+        type="button"
+        onClick={saveCurrentFocusAsTemplate}
+        disabled={!prompt.trim()}
+        className="px-2.5 py-1 rounded-md text-xs bg-slate-800/70 border border-slate-600 text-slate-200 hover:border-purple-500 hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        title="Save current focus as a reusable template"
+    >
+        Save focus
+    </button>
+</div>
+
+{focusTemplates.length > 0 && (
+    <div className="mt-2">
+        <p className="text-xs text-slate-500 mb-1">Saved templates</p>
+        <div className="flex flex-wrap gap-2">
+            {focusTemplates.map((t) => (
+                <span key={t} className="inline-flex items-center gap-1 rounded-full bg-slate-800/60 border border-slate-600 px-2.5 py-1 text-xs text-slate-200">
+                    <button
+                        type="button"
+                        onClick={() => setPrompt(t)}
+                        className="hover:text-white"
+                        title="Use this template"
+                    >
+                        {t}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => removeTemplate(t)}
+                        className="ml-1 text-slate-400 hover:text-red-300"
+                        title="Remove template"
+                    >
+                        ×
+                    </button>
+                </span>
+            ))}
+        </div>
+    </div>
+)}
+
 
                         {/* Guided prompt chips */}
                         <div className="mt-2 flex flex-wrap gap-2">
