@@ -659,43 +659,84 @@ const deriveAutoTags = (): string[] => {
                             </div>
                         )}
 
-                        <div className="mt-auto p-2 bg-slate-900/50 flex flex-col gap-2 border-t border-slate-800">
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                                <div className="flex flex-wrap items-center gap-2">
-                                    <button
-                                        onClick={handleSaveNotesToShowPlanner}
-                                        disabled={plannerSaveStatus === 'saving'}
-                                        className="px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 disabled:opacity-60"
-                                        title="Save this analysis as a task in Show Planner"
-                                    >
-                                        {plannerSaveStatus === 'saving'
-                                            ? 'Saving…'
-                                            : plannerSaveStatus === 'saved'
-                                                ? 'Saved to Show Planner'
-                                                : 'Save notes to Show Planner'}
-                                    </button>
-                                    <button
-                                        onClick={handleRefineWithAi}
-                                        disabled={!onAiSpark}
-                                        className="px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 disabled:opacity-60 disabled:hover:bg-slate-700 disabled:cursor-not-allowed"
-                                        title="Open AI Assistant with this analysis"
-                                    >
-                                        Refine this routine with AI
-                                    </button>
-                                    <button
-                                        onClick={handleRunLiveAudioRehearsal}
-                                        disabled={!onNavigate}
-                                        className="px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 disabled:opacity-60 disabled:hover:bg-slate-700 disabled:cursor-not-allowed"
-                                        title="Jump into Live Audio Rehearsal"
-                                    >
-                                        Run Live Audio Rehearsal
-                                    </button>
-                                </div>
+                        <div className="mt-auto p-3 bg-slate-900/50 flex flex-col gap-3 border-t border-slate-800">
+                            <div className="flex items-center justify-between">
+                                <p className="text-xs text-slate-400">Next steps</p>
+                                <p className="text-xs text-slate-500">Tip: use Analysis Focus chips to steer the feedback</p>
+                            </div>
 
-                                <div className="flex items-center justify-end gap-2">
-                            <button onClick={handleStartOver} className="px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200">Start Over</button>
-                            <ShareButton title={`Video Analysis: ${videoFile?.name}`} text={analysisResult} className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200"><ShareIcon className="w-4 h-4" /><span>Share</span></ShareButton>
-                            <button onClick={handleSave} disabled={saveStatus === 'saved'} className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200">{saveStatus === 'saved' ? <><CheckIcon className="w-4 h-4 text-green-400" /><span>Saved!</span></> : <><SaveIcon className="w-4 h-4" /><span>Save Idea</span></>}</button>
+                            {/* Primary post-analysis CTAs */}
+                            <div className="flex flex-wrap items-center gap-2">
+                                <button
+                                    onClick={handleSaveNotesToShowPlanner}
+                                    disabled={!onDeepLinkShowPlanner || plannerSaveStatus === 'saving'}
+                                    className="px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 disabled:opacity-60 disabled:hover:bg-slate-700 disabled:cursor-not-allowed"
+                                    title="Save this analysis as a task in Show Planner"
+                                >
+                                    {plannerSaveStatus === 'saving'
+                                        ? 'Saving…'
+                                        : plannerSaveStatus === 'saved'
+                                            ? 'Saved to Show Planner'
+                                            : 'Save notes to Show Planner'}
+                                </button>
+
+                                <button
+                                    onClick={handleRefineWithAi}
+                                    disabled={!onAiSpark}
+                                    className="px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 disabled:opacity-60 disabled:hover:bg-slate-700 disabled:cursor-not-allowed"
+                                    title="Open AI Assistant with this analysis"
+                                >
+                                    Refine this routine with AI
+                                </button>
+
+                                <button
+                                    onClick={handleRunLiveAudioRehearsal}
+                                    disabled={!onNavigate}
+                                    className="px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 disabled:opacity-60 disabled:hover:bg-slate-700 disabled:cursor-not-allowed"
+                                    title="Jump to Live Rehearsal (Audio)"
+                                >
+                                    Run Live Audio Rehearsal
+                                </button>
+                            </div>
+
+                            {/* Utility actions */}
+                            <div className="flex items-center justify-between gap-2 pt-1">
+                                <button
+                                    onClick={handleStartOver}
+                                    className="px-3 py-1.5 text-sm bg-transparent hover:bg-slate-800/60 rounded-md text-slate-300 border border-slate-700/70"
+                                    title="Clear the current video and analysis"
+                                >
+                                    Start Over
+                                </button>
+
+                                <div className="flex items-center gap-2">
+                                    <ShareButton
+                                        title={`Video Analysis: ${videoFile?.name || 'Rehearsal'}`}
+                                        text={analysisResult || ''}
+                                        className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200"
+                                    >
+                                        <ShareIcon className="w-4 h-4" />
+                                        <span>Share</span>
+                                    </ShareButton>
+
+                                    <button
+                                        onClick={handleSave}
+                                        disabled={saveStatus === 'saved'}
+                                        className="flex items-center gap-2 px-3 py-1.5 text-sm bg-purple-700 hover:bg-purple-600 rounded-md text-white disabled:opacity-70 disabled:hover:bg-purple-700"
+                                        title="Save this analysis to your Saved Ideas"
+                                    >
+                                        {saveStatus === 'saved' ? (
+                                            <>
+                                                <CheckIcon className="w-4 h-4 text-green-200" />
+                                                <span>Saved!</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <SaveIcon className="w-4 h-4" />
+                                                <span>Save Idea</span>
+                                            </>
+                                        )}
+                                    </button>
                                 </div>
                             </div>
                         </div>

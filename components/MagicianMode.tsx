@@ -2086,17 +2086,7 @@ useEffect(() => {
           </>
         );
         case 'live-rehearsal': return <LiveRehearsal user={user} onReturnToStudio={handleReturnFromRehearsal} onIdeaSaved={() => handleIdeaSaved('Rehearsal saved!')} />;
-        case 'video-rehearsal':
-          return (
-            <VideoRehearsal
-              user={user}
-              onIdeaSaved={() => handleIdeaSaved('Video analysis saved!')}
-              onAiSpark={handleAiSpark}
-              onNavigate={(view) => handleNavigate(view as any)}
-              onDeepLinkShowPlanner={(showId) => handleDeepLink('show-planner', showId)}
-              onRequestUpgrade={() => setIsUpgradeModalOpen(true)}
-            />
-          );
+        case 'video-rehearsal': return <VideoRehearsal onIdeaSaved={() => handleIdeaSaved('Video analysis saved!')} user={user} />;
         case 'visual-brainstorm': return <VisualBrainstorm onIdeaSaved={() => handleIdeaSaved('Image idea saved!')} user={user} />;
         case 'saved-ideas': return <SavedIdeas onAiSpark={handleAiSpark} initialIdeaId={initialIdeaId || undefined} />;
         case 'prop-checklists': return <PropChecklists onIdeaSaved={() => handleIdeaSaved('Checklist saved!')} />;
