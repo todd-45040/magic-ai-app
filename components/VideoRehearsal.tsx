@@ -137,8 +137,7 @@ const VideoRehearsal: React.FC<VideoRehearsalProps> = ({ user, onIdeaSaved }) =>
                 `1) A short 2–3 sentence overview of what you observe (routine/props/staging).`,
                 `2) A detailed time-stamped analysis referencing the provided frame timestamps when possible.`,
                 `3) A concise summary of 3–7 actionable items.`,
-            ].join('
-');
+            ].join('\n');
 
             const parts: any[] = [{ text: intro }];
 
