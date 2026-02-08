@@ -9,9 +9,12 @@ export type UsageStatus = {
   remaining?: number;
   burstLimit?: number;
   burstRemaining?: number;
+  liveUsed?: number;
+  liveLimit?: number;
+  liveRemaining?: number;
 };
 
-async function getBearerToken(): Promise<string> {
+export async function getBearerToken(): Promise<string> {
   try {
     const { data } = await supabase.auth.getSession();
     const token = data?.session?.access_token;

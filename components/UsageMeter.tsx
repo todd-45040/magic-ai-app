@@ -25,6 +25,7 @@ export default function UsageMeter({ user }: { user?: User | null }) {
   const label = useMemo(() => {
     const remaining = status.remaining;
     const limit = status.limit;
+    const used = status.used ?? (limit != null && remaining != null ? limit - remaining : undefined);
     const mem = formatMembership(status.membership);
 
     if (limit === 10000 && remaining != null) {
@@ -33,12 +34,14 @@ export default function UsageMeter({ user }: { user?: User | null }) {
     if (remaining == null || limit == null) {
       return mem ? `${mem}` : 'AI Usage';
     }
-    return `${mem}: ${remaining}/${limit}`;
-  }, [status.remaining, status.limit, status.membership]);
+    // Show USED/LIMIT to avoid confusion (e.g., "11/20" can read like used when it's actually remaining).
+    return used == null ? `${mem}: ${remaining}/${limit}` : `${mem}: ${used}/${limit}`;
+  }, [status.used, status.remaining, status.limit, status.membership]);
 
   const liveLabel = useMemo(() => {
     if (!live || !live.limit) return null;
-    return `Live: ${live.remaining}/${live.limit} min`;
+    // Show USED/LIMIT for consistency with AI label.
+    return `Live: ${live.used}/${live.limit} min`;
   }, [live]);
 
   useEffect(() => {
@@ -53,7 +56,12 @@ export default function UsageMeter({ user }: { user?: User | null }) {
       }
     };
 
-    const loadLocal = () => {
+    const loadLive = (s?: UsageStatus) => {
+      // Prefer server-backed live usage. Fall back to local only if server doesn't provide live fields.
+      if (s?.liveLimit != null && s.liveRemaining != null && s.liveUsed != null) {
+        setLive({ used: Number(s.liveUsed || 0), limit: Number(s.liveLimit || 0), remaining: Number(s.liveRemaining || 0) });
+        return;
+      }
       if (!user) {
         setLive(null);
         return;
@@ -65,12 +73,22 @@ export default function UsageMeter({ user }: { user?: User | null }) {
       }
     };
 
-    loadServer();
-    loadLocal();
+    (async () => {
+      const s = await fetchUsageStatus().catch(() => null as any);
+      if (mounted && s?.ok) {
+        setStatus(s);
+        loadLive(s);
+      } else {
+        loadLive();
+      }
+    })();
 
-    const interval = window.setInterval(() => {
-      loadServer();
-      loadLocal();
+    const interval = window.setInterval(async () => {
+      const s = await fetchUsageStatus().catch(() => null as any);
+      if (mounted && s?.ok) {
+        setStatus(s);
+        loadLive(s);
+      }
     }, 60000);
 
     const onServerUsageUpdate = (e: Event) => {
@@ -97,14 +115,28 @@ export default function UsageMeter({ user }: { user?: User | null }) {
       });
     };
 
+    const onLiveUsageUpdate = (e: Event) => {
+      const ce = e as CustomEvent;
+      const detail = (ce.detail || {}) as any;
+      if (!mounted) return;
+      if (detail.liveLimit == null && detail.liveRemaining == null && detail.liveUsed == null) return;
+      setLive({
+        used: Number(detail.liveUsed ?? 0),
+        limit: Number(detail.liveLimit ?? 0),
+        remaining: Number(detail.liveRemaining ?? 0),
+      });
+    };
+
     window.addEventListener('ai-usage-update', onServerUsageUpdate);
     window.addEventListener('maw-usage-local-update', onLocalUsageUpdate);
+    window.addEventListener('live-usage-update', onLiveUsageUpdate);
 
     return () => {
       mounted = false;
       window.clearInterval(interval);
       window.removeEventListener('ai-usage-update', onServerUsageUpdate);
       window.removeEventListener('maw-usage-local-update', onLocalUsageUpdate);
+      window.removeEventListener('live-usage-update', onLiveUsageUpdate);
     };
   }, [user]);
 

@@ -47,6 +47,18 @@ const TIER_LIMITS: Record<string, number> = {
   'semi-pro': 100,
 };
 
+// Live rehearsal daily minutes limits.
+const LIVE_MINUTE_LIMITS: Record<string, number> = {
+  free: 0,
+  trial: 10,
+  performer: 30,
+  professional: 120,
+  expired: 0,
+  // legacy
+  amateur: 30,
+  'semi-pro': 30,
+};
+
 // Per-minute burst limits (requests per minute), even if daily remaining is high.
 const BURST_LIMITS: Record<string, number> = {
   free: 10,
@@ -124,6 +136,9 @@ export async function getAiUsageStatus(req: any): Promise<{
   remaining?: number;
   burstLimit?: number;
   burstRemaining?: number;
+  liveUsed?: number;
+  liveLimit?: number;
+  liveRemaining?: number;
 }> {
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -161,7 +176,7 @@ export async function getAiUsageStatus(req: any): Promise<{
 
   const { data: profile, error: profileErr } = await admin
     .from('users')
-    .select('id, membership, generation_count, last_reset_date')
+    .select('id, membership, generation_count, last_reset_date, live_minutes_used, live_minutes_last_reset_date')
     .eq('id', userId)
     .maybeSingle();
 
@@ -170,11 +185,17 @@ export async function getAiUsageStatus(req: any): Promise<{
   let membership: Membership = 'trial';
   let generationCount = 0;
   let lastResetDateISO = new Date().toISOString();
+  let liveMinutesUsed = 0;
+  let liveMinutesResetISO = new Date().toISOString();
 
   if (profile) {
     membership = (profile.membership as Membership) || 'trial';
     generationCount = profile.generation_count ?? 0;
     lastResetDateISO = profile.last_reset_date ? new Date(profile.last_reset_date).toISOString() : lastResetDateISO;
+    liveMinutesUsed = (profile as any).live_minutes_used ?? 0;
+    liveMinutesResetISO = (profile as any).live_minutes_last_reset_date
+      ? new Date((profile as any).live_minutes_last_reset_date).toISOString()
+      : liveMinutesResetISO;
   } else {
     // If no profile exists yet, treat as trial until created
     membership = 'trial';
@@ -189,9 +210,17 @@ export async function getAiUsageStatus(req: any): Promise<{
     generationCount = 0;
   }
 
+  const liveLastKey = getTodayKeyUTC(new Date(liveMinutesResetISO));
+  if (liveLastKey !== today) {
+    liveMinutesUsed = 0;
+  }
+
   const tier = normalizeTier(membership as any);
   const limit = TIER_LIMITS[tier] ?? TIER_LIMITS.trial;
   const remaining = Math.max(0, limit - generationCount);
+
+  const liveLimit = LIVE_MINUTE_LIMITS[tier] ?? LIVE_MINUTE_LIMITS.trial;
+  const liveRemaining = Math.max(0, liveLimit - Math.max(0, Math.round(liveMinutesUsed)));
 
   const burstLimit = BURST_LIMITS[tier] ?? BURST_LIMITS.trial;
   const minuteKey = getMinuteKeyUTC();
@@ -200,7 +229,18 @@ export async function getAiUsageStatus(req: any): Promise<{
   const usedBurst = map.get(key) || 0;
   const burstRemaining = Math.max(0, burstLimit - usedBurst);
 
-  return { ok: true, membership: tier as any, used: generationCount, limit, remaining, burstLimit, burstRemaining };
+  return {
+    ok: true,
+    membership: tier as any,
+    used: generationCount,
+    limit,
+    remaining,
+    burstLimit,
+    burstRemaining,
+    liveUsed: Math.max(0, Math.round(liveMinutesUsed)),
+    liveLimit,
+    liveRemaining,
+  };
 }
 
 export async function enforceAiUsage(req: any, costUnits: number): Promise<{
@@ -306,6 +346,8 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
       membership: 'trial',
       generation_count: 0,
       last_reset_date: new Date().toISOString(),
+      live_minutes_used: 0,
+      live_minutes_last_reset_date: new Date().toISOString(),
     });
     if (upsertErr) console.error('Usage profile upsert error:', upsertErr);
   }
@@ -373,5 +415,153 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
     membership: tier as any,
     burstRemaining: burst.remaining,
     burstLimit,
+  };
+}
+
+// Live rehearsal minutes are enforced per UTC day.
+export async function enforceLiveMinutes(req: any, minutes: number): Promise<{
+  ok: boolean;
+  status?: number;
+  error?: string;
+  liveUsed?: number;
+  liveLimit?: number;
+  liveRemaining?: number;
+  membership?: Membership;
+}> {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const token = parseBearer(req);
+
+  const amt = Math.max(0, Math.ceil(Number(minutes) || 0));
+  if (amt <= 0) return { ok: true, liveUsed: 0, liveLimit: 0, liveRemaining: 0 };
+
+  // If server isn't configured, do best-effort in-memory tracking (per instance).
+  if (!supabaseUrl || !serviceKey) {
+    const today = getTodayKeyUTC();
+    const identity = ipKey(req);
+    const key = `LIVE_MIN:${today}:${identity}`;
+    const map = getRateMap();
+    const used = map.get(key) || 0;
+    const liveLimit = 10; // emergency safety cap when misconfigured
+    const liveRemaining = Math.max(0, liveLimit - used);
+    if (liveRemaining < amt) {
+      return {
+        ok: false,
+        status: 429,
+        error: `Daily live rehearsal limit reached (${used}/${liveLimit} min).`,
+        liveUsed: used,
+        liveLimit,
+        liveRemaining,
+      };
+    }
+    map.set(key, used + amt);
+    return {
+      ok: true,
+      liveUsed: used + amt,
+      liveLimit,
+      liveRemaining: Math.max(0, liveLimit - (used + amt)),
+    };
+  }
+
+  const admin = await makeSupabaseAdminClient(supabaseUrl, serviceKey);
+
+  // Determine user id (preferred) or fall back to IP identity
+  let userId: string | null = null;
+  if (token && token !== 'guest') {
+    const { data, error } = await admin.auth.getUser(token);
+    if (!error && data?.user?.id) userId = data.user.id;
+  }
+  if (!userId) {
+    // If we can't identify the user, apply best-effort in-memory fallback
+    const today = getTodayKeyUTC();
+    const identity = ipKey(req);
+    const key = `LIVE_MIN:${today}:${identity}`;
+    const map = getRateMap();
+    const used = map.get(key) || 0;
+    const liveLimit = 10;
+    const liveRemaining = Math.max(0, liveLimit - used);
+    if (liveRemaining < amt) {
+      return { ok: false, status: 429, error: `Daily live rehearsal limit reached (${used}/${liveLimit} min).`, liveUsed: used, liveLimit, liveRemaining };
+    }
+    map.set(key, used + amt);
+    return { ok: true, liveUsed: used + amt, liveLimit, liveRemaining: Math.max(0, liveLimit - (used + amt)) };
+  }
+
+  const { data: profile, error: profileErr } = await admin
+    .from('users')
+    .select('id, membership, live_minutes_used, live_minutes_last_reset_date')
+    .eq('id', userId)
+    .maybeSingle();
+  if (profileErr) console.error('Live usage lookup error:', profileErr);
+
+  let membership: Membership = 'trial';
+  let liveUsed = 0;
+  let liveResetISO = new Date().toISOString();
+
+  if (profile) {
+    membership = (profile.membership as Membership) || 'trial';
+    liveUsed = (profile as any).live_minutes_used ?? 0;
+    liveResetISO = (profile as any).live_minutes_last_reset_date
+      ? new Date((profile as any).live_minutes_last_reset_date).toISOString()
+      : liveResetISO;
+  } else {
+    // create profile if missing
+    const { error: upsertErr } = await admin.from('users').upsert({
+      id: userId,
+      membership: 'trial',
+      generation_count: 0,
+      last_reset_date: new Date().toISOString(),
+      live_minutes_used: 0,
+      live_minutes_last_reset_date: new Date().toISOString(),
+    });
+    if (upsertErr) console.error('Live usage profile upsert error:', upsertErr);
+    membership = 'trial';
+    liveUsed = 0;
+    liveResetISO = new Date().toISOString();
+  }
+
+  const today = getTodayKeyUTC();
+  const lastKey = getTodayKeyUTC(new Date(liveResetISO));
+  if (lastKey !== today) {
+    liveUsed = 0;
+    liveResetISO = new Date().toISOString();
+    const { error: resetErr } = await admin
+      .from('users')
+      .update({ live_minutes_used: 0, live_minutes_last_reset_date: liveResetISO })
+      .eq('id', userId);
+    if (resetErr) console.error('Live usage reset error:', resetErr);
+  }
+
+  const tier = normalizeTier(membership as any);
+  const liveLimit = LIVE_MINUTE_LIMITS[tier] ?? LIVE_MINUTE_LIMITS.trial;
+  const remaining = Math.max(0, liveLimit - Math.max(0, Math.round(liveUsed)));
+  if (remaining < amt) {
+    return {
+      ok: false,
+      status: 429,
+      error: `Daily live rehearsal limit reached (${Math.round(liveUsed)}/${liveLimit} min).`,
+      membership: tier as any,
+      liveUsed: Math.max(0, Math.round(liveUsed)),
+      liveLimit,
+      liveRemaining: remaining,
+    };
+  }
+
+  const newUsed = Math.max(0, Math.round(liveUsed)) + amt;
+  const { error: incErr } = await admin
+    .from('users')
+    .update({ live_minutes_used: newUsed, live_minutes_last_reset_date: liveResetISO })
+    .eq('id', userId);
+  if (incErr) {
+    console.error('Live usage increment error:', incErr);
+    return { ok: false, status: 503, error: 'Usage tracking unavailable. Try again shortly.' };
+  }
+
+  return {
+    ok: true,
+    membership: tier as any,
+    liveUsed: newUsed,
+    liveLimit,
+    liveRemaining: Math.max(0, liveLimit - newUsed),
   };
 }

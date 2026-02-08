@@ -5,7 +5,9 @@ import { LiveServerMessage, FunctionCall } from '@google/genai';
 import { startLiveSession, decode, decodeAudioData, type LiveSession } from '../services/geminiService';
 import { saveIdea, updateIdea, getRehearsalSessions } from '../services/ideasService';
 import type { Transcription, TimerState, User } from '../types';
-import { canConsume, consumeLiveMinutes, getUsage } from '../services/usageTracker';
+import { canConsume, getUsage, consumeLiveMinutes } from '../services/usageTracker';
+import { consumeLiveMinutesServer, emitLiveUsageUpdate } from '../services/liveMinutesService';
+import { fetchUsageStatus } from '../services/usageStatusService';
 import { MAGICIAN_LIVE_REHEARSAL_SYSTEM_INSTRUCTION, LIVE_REHEARSAL_TOOLS } from '../constants';
 import { BackIcon, MicrophoneIcon, StopIcon, SaveIcon, WandIcon, TrashIcon, TimerIcon } from './icons';
 
@@ -293,12 +295,30 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
 
 
     const handleStartSession = async () => {
-        // Client-side cap for live rehearsal minutes (daily). Server-side usage enforcement still applies to text requests.
-        const cur = getUsage(user, 'live_minutes');
-        if (cur.limit > 0 && cur.remaining <= 0) {
-            setStatus('error');
-            setErrorMessage(`Daily live rehearsal limit reached (${cur.used}/${cur.limit} min). Upgrade to continue.`);
-            return;
+        // Server-backed cap for live rehearsal minutes (daily), consistent across devices.
+        try {
+            const s = await fetchUsageStatus();
+            if (s?.ok && s.liveLimit != null && s.liveRemaining != null && s.liveLimit > 0 && s.liveRemaining <= 0) {
+                setStatus('error');
+                setErrorMessage(
+                    `Daily live rehearsal minutes limit reached (${Number(s.liveUsed ?? 0)}/${Number(s.liveLimit ?? 0)} min). This is separate from the AI message limit. Upgrade to continue.`
+                );
+                return;
+            }
+        } catch {
+            // If server usage is unavailable, fall back to the existing local tracker.
+            try {
+                const cur = getUsage(user, 'live_minutes');
+                if (cur.limit > 0 && cur.remaining <= 0) {
+                    setStatus('error');
+                    setErrorMessage(
+                        `Daily live rehearsal minutes limit reached (${cur.used}/${cur.limit} min). This is separate from the AI message limit. Upgrade to continue.`
+                    );
+                    return;
+                }
+            } catch {
+                // ignore
+            }
         }
         setStatus('connecting');
         setErrorMessage('');
@@ -694,7 +714,22 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         const start = sessionStartRef.current;
         if (start) {
             const minutes = (Date.now() - start) / 60000;
-            consumeLiveMinutes(user, minutes);
+            try {
+                const res = await consumeLiveMinutesServer(minutes);
+                emitLiveUsageUpdate(res);
+                if (!res.ok) {
+                    // If we hit the cap, show it immediately.
+                    setStatus('error');
+                    setErrorMessage(res.error || 'Daily live rehearsal minutes limit reached. Upgrade to continue.');
+                }
+            } catch {
+                // Fall back to local tracker if server is unavailable.
+                try {
+                    consumeLiveMinutes(user, minutes);
+                } catch {
+                    // ignore
+                }
+            }
             sessionStartRef.current = null;
         }
         if (reason) setErrorMessage(reason);
