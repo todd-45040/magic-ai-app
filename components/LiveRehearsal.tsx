@@ -107,6 +107,8 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
     const timerIntervalRef = useRef<number | null>(null);
 
     // --- Multi-take session state ---
+    // Persist draft state so users can jump to AI analysis and then come back to record Take 2.
+    const DRAFT_STORAGE_KEY = 'maw_live_rehearsal_draft_v2';
     type Take = {
         takeNumber: number;
         startedAt: number;
@@ -130,17 +132,69 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
     const currentTakeStartRef = useRef<number | null>(null);
     const transcriptionHistoryRef = useRef<Transcription[]>([]);
 
+    const persistDraft = (override?: Partial<{ ideaId: string | null; title: string; notes: string; takes: Take[]; selectedTake: number; }>) => {
+        try {
+            const payload = {
+                version: 2,
+                ideaId: override?.ideaId ?? sessionIdeaId,
+                title: override?.title ?? sessionTitle,
+                notes: override?.notes ?? sessionNotes,
+                takes: override?.takes ?? takes,
+                selectedTake: override?.selectedTake ?? selectedTake,
+                savedAt: Date.now(),
+            };
+            // Only store if there's something meaningful to resume.
+            if ((payload.takes?.length ?? 0) === 0) return;
+            localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(payload));
+        } catch {
+            // ignore
+        }
+    };
+
+    const clearDraft = () => {
+        try {
+            localStorage.removeItem(DRAFT_STORAGE_KEY);
+        } catch {
+            // ignore
+        }
+    };
+
     /**
      * "Back to Studio" navigation is handled by the MagicianMode shell.
      * (This project does not use react-router.)
      */
     const safeReturnToStudio = (transcriptToDiscuss?: Transcription[]) => {
         try {
+            // If the user is leaving to run AI analysis, preserve the current session so they can return for Take 2.
+            persistDraft();
             onReturnToStudio?.(transcriptToDiscuss);
         } catch {
             // ignore
         }
     };
+
+    // Restore any in-progress rehearsal draft (so "Back to Live Rehearsal" from AI analysis works).
+    useEffect(() => {
+        try {
+            const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
+            if (!raw) return;
+            const parsed = JSON.parse(raw);
+            if (!parsed || parsed.version !== 2) return;
+            if (!Array.isArray(parsed.takes) || parsed.takes.length === 0) return;
+
+            setSessionIdeaId(parsed.ideaId ?? null);
+            setSessionTitle(typeof parsed.title === 'string' && parsed.title.trim() ? parsed.title : sessionTitle);
+            setSessionNotes(typeof parsed.notes === 'string' ? parsed.notes : '');
+            setTakes(parsed.takes);
+            const idx = typeof parsed.selectedTake === 'number' ? parsed.selectedTake : parsed.takes.length - 1;
+            setSelectedTake(Math.max(0, Math.min(idx, parsed.takes.length - 1)));
+            setView('reviewing');
+            setStatus('idle');
+        } catch {
+            // ignore
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // Usage tracking (client-side, per-day)
     const sessionStartRef = useRef<number | null>(null);
@@ -695,6 +749,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
                     onSelectTake={setSelectedTake}
                     onStartNewTake={() => void handleStartSession()}
                     onResetSession={() => {
+                        clearDraft();
                         setSessionIdeaId(null);
                         setSessionTitle(`Live Rehearsal Session - ${new Date().toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`);
                         setSessionNotes('');
@@ -1151,7 +1206,7 @@ const ReviewView: React.FC<{
                         </div>
                         {hasAnyTakes ? (
                             <button
-                                onClick={() => onReturnToStudio(buildCombinedTranscript(takes))}
+                                onClick={() => safeReturnToStudio(buildCombinedTranscript(takes))}
                                 className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-md text-slate-100 text-sm font-semibold transition-colors"
                             >
                                 Discuss all takes with AI
@@ -1192,7 +1247,7 @@ const ReviewView: React.FC<{
                 </button>
 
                 <button
-                    onClick={() => onReturnToStudio(hasAnyTakes ? buildCombinedTranscript(takes) : undefined)}
+                    onClick={() => safeReturnToStudio(hasAnyTakes ? buildCombinedTranscript(takes) : undefined)}
                     className="w-full md:w-auto flex items-center justify-center gap-2 px-5 py-2.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 font-bold transition-colors"
                 >
                     <BackIcon className="w-5 h-5" />
