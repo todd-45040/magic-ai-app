@@ -129,6 +129,19 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
     const [takes, setTakes] = useState<Take[]>([]);
     const [selectedTake, setSelectedTake] = useState<number>(0);
 
+    // Keep refs in sync so we can persist draft reliably even during rapid state transitions
+    const sessionIdeaIdRef = useRef<string | null>(null);
+    const sessionTitleRef = useRef<string>('');
+    const sessionNotesRef = useRef<string>('');
+    const takesRef = useRef<Take[]>([]);
+    const selectedTakeRef = useRef<number>(0);
+
+    useEffect(() => { sessionIdeaIdRef.current = sessionIdeaId; }, [sessionIdeaId]);
+    useEffect(() => { sessionTitleRef.current = sessionTitle; }, [sessionTitle]);
+    useEffect(() => { sessionNotesRef.current = sessionNotes; }, [sessionNotes]);
+    useEffect(() => { takesRef.current = takes; }, [takes]);
+    useEffect(() => { selectedTakeRef.current = selectedTake; }, [selectedTake]);
+
     const currentTakeStartRef = useRef<number | null>(null);
     const transcriptionHistoryRef = useRef<Transcription[]>([]);
 
@@ -136,11 +149,11 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         try {
             const payload = {
                 version: 2,
-                ideaId: override?.ideaId ?? sessionIdeaId,
-                title: override?.title ?? sessionTitle,
-                notes: override?.notes ?? sessionNotes,
-                takes: override?.takes ?? takes,
-                selectedTake: override?.selectedTake ?? selectedTake,
+                ideaId: override?.ideaId ?? sessionIdeaIdRef.current,
+                title: override?.title ?? sessionTitleRef.current,
+                notes: override?.notes ?? sessionNotesRef.current,
+                takes: override?.takes ?? takesRef.current,
+                selectedTake: override?.selectedTake ?? selectedTakeRef.current,
                 savedAt: Date.now(),
             };
             // Only store if there's something meaningful to resume.
