@@ -37,6 +37,29 @@ const VideoRehearsal: React.FC<VideoRehearsalProps> = ({ user, onIdeaSaved }) =>
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    // Phase 2: Guided intent chips that help users provide better analysis focus prompts.
+    const focusChips = [
+        'Check angles during sleights',
+        'Evaluate pacing and pauses',
+        'Body posture & hand tension',
+        'Timing of secret actions',
+        'Staging & blocking across the frame',
+    ];
+
+    const applyFocusChip = (text: string) => {
+        setPrompt((prev) => {
+            const p = (prev || '').trim();
+            // If empty, just use the chip.
+            if (!p) return text;
+
+            // If the exact chip is already present, don't duplicate.
+            if (p.toLowerCase().includes(text.toLowerCase())) return prev;
+
+            // Otherwise append on a new line for readability.
+            return `${p}\n${text}`;
+        });
+    };
+
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
@@ -160,11 +183,27 @@ const VideoRehearsal: React.FC<VideoRehearsalProps> = ({ user, onIdeaSaved }) =>
                     <div>
                         <label htmlFor="analysis-prompt" className="block text-sm font-medium text-slate-300 mb-1">Analysis Focus (Optional)</label>
                         <textarea id="analysis-prompt" rows={3} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="e.g., Check my posture and hand movements during the vanish." className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500" />
+
+                        {/* Guided prompt chips */}
+                        <div className="mt-2 flex flex-wrap gap-2">
+                            {focusChips.map((chip) => (
+                                <button
+                                    key={chip}
+                                    type="button"
+                                    onClick={() => applyFocusChip(chip)}
+                                    className="px-2.5 py-1 rounded-full text-xs bg-slate-800/70 border border-slate-600 text-slate-200 hover:border-purple-500 hover:bg-slate-800 transition-colors"
+                                >
+                                    {chip}
+                                </button>
+                            ))}
+                        </div>
                     </div>
                     
                     <button onClick={handleAnalyze} disabled={isLoading || !videoFile} className="w-full py-3 mt-4 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed">
                         <WandIcon className="w-5 h-5" />
-                        <span>Analyze Performance</span>
+                        <span>
+                            {isLoading ? 'Analyzing…' : videoFile ? 'Analyze Performance (Ready)' : 'Analyze Performance'}
+                        </span>
                     </button>
                     {error && <p className="text-red-400 mt-2 text-sm text-center">{error}</p>}
                 </div>
