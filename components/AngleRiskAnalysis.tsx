@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import type { User } from '../types';
+import { ANGLE_RISK_ANALYSIS_SYSTEM_INSTRUCTION } from '../constants';
 import { generateResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
 import { ShieldIcon, SaveIcon } from './icons';
@@ -92,7 +93,7 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved }: { user: User; o
     ].filter(Boolean).join('\n');
 
     try {
-      const text = await generateResponse(prompt, user);
+      const text = await generateResponse(prompt, ANGLE_RISK_ANALYSIS_SYSTEM_INSTRUCTION, user);
       setAnalysis(text);
     } catch (e: any) {
       console.error(e);
