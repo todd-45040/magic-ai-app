@@ -1,8 +1,9 @@
 
 import React, { useState, useRef } from 'react';
-import { generateResponse } from '../services/geminiService';
+import { generateResponseWithParts } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
 import { VIDEO_REHEARSAL_SYSTEM_INSTRUCTION } from '../constants';
+import { extractVideoFrames } from '../utils/videoFrames';
 import { VideoIcon, WandIcon, SaveIcon, CheckIcon, ShareIcon, TrashIcon } from './icons';
 import ShareButton from './ShareButton';
 import FormattedText from './FormattedText';
@@ -107,25 +108,52 @@ const VideoRehearsal: React.FC<VideoRehearsalProps> = ({ user, onIdeaSaved }) =>
         setError(null);
         setAnalysisResult(null);
         setSaveStatus('idle');
-
-        // SIMULATION: Since the Gemini API doesn't directly support video file uploads for analysis yet,
-        // we will simulate the process. We'll send a text prompt that describes the scenario to get
-        // a realistic-looking analysis back.
-        const simulationPrompt = `
-            I have just "watched" a video of a magician rehearsing a performance. The video is approximately ${Math.round((videoFile.size / 1024 / 1024) * 15)} seconds long based on file size.
-            The magician provided the following specific instructions for the analysis: "${prompt || 'No specific instructions provided. Please give general feedback.'}"
-            
-            Based on this hypothetical video, please generate a detailed, time-stamped performance analysis.
-        `;
-        
+        // Frame-based analysis:
+        // We extract representative frames client-side and send them to Gemini Vision.
+        // This ensures the feedback is grounded in the uploaded video (not a simulation).
         try {
-          // FIX: Pass the user object to generateResponse as the 3rd argument.
-          const response = await generateResponse(simulationPrompt, VIDEO_REHEARSAL_SYSTEM_INSTRUCTION, user);
-          setAnalysisResult(response);
+            const frames = await extractVideoFrames(videoFile, {
+                frameCount: 12,
+                maxWidth: 640,
+                jpegQuality: 0.72,
+            });
+
+            if (!frames.length) {
+                throw new Error('No frames could be extracted from the video.');
+            }
+
+            const focusText = (prompt || '').trim() || 'No specific instructions provided. Please give general feedback.';
+
+            const intro = [
+                `You are reviewing a magician's rehearsal video using ONLY the provided video frames.`,
+                `CRITICAL RULES:`,
+                `- Base your analysis ONLY on what is visible in the frames. If something is not visible, say "not visible in the provided frames".`,
+                `- Do NOT assume a routine type unless it is clearly shown.`,
+                `- Do NOT invent props, methods, or actions that are not present.`,
+                ``,
+                `The performer requested the following analysis focus: "${focusText}"`,
+                ``,
+                `Deliverables:`,
+                `1) A short 2–3 sentence overview of what you observe (routine/props/staging).`,
+                `2) A detailed time-stamped analysis referencing the provided frame timestamps when possible.`,
+                `3) A concise summary of 3–7 actionable items.`,
+            ].join('
+');
+
+            const parts: any[] = [{ text: intro }];
+
+            // Interleave timestamp labels so the model can anchor observations.
+            for (const f of frames) {
+                parts.push({ text: `Frame @ ${f.timeSec.toFixed(2)}s` });
+                parts.push({ inlineData: { mimeType: f.mimeType, data: f.base64Data } });
+            }
+
+            const response = await generateResponseWithParts(parts, VIDEO_REHEARSAL_SYSTEM_INSTRUCTION, user);
+            setAnalysisResult(response);
         } catch (err) {
-          setError(err instanceof Error ? err.message : "An unknown error occurred during the analysis.");
+            setError(err instanceof Error ? err.message : "An unknown error occurred during the analysis.");
         } finally {
-          setIsLoading(false);
+            setIsLoading(false);
         }
     };
   

@@ -149,6 +149,33 @@ export const generateResponse = async (
   }
 };
 
+
+export const generateResponseWithParts = async (
+  parts: any[],
+  systemInstruction: string,
+  currentUser?: User,
+  history?: ChatMessage[]
+): Promise<string> => {
+  const apiHistory = history?.map(msg => ({
+    role: msg.role,
+    parts: [{ text: msg.text }]
+  })) || [];
+
+  const body: GeminiGenerateBody = {
+    model: 'gemini-3-pro-preview',
+    contents: [...apiHistory, { role: 'user', parts }],
+    config: { systemInstruction },
+  };
+
+  try {
+    const result = await postJson<any>('/api/generate', body, currentUser);
+    return extractText(result);
+  } catch (error: any) {
+    console.error('AI Error:', error);
+    return `Error: ${error?.message || 'Failed to connect to AI wizard.'}`;
+  }
+};
+
 export const generateStructuredResponse = async (
   prompt: string,
   systemInstruction: string,
