@@ -1206,7 +1206,7 @@ const ReviewView: React.FC<{
                         </div>
                         {hasAnyTakes ? (
                             <button
-                                onClick={() => safeReturnToStudio(buildCombinedTranscript(takes))}
+                                onClick={() => onReturnToStudio(buildCombinedTranscript(takes))}
                                 className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-md text-slate-100 text-sm font-semibold transition-colors"
                             >
                                 Discuss all takes with AI
@@ -1247,7 +1247,7 @@ const ReviewView: React.FC<{
                 </button>
 
                 <button
-                    onClick={() => safeReturnToStudio(hasAnyTakes ? buildCombinedTranscript(takes) : undefined)}
+                    onClick={() => onReturnToStudio(hasAnyTakes ? buildCombinedTranscript(takes) : undefined)}
                     className="w-full md:w-auto flex items-center justify-center gap-2 px-5 py-2.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 font-bold transition-colors"
                 >
                     <BackIcon className="w-5 h-5" />
