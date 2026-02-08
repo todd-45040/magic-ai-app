@@ -41,7 +41,7 @@ export default function UsageMeter({ user }: { user?: User | null }) {
   const liveLabel = useMemo(() => {
     if (!live || !live.limit) return null;
     // Show USED/LIMIT for consistency with AI label.
-    return `Live: ${live.used}/${live.limit} min`;
+    return `Live Rehearsal (Audio): ${live.used}/${live.limit} min`;
   }, [live]);
 
   useEffect(() => {

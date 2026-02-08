@@ -153,6 +153,10 @@ const VideoRehearsal: React.FC<VideoRehearsalProps> = ({ user, onIdeaSaved }) =>
                         </div>
                     )}
 
+                    <p className="text-xs text-slate-400 text-center">
+                        Video uploads do not consume Live Rehearsal minutes.
+                    </p>
+
                     <div>
                         <label htmlFor="analysis-prompt" className="block text-sm font-medium text-slate-300 mb-1">Analysis Focus (Optional)</label>
                         <textarea id="analysis-prompt" rows={3} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="e.g., Check my posture and hand movements during the vanish." className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500" />
