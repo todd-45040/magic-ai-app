@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 // by the parent App shell (props callback) and/or a simple location redirect.
 import { LiveServerMessage, FunctionCall } from '@google/genai';
 import { startLiveSession, decode, decodeAudioData, type LiveSession } from '../services/geminiService';
-import { saveIdea, getRehearsalSessions } from '../services/ideasService';
+import { saveIdea, updateIdea, getRehearsalSessions } from '../services/ideasService';
 import type { Transcription, TimerState, User } from '../types';
 import { canConsume, consumeLiveMinutes, getUsage } from '../services/usageTracker';
 import { MAGICIAN_LIVE_REHEARSAL_SYSTEM_INSTRUCTION, LIVE_REHEARSAL_TOOLS } from '../constants';
@@ -106,6 +106,30 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
     const [timer, setTimer] = useState<TimerState>({ startTime: null, duration: null, isRunning: false });
     const timerIntervalRef = useRef<number | null>(null);
 
+    // --- Multi-take session state ---
+    type Take = {
+        takeNumber: number;
+        startedAt: number;
+        endedAt: number;
+        transcript: Transcription[];
+    };
+
+    type RehearsalSessionContentV2 = {
+        version: 2;
+        title: string;
+        notes?: string;
+        takes: Take[];
+    };
+
+    const [sessionIdeaId, setSessionIdeaId] = useState<string | null>(null);
+    const [sessionTitle, setSessionTitle] = useState<string>(() => `Live Rehearsal Session - ${new Date().toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`);
+    const [sessionNotes, setSessionNotes] = useState<string>('');
+    const [takes, setTakes] = useState<Take[]>([]);
+    const [selectedTake, setSelectedTake] = useState<number>(0);
+
+    const currentTakeStartRef = useRef<number | null>(null);
+    const transcriptionHistoryRef = useRef<Transcription[]>([]);
+
     /**
      * "Back to Studio" navigation is handled by the MagicianMode shell.
      * (This project does not use react-router.)
@@ -125,6 +149,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
     const transcriptEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
+        transcriptionHistoryRef.current = transcriptionHistory;
         transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [transcriptionHistory]);
 
@@ -211,6 +236,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         setStatus('connecting');
         setErrorMessage('');
         setTranscriptionHistory([]);
+        currentTakeStartRef.current = Date.now();
         errorOccurred.current = false;
         try {
             // FIX: Request audio without a specific sample rate to ensure compatibility.
@@ -601,6 +627,23 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         // Try to transcribe server-side if Live inputTranscription didn't arrive.
         await transcribeOnServerIfNeeded();
 
+        // Finalize this take
+        try {
+            const takeTranscript = Array.isArray(transcriptionHistoryRef.current) ? transcriptionHistoryRef.current : [];
+            const startedAt = currentTakeStartRef.current ?? Date.now();
+            const endedAt = Date.now();
+            setTakes((prev) => {
+                const takeNumber = (prev?.length ?? 0) + 1;
+                const next = [...(prev ?? []), { takeNumber, startedAt, endedAt, transcript: takeTranscript } as any];
+                setSelectedTake(Math.max(0, next.length - 1));
+                return next as any;
+            });
+        } catch {
+            // ignore
+        } finally {
+            currentTakeStartRef.current = null;
+        }
+
         await safeCleanupSession();
         setView('reviewing');
     };
@@ -625,8 +668,28 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
     const renderContent = () => {
         switch(view) {
             case 'reviewing':
-                return <ReviewView 
-                    transcription={transcriptionHistory}
+                return <ReviewView
+                    takes={takes}
+                    selectedTake={selectedTake}
+                    sessionIdeaId={sessionIdeaId}
+                    sessionTitle={sessionTitle}
+                    sessionNotes={sessionNotes}
+                    onChangeTitle={setSessionTitle}
+                    onChangeNotes={setSessionNotes}
+                    onSelectTake={setSelectedTake}
+                    onStartNewTake={() => void handleStartSession()}
+                    onResetSession={() => {
+                        setSessionIdeaId(null);
+                        setSessionTitle(`Live Rehearsal Session - ${new Date().toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`);
+                        setSessionNotes('');
+                        setTakes([]);
+                        setSelectedTake(0);
+                        setTranscriptionHistory([]);
+                        setErrorMessage('');
+                        setStatus('idle');
+                        setView('idle');
+                    }}
+                    onSessionSaved={(id) => setSessionIdeaId(id)}
                     onIdeaSaved={onIdeaSaved}
                     onReturnToStudio={safeReturnToStudio}
                 />;
@@ -765,7 +828,22 @@ const RehearsalHistory: React.FC<{ onDiscuss: (transcript: Transcription[]) => v
                 let notes = '';
                 try {
                     const obj = JSON.parse(String(r.content || ''));
-                    if (Array.isArray(obj?.transcript)) transcript = obj.transcript as any;
+                    // v1 shape: { transcript: [...], notes: string }
+                    if (Array.isArray(obj?.transcript)) {
+                        transcript = obj.transcript as any;
+                    }
+                    // v2 shape: { version: 2, takes: [...], notes: string }
+                    if (Array.isArray(obj?.takes)) {
+                        const combined: Transcription[] = [];
+                        for (const take of obj.takes) {
+                            const n = Number(take?.takeNumber ?? 0) || combined.length + 1;
+                            combined.push({ source: 'model', text: `— Take ${n} —`, isFinal: true } as any);
+                            if (Array.isArray(take?.transcript)) {
+                                for (const seg of take.transcript) combined.push(seg as any);
+                            }
+                        }
+                        transcript = combined;
+                    }
                     if (typeof obj?.notes === 'string') notes = obj.notes;
                 } catch {
                     // If content isn't JSON, treat it as plain transcript text
@@ -876,176 +954,231 @@ const RehearsalHistory: React.FC<{ onDiscuss: (transcript: Transcription[]) => v
     );
 };
 
+
 const ReviewView: React.FC<{
-    transcription: Transcription[];
+    takes: { takeNumber: number; startedAt: number; endedAt: number; transcript: Transcription[] }[];
+    selectedTake: number;
+    sessionIdeaId: string | null;
+    sessionTitle: string;
+    sessionNotes: string;
+    onChangeTitle: (t: string) => void;
+    onChangeNotes: (n: string) => void;
+    onSelectTake: (idx: number) => void;
+    onStartNewTake: () => void;
+    onResetSession: () => void;
+    onSessionSaved: (id: string) => void;
     onIdeaSaved: () => void;
     onReturnToStudio: (transcriptToDiscuss?: Transcription[]) => void;
-}> = ({ transcription, onIdeaSaved, onReturnToStudio }) => {
+}> = ({
+    takes,
+    selectedTake,
+    sessionIdeaId,
+    sessionTitle,
+    sessionNotes,
+    onChangeTitle,
+    onChangeNotes,
+    onSelectTake,
+    onStartNewTake,
+    onResetSession,
+    onSessionSaved,
+    onIdeaSaved,
+    onReturnToStudio,
+}) => {
     const transcriptEndRef = useRef<HTMLDivElement>(null);
-    const [showSaveForm, setShowSaveForm] = useState(false);
-    const [title, setTitle] = useState(`Rehearsal - ${new Date().toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`);
-    const [notes, setNotes] = useState('');
     const [saveError, setSaveError] = useState<string>('');
     const [saveSuccess, setSaveSuccess] = useState<string>('');
     const [isSaving, setIsSaving] = useState(false);
 
+    const current = takes?.[selectedTake] ?? null;
+
     useEffect(() => {
         transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [transcription]);
-    
-    const handleConfirmSave = async () => {
+    }, [selectedTake, takes]);
+
+    const buildCombinedTranscript = (allTakes: typeof takes): Transcription[] => {
+        const out: Transcription[] = [];
+        for (const t of allTakes ?? []) {
+            out.push({ source: 'model', text: `— Take ${t.takeNumber} —`, isFinal: true } as any);
+            for (const seg of (t.transcript ?? [])) out.push(seg);
+        }
+        return out;
+    };
+
+    const handleSaveSession = async () => {
         setSaveError('');
         setSaveSuccess('');
         setIsSaving(true);
         try {
             const content = {
-                transcript: transcription,
-                notes: notes,
+                version: 2,
+                title: sessionTitle,
+                notes: sessionNotes,
+                takes: takes ?? [],
             };
 
-            // Backward-compatible ideasService supports both signatures.
-            // Prefer object form to match the DB schema (created_at-based).
-            await saveIdea({ type: 'rehearsal', content: JSON.stringify(content), title });
+            if (!sessionIdeaId) {
+                const saved = await saveIdea({ type: 'rehearsal', content: JSON.stringify(content), title: sessionTitle });
+                onSessionSaved(saved.id);
+            } else {
+                await updateIdea(sessionIdeaId, { title: sessionTitle, content: JSON.stringify(content) } as any);
+            }
 
-            // Parent callbacks should never be allowed to crash the app.
-            // If something throws, surface it as a saveError and keep the user on this screen.
             try {
                 onIdeaSaved();
             } catch (cbErr: any) {
                 console.error('onIdeaSaved callback failed:', cbErr);
             }
-            // Notify Live Rehearsal History panels to refresh immediately.
+
             try {
                 window.dispatchEvent(new CustomEvent('maw-rehearsal-saved'));
             } catch {
                 // ignore
             }
-            // Do NOT auto-navigate after saving.
-            // This avoids hard crashes if another route throws during navigation.
-            setShowSaveForm(false);
-            setSaveSuccess('Saved successfully. You can continue rehearsing or return to the studio when ready.');
+
+            setSaveSuccess('Saved successfully. You can start another take or continue refining your notes.');
         } catch (err: any) {
-            const msg = String(err?.message || err || 'Failed to save rehearsal.');
-            setSaveError(msg);
+            setSaveError(String(err?.message || err || 'Failed to save rehearsal session.'));
         } finally {
             setIsSaving(false);
         }
     };
 
-    if (transcription.length === 0) {
-        return (
-            <div className="flex-1 flex flex-col items-center justify-center text-center p-4">
-                <MicrophoneIcon className="w-16 h-16 text-slate-600 mb-4" />
-                <h3 className="text-xl font-bold text-slate-300">Rehearsal Complete</h3>
-                <p className="text-slate-400 mt-2 mb-6">No speech was transcribed during the session.</p>
+    const hasAnyTakes = (takes?.length ?? 0) > 0;
+
+    return (
+        <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="p-4 md:p-6 flex-1 overflow-y-auto space-y-5">
+                <div className="flex flex-col gap-3">
+                    <h3 className="text-xl font-bold text-slate-200 font-cinzel">Session Review</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-300 mb-1">Session Title</label>
+                            <input
+                                value={sessionTitle}
+                                onChange={(e) => onChangeTitle(e.target.value)}
+                                className="w-full px-3 py-2 rounded-md bg-slate-800 border border-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                placeholder="e.g., Linking Rings Patter Session"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-300 mb-1">Session Notes</label>
+                            <input
+                                value={sessionNotes}
+                                onChange={(e) => onChangeNotes(e.target.value)}
+                                className="w-full px-3 py-2 rounded-md bg-slate-800 border border-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                placeholder="What are you working on in this session?"
+                            />
+                        </div>
+                    </div>
+
+                    {saveError && (
+                        <div className="text-sm text-red-300 bg-red-900/20 border border-red-700/40 rounded-md px-3 py-2">
+                            {saveError}
+                        </div>
+                    )}
+                    {saveSuccess && (
+                        <div className="text-sm text-green-300 bg-green-900/20 border border-green-700/40 rounded-md px-3 py-2">
+                            {saveSuccess}
+                        </div>
+                    )}
+                </div>
+
+                <div className="bg-slate-900/40 border border-slate-700 rounded-lg p-4">
+                    <div className="flex items-center justify-between gap-3">
+                        <div>
+                            <div className="text-slate-100 font-semibold">Takes</div>
+                            <div className="text-xs text-slate-400">Record multiple takes in one session (Take 1, Take 2, Take 3…)</div>
+                        </div>
+                        <button
+                            onClick={onStartNewTake}
+                            className="px-3 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white text-sm font-semibold transition-colors"
+                        >
+                            Start Next Take
+                        </button>
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                        {(takes ?? []).map((t, idx) => (
+                            <button
+                                key={t.takeNumber}
+                                onClick={() => onSelectTake(idx)}
+                                className={`px-3 py-1.5 rounded-full text-sm font-semibold border transition-colors ${
+                                    idx === selectedTake
+                                        ? 'bg-purple-700/60 border-purple-500/60 text-white'
+                                        : 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700/60'
+                                }`}
+                            >
+                                Take {t.takeNumber}
+                            </button>
+                        ))}
+                        {!hasAnyTakes ? (
+                            <div className="text-sm text-slate-400">No takes recorded yet.</div>
+                        ) : null}
+                    </div>
+                </div>
+
+                <div className="space-y-4 bg-slate-800/40 border border-slate-700 rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                        <div className="text-slate-200 font-semibold">
+                            {current ? `Transcript — Take ${current.takeNumber}` : 'Transcript'}
+                        </div>
+                        {hasAnyTakes ? (
+                            <button
+                                onClick={() => onReturnToStudio(buildCombinedTranscript(takes))}
+                                className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-md text-slate-100 text-sm font-semibold transition-colors"
+                            >
+                                Discuss all takes with AI
+                            </button>
+                        ) : null}
+                    </div>
+
+                    {current?.transcript?.length ? (
+                        <div className="space-y-4">
+                            {current.transcript.map((t, i) => (
+                                <div key={i} className={`flex flex-col ${t.source === 'user' ? 'items-end' : 'items-start'}`}>
+                                    <span className="text-xs text-slate-400 px-2 mb-0.5 font-semibold">
+                                        {t.source === 'user' ? 'You' : 'AI Coach'}
+                                    </span>
+                                    <p className={`max-w-xl px-4 py-2 rounded-lg ${t.source === 'user' ? 'bg-purple-800 text-white' : 'bg-slate-700 text-slate-200'}`}>
+                                        {t.text}
+                                    </p>
+                                </div>
+                            ))}
+                            <div ref={transcriptEndRef} />
+                        </div>
+                    ) : (
+                        <div className="text-slate-400">No transcript for this take.</div>
+                    )}
+                </div>
+            </div>
+
+            <footer className="p-4 border-t border-slate-800 flex flex-col md:flex-row items-center justify-center gap-3">
                 <button
-                    onClick={() => onReturnToStudio()}
-                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 font-bold transition-colors"
+                    onClick={handleSaveSession}
+                    disabled={isSaving}
+                    className={`w-full md:w-auto flex items-center justify-center gap-2 px-5 py-2.5 text-sm rounded-md font-bold transition-colors ${
+                        isSaving ? 'bg-slate-700 text-slate-300' : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                    }`}
+                >
+                    <SaveIcon className="w-4 h-4" />
+                    <span>{isSaving ? 'Saving…' : (sessionIdeaId ? 'Save Session' : 'Save Session (first save)')}</span>
+                </button>
+
+                <button
+                    onClick={() => onReturnToStudio(hasAnyTakes ? buildCombinedTranscript(takes) : undefined)}
+                    className="w-full md:w-auto flex items-center justify-center gap-2 px-5 py-2.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 font-bold transition-colors"
                 >
                     <BackIcon className="w-5 h-5" />
                     <span>Back to Studio</span>
                 </button>
-            </div>
-        );
-    }
 
-    return (
-        <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="p-4 md:p-6 flex-1 overflow-y-auto">
-                <h3 className="text-xl font-bold text-slate-200 font-cinzel mb-4">Rehearsal Transcript</h3>
-                <div className="space-y-4 bg-slate-800/50 border border-slate-700 rounded-lg p-4">
-                    {transcription.map((t, i) => (
-                        <div key={i} className={`flex flex-col ${t.source === 'user' ? 'items-end' : 'items-start'}`}>
-                            <span className="text-xs text-slate-400 px-2 mb-0.5 font-semibold">
-                                {t.source === 'user' ? 'You' : 'AI Coach'}
-                            </span>
-                            <p className={`max-w-xl px-4 py-2 rounded-lg ${t.source === 'user' ? 'bg-purple-800 text-white' : 'bg-slate-700 text-slate-200'}`}>
-                                {t.text}
-                            </p>
-                        </div>
-                    ))}
-                    <div ref={transcriptEndRef} />
-                </div>
-            </div>
-            <footer className="p-4 border-t border-slate-800 flex flex-col items-center justify-center gap-4">
-                {showSaveForm ? (
-                    <div className="w-full max-w-lg mx-auto space-y-4 p-4 bg-slate-900/50 rounded-lg border border-slate-700 animate-fade-in">
-                        <h4 className="font-bold text-white text-lg">Save Rehearsal Session</h4>
-                        {saveError && (
-                            <div className="text-sm text-red-300 bg-red-900/20 border border-red-700/40 rounded-md px-3 py-2">
-                                {saveError}
-                            </div>
-                        )}
-                        <div>
-                            <label htmlFor="rehearsal-title" className="block text-sm font-medium text-slate-300 mb-1">Title</label>
-                            <input
-                                id="rehearsal-title"
-                                type="text"
-                                value={title}
-                                onChange={(e) => setTitle(e.target.value)}
-                                className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500"
-                            />
-                        </div>
-                        <div>
-                            <label htmlFor="rehearsal-notes" className="block text-sm font-medium text-slate-300 mb-1">Notes (Optional)</label>
-                            <textarea
-                                id="rehearsal-notes"
-                                rows={3}
-                                value={notes}
-                                onChange={(e) => setNotes(e.target.value)}
-                                placeholder="e.g., First run-through of the new opener. Focus on comedic timing."
-                                className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500"
-                            />
-                        </div>
-                        <div className="flex gap-3 pt-2">
-                             <button
-                                onClick={() => setShowSaveForm(false)}
-                                className="w-full flex items-center justify-center gap-2 px-6 py-2 text-sm bg-slate-600 hover:bg-slate-700 rounded-md text-slate-200 font-bold transition-colors"
-                            >
-                                Cancel
-                            </button>
-                             <button
-                                onClick={handleConfirmSave}
-                                disabled={isSaving}
-                                className={`w-full flex items-center justify-center gap-2 px-6 py-2 text-sm rounded-md text-white font-bold transition-colors ${isSaving ? 'bg-purple-700/60 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'}`}
-                            >
-                                <SaveIcon className="w-5 h-5" />
-                                <span>{isSaving ? 'Saving…' : 'Confirm Save'}</span>
-                            </button>
-                        </div>
-                    </div>
-                 ) : (
-                    <>
-                        {saveSuccess && (
-                            <div className="w-full max-w-xl mx-auto text-sm text-emerald-200 bg-emerald-900/20 border border-emerald-700/40 rounded-md px-3 py-2">
-                                {saveSuccess}
-                            </div>
-                        )}
-                    <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                        <button
-                            onClick={() => { setSaveError(''); setSaveSuccess(''); setShowSaveForm(true); }}
-                            className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-sm bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors"
-                        >
-                            <SaveIcon className="w-5 h-5" />
-                            <span>Save & Exit</span>
-                        </button>
-                        <button
-                            onClick={() => onReturnToStudio(transcription)}
-                            className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 font-bold transition-colors"
-                        >
-                            <WandIcon className="w-5 h-5" />
-                            <span>Discuss with AI</span>
-                        </button>
-                        <button
-                            onClick={() => onReturnToStudio()}
-                            className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-sm text-slate-400 hover:text-white transition-colors"
-                        >
-                            <TrashIcon className="w-5 h-5" />
-                            <span>Discard & Exit</span>
-                        </button>
-                    </div>
-                    </>
-                )}
+                <button
+                    onClick={onResetSession}
+                    className="w-full md:w-auto flex items-center justify-center gap-2 px-5 py-2.5 text-sm bg-transparent hover:bg-slate-800/40 rounded-md text-slate-300 font-bold transition-colors"
+                >
+                    <TrashIcon className="w-5 h-5" />
+                    <span>Start New Session</span>
+                </button>
             </footer>
         </div>
     );
