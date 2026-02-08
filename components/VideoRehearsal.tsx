@@ -1,18 +1,23 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { generateResponseWithParts } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
+import { createShow, addTaskToShow } from '../services/showsService';
 import { VIDEO_REHEARSAL_SYSTEM_INSTRUCTION } from '../constants';
 import { extractVideoFrames } from '../utils/videoFrames';
 import { VideoIcon, WandIcon, SaveIcon, CheckIcon, ShareIcon, TrashIcon, InfoIcon } from './icons';
 import ShareButton from './ShareButton';
 import FormattedText from './FormattedText';
-import type { User } from '../types';
+import type { User, AiSparkAction } from '../types';
 import { canConsume, consume } from '../services/usageTracker';
 
 interface VideoRehearsalProps {
     user: User;
     onIdeaSaved: () => void;
+    onAiSpark?: (action: AiSparkAction) => void;
+    onNavigate?: (view: 'show-planner' | 'live-rehearsal') => void;
+    onDeepLinkShowPlanner?: (showId: string) => void;
+    onRequestUpgrade?: () => void;
 }
 
 const LoadingIndicator: React.FC = () => (
@@ -75,7 +80,14 @@ const GuidedPlaceholder: React.FC = () => (
     </div>
 );
 
-const VideoRehearsal: React.FC<VideoRehearsalProps> = ({ user, onIdeaSaved }) => {
+const VideoRehearsal: React.FC<VideoRehearsalProps> = ({
+    user,
+    onIdeaSaved,
+    onAiSpark,
+    onNavigate,
+    onDeepLinkShowPlanner,
+    onRequestUpgrade,
+}) => {
     const [videoFile, setVideoFile] = useState<File | null>(null);
     const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
     const [prompt, setPrompt] = useState('');
@@ -83,8 +95,23 @@ const VideoRehearsal: React.FC<VideoRehearsalProps> = ({ user, onIdeaSaved }) =>
     const [error, setError] = useState<string | null>(null);
     const [analysisResult, setAnalysisResult] = useState<string | null>(null);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
+    const [plannerSaveStatus, setPlannerSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
     const [isInfoOpen, setIsInfoOpen] = useState(false);
+    const [showTrialUpsell, setShowTrialUpsell] = useState(false);
+    const [dismissedUpsell, setDismissedUpsell] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Phase 4: soft trial upsell shown once per user (after first successful analysis).
+    const upsellKey = `maw_video_trial_upsell_shown_${user.id}`;
+    useEffect(() => {
+        try {
+            const alreadyShown = localStorage.getItem(upsellKey) === '1';
+            if (alreadyShown) setDismissedUpsell(true);
+        } catch {
+            // ignore storage failures (private mode, etc.)
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // Phase 2: Guided intent chips that help users provide better analysis focus prompts.
     const focusChips = [
@@ -197,6 +224,16 @@ const VideoRehearsal: React.FC<VideoRehearsalProps> = ({ user, onIdeaSaved }) =>
 
             const response = await generateResponseWithParts(parts, VIDEO_REHEARSAL_SYSTEM_INSTRUCTION, user);
             setAnalysisResult(response);
+
+            // Phase 4: soft upsell after first successful analysis for trial users.
+            if (String(user.membership || '').toLowerCase() === 'trial' && !dismissedUpsell) {
+                setShowTrialUpsell(true);
+                try {
+                    localStorage.setItem(upsellKey, '1');
+                } catch {
+                    // ignore
+                }
+            }
         } catch (err) {
             setError(err instanceof Error ? err.message : "An unknown error occurred during the analysis.");
         } finally {
@@ -212,6 +249,63 @@ const VideoRehearsal: React.FC<VideoRehearsalProps> = ({ user, onIdeaSaved }) =>
             onIdeaSaved();
             setSaveStatus('saved');
             setTimeout(() => setSaveStatus('idle'), 2000);
+        }
+    };
+
+    // Phase 4: Convert insight → action
+    const handleSaveNotesToShowPlanner = async () => {
+        if (!analysisResult || !videoFile) return;
+
+        setPlannerSaveStatus('saving');
+        setError(null);
+
+        try {
+            const showTitle = `Video Rehearsal: ${videoFile.name}`;
+            const show = await createShow(showTitle, 'Auto-created from a Video Rehearsal analysis.');
+
+            const notes = `Focus: ${prompt || 'None'}\n\n---\n\n${analysisResult}`;
+            await addTaskToShow(show.id, {
+                title: `Review video feedback: ${videoFile.name}`,
+                notes,
+                priority: 'Medium',
+                status: 'To-Do',
+            });
+
+            setPlannerSaveStatus('saved');
+
+            // Navigate directly to the new show (best effort).
+            if (onDeepLinkShowPlanner) {
+                onDeepLinkShowPlanner(show.id);
+            } else if (onNavigate) {
+                onNavigate('show-planner');
+            }
+
+            setTimeout(() => setPlannerSaveStatus('idle'), 2500);
+        } catch (err) {
+            setPlannerSaveStatus('idle');
+            setError(err instanceof Error ? err.message : 'Unable to save to Show Planner.');
+        }
+    };
+
+    const handleRefineWithAi = () => {
+        if (!analysisResult) return;
+        if (!onAiSpark) return;
+
+        const content = `Video Rehearsal Analysis\n\nFile: ${videoFile?.name || 'rehearsal'}\nFocus: ${prompt || 'None'}\n\n---\n\n${analysisResult}`;
+        onAiSpark({ type: 'refine-idea', payload: { content } });
+    };
+
+    const handleRunLiveAudioRehearsal = () => {
+        if (onNavigate) onNavigate('live-rehearsal');
+    };
+
+    const handleDismissUpsell = () => {
+        setShowTrialUpsell(false);
+        setDismissedUpsell(true);
+        try {
+            localStorage.setItem(upsellKey, '1');
+        } catch {
+            // ignore
         }
     };
 
@@ -358,10 +452,75 @@ const VideoRehearsal: React.FC<VideoRehearsalProps> = ({ user, onIdeaSaved }) =>
                 ) : analysisResult ? (
                      <div className="relative group flex-1 flex flex-col">
                         <div className="p-4 overflow-y-auto"><FormattedText text={analysisResult} /></div>
-                        <div className="mt-auto p-2 bg-slate-900/50 flex justify-end gap-2 border-t border-slate-800">
+                        {showTrialUpsell && !dismissedUpsell && String(user.membership || '').toLowerCase() === 'trial' && (
+                            <div className="mx-3 mb-2 rounded-lg border border-purple-700/40 bg-purple-900/10 p-3 text-sm text-slate-200">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                        <p className="font-semibold text-slate-100">Pros review video weekly. Unlock unlimited feedback.</p>
+                                        <p className="mt-1 text-xs text-slate-300/80">
+                                            Upgrade when you're ready—your rehearsal workflow gets even smoother with higher limits.
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => onRequestUpgrade && onRequestUpgrade()}
+                                            className="px-3 py-1.5 text-xs rounded-md bg-purple-600 hover:bg-purple-700 text-white font-semibold"
+                                        >
+                                            View plans
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleDismissUpsell}
+                                            className="px-2 py-1.5 text-xs rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200"
+                                            aria-label="Dismiss"
+                                        >
+                                            Not now
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="mt-auto p-2 bg-slate-900/50 flex flex-col gap-2 border-t border-slate-800">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <button
+                                        onClick={handleSaveNotesToShowPlanner}
+                                        disabled={plannerSaveStatus === 'saving'}
+                                        className="px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 disabled:opacity-60"
+                                        title="Save this analysis as a task in Show Planner"
+                                    >
+                                        {plannerSaveStatus === 'saving'
+                                            ? 'Saving…'
+                                            : plannerSaveStatus === 'saved'
+                                                ? 'Saved to Show Planner'
+                                                : 'Save notes to Show Planner'}
+                                    </button>
+                                    <button
+                                        onClick={handleRefineWithAi}
+                                        disabled={!onAiSpark}
+                                        className="px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 disabled:opacity-60 disabled:hover:bg-slate-700 disabled:cursor-not-allowed"
+                                        title="Open AI Assistant with this analysis"
+                                    >
+                                        Refine this routine with AI
+                                    </button>
+                                    <button
+                                        onClick={handleRunLiveAudioRehearsal}
+                                        disabled={!onNavigate}
+                                        className="px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 disabled:opacity-60 disabled:hover:bg-slate-700 disabled:cursor-not-allowed"
+                                        title="Jump into Live Audio Rehearsal"
+                                    >
+                                        Run Live Audio Rehearsal
+                                    </button>
+                                </div>
+
+                                <div className="flex items-center justify-end gap-2">
                             <button onClick={handleStartOver} className="px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200">Start Over</button>
                             <ShareButton title={`Video Analysis: ${videoFile?.name}`} text={analysisResult} className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200"><ShareIcon className="w-4 h-4" /><span>Share</span></ShareButton>
                             <button onClick={handleSave} disabled={saveStatus === 'saved'} className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200">{saveStatus === 'saved' ? <><CheckIcon className="w-4 h-4 text-green-400" /><span>Saved!</span></> : <><SaveIcon className="w-4 h-4" /><span>Save Idea</span></>}</button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 ) : (
