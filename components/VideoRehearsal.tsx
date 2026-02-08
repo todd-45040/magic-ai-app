@@ -4,7 +4,7 @@ import { generateResponseWithParts } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
 import { VIDEO_REHEARSAL_SYSTEM_INSTRUCTION } from '../constants';
 import { extractVideoFrames } from '../utils/videoFrames';
-import { VideoIcon, WandIcon, SaveIcon, CheckIcon, ShareIcon, TrashIcon } from './icons';
+import { VideoIcon, WandIcon, SaveIcon, CheckIcon, ShareIcon, TrashIcon, InfoIcon } from './icons';
 import ShareButton from './ShareButton';
 import FormattedText from './FormattedText';
 import type { User } from '../types';
@@ -28,6 +28,53 @@ const LoadingIndicator: React.FC = () => (
     </div>
 );
 
+
+const GuidedPlaceholder: React.FC = () => (
+    <div className="flex-1 flex items-center justify-center p-6">
+        <div className="w-full max-w-xl text-slate-200">
+            <div className="text-center mb-6">
+                <div className="mx-auto w-14 h-14 rounded-2xl bg-slate-800/70 border border-slate-700 flex items-center justify-center">
+                    <VideoIcon className="w-8 h-8 text-slate-300" />
+                </div>
+                <h3 className="mt-4 text-lg font-semibold text-slate-200">Ready when you are</h3>
+                <p className="mt-1 text-sm text-slate-400">
+                    Upload a rehearsal video and click <span className="text-slate-200 font-medium">Analyze</span>. Your feedback will appear here.
+                </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+                {[
+                    { title: 'Posture', desc: 'Tension, stance, and “magician’s guilt” tells.' },
+                    { title: 'Blocking', desc: 'Where your body and props sit in the frame.' },
+                    { title: 'Timing', desc: 'Pace, pauses, and moments that feel rushed.' },
+                    { title: 'Angles', desc: 'Sightlines and exposure risk based on frames.' },
+                ].map((c) => (
+                    <div key={c.title} className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
+                        <div className="flex items-center justify-between">
+                            <p className="font-semibold text-slate-200">{c.title}</p>
+                            <div className="h-2 w-16 rounded-full bg-slate-800 overflow-hidden">
+                                <div className="h-full w-1/2 bg-slate-700 animate-pulse" />
+                            </div>
+                        </div>
+                        <p className="mt-1 text-xs text-slate-400">{c.desc}</p>
+                        <div className="mt-3 space-y-2 animate-pulse">
+                            <div className="h-2 rounded bg-slate-800" />
+                            <div className="h-2 rounded bg-slate-800 w-5/6" />
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            <div className="rounded-lg border border-slate-800 bg-slate-900/30 p-3 text-sm text-slate-300">
+                <p className="font-semibold text-slate-200 mb-1">Tip</p>
+                <p className="text-slate-400">
+                    Use the <span className="text-slate-200">Analysis Focus</span> chips to guide the AI (e.g., angles, pacing, posture).
+                </p>
+            </div>
+        </div>
+    </div>
+);
+
 const VideoRehearsal: React.FC<VideoRehearsalProps> = ({ user, onIdeaSaved }) => {
     const [videoFile, setVideoFile] = useState<File | null>(null);
     const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
@@ -36,6 +83,7 @@ const VideoRehearsal: React.FC<VideoRehearsalProps> = ({ user, onIdeaSaved }) =>
     const [error, setError] = useState<string | null>(null);
     const [analysisResult, setAnalysisResult] = useState<string | null>(null);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
+    const [isInfoOpen, setIsInfoOpen] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Phase 2: Guided intent chips that help users provide better analysis focus prompts.
@@ -179,8 +227,75 @@ const VideoRehearsal: React.FC<VideoRehearsalProps> = ({ user, onIdeaSaved }) =>
         <main className="flex-1 overflow-y-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
             {/* Control Panel */}
             <div className="flex flex-col">
-                <h2 className="text-xl font-bold text-slate-300 mb-2">Video Rehearsal Studio</h2>
+                <div className="flex items-center gap-2 mb-2">
+                    <h2 className="text-xl font-bold text-slate-300">Video Rehearsal Studio</h2>
+                    <button
+                        type="button"
+                        onClick={() => setIsInfoOpen(true)}
+                        className="ml-1 inline-flex items-center justify-center w-8 h-8 rounded-full border border-slate-700 bg-slate-900/40 text-slate-300 hover:text-white hover:border-purple-500 transition-colors"
+                        title="What the AI looks for"
+                        aria-label="What the AI looks for"
+                    >
+                        <InfoIcon className="w-4 h-4" />
+                    </button>
+                </div>
                 <p className="text-slate-400 mb-4">Upload a video of your performance to get AI-driven feedback on body language, staging, and physical timing.</p>
+
+{isInfoOpen && (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <button
+            type="button"
+            className="absolute inset-0 bg-black/60"
+            onClick={() => setIsInfoOpen(false)}
+            aria-label="Close info modal"
+        />
+        <div className="relative w-full max-w-2xl rounded-xl border border-slate-700 bg-slate-950 shadow-xl">
+            <div className="flex items-start justify-between gap-4 p-4 border-b border-slate-800">
+                <div>
+                    <h3 className="text-lg font-bold text-slate-200">What the AI looks for</h3>
+                    <p className="text-sm text-slate-400 mt-1">
+                        This analysis is grounded in extracted video frames. If something isn’t visible, the AI will say so.
+                    </p>
+                </div>
+                <button
+                    type="button"
+                    onClick={() => setIsInfoOpen(false)}
+                    className="w-9 h-9 rounded-full border border-slate-700 bg-slate-900/40 text-slate-300 hover:text-white hover:border-purple-500 transition-colors flex items-center justify-center"
+                    aria-label="Close"
+                    title="Close"
+                >
+                    <span className="text-xl leading-none">×</span>
+                </button>
+            </div>
+
+            <div className="p-4 space-y-4">
+                <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
+                    <p className="font-semibold text-slate-200 mb-2">What is analyzed</p>
+                    <ul className="list-disc pl-5 space-y-1 text-sm text-slate-300">
+                        <li><span className="font-medium text-slate-200">Posture & tension:</span> stance, shoulders, hand tension, and unnatural freezes.</li>
+                        <li><span className="font-medium text-slate-200">Blocking & framing:</span> where you stand, where props live, and how clearly the “effect” reads.</li>
+                        <li><span className="font-medium text-slate-200">Timing & pacing:</span> rushed moments, missing pauses, and when to let reactions land.</li>
+                        <li><span className="font-medium text-slate-200">Angles & sightlines:</span> exposure risk based on what the camera can see.</li>
+                    </ul>
+                </div>
+
+                <div className="rounded-lg border border-slate-800 bg-slate-900/20 p-3">
+                    <p className="font-semibold text-slate-200 mb-2">What is NOT analyzed</p>
+                    <ul className="list-disc pl-5 space-y-1 text-sm text-slate-300">
+                        <li><span className="font-medium text-slate-200">No method exposure:</span> it won’t teach secrets, gimmicks, or how-to instructions.</li>
+                        <li><span className="font-medium text-slate-200">No guessing:</span> it won’t invent props or moves that aren’t visible in the frames.</li>
+                        <li><span className="font-medium text-slate-200">No identity judgments:</span> feedback is about performance mechanics, not personal traits.</li>
+                    </ul>
+                </div>
+
+                <div className="text-xs text-slate-400">
+                    Tip: Use <span className="text-slate-200 font-medium">Analysis Focus</span> to ask for specific checks (angles, posture, timing).
+                </div>
+            </div>
+        </div>
+    </div>
+)}
+
                 
                 <div className="space-y-4">
                     <input type="file" accept="video/*" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
@@ -250,12 +365,7 @@ const VideoRehearsal: React.FC<VideoRehearsalProps> = ({ user, onIdeaSaved }) =>
                         </div>
                     </div>
                 ) : (
-                    <div className="flex-1 flex items-center justify-center text-center text-slate-500 p-4">
-                        <div>
-                            <VideoIcon className="w-24 h-24 mx-auto mb-4" />
-                            <p>Your performance analysis will appear here.</p>
-                        </div>
-                    </div>
+                    <GuidedPlaceholder />
                 )}
             </div>
         </main>
