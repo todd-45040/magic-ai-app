@@ -517,12 +517,19 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
             .join(' ')
             .trim();
 
-    const transcribeOnServerIfNeeded = async () => {
-        // Only attempt server transcription if we have no user transcript.
+    /**
+     * Ensure we have a usable USER transcript for the take.
+     *
+     * IMPORTANT: React state updates are async. Callers should use the returned
+     * value rather than reading `transcriptionHistoryRef.current` immediately
+     * after this function.
+     */
+    const transcribeOnServerIfNeeded = async (): Promise<Transcription[]> => {
+        // Only attempt server transcription if we already have user transcript.
         const existing = getUserText(transcriptionHistory);
         if (existing) {
             pushDebug('transcribe_skipped', { reason: 'existing_user_transcript', len: existing.length });
-            return;
+            return Array.isArray(transcriptionHistory) ? transcriptionHistory : [];
         }
 
         const chunks = recordedChunksRef.current;
@@ -531,7 +538,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
 
         if (!chunks.length || bytes < 1024) {
             pushDebug('transcribe_skipped', { reason: 'no_audio_chunks', chunks: chunks.length, bytes });
-            return;
+            return Array.isArray(transcriptionHistory) ? transcriptionHistory : [];
         }
 
         const blob = new Blob(chunks, { type: mimeType });
@@ -575,7 +582,9 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
             });
 
             if (res.ok && transcript) {
-                setTranscriptionHistory([{ source: 'user', text: transcript, isFinal: true } as any]);
+                const finalHistory: Transcription[] = [{ source: 'user', text: transcript, isFinal: true } as any];
+                setTranscriptionHistory(finalHistory);
+                return finalHistory;
             }
         } catch (err: any) {
             pushDebug('transcribe_error', { message: String(err?.message || err) });
@@ -585,6 +594,8 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
                 // ignore
             }
         }
+
+        return Array.isArray(transcriptionHistory) ? transcriptionHistory : [];
     };
 
     const stopRecorderAndFlush = async () => {
@@ -625,11 +636,16 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         await stopRecorderAndFlush();
 
         // Try to transcribe server-side if Live inputTranscription didn't arrive.
-        await transcribeOnServerIfNeeded();
+        // Use the returned transcript immediately (do not rely on state/ref sync).
+        const finalizedHistory = await transcribeOnServerIfNeeded();
 
         // Finalize this take
         try {
-            const takeTranscript = Array.isArray(transcriptionHistoryRef.current) ? transcriptionHistoryRef.current : [];
+            // Prefer storing only USER transcript. But if we have none (e.g., transcription failed),
+            // store whatever we have so the take isn't "empty".
+            const all = Array.isArray(finalizedHistory) ? finalizedHistory : [];
+            const userOnly = all.filter((t) => t?.source === 'user');
+            const takeTranscript = userOnly.length ? userOnly : all;
             const startedAt = currentTakeStartRef.current ?? Date.now();
             const endedAt = Date.now();
             setTakes((prev) => {
@@ -999,7 +1015,18 @@ const ReviewView: React.FC<{
         const out: Transcription[] = [];
         for (const t of allTakes ?? []) {
             out.push({ source: 'model', text: `— Take ${t.takeNumber} —`, isFinal: true } as any);
-            for (const seg of (t.transcript ?? [])) out.push(seg);
+
+            const segs = Array.isArray(t?.transcript) ? t.transcript : [];
+            const hasUser = segs.some((s) => s?.source === 'user');
+
+            // If a take somehow has no user segments (e.g., transcription fallback failed),
+            // coerce remaining text segments to `user` so downstream “Discuss with AI”
+            // still has something to analyze.
+            const normalized = hasUser
+                ? segs
+                : segs.map((s) => ({ ...(s as any), source: 'user', isFinal: true }));
+
+            for (const seg of normalized) out.push(seg as any);
         }
         return out;
     };
