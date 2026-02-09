@@ -3,8 +3,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Type } from '@google/genai';
 import { generateResponse, generateStructuredResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
+import { getShows, addTaskToShow } from '../services/showsService';
 import { PERSONAS, PERSONA_SIMULATOR_SYSTEM_INSTRUCTION } from '../constants';
-import type { ChatMessage, Persona, User } from '../types';
+import type { ChatMessage, Persona, Show, User } from '../types';
 import { UsersCogIcon, WandIcon, SaveIcon, SendIcon, CheckIcon } from './icons';
 import FormattedText from './FormattedText';
 
@@ -35,6 +36,20 @@ type PersonaSimulationResult = {
     suggestions: string[];
 };
 
+type PersonaIntensity = 'gentle' | 'realistic' | 'brutal';
+
+const INTENSITY_LABELS: Record<PersonaIntensity, string> = {
+    gentle: 'Gentle',
+    realistic: 'Realistic',
+    brutal: 'Brutal',
+};
+
+const INTENSITY_HELP: Record<PersonaIntensity, string> = {
+    gentle: 'Less interruption. Softer critique. More encouragement.',
+    realistic: 'Balanced, believable audience behavior.',
+    brutal: 'More interruption. Blunt critique. Higher skepticism.',
+};
+
 const PERSONA_MICRO_DESCRIPTIONS: Record<PersonaKey, string> = {
     heckler: 'Challenges logic, interrupts, doubts',
     child: 'Overreacts, blurts thoughts, emotional',
@@ -63,11 +78,20 @@ const PersonaSimulator: React.FC<PersonaSimulatorProps> = ({ user, onIdeaSaved }
     const [mode, setMode] = useState<'setup' | 'simulation'>('setup');
     const [script, setScript] = useState('');
     const [selectedPersona, setSelectedPersona] = useState<PersonaKey | null>(null);
+    const [intensity, setIntensity] = useState<PersonaIntensity>('realistic');
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [result, setResult] = useState<PersonaSimulationResult | null>(null);
+
+    // Save Feedback as Notes
+    const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
+    const [saveTarget, setSaveTarget] = useState<'ideas' | 'sessionNotes' | 'showPlanner'>('ideas');
+    const [shows, setShows] = useState<Show[]>([]);
+    const [selectedShowId, setSelectedShowId] = useState<string>('');
+    const [saveStatus, setSaveStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     const selectedPersonaObj = selectedPersona
@@ -85,15 +109,118 @@ const PersonaSimulator: React.FC<PersonaSimulatorProps> = ({ user, onIdeaSaved }
         scrollToBottom();
     }, [messages]);
 
-    const buildStructuredPrompt = (personaName: string, personaDescription: string, scriptText: string) => {
+    const buildStructuredPrompt = (personaName: string, personaDescription: string, scriptText: string, level: PersonaIntensity) => {
         return (
             `You are simulating a live audience persona reacting to a magician's script.\n\n` +
             `Persona: ${personaName}\n` +
             `Persona behavior: ${personaDescription}\n\n` +
+            `Intensity: ${INTENSITY_LABELS[level]} (${INTENSITY_HELP[level]})\n\n` +
             `TASK: React to the script as the persona would in the moment. Do not explain how magic works. ` +
             `Focus on audience reaction, attention risks, and actionable improvements.\n\n` +
             `SCRIPT:\n${scriptText}`
         );
+    };
+
+    const buildIntensityModifier = (level: PersonaIntensity) => {
+        // Keep this concise and deterministic so the persona remains consistent.
+        if (level === 'gentle') {
+            return `Tone: supportive and constructive. Keep interruptions minimal. If you are a heckler persona, challenge politely and back off quickly.`;
+        }
+        if (level === 'brutal') {
+            return `Tone: blunt and demanding. Interrupt more often. If you are a heckler persona, challenge aggressively and test confidence. Keep it non-harassing.`;
+        }
+        return `Tone: realistic and balanced. React naturally without overdoing it.`;
+    };
+
+    const getFeedbackText = (personaName: string, res: PersonaSimulationResult) => {
+        return (
+            `Persona: ${personaName}\n` +
+            `Intensity: ${INTENSITY_LABELS[intensity]}\n\n` +
+            `Persona Reaction:\n${res.personaReaction}\n\n` +
+            `Risk Moments:\n${res.riskMoments.map(r => `- ${r}`).join('\n') || '- (none)'}\n\n` +
+            `Suggestions:\n${res.suggestions.map(s => `- ${s}`).join('\n') || '- (none)'}`
+        );
+    };
+
+    const openSaveModal = async () => {
+        if (!selectedPersonaObj || !result) return;
+        setSaveStatus(null);
+        setSaveTarget('ideas');
+        setIsSaveModalOpen(true);
+
+        // Lazy-load shows so we don't incur a DB read on every visit.
+        try {
+            const fetched = await getShows();
+            setShows(fetched);
+            // Default select the most recent show if available.
+            if (fetched?.length && !selectedShowId) setSelectedShowId(fetched[0].id);
+        } catch {
+            // It's okay if shows are unavailable; user can still save to ideas.
+            setShows([]);
+        }
+    };
+
+    const handleSaveFeedback = async () => {
+        if (!selectedPersonaObj || !result) return;
+        setIsSaving(true);
+        setSaveStatus(null);
+
+        const titleBase = `Persona Feedback: ${selectedPersonaObj.name}`;
+        const feedbackText = getFeedbackText(selectedPersonaObj.name, result);
+
+        try {
+            if (saveTarget === 'ideas') {
+                await saveIdea({
+                    type: 'text',
+                    title: titleBase,
+                    content: `## ${titleBase}\n\n${feedbackText}`,
+                    tags: ['persona-simulator', 'feedback', selectedPersona],
+                });
+                onIdeaSaved();
+                setSaveStatus({ type: 'success', message: 'Saved to Saved Ideas.' });
+                setIsSaveModalOpen(false);
+                return;
+            }
+
+            if (saveTarget === 'sessionNotes') {
+                await saveIdea({
+                    type: 'text',
+                    title: `Session Notes: ${titleBase}`,
+                    content: `## Session Notes\n\n${feedbackText}`,
+                    tags: ['session-notes', 'persona-simulator', 'feedback', selectedPersona],
+                });
+                onIdeaSaved();
+                setSaveStatus({ type: 'success', message: 'Saved to Session Notes.' });
+                setIsSaveModalOpen(false);
+                return;
+            }
+
+            if (saveTarget === 'showPlanner') {
+                const showId = selectedShowId || shows?.[0]?.id;
+                if (!showId) {
+                    throw new Error('No show selected. Create a show in Show Planner first.');
+                }
+
+                await addTaskToShow(showId, {
+                    title: titleBase,
+                    notes: feedbackText,
+                    priority: 'Medium' as any,
+                    status: 'To-Do' as any,
+                    tags: ['persona-simulator', 'feedback', selectedPersona],
+                });
+
+                setSaveStatus({ type: 'success', message: 'Saved to Show Planner as a new task.' });
+                setIsSaveModalOpen(false);
+                return;
+            }
+        } catch (e: any) {
+            setSaveStatus({
+                type: 'error',
+                message: e?.message ? String(e.message) : 'Could not save feedback. Please try again.',
+            });
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const runSimulation = async () => {
@@ -109,8 +236,10 @@ const PersonaSimulator: React.FC<PersonaSimulatorProps> = ({ user, onIdeaSaved }
 
         try {
             // Ensure the model is strongly anchored to the selected persona.
-            const systemInstruction = PERSONA_SIMULATOR_SYSTEM_INSTRUCTION(selectedPersonaObj.description);
-            const prompt = buildStructuredPrompt(selectedPersonaObj.name, selectedPersonaObj.description, script);
+            const intensityModifier = buildIntensityModifier(intensity);
+            const baseSystemInstruction = PERSONA_SIMULATOR_SYSTEM_INSTRUCTION(selectedPersonaObj.description);
+            const systemInstruction = `${baseSystemInstruction}\n\n${intensityModifier}`;
+            const prompt = buildStructuredPrompt(selectedPersonaObj.name, selectedPersonaObj.description, script, intensity);
 
             const responseSchema = {
                 type: Type.OBJECT,
@@ -132,10 +261,7 @@ const PersonaSimulator: React.FC<PersonaSimulatorProps> = ({ user, onIdeaSaved }
             setResult(safeResult);
 
             // Keep a compact transcript for saving/export.
-            const transcriptText =
-                `Persona Reaction:\n${safeResult.personaReaction}\n\n` +
-                `Risk Moments:\n${safeResult.riskMoments.map(r => `- ${r}`).join('\n') || '- (none)'}\n\n` +
-                `Suggestions:\n${safeResult.suggestions.map(s => `- ${s}`).join('\n') || '- (none)'}`;
+            const transcriptText = getFeedbackText(selectedPersonaObj.name, safeResult);
 
             setMessages(prev => [...prev, createChatMessage('model', transcriptText)]);
         } catch (e) {
@@ -161,7 +287,9 @@ const PersonaSimulator: React.FC<PersonaSimulatorProps> = ({ user, onIdeaSaved }
         setIsLoading(true);
         
         try {
-            const systemInstruction = PERSONA_SIMULATOR_SYSTEM_INSTRUCTION(selectedPersonaObj.description);
+            const intensityModifier = buildIntensityModifier(intensity);
+            const baseSystemInstruction = PERSONA_SIMULATOR_SYSTEM_INSTRUCTION(selectedPersonaObj.description);
+            const systemInstruction = `${baseSystemInstruction}\n\n${intensityModifier}`;
             const history = [...messages, userMessage]; // include the new message for context
             const response = await generateResponse(input, systemInstruction, user, history);
             setMessages(prev => [...prev, createChatMessage('model', response)]);
@@ -193,6 +321,7 @@ const PersonaSimulator: React.FC<PersonaSimulatorProps> = ({ user, onIdeaSaved }
                         <div>
                             <h2 className="text-xl font-bold text-white">Rehearsing with:</h2>
                             <p className="font-semibold text-purple-300">{selectedPersonaObj.name}</p>
+                            <p className="text-xs text-slate-400 mt-0.5">Intensity: <span className="text-slate-200 font-semibold">{INTENSITY_LABELS[intensity]}</span></p>
                         </div>
                     </div>
                     <div className="flex flex-wrap items-center justify-end gap-2">
@@ -210,6 +339,14 @@ const PersonaSimulator: React.FC<PersonaSimulatorProps> = ({ user, onIdeaSaved }
                             title="Go back and choose a different persona"
                         >
                             Test with Another Persona
+                        </button>
+                        <button
+                            onClick={openSaveModal}
+                            disabled={!result || isLoading}
+                            className="px-4 py-2 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-white font-semibold transition-colors flex items-center gap-2 disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed"
+                            title="Save the structured feedback into your workflow"
+                        >
+                            <SaveIcon className="w-4 h-4" /> Save Feedback as Notes
                         </button>
                         <button onClick={handleSave} className="px-4 py-2 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-white font-semibold transition-colors flex items-center gap-2">
                             <SaveIcon className="w-4 h-4" /> Save Transcript
@@ -314,6 +451,132 @@ const PersonaSimulator: React.FC<PersonaSimulatorProps> = ({ user, onIdeaSaved }
                         </div>
                     )}
                 </footer>
+
+                {isSaveModalOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                        <div
+                            className="absolute inset-0 bg-black/60"
+                            onClick={() => !isSaving && setIsSaveModalOpen(false)}
+                        />
+                        <div className="relative w-full max-w-lg rounded-xl border border-slate-700 bg-slate-900 shadow-xl">
+                            <div className="p-4 border-b border-slate-700 flex items-center justify-between">
+                                <div>
+                                    <div className="text-lg font-bold text-slate-100">Save Feedback as Notes</div>
+                                    <div className="text-xs text-slate-400">Send this persona feedback into your workflow.</div>
+                                </div>
+                                <button
+                                    className="px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-semibold disabled:opacity-50"
+                                    onClick={() => setIsSaveModalOpen(false)}
+                                    disabled={isSaving}
+                                >
+                                    Close
+                                </button>
+                            </div>
+
+                            <div className="p-4 space-y-4">
+                                <div className="space-y-2">
+                                    <div className="text-sm font-semibold text-slate-200">Save destination</div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                        <label className={`cursor-pointer rounded-lg border px-3 py-2 text-sm ${saveTarget === 'ideas' ? 'border-purple-500 bg-purple-900/20 text-slate-100' : 'border-slate-700 bg-slate-800 text-slate-200 hover:border-slate-500'}`}>
+                                            <input
+                                                type="radio"
+                                                name="saveTarget"
+                                                className="sr-only"
+                                                checked={saveTarget === 'ideas'}
+                                                onChange={() => setSaveTarget('ideas')}
+                                                disabled={isSaving}
+                                            />
+                                            <div className="font-semibold">Saved Ideas</div>
+                                            <div className="text-[11px] text-slate-400">Stores as a text idea</div>
+                                        </label>
+                                        <label className={`cursor-pointer rounded-lg border px-3 py-2 text-sm ${saveTarget === 'sessionNotes' ? 'border-purple-500 bg-purple-900/20 text-slate-100' : 'border-slate-700 bg-slate-800 text-slate-200 hover:border-slate-500'}`}>
+                                            <input
+                                                type="radio"
+                                                name="saveTarget"
+                                                className="sr-only"
+                                                checked={saveTarget === 'sessionNotes'}
+                                                onChange={() => setSaveTarget('sessionNotes')}
+                                                disabled={isSaving}
+                                            />
+                                            <div className="font-semibold">Session Notes</div>
+                                            <div className="text-[11px] text-slate-400">Tagged for notes</div>
+                                        </label>
+                                        <label className={`cursor-pointer rounded-lg border px-3 py-2 text-sm ${saveTarget === 'showPlanner' ? 'border-purple-500 bg-purple-900/20 text-slate-100' : 'border-slate-700 bg-slate-800 text-slate-200 hover:border-slate-500'}`}>
+                                            <input
+                                                type="radio"
+                                                name="saveTarget"
+                                                className="sr-only"
+                                                checked={saveTarget === 'showPlanner'}
+                                                onChange={() => setSaveTarget('showPlanner')}
+                                                disabled={isSaving}
+                                            />
+                                            <div className="font-semibold">Show Planner</div>
+                                            <div className="text-[11px] text-slate-400">Creates a task</div>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                {saveTarget === 'showPlanner' && (
+                                    <div className="space-y-2">
+                                        <div className="text-sm font-semibold text-slate-200">Choose show</div>
+                                        <select
+                                            value={selectedShowId}
+                                            onChange={(e) => setSelectedShowId(e.target.value)}
+                                            className="w-full rounded-md bg-slate-800 border border-slate-700 text-slate-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                            disabled={isSaving}
+                                        >
+                                            {shows.length === 0 ? (
+                                                <option value="">No shows found (create one in Show Planner)</option>
+                                            ) : (
+                                                shows.map((s) => (
+                                                    <option key={s.id} value={s.id}>
+                                                        {s.title}
+                                                    </option>
+                                                ))
+                                            )}
+                                        </select>
+                                        <div className="text-xs text-slate-400">
+                                            This will add a new task titled “Persona Feedback…” to the selected show.
+                                        </div>
+                                    </div>
+                                )}
+
+                                {saveStatus && (
+                                    <div className={`text-sm rounded-md px-3 py-2 border ${saveStatus.type === 'success' ? 'text-green-200 bg-green-950/30 border-green-800/40' : 'text-red-200 bg-red-950/30 border-red-800/40'}`}>
+                                        {saveStatus.message}
+                                    </div>
+                                )}
+
+                                <div className="flex items-center justify-end gap-2">
+                                    <button
+                                        className="px-4 py-2 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold disabled:opacity-50"
+                                        onClick={() => setIsSaveModalOpen(false)}
+                                        disabled={isSaving}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        className="px-4 py-2 rounded-md bg-purple-600 hover:bg-purple-700 text-white font-bold disabled:bg-slate-700 disabled:text-slate-400 disabled:cursor-not-allowed flex items-center gap-2"
+                                        onClick={handleSaveFeedback}
+                                        disabled={isSaving || (saveTarget === 'showPlanner' && shows.length === 0)}
+                                    >
+                                        {isSaving ? (
+                                            <>
+                                                <LoadingIndicator />
+                                                <span>Saving…</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <SaveIcon className="w-4 h-4" />
+                                                <span>Save</span>
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         )
     }
@@ -367,6 +630,31 @@ const PersonaSimulator: React.FC<PersonaSimulatorProps> = ({ user, onIdeaSaved }
                                 <span className="font-semibold text-purple-300">{selectedPersonaObj.name}</span>
                             </p>
                         )}
+
+                        <div className="mt-4">
+                            <h4 className="text-sm font-semibold text-slate-200 mb-2">Intensity</h4>
+                            <div className="inline-flex rounded-lg border border-slate-700 bg-slate-800 p-1">
+                                {(['gentle', 'realistic', 'brutal'] as PersonaIntensity[]).map((level) => {
+                                    const active = intensity === level;
+                                    return (
+                                        <button
+                                            key={level}
+                                            type="button"
+                                            onClick={() => setIntensity(level)}
+                                            className={`px-3 py-1.5 rounded-md text-sm font-semibold transition-colors ${
+                                                active
+                                                    ? 'bg-purple-700 text-white'
+                                                    : 'text-slate-200 hover:bg-slate-700/60'
+                                            }`}
+                                            title={INTENSITY_HELP[level]}
+                                        >
+                                            {INTENSITY_LABELS[level]}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            <p className="mt-2 text-xs text-slate-400">{INTENSITY_HELP[intensity]}</p>
+                        </div>
                     </div>
 
                     <div>
