@@ -92,6 +92,8 @@ const PersonaSimulator: React.FC<PersonaSimulatorProps> = ({ user, onIdeaSaved }
     const [selectedShowId, setSelectedShowId] = useState<string>('');
     const [saveStatus, setSaveStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
     const [isSaving, setIsSaving] = useState(false);
+    // Friendly post-save notice (shown outside the modal) for destinations that may not auto-refresh.
+    const [postSaveNotice, setPostSaveNotice] = useState<string | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     const selectedPersonaObj = selectedPersona
@@ -108,6 +110,12 @@ const PersonaSimulator: React.FC<PersonaSimulatorProps> = ({ user, onIdeaSaved }
     useEffect(() => {
         scrollToBottom();
     }, [messages]);
+
+    useEffect(() => {
+        if (!postSaveNotice) return;
+        const t = window.setTimeout(() => setPostSaveNotice(null), 7000);
+        return () => window.clearTimeout(t);
+    }, [postSaveNotice]);
 
     const buildStructuredPrompt = (personaName: string, personaDescription: string, scriptText: string, level: PersonaIntensity) => {
         return (
@@ -210,6 +218,8 @@ const PersonaSimulator: React.FC<PersonaSimulatorProps> = ({ user, onIdeaSaved }
                 });
 
                 setSaveStatus({ type: 'success', message: 'Saved to Show Planner as a new task.' });
+                // Some pages may not auto-refresh immediately; make the next step explicit.
+                setPostSaveNotice('Saved — open Show Planner to see the new task.');
                 setIsSaveModalOpen(false);
                 return;
             }
@@ -353,6 +363,14 @@ const PersonaSimulator: React.FC<PersonaSimulatorProps> = ({ user, onIdeaSaved }
                         </button>
                     </div>
                 </header>
+
+                {postSaveNotice && (
+                    <div className="px-4 pt-4">
+                        <div className="text-sm text-green-200 bg-green-950/30 border border-green-800/40 rounded-md px-3 py-2">
+                            {postSaveNotice}
+                        </div>
+                    </div>
+                )}
 
                 <main className="flex-1 overflow-y-auto p-4 md:p-6">
                     <div className="space-y-4">
