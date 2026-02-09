@@ -92,35 +92,86 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
             .join(' ');
     };
 
+    // Phase B: Structure output like a director's plan (overview, act structure, pacing, etc.)
     const directorResponseSchema = {
         type: Type.OBJECT,
         properties: {
             show_title: { type: Type.STRING },
             show_description: { type: Type.STRING },
-            segments: {
-                type: Type.ARRAY,
-                items: {
-                    type: Type.OBJECT,
-                    properties: {
-                        title: { type: Type.STRING },
-                        description: { type: Type.STRING },
-                        suggested_effects: {
-                            type: Type.ARRAY,
-                            items: {
-                                type: Type.OBJECT,
-                                properties: {
-                                    type: { type: Type.STRING },
-                                    rationale: { type: Type.STRING },
-                                },
-                                required: ['type', 'rationale'],
+            show_overview: {
+                type: Type.OBJECT,
+                properties: {
+                    theme: { type: Type.STRING },
+                    audience: { type: Type.STRING },
+                    tone: { type: Type.STRING },
+                    runtime_minutes: { type: Type.NUMBER },
+                },
+                required: ['theme', 'audience', 'tone', 'runtime_minutes'],
+            },
+            act_structure: {
+                type: Type.OBJECT,
+                properties: {
+                    opener: {
+                        type: Type.OBJECT,
+                        properties: {
+                            title: { type: Type.STRING },
+                            minutes: { type: Type.NUMBER },
+                            objective: { type: Type.STRING },
+                        },
+                        required: ['title', 'minutes', 'objective'],
+                    },
+                    middle: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                title: { type: Type.STRING },
+                                minutes: { type: Type.NUMBER },
+                                objective: { type: Type.STRING },
                             },
+                            required: ['title', 'minutes', 'objective'],
                         },
                     },
-                    required: ['title', 'description', 'suggested_effects'],
+                    closer: {
+                        type: Type.OBJECT,
+                        properties: {
+                            title: { type: Type.STRING },
+                            minutes: { type: Type.NUMBER },
+                            objective: { type: Type.STRING },
+                        },
+                        required: ['title', 'minutes', 'objective'],
+                    },
                 },
+                required: ['opener', 'middle', 'closer'],
+            },
+            effect_types: {
+                type: Type.OBJECT,
+                properties: {
+                    visual_opener: { type: Type.STRING },
+                    interactive_centerpiece: { type: Type.STRING },
+                    emotional_closer: { type: Type.STRING },
+                },
+                required: ['visual_opener', 'interactive_centerpiece', 'emotional_closer'],
+            },
+            pacing_notes: {
+                type: Type.OBJECT,
+                properties: {
+                    energy_flow: { type: Type.STRING },
+                    reset_moments: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    volunteer_moments: { type: Type.ARRAY, items: { type: Type.STRING } },
+                },
+                required: ['energy_flow', 'reset_moments', 'volunteer_moments'],
+            },
+            directors_notes: {
+                type: Type.OBJECT,
+                properties: {
+                    risk_points: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    adaptation_suggestions: { type: Type.ARRAY, items: { type: Type.STRING } },
+                },
+                required: ['risk_points', 'adaptation_suggestions'],
             },
         },
-        required: ['show_title', 'show_description', 'segments'],
+        required: ['show_title', 'show_overview', 'act_structure', 'effect_types', 'pacing_notes', 'directors_notes'],
     };
 
     const handleGenerate = async () => {
@@ -140,17 +191,28 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
             : `- Show Title: (not provided) Please invent a strong, marketable show title that fits the audience and theme.`;
 
         const prompt = `
-            Please generate a show plan with the following details:
-            ${titleLine}
-            - Desired Length (minutes): ${showLength}
-            - Target Audience: ${computedAudience}
-            - Overall Theme/Style: ${theme}
-            ${pacing ? `- Pacing: ${pacing}` : ''}
-            ${comedyLevel ? `- Comedy Level: ${comedyLevel}` : ''}
-            ${participation ? `- Audience Participation Level: ${participation}` : ''}
-            ${volunteersOk ? `- Volunteers OK: ${volunteersOk}` : ''}
-            ${constraints.trim() ? `- Constraints / Special Notes: ${constraints.trim()}` : ''}
-        `;
+Please generate a show plan in STRICT JSON matching the provided schema.
+
+Create a director-style plan (not a long narrative). Keep it practical and stage-ready.
+
+Details:
+${titleLine}
+- Desired Length (minutes): ${showLength}
+- Target Audience: ${computedAudience}
+- Overall Theme/Style: ${theme}
+${pacing ? `- Pacing: ${pacing}` : ''}
+${comedyLevel ? `- Comedy Level: ${comedyLevel}` : ''}
+${participation ? `- Audience Participation Level: ${participation}` : ''}
+${volunteersOk ? `- Volunteers OK: ${volunteersOk}` : ''}
+${constraints.trim() ? `- Constraints / Special Notes: ${constraints.trim()}` : ''}
+
+Output requirements:
+- show_overview should summarize theme/audience/tone/runtime.
+- act_structure: opener (5–7 min), middle (2–5 segments sized to fit), closer.
+- effect_types must stay NON-EXPOSURE (high-level categories only).
+- pacing_notes: energy flow + when to reset + when to engage volunteers.
+- directors_notes: risk points + adaptation suggestions.
+`;
         
         try {
           const resultJson = await generateStructuredResponse(
@@ -170,34 +232,62 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
     // FIX: Marked handleAddToPlanner as async to resolve the missing await error on addShow().
     
     const buildIdeaFromShowPlan = (plan: DirectorModeResponse) => {
-        const summaryLines: string[] = [];
-        summaryLines.push(`Show Title: ${plan.show_title}`);
-        if (plan.show_description?.trim()) summaryLines.push(`Show Description: ${plan.show_description.trim()}`);
-        summaryLines.push('');
-        summaryLines.push('Segments:');
-        plan.segments.forEach((seg, idx) => {
-            summaryLines.push(`  ${idx + 1}. ${seg.title}`);
-            if (seg.description?.trim()) summaryLines.push(`     - ${seg.description.trim()}`);
-            if (Array.isArray(seg.suggested_effects) && seg.suggested_effects.length) {
-                summaryLines.push(`     - Suggested effects:`);
-                seg.suggested_effects.forEach((e) => {
-                    const label = e?.type ? e.type : 'Effect';
-                    const why = e?.rationale ? ` — ${e.rationale}` : '';
-                    summaryLines.push(`       • ${label}${why}`);
-                });
-            }
+        const lines: string[] = [];
+        lines.push(`Show Title: ${plan.show_title}`);
+        if (plan.show_description?.trim()) lines.push(`Show Description: ${plan.show_description.trim()}`);
+        lines.push('');
+        lines.push('Show Overview:');
+        lines.push(`  • Theme: ${plan.show_overview?.theme ?? ''}`);
+        lines.push(`  • Audience: ${plan.show_overview?.audience ?? ''}`);
+        lines.push(`  • Tone: ${plan.show_overview?.tone ?? ''}`);
+        lines.push(`  • Runtime: ${plan.show_overview?.runtime_minutes ?? ''} min`);
+        lines.push('');
+        lines.push('Act Structure:');
+        lines.push(`  1) Opener (${plan.act_structure.opener.minutes} min): ${plan.act_structure.opener.title}`);
+        lines.push(`     - Objective: ${plan.act_structure.opener.objective}`);
+        plan.act_structure.middle.forEach((m, i) => {
+            lines.push(`  ${i + 2}) Middle (${m.minutes} min): ${m.title}`);
+            lines.push(`     - Objective: ${m.objective}`);
         });
+        lines.push(`  ${plan.act_structure.middle.length + 2}) Closer (${plan.act_structure.closer.minutes} min): ${plan.act_structure.closer.title}`);
+        lines.push(`     - Objective: ${plan.act_structure.closer.objective}`);
+        lines.push('');
+        lines.push('Effect Types (Non-Exposure):');
+        lines.push(`  • Visual opener: ${plan.effect_types.visual_opener}`);
+        lines.push(`  • Interactive centerpiece: ${plan.effect_types.interactive_centerpiece}`);
+        lines.push(`  • Emotional closer: ${plan.effect_types.emotional_closer}`);
+        lines.push('');
+        lines.push('Pacing Notes:');
+        lines.push(`  • Energy flow: ${plan.pacing_notes.energy_flow}`);
+        if (plan.pacing_notes.reset_moments?.length) {
+            lines.push('  • Reset moments:');
+            plan.pacing_notes.reset_moments.forEach((x) => lines.push(`     - ${x}`));
+        }
+        if (plan.pacing_notes.volunteer_moments?.length) {
+            lines.push('  • Volunteer moments:');
+            plan.pacing_notes.volunteer_moments.forEach((x) => lines.push(`     - ${x}`));
+        }
+        lines.push('');
+        lines.push("Director's Notes:");
+        if (plan.directors_notes.risk_points?.length) {
+            lines.push('  • Risk points:');
+            plan.directors_notes.risk_points.forEach((x) => lines.push(`     - ${x}`));
+        }
+        if (plan.directors_notes.adaptation_suggestions?.length) {
+            lines.push('  • Adaptation suggestions:');
+            plan.directors_notes.adaptation_suggestions.forEach((x) => lines.push(`     - ${x}`));
+        }
 
         const prettyJson = JSON.stringify(plan, null, 2);
 
         const content =
-`${summaryLines.join('\n')}
+`${lines.join('\n')}
 
 --- JSON (for reuse / export) ---
 ${prettyJson}
 `;
         const title = `Director Mode — ${plan.show_title}`;
-        const tags = ['director-mode', 'show-plan'];
+        const tags = ['director-mode', 'show-blueprint'];
         return { title, content, tags };
     };
 
@@ -244,10 +334,35 @@ const handleAddToPlanner = async () => {
             if (!showId) throw new Error('Could not determine created show ID.');
 
             // Insert tasks aligned with current public.tasks schema (title, notes, show_id, user_id)
-            for (const seg of showPlan.segments) {
+            // Create Show Planner tasks aligned to the director plan
+            const tasks = [
+                {
+                    title: `Opener: ${showPlan.act_structure.opener.title}`,
+                    notes: `Objective: ${showPlan.act_structure.opener.objective}\nEstimated: ${showPlan.act_structure.opener.minutes} min`,
+                },
+                ...showPlan.act_structure.middle.map((m, idx) => ({
+                    title: `Middle ${idx + 1}: ${m.title}`,
+                    notes: `Objective: ${m.objective}\nEstimated: ${m.minutes} min`,
+                })),
+                {
+                    title: `Closer: ${showPlan.act_structure.closer.title}`,
+                    notes: `Objective: ${showPlan.act_structure.closer.objective}\nEstimated: ${showPlan.act_structure.closer.minutes} min`,
+                },
+                {
+                    title: `Director Notes: ${showPlan.show_title}`,
+                    notes:
+                        `Effect Types (non-exposure):\n- Visual opener: ${showPlan.effect_types.visual_opener}\n- Interactive centerpiece: ${showPlan.effect_types.interactive_centerpiece}\n- Emotional closer: ${showPlan.effect_types.emotional_closer}\n\nPacing:\n- Energy flow: ${showPlan.pacing_notes.energy_flow}\n` +
+                        (showPlan.pacing_notes.reset_moments?.length ? `- Reset moments: ${showPlan.pacing_notes.reset_moments.join('; ')}\n` : '') +
+                        (showPlan.pacing_notes.volunteer_moments?.length ? `- Volunteer moments: ${showPlan.pacing_notes.volunteer_moments.join('; ')}\n` : '') +
+                        (showPlan.directors_notes.risk_points?.length ? `\nRisk points:\n- ${showPlan.directors_notes.risk_points.join('\n- ')}\n` : '') +
+                        (showPlan.directors_notes.adaptation_suggestions?.length ? `\nAdaptation suggestions:\n- ${showPlan.directors_notes.adaptation_suggestions.join('\n- ')}\n` : ''),
+                },
+            ];
+
+            for (const t of tasks) {
                 await addTaskToShow(showId, {
-                    title: seg.title,
-                    notes: seg.description ?? ''
+                    title: t.title,
+                    notes: t.notes,
                 } as any);
             }
 
@@ -260,13 +375,12 @@ const handleAddToPlanner = async () => {
         }
     };;
 
-    const handleStartOver = () => {
+    const handleBackToForm = () => {
+        // Phase B: keep inputs editable; do not clear the form.
         setShowPlan(null);
         setIsAddedToPlanner(false);
         setIsSavedToIdeas(false);
         setError(null);
-        // Optional: clear form fields
-        // setShowTitle(''); setShowLength(''); setAudienceType(''); setTheme('');
     };
 
     if (isLoading) {
@@ -277,27 +391,143 @@ const handleAddToPlanner = async () => {
         return (
             <div className="flex-1 flex flex-col overflow-y-auto p-4 md:p-6 animate-fade-in">
                 <h2 className="text-3xl font-bold text-white font-cinzel">{showPlan.show_title}</h2>
-                <p className="text-slate-400 mt-2 mb-6">{showPlan.show_description}</p>
-                
-                <div className="space-y-4">
-                    {showPlan.segments.map((segment, index) => (
-                        <div key={index} className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
-                            <h3 className="text-xl font-bold text-[#E6C77A] font-cinzel">{segment.title}</h3>
-                            <p className="text-sm text-slate-300 mt-1 mb-3">{segment.description}</p>
-                            <div className="space-y-2 border-t border-slate-700/50 pt-3">
-                                {segment.suggested_effects.map((effect, effIndex) => (
-                                    <div key={effIndex} className="bg-slate-900/50 p-3 rounded-md">
-                                        <h4 className="font-semibold text-white">{effect.type}</h4>
-                                        <p className="text-xs text-slate-400">{effect.rationale}</p>
-                                    </div>
-                                ))}
+                {showPlan.show_description ? (
+                    <p className="text-slate-400 mt-2">{showPlan.show_description}</p>
+                ) : null}
+
+                {/* Phase B: results actions (keep inputs editable + frictionless reruns) */}
+                <div className="mt-5 mb-6 flex flex-wrap gap-2">
+                    <button
+                        onClick={handleGenerate}
+                        className="px-4 py-2 rounded-md bg-slate-700/60 hover:bg-slate-700 border border-slate-600 text-white font-bold transition-colors"
+                        title="Regenerate this blueprint using your current inputs"
+                    >
+                        Revise Blueprint
+                    </button>
+                    <button
+                        onClick={handleBackToForm}
+                        className="px-4 py-2 rounded-md bg-slate-700/40 hover:bg-slate-700 border border-slate-600 text-white font-bold transition-colors"
+                        title="Go back to adjust audience (inputs are kept)"
+                    >
+                        Change Audience
+                    </button>
+                    <button
+                        onClick={handleStartOver}
+                        className="px-4 py-2 rounded-md bg-slate-600 hover:bg-slate-700 text-white font-bold transition-colors"
+                        title="Hide results (inputs kept)"
+                    >
+                        Hide Results
+                    </button>
+                </div>
+
+                {/* Phase B: structured sections */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+                        <h3 className="text-xl font-bold text-[#E6C77A] font-cinzel">Show Overview</h3>
+                        <div className="mt-3 space-y-2 text-sm text-slate-300">
+                            <p><span className="text-slate-400">Theme:</span> {showPlan.show_overview.theme}</p>
+                            <p><span className="text-slate-400">Audience:</span> {showPlan.show_overview.audience}</p>
+                            <p><span className="text-slate-400">Tone:</span> {showPlan.show_overview.tone}</p>
+                            <p><span className="text-slate-400">Runtime:</span> {showPlan.show_overview.runtime_minutes} min</p>
+                        </div>
+                    </div>
+
+                    <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+                        <h3 className="text-xl font-bold text-[#E6C77A] font-cinzel">Effect Types (No Exposure)</h3>
+                        <div className="mt-3 space-y-3 text-sm text-slate-300">
+                            <div className="bg-slate-900/40 rounded-md p-3 border border-slate-700/60">
+                                <p className="font-semibold text-white">Visual opener</p>
+                                <p className="text-slate-300">{showPlan.effect_types.visual_opener}</p>
+                            </div>
+                            <div className="bg-slate-900/40 rounded-md p-3 border border-slate-700/60">
+                                <p className="font-semibold text-white">Interactive centerpiece</p>
+                                <p className="text-slate-300">{showPlan.effect_types.interactive_centerpiece}</p>
+                            </div>
+                            <div className="bg-slate-900/40 rounded-md p-3 border border-slate-700/60">
+                                <p className="font-semibold text-white">Emotional closer</p>
+                                <p className="text-slate-300">{showPlan.effect_types.emotional_closer}</p>
                             </div>
                         </div>
-                    ))}
+                    </div>
+
+                    <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700 lg:col-span-2">
+                        <h3 className="text-xl font-bold text-[#E6C77A] font-cinzel">Act Structure</h3>
+                        <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <div className="bg-slate-900/40 rounded-md p-3 border border-slate-700/60">
+                                <p className="text-xs text-slate-400">Opener ({showPlan.act_structure.opener.minutes} min)</p>
+                                <p className="font-semibold text-white">{showPlan.act_structure.opener.title}</p>
+                                <p className="text-sm text-slate-300 mt-1">{showPlan.act_structure.opener.objective}</p>
+                            </div>
+                            <div className="bg-slate-900/40 rounded-md p-3 border border-slate-700/60 md:col-span-1">
+                                <p className="text-xs text-slate-400">Middle (segments)</p>
+                                <div className="mt-2 space-y-2">
+                                    {showPlan.act_structure.middle.map((m, i) => (
+                                        <div key={i} className="border border-slate-700/60 rounded-md p-2 bg-slate-950/20">
+                                            <p className="text-xs text-slate-400">{m.minutes} min</p>
+                                            <p className="font-semibold text-white">{m.title}</p>
+                                            <p className="text-sm text-slate-300 mt-1">{m.objective}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="bg-slate-900/40 rounded-md p-3 border border-slate-700/60">
+                                <p className="text-xs text-slate-400">Closer ({showPlan.act_structure.closer.minutes} min)</p>
+                                <p className="font-semibold text-white">{showPlan.act_structure.closer.title}</p>
+                                <p className="text-sm text-slate-300 mt-1">{showPlan.act_structure.closer.objective}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+                        <h3 className="text-xl font-bold text-[#E6C77A] font-cinzel">Pacing Notes</h3>
+                        <div className="mt-3 text-sm text-slate-300 space-y-3">
+                            <div>
+                                <p className="text-slate-400">Energy rises/falls</p>
+                                <p>{showPlan.pacing_notes.energy_flow}</p>
+                            </div>
+                            {showPlan.pacing_notes.reset_moments?.length ? (
+                                <div>
+                                    <p className="text-slate-400">When to reset</p>
+                                    <ul className="list-disc list-inside">
+                                        {showPlan.pacing_notes.reset_moments.map((x, i) => <li key={i}>{x}</li>)}
+                                    </ul>
+                                </div>
+                            ) : null}
+                            {showPlan.pacing_notes.volunteer_moments?.length ? (
+                                <div>
+                                    <p className="text-slate-400">When to engage volunteers</p>
+                                    <ul className="list-disc list-inside">
+                                        {showPlan.pacing_notes.volunteer_moments.map((x, i) => <li key={i}>{x}</li>)}
+                                    </ul>
+                                </div>
+                            ) : null}
+                        </div>
+                    </div>
+
+                    <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+                        <h3 className="text-xl font-bold text-[#E6C77A] font-cinzel">Director’s Notes</h3>
+                        <div className="mt-3 text-sm text-slate-300 space-y-3">
+                            {showPlan.directors_notes.risk_points?.length ? (
+                                <div>
+                                    <p className="text-slate-400">Risk points</p>
+                                    <ul className="list-disc list-inside">
+                                        {showPlan.directors_notes.risk_points.map((x, i) => <li key={i}>{x}</li>)}
+                                    </ul>
+                                </div>
+                            ) : null}
+                            {showPlan.directors_notes.adaptation_suggestions?.length ? (
+                                <div>
+                                    <p className="text-slate-400">Adaptation suggestions</p>
+                                    <ul className="list-disc list-inside">
+                                        {showPlan.directors_notes.adaptation_suggestions.map((x, i) => <li key={i}>{x}</li>)}
+                                    </ul>
+                                </div>
+                            ) : null}
+                        </div>
+                    </div>
                 </div>
 
                 <div className="mt-6 flex flex-wrap items-center justify-center gap-4">
-                    <button onClick={handleStartOver} className="px-6 py-2 bg-slate-600 hover:bg-slate-700 rounded-md text-white font-bold transition-colors">Start Over</button>
                     <button
                         onClick={handleSaveToIdeas}
                         disabled={isSavingIdea || isSavedToIdeas}
