@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import type { User } from '../types';
 import { ANGLE_RISK_ANALYSIS_SYSTEM_INSTRUCTION } from '../constants';
 import { generateResponse } from '../services/geminiService';
@@ -113,43 +113,79 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved }: { user: User; o
     // Extract Mitigations section (if present) so we can render it as a checklist.
     // We look for a heading containing "Mitigations" and split until the next heading.
     const mitigationsHeadingRegex = /^#{2,6}\s+.*mitigations.*$/gim;
-    const match = mitigationsHeadingRegex.exec(raw);
+    const mitigationsMatch = mitigationsHeadingRegex.exec(raw);
 
-    if (!match) {
-      return {
-        pre: decorateHeadings(raw),
-        mitigationsItems: [] as string[],
-        post: '',
-      };
+    let mainWithoutMitigations = raw;
+    let mitigationsItems: string[] = [];
+
+    if (mitigationsMatch) {
+      const headingStart = mitigationsMatch.index;
+      const afterHeadingIndex = headingStart + mitigationsMatch[0].length;
+      const afterHeading = raw.slice(afterHeadingIndex);
+
+      // Find the next heading after Mitigations.
+      const nextHeadingMatch = afterHeading.match(/\n#{2,6}\s+/m);
+      const mitigationsBody = nextHeadingMatch
+        ? afterHeading.slice(0, nextHeadingMatch.index ?? 0)
+        : afterHeading;
+      const post = nextHeadingMatch
+        ? afterHeading.slice(nextHeadingMatch.index ?? 0)
+        : '';
+
+      const pre = raw.slice(0, headingStart);
+
+      mitigationsItems = mitigationsBody
+        .split('\n')
+        .map(l => l.trim())
+        .filter(Boolean)
+        .map(l => l.replace(/^[-*•]\s+/, ''))
+        .map(l => l.replace(/^\d+\.?\s+/, ''))
+        .filter(Boolean);
+
+      mainWithoutMitigations = `${pre}\n${post}`.trim();
     }
 
-    const headingStart = match.index;
-    const afterHeadingIndex = headingStart + match[0].length;
-    const afterHeading = raw.slice(afterHeadingIndex);
+    // Extract "Questions to refine this analysis" so we can elevate it with a refinement CTA.
+    const questionsHeadingRegex = /^#{2,6}\s+.*questions\s+to\s+refine.*$/gim;
+    const questionsMatch = questionsHeadingRegex.exec(mainWithoutMitigations);
 
-    // Find the next heading after Mitigations.
-    const nextHeadingMatch = afterHeading.match(/\n#{2,6}\s+/m);
-    const mitigationsBody = nextHeadingMatch
-      ? afterHeading.slice(0, nextHeadingMatch.index ?? 0)
-      : afterHeading;
-    const post = nextHeadingMatch
-      ? afterHeading.slice(nextHeadingMatch.index ?? 0)
-      : '';
+    let mainText = mainWithoutMitigations;
+    let questionsItems: string[] = [];
 
-    const pre = raw.slice(0, headingStart);
+    if (questionsMatch) {
+      const qStart = questionsMatch.index;
+      const afterQHeadingIndex = qStart + questionsMatch[0].length;
+      const afterHeading = mainWithoutMitigations.slice(afterQHeadingIndex);
 
-    const items = mitigationsBody
-      .split('\n')
-      .map(l => l.trim())
-      .filter(Boolean)
-      .map(l => l.replace(/^[-*•]\s+/, ''))
-      .map(l => l.replace(/^\d+\.?\s+/, ''))
-      .filter(Boolean);
+      // Questions are usually at the end; if there's another heading after, stop there.
+      const nextHeadingMatch = afterHeading.match(/\n#{2,6}\s+/m);
+      const qBody = nextHeadingMatch
+        ? afterHeading.slice(0, nextHeadingMatch.index ?? 0)
+        : afterHeading;
+
+      const qPre = mainWithoutMitigations.slice(0, qStart);
+      const qPost = nextHeadingMatch
+        ? afterHeading.slice(nextHeadingMatch.index ?? 0)
+        : '';
+
+      mainText = `${qPre}\n${qPost}`.trim();
+
+      questionsItems = qBody
+        .split('\n')
+        .map(l => l.trim())
+        .filter(Boolean)
+        .map(l => l.replace(/^[-*•]\s+/, ''))
+        .map(l => l.replace(/^\d+\.?\s+/, ''))
+        .filter(Boolean);
+    }
+
+    const firstQuestion = questionsItems.length ? questionsItems[0] : '';
 
     return {
-      pre: decorateHeadings(pre),
-      mitigationsItems: items,
-      post: decorateHeadings(post),
+      main: decorateHeadings(mainText),
+      mitigationsItems,
+      questionsItems,
+      firstQuestion,
     };
   }, [analysis]);
 
@@ -230,6 +266,21 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved }: { user: User; o
       console.error(e);
       toast.showToast('Could not save idea.', 'error');
     }
+  };
+
+
+  const handleRefineFromQuestions = () => {
+    const q = decoratedOutput?.firstQuestion?.trim();
+    if (!q) return;
+
+    // Pre-fill focus field with the first refinement question and bring the user back to inputs.
+    setFocusText(q);
+
+    // Smooth scroll + focus.
+    setTimeout(() => {
+      focusRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      focusRef.current?.focus();
+    }, 0);
   };
 
   return (
@@ -318,6 +369,7 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved }: { user: User; o
             <div>
               <label className="block text-sm font-medium text-white/80 mb-1">Focus (optional)</label>
               <textarea
+                ref={focusRef}
                 value={focusText}
                 onChange={(e) => setFocusText(e.target.value)}
                 rows={3}
@@ -412,7 +464,7 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved }: { user: User; o
                 {/* Phase 6B: Decorated headings + actionable Mitigations checklist */}
                 {decoratedOutput ? (
                   <>
-                    {!!decoratedOutput.pre.trim() && <FormattedText text={decoratedOutput.pre} />}
+                    {!!decoratedOutput.main.trim() && <FormattedText text={decoratedOutput.main} />}
 
                     {decoratedOutput.mitigationsItems.length > 0 && (
                       <div className="my-4 rounded-xl border border-purple-400/20 bg-purple-500/10 p-4">
@@ -445,9 +497,30 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved }: { user: User; o
                       </div>
                     )}
 
-                    {!!decoratedOutput.post.trim() && <FormattedText text={decoratedOutput.post} />}
+                    {decoratedOutput.questionsItems.length > 0 && (
+                      <div className="my-4 rounded-xl border border-white/10 bg-black/10 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-white">Want even more precision?</p>
+                            <p className="mt-1 text-xs text-white/60">Answer the first question to refine your focus, then rerun the analysis.</p>
+                          </div>
+                          <button
+                            onClick={handleRefineFromQuestions}
+                            className="shrink-0 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-white/80 hover:bg-white/[0.07]"
+                          >
+                            Refine this analysis
+                          </button>
+                        </div>
+
+                        <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-white/80">
+                          {decoratedOutput.questionsItems.slice(0, 8).map((q, i) => (
+                            <li key={`${i}-${q.slice(0, 12)}`} className="leading-relaxed">{q}</li>
+                          ))}
+                        </ol>
+                      </div>
+                    )}
                   </>
-                ) : (
+                )) : (
                   <FormattedText text={analysis} />
                 )}
               </div>
