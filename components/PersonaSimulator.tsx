@@ -26,14 +26,36 @@ const LoadingIndicator: React.FC = () => (
     </div>
 );
 
+type PersonaKey = 'heckler' | 'child' | 'corporate' | 'supportive';
+
+const PERSONA_KEY_BY_NAME: Record<string, PersonaKey> = {
+    'Skeptical Heckler': 'heckler',
+    'Enthusiastic Child': 'child',
+    'Distracted Corporate Guest': 'corporate',
+    'Supportive Partner': 'supportive',
+};
+
+const getPersonaKey = (persona: Persona): PersonaKey => {
+    // Fallback keeps the app functional if labels change unexpectedly.
+    return PERSONA_KEY_BY_NAME[persona.name] ?? 'heckler';
+};
+
 const PersonaSimulator: React.FC<PersonaSimulatorProps> = ({ user, onIdeaSaved }) => {
     const [mode, setMode] = useState<'setup' | 'simulation'>('setup');
     const [script, setScript] = useState('');
-    const [selectedPersona, setSelectedPersona] = useState<Persona | null>(null);
+    const [selectedPersona, setSelectedPersona] = useState<PersonaKey | null>(null);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    const selectedPersonaObj = selectedPersona
+        ? PERSONAS.find(p => getPersonaKey(p) === selectedPersona) ?? null
+        : null;
+
+    const canStart = !!script.trim() && !!selectedPersonaObj && !isLoading;
+    const canSend = !!input.trim() && !!selectedPersonaObj && !isLoading;
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -44,37 +66,48 @@ const PersonaSimulator: React.FC<PersonaSimulatorProps> = ({ user, onIdeaSaved }
     }, [messages]);
 
     const handleStartSimulation = async () => {
-        if (!script || !selectedPersona) return;
+        if (!script.trim() || !selectedPersonaObj) return;
+
+        setError(null);
 
         const firstMessage = createChatMessage('user', script);
         setMessages([firstMessage]);
         setMode('simulation');
         setIsLoading(true);
 
-        const systemInstruction = PERSONA_SIMULATOR_SYSTEM_INSTRUCTION(selectedPersona.description);
-        // FIX: Pass the user object as the 3rd argument to generateResponse.
-        const response = await generateResponse(script, systemInstruction, user);
-        
-        setMessages(prev => [...prev, createChatMessage('model', response)]);
-        setIsLoading(false);
+        try {
+            // Ensure the model is strongly anchored to the selected persona.
+            const systemInstruction = PERSONA_SIMULATOR_SYSTEM_INSTRUCTION(selectedPersonaObj.description);
+            const response = await generateResponse(script, systemInstruction, user);
+            setMessages(prev => [...prev, createChatMessage('model', response)]);
+        } catch (e) {
+            // Friendly, on-brand message. Never surface raw API errors.
+            setError("The audience didn’t respond — try again in a moment.");
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const handleSend = async () => {
-        if (!input.trim() || !selectedPersona) return;
+        if (!input.trim() || !selectedPersonaObj) return;
+
+        setError(null);
 
         const userMessage = createChatMessage('user', input);
         setMessages(prev => [...prev, userMessage]);
         setInput('');
         setIsLoading(true);
         
-        const systemInstruction = PERSONA_SIMULATOR_SYSTEM_INSTRUCTION(selectedPersona.description);
-        const history = [...messages, userMessage]; // include the new message for context
-
-        // FIX: Reordered arguments to pass 'user' as the 3rd argument and 'history' as the 4th, matching generateResponse signature.
-        const response = await generateResponse(input, systemInstruction, user, history);
-
-        setMessages(prev => [...prev, createChatMessage('model', response)]);
-        setIsLoading(false);
+        try {
+            const systemInstruction = PERSONA_SIMULATOR_SYSTEM_INSTRUCTION(selectedPersonaObj.description);
+            const history = [...messages, userMessage]; // include the new message for context
+            const response = await generateResponse(input, systemInstruction, user, history);
+            setMessages(prev => [...prev, createChatMessage('model', response)]);
+        } catch (e) {
+            setError("The audience didn’t respond — try again in a moment.");
+        } finally {
+            setIsLoading(false);
+        }
     };
     
     const handleEndSimulation = () => {
@@ -84,26 +117,26 @@ const PersonaSimulator: React.FC<PersonaSimulatorProps> = ({ user, onIdeaSaved }
     };
 
     const handleSave = () => {
-        if (messages.length === 0 || !selectedPersona) return;
+        if (messages.length === 0 || !selectedPersonaObj) return;
         
-        let content = `## Persona Simulation: ${selectedPersona.name}\n\n`;
-        content += messages.map(msg => `**${msg.role === 'user' ? 'Magician' : selectedPersona.name}:** ${msg.text}`).join('\n\n---\n\n');
+        let content = `## Persona Simulation: ${selectedPersonaObj.name}\n\n`;
+        content += messages.map(msg => `**${msg.role === 'user' ? 'Magician' : selectedPersonaObj.name}:** ${msg.text}`).join('\n\n---\n\n');
 
-        const title = `Persona Sim: ${selectedPersona.name}`;
+        const title = `Persona Sim: ${selectedPersonaObj.name}`;
         saveIdea('text', content, title);
         onIdeaSaved();
     };
 
 
-    if (mode === 'simulation' && selectedPersona) {
+    if (mode === 'simulation' && selectedPersonaObj) {
         return (
             <div className="flex-1 flex flex-col h-full overflow-hidden">
                 <header className="p-4 border-b border-slate-700 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <selectedPersona.icon className="w-8 h-8 text-purple-400" />
+                        <selectedPersonaObj.icon className="w-8 h-8 text-purple-400" />
                         <div>
                             <h2 className="text-xl font-bold text-white">Rehearsing with:</h2>
-                            <p className="font-semibold text-purple-300">{selectedPersona.name}</p>
+                            <p className="font-semibold text-purple-300">{selectedPersonaObj.name}</p>
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -120,7 +153,7 @@ const PersonaSimulator: React.FC<PersonaSimulatorProps> = ({ user, onIdeaSaved }
                             {msg.role === 'model' ? (
                             <>
                                 <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center flex-shrink-0">
-                                    <selectedPersona.icon className="w-5 h-5 text-purple-400" />
+                                    <selectedPersonaObj.icon className="w-5 h-5 text-purple-400" />
                                 </div>
                                 <div className="max-w-lg px-4 py-2 rounded-xl bg-slate-700 text-slate-200">
                                     <FormattedText text={msg.text} />
@@ -136,7 +169,7 @@ const PersonaSimulator: React.FC<PersonaSimulatorProps> = ({ user, onIdeaSaved }
                     {isLoading && (
                     <div className="flex items-start gap-3 justify-start">
                         <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center flex-shrink-0">
-                            <selectedPersona.icon className="w-5 h-5 text-purple-400" />
+                            <selectedPersonaObj.icon className="w-5 h-5 text-purple-400" />
                         </div>
                         <div className="max-w-lg px-4 py-2 rounded-xl bg-slate-700 text-slate-200">
                             <LoadingIndicator />
@@ -149,16 +182,22 @@ const PersonaSimulator: React.FC<PersonaSimulatorProps> = ({ user, onIdeaSaved }
                 <footer className="p-4 border-t border-slate-800">
                     <div className="flex items-center bg-slate-800 rounded-lg">
                         <input
-                            type="text" value={input} onChange={(e) => setInput(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && !isLoading && handleSend()}
+                            type="text" value={input} onChange={(e) => { setInput(e.target.value); if (error) setError(null); }}
+                            onKeyDown={(e) => e.key === 'Enter' && canSend && handleSend()}
                             placeholder="Continue the performance..."
                             className="flex-1 w-full bg-transparent px-4 py-3 text-white placeholder-slate-400 focus:outline-none"
                             disabled={isLoading}
                         />
-                        <button onClick={handleSend} disabled={isLoading || !input.trim()} className="p-3 text-purple-400 hover:text-purple-300 disabled:text-slate-600 transition-colors">
+                        <button onClick={handleSend} disabled={!canSend} className="p-3 text-purple-400 hover:text-purple-300 disabled:text-slate-600 transition-colors">
                             <SendIcon className="w-6 h-6" />
                         </button>
                     </div>
+
+                    {error && (
+                        <div className="mt-3 text-sm text-red-300 bg-red-950/40 border border-red-900/60 rounded-md px-3 py-2">
+                            {error}
+                        </div>
+                    )}
                 </footer>
             </div>
         )
@@ -180,8 +219,8 @@ const PersonaSimulator: React.FC<PersonaSimulatorProps> = ({ user, onIdeaSaved }
                             {PERSONAS.map(persona => (
                                 <button
                                     key={persona.name}
-                                    onClick={() => setSelectedPersona(persona)}
-                                    className={`p-3 rounded-lg text-center border-2 transition-colors ${selectedPersona?.name === persona.name ? 'border-purple-500 bg-purple-900/50' : 'border-slate-700 bg-slate-800 hover:border-slate-500'}`}
+                                    onClick={() => { setSelectedPersona(getPersonaKey(persona)); setError(null); }}
+                                    className={`p-3 rounded-lg text-center border-2 transition-colors ${selectedPersona === getPersonaKey(persona) ? 'border-purple-500 bg-purple-900/50' : 'border-slate-700 bg-slate-800 hover:border-slate-500'}`}
                                 >
                                     <persona.icon className="w-8 h-8 mx-auto mb-2 text-purple-400" />
                                     <p className="font-semibold text-sm text-white">{persona.name}</p>
@@ -193,7 +232,7 @@ const PersonaSimulator: React.FC<PersonaSimulatorProps> = ({ user, onIdeaSaved }
                     <div>
                         <h3 className="text-lg font-semibold text-slate-200 mb-2">2. Enter Your Script</h3>
                         <textarea
-                            rows={8} value={script} onChange={(e) => setScript(e.target.value)}
+                            rows={8} value={script} onChange={(e) => { setScript(e.target.value); if (error) setError(null); }}
                             placeholder="Paste your patter or routine description here..."
                             className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
                         />
@@ -201,12 +240,24 @@ const PersonaSimulator: React.FC<PersonaSimulatorProps> = ({ user, onIdeaSaved }
                     
                     <button
                         onClick={handleStartSimulation}
-                        disabled={!script || !selectedPersona}
+                        disabled={!canStart}
                         className="w-full py-3 mt-4 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
                     >
                         <WandIcon className="w-5 h-5" />
                         <span>Start Simulation</span>
                     </button>
+
+                    {!canStart && (
+                        <p className="text-center text-sm text-slate-400 mt-2">
+                            Select a persona and enter your script to begin.
+                        </p>
+                    )}
+
+                    {error && (
+                        <div className="mt-3 text-sm text-red-300 bg-red-950/40 border border-red-900/60 rounded-md px-3 py-2">
+                            {error}
+                        </div>
+                    )}
                 </div>
             </div>
         </main>
