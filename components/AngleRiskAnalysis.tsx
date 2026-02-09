@@ -366,6 +366,8 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved, onDeepLinkShowPla
       focusRef.current?.focus();
     }, 0);
   };
+  const handleRunVideoRehearsal = () => {
+    if (onNavigate) {
       onNavigate('video-rehearsal');
       return;
     }
