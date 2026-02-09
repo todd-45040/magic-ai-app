@@ -62,7 +62,8 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
         return picked || custom;
     })();
 
-    const isFormValid = showTitle.trim() && showLength && computedAudience && theme.trim();
+    // Show Title is optional: AI can generate a strong title if the user leaves it blank.
+    const isFormValid = Boolean(showLength && computedAudience && theme.trim());
 
     const showLengthPresets = [30, 45, 60, 90];
     const audiencePresets = [
@@ -134,9 +135,13 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
         setIsAddedToPlanner(false);
         setIsSavedToIdeas(false);
 
+        const titleLine = showTitle.trim()
+            ? `- Show Title: ${showTitle.trim()}`
+            : `- Show Title: (not provided) Please invent a strong, marketable show title that fits the audience and theme.`;
+
         const prompt = `
             Please generate a show plan with the following details:
-            - Show Title: ${showTitle}
+            ${titleLine}
             - Desired Length (minutes): ${showLength}
             - Target Audience: ${computedAudience}
             - Overall Theme/Style: ${theme}
@@ -336,6 +341,9 @@ const handleAddToPlanner = async () => {
                                 placeholder="e.g., Mysteries of the Mind"
                                 className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
                             />
+                            <p className="mt-1 text-xs text-slate-400">
+                                Optional — the AI can generate a title for you.
+                            </p>
                         </div>
 
                         <div>
@@ -505,7 +513,7 @@ const handleAddToPlanner = async () => {
                         className="w-full py-3 mt-4 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
                     >
                         <WandIcon className="w-5 h-5" />
-                        <span>✨ ✨ Create My Show Blueprint ✨</span>
+                        <span>🎭 Direct My Show Blueprint</span>
                     </button>
                     <p className="text-center text-xs text-slate-400 -mt-2">Typically takes 10–15 seconds.</p>
 
