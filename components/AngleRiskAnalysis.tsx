@@ -227,40 +227,9 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved, onDeepLinkShowPla
   };
 
   const handleAnalyze = async () => {
-    if (!canAnalyze || isLoading) return;
-    setIsLoading(true);
-    setAnalysis('');
-
-    const prompt = [
-      `You are an expert stagecraft and rehearsal coach for magicians.`,
-      `Task: Provide an Angle/Risk Analysis for the routine named: "${routineName.trim()}".`,
-      `Context: Performance mode = ${mode}. Audience setup = ${setup}.`,
-      propsText.trim() ? `Props/Setup Notes: ${propsText.trim()}` : null,
-      keyMoments.length ? `Key moments to protect: ${keyMoments.join(', ')}.` : null,
-      focusText.trim() ? `User focus requests: ${focusText.trim()}` : null,
-      '',
-      `Rules (important):`,
-      `- Do NOT expose methods, secret gimmicks, sleights, or step-by-step instructions.`,
-      `- Give performance-safe guidance: blocking, sightlines, timing, misdirection, handling tells, reset and pocket management.`,
-      `- If something depends on method details you cannot know, say what to watch for in general (non-exposure).`,
-      '',
-      `Output format (use headings):`,
-      `1) Overview (1 short paragraph)`,
-      `2) Sightline & Angle Risks (bullets)`,
-      `3) Reset & Pocket/Prop Management Risks (bullets)`,
-      `4) Handling/Body-Language Tells (bullets)`,
-      `5) Mitigations (3–7 actionable steps, written as checklist items)`,
-    ].filter(Boolean).join('\n');
-
-    try {
-      const text = await generateResponse(prompt, ANGLE_RISK_ANALYSIS_SYSTEM_INSTRUCTION, user);
-      setAnalysis(text);
-    } catch (e: any) {
-      console.error(e);
-      toast.showToast('Angle/Risk analysis failed. Please try again.', 'error');
-    } finally {
-      setIsLoading(false);
-    }
+    // Keep the main Analyze button behavior centralized so the refinement loop
+    // and initial run always use the same prompt builder.
+    await runAnalysis();
   };
 
   const handleSaveIdea = async () => {
@@ -306,8 +275,50 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved, onDeepLinkShowPla
       toast.showToast('Could not save to Show Planner.', 'error');
     }
   };  
-  const handleRefineWithAI = () => {
-    if (!analysis.trim()) return;
+  // Helper used by both the initial analysis and the refinement loop.
+  // Allows a one-off focus override without changing overall data flow.
+  const runAnalysis = async (focusOverride?: string) => {
+    if (!canAnalyze || isLoading) return;
+    setIsLoading(true);
+    setAnalysis('');
+
+    const focusToUse = (focusOverride ?? focusText).trim();
+
+    const prompt = [
+      `You are an expert stagecraft and rehearsal coach for magicians.`,
+      `Task: Provide an Angle/Risk Analysis for the routine named: "${routineName.trim()}".`,
+      `Context: Performance mode = ${mode}. Audience setup = ${setup}.`,
+      propsText.trim() ? `Props/Setup Notes: ${propsText.trim()}` : null,
+      keyMoments.length ? `Key moments to protect: ${keyMoments.join(', ')}.` : null,
+      focusToUse ? `User focus requests: ${focusToUse}` : null,
+      '',
+      `Rules (important):`,
+      `- Do NOT expose methods, secret gimmicks, sleights, or step-by-step instructions.`,
+      `- Give performance-safe guidance: blocking, sightlines, timing, misdirection, handling tells, reset and pocket management.`,
+      `- If something depends on method details you cannot know, say what to watch for in general (non-exposure).`,
+      '',
+      `Output format (use headings):`,
+      `1) Overview (1 short paragraph)`,
+      `2) Sightline & Angle Risks (bullets)`,
+      `3) Reset & Pocket/Prop Management Risks (bullets)`,
+      `4) Handling/Body-Language Tells (bullets)`,
+      `5) Mitigations (3–7 actionable steps, written as checklist items)`,
+      `6) Questions to refine this analysis (3–6 targeted questions)`,
+    ].filter(Boolean).join('\n');
+
+    try {
+      const text = await generateResponse(prompt, ANGLE_RISK_ANALYSIS_SYSTEM_INSTRUCTION, user);
+      setAnalysis(text);
+    } catch (e: any) {
+      console.error(e);
+      toast.showToast('Angle/Risk analysis failed. Please try again.', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRefineWithAI = async () => {
+    if (!analysis.trim() || isLoading) return;
     const prompt = [
       'You are a rehearsal coach for a magician. Help refine this routine WITHOUT exposing method.',
       routineName.trim() ? `Routine: ${routineName.trim()}` : null,
@@ -320,11 +331,27 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved, onDeepLinkShowPla
       'Task: Propose a revised blocking and handling plan that reduces exposure risk. Provide 3-7 actionable rehearsal drills.',
     ].filter(Boolean).join('\n');
 
-    // Let the parent decide how to route this (AI Assistant, Patter Engine, etc.)
-    onAiSpark?.({ kind: 'angle-risk-refine', prompt, routineName: routineName.trim() });
-    // Fallback navigation if parent ignores onAiSpark.
-    onNavigate?.('ai-assistant');
-  }; 
+    // Preferred: hand off to the parent (AI Assistant) so the user can continue iterating there.
+    if (onAiSpark) {
+      onAiSpark({ kind: 'angle-risk-refine', prompt, routineName: routineName.trim() });
+      onNavigate?.('ai-assistant');
+      return;
+    }
+
+    // Fallback: if no parent handler exists, run the refinement on this page.
+    setIsLoading(true);
+    try {
+      const text = await generateResponse(prompt, ANGLE_RISK_ANALYSIS_SYSTEM_INSTRUCTION, user);
+      setAnalysis(text);
+      toast.showToast('Refinement generated', 'success');
+    } catch (e: any) {
+      console.error(e);
+      toast.showToast('Refinement failed. Please try again.', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleRefineFromQuestions = () => {
     const q = decoratedOutput?.firstQuestion?.trim();
     if (!q) return;
@@ -332,10 +359,12 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved, onDeepLinkShowPla
     // Pre-fill focus field with the first refinement question and bring the user back to inputs.
     setFocusText(q);
 
-    // Smooth scroll + focus.
+    // Smooth scroll + focus + automatically rerun analysis with the new focus.
     setTimeout(() => {
       focusRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       focusRef.current?.focus();
+      // Run immediately using the override (state updates are async).
+      void runAnalysis(q);
     }, 0);
   };
   const handleRunVideoRehearsal = () => {
