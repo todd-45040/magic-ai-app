@@ -3,7 +3,8 @@ import type { User } from '../types';
 import { ANGLE_RISK_ANALYSIS_SYSTEM_INSTRUCTION } from '../constants';
 import { generateResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
-import { ShieldIcon, SaveIcon } from './icons';
+import { createShow, addTaskToShow } from '../services/showsService';
+import { ShieldIcon, SaveIcon, ShareIcon, VideoIcon, WandIcon } from './icons';
 import FormattedText from './FormattedText';
 import { useToast } from './ToastProvider';
 
@@ -26,10 +27,18 @@ const FOCUS_CHIPS = [
   'Timing of secret actions',
 ] as const;
 
-export default function AngleRiskAnalysis({ user, onIdeaSaved }: { user: User; onIdeaSaved?: () => void }) {
-  const toast = useToast();
+type Props = {
+  user: User;
+  onIdeaSaved?: () => void;
+  // Phase 6D: optional CTA hooks (kept optional to avoid breaking other pages)
+  onDeepLinkShowPlanner?: (showId: string) => void;
+  onNavigate?: (view: string) => void;
+  onAiSpark?: (...args: any[]) => void;
+};
 
-  // Used by the refinement-loop CTA to scroll back to (and focus) the Focus textarea.
+export default function AngleRiskAnalysis({ user, onIdeaSaved, onDeepLinkShowPlanner, onNavigate, onAiSpark }: Props) {
+  const toast = useToast();
+  const routineNameRef = useRef<HTMLInputElement | null>(null);
   const focusRef = useRef<HTMLTextAreaElement | null>(null);
 
   const [routineName, setRoutineName] = useState('');
@@ -271,6 +280,78 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved }: { user: User; o
     }
   };
 
+  // Phase 6D: Primary CTA - convert this analysis into a Show Planner item.
+  const handleSaveToShowPlanner = async () => {
+    if (!analysis.trim()) return;
+    try {
+      const title = routineName.trim() ? `Angle/Risk — ${routineName.trim()}` : 'Angle/Risk — Routine';
+      const show = await createShow(title, 'Created from Angle/Risk Analysis');
+
+      await addTaskToShow(show.id, {
+        title: 'Review Angle/Risk Notes',
+        notes: analysis,
+        priority: 'High',
+        status: 'To-Do',
+      } as any);
+
+      toast.showToast('Saved to Show Planner', 'success');
+      if (onDeepLinkShowPlanner) {
+        onDeepLinkShowPlanner(show.id);
+      } else {
+        // Fallback: if the parent doesn’t provide a deep-link handler, at least navigate.
+        onNavigate?.('show-planner');
+      }
+    } catch (e) {
+      console.error(e);
+      toast.showToast('Could not save to Show Planner.', 'error');
+    }
+  };
+
+  const handleShare = async () => {
+    if (!analysis.trim()) return;
+    try {
+      await navigator.clipboard.writeText(analysis);
+      toast.showToast('Copied analysis to clipboard', 'success');
+    } catch (e) {
+      console.error(e);
+      toast.showToast('Could not copy to clipboard.', 'error');
+    }
+  };
+
+  const handleStartOver = () => {
+    setAnalysis('');
+    setIsLoading(false);
+    // Keep the input values (routine, setup, etc.) but return the user to the top to iterate.
+    setTimeout(() => {
+      routineNameRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      routineNameRef.current?.focus();
+    }, 0);
+  };
+
+  const handleRefineWithAI = () => {
+    if (!analysis.trim()) return;
+    const prompt = [
+      'You are a rehearsal coach for a magician. Help refine this routine WITHOUT exposing method.',
+      routineName.trim() ? `Routine: ${routineName.trim()}` : null,
+      `Mode: ${mode}. Audience setup: ${setup}.`,
+      focusText.trim() ? `Focus: ${focusText.trim()}` : null,
+      '',
+      'Angle/Risk Analysis Notes:',
+      analysis.trim(),
+      '',
+      'Task: Propose a revised blocking and handling plan that reduces exposure risk. Provide 3-7 actionable rehearsal drills.',
+    ].filter(Boolean).join('\n');
+
+    // Let the parent decide how to route this (AI Assistant, Patter Engine, etc.)
+    onAiSpark?.({ kind: 'angle-risk-refine', prompt, routineName: routineName.trim() });
+    // Fallback navigation if parent ignores onAiSpark.
+    onNavigate?.('ai-assistant');
+  };
+
+  const handleRunVideoRehearsal = () => {
+    onNavigate?.('video-rehearsal');
+  };
+
 
   const handleRefineFromQuestions = () => {
     const q = decoratedOutput?.firstQuestion?.trim();
@@ -284,6 +365,30 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved }: { user: User; o
       focusRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       focusRef.current?.focus();
     }, 0);
+  };
+      onNavigate('video-rehearsal');
+      return;
+    }
+    toast.showToast('Video Rehearsal navigation is not available in this build.', 'info');
+  };
+
+  // Phase 6D: utility CTAs
+  const handleShare = async () => {
+    if (!analysis.trim()) return;
+    try {
+      const shareText = `Angle/Risk Analysis — ${routineName.trim() || 'Routine'}\nMode: ${mode} | Audience: ${setup}\n\n${analysis}`;
+      await navigator.clipboard.writeText(shareText);
+      toast.showToast('Copied share text to clipboard', 'success');
+    } catch {
+      toast.showToast('Could not copy to clipboard.', 'error');
+    }
+  };
+
+  const handleStartOver = () => {
+    setAnalysis('');
+    setIsLoading(false);
+    toast.showToast('Ready for a new analysis', 'info');
+    setTimeout(() => routineNameRef.current?.focus(), 0);
   };
 
   return (
@@ -305,6 +410,7 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved }: { user: User; o
             <div>
               <label className="block text-sm font-medium text-white/80 mb-1">Routine name</label>
               <input
+                ref={routineNameRef}
                 value={routineName}
                 onChange={(e) => setRoutineName(e.target.value)}
                 placeholder="e.g., Zombie Ball (floating sphere)"
@@ -523,18 +629,66 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved }: { user: User; o
                       </div>
                     )}
                   </>
-                ) : (
+                )) : (
                   <FormattedText text={analysis} />
                 )}
               </div>
-              <div className="mt-4 flex items-center justify-end gap-2">
-                <button
-                  onClick={handleSaveIdea}
-                  className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm font-medium text-white/80 hover:bg-white/[0.07]"
-                >
-                  <SaveIcon className="h-4 w-4" />
-                  Save Idea
-                </button>
+              {/* Phase 6D: clearer CTA footer with primary "Next Steps" + de-emphasized utilities */}
+              <div className="mt-4 rounded-xl border border-white/10 bg-black/10 p-3">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                  <div className="flex-1">
+                    <p className="text-xs font-semibold tracking-wide text-white/60">Next Steps</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        onClick={handleSaveToShowPlanner}
+                        className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-3 py-2 text-xs font-semibold text-white hover:bg-purple-700"
+                      >
+                        <SaveIcon className="h-4 w-4" />
+                        Save to Show Planner
+                      </button>
+                      <button
+                        onClick={handleRefineWithAI}
+                        className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-white/85 hover:bg-white/[0.07]"
+                      >
+                        <WandIcon className="h-4 w-4" />
+                        Refine with AI
+                      </button>
+                      <button
+                        onClick={handleRunVideoRehearsal}
+                        className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-white/85 hover:bg-white/[0.07]"
+                      >
+                        <VideoIcon className="h-4 w-4" />
+                        Run Video Rehearsal
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="lg:text-right">
+                    <p className="text-xs font-semibold tracking-wide text-white/50">Utilities</p>
+                    <div className="mt-2 flex flex-wrap gap-2 lg:justify-end">
+                      <button
+                        onClick={handleSaveIdea}
+                        className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs font-semibold text-white/70 hover:bg-white/[0.05]"
+                      >
+                        <SaveIcon className="h-4 w-4" />
+                        Save Idea
+                      </button>
+                      <button
+                        onClick={handleShare}
+                        className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs font-semibold text-white/70 hover:bg-white/[0.05]"
+                      >
+                        <ShareIcon className="h-4 w-4" />
+                        Share
+                      </button>
+                      <button
+                        onClick={handleStartOver}
+                        className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs font-semibold text-white/70 hover:bg-white/[0.05]"
+                      >
+                        Start Over
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}
