@@ -67,6 +67,92 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved }: { user: User; o
 
   const canAnalyze = routineName.trim().length > 0;
 
+  // Phase 6B: Improve output scannability without changing AI logic.
+  // We decorate key section headings with visual anchors, and render the Mitigations section
+  // in a dedicated, actionable checklist container.
+  const decoratedOutput = useMemo(() => {
+    const raw = analysis || '';
+    if (!raw.trim()) return null;
+
+    const decorateHeadings = (txt: string) => {
+      const lines = txt.split('\n');
+      const out: string[] = [];
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        const isHeading = /^#{2,6}\s+/.test(trimmed);
+        if (!isHeading) {
+          out.push(line);
+          continue;
+        }
+
+        const lower = trimmed.toLowerCase();
+
+        // Sightlines
+        if (lower.includes('sightline')) {
+          out.push(trimmed.replace(/^#{2,6}\s+.*/, '### 👁 Sightlines'));
+          continue;
+        }
+        // Reset / pocket / prop management
+        if (lower.includes('reset') || lower.includes('pocket') || lower.includes('prop management')) {
+          out.push(trimmed.replace(/^#{2,6}\s+.*/, '### 🔁 Reset Risks'));
+          continue;
+        }
+        // Handling/body-language tells
+        if (lower.includes('handling') || lower.includes('body-language') || lower.includes('body language') || lower.includes('tells')) {
+          out.push(trimmed.replace(/^#{2,6}\s+.*/, '### 🧍 Handling Tells'));
+          continue;
+        }
+
+        out.push(line);
+      }
+
+      return out.join('\n');
+    };
+
+    // Extract Mitigations section (if present) so we can render it as a checklist.
+    // We look for a heading containing "Mitigations" and split until the next heading.
+    const mitigationsHeadingRegex = /^#{2,6}\s+.*mitigations.*$/gim;
+    const match = mitigationsHeadingRegex.exec(raw);
+
+    if (!match) {
+      return {
+        pre: decorateHeadings(raw),
+        mitigationsItems: [] as string[],
+        post: '',
+      };
+    }
+
+    const headingStart = match.index;
+    const afterHeadingIndex = headingStart + match[0].length;
+    const afterHeading = raw.slice(afterHeadingIndex);
+
+    // Find the next heading after Mitigations.
+    const nextHeadingMatch = afterHeading.match(/\n#{2,6}\s+/m);
+    const mitigationsBody = nextHeadingMatch
+      ? afterHeading.slice(0, nextHeadingMatch.index ?? 0)
+      : afterHeading;
+    const post = nextHeadingMatch
+      ? afterHeading.slice(nextHeadingMatch.index ?? 0)
+      : '';
+
+    const pre = raw.slice(0, headingStart);
+
+    const items = mitigationsBody
+      .split('\n')
+      .map(l => l.trim())
+      .filter(Boolean)
+      .map(l => l.replace(/^[-*•]\s+/, ''))
+      .map(l => l.replace(/^\d+\.?\s+/, ''))
+      .filter(Boolean);
+
+    return {
+      pre: decorateHeadings(pre),
+      mitigationsItems: items,
+      post: decorateHeadings(post),
+    };
+  }, [analysis]);
+
   const normalizedTags = useMemo(() => {
     const tags = new Set<string>();
     tags.add('angle-risk');
@@ -322,7 +408,48 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved }: { user: User; o
                     </div>
                   </div>
                 )}
-                <FormattedText text={analysis} />
+
+                {/* Phase 6B: Decorated headings + actionable Mitigations checklist */}
+                {decoratedOutput ? (
+                  <>
+                    {!!decoratedOutput.pre.trim() && <FormattedText text={decoratedOutput.pre} />}
+
+                    {decoratedOutput.mitigationsItems.length > 0 && (
+                      <div className="my-4 rounded-xl border border-purple-400/20 bg-purple-500/10 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-white">🛡 Mitigations</p>
+                            <p className="mt-1 text-xs text-white/60">Actionable steps to reduce exposure risk and improve control.</p>
+                          </div>
+                        </div>
+
+                        <ul className="mt-3 space-y-2">
+                          {decoratedOutput.mitigationsItems.slice(0, 12).map((item, idx) => {
+                            // Emphasize a leading verb/phrase (best-effort) without changing the model output.
+                            const m = item.match(/^([A-Za-z][A-Za-z'’\-]+(?:\s+[A-Za-z][A-Za-z'’\-]+){0,2})([:—\-])\s*(.*)$/);
+                            const lead = m ? m[1] : item.split(/\s+/)[0];
+                            const rest = m ? m[3] : item.slice(lead.length).trim();
+
+                            return (
+                              <li key={`${idx}-${lead}`} className="flex gap-3 rounded-lg border border-white/10 bg-black/10 px-3 py-2">
+                                <div className="mt-0.5 h-5 w-5 flex items-center justify-center rounded-md border border-white/10 bg-white/[0.03] text-white/60">
+                                  ✓
+                                </div>
+                                <div className="text-sm text-white/85 leading-relaxed">
+                                  <strong className="text-white">{lead}</strong>{rest ? ` — ${rest}` : ''}
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    )}
+
+                    {!!decoratedOutput.post.trim() && <FormattedText text={decoratedOutput.post} />}
+                  </>
+                ) : (
+                  <FormattedText text={analysis} />
+                )}
               </div>
               <div className="mt-4 flex items-center justify-end gap-2">
                 <button
