@@ -39,6 +39,32 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved }: { user: User; o
   const [isLoading, setIsLoading] = useState(false);
   const [analysis, setAnalysis] = useState<string>('');
 
+  // Phase 6A: lightweight, UI-only "Risk Profile" derived from the returned text.
+  // (No AI changes; simple keyword checks to improve scannability.)
+  const riskProfile = useMemo(() => {
+    const text = (analysis || '').toLowerCase();
+    if (!text) return null;
+
+    const isHigh = text.includes('extreme') || text.includes('highest risk');
+    const overall = isHigh ? { label: 'High', dot: '🔴' } : { label: 'Medium', dot: '🟡' };
+
+    const areas: string[] = [];
+    if (text.includes('sightline') || text.includes('angle')) areas.push('Sightlines');
+    if (text.includes('reset') || text.includes('pocket') || text.includes('prop management')) areas.push('Reset');
+    if (text.includes('handling') || text.includes('body-language') || text.includes('body language') || text.includes('tell')) {
+      areas.push('Handling Tells');
+    }
+    if (text.includes('blocking') || text.includes('stage')) areas.push('Blocking');
+    if (text.includes('timing') || text.includes('pause') || text.includes('pace')) areas.push('Timing');
+
+    const primary = (areas.length ? Array.from(new Set(areas)) : ['Sightlines', 'Handling Tells']).slice(0, 2);
+
+    return {
+      overall,
+      primary,
+    };
+  }, [analysis]);
+
   const canAnalyze = routineName.trim().length > 0;
 
   const normalizedTags = useMemo(() => {
@@ -174,7 +200,7 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved }: { user: User; o
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-white/80 mb-2">Key moments to protect</label>
+              <label className="block text-sm font-medium text-white/80 mb-2">Key moments to protect <span className="text-white/50">(where exposure is most likely)</span></label>
               <div className="flex flex-wrap gap-2">
                 {DEFAULT_KEY_MOMENTS.map(m => (
                   <button
@@ -212,6 +238,7 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved }: { user: User; o
                 placeholder="e.g., angles during steals, reset risk between tables, posture tells during secret actions"
                 className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-2.5 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
               />
+              <p className="mt-2 text-xs text-white/55">Use this to bias the analysis (e.g., angles, handling tells, reset safety).</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {FOCUS_CHIPS.map(t => (
                   <button
@@ -279,6 +306,22 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved }: { user: User; o
           {!!analysis && !isLoading && (
             <div className="flex h-full flex-col">
               <div className="flex-1 overflow-auto pr-1">
+                {riskProfile && (
+                  <div className="mb-4 rounded-xl border border-white/10 bg-black/10 p-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-semibold text-white">Risk Profile</p>
+                        <p className="mt-1 text-xs text-white/60">A quick summary based on keywords in this report.</p>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm text-white/85">
+                          Overall Risk: <span className="font-semibold">{riskProfile.overall.dot} {riskProfile.overall.label}</span>
+                        </div>
+                        <div className="mt-1 text-xs text-white/60">Primary Risk Areas: <span className="text-white/75">{riskProfile.primary.join(', ')}</span></div>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <FormattedText text={analysis} />
               </div>
               <div className="mt-4 flex items-center justify-end gap-2">
