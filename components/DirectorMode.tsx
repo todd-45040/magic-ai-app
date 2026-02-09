@@ -1,12 +1,11 @@
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Type } from "@google/genai";
 import { saveIdea } from '../services/ideasService';
-import { addShow, addTaskToShow } from '../services/showsService';
+import { createShow, addTasksToShow } from '../services/showsService';
 import { DIRECTOR_MODE_SYSTEM_INSTRUCTION } from '../constants';
 import type { DirectorModeResponse } from '../types';
-import { StageCurtainsIcon, WandIcon, SaveIcon, CheckIcon, ShareIcon, ChecklistIcon } from './icons';
-import ShareButton from './ShareButton';
+import { StageCurtainsIcon, WandIcon, SaveIcon, CheckIcon, ChecklistIcon } from './icons';
 import { generateStructuredResponse } from '../services/geminiService';
 
 
@@ -54,6 +53,8 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
     const [isAddingToPlanner, setIsAddingToPlanner] = useState(false);
     const [isSavingIdea, setIsSavingIdea] = useState(false);
     const [isSavedToIdeas, setIsSavedToIdeas] = useState(false);
+    const [plannerNotice, setPlannerNotice] = useState<string | null>(null);
+    const [ideaNotice, setIdeaNotice] = useState<string | null>(null);
     
     const computedAudience = (() => {
         const picked = audienceChips.join(', ');
@@ -61,6 +62,31 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
         if (picked && custom) return `${picked}, ${custom}`;
         return picked || custom;
     })();
+
+    const directorsNotesBlock = useMemo(() => {
+        if (!showPlan) return '';
+        const parts: string[] = [];
+        parts.push(`Effect Types (non-exposure):`);
+        parts.push(`- Visual opener: ${showPlan.effect_types.visual_opener}`);
+        parts.push(`- Interactive centerpiece: ${showPlan.effect_types.interactive_centerpiece}`);
+        parts.push(`- Emotional closer: ${showPlan.effect_types.emotional_closer}`);
+        parts.push('');
+        parts.push('Pacing:');
+        parts.push(`- Energy flow: ${showPlan.pacing_notes.energy_flow}`);
+        if (showPlan.pacing_notes.reset_moments?.length) parts.push(`- Reset moments: ${showPlan.pacing_notes.reset_moments.join('; ')}`);
+        if (showPlan.pacing_notes.volunteer_moments?.length) parts.push(`- Volunteer moments: ${showPlan.pacing_notes.volunteer_moments.join('; ')}`);
+        if (showPlan.directors_notes.risk_points?.length) {
+            parts.push('');
+            parts.push('Risk points:');
+            showPlan.directors_notes.risk_points.forEach((x) => parts.push(`- ${x}`));
+        }
+        if (showPlan.directors_notes.adaptation_suggestions?.length) {
+            parts.push('');
+            parts.push('Adaptation suggestions:');
+            showPlan.directors_notes.adaptation_suggestions.forEach((x) => parts.push(`- ${x}`));
+        }
+        return parts.join('\n');
+    }, [showPlan]);
 
     // Show Title is optional: AI can generate a strong title if the user leaves it blank.
     const isFormValid = Boolean(showLength && computedAudience && theme.trim());
@@ -229,7 +255,7 @@ Output requirements:
         }
     };
   
-    // FIX: Marked handleAddToPlanner as async to resolve the missing await error on addShow().
+    // Phase C: Send structured blueprint into Show Planner as a NEW show + 4 core tasks.
     
     const buildIdeaFromShowPlan = (plan: DirectorModeResponse) => {
         const lines: string[] = [];
@@ -296,6 +322,7 @@ ${prettyJson}
         try {
             setIsSavingIdea(true);
             setError(null);
+            setIdeaNotice(null);
 
             const { title, content, tags } = buildIdeaFromShowPlan(showPlan);
 
@@ -307,6 +334,8 @@ ${prettyJson}
             } as any);
 
             setIsSavedToIdeas(true);
+            setIdeaNotice('Saved — open Saved Ideas to view this blueprint.');
+            window.setTimeout(() => setIdeaNotice(null), 7000);
             onIdeaSaved?.();
         } catch (e: any) {
             console.error('Save to Ideas failed:', e);
@@ -316,64 +345,69 @@ ${prettyJson}
         }
     };
 
-const handleAddToPlanner = async () => {
+    const handleSendToPlanner = async () => {
         if (!showPlan) return;
         if (isAddedToPlanner || isAddingToPlanner) return;
 
         try {
             setIsAddingToPlanner(true);
             setError(null);
+            setPlannerNotice(null);
 
-            // Create the show (returns created show row / object)
-            const createdShow: any = await addShow({
-                title: showPlan.show_title,
-                description: showPlan.show_description ?? ''
-            } as any);
+            // Create a NEW show in Show Planner (Director Mode is intentionally additive)
+            const created = await createShow(showPlan.show_title, showPlan.show_description ?? null);
+            const showId = created?.id;
+            if (!showId) throw new Error('Could not create the show in Show Planner.');
 
-            const showId = Array.isArray(createdShow) ? createdShow[0]?.id : createdShow?.id;
-            if (!showId) throw new Error('Could not determine created show ID.');
+            // Build 4 tasks: Opener, Segment 1, Segment 2, Closer.
+            // If there are more than 2 middle segments, we fold extras into Segment 2 notes.
+            const opener = showPlan.act_structure.opener;
+            const closer = showPlan.act_structure.closer;
+            const middle = Array.isArray(showPlan.act_structure.middle) ? showPlan.act_structure.middle : [];
+            const seg1 = middle[0];
+            const seg2 = middle[1];
+            const extras = middle.slice(2);
 
-            // Insert tasks aligned with current public.tasks schema (title, notes, show_id, user_id)
-            // Create Show Planner tasks aligned to the director plan
-            const tasks = [
+            const directorNotesForTasks = directorsNotesBlock ? `\n\n--- Director Notes ---\n${directorsNotesBlock}` : '';
+
+            const taskPayloads = [
                 {
-                    title: `Opener: ${showPlan.act_structure.opener.title}`,
-                    notes: `Objective: ${showPlan.act_structure.opener.objective}\nEstimated: ${showPlan.act_structure.opener.minutes} min`,
-                },
-                ...showPlan.act_structure.middle.map((m, idx) => ({
-                    title: `Middle ${idx + 1}: ${m.title}`,
-                    notes: `Objective: ${m.objective}\nEstimated: ${m.minutes} min`,
-                })),
-                {
-                    title: `Closer: ${showPlan.act_structure.closer.title}`,
-                    notes: `Objective: ${showPlan.act_structure.closer.objective}\nEstimated: ${showPlan.act_structure.closer.minutes} min`,
+                    title: `Opener — ${opener.title}`,
+                    notes: `Objective: ${opener.objective}\nEstimated: ${opener.minutes} min${directorNotesForTasks}`,
                 },
                 {
-                    title: `Director Notes: ${showPlan.show_title}`,
-                    notes:
-                        `Effect Types (non-exposure):\n- Visual opener: ${showPlan.effect_types.visual_opener}\n- Interactive centerpiece: ${showPlan.effect_types.interactive_centerpiece}\n- Emotional closer: ${showPlan.effect_types.emotional_closer}\n\nPacing:\n- Energy flow: ${showPlan.pacing_notes.energy_flow}\n` +
-                        (showPlan.pacing_notes.reset_moments?.length ? `- Reset moments: ${showPlan.pacing_notes.reset_moments.join('; ')}\n` : '') +
-                        (showPlan.pacing_notes.volunteer_moments?.length ? `- Volunteer moments: ${showPlan.pacing_notes.volunteer_moments.join('; ')}\n` : '') +
-                        (showPlan.directors_notes.risk_points?.length ? `\nRisk points:\n- ${showPlan.directors_notes.risk_points.join('\n- ')}\n` : '') +
-                        (showPlan.directors_notes.adaptation_suggestions?.length ? `\nAdaptation suggestions:\n- ${showPlan.directors_notes.adaptation_suggestions.join('\n- ')}\n` : ''),
+                    title: `Segment 1 — ${seg1?.title ?? 'Core Feature'}`,
+                    notes: `Objective: ${seg1?.objective ?? 'Develop the central throughline and build audience buy-in.'}` +
+                        `\nEstimated: ${seg1?.minutes ?? Math.max(5, Math.round(Number(showPlan.show_overview.runtime_minutes) / 4))} min` +
+                        `${extras.length ? `\n\nAdditional middle beats to consider:\n- ${extras.map((x) => x.title).join('\n- ')}` : ''}` +
+                        `${directorNotesForTasks}`,
+                },
+                {
+                    title: `Segment 2 — ${seg2?.title ?? 'Interactive Centerpiece'}`,
+                    notes: `Objective: ${seg2?.objective ?? 'Raise stakes, increase interaction, and set up the closer.'}` +
+                        `\nEstimated: ${seg2?.minutes ?? Math.max(5, Math.round(Number(showPlan.show_overview.runtime_minutes) / 4))} min` +
+                        `${directorNotesForTasks}`,
+                },
+                {
+                    title: `Closer — ${closer.title}`,
+                    notes: `Objective: ${closer.objective}\nEstimated: ${closer.minutes} min${directorNotesForTasks}`,
                 },
             ];
 
-            for (const t of tasks) {
-                await addTaskToShow(showId, {
-                    title: t.title,
-                    notes: t.notes,
-                } as any);
-            }
+            await addTasksToShow(showId, taskPayloads as any);
 
             setIsAddedToPlanner(true);
+            setPlannerNotice('Saved — open Show Planner to see the new show and tasks.');
+
+            // Auto-clear the notice after a short time
+            window.setTimeout(() => setPlannerNotice(null), 7000);
         } catch (e: any) {
-            console.error('Add to Show Planner failed:', e);
-            setError(e?.message ?? 'Unable to add the plan to Show Planner.');
+            console.error('Send to Show Planner failed:', e);
+            setError(e?.message ?? 'Unable to send the blueprint to Show Planner.');
         } finally {
             setIsAddingToPlanner(false);
         }
-    };;
+    };
 
     const handleBackToForm = () => {
         // Phase B: keep inputs editable; do not clear the form.
@@ -540,11 +574,26 @@ const handleAddToPlanner = async () => {
                         </span>
                     </button>
 
-                    <button onClick={handleAddToPlanner} disabled={isAddedToPlanner || isAddingToPlanner} className="px-6 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-green-700 disabled:cursor-not-allowed flex items-center gap-2">
+                    <button onClick={handleSendToPlanner} disabled={isAddedToPlanner || isAddingToPlanner} className="px-6 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-green-700 disabled:cursor-not-allowed flex items-center gap-2">
                         {isAddedToPlanner ? <CheckIcon className="w-5 h-5" /> : <ChecklistIcon className="w-5 h-5" />}
-                        <span>{isAddedToPlanner ? 'Added to Show Planner!' : 'Add to Show Planner'}</span>
+                        <span>{isAddedToPlanner ? 'Sent to Show Planner!' : (isAddingToPlanner ? 'Sending…' : 'Send Blueprint to Show Planner')}</span>
                     </button>
                 </div>
+
+                {(plannerNotice || ideaNotice) ? (
+                    <div className="mt-4 flex flex-col items-center gap-2">
+                        {plannerNotice ? (
+                            <div className="px-4 py-2 rounded-md bg-green-900/30 border border-green-700/40 text-green-200 text-sm">
+                                {plannerNotice}
+                            </div>
+                        ) : null}
+                        {ideaNotice ? (
+                            <div className="px-4 py-2 rounded-md bg-green-900/30 border border-green-700/40 text-green-200 text-sm">
+                                {ideaNotice}
+                            </div>
+                        ) : null}
+                    </div>
+                ) : null}
             </div>
         );
     }
