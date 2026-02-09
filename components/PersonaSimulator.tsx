@@ -1,6 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { generateResponse } from '../services/geminiService';
+import { Type } from '@google/genai';
+import { generateResponse, generateStructuredResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
 import { PERSONAS, PERSONA_SIMULATOR_SYSTEM_INSTRUCTION } from '../constants';
 import type { ChatMessage, Persona, User } from '../types';
@@ -27,6 +28,12 @@ const LoadingIndicator: React.FC = () => (
 );
 
 type PersonaKey = 'heckler' | 'child' | 'corporate' | 'supportive';
+
+type PersonaSimulationResult = {
+    personaReaction: string;
+    riskMoments: string[];
+    suggestions: string[];
+};
 
 const PERSONA_MICRO_DESCRIPTIONS: Record<PersonaKey, string> = {
     heckler: 'Challenges logic, interrupts, doubts',
@@ -60,6 +67,7 @@ const PersonaSimulator: React.FC<PersonaSimulatorProps> = ({ user, onIdeaSaved }
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [result, setResult] = useState<PersonaSimulationResult | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     const selectedPersonaObj = selectedPersona
@@ -77,10 +85,22 @@ const PersonaSimulator: React.FC<PersonaSimulatorProps> = ({ user, onIdeaSaved }
         scrollToBottom();
     }, [messages]);
 
-    const handleStartSimulation = async () => {
+    const buildStructuredPrompt = (personaName: string, personaDescription: string, scriptText: string) => {
+        return (
+            `You are simulating a live audience persona reacting to a magician's script.\n\n` +
+            `Persona: ${personaName}\n` +
+            `Persona behavior: ${personaDescription}\n\n` +
+            `TASK: React to the script as the persona would in the moment. Do not explain how magic works. ` +
+            `Focus on audience reaction, attention risks, and actionable improvements.\n\n` +
+            `SCRIPT:\n${scriptText}`
+        );
+    };
+
+    const runSimulation = async () => {
         if (!script.trim() || !selectedPersonaObj) return;
 
         setError(null);
+        setResult(null);
 
         const firstMessage = createChatMessage('user', script);
         setMessages([firstMessage]);
@@ -90,14 +110,44 @@ const PersonaSimulator: React.FC<PersonaSimulatorProps> = ({ user, onIdeaSaved }
         try {
             // Ensure the model is strongly anchored to the selected persona.
             const systemInstruction = PERSONA_SIMULATOR_SYSTEM_INSTRUCTION(selectedPersonaObj.description);
-            const response = await generateResponse(script, systemInstruction, user);
-            setMessages(prev => [...prev, createChatMessage('model', response)]);
+            const prompt = buildStructuredPrompt(selectedPersonaObj.name, selectedPersonaObj.description, script);
+
+            const responseSchema = {
+                type: Type.OBJECT,
+                properties: {
+                    personaReaction: { type: Type.STRING },
+                    riskMoments: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    suggestions: { type: Type.ARRAY, items: { type: Type.STRING } },
+                },
+                required: ['personaReaction', 'riskMoments', 'suggestions'],
+            };
+
+            const structured = await generateStructuredResponse(prompt, systemInstruction, responseSchema, user);
+            const safeResult: PersonaSimulationResult = {
+                personaReaction: typeof structured?.personaReaction === 'string' ? structured.personaReaction : 'No reaction returned.',
+                riskMoments: Array.isArray(structured?.riskMoments) ? structured.riskMoments.filter((x: any) => typeof x === 'string') : [],
+                suggestions: Array.isArray(structured?.suggestions) ? structured.suggestions.filter((x: any) => typeof x === 'string') : [],
+            };
+
+            setResult(safeResult);
+
+            // Keep a compact transcript for saving/export.
+            const transcriptText =
+                `Persona Reaction:\n${safeResult.personaReaction}\n\n` +
+                `Risk Moments:\n${safeResult.riskMoments.map(r => `- ${r}`).join('\n') || '- (none)'}\n\n` +
+                `Suggestions:\n${safeResult.suggestions.map(s => `- ${s}`).join('\n') || '- (none)'}`;
+
+            setMessages(prev => [...prev, createChatMessage('model', transcriptText)]);
         } catch (e) {
             // Friendly, on-brand message. Never surface raw API errors.
             setError("The audience didn’t respond — try again in a moment.");
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const handleStartSimulation = async () => {
+        await runSimulation();
     };
 
     const handleSend = async () => {
@@ -122,12 +172,6 @@ const PersonaSimulator: React.FC<PersonaSimulatorProps> = ({ user, onIdeaSaved }
         }
     };
     
-    const handleEndSimulation = () => {
-        setMode('setup');
-        setMessages([]);
-        // Do not clear script or persona, user might want to re-run
-    };
-
     const handleSave = () => {
         if (messages.length === 0 || !selectedPersonaObj) return;
         
@@ -151,44 +195,103 @@ const PersonaSimulator: React.FC<PersonaSimulatorProps> = ({ user, onIdeaSaved }
                             <p className="font-semibold text-purple-300">{selectedPersonaObj.name}</p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                         <button onClick={handleSave} className="px-4 py-2 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-white font-semibold transition-colors flex items-center gap-2">
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                        <button
+                            onClick={runSimulation}
+                            disabled={!canStart}
+                            className="px-4 py-2 text-sm bg-purple-700 hover:bg-purple-600 rounded-md text-white font-bold transition-colors disabled:bg-slate-700 disabled:text-slate-400 disabled:cursor-not-allowed"
+                            title="Run the same script again with this persona"
+                        >
+                            Run Again
+                        </button>
+                        <button
+                            onClick={() => { setMode('setup'); setMessages([]); setResult(null); setInput(''); setError(null); }}
+                            className="px-4 py-2 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-white font-semibold transition-colors"
+                            title="Go back and choose a different persona"
+                        >
+                            Test with Another Persona
+                        </button>
+                        <button onClick={handleSave} className="px-4 py-2 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-white font-semibold transition-colors flex items-center gap-2">
                             <SaveIcon className="w-4 h-4" /> Save Transcript
-                         </button>
-                        <button onClick={handleEndSimulation} className="px-4 py-2 text-sm bg-red-800/80 hover:bg-red-700 rounded-md text-white font-bold transition-colors">End Simulation</button>
+                        </button>
                     </div>
                 </header>
 
-                <main className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
-                    {messages.map((msg) => (
-                        <div key={msg.id} className={`flex items-start gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                            {msg.role === 'model' ? (
-                            <>
-                                <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center flex-shrink-0">
-                                    <selectedPersonaObj.icon className="w-5 h-5 text-purple-400" />
-                                </div>
-                                <div className="max-w-lg px-4 py-2 rounded-xl bg-slate-700 text-slate-200">
-                                    <FormattedText text={msg.text} />
-                                </div>
-                            </>
-                            ) : (
-                                <div className="max-w-lg px-4 py-2 rounded-xl bg-purple-800 text-white">
-                                    <p className="whitespace-pre-wrap break-words">{msg.text}</p>
+                <main className="flex-1 overflow-y-auto p-4 md:p-6">
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-lg font-bold text-slate-200">Persona Feedback</h3>
+                            {isLoading && (
+                                <div className="flex items-center gap-2 text-sm text-slate-300">
+                                    <LoadingIndicator />
+                                    <span>Audience reacting…</span>
                                 </div>
                             )}
                         </div>
-                    ))}
-                    {isLoading && (
-                    <div className="flex items-start gap-3 justify-start">
-                        <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center flex-shrink-0">
-                            <selectedPersonaObj.icon className="w-5 h-5 text-purple-400" />
-                        </div>
-                        <div className="max-w-lg px-4 py-2 rounded-xl bg-slate-700 text-slate-200">
-                            <LoadingIndicator />
-                        </div>
+
+                        {result ? (
+                            <div className="grid grid-cols-1 gap-4">
+                                <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
+                                    <h4 className="text-sm font-bold text-purple-300 mb-2">Persona Reaction</h4>
+                                    <p className="text-slate-200 whitespace-pre-wrap break-words">{result.personaReaction}</p>
+                                </section>
+
+                                <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
+                                    <h4 className="text-sm font-bold text-purple-300 mb-2">Risk Moments</h4>
+                                    {result.riskMoments?.length ? (
+                                        <ul className="list-disc pl-5 space-y-1 text-slate-200">
+                                            {result.riskMoments.map((r, idx) => (
+                                                <li key={idx} className="whitespace-pre-wrap break-words">{r}</li>
+                                            ))}
+                                        </ul>
+                                    ) : (
+                                        <p className="text-slate-400">No major risk moments detected.</p>
+                                    )}
+                                </section>
+
+                                <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
+                                    <h4 className="text-sm font-bold text-purple-300 mb-2">Suggestions</h4>
+                                    {result.suggestions?.length ? (
+                                        <ul className="list-disc pl-5 space-y-1 text-slate-200">
+                                            {result.suggestions.map((s, idx) => (
+                                                <li key={idx} className="whitespace-pre-wrap break-words">{s}</li>
+                                            ))}
+                                        </ul>
+                                    ) : (
+                                        <p className="text-slate-400">No suggestions returned.</p>
+                                    )}
+                                </section>
+                            </div>
+                        ) : (
+                            <div className="rounded-xl border border-slate-700 bg-slate-800/60 p-4 text-slate-300">
+                                {isLoading ? 'Generating persona feedback…' : 'Run the simulation to see structured feedback here.'}
+                            </div>
+                        )}
+
+                        {/* Optional follow-ups */}
+                        {messages.length > 2 && (
+                            <section className="rounded-xl border border-slate-700 bg-slate-900/40 p-4">
+                                <h4 className="text-sm font-bold text-slate-200 mb-2">Follow-ups</h4>
+                                <div className="space-y-3">
+                                    {messages.slice(2).map((msg) => (
+                                        <div key={msg.id} className={`flex items-start gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                            {msg.role === 'model' ? (
+                                                <div className="max-w-2xl px-4 py-2 rounded-xl bg-slate-700 text-slate-200">
+                                                    <FormattedText text={msg.text} />
+                                                </div>
+                                            ) : (
+                                                <div className="max-w-2xl px-4 py-2 rounded-xl bg-purple-800 text-white">
+                                                    <p className="whitespace-pre-wrap break-words">{msg.text}</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </section>
+                        )}
+
+                        <div ref={messagesEndRef} />
                     </div>
-                    )}
-                    <div ref={messagesEndRef} />
                 </main>
 
                 <footer className="p-4 border-t border-slate-800">
@@ -300,8 +403,17 @@ const PersonaSimulator: React.FC<PersonaSimulatorProps> = ({ user, onIdeaSaved }
                         disabled={!canStart}
                         className="w-full py-3 mt-4 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
                     >
-                        <WandIcon className="w-5 h-5" />
-                        <span>Start Simulation</span>
+                        {isLoading ? (
+                            <>
+                                <LoadingIndicator />
+                                <span>Audience reacting…</span>
+                            </>
+                        ) : (
+                            <>
+                                <WandIcon className="w-5 h-5" />
+                                <span>Start Simulation</span>
+                            </>
+                        )}
                     </button>
 
                     {!canStart && (
