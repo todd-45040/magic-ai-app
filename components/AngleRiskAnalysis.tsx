@@ -305,29 +305,7 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved, onDeepLinkShowPla
       console.error(e);
       toast.showToast('Could not save to Show Planner.', 'error');
     }
-  };
-
-  const handleShare = async () => {
-    if (!analysis.trim()) return;
-    try {
-      await navigator.clipboard.writeText(analysis);
-      toast.showToast('Copied analysis to clipboard', 'success');
-    } catch (e) {
-      console.error(e);
-      toast.showToast('Could not copy to clipboard.', 'error');
-    }
-  };
-
-  const handleStartOver = () => {
-    setAnalysis('');
-    setIsLoading(false);
-    // Keep the input values (routine, setup, etc.) but return the user to the top to iterate.
-    setTimeout(() => {
-      routineNameRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      routineNameRef.current?.focus();
-    }, 0);
-  };
-
+  };  
   const handleRefineWithAI = () => {
     if (!analysis.trim()) return;
     const prompt = [
@@ -346,13 +324,7 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved, onDeepLinkShowPla
     onAiSpark?.({ kind: 'angle-risk-refine', prompt, routineName: routineName.trim() });
     // Fallback navigation if parent ignores onAiSpark.
     onNavigate?.('ai-assistant');
-  };
-
-  const handleRunVideoRehearsal = () => {
-    onNavigate?.('video-rehearsal');
-  };
-
-
+  }; 
   const handleRefineFromQuestions = () => {
     const q = decoratedOutput?.firstQuestion?.trim();
     if (!q) return;
@@ -631,7 +603,7 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved, onDeepLinkShowPla
                       </div>
                     )}
                   </>
-                )) : (
+                ) : (
                   <FormattedText text={analysis} />
                 )}
               </div>
