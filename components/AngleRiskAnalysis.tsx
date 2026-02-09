@@ -29,6 +29,9 @@ const FOCUS_CHIPS = [
 export default function AngleRiskAnalysis({ user, onIdeaSaved }: { user: User; onIdeaSaved?: () => void }) {
   const toast = useToast();
 
+  // Used by the refinement-loop CTA to scroll back to (and focus) the Focus textarea.
+  const focusRef = useRef<HTMLTextAreaElement | null>(null);
+
   const [routineName, setRoutineName] = useState('');
   const [mode, setMode] = useState<PerformanceMode>('Close-up');
   const [setup, setSetup] = useState<AudienceSetup>('Seated (front)');
