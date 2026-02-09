@@ -4,7 +4,7 @@ import { generateResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
 import { PERSONAS, PERSONA_SIMULATOR_SYSTEM_INSTRUCTION } from '../constants';
 import type { ChatMessage, Persona, User } from '../types';
-import { UsersCogIcon, WandIcon, SaveIcon, SendIcon } from './icons';
+import { UsersCogIcon, WandIcon, SaveIcon, SendIcon, CheckIcon } from './icons';
 import FormattedText from './FormattedText';
 
 interface PersonaSimulatorProps {
@@ -27,6 +27,18 @@ const LoadingIndicator: React.FC = () => (
 );
 
 type PersonaKey = 'heckler' | 'child' | 'corporate' | 'supportive';
+
+const PERSONA_MICRO_DESCRIPTIONS: Record<PersonaKey, string> = {
+    heckler: 'Challenges logic, interrupts, doubts',
+    child: 'Overreacts, blurts thoughts, emotional',
+    corporate: 'Half-listening, polite, easily distracted',
+    supportive: 'Encouraging, affirming, emotionally tuned',
+};
+
+const SCRIPT_EXAMPLE =
+    "Ladies and gentlemen, let’s try a quick experiment. I’ll need your imagination for just a moment…\n\n" +
+    "In a second, you’ll see something that looks impossible — and that’s because it is… until it isn’t.\n\n" +
+    "If at any point you think you know what’s happening, don’t say it out loud — just smile and keep it to yourself.";
 
 const PERSONA_KEY_BY_NAME: Record<string, PersonaKey> = {
     'Skeptical Heckler': 'heckler',
@@ -217,25 +229,70 @@ const PersonaSimulator: React.FC<PersonaSimulatorProps> = ({ user, onIdeaSaved }
                         <h3 className="text-lg font-semibold text-slate-200 mb-2">1. Choose a Persona</h3>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                             {PERSONAS.map(persona => (
+                                (() => {
+                                    const key = getPersonaKey(persona);
+                                    const isSelected = selectedPersona === key;
+                                    return (
                                 <button
                                     key={persona.name}
                                     onClick={() => { setSelectedPersona(getPersonaKey(persona)); setError(null); }}
-                                    className={`p-3 rounded-lg text-center border-2 transition-colors ${selectedPersona === getPersonaKey(persona) ? 'border-purple-500 bg-purple-900/50' : 'border-slate-700 bg-slate-800 hover:border-slate-500'}`}
+                                    className={`relative p-3 rounded-lg text-center border-2 transition-all ${
+                                        isSelected
+                                            ? 'border-yellow-400 bg-purple-900/50 shadow-[0_0_0_3px_rgba(250,204,21,0.12)]'
+                                            : 'border-slate-700 bg-slate-800 hover:border-slate-500'
+                                    }`}
                                 >
+                                    {isSelected && (
+                                        <span className="absolute top-2 right-2 inline-flex items-center justify-center w-6 h-6 rounded-full bg-yellow-400/20 border border-yellow-400/40">
+                                            <CheckIcon className="w-4 h-4 text-yellow-300" />
+                                        </span>
+                                    )}
                                     <persona.icon className="w-8 h-8 mx-auto mb-2 text-purple-400" />
                                     <p className="font-semibold text-sm text-white">{persona.name}</p>
+                                    <p className="mt-1 text-[11px] leading-snug text-slate-400">
+                                        {PERSONA_MICRO_DESCRIPTIONS[key]}
+                                    </p>
                                 </button>
+                                    );
+                                })()
                             ))}
                         </div>
+
+                        {selectedPersonaObj && (
+                            <p className="mt-3 text-sm text-slate-300">
+                                <span className="text-slate-400">Persona selected:</span>{' '}
+                                <span className="font-semibold text-purple-300">{selectedPersonaObj.name}</span>
+                            </p>
+                        )}
                     </div>
 
                     <div>
                         <h3 className="text-lg font-semibold text-slate-200 mb-2">2. Enter Your Script</h3>
+                        <p className="text-sm text-slate-400 mb-2">
+                            Paste your patter, routine description, or performance script.
+                        </p>
                         <textarea
                             rows={8} value={script} onChange={(e) => { setScript(e.target.value); if (error) setError(null); }}
                             placeholder="Paste your patter or routine description here..."
                             className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
                         />
+
+                        <div className="mt-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                            <p className="text-xs text-slate-500">Best results with 1–5 minutes of spoken text.</p>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const next = script.trim().length
+                                        ? `${script.replace(/\s*$/, '')}\n\n${SCRIPT_EXAMPLE}`
+                                        : SCRIPT_EXAMPLE;
+                                    setScript(next);
+                                    setError(null);
+                                }}
+                                className="text-xs font-semibold text-purple-300 hover:text-purple-200 underline underline-offset-4"
+                            >
+                                Insert example script
+                            </button>
+                        </div>
                     </div>
                     
                     <button
