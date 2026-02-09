@@ -520,7 +520,7 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved }: { user: User; o
                       </div>
                     )}
                   </>
-                )) : (
+                ) : (
                   <FormattedText text={analysis} />
                 )}
               </div>
