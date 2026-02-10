@@ -4,6 +4,17 @@ import { fetchShowFeedback, buildShowFeedbackUrl } from '../services/showFeedbac
 import { StarIcon, UsersIcon, QrCodeIcon, CopyIcon } from './icons';
 import { useAppState } from '../store';
 
+
+const REACTION_META: Record<string, { label: string; tip: string }> = {
+  party: { label: "Big Reaction", tip: "Strong surprise or applause moment" },
+  amazed: { label: "Amazed", tip: "Audience visibly impressed or surprised" },
+  laugh: { label: "Laughter", tip: "Comedic beat landed well" },
+  confused: { label: "Confused", tip: "Moment may need clarification or tightening" },
+  clap: { label: "Applause", tip: "Clear positive response or appreciation" },
+  love: { label: "Loved It", tip: "Emotional connection or favorite moment" },
+};
+
+
 const REACTIONS: { key: Feedback['reaction']; label: string }[] = [
     { key: '🎉', label: 'Fun' },
     { key: '😲', label: 'Wow' },
