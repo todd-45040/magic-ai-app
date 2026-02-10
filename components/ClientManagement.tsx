@@ -263,6 +263,7 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ onClientsUpdate, on
                                     </button>
                                 </div>
                             </div>
+                        </div>
                     ))}
                 </div>
             )}
