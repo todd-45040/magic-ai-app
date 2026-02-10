@@ -82,8 +82,8 @@ const ClientModal: React.FC<{
 
     const modalContent = (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={onClose}>
-            <div className="w-full max-w-lg border border-slate-700/40 rounded-lg shadow-2xl text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50" onClick={(e) => e.stopPropagation()}>
-                <form id="client-form" onSubmit={handleSubmit} className="p-6 space-y-4">
+            <div className="w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col rounded-lg border border-slate-700/40 bg-slate-900/80 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                <form id="client-form" onSubmit={handleSubmit} className="p-6 space-y-4 flex-1 min-h-0 overflow-y-auto">
                     <h2 className="text-xl font-bold text-white">{modalTitle}</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div><label htmlFor="name" className="block text-sm font-medium text-slate-300 mb-1">Name*</label><input id="name" type="text" value={name} onChange={e => setName(e.target.value)} required autoFocus className="w-full px-3 py-2 border-slate-600 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50" /></div>
