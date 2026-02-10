@@ -185,7 +185,7 @@ const [selectedShowId, setSelectedShowId] = useState<string>('');
                         )}
                         <div className="flex flex-wrap gap-2">
                             {REACTIONS.map(r => (
-                                <span key={String(r.key)} className=\"px-2 py-1 text-sm rounded-md bg-slate-900/40 border border-slate-700 text-slate-200 flex items-center gap-2\" title={`${r.label}: ${r.tip}`} aria-label={`${r.label}. ${r.tip}`}>
+                                <span key={String(r.key)} className="px-2 py-1 text-sm rounded-md bg-slate-900/40 border border-slate-700 text-slate-200 flex items-center gap-2" title={`${r.label}: ${r.tip}`} aria-label={`${r.label}. ${r.tip}`}>
                                     <span className="text-base" aria-hidden="true">{String(r.key)}</span>
                                     <span className="text-xs text-slate-300">{reactionCounts[String(r.key)] ?? 0}</span>
                                 </span>
