@@ -179,7 +179,7 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ onClientsUpdate, on
                 </button>
             </header>
 
-            {clients.length > 0 ? (
+            {clients.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {clients.map(client => (
                         <div key={client.id} className="bg-slate-800 border border-slate-700 rounded-lg p-4 flex flex-col justify-between">
@@ -265,13 +265,14 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ onClientsUpdate, on
                             </div>
                     ))}
                 </div>
-            ) : (
+            )}
+
+            {clients.length === 0 && (
                 <div className="flex-1 flex flex-col items-center justify-center text-center py-12">
                     <UsersCogIcon className="w-16 h-16 mx-auto textborder-slate-600 mb-4" />
                     <h3 className="text-lg font-bold text-slate-400">Your Client List is Empty</h3>
                     <p className="text-slate-500">Click "Add New Client" to start building your professional network.</p>
-                </div>
-            )}
+                </div>)}
         </div>
     );
 };
