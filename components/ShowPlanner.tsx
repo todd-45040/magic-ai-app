@@ -1238,20 +1238,30 @@ const AudienceFeedbackQrModal: React.FC<{ show: Show; onClose: () => void }> = (
     const [url, setUrl] = useState('');
     const [copied, setCopied] = useState(false);
 
+
     useEffect(() => {
-        const u = buildShowFeedbackUrl(show.id);
-        setUrl(u);
-        if (canvasRef.current) {
-            QRCode.toCanvas(
-                canvasRef.current,
-                u,
-                { width: 256, color: { dark: '#e2e8f0', light: '#0000' } },
-                (error) => {
-                    if (error) console.error(error);
-                }
-            );
-        }
+        // Generate the feedback URL first so the <canvas> mounts.
+        setUrl(buildShowFeedbackUrl(show.id));
     }, [show.id]);
+
+    useEffect(() => {
+        // Draw (or redraw) the QR once the URL is set and the canvas exists.
+        if (!url || !canvasRef.current) return;
+        QRCode.toCanvas(
+            canvasRef.current,
+            url,
+            { width: 256, color: { dark: '#e2e8f0', light: '#0000' } },
+            (error) => {
+                if (error) console.error(error);
+            }
+        );
+    }, [url]);
+            { width: 256, color: { dark: '#e2e8f0', light: '#0000' } },
+            (error) => {
+                if (error) console.error(error);
+            }
+        );
+    }, [url]);
 
     const handleCopy = async () => {
         if (!url) return;
@@ -1266,18 +1276,8 @@ const AudienceFeedbackQrModal: React.FC<{ show: Show; onClose: () => void }> = (
 
     const handleRotate = async () => {
         try {
-            const u = buildShowFeedbackUrl(show.id, rotateShowFeedbackToken(show.id));
-            setUrl(u);
-            if (canvasRef.current) {
-                QRCode.toCanvas(
-                    canvasRef.current,
-                    u,
-                    { width: 256, color: { dark: '#e2e8f0', light: '#0000' } },
-                    (error) => {
-                        if (error) console.error(error);
-                    }
-                );
-            }
+            // Rotate token, update URL; the QR redraw happens in the [url] effect above.
+            setUrl(buildShowFeedbackUrl(show.id, rotateShowFeedbackToken(show.id)));
         } catch {
             // ignore
         }
