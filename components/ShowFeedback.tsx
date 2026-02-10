@@ -4,24 +4,13 @@ import { fetchShowFeedback, buildShowFeedbackUrl } from '../services/showFeedbac
 import { StarIcon, UsersIcon, QrCodeIcon, CopyIcon } from './icons';
 import { useAppState } from '../store';
 
-
-const REACTION_META: Record<string, { label: string; tip: string }> = {
-  party: { label: "Big Reaction", tip: "Strong surprise or applause moment" },
-  amazed: { label: "Amazed", tip: "Audience visibly impressed or surprised" },
-  laugh: { label: "Laughter", tip: "Comedic beat landed well" },
-  confused: { label: "Confused", tip: "Moment may need clarification or tightening" },
-  clap: { label: "Applause", tip: "Clear positive response or appreciation" },
-  love: { label: "Loved It", tip: "Emotional connection or favorite moment" },
-};
-
-
-const REACTIONS: { key: Feedback['reaction']; label: string }[] = [
-    { key: '🎉', label: 'Fun' },
-    { key: '😲', label: 'Wow' },
-    { key: '😂', label: 'Funny' },
-    { key: '🤔', label: 'Confusing' },
-    { key: '👏', label: 'Applause' },
-    { key: '❤️', label: 'Loved it' },
+const REACTIONS: { key: Feedback['reaction']; label: string; tip: string }[] = [
+    { key: '🎉', label: 'Big Reaction', tip: 'Strong surprise or applause moment' },
+    { key: '😲', label: 'Amazed', tip: 'Audience visibly impressed or surprised' },
+    { key: '😂', label: 'Laughter', tip: 'Comedic beat landed well' },
+    { key: '🤔', label: 'Confused', tip: 'Moment may need clarification or tightening' },
+    { key: '👏', label: 'Applause', tip: 'Clear positive response or appreciation' },
+    { key: '❤️', label: 'Loved It', tip: 'Emotional connection or favorite moment' },
 ];
 
 const StarRatingDisplay: React.FC<{ rating: number }> = ({ rating }) => (
@@ -37,7 +26,8 @@ const StarRatingDisplay: React.FC<{ rating: number }> = ({ rating }) => (
 
 const ShowFeedback: React.FC = () => {
     const { shows } = useAppState();
-    const [selectedShowId, setSelectedShowId] = useState<string>('');
+        const [showLegend, setShowLegend] = useState(false);
+const [selectedShowId, setSelectedShowId] = useState<string>('');
     const [feedback, setFeedback] = useState<Feedback[]>([]);
     const [loading, setLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState<string>('');
@@ -168,10 +158,34 @@ const ShowFeedback: React.FC = () => {
                         </p>
                     </div>
                     <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
-                        <h3 className="text-sm font-semibold text-slate-400 mb-2">Reaction Breakdown</h3>
+                        <div className="flex items-center justify-between mb-2">
+                            <h3 className="text-sm font-semibold text-slate-400">Reaction Breakdown</h3>
+                            <button
+                                type="button"
+                                onClick={() => setShowLegend(v => !v)}
+                                className="text-xs text-slate-400 hover:text-slate-200 underline decoration-slate-600 hover:decoration-slate-300 transition"
+                            >
+                                What do these mean?
+                            </button>
+                        </div>
+                        {showLegend && (
+                            <div className="mb-3 rounded-lg border border-slate-700 bg-slate-900/30 p-3 text-xs text-slate-200">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {REACTIONS.map(r => (
+                                        <div key={`legend-${String(r.key)}`} className="flex items-start gap-2">
+                                            <span className="text-base leading-none mt-[1px]" aria-hidden="true">{String(r.key)}</span>
+                                            <div className="leading-snug">
+                                                <div className="font-semibold text-slate-100">{r.label}</div>
+                                                <div className="text-slate-300">{r.tip}</div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )
                         <div className="flex flex-wrap gap-2">
                             {REACTIONS.map(r => (
-                                <span key={String(r.key)} className="px-2 py-1 text-sm rounded-md bg-slate-900/40 border border-slate-700 text-slate-200 flex items-center gap-2">
+                                <span key={String(r.key)} className=\"px-2 py-1 text-sm rounded-md bg-slate-900/40 border border-slate-700 text-slate-200 flex items-center gap-2\" title={`${r.label}: ${r.tip}`} aria-label={`${r.label}. ${r.tip}`}>
                                     <span className="text-base" aria-hidden="true">{String(r.key)}</span>
                                     <span className="text-xs text-slate-300">{reactionCounts[String(r.key)] ?? 0}</span>
                                 </span>
