@@ -16,6 +16,7 @@ import MagicianMode from './components/MagicianMode';
 import About from './components/About';
 import DisclaimerModal from './components/DisclaimerModal';
 import LiveFeedbackView from './components/LiveFeedbackView';
+import PublicFeedbackForm from './components/PublicFeedbackForm';
 import AppSuggestionModal from './components/AppSuggestionModal';
 import { isDemoEnabled, enableDemo, seedDemoData } from './services/demoSeedService';
 
@@ -45,6 +46,8 @@ function App() {
     const urlParams = new URLSearchParams(window.location.search);
     const modeParam = urlParams.get('mode');
     const perfId = urlParams.get('performanceId');
+    const showIdParam = urlParams.get('showId');
+    const tokenParam = urlParams.get('token');
 
     const getAppBasePath = () => {
       try {
@@ -93,6 +96,14 @@ function App() {
     if (modeParam === 'live-feedback' && perfId) {
       setLivePerformanceId(perfId);
       setMode('live-feedback');
+      setAuthLoading(false);
+      window.clearTimeout(loadingTimeout);
+      return;
+    }
+
+    // Public, no-login audience feedback via QR code
+    if (modeParam === 'audience-feedback' && showIdParam && tokenParam) {
+      setMode('audience-feedback');
       setAuthLoading(false);
       window.clearTimeout(loadingTimeout);
       return;
@@ -192,6 +203,14 @@ function App() {
 
     if (mode === 'live-feedback' && livePerformanceId) {
       return <LiveFeedbackView performanceId={livePerformanceId} />;
+    }
+
+    if (mode === 'audience-feedback') {
+      return <PublicFeedbackForm />;
+    }
+
+    if (mode === 'audience-feedback') {
+      return <PublicFeedbackForm />;
     }
 
     if (mode === 'magician' && user) {

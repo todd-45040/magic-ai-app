@@ -1,7 +1,14 @@
 
 import React from 'react';
 
-export type Mode = 'selection' | 'audience' | 'magician' | 'auth' | 'about' | 'live-feedback';
+export type Mode =
+  | 'selection'
+  | 'audience'
+  | 'magician'
+  | 'auth'
+  | 'about'
+  | 'live-feedback'
+  | 'audience-feedback';
 
 export interface ChatMessage {
   id: string;
@@ -108,6 +115,10 @@ export interface Show {
 
 export interface Feedback {
   id: string;
+  // Optional show context when feedback is collected via a show-specific QR code.
+  showId?: string;
+  // Optional audience reaction emoji for quick “moment” feedback.
+  reaction?: '🎉' | '😲' | '😂' | '🤔' | '❤️' | '👏' | '😴' | string;
   rating: number; 
   tags: string[];
   comment: string;

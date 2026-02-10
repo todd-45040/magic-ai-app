@@ -7,6 +7,7 @@ import type { Show, Task, Subtask, TaskPriority, Client, Finances, Expense, Perf
 import { getShows, addShow, updateShow, deleteShow, addTaskToShow, addTasksToShow, updateTaskInShow, deleteTaskFromShow, toggleSubtask } from '../services/showsService';
 import { startPerformance, endPerformance, getPerformancesByShowId } from '../services/performanceService';
 import { generateResponse, generateStructuredResponse } from '../services/geminiService';
+import { buildShowFeedbackUrl, rotateShowFeedbackToken } from '../services/showFeedbackService';
 import { AI_TASK_SUGGESTER_SYSTEM_INSTRUCTION, IN_TASK_PATTER_SYSTEM_INSTRUCTION } from '../constants';
 import { AnalyticsIcon, BackIcon, CalendarIcon, CheckIcon, ChecklistIcon, CopyIcon, DollarSignIcon, FileTextIcon, MusicNoteIcon, PencilIcon, QrCodeIcon, StageCurtainsIcon, TrashIcon, UsersIcon, ViewGridIcon, ViewListIcon, WandIcon } from './icons';
 import { useAppState } from '../store';
@@ -276,6 +277,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
     const [isScriptModalOpen, setIsScriptModalOpen] = useState(false);
     const [isShowModalOpen, setIsShowModalOpen] = useState(false);
     const [isLiveModalOpen, setIsLiveModalOpen] = useState(false);
+    const [isAudienceQrModalOpen, setIsAudienceQrModalOpen] = useState(false);
     const [generatedScript, setGeneratedScript] = useState('');
     const [taskToEdit, setTaskToEdit] = useState<Task | null>(null);
     const [sortBy, setSortBy] = useState<SortBy>('dueDate');
@@ -606,6 +608,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                             {client && <p className="text-sm text-slate-400 flex items-center gap-2"><UsersIcon className="w-4 h-4" /> {client.name}</p>}
                         </div>
                         <div className="flex items-center gap-2">
+                            <button onClick={() => setIsAudienceQrModalOpen(true)} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-md text-white font-semibold transition-colors flex items-center gap-2 text-sm" title="Generate a post-show feedback QR code"><QrCodeIcon className="w-4 h-4" /><span>Audience QR</span></button>
                             <button onClick={() => setIsLiveModalOpen(true)} className="px-3 py-2 bg-green-600 hover:bg-green-700 rounded-md text-white font-semibold transition-colors flex items-center gap-2 text-sm"><QrCodeIcon className="w-4 h-4" /><span>Start Live Show</span></button>
                             <button onClick={handleAiSuggestTasks} disabled={isSuggesting} className="px-3 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold flex items-center gap-2 transition-colors"><WandIcon className="w-4 h-4" /><span>{isSuggesting ? 'Thinking...' : 'AI-Suggest Tasks'}</span></button>
                             <button onClick={generateScriptGuide} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 font-semibold transition-colors flex items-center gap-2 text-sm"><FileTextIcon className="w-4 h-4" /><span>Script Guide</span></button>
@@ -765,6 +768,7 @@ return (
             {isScriptModalOpen && <ScriptGuideModal script={generatedScript} onClose={() => setIsScriptModalOpen(false)} />}
             {isShowModalOpen && <ShowModal onClose={() => setIsShowModalOpen(false)} onSave={handleAddShow} />}
             {isLiveModalOpen && selectedShow && <LivePerformanceModal show={selectedShow} onClose={() => setIsLiveModalOpen(false)} onEnd={(id) => { setIsLiveModalOpen(false); onNavigateToAnalytics(id); }} />}
+            {isAudienceQrModalOpen && selectedShow && <AudienceFeedbackQrModal show={selectedShow} onClose={() => setIsAudienceQrModalOpen(false)} />}
             {selectedShow ? <ShowDetailView /> : <ShowListView />}
 
             {toastMsg && (
@@ -1223,6 +1227,82 @@ const LivePerformanceModal: React.FC<{ show: Show; onClose: () => void; onEnd: (
                     {performance ? <canvas ref={canvasRef} /> : <p>Generating QR Code...</p>}
                 </div>
                 <button onClick={handleEnd} className="w-full mt-6 py-3 bg-red-600 hover:bg-red-700 rounded-md text-white font-bold transition-colors">End Show & View Analytics</button>
+            </div>
+        </div>,
+        document.body
+    );
+};
+
+const AudienceFeedbackQrModal: React.FC<{ show: Show; onClose: () => void }> = ({ show, onClose }) => {
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const [url, setUrl] = useState('');
+    const [copied, setCopied] = useState(false);
+
+    useEffect(() => {
+        const u = buildShowFeedbackUrl(show.id);
+        setUrl(u);
+        if (canvasRef.current) {
+            QRCode.toCanvas(
+                canvasRef.current,
+                u,
+                { width: 256, color: { dark: '#e2e8f0', light: '#0000' } },
+                (error) => {
+                    if (error) console.error(error);
+                }
+            );
+        }
+    }, [show.id]);
+
+    const handleCopy = async () => {
+        if (!url) return;
+        try {
+            await navigator.clipboard.writeText(url);
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 1500);
+        } catch {
+            // ignore
+        }
+    };
+
+    const handleRotate = async () => {
+        try {
+            const u = buildShowFeedbackUrl(show.id, rotateShowFeedbackToken(show.id));
+            setUrl(u);
+            if (canvasRef.current) {
+                QRCode.toCanvas(
+                    canvasRef.current,
+                    u,
+                    { width: 256, color: { dark: '#e2e8f0', light: '#0000' } },
+                    (error) => {
+                        if (error) console.error(error);
+                    }
+                );
+            }
+        } catch {
+            // ignore
+        }
+    };
+
+    return createPortal(
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={onClose}>
+            <div className="w-full max-w-md bg-slate-800 border border-purple-500 rounded-lg shadow-2xl text-center p-8" onClick={(e) => e.stopPropagation()}>
+                <QrCodeIcon className="w-12 h-12 mx-auto mb-2 text-purple-400" />
+                <h2 className="text-2xl font-bold text-white font-cinzel">Post‑Show Feedback</h2>
+                <p className="text-slate-400 mt-2 mb-4">
+                    Display this QR code after the show. Audience members can scan it to leave a quick rating and comments.
+                </p>
+                <div className="bg-slate-900 p-4 rounded-lg inline-block border border-slate-700">
+                    {url ? <canvas ref={canvasRef} /> : <p>Generating QR Code...</p>}
+                </div>
+                <div className="mt-5 flex gap-2">
+                    <button onClick={handleCopy} className="flex-1 py-2 bg-slate-700 hover:bg-slate-600 rounded-md text-white font-bold transition-colors">
+                        {copied ? 'Copied!' : 'Copy Link'}
+                    </button>
+                    <button onClick={handleRotate} className="flex-1 py-2 bg-slate-700 hover:bg-slate-600 rounded-md text-white font-bold transition-colors" title="Invalidate old QR links and create a new one">
+                        Rotate Link
+                    </button>
+                </div>
+                <button onClick={onClose} className="w-full mt-3 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors">Done</button>
             </div>
         </div>,
         document.body
