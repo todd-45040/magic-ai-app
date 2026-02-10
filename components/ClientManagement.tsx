@@ -9,7 +9,33 @@ type ClientX = Client & {
     last_contacted?: string;
     last_show_title?: string;
     last_show_date?: string;
+    related_shows?: { title: string; date?: string }[];
 };
+
+
+type NoteEntry = { at: string; text: string };
+
+function parseNotesTimeline(raw?: string): NoteEntry[] {
+    const r = (raw || '').trim();
+    if (!r) return [];
+    try {
+        const parsed = JSON.parse(r);
+        if (Array.isArray(parsed)) {
+            return parsed
+                .filter((x) => x && typeof x.text === 'string')
+                .map((x) => ({ at: typeof x.at === 'string' ? x.at : '', text: String(x.text) }));
+        }
+    } catch { /* ignore */ }
+    // Back-compat: treat existing notes string as one entry
+    return [{ at: '', text: r }];
+}
+
+function formatShortDate(iso?: string) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString();
+}
 
 interface ClientManagementProps {
     onClientsUpdate: (clients: Client[]) => void;
@@ -25,11 +51,15 @@ const ClientModal: React.FC<{
     const [company, setCompany] = useState(clientToEdit?.company || '');
     const [email, setEmail] = useState(clientToEdit?.email || '');
     const [phone, setPhone] = useState(clientToEdit?.phone || '');
-    const [notes, setNotes] = useState(clientToEdit?.notes || '');
+    const [notesTimeline, setNotesTimeline] = useState<NoteEntry[]>(parseNotesTimeline(clientToEdit?.notes));
+    const [newNote, setNewNote] = useState('');
     const [tagsText, setTagsText] = useState((clientToEdit?.tags || []).join(', '));
     const [lastContacted, setLastContacted] = useState(clientToEdit?.last_contacted || '');
     const [lastShowTitle, setLastShowTitle] = useState(clientToEdit?.last_show_title || '');
     const [lastShowDate, setLastShowDate] = useState(clientToEdit?.last_show_date || '');
+    const [relatedShows, setRelatedShows] = useState<{ title: string; date?: string }[]>(clientToEdit?.related_shows || []);
+    const [newRelatedShowTitle, setNewRelatedShowTitle] = useState('');
+    const [newRelatedShowDate, setNewRelatedShowDate] = useState('');
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -39,7 +69,7 @@ const ClientModal: React.FC<{
             company,
             email,
             phone,
-            notes,
+            notes: JSON.stringify(notesTimeline),
             tags: tagsText.split(',').map(t => t.trim()).filter(Boolean),
             last_contacted: lastContacted || undefined,
             last_show_title: lastShowTitle || undefined,
@@ -110,7 +140,112 @@ const ClientModal: React.FC<{
                         />
                     </div>
 
-<label htmlFor="notes" className="block text-sm font-medium text-slate-300 mb-1">Notes</label><textarea id="notes" rows={3} value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g., Met at the 2026 convention. Interested in a holiday party booking." className="w-full px-3 py-2 border-slate-600 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border border border/30 focus:ring-1 focus:ringborder border border/30/50" /></div>
+
+<label className="block text-sm font-medium text-slate-300 mb-1">Notes Timeline</label>
+<div className="rounded-md border border-slate-700 bg-slate-950/30 p-3">
+    {notesTimeline.length === 0 ? (
+        <div className="text-sm text-slate-400">No notes yet. Add your first note below.</div>
+    ) : (
+        <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+            {notesTimeline
+                .slice()
+                .sort((a, b) => (b.at || '').localeCompare(a.at || ''))
+                .map((n, idx) => (
+                    <div key={idx} className="text-sm">
+                        <div className="text-slate-400 text-xs mb-0.5">
+                            {n.at ? formatShortDate(n.at) : 'Note'}
+                        </div>
+                        <div className="text-slate-100 whitespace-pre-wrap">{n.text}</div>
+                    </div>
+                ))}
+        </div>
+    )}
+
+    <div className="mt-3">
+        <label htmlFor="newNote" className="block text-xs font-medium text-slate-400 mb-1">Add a note (append-only)</label>
+        <textarea
+            id="newNote"
+            rows={2}
+            value={newNote}
+            onChange={(e) => setNewNote(e.target.value)}
+            placeholder="e.g., Met at the 2026 convention. Interested in a holiday party booking."
+            className="w-full px-3 py-2 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50"
+        />
+        <div className="mt-2 flex justify-end">
+            <button
+                type="button"
+                onClick={() => {
+                    const t = newNote.trim();
+                    if (!t) return;
+                    setNotesTimeline((prev) => [{ at: new Date().toISOString(), text: t }, ...prev]);
+                    setNewNote('');
+                }}
+                className="px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-100 text-sm border border-slate-600 transition"
+            >
+                Add Note
+            </button>
+        </div>
+    </div>
+</div>
+
+<div className="mt-4">
+    <label className="block text-sm font-medium text-slate-300 mb-1">Related Shows</label>
+    {relatedShows.length === 0 ? (
+        <div className="text-sm text-slate-400 mb-2">No related shows yet. Add one below.</div>
+    ) : (
+        <div className="flex flex-wrap gap-2 mb-2">
+            {relatedShows.slice(0, 6).map((s, idx) => (
+                <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                        // Best-effort navigation hook (safe even if unused)
+                        try {
+                            localStorage.setItem('maw_open_show_title', s.title);
+                            window.location.href = `/?tab=show-planner&showTitle=${encodeURIComponent(s.title)}`;
+                        } catch {}
+                    }}
+                    className="px-2 py-1 rounded-md text-xs bg-slate-900/40 border border-slate-700 text-slate-200 hover:bg-slate-800 transition"
+                    title="Open in Show Planner"
+                >
+                    {s.title}{s.date ? ` • ${formatShortDate(s.date)}` : ''}
+                </button>
+            ))}
+        </div>
+    )}
+
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <input
+            type="text"
+            value={newRelatedShowTitle}
+            onChange={(e) => setNewRelatedShowTitle(e.target.value)}
+            placeholder="Show title (e.g., Science Time)"
+            className="w-full px-3 py-2 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50"
+        />
+        <input
+            type="date"
+            value={newRelatedShowDate}
+            onChange={(e) => setNewRelatedShowDate(e.target.value)}
+            className="w-full px-3 py-2 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50"
+        />
+    </div>
+    <div className="mt-2 flex justify-end">
+        <button
+            type="button"
+            onClick={() => {
+                const title = newRelatedShowTitle.trim();
+                if (!title) return;
+                setRelatedShows((prev) => [{ title, date: newRelatedShowDate || undefined }, ...prev]);
+                setNewRelatedShowTitle('');
+                setNewRelatedShowDate('');
+            }}
+            className="px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-100 text-sm border border-slate-600 transition"
+        >
+            Add Related Show
+        </button>
+    </div>
+</div>
+
                     <div className="flex gap-3 pt-2">
                         <button type="button" onClick={onClose} className="w-full py-2 rounded-md text-slate-300 font-bold text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border border border/30 focus:ring-1 focus:ringborder border border/30/50">Cancel</button>
                         <button type="submit" className="w-full py-2 rounded-md text-white font-bold text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border border border/30 focus:ring-1 focus:ringborder border border/30/50">{buttonText}</button>
@@ -208,8 +343,39 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ onClientsUpdate, on
                                     {(client.last_show_title || client.last_show_date) && (
                                         <p className="text-xs text-slate-400"><strong>Last show:</strong> {client.last_show_title || '—'}{client.last_show_date ? ` — ${client.last_show_date}` : ''}</p>
                                     )}
+                                    {((client.related_shows && client.related_shows.length > 0) || client.last_show_title) && (
+                                        <div className="mt-2">
+                                            <div className="text-xs font-semibold text-slate-400 mb-1">Related Shows</div>
+                                            <div className="flex flex-wrap gap-2">
+                                                {(client.related_shows && client.related_shows.length > 0
+                                                    ? client.related_shows
+                                                    : [{ title: client.last_show_title || 'Show', date: client.last_show_date || undefined }])
+                                                    .slice(0, 3)
+                                                    .map((s, idx) => (
+                                                        <button
+                                                            key={idx}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                try {
+                                                                    localStorage.setItem('maw_open_show_title', s.title);
+                                                                    window.location.href = `/?tab=show-planner&showTitle=${encodeURIComponent(s.title)}`;
+                                                                } catch {}
+                                                            }}
+                                                            className="px-2 py-1 rounded-md text-[11px] bg-slate-900/40 border border-slate-700 text-slate-200 hover:bg-slate-800 transition"
+                                                            title="Open in Show Planner"
+                                                        >
+                                                            {s.title}{s.date ? ` • ${formatShortDate(s.date)}` : ''}
+                                                        </button>
+                                                    ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
-                                {client.notes && <p className="text-xs text-slate-400 bg-slate-900/50 p-2 rounded-md mt-3"><strong>Notes:</strong> {client.notes}</p>}
+                                {parseNotesTimeline(client.notes).length > 0 && (
+                                    <p className="text-xs text-slate-400 bg-slate-900/50 p-2 rounded-md mt-3">
+                                        <strong>Latest note:</strong> {parseNotesTimeline(client.notes)[0].text}
+                                    </p>
+                                )}
                             </div>
                              <div className="border-t border-slate-700/50 mt-3 pt-3">
                                 <div className="flex items-center justify-between gap-2">
