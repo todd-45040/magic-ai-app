@@ -1256,13 +1256,6 @@ const AudienceFeedbackQrModal: React.FC<{ show: Show; onClose: () => void }> = (
             }
         );
     }, [url]);
-            { width: 256, color: { dark: '#e2e8f0', light: '#0000' } },
-            (error) => {
-                if (error) console.error(error);
-            }
-        );
-    }, [url]);
-
     const handleCopy = async () => {
         if (!url) return;
         try {
