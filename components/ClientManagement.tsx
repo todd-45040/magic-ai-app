@@ -82,20 +82,19 @@ const ClientModal: React.FC<{
 
     const modalContent = (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={onClose}>
-            <div className="w-full max-w-lg border border border/30 rounded-lg shadow-2xl text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border border border/30 focus:ring-1 focus:ringborder border border/30/50" onClick={(e) => e.stopPropagation()}>
+            <div className="w-full max-w-lg border border-slate-700/40 rounded-lg shadow-2xl text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50" onClick={(e) => e.stopPropagation()}>
                 <form id="client-form" onSubmit={handleSubmit} className="p-6 space-y-4">
                     <h2 className="text-xl font-bold text-white">{modalTitle}</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div><label htmlFor="name" className="block text-sm font-medium text-slate-300 mb-1">Name*</label><input id="name" type="text" value={name} onChange={e => setName(e.target.value)} required autoFocus className="w-full px-3 py-2 border-slate-600 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border border border/30 focus:ring-1 focus:ringborder border border/30/50" /></div>
-                        <div><label htmlFor="company" className="block text-sm font-medium text-slate-300 mb-1">Company</label><input id="company" type="text" value={company} onChange={e => setCompany(e.target.value)} className="w-full px-3 py-2 border-slate-600 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border border border/30 focus:ring-1 focus:ringborder border border/30/50" /></div>
-                        <div><label htmlFor="email" className="block text-sm font-medium text-slate-300 mb-1">Email</label><input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full px-3 py-2 border-slate-600 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border border border/30 focus:ring-1 focus:ringborder border border/30/50" /></div>
-                        <div><label htmlFor="phone" className="block text-sm font-medium text-slate-300 mb-1">Phone</label><input id="phone" type="tel" value={phone} onChange={e => setPhone(e.target.value)} className="w-full px-3 py-2 border-slate-600 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border border border/30 focus:ring-1 focus:ringborder border border/30/50" /></div>
+                        <div><label htmlFor="name" className="block text-sm font-medium text-slate-300 mb-1">Name*</label><input id="name" type="text" value={name} onChange={e => setName(e.target.value)} required autoFocus className="w-full px-3 py-2 border-slate-600 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50" /></div>
+                        <div><label htmlFor="company" className="block text-sm font-medium text-slate-300 mb-1">Company</label><input id="company" type="text" value={company} onChange={e => setCompany(e.target.value)} className="w-full px-3 py-2 border-slate-600 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50" /></div>
+                        <div><label htmlFor="email" className="block text-sm font-medium text-slate-300 mb-1">Email</label><input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full px-3 py-2 border-slate-600 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50" /></div>
+                        <div><label htmlFor="phone" className="block text-sm font-medium text-slate-300 mb-1">Phone</label><input id="phone" type="tel" value={phone} onChange={e => setPhone(e.target.value)} className="w-full px-3 py-2 border-slate-600 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50" /></div>
                     </div>
-                    <div>
                     <div className="col-span-2">
                         <label className="block text-sm font-medium text-slate-300 mb-1">Tags</label>
                         <input
-                            className="w-full px-3 py-2 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border border border/30 focus:ring-1 focus:ringborder border border/30/50"
+                            className="w-full px-3 py-2 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50"
                             value={tagsText}
                             onChange={(e) => setTagsText(e.target.value)}
                             placeholder="e.g., Corporate, Repeat, Holiday"
@@ -114,7 +113,7 @@ const ClientModal: React.FC<{
                             <label className="block text-sm font-medium text-slate-300 mb-1">Last Contacted</label>
                             <input
                                 type="date"
-                                className="w-full px-3 py-2 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border border border/30 focus:ring-1 focus:ringborder border border/30/50"
+                                className="w-full px-3 py-2 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50"
                                 value={lastContacted}
                                 onChange={(e) => setLastContacted(e.target.value)}
                             />
@@ -123,7 +122,7 @@ const ClientModal: React.FC<{
                             <label className="block text-sm font-medium text-slate-300 mb-1">Last Show Date</label>
                             <input
                                 type="date"
-                                className="w-full px-3 py-2 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border border border/30 focus:ring-1 focus:ringborder border border/30/50"
+                                className="w-full px-3 py-2 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50"
                                 value={lastShowDate}
                                 onChange={(e) => setLastShowDate(e.target.value)}
                             />
@@ -133,7 +132,7 @@ const ClientModal: React.FC<{
                     <div className="col-span-2">
                         <label className="block text-sm font-medium text-slate-300 mb-1">Last Show Title</label>
                         <input
-                            className="w-full px-3 py-2 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border border border/30 focus:ring-1 focus:ringborder border border/30/50"
+                            className="w-full px-3 py-2 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50"
                             value={lastShowTitle}
                             onChange={(e) => setLastShowTitle(e.target.value)}
                             placeholder="e.g., Science Time"
@@ -247,8 +246,8 @@ const ClientModal: React.FC<{
 </div>
 
                     <div className="flex gap-3 pt-2">
-                        <button type="button" onClick={onClose} className="w-full py-2 rounded-md text-slate-300 font-bold text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border border border/30 focus:ring-1 focus:ringborder border border/30/50">Cancel</button>
-                        <button type="submit" className="w-full py-2 rounded-md text-white font-bold text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border border border/30 focus:ring-1 focus:ringborder border border/30/50">{buttonText}</button>
+                        <button type="button" onClick={onClose} className="w-full py-2 rounded-md text-slate-300 font-bold text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50">Cancel</button>
+                        <button type="submit" className="w-full py-2 rounded-md text-white font-bold text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50">{buttonText}</button>
                     </div>
                 </form>
             </div>
