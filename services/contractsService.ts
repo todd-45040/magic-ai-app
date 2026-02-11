@@ -47,6 +47,11 @@ export const listContractsForShow = async (showId: string): Promise<ContractRow[
 };
 
 export const createContractVersion = async (args: CreateContractArgs): Promise<ContractRow> => {
+  // Debug: confirm we have a real Supabase auth session (required for RLS policies)
+  const { data: userData, error: userErr } = await supabase.auth.getUser();
+  // eslint-disable-next-line no-console
+  console.log('AUTH DEBUG:', { userErr, userId: userData?.user?.id });
+
   const uid = await getUserIdOrThrow();
 
   // Compute next version number for this show
@@ -62,6 +67,8 @@ export const createContractVersion = async (args: CreateContractArgs): Promise<C
 
   const nextVersion = (latest?.[0]?.version ?? 0) + 1;
 
+  // Build the insert payload using ONLY columns that exist in your contracts table.
+  // (Your current schema does NOT include a "structured" column.)
   const basePayload: any = {
     show_id: args.showId,
     user_id: uid,
@@ -71,25 +78,26 @@ export const createContractVersion = async (args: CreateContractArgs): Promise<C
     status: args.status ?? 'draft',
   };
 
-  // Optional column: structured (may not exist in some DB schemas / schema cache)
-  // Strategy:
-  // 1) Try insert WITH structured only if provided
-  // 2) If PostgREST reports missing column (e.g., PGRST204 schema cache), retry WITHOUT structured
-  const payloadWithStructured =
-    args.structured !== undefined ? { ...basePayload, structured: args.structured } : basePayload;
+  // eslint-disable-next-line no-console
+  console.log('CONTRACT INSERT PAYLOAD:', {
+    show_id: basePayload.show_id,
+    user_id: basePayload.user_id,
+    client_id: basePayload.client_id,
+    version: basePayload.version,
+    status: basePayload.status,
+    content_len: (basePayload.content || '').length,
+  });
 
-  let insertRes = await supabase.from('contracts').insert(payloadWithStructured).select('*').single();
+  // Insert and return the newly created contract version row.
+  let insertRes = await supabase.from('contracts').insert(basePayload).select('*').single();
 
-  if (insertRes.error && args.structured !== undefined) {
-    const msg = (insertRes.error as any)?.message?.toLowerCase?.() ?? '';
-    const code = (insertRes.error as any)?.code ?? '';
+  if (insertRes.error) {
+    const msg = insertRes.error.message || '';
+    const looksLikeMissingColumn =
+      msg.toLowerCase().includes('column') && msg.toLowerCase().includes('does not exist');
 
-    const looksLikeMissingStructuredColumn =
-      code === 'PGRST204' ||
-      (msg.includes('could not find') && msg.includes('structured') && msg.includes('schema cache')) ||
-      (msg.includes('column') && msg.includes('structured') && msg.includes('does not exist'));
-
-    if (looksLikeMissingStructuredColumn) {
+    if (looksLikeMissingColumn) {
+      // We already send only known columns; but keep a safe retry path anyway.
       insertRes = await supabase.from('contracts').insert(basePayload).select('*').single();
     }
   }
