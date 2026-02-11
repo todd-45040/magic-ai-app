@@ -6,6 +6,7 @@ import QRCode from 'qrcode';
 import type { Show, Task, Subtask, TaskPriority, Client, Finances, Expense, Performance, User } from '../types';
 import { getShows, addShow, updateShow, deleteShow, addTaskToShow, addTasksToShow, updateTaskInShow, deleteTaskFromShow, toggleSubtask } from '../services/showsService';
 import { startPerformance, endPerformance, getPerformancesByShowId } from '../services/performanceService';
+import { listContractsForShow, updateContractStatus, type ContractRow, type ContractStatus } from '../services/contractsService';
 import { generateResponse, generateStructuredResponse } from '../services/geminiService';
 import { buildShowFeedbackUrl, rotateShowFeedbackToken } from '../services/showFeedbackService';
 import { AI_TASK_SUGGESTER_SYSTEM_INSTRUCTION, IN_TASK_PATTER_SYSTEM_INSTRUCTION } from '../constants';
@@ -505,10 +506,17 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
     
     const ShowDetailView = () => {
         if (!selectedShow) return null;
-        const [activeTab, setActiveTab] = useState<'tasks' | 'finances' | 'history'>('tasks');
+        const [activeTab, setActiveTab] = useState<'tasks' | 'finances' | 'contract' | 'history'>('tasks');
         const [isSuggesting, setIsSuggesting] = useState(false);
         const [suggestionError, setSuggestionError] = useState<string | null>(null);
         const [pastPerformances, setPastPerformances] = useState<Performance[]>([]);
+        const [contractRows, setContractRows] = useState<ContractRow[]>([]);
+        const [activeContractId, setActiveContractId] = useState<string>('');
+        const [activeContractContent, setActiveContractContent] = useState<string>('');
+        const [activeContractStatus, setActiveContractStatus] = useState<ContractStatus>('draft');
+        const [isLoadingContracts, setIsLoadingContracts] = useState(false);
+        const [contractError, setContractError] = useState<string | null>(null);
+
         const client = clients.find(c => c.id === selectedShow.clientId);
 
         useEffect(() => {
@@ -519,6 +527,34 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                     setPastPerformances(data);
                 };
                 fetchHistory();
+            }
+
+            if (activeTab === 'contract') {
+                const fetchContracts = async () => {
+                    setIsLoadingContracts(true);
+                    setContractError(null);
+                    try {
+                        const rows = await listContractsForShow(selectedShow.id);
+                        setContractRows(rows);
+
+                        const latest = rows?.[0];
+                        if (latest) {
+                            setActiveContractId(latest.id);
+                            setActiveContractContent(latest.content || '');
+                            setActiveContractStatus((latest.status || 'draft') as ContractStatus);
+                        } else {
+                            setActiveContractId('');
+                            setActiveContractContent('');
+                            setActiveContractStatus('draft');
+                        }
+                    } catch (e: any) {
+                        console.error('Failed to load contracts for show:', e);
+                        setContractError(e?.message ? String(e.message) : 'Failed to load contracts.');
+                    } finally {
+                        setIsLoadingContracts(false);
+                    }
+                };
+                fetchContracts();
             }
         }, [activeTab, selectedShow.id]);
 
@@ -620,6 +656,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                          <div className="flex items-center">
                             <TabButton icon={ChecklistIcon} label="Tasks" isActive={activeTab === 'tasks'} onClick={() => setActiveTab('tasks')} />
                             <TabButton icon={DollarSignIcon} label="Finances" isActive={activeTab === 'finances'} onClick={() => setActiveTab('finances')} />
+                            <TabButton icon={FileTextIcon} label="Contract" isActive={activeTab === 'contract'} onClick={() => setActiveTab('contract')} />
                             <TabButton icon={AnalyticsIcon} label="Performance History" isActive={activeTab === 'history'} onClick={() => setActiveTab('history')} />
                         </div>
                         {activeTab === 'tasks' && <div className="bg-slate-700 p-1 rounded-md flex items-center"><button onClick={() => setViewMode('board')} className={`flex items-center gap-2 px-3 py-1 text-sm font-medium rounded transition-colors ${viewMode === 'board' ? 'bg-purple-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}><ViewGridIcon className="w-4 h-4" />Board</button><button onClick={() => setViewMode('list')} className={`flex items-center gap-2 px-3 py-1 text-sm font-medium rounded transition-colors ${viewMode === 'list' ? 'bg-purple-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}><ViewListIcon className="w-4 h-4" />List</button></div>}
@@ -630,9 +667,144 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                     {activeTab === 'tasks' ? (
                         tasks.length === 0 ? <div className="text-center py-10 text-slate-400"><p className="mb-3">No tasks yet. Click <span className="text-slate-200 font-semibold">Add Task</span> to get started.</p><button onClick={handleAiSuggestTasks} disabled={isSuggesting} className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold transition-colors"><WandIcon className="w-4 h-4" /><span>{isSuggesting ? 'Thinking...' : 'AI-Suggest Tasks'}</span></button></div> : viewMode === 'list' ? <ListView /> : <BoardView />
 
+                    
                     ) : activeTab === 'finances' ? (
                         <FinanceTracker show={selectedShow} onUpdate={(updates) => handleUpdateShow(selectedShow.id, updates)} />
+                    ) : activeTab === 'contract' ? (
+                        <div className="space-y-4">
+                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                                <div className="flex items-center gap-3">
+                                    <div className="text-slate-300 text-sm font-semibold">Version</div>
+                                    <select
+                                        value={activeContractId}
+                                        onChange={(e) => {
+                                            const id = e.target.value;
+                                            setActiveContractId(id);
+                                            const row = contractRows.find(r => r.id === id);
+                                            if (row) {
+                                                setActiveContractContent(row.content || '');
+                                                setActiveContractStatus((row.status || 'draft') as ContractStatus);
+                                            }
+                                        }}
+                                        className="bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-slate-200 text-sm"
+                                        disabled={isLoadingContracts || contractRows.length === 0}
+                                        title={contractRows.length === 0 ? 'No saved contracts yet' : 'Select a saved contract version'}
+                                    >
+                                        {contractRows.length === 0 ? (
+                                            <option value="">No contracts</option>
+                                        ) : (
+                                            contractRows
+                                                .slice()
+                                                .sort((a, b) => (b.version ?? 0) - (a.version ?? 0))
+                                                .map((r) => (
+                                                    <option key={r.id} value={r.id}>
+                                                        v{r.version} ({r.status})
+                                                    </option>
+                                                ))
+                                        )}
+                                    </select>
+
+                                    <span
+                                        className={`px-2 py-1 rounded-full text-xs font-semibold border ${
+                                            activeContractStatus === 'signed'
+                                                ? 'bg-green-500/15 text-green-300 border-green-500/30'
+                                                : activeContractStatus === 'sent'
+                                                ? 'bg-blue-500/15 text-blue-300 border-blue-500/30'
+                                                : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                                        }`}
+                                        title="Contract status"
+                                    >
+                                        {activeContractStatus.toUpperCase()}
+                                    </span>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => {
+                                            if (!activeContractContent) return;
+                                            navigator.clipboard.writeText(activeContractContent);
+                                        }}
+                                        className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-slate-700 hover:bg-slate-600 text-slate-100 text-sm"
+                                        title="Copy contract text"
+                                    >
+                                        <CopyIcon className="w-4 h-4" />
+                                        Copy
+                                    </button>
+
+                                    <button
+                                        disabled
+                                        className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-slate-800 text-slate-500 text-sm cursor-not-allowed"
+                                        title="PDF download coming soon"
+                                    >
+                                        <FileTextIcon className="w-4 h-4" />
+                                        Download PDF (Soon)
+                                    </button>
+
+                                    <button
+                                        onClick={async () => {
+                                            if (!activeContractId) return;
+                                            try {
+                                                const updated = await updateContractStatus(activeContractId, 'sent');
+                                                setActiveContractStatus((updated.status || 'sent') as ContractStatus);
+                                                const rows = await listContractsForShow(selectedShow.id);
+                                                setContractRows(rows);
+                                            } catch (e) {
+                                                console.error(e);
+                                                setContractError('Failed to update status to SENT.');
+                                            }
+                                        }}
+                                        disabled={!activeContractId}
+                                        className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-blue-700 hover:bg-blue-600 disabled:bg-slate-800 disabled:text-slate-500 text-white text-sm"
+                                        title="Mark as Sent"
+                                    >
+                                        Mark Sent
+                                    </button>
+
+                                    <button
+                                        onClick={async () => {
+                                            if (!activeContractId) return;
+                                            try {
+                                                const updated = await updateContractStatus(activeContractId, 'signed');
+                                                setActiveContractStatus((updated.status || 'signed') as ContractStatus);
+                                                const rows = await listContractsForShow(selectedShow.id);
+                                                setContractRows(rows);
+                                            } catch (e) {
+                                                console.error(e);
+                                                setContractError('Failed to update status to SIGNED.');
+                                            }
+                                        }}
+                                        disabled={!activeContractId}
+                                        className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-green-700 hover:bg-green-600 disabled:bg-slate-800 disabled:text-slate-500 text-white text-sm"
+                                        title="Mark as Signed"
+                                    >
+                                        Mark Signed
+                                    </button>
+                                </div>
+                            </div>
+
+                            {contractError && (
+                                <div className="text-sm text-red-300 bg-red-500/10 border border-red-500/20 rounded-md p-3">
+                                    {contractError}
+                                </div>
+                            )}
+
+                            <div className="bg-slate-800/40 border border-slate-700 rounded-lg p-4 min-h-[280px]">
+                                {isLoadingContracts ? (
+                                    <div className="text-slate-400">Loading contracts…</div>
+                                ) : !activeContractContent ? (
+                                    <div className="text-slate-400">
+                                        No saved contract for this show yet. Generate one in the Contract Generator and click <span className="text-slate-200 font-semibold">Save to Show</span>.
+                                    </div>
+                                ) : (
+                                    <pre className="whitespace-pre-wrap text-slate-200 text-sm leading-relaxed">
+{activeContractContent}
+                                    </pre>
+                                )}
+                            </div>
+                        </div>
                     ) : (
+                        <PerformanceHistory performances={pastPerformances} onNavigateToAnalytics={onNavigateToAnalytics} />
+                    )}
                         <PerformanceHistory performances={pastPerformances} onNavigateToAnalytics={onNavigateToAnalytics} />
                     )}
                 </div>

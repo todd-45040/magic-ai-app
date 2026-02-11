@@ -4,12 +4,13 @@ export type ContractStatus = 'draft' | 'sent' | 'signed';
 
 export interface ContractRow {
   id: string;
-  show_id: string;
   user_id: string;
+  show_id: string;
   client_id: string | null;
   version: number;
   content: string;
   status: ContractStatus;
+  structured?: any | null;
   deposit_paid?: boolean;
   balance_paid?: boolean;
   created_at?: string;
@@ -25,63 +26,20 @@ const getUserIdOrThrow = async (): Promise<string> => {
   return userId;
 };
 
-const safeSelect = async <T = any>(queryFn: () => Promise<{ data: any; error: any }>, fallback: T): Promise<T> => {
-  try {
-    const { data, error } = await queryFn();
-    if (error) throw error;
-    return (data ?? fallback) as T;
-  } catch {
-    return fallback;
-  }
-};
-
-// Retry helpers to survive schema drift (missing optional columns in some envs).
-const safeInsert = async (table: string, payload: any) => {
-  let current: any = Array.isArray(payload) ? payload.map((p: any) => ({ ...p })) : { ...payload };
+// Remove missing columns dynamically if schema cache is behind or some envs differ.
+const safeInsertSingle = async (table: string, payload: any) => {
+  let current: any = { ...payload };
   for (let i = 0; i < 8; i++) {
-    const { data, error } = await supabase.from(table).insert(current).select().single();
-    if (!error) return { data, error: null };
+    const { data, error } = await supabase.from(table).insert(current).select('*').single();
+    if (!error) return data;
     const msg = String((error as any)?.message ?? error ?? '');
+
+    // Missing column pattern from Supabase PostgREST
     const m = msg.match(/Could not find the '([^']+)' column of '([^']+)'/i);
     const missingCol = m?.[1];
     const missingTable = m?.[2];
     if (missingCol && (!missingTable || missingTable === table)) {
-      if (Array.isArray(current)) {
-        current = current.map((row: any) => {
-          if (row && Object.prototype.hasOwnProperty.call(row, missingCol)) {
-            const next = { ...row };
-            delete next[missingCol];
-            return next;
-          }
-          return row;
-        });
-      } else if (current && Object.prototype.hasOwnProperty.call(current, missingCol)) {
-        delete current[missingCol];
-      } else {
-        break;
-      }
-      continue;
-    }
-    throw error;
-  }
-  throw new Error(`Failed to insert into ${table}.`);
-};
-
-const safeUpdate = async (table: string, match: Record<string, any>, changes: any) => {
-  let current: any = { ...changes };
-  for (let i = 0; i < 8; i++) {
-    let q: any = supabase.from(table).update(current);
-    Object.entries(match).forEach(([k, v]) => {
-      q = q.eq(k, v);
-    });
-    const { error } = await q;
-    if (!error) return;
-    const msg = String((error as any)?.message ?? error ?? '');
-    const m = msg.match(/Could not find the '([^']+)' column of '([^']+)'/i);
-    const missingCol = m?.[1];
-    const missingTable = m?.[2];
-    if (missingCol && (!missingTable || missingTable === table)) {
-      if (current && Object.prototype.hasOwnProperty.call(current, missingCol)) {
+      if (Object.prototype.hasOwnProperty.call(current, missingCol)) {
         const next = { ...current };
         delete next[missingCol];
         current = next;
@@ -90,7 +48,29 @@ const safeUpdate = async (table: string, match: Record<string, any>, changes: an
     }
     throw error;
   }
-  throw new Error(`Failed to update ${table}.`);
+  throw new Error('Insert failed after retries.');
+};
+
+const safeUpdateById = async (table: string, id: string, patch: any) => {
+  let current: any = { ...patch };
+  for (let i = 0; i < 8; i++) {
+    const { data, error } = await supabase.from(table).update(current).eq('id', id).select('*').single();
+    if (!error) return data;
+    const msg = String((error as any)?.message ?? error ?? '');
+    const m = msg.match(/Could not find the '([^']+)' column of '([^']+)'/i);
+    const missingCol = m?.[1];
+    const missingTable = m?.[2];
+    if (missingCol && (!missingTable || missingTable === table)) {
+      if (Object.prototype.hasOwnProperty.call(current, missingCol)) {
+        const next = { ...current };
+        delete next[missingCol];
+        current = next;
+        continue;
+      }
+    }
+    throw error;
+  }
+  throw new Error('Update failed after retries.');
 };
 
 export const listContractsForShow = async (showId: string): Promise<ContractRow[]> => {
@@ -98,12 +78,12 @@ export const listContractsForShow = async (showId: string): Promise<ContractRow[
   const { data, error } = await supabase
     .from('contracts')
     .select('*')
-    .eq('user_id', userId)
     .eq('show_id', showId)
+    .eq('user_id', userId)
     .order('version', { ascending: false });
 
   if (error) throw error;
-  return (data ?? []) as ContractRow[];
+  return (data ?? []) as any;
 };
 
 export const getLatestContractForShow = async (showId: string): Promise<ContractRow | null> => {
@@ -113,19 +93,26 @@ export const getLatestContractForShow = async (showId: string): Promise<Contract
 
 export const createContractVersion = async (args: {
   showId: string;
-  clientId?: string | null;
+  clientId?: string;
   content: string;
-  status?: ContractStatus;
-  // optional extra fields; will be dropped automatically if columns don't exist
   structured?: any;
-  depositPaid?: boolean;
-  balancePaid?: boolean;
+  status?: ContractStatus;
 }): Promise<ContractRow> => {
   const userId = await getUserIdOrThrow();
 
-  // Determine next version number
-  const latest = await getLatestContractForShow(args.showId);
-  const nextVersion = (latest?.version ?? 0) + 1;
+  // Determine next version
+  const { data: latest, error: latestErr } = await supabase
+    .from('contracts')
+    .select('version')
+    .eq('show_id', args.showId)
+    .eq('user_id', userId)
+    .order('version', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  // If the table exists but RLS blocks select, this may error. In that case, default to version 1.
+  let nextVersion = 1;
+  if (!latestErr && latest?.version) nextVersion = Number(latest.version) + 1;
 
   const payload: any = {
     show_id: args.showId,
@@ -134,34 +121,21 @@ export const createContractVersion = async (args: {
     version: nextVersion,
     content: args.content,
     status: args.status ?? 'draft',
-    updated_at: new Date().toISOString(),
+    structured: args.structured ?? null,
   };
 
-  // Optional columns (schema drift safe)
-  if (args.structured !== undefined) payload.structured = args.structured;
-  if (args.depositPaid !== undefined) payload.deposit_paid = args.depositPaid;
-  if (args.balancePaid !== undefined) payload.balance_paid = args.balancePaid;
-
-  const { data } = await safeInsert('contracts', payload);
-  return data as ContractRow;
+  const inserted = await safeInsertSingle('contracts', payload);
+  return inserted as any;
 };
 
-export const updateContractStatus = async (contractId: string, status: ContractStatus) => {
-  await safeUpdate('contracts', { id: contractId }, { status, updated_at: new Date().toISOString() });
+export const updateContractStatus = async (contractId: string, status: ContractStatus): Promise<ContractRow> => {
+  return (await safeUpdateById('contracts', contractId, { status })) as any;
 };
 
-export const markDepositPaid = async (contractId: string, paid: boolean) => {
-  await safeUpdate('contracts', { id: contractId }, { deposit_paid: paid, updated_at: new Date().toISOString() });
+export const markDepositPaid = async (contractId: string, paid: boolean): Promise<ContractRow> => {
+  return (await safeUpdateById('contracts', contractId, { deposit_paid: paid })) as any;
 };
 
-export const markBalancePaid = async (contractId: string, paid: boolean) => {
-  await safeUpdate('contracts', { id: contractId }, { balance_paid: paid, updated_at: new Date().toISOString() });
-};
-
-// Backward-compat check: detect if contracts table exists (best-effort)
-export const contractsTableAvailable = async (): Promise<boolean> => {
-  // Try a harmless select with limit 1.
-  const userId = await getUserIdOrThrow();
-  const { error } = await supabase.from('contracts').select('id').eq('user_id', userId).limit(1);
-  return !error;
+export const markBalancePaid = async (contractId: string, paid: boolean): Promise<ContractRow> => {
+  return (await safeUpdateById('contracts', contractId, { balance_paid: paid })) as any;
 };

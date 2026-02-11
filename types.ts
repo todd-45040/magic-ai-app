@@ -71,6 +71,18 @@ export type AudienceTab = 'chat' | 'identify' | 'publications' | 'community' | '
 export type TaskPriority = 'High' | 'Medium' | 'Low';
 export type TaskStatus = 'To-Do' | 'Completed';
 
+export type ContractStatus = 'draft' | 'sent' | 'signed';
+
+export interface ContractSectionBundle {
+  performanceDetails: string;
+  paymentTerms: string;
+  technicalRequirements: string;
+  cancellationPolicy: string;
+  forceMajeure: string;
+  signatureBlock: string;
+}
+
+
 export interface Subtask {
   id: string;
   text: string;
@@ -110,21 +122,12 @@ export interface Show {
     updatedAt: number;
     clientId?: string;
     finances?: Finances;
-    // Optional: structured performance contract saved from the Contract Generator.
-    // Stored as JSON when supported by the backend schema.
-    contract?: {
-      performanceDetails: string;
-      paymentTerms: string;
-      technicalRequirements: string;
-      cancellationPolicy: string;
-      forceMajeure: string;
-      signatureBlock: string;
-      // lightweight metadata for tracking
-      generatedAt?: number;
-      clientId?: string;
-    };
     tags?: string[];
+    // Backward compatibility: older contract saves nested onto the show
+    contract?: ContractSectionBundle;
+    contractVersions?: any[];
 }
+
 
 export interface Feedback {
   id: string;

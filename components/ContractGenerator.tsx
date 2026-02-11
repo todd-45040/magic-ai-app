@@ -6,6 +6,7 @@ import { saveIdea } from '../services/ideasService';
 import { CONTRACT_GENERATOR_SYSTEM_INSTRUCTION } from '../constants';
 import { FileTextIcon, WandIcon, SaveIcon, CheckIcon, ShareIcon, CopyIcon } from './icons';
 import { updateShow } from '../services/showsService';
+import { createContractVersion } from '../services/contractsService';
 import type { Client, Show, User } from '../types';
 
 interface ContractGeneratorProps {
@@ -231,13 +232,43 @@ Guidelines:
         if (!selectedShowId || !result) return;
         try {
             setError(null);
-            const updatedShows = await updateShow(selectedShowId, { contract: result } as any);
-            onShowsUpdate(updatedShows);
+
+            // 1) Preferred: persist into the dedicated `contracts` table (versioned)
+            const metaText = formatContractAsText(result, { performerName, clientName, eventTitle });
+            await createContractVersion({
+                showId: selectedShowId,
+                clientId: selectedClientId || undefined,
+                content: metaText,
+                structured: result,
+                status: 'draft',
+            });
+
+            // Keep the shows list fresh (no-op if your parent already refetches elsewhere)
+            onShowsUpdate(shows);
+
             setSaveToShowStatus('saved');
             setTimeout(() => setSaveToShowStatus('idle'), 2000);
+
+            // Jump to Show Planner for that show
             onNavigateToShowPlanner(selectedShowId);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to save contract to show.');
+        } catch (err: any) {
+            // 2) Backward compatibility: older deployments (no contracts table) fall back to show-based storage.
+            console.error('Save contract failed (contracts table). Falling back to legacy show storage...', err);
+
+            try {
+                const updatedShows = await updateShow(selectedShowId, { contract: result } as any);
+                onShowsUpdate(updatedShows);
+                setSaveToShowStatus('saved');
+                setTimeout(() => setSaveToShowStatus('idle'), 2000);
+                onNavigateToShowPlanner(selectedShowId);
+                return;
+            } catch (legacyErr: any) {
+                console.error('Legacy save to show also failed:', legacyErr);
+                const msg =
+                    (legacyErr?.message || err?.message) ??
+                    'Failed to save contract. Check contracts table RLS and required columns (user_id).';
+                setError(String(msg));
+            }
         }
     };
 
