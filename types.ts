@@ -86,14 +86,6 @@ export interface Expense {
 export interface Finances {
   performanceFee: number;
   expenses: Expense[];
-  // Optional income entries (used by the FinanceTracker UI)
-  income?: Array<{ id: string; description: string; amount: number; createdAt?: number }>;
-  // Phase A: payment tracking (deposit/paid/balance/status)
-  payments?: {
-    depositReceived?: number;
-    amountPaid?: number;
-    status?: 'prospect' | 'booked' | 'paid' | 'completed';
-  };
 }
 
 export interface Task {
@@ -240,7 +232,14 @@ export interface Client {
   createdAt: number;
 }
 
-export type WidgetId = 'quick-actions' | 'upcoming-tasks' | 'latest-feedback' | 'recent-idea' | 'featured-tools';
+export type WidgetId =
+  | 'quick-actions'
+  | 'upcoming-tasks'
+  | 'latest-feedback'
+  | 'recent-idea'
+  | 'featured-tools'
+  | 'business-metrics'
+  | 'strategic-insights';
 
 export interface DashboardWidget {
   id: WidgetId;

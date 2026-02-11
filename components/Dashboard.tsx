@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import type { User, Show, Feedback, SavedIdea, MagicianView, PredefinedPrompt, DashboardLayout, WidgetId } from '../types';
 import { getLayout, saveLayout, WIDGETS, getDefaultLayout } from '../services/dashboardService';
 import { updateTaskInShow } from '../services/showsService';
+import { getPerformancesByShowId } from '../services/performanceService';
 import FeedbackModal from './FeedbackModal';
 import { RabbitIcon, ClockIcon, StarIcon, BookmarkIcon, WandIcon, MicrophoneIcon, StageCurtainsIcon, LightbulbIcon, UsersCogIcon, ChecklistIcon, FileTextIcon, ImageIcon, BookIcon, CustomizeIcon, DragHandleIcon, EyeIcon, EyeOffIcon, ChevronDownIcon } from './icons';
 
@@ -178,6 +179,140 @@ const FeaturedToolsWidget: React.FC<{ onNavigate: (view: MagicianView) => void }
     </>
 );
 
+const formatMoney = (value: number, currency: string = 'USD') => {
+    try {
+        return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(value);
+    } catch {
+        return `$${value.toFixed(0)}`;
+    }
+};
+
+const BusinessMetricsWidget: React.FC<{ shows: Show[]; feedback: Feedback[] }> = ({ shows, feedback }) => {
+    const { gross, expenses, net, completedCount, avgRating, responseCount } = useMemo(() => {
+        const gross = shows.reduce((sum, s) => sum + (s.finances?.performanceFee || 0), 0);
+        const expenses = shows.reduce((sum, s) => {
+            const ex = s.finances?.expenses || [];
+            return sum + ex.reduce((sub, e) => sub + (e.amount || 0), 0);
+        }, 0);
+        const net = gross - expenses;
+
+        const completedCount = shows.reduce((count, s) => {
+            const perfs = getPerformancesByShowId(s.id);
+            return count + (perfs.some(p => !!p.endTime) ? 1 : 0);
+        }, 0);
+
+        const responseCount = feedback.length;
+        const avgRating = responseCount > 0 ? (feedback.reduce((sum, f) => sum + (f.rating || 0), 0) / responseCount) : 0;
+
+        return { gross, expenses, net, completedCount, avgRating, responseCount };
+    }, [shows, feedback]);
+
+    return (
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-3">
+                <div className="text-xs text-slate-400">Gross Revenue</div>
+                <div className="mt-1 text-xl font-bold text-slate-100">{formatMoney(gross)}</div>
+            </div>
+            <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-3">
+                <div className="text-xs text-slate-400">Expenses</div>
+                <div className="mt-1 text-xl font-bold text-slate-100">{formatMoney(expenses)}</div>
+            </div>
+            <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-3">
+                <div className="text-xs text-slate-400">Net (Estimated)</div>
+                <div className="mt-1 text-xl font-bold text-yellow-200">{formatMoney(net)}</div>
+            </div>
+
+            <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-3">
+                <div className="text-xs text-slate-400">Completed Shows</div>
+                <div className="mt-1 text-xl font-bold text-slate-100">{completedCount}</div>
+            </div>
+            <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-3">
+                <div className="text-xs text-slate-400">Avg Rating</div>
+                <div className="mt-1 text-xl font-bold text-slate-100">{avgRating ? avgRating.toFixed(1) : '—'}</div>
+            </div>
+            <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-3">
+                <div className="text-xs text-slate-400">Audience Responses</div>
+                <div className="mt-1 text-xl font-bold text-slate-100">{responseCount}</div>
+            </div>
+
+            <p className="col-span-2 lg:col-span-3 text-xs text-slate-400">
+                Revenue is pulled from Show Planner fees and expenses. Completed Shows are counted when a performance has an end time.
+            </p>
+        </div>
+    );
+};
+
+const StrategicInsightsWidget: React.FC<{ shows: Show[]; feedback: Feedback[]; onNavigate: (view: MagicianView) => void }> = ({ shows, feedback, onNavigate }) => {
+    const insights = useMemo(() => {
+        const out: { title: string; detail: string; action?: { label: string; view: MagicianView } }[] = [];
+
+        const showsWithFee = shows.filter(s => (s.finances?.performanceFee || 0) > 0).length;
+        const showsWithFeedback = new Set(feedback.map(f => f.showId)).size;
+
+        if (shows.length > 0 && showsWithFeedback < shows.length) {
+            out.push({
+                title: 'Collect more audience feedback',
+                detail: `${shows.length - showsWithFeedback} show(s) have no audience responses yet. Generate a QR code and display it after the show.`,
+                action: { label: 'Audience Feedback', view: 'show-feedback' },
+            });
+        }
+
+        const highExpenseShows = shows.filter(s => {
+            const fee = s.finances?.performanceFee || 0;
+            const exp = (s.finances?.expenses || []).reduce((sum, e) => sum + (e.amount || 0), 0);
+            return fee > 0 && exp / fee >= 0.5;
+        }).length;
+        if (highExpenseShows > 0) {
+            out.push({
+                title: 'Watch profit on a few shows',
+                detail: `${highExpenseShows} show(s) have expenses above 50% of your fee. Consider tightening travel/prop costs for better margins.`,
+            });
+        }
+
+        if (showsWithFee === 0 && shows.length > 0) {
+            out.push({
+                title: 'Add your performance fee',
+                detail: 'Your shows don’t have fees recorded yet. Adding fees/expenses makes your business dashboard instantly more valuable.',
+                action: { label: 'Show Planner', view: 'show-planner' },
+            });
+        }
+
+        const avgRating = feedback.length ? feedback.reduce((s, f) => s + (f.rating || 0), 0) / feedback.length : 0;
+        if (feedback.length >= 3 && avgRating >= 4.6) {
+            out.push({
+                title: 'You’re in “rebook” territory',
+                detail: `Your average rating is ${avgRating.toFixed(1)} across ${feedback.length} response(s). Consider adding a 2-sentence rebooking ask to your follow-up email.`,
+                action: { label: 'Draft Email', view: 'client-management' },
+            });
+        }
+
+        return out.length ? out : [{ title: 'Keep building data', detail: 'Add fees/expenses, collect audience feedback, and log performances to unlock smarter insights.' }];
+    }, [shows, feedback]);
+
+    return (
+        <div className="space-y-3">
+            {insights.slice(0, 4).map((i, idx) => (
+                <div key={idx} className="rounded-lg border border-slate-700 bg-slate-900/40 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                        <div>
+                            <div className="font-semibold text-slate-100">{i.title}</div>
+                            <div className="text-sm text-slate-400 mt-1">{i.detail}</div>
+                        </div>
+                        {i.action && (
+                            <button
+                                onClick={() => onNavigate(i.action!.view)}
+                                className="shrink-0 px-3 py-1.5 rounded-md bg-purple-600/80 hover:bg-purple-600 text-white text-sm font-semibold"
+                            >
+                                {i.action.label}
+                            </button>
+                        )}
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+};
+
 
 // --- Main Dashboard Component ---
 
@@ -262,6 +397,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, shows, feedback, ideas, onN
     
     const widgetComponents: Record<WidgetId, React.ReactNode> = {
         'quick-actions': <QuickActionsWidget onNavigate={onNavigate} />,
+        'business-metrics': <BusinessMetricsWidget shows={shows} feedback={feedback} />,
+        'strategic-insights': <StrategicInsightsWidget shows={shows} feedback={feedback} onNavigate={onNavigate} />,
         'upcoming-tasks': <UpcomingTasksWidget shows={shows} onNavigate={onNavigate} onShowsUpdate={onShowsUpdate} />,
         'latest-feedback': <LatestFeedbackWidget feedback={feedback} onNavigate={onNavigate} onFeedbackClick={setSelectedFeedback} />,
         'recent-idea': <RecentIdeaWidget ideas={ideas} onNavigate={onNavigate} />,

@@ -1280,37 +1280,6 @@ useEffect(() => {
   return () => window.removeEventListener('maw:go-dashboard', handler as any);
 }, []);
 
-// Global navigation: allow deep-linking between tools without full page reload.
-// Other components can dispatch: window.dispatchEvent(new CustomEvent('maw:navigate', { detail: { view: 'show-planner', ... } }))
-useEffect(() => {
-  const handler = (evt: Event) => {
-    try {
-      const ce = evt as CustomEvent;
-      const detail = (ce && (ce as any).detail) || {};
-      const view = detail.view as MagicianView | undefined;
-      if (!view) return;
-
-      // Persist view the same way tab clicks do
-      try { localStorage.setItem(MAGICIAN_VIEW_STORAGE_KEY, view); } catch {}
-      setActiveView(view);
-
-      // Optional: store a show title for Show Planner to consume (future-friendly)
-      if (detail.showTitle) {
-        try { localStorage.setItem('maw_open_show_title', String(detail.showTitle)); } catch {}
-      }
-      if (detail.clientName) {
-        try { localStorage.setItem('maw_new_booking_client_name', String(detail.clientName)); } catch {}
-      }
-      if (detail.clientEmail) {
-        try { localStorage.setItem('maw_new_booking_client_email', String(detail.clientEmail)); } catch {}
-      }
-    } catch {}
-  };
-
-  window.addEventListener('maw:navigate', handler as any);
-  return () => window.removeEventListener('maw:navigate', handler as any);
-}, []);
-
 
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);

@@ -329,16 +329,12 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
 
     // Show handlers
     const handleAddShow = async (title: string, description?: string, clientId?: string) => {
+        // NOTE: showsService.addShow expects a Partial<Show> object.
+        // We intentionally do NOT persist clientId unless your DB schema supports it.
         const newShows = await addShow({
             title,
             description: description || null,
-            clientId: clientId || null,
-            finances: {
-                performanceFee: 0,
-                expenses: [],
-                income: [],
-                payments: { depositReceived: 0, amountPaid: 0, status: clientId ? 'booked' : 'prospect' }
-            }
+            finances: { performanceFee: 0, expenses: [], income: [] }
         } as any);
         setShows(newShows);
         setIsShowModalOpen(false);
@@ -635,7 +631,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                         tasks.length === 0 ? <div className="text-center py-10 text-slate-400"><p className="mb-3">No tasks yet. Click <span className="text-slate-200 font-semibold">Add Task</span> to get started.</p><button onClick={handleAiSuggestTasks} disabled={isSuggesting} className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold transition-colors"><WandIcon className="w-4 h-4" /><span>{isSuggesting ? 'Thinking...' : 'AI-Suggest Tasks'}</span></button></div> : viewMode === 'list' ? <ListView /> : <BoardView />
 
                     ) : activeTab === 'finances' ? (
-                        <FinanceTracker show={selectedShow} clients={clients} onUpdate={(updates) => handleUpdateShow(selectedShow.id, updates)} />
+                        <FinanceTracker show={selectedShow} onUpdate={(updates) => handleUpdateShow(selectedShow.id, updates)} />
                     ) : (
                         <PerformanceHistory performances={pastPerformances} onNavigateToAnalytics={onNavigateToAnalytics} />
                     )}
@@ -789,10 +785,6 @@ const ShowListItem: React.FC<{show: Show, clients: Client[], onSelect: () => voi
     const totalTasks = show.tasks.length;
     const progress = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
     const client = clients.find(c => c.id === show.clientId);
-    const finances = (show.finances as any) || {};
-    const fee = Number(finances.performanceFee || 0);
-    const paid = Number((finances.payments || {}).amountPaid || 0);
-    const balance = Math.max(0, fee - paid);
 
     return (
         <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 flex flex-col justify-between transition-all hover:border-purple-500 hover:shadow-lg hover:shadow-purple-900/20">
@@ -801,13 +793,6 @@ const ShowListItem: React.FC<{show: Show, clients: Client[], onSelect: () => voi
                     <div>
                         <h3 className="font-cinzel font-bold text-lg text-white mb-1 pr-10">{show.title}</h3>
                         {client && <p className="text-xs text-slate-400 flex items-center gap-1"><UsersIcon className="w-3 h-3" /> {client.name}</p>}
-                        {(fee > 0 || paid > 0) && (
-                            <p className="text-xs text-slate-500 mt-1">
-                                Fee: <span className="text-slate-300 font-semibold">${fee.toFixed(0)}</span>
-                                {' • '}
-                                Balance: <span className={`font-semibold ${balance > 0 ? 'text-amber-300' : 'text-emerald-300'}`}>${balance.toFixed(0)}</span>
-                            </p>
-                        )}
                     </div>
                     <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-2 -mt-1 -mr-1 text-slate-400 hover:text-red-400 rounded-full hover:bg-slate-700 transition-colors"><TrashIcon className="w-5 h-5"/></button>
                 </div>
@@ -826,7 +811,7 @@ const ShowListItem: React.FC<{show: Show, clients: Client[], onSelect: () => voi
 };
 
 
-const FinanceTracker: React.FC<{ show: Show; clients: Client[]; onUpdate: (updates: Partial<Show>) => void }> = ({ show, clients, onUpdate }) => {
+const FinanceTracker: React.FC<{ show: Show; onUpdate: (updates: Partial<Show>) => void }> = ({ show, onUpdate }) => {
     type MoneyEntry = { id: string; description: string; amount: number; createdAt?: number };
 
     const finances = useMemo(
@@ -843,28 +828,7 @@ const FinanceTracker: React.FC<{ show: Show; clients: Client[]; onUpdate: (updat
     const expenses: MoneyEntry[] = Array.isArray(finances.expenses) ? finances.expenses : [];
     const income: MoneyEntry[] = Array.isArray(finances.income) ? finances.income : [];
 
-    // Phase A: lightweight client + payment link
-    const payments = (finances as any).payments || {};
-    const paymentStatus: 'prospect' | 'booked' | 'paid' | 'completed' = payments.status || (show.clientId ? 'booked' : 'prospect');
-    const depositReceived = Number(payments.depositReceived || 0);
-    const amountPaid = Number(payments.amountPaid || 0);
-
     const [fee, setFee] = useState<string>(String(performanceFee ?? 0));
-    const [clientId, setClientId] = useState<string>(show.clientId || '');
-    const [deposit, setDeposit] = useState<string>(String(depositReceived ?? 0));
-    const [paid, setPaid] = useState<string>(String(amountPaid ?? 0));
-    const [status, setStatus] = useState<typeof paymentStatus>(paymentStatus);
-
-    // Keep local UI fields in sync when switching shows
-    useEffect(() => {
-        setClientId(show.clientId || '');
-        const p = ((show.finances as any) || {}).payments || {};
-        setDeposit(String(Number(p.depositReceived || 0)));
-        setPaid(String(Number(p.amountPaid || 0)));
-        setStatus((p.status as any) || (show.clientId ? 'booked' : 'prospect'));
-        setFee(String(Number(((show.finances as any) || {}).performanceFee || 0)));
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [show.id]);
 
     // Add/Edit modal state
     const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
@@ -930,30 +894,6 @@ const FinanceTracker: React.FC<{ show: Show; clients: Client[]; onUpdate: (updat
     const handleFeeUpdate = () => {
         const n = parseFloat(fee);
         onUpdate({ finances: { ...finances, performanceFee: Number.isFinite(n) ? n : 0 } });
-    };
-
-    const handleSaveClientAndPayments = () => {
-        const nextFee = parseFloat(fee);
-        const nextDeposit = parseFloat(deposit);
-        const nextPaid = parseFloat(paid);
-
-        const safeFee = Number.isFinite(nextFee) ? nextFee : 0;
-        const safeDeposit = Number.isFinite(nextDeposit) ? nextDeposit : 0;
-        const safePaid = Number.isFinite(nextPaid) ? nextPaid : 0;
-
-        onUpdate({
-            clientId: clientId || null,
-            finances: {
-                ...finances,
-                performanceFee: safeFee,
-                payments: {
-                    ...(finances as any).payments,
-                    depositReceived: safeDeposit,
-                    amountPaid: safePaid,
-                    status
-                }
-            }
-        } as any);
     };
 
     const saveEntry = () => {
@@ -1118,93 +1058,25 @@ const FinanceTracker: React.FC<{ show: Show; clients: Client[]; onUpdate: (updat
 
                 <div className="space-y-6">
                     <div className="bg-slate-900/40 border border-slate-700 rounded-xl p-4">
-                        <h4 className="text-base font-bold text-white mb-2">Client & Revenue</h4>
-                        <p className="text-sm text-slate-400 mb-4">Link this show to a client and track payments.</p>
-
-                        <div className="space-y-3">
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-400 mb-1">Client</label>
-                                <select
-                                    value={clientId}
-                                    onChange={(e) => setClientId(e.target.value)}
-                                    className="w-full bg-slate-900 border border-slate-600 rounded-md px-3 py-2 text-sm text-white"
-                                >
-                                    <option value="">No client (Practice / Personal)</option>
-                                    {clients.map((c) => (
-                                        <option key={c.id} value={c.id}>
-                                            {c.name}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-400 mb-1">Booking Status</label>
-                                <select
-                                    value={status}
-                                    onChange={(e) => setStatus(e.target.value as any)}
-                                    className="w-full bg-slate-900 border border-slate-600 rounded-md px-3 py-2 text-sm text-white"
-                                >
-                                    <option value="prospect">Prospect</option>
-                                    <option value="booked">Booked</option>
-                                    <option value="paid">Paid</option>
-                                    <option value="completed">Completed</option>
-                                </select>
-                            </div>
-
-                            <div className="grid grid-cols-1 gap-3">
-                                <div>
-                                    <label className="block text-xs font-semibold text-slate-400 mb-1">Performance Fee</label>
-                                    <input
-                                        type="text"
-                                        inputMode="decimal"
-                                        value={fee}
-                                        onChange={handleFeeChange}
-                                        onBlur={() => setFee((prev) => (prev.trim() === "" ? "" : formatToFixed2(prev)))}
-                                        className="w-full bg-slate-900 border border-slate-600 rounded-md px-3 py-2 text-sm text-white"
-                                        placeholder="0.00"
-                                    />
-                                </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="block text-xs font-semibold text-slate-400 mb-1">Deposit Received</label>
-                                        <input
-                                            type="text"
-                                            inputMode="decimal"
-                                            value={deposit}
-                                            onChange={(e) => setDeposit(e.target.value)}
-                                            onBlur={() => setDeposit((prev) => (prev.trim() === "" ? "" : formatToFixed2(prev)))}
-                                            className="w-full bg-slate-900 border border-slate-600 rounded-md px-3 py-2 text-sm text-white"
-                                            placeholder="0.00"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-semibold text-slate-400 mb-1">Total Paid</label>
-                                        <input
-                                            type="text"
-                                            inputMode="decimal"
-                                            value={paid}
-                                            onChange={(e) => setPaid(e.target.value)}
-                                            onBlur={() => setPaid((prev) => (prev.trim() === "" ? "" : formatToFixed2(prev)))}
-                                            className="w-full bg-slate-900 border border-slate-600 rounded-md px-3 py-2 text-sm text-white"
-                                            placeholder="0.00"
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center justify-between rounded-lg border border-slate-700 bg-slate-900/50 px-3 py-2">
-                                    <span className="text-sm text-slate-300">Balance Due</span>
-                                    <span className="text-sm font-bold text-slate-100">${formatMoney(Math.max(0, Number((parseFloat(fee) || 0) - (parseFloat(paid) || 0))))}</span>
-                                </div>
-
-                                <button
-                                    type="button"
-                                    onClick={handleSaveClientAndPayments}
-                                    className="w-full px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md text-white font-semibold text-sm transition-colors"
-                                >
-                                    Save Client & Payments
-                                </button>
-                            </div>
+                        <h4 className="text-base font-bold text-white mb-3">Performance Fee</h4>
+                        <p className="text-sm text-slate-400 mb-3">Your primary fee for performing this show.</p>
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="text"
+                                inputMode="decimal"
+                                value={fee}
+                                onChange={handleFeeChange}
+                                onBlur={() => setFee((prev) => (prev.trim() === "" ? "" : formatToFixed2(prev)))}
+                                className="flex-1 bg-slate-900 border border-slate-600 rounded-md px-3 py-2 text-sm text-white"
+                                placeholder="0.00"
+                            />
+                            <button
+                                type="button"
+                                onClick={handleFeeUpdate}
+                                className="px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md text-white font-semibold text-sm transition-colors"
+                            >
+                                Save
+                            </button>
                         </div>
                     </div>
 

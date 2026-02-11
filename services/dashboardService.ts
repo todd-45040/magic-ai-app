@@ -1,11 +1,21 @@
 import type { DashboardLayout, DashboardWidget, WidgetId } from '../types';
-import { RabbitIcon, ClockIcon, StarIcon, BookmarkIcon, WandIcon } from '../components/icons';
+import {
+    RabbitIcon,
+    ClockIcon,
+    StarIcon,
+    BookmarkIcon,
+    WandIcon,
+    UsersCogIcon,
+    LightbulbIcon,
+} from '../components/icons';
 
 
 const LAYOUT_STORAGE_KEY = 'magician_dashboard_layout';
 
 export const WIDGETS: DashboardWidget[] = [
     { id: 'quick-actions', title: 'Quick Actions', icon: RabbitIcon },
+    { id: 'business-metrics', title: 'Business Metrics', icon: UsersCogIcon },
+    { id: 'strategic-insights', title: 'Strategic Insights', icon: LightbulbIcon },
     { id: 'upcoming-tasks', title: 'My Next Show', icon: ClockIcon },
     { id: 'latest-feedback', title: 'Audience Reactions', icon: StarIcon },
     { id: 'recent-idea', title: 'My Current Work', icon: BookmarkIcon },
@@ -13,7 +23,7 @@ export const WIDGETS: DashboardWidget[] = [
 ];
 
 export const getDefaultLayout = (): DashboardLayout => ({
-    visible: ['quick-actions', 'featured-tools', 'upcoming-tasks', 'latest-feedback', 'recent-idea'],
+    visible: ['quick-actions', 'business-metrics', 'strategic-insights', 'featured-tools', 'upcoming-tasks', 'latest-feedback', 'recent-idea'],
     hidden: [],
 });
 
