@@ -365,6 +365,17 @@ const ClientModal: React.FC<{
                 const title = newRelatedShowTitle.trim();
                 if (!title) return;
                 setRelatedShows((prev) => [{ title, date: newRelatedShowDate || undefined }, ...prev]);
+                // Auto status logic: adding a show implies "Booked" (or "Completed" if date already passed)
+                try {
+                    const d = (newRelatedShowDate || '').trim();
+                    if (d) {
+                        const today = new Date().toISOString().slice(0, 10);
+                        if (d < today) setBookingStatus('completed');
+                        else setBookingStatus('booked');
+                    } else {
+                        if (bookingStatus === 'prospect') setBookingStatus('booked');
+                    }
+                } catch {}
                 setNewRelatedShowTitle('');
                 setNewRelatedShowDate('');
             }}
@@ -394,6 +405,8 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ onClientsUpdate, on
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState<'all' | 'prospect' | 'booked' | 'completed' | 'followup'>('all');
     const [tagFilter, setTagFilter] = useState<string>('all');
+    const [flashStatusClientId, setFlashStatusClientId] = useState<string | null>(null);
+    const [flashRevenueClientId, setFlashRevenueClientId] = useState<string | null>(null);
 
 
     useEffect(() => {
@@ -403,14 +416,49 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ onClientsUpdate, on
     }, [onClientsUpdate]);
     
     const handleSaveClient = (clientData: Omit<Client, 'id'|'createdAt'>) => {
-        let updatedClients;
+        let updatedClients: any[];
+        const prevStatus = (clientToEdit as any)?.booking_status as ClientX['booking_status'] | undefined;
+        const prevLifetime = (clientToEdit as any)?.lifetime_value as number | undefined;
+
         if (clientToEdit) {
             updatedClients = updateClient(clientToEdit.id, clientData);
         } else {
             updatedClients = addClient(clientData as any);
         }
-        setClients(updatedClients);
-        onClientsUpdate(updatedClients);
+
+        // Micro-interactions: flash on status / revenue changes
+        try {
+            const savedId = clientToEdit
+                ? clientToEdit.id
+                : (updatedClients?.[updatedClients.length - 1]?.id as string | undefined);
+
+            const saved = savedId ? (updatedClients as ClientX[]).find((c) => c.id === savedId) : undefined;
+            const nextStatus = saved?.booking_status;
+            const nextLifetime = saved?.lifetime_value;
+
+            if (savedId && prevStatus && nextStatus && prevStatus !== nextStatus) {
+                setFlashStatusClientId(savedId);
+                window.setTimeout(() => setFlashStatusClientId(null), 900);
+            }
+
+            if (savedId && typeof prevLifetime === 'number' && typeof nextLifetime === 'number' && prevLifetime !== nextLifetime) {
+                setFlashRevenueClientId(savedId);
+                window.setTimeout(() => setFlashRevenueClientId(null), 900);
+            }
+
+            // Special case: if newly marked completed, also flash revenue line
+            if (savedId && nextStatus === 'completed' && prevStatus !== 'completed') {
+                setFlashStatusClientId(savedId);
+                setFlashRevenueClientId(savedId);
+                window.setTimeout(() => {
+                    setFlashStatusClientId(null);
+                    setFlashRevenueClientId(null);
+                }, 1100);
+            }
+        } catch {}
+
+        setClients(updatedClients as any);
+        onClientsUpdate(updatedClients as any);
         setIsModalOpen(false);
         setClientToEdit(null);
     };
@@ -540,9 +588,9 @@ return (
             {/* Tier 4: Mini Dashboard */}
             {clients.length > 0 && (
                 <div className="mb-5 grid grid-cols-1 md:grid-cols-4 gap-3">
-                    <div className="p-4 rounded-lg bg-slate-900/40 border border-slate-700">
+                    <div className="py-3 px-4 rounded-lg bg-slate-900/40 border border-slate-700">
                         <div className="text-xs text-slate-400">Upcoming Follow-Ups (7 days)</div>
-                        <div className="text-2xl font-bold text-slate-100 mt-1">
+                        <div className="text-2xl font-bold text-slate-100 mt-0.5">
                             {clients.filter(c => {
                                 const d = getNextFollowUpDate(c.notes);
                                 if (!d) return false;
@@ -552,9 +600,9 @@ return (
                             }).length}
                         </div>
                     </div>
-                    <div className="p-4 rounded-lg bg-slate-900/40 border border-slate-700">
+                    <div className="py-3 px-4 rounded-lg bg-slate-900/40 border border-slate-700">
                         <div className="text-xs text-slate-400">Stale Clients (90+ days)</div>
-                        <div className="text-2xl font-bold text-slate-100 mt-1">
+                        <div className="text-2xl font-bold text-slate-100 mt-0.5">
                             {clients.filter(c => {
                                 if (!c.last_contacted) return true;
                                 const d = new Date(c.last_contacted + 'T00:00:00').getTime();
@@ -562,15 +610,15 @@ return (
                             }).length}
                         </div>
                     </div>
-                    <div className="p-4 rounded-lg bg-slate-900/40 border border-slate-700">
+                    <div className="py-3 px-4 rounded-lg bg-slate-900/40 border border-slate-700">
                         <div className="text-xs text-slate-400">Booked Clients</div>
-                        <div className="text-2xl font-bold text-slate-100 mt-1">
+                        <div className="text-2xl font-bold text-slate-100 mt-0.5">
                             {clients.filter(c => (c.booking_status || 'prospect') === 'booked').length}
                         </div>
                     </div>
-                    <div className="p-4 rounded-lg bg-slate-900/40 border border-slate-700">
+                    <div className="py-3 px-4 rounded-lg bg-slate-900/40 border border-slate-700">
                         <div className="text-xs text-slate-400">Total Revenue (Lifetime)</div>
-                        <div className="text-2xl font-bold text-slate-100 mt-1">
+                        <div className="text-2xl font-bold text-slate-100 mt-0.5">
                             {money(clients.reduce((sum, c) => sum + (typeof c.lifetime_value === 'number' ? c.lifetime_value : 0), 0), clients.find(c => c.currency)?.currency || 'USD')}
                         </div>
                     </div>
@@ -579,7 +627,7 @@ return (
 
             {/* Tier 4: AI Insights (lightweight, rule-based for now) */}
             {clients.length > 0 && (
-                <div className="mb-5 p-4 rounded-lg bg-slate-900/30 border border-slate-700">
+                <div className="mb-4 p-3 rounded-lg bg-slate-900/25 border border-slate-700">
                     <div className="flex items-center justify-between gap-3">
                         <div>
                             <div className="text-sm font-semibold text-slate-100">AI Insights</div>
@@ -587,7 +635,7 @@ return (
                         </div>
                     </div>
 
-                    <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2">
                         {clients
                             .filter(c => {
                                 if (!c.last_contacted) return true;
@@ -596,7 +644,7 @@ return (
                             })
                             .slice(0, 3)
                             .map(c => (
-                                <div key={c.id} className="p-3 rounded-md bg-slate-900/40 border border-slate-700">
+                                <div key={c.id} className="p-3 rounded-md bg-slate-900/35 border border-slate-700">
                                     <div className="text-sm font-semibold text-slate-100">{c.name}</div>
                                     <div className="text-xs text-slate-400">Haven’t contacted in 90+ days</div>
                                     <div className="mt-2 flex gap-2">
@@ -613,7 +661,7 @@ return (
                                         </button>
                                         <button
                                             type="button"
-                                            className="px-2 py-1 rounded-md text-xs bg-purple-600/70 border border-purple-400/40 text-white hover:bg-purple-600"
+                                            className="px-2 py-1 rounded-md text-xs bg-purple-600/70 border border-purple-400/40 text-white hover:bg-purple-600 hover:shadow-md hover:shadow-purple-500/30 transition"
                                             onClick={() => onAiSpark({ type: 'draft-email', payload: { client: c, context: { bookingStatus: c.booking_status || 'prospect', lastShowTitle: c.last_show_title, lastShowDate: c.last_show_date, tags: c.tags || [], latestNote: parseNotesTimeline(c.notes)[0]?.text || '', relatedShows: c.related_shows || [], nextFollowUp: getNextFollowUpDate(c.notes), revenue: { last: c.last_booking_value, lifetime: c.lifetime_value, currency: c.currency || 'USD' } } } })}
                                         >
                                             Draft Email
@@ -671,13 +719,13 @@ return (
             {filteredClients.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {filteredClients.map(client => (
-                        <div key={client.id} className="bg-slate-800 border border-slate-700 rounded-lg p-4 flex flex-col justify-between">
+                        <div key={client.id} className="bg-slate-800/80 border border-slate-700 rounded-xl p-5 flex flex-col justify-between shadow-lg shadow-black/30 hover:shadow-xl hover:-translate-y-0.5 transition-all">
                             <div>
                                 <div className="flex justify-between items-start gap-2 mb-2">
                                     <div>
                                         <div className="flex items-center gap-2">
                                             <h3 className="font-bold text-lg text-white">{client.name}</h3>
-                                            <span className={`px-2 py-0.5 text-[11px] rounded-full border ${getBookingStatusMeta(client.booking_status).cls}`}>
+                                            <span className={`px-2 py-0.5 text-[11px] rounded-full border ${getBookingStatusMeta(client.booking_status).cls} ${flashStatusClientId === client.id ? 'animate-pulse' : ''}`}>
                                                 {getBookingStatusMeta(client.booking_status).label}
                                             </span>
                                         </div>
@@ -698,6 +746,11 @@ return (
                                 <div className="text-sm space-y-1 text-slate-300 border-t border-slate-700/50 pt-2">
                                     {client.email && <p><strong className="text-slate-400">Email:</strong> {client.email}</p>}
                                     {client.phone && <p><strong className="text-slate-400">Phone:</strong> {client.phone}</p>}
+                                    {typeof client.lifetime_value === 'number' && (
+                                        <p className={`text-xs text-slate-400 mt-2 ${flashRevenueClientId === client.id ? 'animate-pulse' : ''}`}>
+                                            <strong>Revenue:</strong> {money(client.lifetime_value, client.currency || 'USD')} lifetime
+                                        </p>
+                                    )}
                                     {client.last_contacted && <p className="text-xs text-slate-400 mt-2"><strong>Last contacted:</strong> {client.last_contacted}</p>}
                                     {(client.last_show_title || client.last_show_date) && (
                                         <p className="text-xs text-slate-400"><strong>Last show:</strong> {client.last_show_title || '—'}{client.last_show_date ? ` — ${client.last_show_date}` : ''}</p>
@@ -752,7 +805,7 @@ return (
                                             onAiSpark({ type: 'draft-email', payload: { client: updated, context: { bookingStatus: updated.booking_status || 'prospect', lastShowTitle: updated.last_show_title, lastShowDate: updated.last_show_date, tags: updated.tags || [], latestNote: parseNotesTimeline(updated.notes)[0]?.text || '', relatedShows: updated.related_shows || [] } } });
                                         }}
                                         title="Draft follow-up email"
-                                        className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-slate-900/40 border border-slate-700 text-slate-200 hover:bg-slate-900/60 transition"
+                                        className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-slate-900/40 border border-slate-700 text-slate-200 hover:bg-slate-900/60 hover:border-purple-400/40 hover:shadow-md hover:shadow-purple-500/20 transition-all"
                                     >
                                         <MailIcon className="w-4 h-4" />
                                         <span className="text-sm font-semibold">Email</span>
