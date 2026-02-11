@@ -10,6 +10,7 @@ type ClientX = Client & {
     last_show_title?: string;
     last_show_date?: string;
     related_shows?: { title: string; date?: string }[];
+    booking_status?: 'prospect' | 'booked' | 'completed' | 'followup';
 };
 
 
@@ -30,6 +31,21 @@ function parseNotesTimeline(raw?: string): NoteEntry[] {
     return [{ at: '', text: r }];
 }
 
+
+
+function getBookingStatusMeta(status?: ClientX['booking_status']): { label: string; cls: string } {
+    switch (status) {
+        case 'booked':
+            return { label: 'Booked', cls: 'bg-emerald-900/30 border-emerald-700 text-emerald-200' };
+        case 'completed':
+            return { label: 'Completed', cls: 'bg-sky-900/30 border-sky-700 text-sky-200' };
+        case 'followup':
+            return { label: 'Follow-Up Needed', cls: 'bg-rose-900/30 border-rose-700 text-rose-200' };
+        case 'prospect':
+        default:
+            return { label: 'Prospect', cls: 'bg-amber-900/30 border-amber-700 text-amber-200' };
+    }
+}
 
 function getAppBasePath(): string {
     try {
@@ -84,6 +100,7 @@ const ClientModal: React.FC<{
     const [lastContacted, setLastContacted] = useState(clientToEdit?.last_contacted || '');
     const [lastShowTitle, setLastShowTitle] = useState(clientToEdit?.last_show_title || '');
     const [lastShowDate, setLastShowDate] = useState(clientToEdit?.last_show_date || '');
+    const [bookingStatus, setBookingStatus] = useState<ClientX['booking_status']>(clientToEdit?.booking_status || 'prospect');
     const [relatedShows, setRelatedShows] = useState<{ title: string; date?: string }[]>(clientToEdit?.related_shows || []);
     const [newRelatedShowTitle, setNewRelatedShowTitle] = useState('');
     const [newRelatedShowDate, setNewRelatedShowDate] = useState('');
@@ -117,6 +134,20 @@ const ClientModal: React.FC<{
                         <div><label htmlFor="company" className="block text-sm font-medium text-slate-300 mb-1">Company</label><input id="company" type="text" value={company} onChange={e => setCompany(e.target.value)} className="w-full px-3 py-2 border-slate-600 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50" /></div>
                         <div><label htmlFor="email" className="block text-sm font-medium text-slate-300 mb-1">Email</label><input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full px-3 py-2 border-slate-600 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50" /></div>
                         <div><label htmlFor="phone" className="block text-sm font-medium text-slate-300 mb-1">Phone</label><input id="phone" type="tel" value={phone} onChange={e => setPhone(e.target.value)} className="w-full px-3 py-2 border-slate-600 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50" /></div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">Booking Status</label>
+                        <select
+                            value={bookingStatus}
+                            onChange={(e) => setBookingStatus(e.target.value as any)}
+                            className="w-full px-3 py-2 rounded-md text-slate-100 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50"
+                        >
+                            <option value="prospect">Prospect</option>
+                            <option value="booked">Booked</option>
+                            <option value="completed">Completed</option>
+                            <option value="followup">Follow-Up Needed</option>
+                        </select>
+                    </div>
+
                     </div>
                     <div className="col-span-2">
                         <label className="block text-sm font-medium text-slate-300 mb-1">Tags</label>
@@ -292,6 +323,10 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ onClientsUpdate, on
     const [clients, setClients] = useState<ClientX[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [clientToEdit, setClientToEdit] = useState<Client | null>(null);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [statusFilter, setStatusFilter] = useState<'all' | 'prospect' | 'booked' | 'completed' | 'followup'>('all');
+    const [tagFilter, setTagFilter] = useState<string>('all');
+
 
     useEffect(() => {
         const allClients = getClients();
@@ -334,7 +369,7 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ onClientsUpdate, on
         const msg = `Follow-up reminder: reach out on ${chosen}.`;
 
         try {
-            await addNoteToClient(client, msg);
+            await addNoteToClient({ ...client, booking_status: 'followup' }, msg);
             try {
                 await navigator.clipboard.writeText(msg);
             } catch {
@@ -397,7 +432,29 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ onClientsUpdate, on
         setIsModalOpen(true);
     };
 
-    return (
+    
+    const allTags = Array.from(
+        new Set(
+            (clients || [])
+                .flatMap((c) => (c.tags || []).map((t) => t.trim()).filter(Boolean))
+        )
+    ).sort((a, b) => a.localeCompare(b));
+
+    const filteredClients = (clients || []).filter((c) => {
+        const q = searchQuery.trim().toLowerCase();
+        const matchesQuery =
+            !q ||
+            (c.name || '').toLowerCase().includes(q) ||
+            (c.company || '').toLowerCase().includes(q);
+
+        const matchesStatus = statusFilter === 'all' || (c.booking_status || 'prospect') === statusFilter;
+
+        const matchesTag = tagFilter === 'all' || (c.tags || []).includes(tagFilter);
+
+        return matchesQuery && matchesStatus && matchesTag;
+    });
+
+return (
         <div className="flex-1 flex flex-col overflow-y-auto p-4 md:p-6 animate-fade-in">
             {isModalOpen && <ClientModal onClose={() => setIsModalOpen(false)} onSave={handleSaveClient} clientToEdit={clientToEdit} />}
             <header className="flex flex-wrap items-center justify-between gap-4 mb-6">
@@ -411,14 +468,57 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ onClientsUpdate, on
                 </button>
             </header>
 
-            {clients.length > 0 && (
+            <div className="mb-4 flex flex-col md:flex-row gap-3 md:items-center">
+                <div className="flex-1">
+                    <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search clients by name or company…"
+                        className="w-full px-3 py-2 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50"
+                    />
+                </div>
+                <div className="flex gap-3">
+                    <select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value as any)}
+                        className="px-3 py-2 rounded-md text-slate-100 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50"
+                        title="Filter by booking status"
+                    >
+                        <option value="all">All Statuses</option>
+                        <option value="prospect">Prospect</option>
+                        <option value="booked">Booked</option>
+                        <option value="completed">Completed</option>
+                        <option value="followup">Follow-Up Needed</option>
+                    </select>
+                    <select
+                        value={tagFilter}
+                        onChange={(e) => setTagFilter(e.target.value)}
+                        className="px-3 py-2 rounded-md text-slate-100 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50"
+                        title="Filter by tag"
+                    >
+                        <option value="all">All Tags</option>
+                        {allTags.map((t) => (
+                            <option key={t} value={t}>{t}</option>
+                        ))}
+                    </select>
+                </div>
+            </div>
+
+
+            {filteredClients.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {clients.map(client => (
+                    {filteredClients.map(client => (
                         <div key={client.id} className="bg-slate-800 border border-slate-700 rounded-lg p-4 flex flex-col justify-between">
                             <div>
                                 <div className="flex justify-between items-start gap-2 mb-2">
                                     <div>
-                                        <h3 className="font-bold text-lg text-white">{client.name}</h3>
+                                        <div className="flex items-center gap-2">
+                                            <h3 className="font-bold text-lg text-white">{client.name}</h3>
+                                            <span className={`px-2 py-0.5 text-[11px] rounded-full border ${getBookingStatusMeta(client.booking_status).cls}`}>
+                                                {getBookingStatusMeta(client.booking_status).label}
+                                            </span>
+                                        </div>
                                         {client.company && <p className="text-sm text-slate-400">{client.company}</p>}
                                 {client.tags && client.tags.length > 0 && (
                                     <div className="mt-2 flex flex-wrap gap-1">
@@ -487,7 +587,7 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ onClientsUpdate, on
                                             const updated = { ...client, last_contacted: today };
                                             updateClient(updated as any);
                                             setClients(getClients() as ClientX[]);
-                                            onAiSpark({ type: 'draft-email', payload: { client: updated } });
+                                            onAiSpark({ type: 'draft-email', payload: { client: updated, context: { bookingStatus: updated.booking_status || 'prospect', lastShowTitle: updated.last_show_title, lastShowDate: updated.last_show_date, tags: updated.tags || [], latestNote: parseNotesTimeline(updated.notes)[0]?.text || '', relatedShows: updated.related_shows || [] } } });
                                         }}
                                         title="Draft follow-up email"
                                         className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-slate-900/40 border border-slate-700 text-slate-200 hover:bg-slate-900/60 transition"
@@ -535,11 +635,19 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ onClientsUpdate, on
                 </div>
             )}
 
-            {clients.length === 0 && (
+            
+            {clients.length > 0 && filteredClients.length === 0 && (
                 <div className="flex-1 flex flex-col items-center justify-center text-center py-12">
-                    <UsersCogIcon className="w-16 h-16 mx-auto textborder-slate-600 mb-4" />
+                    <h3 className="text-lg font-bold text-slate-300">No matching clients</h3>
+                    <p className="text-slate-500">Try adjusting your search or filters.</p>
+                </div>
+            )}
+
+{clients.length === 0 && (
+                <div className="flex-1 flex flex-col items-center justify-center text-center py-12">
+                    <UsersCogIcon className="w-16 h-16 mx-auto text-slate-600 mb-4" />
                     <h3 className="text-lg font-bold text-slate-400">Your Client List is Empty</h3>
-                    <p className="text-slate-500">Click "Add New Client" to start building your professional network.</p>
+                    <p className="text-slate-500">Clients are created automatically from bookings or can be added manually. Once you perform shows, feedback and follow-ups can connect here automatically.</p>
                 </div>)}
         </div>
     );
