@@ -11,6 +11,10 @@ type ClientX = Client & {
     last_show_date?: string;
     related_shows?: { title: string; date?: string }[];
     booking_status?: 'prospect' | 'booked' | 'completed' | 'followup';
+    currency?: string; // e.g., USD
+    lifetime_value?: number; // total revenue from this client
+    last_booking_value?: number; // last booking amount
+
 };
 
 
@@ -73,6 +77,67 @@ function promptForReminderDate(defaultYmd?: string): string | null {
     return v;
 }
 
+
+const BOOKING_STATUS_LABEL: Record<NonNullable<ClientX['booking_status']>, string> = {
+    prospect: 'Prospect',
+    booked: 'Booked',
+    completed: 'Completed',
+    followup: 'Follow-Up Needed',
+};
+
+function statusPillClasses(status: NonNullable<ClientX['booking_status']>) {
+    switch (status) {
+        case 'booked':
+            return 'bg-purple-500/15 border-purple-400/40 text-purple-200';
+        case 'completed':
+            return 'bg-slate-500/15 border-slate-400/40 text-slate-200';
+        case 'followup':
+            return 'bg-red-500/15 border-red-400/40 text-red-200';
+        case 'prospect':
+        default:
+            return 'bg-amber-500/15 border-amber-400/40 text-amber-200';
+    }
+}
+
+function getNextFollowUpDate(notesJson?: string): string | null {
+    const entries = parseNotesTimeline(notesJson);
+    // Look for the newest reminder line with a YYYY-MM-DD date
+    for (const e of entries) {
+        const m = e.text.match(/reach out on\s+(\d{4}-\d{2}-\d{2})/i);
+        if (m?.[1]) return m[1];
+    }
+    return null;
+}
+
+function money(n?: number, currency?: string) {
+    if (typeof n !== 'number' || Number.isNaN(n)) return '—';
+    try {
+        return new Intl.NumberFormat(undefined, { style: 'currency', currency: currency || 'USD', maximumFractionDigits: 0 }).format(n);
+    } catch {
+        return `$${Math.round(n)}`;
+    }
+}
+
+function normalizeBookingStatus(client: ClientX): ClientX['booking_status'] {
+    // Preserve explicit follow-up flag if set
+    if (client.booking_status === 'followup') return 'followup';
+
+    const today = new Date().toISOString().slice(0, 10);
+    const showDate = client.last_show_date;
+
+    if (showDate) {
+        if (showDate < today) return 'completed';
+        // show date in future/today implies booked
+        return 'booked';
+    }
+
+    // if a booking value exists, treat as booked (light heuristic)
+    if (typeof client.last_booking_value === 'number' && client.last_booking_value > 0) return 'booked';
+
+    return client.booking_status || 'prospect';
+}
+
+
 function formatShortDate(iso?: string) {
     if (!iso) return '';
     const d = new Date(iso);
@@ -101,6 +166,9 @@ const ClientModal: React.FC<{
     const [lastShowTitle, setLastShowTitle] = useState(clientToEdit?.last_show_title || '');
     const [lastShowDate, setLastShowDate] = useState(clientToEdit?.last_show_date || '');
     const [bookingStatus, setBookingStatus] = useState<ClientX['booking_status']>(clientToEdit?.booking_status || 'prospect');
+    const [currency, setCurrency] = useState(clientToEdit?.currency || 'USD');
+    const [lifetimeValue, setLifetimeValue] = useState<string>(clientToEdit?.lifetime_value?.toString() || '');
+    const [lastBookingValue, setLastBookingValue] = useState<string>(clientToEdit?.last_booking_value?.toString() || '');
     const [relatedShows, setRelatedShows] = useState<{ title: string; date?: string }[]>(clientToEdit?.related_shows || []);
     const [newRelatedShowTitle, setNewRelatedShowTitle] = useState('');
     const [newRelatedShowDate, setNewRelatedShowDate] = useState('');
@@ -467,6 +535,100 @@ return (
                     <span>Add New Client</span>
                 </button>
             </header>
+
+
+            {/* Tier 4: Mini Dashboard */}
+            {clients.length > 0 && (
+                <div className="mb-5 grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <div className="p-4 rounded-lg bg-slate-900/40 border border-slate-700">
+                        <div className="text-xs text-slate-400">Upcoming Follow-Ups (7 days)</div>
+                        <div className="text-2xl font-bold text-slate-100 mt-1">
+                            {clients.filter(c => {
+                                const d = getNextFollowUpDate(c.notes);
+                                if (!d) return false;
+                                const today = new Date().toISOString().slice(0, 10);
+                                const max = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+                                return d >= today && d <= max;
+                            }).length}
+                        </div>
+                    </div>
+                    <div className="p-4 rounded-lg bg-slate-900/40 border border-slate-700">
+                        <div className="text-xs text-slate-400">Stale Clients (90+ days)</div>
+                        <div className="text-2xl font-bold text-slate-100 mt-1">
+                            {clients.filter(c => {
+                                if (!c.last_contacted) return true;
+                                const d = new Date(c.last_contacted + 'T00:00:00').getTime();
+                                return Date.now() - d > 90 * 24 * 60 * 60 * 1000;
+                            }).length}
+                        </div>
+                    </div>
+                    <div className="p-4 rounded-lg bg-slate-900/40 border border-slate-700">
+                        <div className="text-xs text-slate-400">Booked Clients</div>
+                        <div className="text-2xl font-bold text-slate-100 mt-1">
+                            {clients.filter(c => (c.booking_status || 'prospect') === 'booked').length}
+                        </div>
+                    </div>
+                    <div className="p-4 rounded-lg bg-slate-900/40 border border-slate-700">
+                        <div className="text-xs text-slate-400">Total Revenue (Lifetime)</div>
+                        <div className="text-2xl font-bold text-slate-100 mt-1">
+                            {money(clients.reduce((sum, c) => sum + (typeof c.lifetime_value === 'number' ? c.lifetime_value : 0), 0), clients.find(c => c.currency)?.currency || 'USD')}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Tier 4: AI Insights (lightweight, rule-based for now) */}
+            {clients.length > 0 && (
+                <div className="mb-5 p-4 rounded-lg bg-slate-900/30 border border-slate-700">
+                    <div className="flex items-center justify-between gap-3">
+                        <div>
+                            <div className="text-sm font-semibold text-slate-100">AI Insights</div>
+                            <div className="text-xs text-slate-400">Quick wins based on your client activity.</div>
+                        </div>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+                        {clients
+                            .filter(c => {
+                                if (!c.last_contacted) return true;
+                                const d = new Date(c.last_contacted + 'T00:00:00').getTime();
+                                return Date.now() - d > 90 * 24 * 60 * 60 * 1000;
+                            })
+                            .slice(0, 3)
+                            .map(c => (
+                                <div key={c.id} className="p-3 rounded-md bg-slate-900/40 border border-slate-700">
+                                    <div className="text-sm font-semibold text-slate-100">{c.name}</div>
+                                    <div className="text-xs text-slate-400">Haven’t contacted in 90+ days</div>
+                                    <div className="mt-2 flex gap-2">
+                                        <button
+                                            type="button"
+                                            className="px-2 py-1 rounded-md text-xs bg-slate-900/40 border border-slate-700 text-slate-200 hover:bg-slate-900/60"
+                                            onClick={() => {
+                                                const today = new Date().toISOString().slice(0, 10);
+                                                updateClient({ ...(c as any), last_contacted: today } as any);
+                                                setClients(getClients() as ClientX[]);
+                                            }}
+                                        >
+                                            Mark Contacted
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="px-2 py-1 rounded-md text-xs bg-purple-600/70 border border-purple-400/40 text-white hover:bg-purple-600"
+                                            onClick={() => onAiSpark({ type: 'draft-email', payload: { client: c, context: { bookingStatus: c.booking_status || 'prospect', lastShowTitle: c.last_show_title, lastShowDate: c.last_show_date, tags: c.tags || [], latestNote: parseNotesTimeline(c.notes)[0]?.text || '', relatedShows: c.related_shows || [], nextFollowUp: getNextFollowUpDate(c.notes), revenue: { last: c.last_booking_value, lifetime: c.lifetime_value, currency: c.currency || 'USD' } } } })}
+                                        >
+                                            Draft Email
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        {clients.filter(c => !c.last_contacted || (Date.now() - new Date((c.last_contacted || '1970-01-01') + 'T00:00:00').getTime() > 90 * 24 * 60 * 60 * 1000)).length === 0 && (
+                            <div className="p-3 rounded-md bg-slate-900/20 border border-slate-700 text-slate-300 text-sm">
+                                No stale clients detected. Nice work staying in touch.
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
 
             <div className="mb-4 flex flex-col md:flex-row gap-3 md:items-center">
                 <div className="flex-1">
