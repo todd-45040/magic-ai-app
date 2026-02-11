@@ -6,7 +6,6 @@ import { saveIdea } from '../services/ideasService';
 import { CONTRACT_GENERATOR_SYSTEM_INSTRUCTION } from '../constants';
 import { FileTextIcon, WandIcon, SaveIcon, CheckIcon, ShareIcon, CopyIcon } from './icons';
 import { updateShow } from '../services/showsService';
-import { createContractVersion } from '../services/contractsService';
 import type { Client, Show, User } from '../types';
 
 interface ContractGeneratorProps {
@@ -31,14 +30,15 @@ const LoadingIndicator: React.FC = () => (
         <p className="text-slate-300 mt-4 text-lg">Drafting your agreement...</p>
         <p className="text-slate-400 text-sm">Ensuring all the details are in place.</p>
     </div>
+);
 
+// Accept values like "$500", "1,500.00", "500" and convert safely to a number.
 const parseCurrencyToNumber = (value: string): number => {
     const cleaned = (value || '').toString().replace(/[^0-9.]/g, '');
     const num = Number(cleaned);
     return Number.isFinite(num) ? num : 0;
 };
 
-);
 
 const ContractGenerator: React.FC<ContractGeneratorProps> = ({ user, clients, shows, onShowsUpdate, onNavigateToShowPlanner, onIdeaSaved }) => {
     // Form State
@@ -69,8 +69,7 @@ const ContractGenerator: React.FC<ContractGeneratorProps> = ({ user, clients, sh
     const [copyStatus, setCopyStatus] = useState<'idle' | 'copied'>('idle');
     const [saveToShowStatus, setSaveToShowStatus] = useState<'idle' | 'saved'>('idle');
     
-    const feeNum = useMemo(() => parseCurrencyToNumber(performanceFee), [performanceFee]);
-    const isFormValid = performerName.trim() && clientName.trim() && eventDate.trim() && feeNum > 0;
+    const isFormValid = performerName && clientName && eventDate && performanceFee;
 
     const responseSchema = useMemo(() => ({
         type: Type.OBJECT,
@@ -223,49 +222,15 @@ Guidelines:
 
     const handleSaveToShow = async () => {
         if (!selectedShowId || !result) return;
-
-        // Build a plain-text contract for storage + sharing
-        const contractText =
-            `PERFORMANCE DETAILS\n${result.performanceDetails}\n\n` +
-            `PAYMENT TERMS\n${result.paymentTerms}\n\n` +
-            `TECHNICAL REQUIREMENTS\n${result.technicalRequirements}\n\n` +
-            `CANCELLATION POLICY\n${result.cancellationPolicy}\n\n` +
-            `FORCE MAJEURE\n${result.forceMajeure}\n\n` +
-            `SIGNATURES\n${result.signatureBlock}\n`;
-
         try {
             setError(null);
-
-            // Primary path: save into the contracts table (versioned)
-            await createContractVersion({
-                showId: selectedShowId,
-                clientId: selectedClientId || null,
-                content: contractText,
-                status: 'draft',
-                structured: result,
-            });
-
+            const updatedShows = await updateShow(selectedShowId, { contract: result } as any);
+            onShowsUpdate(updatedShows);
             setSaveToShowStatus('saved');
             setTimeout(() => setSaveToShowStatus('idle'), 2000);
-
-            // Navigate after a successful DB write
             onNavigateToShowPlanner(selectedShowId);
-            return;
-        } catch (e: any) {
-            console.error('Save contract failed (contracts table):', e);
-            const msg = e?.message ? String(e.message) : 'Failed to save contract to database.';
-            setError(
-                msg +
-                    '  (Tip: If Row Level Security is enabled on contracts, you need INSERT/SELECT policies for auth.uid() = user_id.)'
-            );
-
-            // Backward compatibility fallback: try to persist onto the show record if supported
-            try {
-                const updatedShows = await updateShow(selectedShowId, { contract: result } as any);
-                onShowsUpdate(updatedShows);
-            } catch (fallbackErr) {
-                console.warn('Legacy fallback save-to-show also failed:', fallbackErr);
-            }
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to save contract to show.');
         }
     };
 
