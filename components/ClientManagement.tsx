@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import type { Client, AiSparkAction } from '../types';
 import { getClients, addClient, updateClient, deleteClient } from '../services/clientsService';
 import { UsersCogIcon, TrashIcon, PencilIcon, WandIcon, MailIcon } from './icons';
+// OPTION_A_POLISH: investor-ready hierarchy + micro-interactions + revenue display + auto status logic
 
 type ClientX = Client & {
     tags?: string[];
