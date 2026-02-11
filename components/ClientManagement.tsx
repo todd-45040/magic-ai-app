@@ -30,11 +30,13 @@ function parseNotesTimeline(raw?: string): NoteEntry[] {
     return [{ at: '', text: r }];
 }
 
-function promptForReminderDate(defaultIso?: string): string | null {
-    const def = (defaultIso || '').slice(0, 10) || new Date().toISOString().slice(0, 10);
+
+function promptForReminderDate(defaultYmd?: string): string | null {
+    const def = (defaultYmd || '').trim() || new Date().toISOString().slice(0, 10);
     const input = window.prompt('Follow-up date (YYYY-MM-DD):', def);
-    if (!input) return null;
+    if (input === null) return null; // cancelled
     const v = input.trim();
+    if (!v) return null;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) {
         alert('Please enter a date in YYYY-MM-DD format.');
         return null;
@@ -191,32 +193,249 @@ const ClientModal: React.FC<{
             <button
                 type="button"
                 onClick={() => {
-                                            // Follow-up reminder (lightweight date prompt)
-                                            const today = new Date();
-                                            const def = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000)
-                                                .toISOString()
-                                                .slice(0, 10);
-                                            const chosen = promptForReminderDate(def);
-                                            if (!chosen) return;
+                    const t = newNote.trim();
+                    if (!t) return;
+                    setNotesTimeline((prev) => [{ at: new Date().toISOString(), text: t }, ...prev]);
+                    setNewNote('');
+                }}
+                className="px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-100 text-sm border border-slate-600 transition"
+            >
+                Add Note
+            </button>
+        </div>
+    </div>
+</div>
 
-                                            const line = `Follow-up reminder: reach out on ${chosen}.`;
-                                            // Append to notes timeline (stored as JSON in client.notes)
-                                            const updatedNote = JSON.stringify([
-                                                { at: new Date().toISOString(), text: line },
-                                                ...parseNotesTimeline(client.notes),
-                                            ]);
-                                            handleUpdateClient({
-                                                ...client,
-                                                notes: updatedNote,
-                                                last_contacted: client.last_contacted || new Date().toISOString().slice(0, 10),
-                                            });
+<div className="mt-4">
+    <label className="block text-sm font-medium text-slate-300 mb-1">Related Shows</label>
+    {relatedShows.length === 0 ? (
+        <div className="text-sm text-slate-400 mb-2">No related shows yet. Add one below.</div>
+    ) : (
+        <div className="flex flex-wrap gap-2 mb-2">
+            {relatedShows.slice(0, 6).map((s, idx) => (
+                <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                        // Best-effort navigation hook (safe even if unused)
+                        try {
+                            localStorage.setItem('maw_open_show_title', s.title);
+                            window.location.href = `/?tab=show-planner&showTitle=${encodeURIComponent(s.title)}`;
+                        } catch {}
+                    }}
+                    className="px-2 py-1 rounded-md text-xs bg-slate-900/40 border border-slate-700 text-slate-200 hover:bg-slate-800 transition"
+                    title="Open in Show Planner"
+                >
+                    {s.title}{s.date ? ` • ${formatShortDate(s.date)}` : ''}
+                </button>
+            ))}
+        </div>
+    )}
 
-                                            // Copy reminder line for quick paste elsewhere
-                                            try {
-                                                navigator.clipboard.writeText(line);
-                                            } catch {}
-                                            alert('Reminder added to notes and copied to clipboard.');
-                                        }}
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <input
+            type="text"
+            value={newRelatedShowTitle}
+            onChange={(e) => setNewRelatedShowTitle(e.target.value)}
+            placeholder="Show title (e.g., Science Time)"
+            className="w-full px-3 py-2 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50"
+        />
+        <input
+            type="date"
+            value={newRelatedShowDate}
+            onChange={(e) => setNewRelatedShowDate(e.target.value)}
+            className="w-full px-3 py-2 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50"
+        />
+    </div>
+    <div className="mt-2 flex justify-end">
+        <button
+            type="button"
+            onClick={() => {
+                const title = newRelatedShowTitle.trim();
+                if (!title) return;
+                setRelatedShows((prev) => [{ title, date: newRelatedShowDate || undefined }, ...prev]);
+                setNewRelatedShowTitle('');
+                setNewRelatedShowDate('');
+            }}
+            className="px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-100 text-sm border border-slate-600 transition"
+        >
+            Add Related Show
+        </button>
+    </div>
+</div>
+
+                    <div className="flex gap-3 pt-2">
+                        <button type="button" onClick={onClose} className="w-full py-2 rounded-md text-slate-300 font-bold text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50">Cancel</button>
+                        <button type="submit" className="w-full py-2 rounded-md text-white font-bold text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50">{buttonText}</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+    return createPortal(modalContent, document.body);
+};
+
+
+const ClientManagement: React.FC<ClientManagementProps> = ({ onClientsUpdate, onAiSpark }) => {
+    const [clients, setClients] = useState<ClientX[]>([]);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [clientToEdit, setClientToEdit] = useState<Client | null>(null);
+
+    useEffect(() => {
+        const allClients = getClients();
+        setClients(allClients);
+        onClientsUpdate(allClients);
+    }, [onClientsUpdate]);
+    
+    const handleSaveClient = (clientData: Omit<Client, 'id'|'createdAt'>) => {
+        let updatedClients;
+        if (clientToEdit) {
+            updatedClients = updateClient(clientToEdit.id, clientData);
+        } else {
+            updatedClients = addClient(clientData as any);
+        }
+        setClients(updatedClients);
+        onClientsUpdate(updatedClients);
+        setIsModalOpen(false);
+        setClientToEdit(null);
+    };
+
+
+    const addNoteToClient = async (client: ClientX, noteText: string) => {
+        const timeline = parseNotesTimeline((client as any).notes);
+        const next = [{ at: new Date().toISOString(), text: noteText }, ...timeline];
+        const updated: ClientX = { ...client, notes: JSON.stringify(next) } as any;
+        updateClient(updated as any);
+        const refreshed = getClients() as ClientX[];
+        setClients(refreshed);
+        onClientsUpdate(refreshed);
+        return updated;
+    };
+
+    const handleFollowUpReminder = async (client: ClientX) => {
+        // Lightweight date prompt (no calendar UI)
+        const today = new Date();
+        const def = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        const chosen = promptForReminderDate(def);
+        if (!chosen) return;
+
+        const msg = `Follow-up reminder: reach out on ${chosen}.`;
+
+        try {
+            await addNoteToClient(client, msg);
+            try {
+                await navigator.clipboard.writeText(msg);
+            } catch {
+                // ignore clipboard failures
+            }
+            alert('Reminder added to notes and copied to clipboard.');
+        } catch (e) {
+            console.error(e);
+            alert('Could not add reminder. Please try again.');
+        }
+    };
+
+    const handleCreateBooking = async (client: ClientX) => {
+        // Best-effort handoff to Show Planner (safe even if Show Planner ignores these hints today)
+        try {
+            localStorage.setItem('maw_new_booking_client_name', client.name || '');
+            localStorage.setItem('maw_new_booking_client_company', client.company || '');
+            localStorage.setItem('maw_new_booking_client_email', client.email || '');
+            localStorage.setItem('maw_new_booking_client_phone', client.phone || '');
+        } catch {}
+
+        // Also copy contact info for quick pasting
+        try {
+            if (navigator?.clipboard?.writeText) {
+                await navigator.clipboard.writeText(
+                    `Client: ${client.name}\nCompany: ${client.company || ''}\nEmail: ${client.email || ''}\nPhone: ${client.phone || ''}`
+                );
+            }
+        } catch {}
+
+        // Navigate to Show Planner tab
+        window.location.href = `/?tab=show-planner&newBooking=1&clientName=${encodeURIComponent(client.name || '')}`;
+    };
+
+    const handleDeleteClient = (id: string) => {
+        if (window.confirm("Are you sure you want to delete this client? This cannot be undone.")) {
+            const updatedClients = deleteClient(id);
+            setClients(updatedClients);
+            onClientsUpdate(updatedClients);
+        }
+    };
+
+    const openEditModal = (client: Client) => {
+        setClientToEdit(client);
+        setIsModalOpen(true);
+    };
+
+    const openAddModal = () => {
+        setClientToEdit(null);
+        setIsModalOpen(true);
+    };
+
+    return (
+        <div className="flex-1 flex flex-col overflow-y-auto p-4 md:p-6 animate-fade-in">
+            {isModalOpen && <ClientModal onClose={() => setIsModalOpen(false)} onSave={handleSaveClient} clientToEdit={clientToEdit} />}
+            <header className="flex flex-wrap items-center justify-between gap-4 mb-6">
+                <div className="flex items-center gap-3">
+                    <UsersCogIcon className="w-8 h-8 text-purple-400" />
+                    <h2 className="text-2xl font-bold text-slate-200 font-cinzel">Client Management</h2>
+                </div>
+                <button onClick={openAddModal} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors flex items-center gap-2 text-sm">
+                    <WandIcon className="w-4 h-4" />
+                    <span>Add New Client</span>
+                </button>
+            </header>
+
+            {clients.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {clients.map(client => (
+                        <div key={client.id} className="bg-slate-800 border border-slate-700 rounded-lg p-4 flex flex-col justify-between">
+                            <div>
+                                <div className="flex justify-between items-start gap-2 mb-2">
+                                    <div>
+                                        <h3 className="font-bold text-lg text-white">{client.name}</h3>
+                                        {client.company && <p className="text-sm text-slate-400">{client.company}</p>}
+                                {client.tags && client.tags.length > 0 && (
+                                    <div className="mt-2 flex flex-wrap gap-1">
+                                        {client.tags.slice(0, 6).map((t, idx) => (
+                                            <span key={idx} className="px-2 py-0.5 text-[11px] rounded-full bg-slate-900/40 border border-slate-700 text-slate-200">{t}</span>
+                                        ))}
+                                    </div>
+                                )}
+                                    </div>
+                                    <div className="flex items-center gap-1 flex-shrink-0">
+                                        <button onClick={() => openEditModal(client)} className="p-2 text-slate-400 hover:text-amber-300 rounded-full hover:bg-slate-700"><PencilIcon className="w-5 h-5"/></button>
+                                        <button onClick={() => handleDeleteClient(client.id)} className="p-2 text-slate-400 hover:text-red-400 rounded-full hover:bg-slate-700"><TrashIcon className="w-5 h-5"/></button>
+                                    </div>
+                                </div>
+                                <div className="text-sm space-y-1 text-slate-300 border-t border-slate-700/50 pt-2">
+                                    {client.email && <p><strong className="text-slate-400">Email:</strong> {client.email}</p>}
+                                    {client.phone && <p><strong className="text-slate-400">Phone:</strong> {client.phone}</p>}
+                                    {client.last_contacted && <p className="text-xs text-slate-400 mt-2"><strong>Last contacted:</strong> {client.last_contacted}</p>}
+                                    {(client.last_show_title || client.last_show_date) && (
+                                        <p className="text-xs text-slate-400"><strong>Last show:</strong> {client.last_show_title || '—'}{client.last_show_date ? ` — ${client.last_show_date}` : ''}</p>
+                                    )}
+                                    {((client.related_shows && client.related_shows.length > 0) || client.last_show_title) && (
+                                        <div className="mt-2">
+                                            <div className="text-xs font-semibold text-slate-400 mb-1">Related Shows</div>
+                                            <div className="flex flex-wrap gap-2">
+                                                {(client.related_shows && client.related_shows.length > 0
+                                                    ? client.related_shows
+                                                    : [{ title: client.last_show_title || 'Show', date: client.last_show_date || undefined }])
+                                                    .slice(0, 3)
+                                                    .map((s, idx) => (
+                                                        <button
+                                                            key={idx}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                try {
+                                                                    localStorage.setItem('maw_open_show_title', s.title);
+                                                                    window.location.href = `/?tab=show-planner&showTitle=${encodeURIComponent(s.title)}`;
+                                                                } catch {}
+                                                            }}
                                                             className="px-2 py-1 rounded-md text-[11px] bg-slate-900/40 border border-slate-700 text-slate-200 hover:bg-slate-800 transition"
                                                             title="Open in Show Planner"
                                                         >
