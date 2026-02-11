@@ -517,7 +517,43 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
         const [isLoadingContracts, setIsLoadingContracts] = useState(false);
         const [contractError, setContractError] = useState<string | null>(null);
 
+        // Latest contract status for header badge (when at least one contract exists)
+        const headerContractStatus: ContractStatus | null = useMemo(() => {
+            if (!contractRows || contractRows.length === 0) return null;
+            const latest = contractRows.reduce((acc, cur) => ((cur.version ?? 0) > (acc.version ?? 0) ? cur : acc), contractRows[0]);
+            return ((latest.status || 'draft') as ContractStatus) ?? 'draft';
+        }, [contractRows]);
+
+
         const client = clients.find(c => c.id === selectedShow.clientId);
+
+        // Load contracts as soon as a show is opened so the header status badge stays accurate
+        useEffect(() => {
+            const fetchContractsForHeader = async () => {
+                setIsLoadingContracts(true);
+                setContractError(null);
+                try {
+                    const rows = await listContractsForShow(selectedShow.id);
+                    setContractRows(rows);
+
+                    // Keep the active contract pointing at latest version
+                    const latest = rows?.[0];
+                    if (latest && !activeContractId) {
+                        setActiveContractId(latest.id);
+                        setActiveContractContent(latest.content || '');
+                        setActiveContractStatus((latest.status || 'draft') as ContractStatus);
+                    }
+                } catch (e: any) {
+                    console.error('Failed to load contracts for show:', e);
+                    // Only show the error inside the Contract tab
+                } finally {
+                    setIsLoadingContracts(false);
+                }
+            };
+
+            fetchContractsForHeader();
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, [selectedShow.id]);
 
         useEffect(() => {
             if (activeTab === 'history') {
@@ -640,7 +676,36 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                     <button onClick={() => setSelectedShow(null)} className="flex items-center gap-2 mb-4 text-slate-300 hover:text-white transition-colors"><BackIcon className="w-5 h-5" /><span>Back to All Shows</span></button>
                     <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
                         <div>
+                            <div className="flex items-center gap-3">
                             <h2 className="text-2xl font-bold text-slate-200 font-cinzel truncate">{selectedShow.title}</h2>
+                            {headerContractStatus && (
+                                <span
+                                    className={`inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-bold border ${
+                                        headerContractStatus === 'signed'
+                                            ? 'bg-green-900/40 text-green-200 border-green-700/60'
+                                            : headerContractStatus === 'sent'
+                                                ? 'bg-blue-900/40 text-blue-200 border-blue-700/60'
+                                                : 'bg-amber-900/40 text-amber-200 border-amber-700/60'
+                                    }`}
+                                    title="Latest contract status"
+                                >
+                                    <span
+                                        className={`w-2 h-2 rounded-full ${
+                                            headerContractStatus === 'signed'
+                                                ? 'bg-green-400'
+                                                : headerContractStatus === 'sent'
+                                                    ? 'bg-blue-400'
+                                                    : 'bg-amber-400'
+                                        }`}
+                                    />
+                                    {headerContractStatus === 'signed'
+                                        ? 'SIGNED'
+                                        : headerContractStatus === 'sent'
+                                            ? 'SENT'
+                                            : 'DRAFT'}
+                                </span>
+                            )}
+                        </div>
                             {client && <p className="text-sm text-slate-400 flex items-center gap-2"><UsersIcon className="w-4 h-4" /> {client.name}</p>}
                         </div>
                         <div className="flex items-center gap-2">

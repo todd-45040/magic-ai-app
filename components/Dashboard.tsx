@@ -4,6 +4,7 @@ import type { User, Show, Feedback, SavedIdea, MagicianView, PredefinedPrompt, D
 import { getLayout, saveLayout, WIDGETS, getDefaultLayout } from '../services/dashboardService';
 import { updateTaskInShow } from '../services/showsService';
 import { getPerformancesByShowId } from '../services/performanceService';
+import { supabase } from '../supabase';
 import FeedbackModal from './FeedbackModal';
 import { RabbitIcon, ClockIcon, StarIcon, BookmarkIcon, WandIcon, MicrophoneIcon, StageCurtainsIcon, LightbulbIcon, UsersCogIcon, ChecklistIcon, FileTextIcon, ImageIcon, BookIcon, CustomizeIcon, DragHandleIcon, EyeIcon, EyeOffIcon, ChevronDownIcon } from './icons';
 
@@ -242,6 +243,92 @@ const BusinessMetricsWidget: React.FC<{ shows: Show[]; feedback: Feedback[] }> =
     );
 };
 
+
+
+const ContractPipelineWidget: React.FC = () => {
+    const [stats, setStats] = useState<{ draft: number; sent: number; signed: number; depositsCollected: number; outstandingBalances: number; }>({
+        draft: 0,
+        sent: 0,
+        signed: 0,
+        depositsCollected: 0,
+        outstandingBalances: 0,
+    });
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        const load = async () => {
+            setLoading(true);
+            setError(null);
+            try {
+                const { data: userData, error: userErr } = await supabase.auth.getUser();
+                if (userErr) throw userErr;
+                const userId = userData?.user?.id;
+                if (!userId) {
+                    // Not logged in via Supabase Auth — show 0s quietly
+                    setLoading(false);
+                    return;
+                }
+
+                const { data, error: qErr } = await supabase
+                    .from('contracts')
+                    .select('status, deposit_paid, balance_paid')
+                    .eq('user_id', userId);
+
+                if (qErr) throw qErr;
+
+                const rows = (data || []) as any[];
+                const next = {
+                    draft: rows.filter(r => (r.status || 'draft') === 'draft').length,
+                    sent: rows.filter(r => r.status === 'sent').length,
+                    signed: rows.filter(r => r.status === 'signed').length,
+                    depositsCollected: rows.filter(r => r.deposit_paid === true).length,
+                    outstandingBalances: rows.filter(r => (r.status === 'signed') && r.balance_paid !== true).length,
+                };
+                setStats(next);
+            } catch (e: any) {
+                console.error('Failed to load contract pipeline stats:', e);
+                setError(e?.message ? String(e.message) : 'Failed to load contract stats.');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        load();
+    }, []);
+
+    return (
+        <>
+            {error && <p className="text-sm text-red-400 mb-2">{error}</p>}
+            <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 bg-slate-900/50 rounded-md border border-slate-700">
+                    <p className="text-xs text-slate-400">Contracts Draft</p>
+                    <p className="text-2xl font-bold text-amber-300">{loading ? '—' : stats.draft}</p>
+                </div>
+                <div className="p-3 bg-slate-900/50 rounded-md border border-slate-700">
+                    <p className="text-xs text-slate-400">Contracts Sent</p>
+                    <p className="text-2xl font-bold text-blue-300">{loading ? '—' : stats.sent}</p>
+                </div>
+                <div className="p-3 bg-slate-900/50 rounded-md border border-slate-700">
+                    <p className="text-xs text-slate-400">Contracts Signed</p>
+                    <p className="text-2xl font-bold text-green-300">{loading ? '—' : stats.signed}</p>
+                </div>
+                <div className="p-3 bg-slate-900/50 rounded-md border border-slate-700">
+                    <p className="text-xs text-slate-400">Deposits Collected</p>
+                    <p className="text-2xl font-bold text-slate-200">{loading ? '—' : stats.depositsCollected}</p>
+                </div>
+                <div className="col-span-2 p-3 bg-slate-900/50 rounded-md border border-slate-700 flex items-center justify-between">
+                    <div>
+                        <p className="text-xs text-slate-400">Outstanding Balances</p>
+                        <p className="text-2xl font-bold text-slate-200">{loading ? '—' : stats.outstandingBalances}</p>
+                    </div>
+                    <p className="text-xs text-slate-500">Signed & unpaid</p>
+                </div>
+            </div>
+        </>
+    );
+};
+
 const StrategicInsightsWidget: React.FC<{ shows: Show[]; feedback: Feedback[]; onNavigate: (view: MagicianView) => void }> = ({ shows, feedback, onNavigate }) => {
     const insights = useMemo(() => {
         const out: { title: string; detail: string; action?: { label: string; view: MagicianView } }[] = [];
@@ -398,6 +485,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, shows, feedback, ideas, onN
     const widgetComponents: Record<WidgetId, React.ReactNode> = {
         'quick-actions': <QuickActionsWidget onNavigate={onNavigate} />,
         'business-metrics': <BusinessMetricsWidget shows={shows} feedback={feedback} />,
+        'contract-pipeline': <ContractPipelineWidget />,
         'strategic-insights': <StrategicInsightsWidget shows={shows} feedback={feedback} onNavigate={onNavigate} />,
         'upcoming-tasks': <UpcomingTasksWidget shows={shows} onNavigate={onNavigate} onShowsUpdate={onShowsUpdate} />,
         'latest-feedback': <LatestFeedbackWidget feedback={feedback} onNavigate={onNavigate} onFeedbackClick={setSelectedFeedback} />,

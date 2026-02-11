@@ -71,18 +71,6 @@ export type AudienceTab = 'chat' | 'identify' | 'publications' | 'community' | '
 export type TaskPriority = 'High' | 'Medium' | 'Low';
 export type TaskStatus = 'To-Do' | 'Completed';
 
-export type ContractStatus = 'draft' | 'sent' | 'signed';
-
-export interface ContractSectionBundle {
-  performanceDetails: string;
-  paymentTerms: string;
-  technicalRequirements: string;
-  cancellationPolicy: string;
-  forceMajeure: string;
-  signatureBlock: string;
-}
-
-
 export interface Subtask {
   id: string;
   text: string;
@@ -123,11 +111,7 @@ export interface Show {
     clientId?: string;
     finances?: Finances;
     tags?: string[];
-    // Backward compatibility: older contract saves nested onto the show
-    contract?: ContractSectionBundle;
-    contractVersions?: any[];
 }
-
 
 export interface Feedback {
   id: string;
@@ -255,7 +239,8 @@ export type WidgetId =
   | 'recent-idea'
   | 'featured-tools'
   | 'business-metrics'
-  | 'strategic-insights';
+  | 'strategic-insights'
+  | 'contract-pipeline';
 
 export interface DashboardWidget {
   id: WidgetId;
