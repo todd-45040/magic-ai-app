@@ -1311,6 +1311,13 @@ useEffect(() => {
 
   const [initialShowId, setInitialShowId] = useState<string | null>(null);
   const [initialTaskId, setInitialTaskId] = useState<string | null>(null);
+
+  const handleOpenShowPlannerFromClient = (showId: string | null, taskId?: string | null) => {
+    setInitialShowId(showId ?? null);
+    setInitialTaskId(taskId ?? null);
+    setActiveView('show-planner');
+  };
+
   const [initialIdeaId, setInitialIdeaId] = useState<string | null>(null);
 
   const tier = normalizeTier(user.membership as any);
@@ -2107,7 +2114,7 @@ useEffect(() => {
         case 'persona-simulator': return <PersonaSimulator onIdeaSaved={() => handleIdeaSaved('Persona simulation saved!')} user={user} />;
         case 'gospel-magic-assistant': return <GospelMagicAssistant onIdeaSaved={() => handleIdeaSaved('Gospel routine idea saved!')} />;
         case 'mentalism-assistant': return <MentalismAssistant onIdeaSaved={() => handleIdeaSaved('Mentalism idea saved!')} user={user} />;
-        case 'client-management': return <ClientManagement onClientsUpdate={handleClientsUpdate} onAiSpark={handleAiSpark} />;
+        case 'client-management': return <ClientManagement onClientsUpdate={handleClientsUpdate} onAiSpark={handleAiSpark} onOpenShowPlanner={handleOpenShowPlannerFromClient} />;
         case 'member-management': return <MemberManagement />;
         case 'effect-generator': return <EffectGenerator onIdeaSaved={() => handleIdeaSaved('Effect ideas saved!')} />;
         case 'magic-wire': return <MagicWire currentUser={user} onIdeaSaved={() => handleIdeaSaved('News article saved!')} />;

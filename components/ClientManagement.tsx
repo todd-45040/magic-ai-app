@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import type { Client, AiSparkAction } from '../types';
 import { getClients, addClient, updateClient, deleteClient } from '../services/clientsService';
+import { createShow, addTaskToShow, getShows } from '../services/showsService';
 import { UsersCogIcon, TrashIcon, PencilIcon, WandIcon, MailIcon } from './icons';
 
 type ClientX = Client & {
@@ -40,6 +41,8 @@ function formatShortDate(iso?: string) {
 interface ClientManagementProps {
     onClientsUpdate: (clients: Client[]) => void;
     onAiSpark: (action: AiSparkAction) => void;
+    /** Navigate to Show Planner and optionally open a specific show/task */
+    onOpenShowPlanner?: (showId: string | null, taskId?: string | null) => void;
 }
 
 const ClientModal: React.FC<{
@@ -257,7 +260,7 @@ const ClientModal: React.FC<{
 };
 
 
-const ClientManagement: React.FC<ClientManagementProps> = ({ onClientsUpdate, onAiSpark }) => {
+const ClientManagement: React.FC<ClientManagementProps> = ({ onClientsUpdate, onAiSpark, onOpenShowPlanner }) => {
     const [clients, setClients] = useState<ClientX[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [clientToEdit, setClientToEdit] = useState<Client | null>(null);
@@ -266,9 +269,88 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ onClientsUpdate, on
         const allClients = getClients();
         setClients(allClients);
         onClientsUpdate(allClients);
-    }, [onClientsUpdate]);
-    
-    const handleSaveClient = (clientData: Omit<Client, 'id'|'createdAt'>) => {
+
+}, [onClientsUpdate]);
+
+// --- Quick Actions (Client Tile Buttons) ---
+
+const openShowPlanner = (showId: string | null, taskId?: string | null) => {
+    if (onOpenShowPlanner) {
+        onOpenShowPlanner(showId, taskId ?? null);
+    }
+};
+
+const ensureFollowUpShow = async (): Promise<string> => {
+    const STORAGE_KEY = 'maw_followups_show_id';
+    const existingId = localStorage.getItem(STORAGE_KEY);
+
+    try {
+        if (existingId) {
+            const shows = await getShows();
+            if (shows.some(s => s.id === existingId)) return existingId;
+        }
+    } catch {
+        // If fetching shows fails, we'll attempt to create the follow-up show below.
+    }
+
+    const created = await createShow('Client Follow-ups', 'Auto-created checklist for client follow-up reminders.');
+    localStorage.setItem(STORAGE_KEY, created.id);
+    return created.id;
+};
+
+const handleAddFollowUp = async (client: ClientX) => {
+    try {
+        const showId = await ensureFollowUpShow();
+        const due = new Date();
+        // Default: 3 days from now (nice, practical nudge)
+        due.setDate(due.getDate() + 3);
+
+        await addTaskToShow(showId, {
+            title: `Follow up: ${client.name}${client.company ? ` (${client.company})` : ''}`,
+            notes: [
+                client.email ? `Email: ${client.email}` : null,
+                client.phone ? `Phone: ${client.phone}` : null,
+                '',
+                'Next step: (add notes here)'
+            ].filter(Boolean).join('\n'),
+            priority: 'Medium',
+            dueDate: due.toISOString(),
+            status: 'To-Do',
+        } as any);
+
+        openShowPlanner(showId, null);
+    } catch (err: any) {
+        console.error('Failed to add follow-up:', err);
+        alert(`Could not add follow-up. ${err?.message ? `\n\n${err.message}` : ''}`);
+    }
+};
+
+const handleCreateBooking = async (client: ClientX) => {
+    try {
+        const created = await createShow(
+            `${client.name}${client.company ? ` — ${client.company}` : ''} Booking`,
+            [
+                `Client: ${client.name}`,
+                client.company ? `Company: ${client.company}` : null,
+                client.email ? `Email: ${client.email}` : null,
+                client.phone ? `Phone: ${client.phone}` : null,
+            ].filter(Boolean).join('\n')
+        );
+
+        // Seed the new show with a few default prep tasks (fast win)
+        await addTaskToShow(created.id, { title: 'Confirm date & venue', priority: 'High', status: 'To-Do' } as any);
+        await addTaskToShow(created.id, { title: 'Send contract / agreement', priority: 'High', status: 'To-Do' } as any);
+        await addTaskToShow(created.id, { title: 'Build set list & prop checklist', priority: 'Medium', status: 'To-Do' } as any);
+
+        openShowPlanner(created.id, null);
+    } catch (err: any) {
+        console.error('Failed to create booking/show:', err);
+        alert(`Could not create show / booking. ${err?.message ? `\n\n${err.message}` : ''}`);
+    }
+};
+
+const handleSaveClient = (clientData: Omit
+ = (clientData: Omit<Client, 'id'|'createdAt'>) => {
         let updatedClients;
         if (clientToEdit) {
             updatedClients = updateClient(clientToEdit.id, clientData);
@@ -409,7 +491,7 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ onClientsUpdate, on
 
                                     <button
                                         type="button"
-                                        onClick={() => alert('Follow-up reminders are coming soon.')}
+                                        onClick={() => handleAddFollowUp(client)}
                                         title="Add follow-up reminder (coming soon)"
                                         className="px-3 py-2 rounded-md bg-slate-900/40 border border-slate-700 text-slate-200 hover:bg-slate-900/60 transition"
                                         aria-label="Add follow-up reminder"
@@ -419,7 +501,7 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ onClientsUpdate, on
 
                                     <button
                                         type="button"
-                                        onClick={() => alert('Booking creation will connect to Show Planner in a future update.')}
+                                        onClick={() => handleCreateBooking(client)}
                                         title="Create show / booking (coming soon)"
                                         className="px-3 py-2 rounded-md bg-slate-900/40 border border-slate-700 text-slate-200 hover:bg-slate-900/60 transition"
                                         aria-label="Create show / booking"
