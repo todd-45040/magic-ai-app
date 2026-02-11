@@ -281,6 +281,60 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ onClientsUpdate, on
         setClientToEdit(null);
     };
 
+
+    const addNoteToClient = async (client: ClientX, noteText: string) => {
+        const timeline = parseNotesTimeline((client as any).notes);
+        const next = [{ at: new Date().toISOString(), text: noteText }, ...timeline];
+        const updated: ClientX = { ...client, notes: JSON.stringify(next) } as any;
+        updateClient(updated as any);
+        const refreshed = getClients() as ClientX[];
+        setClients(refreshed);
+        onClientsUpdate(refreshed);
+        return updated;
+    };
+
+    const handleFollowUpReminder = async (client: ClientX) => {
+        // Simple, practical default: remind in 7 days
+        const d = new Date();
+        d.setDate(d.getDate() + 7);
+        const when = d.toLocaleDateString();
+        const msg = `Follow-up reminder: reach out on ${when}.`;
+
+        try {
+            await addNoteToClient(client, msg);
+            // Copy a ready-to-paste reminder to clipboard (optional but handy)
+            if (navigator?.clipboard?.writeText) {
+                await navigator.clipboard.writeText(`${client.name}${client.company ? ` (${client.company})` : ''} — ${msg}`);
+            }
+            alert('Follow-up reminder added to Notes Timeline (and copied to clipboard).');
+        } catch (e) {
+            console.error(e);
+            alert('Reminder created, but something went wrong saving it. Please try again.');
+        }
+    };
+
+    const handleCreateBooking = async (client: ClientX) => {
+        // Best-effort handoff to Show Planner (safe even if Show Planner ignores these hints today)
+        try {
+            localStorage.setItem('maw_new_booking_client_name', client.name || '');
+            localStorage.setItem('maw_new_booking_client_company', client.company || '');
+            localStorage.setItem('maw_new_booking_client_email', client.email || '');
+            localStorage.setItem('maw_new_booking_client_phone', client.phone || '');
+        } catch {}
+
+        // Also copy contact info for quick pasting
+        try {
+            if (navigator?.clipboard?.writeText) {
+                await navigator.clipboard.writeText(
+                    `Client: ${client.name}\nCompany: ${client.company || ''}\nEmail: ${client.email || ''}\nPhone: ${client.phone || ''}`
+                );
+            }
+        } catch {}
+
+        // Navigate to Show Planner tab
+        window.location.href = `/?tab=show-planner&newBooking=1&clientName=${encodeURIComponent(client.name || '')}`;
+    };
+
     const handleDeleteClient = (id: string) => {
         if (window.confirm("Are you sure you want to delete this client? This cannot be undone.")) {
             const updatedClients = deleteClient(id);
@@ -409,8 +463,8 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ onClientsUpdate, on
 
                                     <button
                                         type="button"
-                                        onClick={() => alert('Follow-up reminders are coming soon.')}
-                                        title="Add follow-up reminder (coming soon)"
+                                        onClick={() => handleFollowUpReminder(client)}
+                                        title="Add follow-up reminder (adds note + copies reminder)"
                                         className="px-3 py-2 rounded-md bg-slate-900/40 border border-slate-700 text-slate-200 hover:bg-slate-900/60 transition"
                                         aria-label="Add follow-up reminder"
                                     >
@@ -419,8 +473,8 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ onClientsUpdate, on
 
                                     <button
                                         type="button"
-                                        onClick={() => alert('Booking creation will connect to Show Planner in a future update.')}
-                                        title="Create show / booking (coming soon)"
+                                        onClick={() => handleCreateBooking(client)}
+                                        title="Create show / booking (opens Show Planner)"
                                         className="px-3 py-2 rounded-md bg-slate-900/40 border border-slate-700 text-slate-200 hover:bg-slate-900/60 transition"
                                         aria-label="Create show / booking"
                                     >
