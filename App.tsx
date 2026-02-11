@@ -331,7 +331,7 @@ function App() {
           </button>
         </div>
 
-        <p>Copyright 2026 Magicians&apos; AI Wizard, LLC - v0.93 Beta</p>
+        <p>Copyright 2026 Magicians&apos; AI Wizard, LLC - v0.94-Beta</p>
       </footer>
     </div>
   );
