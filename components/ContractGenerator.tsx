@@ -33,6 +33,11 @@ const LoadingIndicator: React.FC = () => (
     </div>
 );
 
+
+const isUuid = (value: string): boolean => {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+};
+
 const contractSectionsToText = (sections: ContractSections): string => {
     const parts: Array<[string, string]> = [
         ['Performance Details', sections.performanceDetails],
@@ -240,11 +245,10 @@ Guidelines:
 
             await createContractVersion({
                 showId: selectedShowId,
-                clientId: selectedClientId || null,
+                clientId: (selectedClientId && isUuid(selectedClientId) ? selectedClientId : null),
                 content,
                 status: 'draft',
-                structured: result,
-            });
+});
 
             setSaveToShowStatus('saved');
             setTimeout(() => setSaveToShowStatus('idle'), 2000);
