@@ -491,7 +491,7 @@ const handleCreateBooking = async (client: ClientX) => {
                                     <button
                                         type="button"
                                         onClick={() => handleAddFollowUp(client)}
-                                        title="Add follow-up reminder (coming soon)"
+                                        title="Create a follow-up task for this client and open it in Show Planner"
                                         className="px-3 py-2 rounded-md bg-slate-900/40 border border-slate-700 text-slate-200 hover:bg-slate-900/60 transition"
                                         aria-label="Add follow-up reminder"
                                     >
@@ -501,7 +501,7 @@ const handleCreateBooking = async (client: ClientX) => {
                                     <button
                                         type="button"
                                         onClick={() => handleCreateBooking(client)}
-                                        title="Create show / booking (coming soon)"
+                                        title="Create a new show linked to this client and open it in Show Planner"
                                         className="px-3 py-2 rounded-md bg-slate-900/40 border border-slate-700 text-slate-200 hover:bg-slate-900/60 transition"
                                         aria-label="Create show / booking"
                                     >
