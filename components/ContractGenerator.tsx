@@ -6,6 +6,7 @@ import { saveIdea } from '../services/ideasService';
 import { CONTRACT_GENERATOR_SYSTEM_INSTRUCTION } from '../constants';
 import { FileTextIcon, WandIcon, SaveIcon, CheckIcon, ShareIcon, CopyIcon } from './icons';
 import { updateShow } from '../services/showsService';
+import { createContractVersion } from '../services/contractsService';
 import type { Client, Show, User } from '../types';
 
 interface ContractGeneratorProps {
@@ -32,11 +33,20 @@ const LoadingIndicator: React.FC = () => (
     </div>
 );
 
-// Accept values like "$500", "1,500.00", "500" and convert safely to a number.
-const parseCurrencyToNumber = (value: string): number => {
-    const cleaned = (value || '').toString().replace(/[^0-9.]/g, '');
-    const num = Number(cleaned);
-    return Number.isFinite(num) ? num : 0;
+const contractSectionsToText = (sections: ContractSections): string => {
+    const parts: Array<[string, string]> = [
+        ['Performance Details', sections.performanceDetails],
+        ['Payment Terms', sections.paymentTerms],
+        ['Technical Requirements', sections.technicalRequirements],
+        ['Cancellation Policy', sections.cancellationPolicy],
+        ['Force Majeure', sections.forceMajeure],
+        ['Signature Block', sections.signatureBlock],
+    ];
+
+    return parts
+        .filter(([, body]) => (body ?? '').toString().trim().length > 0)
+        .map(([title, body]) => `${title}\n${body}`.trim())
+        .join('\n\n');
 };
 
 
@@ -224,13 +234,42 @@ Guidelines:
         if (!selectedShowId || !result) return;
         try {
             setError(null);
-            const updatedShows = await updateShow(selectedShowId, { contract: result } as any);
-            onShowsUpdate(updatedShows);
+
+            // Persist contract to the contracts table (versioned)
+            const content = contractSectionsToText(result);
+
+            await createContractVersion({
+                showId: selectedShowId,
+                clientId: selectedClientId || null,
+                content,
+                status: 'draft',
+                structured: result,
+            });
+
             setSaveToShowStatus('saved');
             setTimeout(() => setSaveToShowStatus('idle'), 2000);
+
+            // Navigate to Show Planner only after successful save
             onNavigateToShowPlanner(selectedShowId);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to save contract to show.');
+        } catch (err: any) {
+            console.error('Save to Show failed:', err);
+
+            // Backward compatibility fallback (older builds that stored contract on show)
+            try {
+                const updatedShows = await updateShow(selectedShowId, { contract: result } as any);
+                onShowsUpdate(updatedShows);
+                setSaveToShowStatus('saved');
+                setTimeout(() => setSaveToShowStatus('idle'), 2000);
+                onNavigateToShowPlanner(selectedShowId);
+                return;
+            } catch (fallbackErr: any) {
+                console.error('Legacy save fallback failed:', fallbackErr);
+            }
+
+            const msg =
+                (err?.message as string) ||
+                'Failed to save contract to database. Check Supabase RLS policies and required columns on the contracts table.';
+            setError(msg);
         }
     };
 
