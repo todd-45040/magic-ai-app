@@ -110,6 +110,19 @@ export interface Show {
     updatedAt: number;
     clientId?: string;
     finances?: Finances;
+    // Optional: structured performance contract saved from the Contract Generator.
+    // Stored as JSON when supported by the backend schema.
+    contract?: {
+      performanceDetails: string;
+      paymentTerms: string;
+      technicalRequirements: string;
+      cancellationPolicy: string;
+      forceMajeure: string;
+      signatureBlock: string;
+      // lightweight metadata for tracking
+      generatedAt?: number;
+      clientId?: string;
+    };
     tags?: string[];
 }
 

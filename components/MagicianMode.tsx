@@ -2105,7 +2105,20 @@ useEffect(() => {
         case 'magic-archives': return <MagicArchives onIdeaSaved={() => handleIdeaSaved('Research saved!')} />;
         case 'patter-engine': return <PatterEngine onIdeaSaved={() => handleIdeaSaved('Patter ideas saved!')} user={user} />;
         case 'marketing-campaign': return <MarketingCampaign onIdeaSaved={() => handleIdeaSaved('Marketing campaign ideas saved!')} user={user} />;
-        case 'contract-generator': return <ContractGenerator onIdeaSaved={() => handleIdeaSaved('Contract saved!')} user={user} />;
+        case 'contract-generator':
+          return (
+            <ContractGenerator
+              user={user}
+              clients={clients}
+              shows={shows}
+              onShowsUpdate={handleShowsUpdate}
+              onNavigateToShowPlanner={(showId) => {
+                setInitialShowId(showId);
+                setActiveView('show-planner');
+              }}
+              onIdeaSaved={() => handleIdeaSaved('Contract saved!')}
+            />
+          );
         case 'assistant-studio': return <AssistantStudio onIdeaSaved={() => handleIdeaSaved('Assistant idea saved!')} user={user} />;
         case 'director-mode': return <DirectorMode onIdeaSaved={() => handleIdeaSaved('Show Plan saved!')} />;
         case 'illusion-blueprint': return <IllusionBlueprint onIdeaSaved={() => handleIdeaSaved('Illusion Blueprint saved!')} user={user} />;

@@ -237,8 +237,9 @@ export const updateShow = async (id: string, updates: Partial<Show>): Promise<Sh
   // Prevent accidentally writing tasks array into shows row (tasks live in tasks table)
   delete payload.tasks;
 
-  const { error } = await supabase.from('shows').update(payload).eq('id', id).eq('user_id', userId);
-  if (error) throw error;
+  // Use schema-drift safe update so optional/newer columns (like `contract`) don't break builds
+  // across environments that haven't applied the latest DB migrations yet.
+  await safeUpdate('shows', payload, { id, user_id: userId });
 
   return getShows();
 };
