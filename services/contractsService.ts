@@ -69,28 +69,28 @@ export const createContractVersion = async (args: CreateContractArgs): Promise<C
     version: nextVersion,
     content: args.content,
     status: args.status ?? 'draft',
-    structured: args.structured ?? null,
   };
 
-  // Some deployments may not include optional columns like structured.
-  // Try insert with full payload, and retry with a minimal payload if the column doesn't exist.
-  let insertRes = await supabase.from('contracts').insert(basePayload).select('*').single();
+  // Optional column: structured (may not exist in some DB schemas / schema cache)
+  // Strategy:
+  // 1) Try insert WITH structured only if provided
+  // 2) If PostgREST reports missing column (e.g., PGRST204 schema cache), retry WITHOUT structured
+  const payloadWithStructured =
+    args.structured !== undefined ? { ...basePayload, structured: args.structured } : basePayload;
 
-  if (insertRes.error) {
-    const msg = insertRes.error.message || '';
-    const looksLikeMissingColumn =
-      msg.toLowerCase().includes('column') && msg.toLowerCase().includes('does not exist');
+  let insertRes = await supabase.from('contracts').insert(payloadWithStructured).select('*').single();
 
-    if (looksLikeMissingColumn) {
-      const minimalPayload = {
-        show_id: basePayload.show_id,
-        user_id: basePayload.user_id,
-        client_id: basePayload.client_id,
-        version: basePayload.version,
-        content: basePayload.content,
-        status: basePayload.status,
-      };
-      insertRes = await supabase.from('contracts').insert(minimalPayload).select('*').single();
+  if (insertRes.error && args.structured !== undefined) {
+    const msg = (insertRes.error as any)?.message?.toLowerCase?.() ?? '';
+    const code = (insertRes.error as any)?.code ?? '';
+
+    const looksLikeMissingStructuredColumn =
+      code === 'PGRST204' ||
+      (msg.includes('could not find') && msg.includes('structured') && msg.includes('schema cache')) ||
+      (msg.includes('column') && msg.includes('structured') && msg.includes('does not exist'));
+
+    if (looksLikeMissingStructuredColumn) {
+      insertRes = await supabase.from('contracts').insert(basePayload).select('*').single();
     }
   }
 
