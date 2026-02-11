@@ -805,8 +805,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                     ) : (
                         <PerformanceHistory performances={pastPerformances} onNavigateToAnalytics={onNavigateToAnalytics} />
                     )}
-                        <PerformanceHistory performances={pastPerformances} onNavigateToAnalytics={onNavigateToAnalytics} />
-                    )}
+                        
                 </div>
             </div>
         );
