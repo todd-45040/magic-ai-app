@@ -228,7 +228,11 @@ const ClientModal: React.FC<{
                         // Best-effort navigation hook (safe even if unused)
                         try {
                             localStorage.setItem('maw_open_show_title', s.title);
-                            window.location.href = `${getAppBasePath()}/?tab=show-planner&showTitle=${encodeURIComponent(s.title)}`;
+                            try {
+                            window.dispatchEvent(
+                                new CustomEvent('maw:navigate', { detail: { view: 'show-planner', showTitle: s.title } })
+                            );
+                        } catch {}
                         } catch {}
                     }}
                     className="px-2 py-1 rounded-md text-xs bg-slate-900/40 border border-slate-700 text-slate-200 hover:bg-slate-800 transition"
@@ -361,9 +365,19 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ onClientsUpdate, on
             }
         } catch {}
 
-        // Navigate to Show Planner tab
-        window.location.href = `${getAppBasePath()}/?tab=show-planner&newBooking=1&clientName=${encodeURIComponent(client.name || '')}`;
-    };
+        // Navigate to Show Planner (no full reload)
+        try {
+            window.dispatchEvent(
+                new CustomEvent('maw:navigate', {
+                    detail: {
+                        view: 'show-planner',
+                        newBooking: true,
+                        clientName: client.name || '',
+                        clientEmail: client.email || '',
+                    },
+                })
+            );
+        } catch {}};
 
     const handleDeleteClient = (id: string) => {
         if (window.confirm("Are you sure you want to delete this client? This cannot be undone.")) {
@@ -441,7 +455,11 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ onClientsUpdate, on
                                                             onClick={() => {
                                                                 try {
                                                                     localStorage.setItem('maw_open_show_title', s.title);
-                                                                    window.location.href = `${getAppBasePath()}/?tab=show-planner&showTitle=${encodeURIComponent(s.title)}`;
+                                                                    try {
+                            window.dispatchEvent(
+                                new CustomEvent('maw:navigate', { detail: { view: 'show-planner', showTitle: s.title } })
+                            );
+                        } catch {}
                                                                 } catch {}
                                                             }}
                                                             className="px-2 py-1 rounded-md text-[11px] bg-slate-900/40 border border-slate-700 text-slate-200 hover:bg-slate-800 transition"
