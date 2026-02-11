@@ -1,11 +1,12 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Type } from '@google/genai';
 import { generateStructuredResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
 import { CONTRACT_GENERATOR_SYSTEM_INSTRUCTION } from '../constants';
 import { FileTextIcon, WandIcon, SaveIcon, CheckIcon, ShareIcon, CopyIcon } from './icons';
 import { updateShow } from '../services/showsService';
+import { contractsTableAvailable, createContractVersion, listContractsForShow, updateContractStatus, type ContractRow, type ContractStatus } from '../services/contractsService';
 import type { Client, Show, User } from '../types';
 
 interface ContractGeneratorProps {
@@ -60,6 +61,11 @@ const ContractGenerator: React.FC<ContractGeneratorProps> = ({ user, clients, sh
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
     const [copyStatus, setCopyStatus] = useState<'idle' | 'copied'>('idle');
     const [saveToShowStatus, setSaveToShowStatus] = useState<'idle' | 'saved'>('idle');
+    const [contractRows, setContractRows] = useState<ContractRow[]>([]);
+    const [activeContractId, setActiveContractId] = useState<string | null>(null);
+    const [contractStatus, setContractStatus] = useState<ContractStatus>('draft');
+    const [selectedVersionId, setSelectedVersionId] = useState<string>('');
+
     
     const isFormValid = performerName && clientName && eventDate && performanceFee;
 
@@ -76,6 +82,14 @@ const ContractGenerator: React.FC<ContractGeneratorProps> = ({ user, clients, sh
         required: ['performanceDetails', 'paymentTerms', 'technicalRequirements', 'cancellationPolicy', 'forceMajeure', 'signatureBlock']
     }), []);
 
+    // If user edits the generated contract, treat it as a draft (until they re-save).
+    useEffect(() => {
+        if (!result) return;
+        setSaveToShowStatus('idle');
+        setContractStatus((prev) => prev || 'draft');
+    }, [result?.performanceDetails, result?.paymentTerms, result?.technicalRequirements, result?.cancellationPolicy, result?.forceMajeure, result?.signatureBlock]);
+
+
     const handleClientSelect = (id: string) => {
         setSelectedClientId(id);
         const c = clients.find(x => x.id === id);
@@ -88,6 +102,43 @@ const ContractGenerator: React.FC<ContractGeneratorProps> = ({ user, clients, sh
         const inferredAddress = (c.notes || '').includes('Address:') ? (c.notes || '').split('Address:')[1]?.split('\n')[0]?.trim() : '';
         setClientAddress(inferredAddress || '');
     };
+
+    
+    const loadContractsForSelectedShow = async (showId: string) => {
+        try {
+            const hasTable = await contractsTableAvailable();
+            if (!hasTable) {
+                setContractRows([]);
+                setActiveContractId(null);
+                setSelectedVersionId('');
+                return;
+            }
+            const rows = await listContractsForShow(showId);
+            setContractRows(rows);
+            const latest = rows[0];
+            if (latest) {
+                setActiveContractId(latest.id);
+                setContractStatus(latest.status ?? 'draft');
+                setSelectedVersionId(latest.id);
+                const parsed = tryDeserializeContractPayload(latest.content);
+                if (parsed?.sections) {
+                    // Merge into current result shape (keep metadata fields like generatedAt/clientId)
+                    setResult((prev) => ({
+                        ...(prev ?? ({} as any)),
+                        ...parsed.sections,
+                        generatedAt: (prev as any)?.generatedAt ?? Date.now(),
+                        clientId: selectedClientId || (parsed?.meta?.clientId ?? undefined),
+                    }));
+                }
+            }
+        } catch {
+            // If contracts table isn't reachable for any reason, keep UI stable.
+            setContractRows([]);
+            setActiveContractId(null);
+            setSelectedVersionId('');
+        }
+    };
+
 
     const handleShowSelect = (id: string) => {
         setSelectedShowId(id);
@@ -104,9 +155,29 @@ const ContractGenerator: React.FC<ContractGeneratorProps> = ({ user, clients, sh
             const existing = (s as any).contract as ContractSections;
             if (existing?.performanceDetails) setResult(existing);
         }
+        loadContractsForSelectedShow(id);
+
     };
 
-    const handleGenerate = async () => {
+    
+    const handleVersionSelect = (contractId: string) => {
+        setSelectedVersionId(contractId);
+        const row = contractRows.find(r => r.id === contractId);
+        if (!row) return;
+        setActiveContractId(row.id);
+        setContractStatus(row.status ?? 'draft');
+        const parsed = tryDeserializeContractPayload(row.content);
+        if (parsed?.sections) {
+            setResult((prev) => ({
+                ...(prev ?? ({} as any)),
+                ...parsed.sections,
+                generatedAt: (prev as any)?.generatedAt ?? Date.now(),
+                clientId: selectedClientId || (parsed?.meta?.clientId ?? undefined),
+            }));
+        }
+    };
+
+const handleGenerate = async () => {
         if (!isFormValid) {
             setError("Please fill in all required fields (*).");
             return;
@@ -212,21 +283,105 @@ Guidelines:
         }
     };
 
+    
+    const serializeContractPayload = (sections: ContractSections, meta: any) => {
+        // Store as JSON string in contracts.content for structured restore + versioning.
+        return JSON.stringify({ kind: 'magic_ai_wizard_contract_v1', meta, sections });
+    };
+
+    const tryDeserializeContractPayload = (raw: string): { meta?: any; sections?: Partial<ContractSections> } | null => {
+        try {
+            const obj = JSON.parse(raw);
+            if (obj && typeof obj === 'object' && obj.sections) return obj;
+            return null;
+        } catch {
+            return null;
+        }
+    };
+
+
     const handleSaveToShow = async () => {
         if (!selectedShowId || !result) return;
         try {
             setError(null);
-            const updatedShows = await updateShow(selectedShowId, { contract: result } as any);
-            onShowsUpdate(updatedShows);
+
+            const meta = {
+                performerName,
+                clientName,
+                clientEmail,
+                clientPhone,
+                clientAddress,
+                eventTitle,
+                eventType,
+                eventDate,
+                eventTime,
+                eventLocation,
+                performanceLength,
+                performanceFee,
+                depositAmount,
+                depositDueDate,
+                specialRequirements,
+                cancellationPolicy,
+                showId: selectedShowId,
+                clientId: selectedClientId || undefined,
+            };
+
+            // Prefer contracts table persistence (versioned + status tracking).
+            let savedToContracts = false;
+            try {
+                const hasTable = await contractsTableAvailable();
+                if (hasTable) {
+                    const payload = serializeContractPayload(result, meta);
+                    const row = await createContractVersion({
+                        showId: selectedShowId,
+                        clientId: selectedClientId || null,
+                        content: payload,
+                        status: contractStatus ?? 'draft',
+                        structured: { meta, sections: result },
+                    });
+                    savedToContracts = true;
+                    setActiveContractId(row.id);
+                    setContractStatus(row.status ?? 'draft');
+                    // Refresh versions list
+                    const rows = await listContractsForShow(selectedShowId);
+                    setContractRows(rows);
+                    setSelectedVersionId(row.id);
+                }
+            } catch {
+                // fall through to legacy save
+            }
+
+            // Backward compatibility: also (or alternatively) save into the show record if supported.
+            // Some older deployments stored contracts on the show object. If the column doesn't exist,
+            // showsService.safeUpdate will automatically strip it.
+            if (!savedToContracts) {
+                const updatedShows = await updateShow(selectedShowId, { contract: result } as any);
+                onShowsUpdate(updatedShows);
+            }
+
             setSaveToShowStatus('saved');
             setTimeout(() => setSaveToShowStatus('idle'), 2000);
             onNavigateToShowPlanner(selectedShowId);
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to save contract to show.');
+            setError(err instanceof Error ? err.message : 'Failed to save contract.');
         }
     };
 
-    const updateSection = (key: keyof ContractSections, value: string) => {
+    
+    const handleStatusChange = async (next: ContractStatus) => {
+        setContractStatus(next);
+        // Update latest/active contract status if it exists in contracts table
+        if (!activeContractId) return;
+        try {
+            await updateContractStatus(activeContractId, next);
+            // Update local cache
+            setContractRows((prev) => prev.map(r => r.id === activeContractId ? ({ ...r, status: next }) : r));
+        } catch {
+            // ignore; status will persist on next save
+        }
+    };
+
+const updateSection = (key: keyof ContractSections, value: string) => {
         setResult((prev) => prev ? ({ ...prev, [key]: value }) : prev);
     };
 
@@ -344,6 +499,37 @@ Guidelines:
                             <SectionEditor title="Signature Block" value={result.signatureBlock} onChange={(v) => updateSection('signatureBlock', v)} />
                         </div>
                         <div className="mt-auto p-2 bg-slate-900/50 flex justify-end gap-2 border-t border-slate-800">
+                            <div className="mr-auto flex flex-wrap items-center gap-2">
+                                {contractRows.length > 0 && (
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-slate-400">Version</span>
+                                        <select
+                                            value={selectedVersionId}
+                                            onChange={(e) => handleVersionSelect(e.target.value)}
+                                            className="px-2 py-1 text-xs bg-slate-800 border border-slate-700 rounded text-slate-100"
+                                        >
+                                            {contractRows.map((r) => (
+                                                <option key={r.id} value={r.id}>
+                                                    v{r.version} • {r.status}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs text-slate-400">Status</span>
+                                    <select
+                                        value={contractStatus}
+                                        onChange={(e) => handleStatusChange(e.target.value as ContractStatus)}
+                                        className="px-2 py-1 text-xs bg-slate-800 border border-slate-700 rounded text-slate-100"
+                                    >
+                                        <option value="draft">draft</option>
+                                        <option value="sent">sent</option>
+                                        <option value="signed">signed</option>
+                                    </select>
+                                </div>
+                            </div>
+
                             <button
                                 onClick={handleSaveToShow}
                                 disabled={!selectedShowId || saveToShowStatus === 'saved'}
