@@ -159,16 +159,21 @@ export const getShows = async (): Promise<Show[]> => {
 
   if (error) throw error;
   // Normalize task fields to keep UI grouping/filtering stable across older rows.
-  return (((data as any[]) ?? []) as any[]).map((show) => ({
-    ...show,
-    tasks: Array.isArray(show.tasks)
-      ? show.tasks.map((t: any) => ({
-          ...t,
-          priority: getPriorityFromRow(t),
-          status: t.status ?? 'To-Do'
-        }))
-      : []
-  })) as Show[];
+  return (((data as any[]) ?? []) as any[]).map((show) => {
+    // Support snake_case columns in the DB (e.g., client_id) while the UI uses camelCase.
+    const clientId = (show as any).clientId ?? (show as any).client_id;
+    return {
+      ...show,
+      ...(clientId ? { clientId } : {}),
+      tasks: Array.isArray(show.tasks)
+        ? show.tasks.map((t: any) => ({
+            ...t,
+            priority: getPriorityFromRow(t),
+            status: t.status ?? 'To-Do'
+          }))
+        : []
+    };
+  }) as Show[];
 };
 
 export const getShowById = async (id: string): Promise<Show | undefined> => {
@@ -191,40 +196,61 @@ export const getShowById = async (id: string): Promise<Show | undefined> => {
 };
 
 
-export const createShow = async (title: string, description?: string | null): Promise<Show> => {
+export const createShow = async (
+  title: string,
+  description?: string | null,
+  clientId?: string | null,
+  finances?: any
+): Promise<Show> => {
   const userId = await getUserIdOrThrow();
 
   const payload: any = {
     user_id: userId,
     title: String(title ?? '').trim(),
     description: description ?? null,
-    // Keep finances in a single JSON object (safe for current schema)
-    finances: {
-      performanceFee: 0,
-      expenses: [],
-      income: []
-    },
+    // Phase A: keep finances in a single JSON object (schema-safe)
+    finances:
+      finances ??
+      {
+        performanceFee: 0,
+        expenses: [],
+        income: [],
+        payments: { depositReceived: 0, amountPaid: 0, status: 'prospect' }
+      },
     updated_at: new Date().toISOString()
   };
 
+  // Attempt to persist client_id if the DB schema supports it.
+  if (clientId) payload.client_id = clientId;
+
   if (!payload.title) throw new Error('Show title required');
 
-  // Insert and return the created row (most reliable for downstream task inserts)
-  const { data, error } = await supabase
-    .from('shows')
-    .insert(payload)
-    .select('*')
-    .single();
+  // Insert and return the created row. If the schema doesn't have newer columns
+  // (like client_id), retry after stripping them.
+  for (let i = 0; i < 4; i++) {
+    const { data, error } = await supabase.from('shows').insert(payload).select('*').single();
+    if (!error) return data as unknown as Show;
 
-  if (error) throw error;
-  return data as unknown as Show;
+    const msg = String((error as any)?.message ?? error ?? '');
+    const m = msg.match(/Could not find the '([^']+)' column of '([^']+)'/i);
+    const missingCol = m?.[1];
+    const missingTable = m?.[2];
+    if (missingCol && (!missingTable || missingTable === 'shows') && Object.prototype.hasOwnProperty.call(payload, missingCol)) {
+      delete (payload as any)[missingCol];
+      continue;
+    }
+    throw error;
+  }
+  throw new Error('Create show failed after retries (schema drift).');
 };
 
 export const addShow = async (show: Partial<Show>): Promise<Show[]> => {
   const title = (show as any).title ?? (show as any).showTitle ?? '';
   const description = (show as any).description ?? (show as any).show_description ?? null;
+  const clientId = (show as any).clientId ?? (show as any).client_id ?? null;
+  const finances = (show as any).finances ?? null;
 
-  await createShow(String(title ?? ''), description);
+  await createShow(String(title ?? ''), description, clientId, finances);
 
   return getShows();
 };
@@ -237,8 +263,8 @@ export const updateShow = async (id: string, updates: Partial<Show>): Promise<Sh
   // Prevent accidentally writing tasks array into shows row (tasks live in tasks table)
   delete payload.tasks;
 
-  const { error } = await supabase.from('shows').update(payload).eq('id', id).eq('user_id', userId);
-  if (error) throw error;
+  // Support schema drift (e.g., some envs may not have client_id yet).
+  await safeUpdate('shows', payload, { id, user_id: userId });
 
   return getShows();
 };
