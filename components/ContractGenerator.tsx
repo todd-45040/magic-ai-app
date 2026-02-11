@@ -1,12 +1,12 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Type } from '@google/genai';
 import { generateStructuredResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
 import { CONTRACT_GENERATOR_SYSTEM_INSTRUCTION } from '../constants';
 import { FileTextIcon, WandIcon, SaveIcon, CheckIcon, ShareIcon, CopyIcon } from './icons';
 import { updateShow } from '../services/showsService';
-import { createContractVersion } from '../services/contractsService';
+import { createContractVersion, listContractsForShow } from '../services/contractsService';
 import type { Client, Show, User } from '../types';
 
 interface ContractGeneratorProps {
@@ -83,8 +83,61 @@ const ContractGenerator: React.FC<ContractGeneratorProps> = ({ user, clients, sh
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
     const [copyStatus, setCopyStatus] = useState<'idle' | 'copied'>('idle');
     const [saveToShowStatus, setSaveToShowStatus] = useState<'idle' | 'saved'>('idle');
+
+    // Selected show context (versioning + status awareness)
+    const [showNextVersion, setShowNextVersion] = useState<number | null>(null);
+    const [showLatestStatus, setShowLatestStatus] = useState<string | null>(null);
     
     const isFormValid = performerName && clientName && eventDate && performanceFee;
+    const selectedShow = useMemo(() => shows.find(s => s.id === selectedShowId) ?? null, [shows, selectedShowId]);
+
+    // If Show Planner requests a revision flow, it can drop a prefill payload in localStorage.
+    // This keeps the feature working even if the navigation method changes.
+    useEffect(() => {
+        try {
+            const raw = localStorage.getItem('maw_contract_revision_prefill');
+            if (!raw) return;
+            const parsed = JSON.parse(raw);
+            if (parsed?.showId && typeof parsed.showId === 'string') {
+                setSelectedShowId(parsed.showId);
+                handleShowSelect(parsed.showId);
+            }
+            // One-shot
+            localStorage.removeItem('maw_contract_revision_prefill');
+        } catch {
+            // ignore
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // Load version context for the selected show (next version number + latest status)
+    useEffect(() => {
+        let cancelled = false;
+        const run = async () => {
+            if (!selectedShowId) {
+                setShowNextVersion(null);
+                setShowLatestStatus(null);
+                return;
+            }
+            try {
+                const list = await listContractsForShow(selectedShowId);
+                if (cancelled) return;
+                const maxVersion = list.reduce((m: number, c: any) => Math.max(m, Number(c?.version ?? 0) || 0), 0);
+                const latest = [...list].sort((a: any, b: any) => (Number(b?.version ?? 0) - Number(a?.version ?? 0)))[0];
+                setShowNextVersion((maxVersion || 0) + 1);
+                setShowLatestStatus((latest?.status as string) ?? null);
+            } catch {
+                if (!cancelled) {
+                    setShowNextVersion(1);
+                    setShowLatestStatus(null);
+                }
+            }
+        };
+        void run();
+        return () => {
+            cancelled = true;
+        };
+    }, [selectedShowId]);
 
     const responseSchema = useMemo(() => ({
         type: Type.OBJECT,
@@ -128,6 +181,55 @@ const ContractGenerator: React.FC<ContractGeneratorProps> = ({ user, clients, sh
             if (existing?.performanceDetails) setResult(existing);
         }
     };
+
+    // If another part of the app wants to start a revision from Show Planner,
+    // it can stash a prefill request in localStorage and we will preselect that show.
+    useEffect(() => {
+        try {
+            const raw = localStorage.getItem('maw_contract_revision_prefill');
+            if (!raw) return;
+            const payload = JSON.parse(raw);
+            if (payload?.showId && typeof payload.showId === 'string') {
+                // Clear immediately to avoid repeated auto-navigation.
+                localStorage.removeItem('maw_contract_revision_prefill');
+                setSelectedShowId(payload.showId);
+                handleShowSelect(payload.showId);
+            }
+        } catch {
+            // ignore
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // Keep version context up to date for the selected show.
+    useEffect(() => {
+        const run = async () => {
+            if (!selectedShowId) {
+                setShowNextVersion(null);
+                setShowLatestStatus(null);
+                return;
+            }
+
+            try {
+                const rows = await listContractsForShow(selectedShowId);
+                if (!rows || rows.length === 0) {
+                    setShowNextVersion(1);
+                    setShowLatestStatus(null);
+                    return;
+                }
+                const maxV = rows.reduce((m: number, r: any) => Math.max(m, Number(r.version) || 1), 1);
+                const latest = [...rows].sort((a: any, b: any) => (Number(b.version) || 0) - (Number(a.version) || 0))[0];
+                setShowNextVersion(maxV + 1);
+                setShowLatestStatus((latest?.status as string) || null);
+            } catch {
+                // If anything goes wrong, don't block the user.
+                setShowNextVersion(null);
+                setShowLatestStatus(null);
+            }
+        };
+
+        void run();
+    }, [selectedShowId]);
 
     const handleGenerate = async () => {
         if (!isFormValid) {
@@ -371,7 +473,24 @@ Guidelines:
                     </div>
                     <div><label htmlFor="requirements" className="block text-sm font-medium text-slate-300 mb-1">Special Requirements (Rider)</label><textarea id="requirements" rows={3} value={specialRequirements} onChange={(e) => setSpecialRequirements(e.target.value)} placeholder="e.g., Private changing area, bottled water, one microphone on a stand." className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white" /></div>
                     <div><label htmlFor="cancellation" className="block text-sm font-medium text-slate-300 mb-1">Cancellation Policy</label><textarea id="cancellation" rows={3} value={cancellationPolicy} onChange={(e) => setCancellationPolicy(e.target.value)} className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white text-sm" /></div>
-                    
+                    {selectedShow && (
+                        <div className="mt-3 rounded-md border border-slate-700 bg-slate-900/40 px-3 py-2 text-xs text-slate-300">
+                            <div>
+                                Editing: <span className="font-semibold text-slate-100">{selectedShow.title}</span>
+                                {showNextVersion ? (
+                                    <>
+                                        {' '}— Next version will be <span className="font-semibold text-slate-100">v{showNextVersion}</span>
+                                    </>
+                                ) : null}
+                            </div>
+                            {String(showLatestStatus || '').toLowerCase() === 'signed' ? (
+                                <div className="mt-1 text-yellow-200/90">
+                                    This contract is marked <span className="font-semibold">Signed</span>. Creating a new version will create a revision.
+                                </div>
+                            ) : null}
+                        </div>
+                    )}
+
                     <button onClick={handleGenerate} disabled={isLoading || !isFormValid} className="w-full py-3 mt-4 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed">
                         <WandIcon className="w-5 h-5" />
                         <span>Generate Contract</span>
@@ -394,19 +513,34 @@ Guidelines:
                             <SectionEditor title="Force Majeure" value={result.forceMajeure} onChange={(v) => updateSection('forceMajeure', v)} />
                             <SectionEditor title="Signature Block" value={result.signatureBlock} onChange={(v) => updateSection('signatureBlock', v)} />
                         </div>
-                        <div className="mt-auto p-2 bg-slate-900/50 flex justify-end gap-2 border-t border-slate-800">
+                        <div className="mt-auto p-2 bg-slate-900/50 flex flex-col gap-2 border-t border-slate-800">
+                            <div className="flex justify-end gap-2">
                             <button
                                 onClick={handleSaveToShow}
                                 disabled={!selectedShowId || saveToShowStatus === 'saved'}
-                                title={!selectedShowId ? 'Select a show to save this contract' : 'Save this contract to the selected show and open it in Show Planner'}
+                                title={!selectedShowId ? 'Select a show to save this contract' : 'Save as a new version for the selected show, then open it in Show Planner'}
                                 className="flex items-center gap-2 px-3 py-1.5 text-sm bg-purple-700 hover:bg-purple-600 disabled:bg-slate-700 disabled:cursor-not-allowed rounded-md text-white"
                             >
                                 {saveToShowStatus === 'saved' ? <CheckIcon className="w-4 h-4 text-green-300" /> : <ShareIcon className="w-4 h-4" />}
-                                <span>{saveToShowStatus === 'saved' ? 'Saved to Show!' : 'Save to Show'}</span>
+                                <span>{saveToShowStatus === 'saved' ? 'Saved to Show!' : 'Save as New Version to Show'}</span>
                             </button>
                             <button onClick={handleDownload} className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200"><FileTextIcon className="w-4 h-4" /><span>Download .txt</span></button>
                             <button onClick={handleCopy} disabled={copyStatus === 'copied'} className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200">{copyStatus === 'copied' ? <CheckIcon className="w-4 h-4 text-green-400" /> : <CopyIcon className="w-4 h-4" />}<span>{copyStatus === 'copied' ? 'Copied!' : 'Copy'}</span></button>
-                            <button onClick={handleSave} disabled={saveStatus === 'saved'} className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200">{saveStatus === 'saved' ? <CheckIcon className="w-4 h-4 text-green-400" /> : <SaveIcon className="w-4 h-4" />}<span>{saveStatus === 'saved' ? 'Saved!' : 'Save'}</span></button>
+                            <button
+                                onClick={handleSave}
+                                disabled={saveStatus === 'saved'}
+                                title="Save this contract as a Saved Idea (for reuse later)"
+                                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200"
+                            >
+                                {saveStatus === 'saved' ? <CheckIcon className="w-4 h-4 text-green-400" /> : <SaveIcon className="w-4 h-4" />}
+                                <span>{saveStatus === 'saved' ? 'Saved!' : 'Save to Ideas'}</span>
+                            </button>
+                            </div>
+
+                            <div className="text-xs text-slate-400 flex flex-col gap-1">
+                                <div>• <span className="text-slate-300">Save to Ideas</span> stores this contract as a Saved Idea.</div>
+                                <div>• <span className="text-slate-300">Save as New Version to Show</span> creates a new contract version for the selected show.</div>
+                            </div>
                         </div>
                     </div>
                 ) : (
