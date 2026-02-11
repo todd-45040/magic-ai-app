@@ -2,140 +2,110 @@ import { supabase } from '../supabase';
 
 export type ContractStatus = 'draft' | 'sent' | 'signed';
 
-export interface ContractRow {
+export type ContractRow = {
   id: string;
-  user_id: string;
   show_id: string;
+  user_id: string;
   client_id: string | null;
   version: number;
   content: string;
   status: ContractStatus;
-  structured?: any | null;
-  deposit_paid?: boolean;
-  balance_paid?: boolean;
+  structured?: any;
   created_at?: string;
   updated_at?: string;
-}
+};
 
-// Helpers
+type CreateContractArgs = {
+  showId: string;
+  clientId: string | null;
+  content: string;
+  status?: ContractStatus;
+  structured?: any;
+};
+
 const getUserIdOrThrow = async (): Promise<string> => {
   const { data, error } = await supabase.auth.getUser();
   if (error) throw error;
-  const userId = data?.user?.id;
-  if (!userId) throw new Error('Not authenticated');
-  return userId;
-};
-
-// Remove missing columns dynamically if schema cache is behind or some envs differ.
-const safeInsertSingle = async (table: string, payload: any) => {
-  let current: any = { ...payload };
-  for (let i = 0; i < 8; i++) {
-    const { data, error } = await supabase.from(table).insert(current).select('*').single();
-    if (!error) return data;
-    const msg = String((error as any)?.message ?? error ?? '');
-
-    // Missing column pattern from Supabase PostgREST
-    const m = msg.match(/Could not find the '([^']+)' column of '([^']+)'/i);
-    const missingCol = m?.[1];
-    const missingTable = m?.[2];
-    if (missingCol && (!missingTable || missingTable === table)) {
-      if (Object.prototype.hasOwnProperty.call(current, missingCol)) {
-        const next = { ...current };
-        delete next[missingCol];
-        current = next;
-        continue;
-      }
-    }
-    throw error;
-  }
-  throw new Error('Insert failed after retries.');
-};
-
-const safeUpdateById = async (table: string, id: string, patch: any) => {
-  let current: any = { ...patch };
-  for (let i = 0; i < 8; i++) {
-    const { data, error } = await supabase.from(table).update(current).eq('id', id).select('*').single();
-    if (!error) return data;
-    const msg = String((error as any)?.message ?? error ?? '');
-    const m = msg.match(/Could not find the '([^']+)' column of '([^']+)'/i);
-    const missingCol = m?.[1];
-    const missingTable = m?.[2];
-    if (missingCol && (!missingTable || missingTable === table)) {
-      if (Object.prototype.hasOwnProperty.call(current, missingCol)) {
-        const next = { ...current };
-        delete next[missingCol];
-        current = next;
-        continue;
-      }
-    }
-    throw error;
-  }
-  throw new Error('Update failed after retries.');
+  const uid = data?.user?.id;
+  if (!uid) throw new Error('Not authenticated. Please sign in again.');
+  return uid;
 };
 
 export const listContractsForShow = async (showId: string): Promise<ContractRow[]> => {
-  const userId = await getUserIdOrThrow();
+  if (!showId) return [];
+  const uid = await getUserIdOrThrow();
+
   const { data, error } = await supabase
     .from('contracts')
     .select('*')
     .eq('show_id', showId)
-    .eq('user_id', userId)
+    .eq('user_id', uid)
     .order('version', { ascending: false });
 
   if (error) throw error;
-  return (data ?? []) as any;
+  return (data || []) as any;
 };
 
-export const getLatestContractForShow = async (showId: string): Promise<ContractRow | null> => {
-  const rows = await listContractsForShow(showId);
-  return rows.length ? rows[0] : null;
-};
+export const createContractVersion = async (args: CreateContractArgs): Promise<ContractRow> => {
+  const uid = await getUserIdOrThrow();
 
-export const createContractVersion = async (args: {
-  showId: string;
-  clientId?: string;
-  content: string;
-  structured?: any;
-  status?: ContractStatus;
-}): Promise<ContractRow> => {
-  const userId = await getUserIdOrThrow();
-
-  // Determine next version
+  // Compute next version number for this show
   const { data: latest, error: latestErr } = await supabase
     .from('contracts')
     .select('version')
     .eq('show_id', args.showId)
-    .eq('user_id', userId)
+    .eq('user_id', uid)
     .order('version', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(1);
 
-  // If the table exists but RLS blocks select, this may error. In that case, default to version 1.
-  let nextVersion = 1;
-  if (!latestErr && latest?.version) nextVersion = Number(latest.version) + 1;
+  if (latestErr) throw latestErr;
 
-  const payload: any = {
+  const nextVersion = (latest?.[0]?.version ?? 0) + 1;
+
+  const basePayload: any = {
     show_id: args.showId,
-    user_id: userId,
-    client_id: args.clientId ?? null,
+    user_id: uid,
+    client_id: args.clientId,
     version: nextVersion,
     content: args.content,
     status: args.status ?? 'draft',
     structured: args.structured ?? null,
   };
 
-  const inserted = await safeInsertSingle('contracts', payload);
-  return inserted as any;
+  // Some deployments may not include optional columns like structured.
+  // Try insert with full payload, and retry with a minimal payload if the column doesn't exist.
+  let insertRes = await supabase.from('contracts').insert(basePayload).select('*').single();
+
+  if (insertRes.error) {
+    const msg = insertRes.error.message || '';
+    const looksLikeMissingColumn =
+      msg.toLowerCase().includes('column') && msg.toLowerCase().includes('does not exist');
+
+    if (looksLikeMissingColumn) {
+      const minimalPayload = {
+        show_id: basePayload.show_id,
+        user_id: basePayload.user_id,
+        client_id: basePayload.client_id,
+        version: basePayload.version,
+        content: basePayload.content,
+        status: basePayload.status,
+      };
+      insertRes = await supabase.from('contracts').insert(minimalPayload).select('*').single();
+    }
+  }
+
+  if (insertRes.error) throw insertRes.error;
+  return insertRes.data as any;
 };
 
-export const updateContractStatus = async (contractId: string, status: ContractStatus): Promise<ContractRow> => {
-  return (await safeUpdateById('contracts', contractId, { status })) as any;
-};
+export const updateContractStatus = async (contractId: string, status: ContractStatus): Promise<void> => {
+  const uid = await getUserIdOrThrow();
 
-export const markDepositPaid = async (contractId: string, paid: boolean): Promise<ContractRow> => {
-  return (await safeUpdateById('contracts', contractId, { deposit_paid: paid })) as any;
-};
+  const { error } = await supabase
+    .from('contracts')
+    .update({ status })
+    .eq('id', contractId)
+    .eq('user_id', uid);
 
-export const markBalancePaid = async (contractId: string, paid: boolean): Promise<ContractRow> => {
-  return (await safeUpdateById('contracts', contractId, { balance_paid: paid })) as any;
+  if (error) throw error;
 };

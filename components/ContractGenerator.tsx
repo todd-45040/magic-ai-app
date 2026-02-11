@@ -31,6 +31,13 @@ const LoadingIndicator: React.FC = () => (
         <p className="text-slate-300 mt-4 text-lg">Drafting your agreement...</p>
         <p className="text-slate-400 text-sm">Ensuring all the details are in place.</p>
     </div>
+
+const parseCurrencyToNumber = (value: string): number => {
+    const cleaned = (value || '').toString().replace(/[^0-9.]/g, '');
+    const num = Number(cleaned);
+    return Number.isFinite(num) ? num : 0;
+};
+
 );
 
 const ContractGenerator: React.FC<ContractGeneratorProps> = ({ user, clients, shows, onShowsUpdate, onNavigateToShowPlanner, onIdeaSaved }) => {
@@ -61,20 +68,9 @@ const ContractGenerator: React.FC<ContractGeneratorProps> = ({ user, clients, sh
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
     const [copyStatus, setCopyStatus] = useState<'idle' | 'copied'>('idle');
     const [saveToShowStatus, setSaveToShowStatus] = useState<'idle' | 'saved'>('idle');
-
-    const parseMoney = (value: string) => {
-        const cleaned = String(value ?? '').replace(/[^0-9.]/g, '');
-        if (!cleaned) return NaN;
-        const n = Number(cleaned);
-        return Number.isFinite(n) ? n : NaN;
-    };
-
-    const isFormValid =
-        performerName.trim().length > 0 &&
-        clientName.trim().length > 0 &&
-        eventDate.trim().length > 0 &&
-        Number.isFinite(parseMoney(performanceFee)) &&
-        parseMoney(performanceFee) > 0;
+    
+    const feeNum = useMemo(() => parseCurrencyToNumber(performanceFee), [performanceFee]);
+    const isFormValid = performerName.trim() && clientName.trim() && eventDate.trim() && feeNum > 0;
 
     const responseSchema = useMemo(() => ({
         type: Type.OBJECT,
@@ -132,9 +128,6 @@ const ContractGenerator: React.FC<ContractGeneratorProps> = ({ user, clients, sh
         setCopyStatus('idle');
         setSaveToShowStatus('idle');
 
-        const feeNumber = parseMoney(performanceFee);
-        const depositNumber = parseMoney(depositAmount);
-
         const prompt = `
 You are drafting a professional performance contract for a magician.
 
@@ -156,8 +149,8 @@ Event details:
 - Performance Length: ${performanceLength}
 
 Financials:
-- Total Performance Fee: $${Number.isFinite(feeNumber) ? feeNumber : performanceFee}
-- Deposit Amount: $${Number.isFinite(depositNumber) ? depositNumber : depositAmount}
+- Total Performance Fee: $${performanceFee}
+- Deposit Amount: $${depositAmount}
 - Deposit Due Date: ${depositDueDate}
 - Balance Due Date: The day of the event, prior to the performance.
 
@@ -230,44 +223,48 @@ Guidelines:
 
     const handleSaveToShow = async () => {
         if (!selectedShowId || !result) return;
+
+        // Build a plain-text contract for storage + sharing
+        const contractText =
+            `PERFORMANCE DETAILS\n${result.performanceDetails}\n\n` +
+            `PAYMENT TERMS\n${result.paymentTerms}\n\n` +
+            `TECHNICAL REQUIREMENTS\n${result.technicalRequirements}\n\n` +
+            `CANCELLATION POLICY\n${result.cancellationPolicy}\n\n` +
+            `FORCE MAJEURE\n${result.forceMajeure}\n\n` +
+            `SIGNATURES\n${result.signatureBlock}\n`;
+
         try {
             setError(null);
 
-            // 1) Preferred: persist into the dedicated `contracts` table (versioned)
-            const metaText = formatContractAsText(result, { performerName, clientName, eventTitle });
+            // Primary path: save into the contracts table (versioned)
             await createContractVersion({
                 showId: selectedShowId,
-                clientId: selectedClientId || undefined,
-                content: metaText,
-                structured: result,
+                clientId: selectedClientId || null,
+                content: contractText,
                 status: 'draft',
+                structured: result,
             });
-
-            // Keep the shows list fresh (no-op if your parent already refetches elsewhere)
-            onShowsUpdate(shows);
 
             setSaveToShowStatus('saved');
             setTimeout(() => setSaveToShowStatus('idle'), 2000);
 
-            // Jump to Show Planner for that show
+            // Navigate after a successful DB write
             onNavigateToShowPlanner(selectedShowId);
-        } catch (err: any) {
-            // 2) Backward compatibility: older deployments (no contracts table) fall back to show-based storage.
-            console.error('Save contract failed (contracts table). Falling back to legacy show storage...', err);
+            return;
+        } catch (e: any) {
+            console.error('Save contract failed (contracts table):', e);
+            const msg = e?.message ? String(e.message) : 'Failed to save contract to database.';
+            setError(
+                msg +
+                    '  (Tip: If Row Level Security is enabled on contracts, you need INSERT/SELECT policies for auth.uid() = user_id.)'
+            );
 
+            // Backward compatibility fallback: try to persist onto the show record if supported
             try {
                 const updatedShows = await updateShow(selectedShowId, { contract: result } as any);
                 onShowsUpdate(updatedShows);
-                setSaveToShowStatus('saved');
-                setTimeout(() => setSaveToShowStatus('idle'), 2000);
-                onNavigateToShowPlanner(selectedShowId);
-                return;
-            } catch (legacyErr: any) {
-                console.error('Legacy save to show also failed:', legacyErr);
-                const msg =
-                    (legacyErr?.message || err?.message) ??
-                    'Failed to save contract. Check contracts table RLS and required columns (user_id).';
-                setError(String(msg));
+            } catch (fallbackErr) {
+                console.warn('Legacy fallback save-to-show also failed:', fallbackErr);
             }
         }
     };
@@ -360,30 +357,8 @@ Guidelines:
                     <div><label htmlFor="event-location" className="block text-sm font-medium text-slate-300 mb-1">Event Location / Address</label><textarea id="event-location" rows={2} value={eventLocation} onChange={(e) => setEventLocation(e.target.value)} className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white" /></div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div><label htmlFor="perf-length" className="block text-sm font-medium text-slate-300 mb-1">Performance Length</label><input id="perf-length" type="text" value={performanceLength} onChange={(e) => setPerformanceLength(e.target.value)} placeholder="e.g., 45 minutes" className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white" /></div>
-                        <div>
-                            <label htmlFor="perf-fee" className="block text-sm font-medium text-slate-300 mb-1">Performance Fee ($)*</label>
-                            <input
-                                id="perf-fee"
-                                type="text"
-                                inputMode="decimal"
-                                value={performanceFee}
-                                onChange={(e) => setPerformanceFee(e.target.value)}
-                                placeholder="e.g., 1500"
-                                className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white"
-                            />
-                        </div>
-                        <div>
-                            <label htmlFor="deposit-amt" className="block text-sm font-medium text-slate-300 mb-1">Deposit Amount ($)</label>
-                            <input
-                                id="deposit-amt"
-                                type="text"
-                                inputMode="decimal"
-                                value={depositAmount}
-                                onChange={(e) => setDepositAmount(e.target.value)}
-                                placeholder="e.g., 750"
-                                className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white"
-                            />
-                        </div>
+                        <div><label htmlFor="perf-fee" className="block text-sm font-medium text-slate-300 mb-1">Performance Fee ($)*</label><input id="perf-fee" type="number" value={performanceFee} onChange={(e) => setPerformanceFee(e.target.value)} placeholder="e.g., 1500" className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white" /></div>
+                        <div><label htmlFor="deposit-amt" className="block text-sm font-medium text-slate-300 mb-1">Deposit Amount ($)</label><input id="deposit-amt" type="number" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} placeholder="e.g., 750" className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white" /></div>
                         <div><label htmlFor="deposit-due" className="block text-sm font-medium text-slate-300 mb-1">Deposit Due Date</label><input id="deposit-due" type="date" value={depositDueDate} onChange={(e) => setDepositDueDate(e.target.value)} className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white" /></div>
                     </div>
                     <div><label htmlFor="requirements" className="block text-sm font-medium text-slate-300 mb-1">Special Requirements (Rider)</label><textarea id="requirements" rows={3} value={specialRequirements} onChange={(e) => setSpecialRequirements(e.target.value)} placeholder="e.g., Private changing area, bottled water, one microphone on a stand." className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white" /></div>
