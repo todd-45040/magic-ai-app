@@ -349,8 +349,7 @@ const handleCreateBooking = async (client: ClientX) => {
     }
 };
 
-const handleSaveClient = (clientData: Omit
- = (clientData: Omit<Client, 'id'|'createdAt'>) => {
+    const handleSaveClient = (clientData: Omit<ClientX, 'id' | 'createdAt'>) => {
         let updatedClients;
         if (clientToEdit) {
             updatedClients = updateClient(clientToEdit.id, clientData);
