@@ -31,6 +31,14 @@ function parseNotesTimeline(raw?: string): NoteEntry[] {
 }
 
 
+function getAppBasePath(): string {
+    try {
+        return window.location.pathname.startsWith('/app') ? '/app' : '';
+    } catch {
+        return '';
+    }
+}
+
 function promptForReminderDate(defaultYmd?: string): string | null {
     const def = (defaultYmd || '').trim() || new Date().toISOString().slice(0, 10);
     const input = window.prompt('Follow-up date (YYYY-MM-DD):', def);
@@ -220,7 +228,7 @@ const ClientModal: React.FC<{
                         // Best-effort navigation hook (safe even if unused)
                         try {
                             localStorage.setItem('maw_open_show_title', s.title);
-                            window.location.href = `/?tab=show-planner&showTitle=${encodeURIComponent(s.title)}`;
+                            window.location.href = `${getAppBasePath()}/?tab=show-planner&showTitle=${encodeURIComponent(s.title)}`;
                         } catch {}
                     }}
                     className="px-2 py-1 rounded-md text-xs bg-slate-900/40 border border-slate-700 text-slate-200 hover:bg-slate-800 transition"
@@ -354,7 +362,7 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ onClientsUpdate, on
         } catch {}
 
         // Navigate to Show Planner tab
-        window.location.href = `/?tab=show-planner&newBooking=1&clientName=${encodeURIComponent(client.name || '')}`;
+        window.location.href = `${getAppBasePath()}/?tab=show-planner&newBooking=1&clientName=${encodeURIComponent(client.name || '')}`;
     };
 
     const handleDeleteClient = (id: string) => {
@@ -433,7 +441,7 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ onClientsUpdate, on
                                                             onClick={() => {
                                                                 try {
                                                                     localStorage.setItem('maw_open_show_title', s.title);
-                                                                    window.location.href = `/?tab=show-planner&showTitle=${encodeURIComponent(s.title)}`;
+                                                                    window.location.href = `${getAppBasePath()}/?tab=show-planner&showTitle=${encodeURIComponent(s.title)}`;
                                                                 } catch {}
                                                             }}
                                                             className="px-2 py-1 rounded-md text-[11px] bg-slate-900/40 border border-slate-700 text-slate-200 hover:bg-slate-800 transition"
