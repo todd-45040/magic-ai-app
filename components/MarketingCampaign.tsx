@@ -2,14 +2,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { generateResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
+import { createShow, addTasksToShow } from '../services/showsService';
 import { MARKETING_ASSISTANT_SYSTEM_INSTRUCTION } from '../constants';
-import { MegaphoneIcon, WandIcon, SaveIcon, CheckIcon, ShareIcon, UsersIcon, StageCurtainsIcon } from './icons';
+import { MegaphoneIcon, WandIcon, SaveIcon, CheckIcon, ShareIcon, UsersIcon, StageCurtainsIcon, CalendarIcon, FileTextIcon, MailIcon, BlueprintIcon, ChevronDownIcon, SendIcon } from './icons';
 import ShareButton from './ShareButton';
 import type { User } from '../types';
 
 interface MarketingCampaignProps {
     user: User;
     onIdeaSaved: () => void;
+    onNavigateToShowPlanner?: (showId: string) => void;
 }
 
 const LoadingIndicator: React.FC<{ stepText: string }> = ({ stepText }) => (
@@ -63,7 +65,7 @@ const LOADING_STEPS = [
 ];
 
 
-const MarketingCampaign: React.FC<MarketingCampaignProps> = ({ user, onIdeaSaved }) => {
+const MarketingCampaign: React.FC<MarketingCampaignProps> = ({ user, onIdeaSaved, onNavigateToShowPlanner }) => {
     const [showTitle, setShowTitle] = useState('');
     const [selectedAudiences, setSelectedAudiences] = useState<string[]>([]);
     const [customAudience, setCustomAudience] = useState('');
@@ -79,6 +81,12 @@ const MarketingCampaign: React.FC<MarketingCampaignProps> = ({ user, onIdeaSaved
     const [error, setError] = useState<string | null>(null);
     const [result, setResult] = useState<string | null>(null);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
+
+    const [actionNotice, setActionNotice] = useState<string | null>(null);
+    const [isSendingToPlanner, setIsSendingToPlanner] = useState(false);
+    const [isSavingBlueprint, setIsSavingBlueprint] = useState(false);
+    const [blueprintMenuOpen, setBlueprintMenuOpen] = useState(false);
+
 
     useEffect(() => {
         if (!isLoading) return;
@@ -185,6 +193,63 @@ const targetHook = useMemo(() => {
 const showTitleSuggestionsVisible = useMemo(() => showTitle.trim().length < 3, [showTitle]);
 const themeSuggestionsVisible = useMemo(() => keyThemes.trim().length < 8, [keyThemes]);
 
+const advisorNotes = useMemo(() => {
+    const notes: string[] = [];
+    const a = liveAudiencesLabel.toLowerCase();
+
+    if (campaignStyle === 'Premium Corporate' || a.includes('corporate')) {
+        notes.push('Your tone positions you as a premium performer — lean on credibility, outcomes, and professionalism.');
+        notes.push('Your hook appeals strongly to corporate buyers — emphasize engagement, impact, and reliability.');
+        notes.push('Consider adding credibility proof (logos, testimonials, short video clip) to increase conversions.');
+    } else if (campaignStyle === 'High-Energy Festival' || a.includes('festival') || a.includes('fair')) {
+        notes.push('Festival audiences respond best to high-energy hooks and simple, repeatable messaging.');
+        notes.push('Lead with “stop-and-watch” moments — bold claims + fast payoff increases crowd build.');
+        notes.push('Add a clear call-to-action: time windows, location, and “next show” rhythm.');
+    } else if (campaignStyle === 'Elegant Theater' || a.includes('theater') || a.includes('stage')) {
+        notes.push('Your positioning is premium — build prestige with story, reviews, and atmosphere cues.');
+        notes.push('Theater buyers love clarity: run time, age guidance, and what makes this show “different.”');
+        notes.push('Add a short “director’s statement” paragraph to elevate perceived value.');
+    } else if (campaignStyle === 'Viral Social Push') {
+        notes.push('Your best advantage is shareability — design your hook around curiosity + quick payoff.');
+        notes.push('Create 3–5 “moment clips” to anchor posts (reactions, reveals, participatory beats).');
+        notes.push('Use a tight CTA: “DM for dates” or “Book now” with one link destination.');
+    } else {
+        // fallback
+        notes.push('Your tone is strong — make sure your hook is repeated consistently across every channel.');
+        notes.push('Add one credibility line (years, awards, notable venues) to boost trust and booking confidence.');
+        notes.push('Consider a clear CTA path: “inquire” → “availability” → “deposit” to reduce drop-off.');
+    }
+
+    return notes.slice(0, 3);
+}, [campaignStyle, liveAudiencesLabel]);
+
+const conversionPredictor = useMemo(() => {
+    const a = liveAudiencesLabel.toLowerCase();
+
+    let bestChannel = 'Email Outreach';
+    if (campaignStyle === 'Viral Social Push') bestChannel = 'Social + Short Video';
+    else if (a.includes('family')) bestChannel = 'Facebook/Instagram';
+    else if (a.includes('festival') || a.includes('fair')) bestChannel = 'Social + Posters';
+    else if (a.includes('theater') || a.includes('stage')) bestChannel = 'Email + Press + Listings';
+    else if (a.includes('private')) bestChannel = 'Referrals + Direct Outreach';
+    else if (a.includes('strolling') || a.includes('close-up')) bestChannel = 'Event Planners + Instagram';
+
+    const bestHook = targetHook;
+
+    // readiness drives range; keep believable and consistent
+    let low = 10;
+    let high = 16;
+    if (readinessScore >= 85) { low = 18; high = 24; }
+    else if (readinessScore >= 65) { low = 14; high = 20; }
+
+    return {
+        range: `${low}–${high}%`,
+        bestChannel,
+        bestHook,
+    };
+}, [campaignStyle, liveAudiencesLabel, readinessScore, targetHook]);
+
+
 const generateButtonLabel = useMemo(() => {
         if (isLoading) return 'Generating Campaign…';
         if (error) return 'Try Again';
@@ -244,6 +309,98 @@ const generateButtonLabel = useMemo(() => {
             setSaveStatus('saved');
             setTimeout(() => setSaveStatus('idle'), 2000);
         }
+    };
+
+    const buildBlueprintContent = (label: string) => {
+        const meta = [
+            `Campaign Style: ${campaignStyle || 'Not specified'}`,
+            `Target Audience: ${liveAudiencesLabel}`,
+            `Performance Style: ${selectedStyles.join(', ') || 'Not specified'}`,
+            `Readiness: ${readinessScore}%`,
+        ].join('\n');
+
+        const body = result ? result : '(No generated output yet.)';
+
+        return `## Marketing Campaign Blueprint — ${label}\n\n**Show:** ${showTitle || '(untitled)'}\n\n**Meta**\n${meta}\n\n---\n\n${body}`;
+    };
+
+    const handleBlueprintSave = (label: 'Save as Template' | 'Save to Campaign Library' | 'Reuse Later' | 'Duplicate Campaign') => {
+        if (!showTitle.trim()) {
+            setShowTitleTouched(true);
+            setActionNotice('Add a show title before saving a blueprint.');
+            window.setTimeout(() => setActionNotice(null), 2200);
+            return;
+        }
+        setIsSavingBlueprint(true);
+        setBlueprintMenuOpen(false);
+        try {
+            const content = buildBlueprintContent(label);
+            const title = `Marketing Blueprint — ${label} — ${showTitle}`;
+            saveIdea('text', content, title);
+            onIdeaSaved();
+            setActionNotice('Blueprint saved to Saved Ideas.');
+        } finally {
+            setIsSavingBlueprint(false);
+            window.setTimeout(() => setActionNotice(null), 2200);
+        }
+    };
+
+    const handleSendToShowPlanner = async () => {
+        if (!result) return;
+        if (!showTitle.trim()) {
+            setShowTitleTouched(true);
+            setActionNotice('Add a show title so we can create a show plan.');
+            window.setTimeout(() => setActionNotice(null), 2200);
+            return;
+        }
+
+        setIsSendingToPlanner(true);
+        setActionNotice(null);
+
+        try {
+            const description = [
+                'Auto-generated from Marketing Campaign Generator.',
+                `Campaign Style: ${campaignStyle || 'Not specified'}`,
+                `Target Audience: ${liveAudiencesLabel}`,
+                `Performance Style: ${selectedStyles.join(', ') || 'Not specified'}`,
+            ].join('\n');
+
+            const created = await createShow(showTitle.trim(), description);
+
+            const tasks = [
+                { title: 'Marketing: Press Release', notes: result, priority: 'Medium', status: 'To-Do' },
+                { title: 'Marketing: Social Posts', notes: result, priority: 'Medium', status: 'To-Do' },
+                { title: 'Marketing: Email Campaign', notes: result, priority: 'Medium', status: 'To-Do' },
+                { title: 'Marketing: Poster / Flyer Copy', notes: result, priority: 'Medium', status: 'To-Do' },
+                { title: 'Marketing: Booking Pitch', notes: result, priority: 'High', status: 'To-Do' },
+            ];
+
+            await addTasksToShow(created.id, tasks as any);
+
+            setActionNotice('Added marketing tasks to Show Planner.');
+            onNavigateToShowPlanner?.(created.id);
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : 'Unable to send to Show Planner.';
+            setActionNotice(msg);
+        } finally {
+            setIsSendingToPlanner(false);
+            window.setTimeout(() => setActionNotice(null), 2600);
+        }
+    };
+
+    const handleQuickExportIdea = (kind: 'Client Proposal' | 'Social Scheduler' | 'Booking Pitch Builder') => {
+        if (!result) return;
+        const label = kind === 'Client Proposal'
+            ? 'Client Proposal Draft'
+            : kind === 'Social Scheduler'
+            ? 'Social Pack'
+            : 'Booking Pitch Draft';
+
+        const content = buildBlueprintContent(label);
+        saveIdea('text', content, `${label} — ${showTitle || 'Untitled'}`);
+        onIdeaSaved();
+        setActionNotice(`${label} saved to Saved Ideas.`);
+        window.setTimeout(() => setActionNotice(null), 2200);
     };
 
     return (
@@ -423,10 +580,83 @@ const generateButtonLabel = useMemo(() => {
                     </div>
                 ) : result ? (
                      <div className="relative group flex-1 flex flex-col">
-                        <div className="p-4 overflow-y-auto">
+                        <div className="p-4 overflow-y-auto space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
+                                    <p className="text-sm font-semibold text-slate-200">AI Strategy Notes</p>
+                                    <ul className="mt-2 space-y-1 text-sm text-slate-300">
+                                        {advisorNotes.map((n, idx) => (
+                                            <li key={idx}>• {n}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                                <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
+                                    <p className="text-sm font-semibold text-slate-200">Audience Conversion Predictor</p>
+                                    <div className="mt-2 grid grid-cols-1 gap-1 text-sm">
+                                        <div className="flex items-start justify-between gap-2">
+                                            <span className="text-slate-400">Predicted Response Rate</span>
+                                            <span className="text-slate-200">{conversionPredictor.range}</span>
+                                        </div>
+                                        <div className="flex items-start justify-between gap-2">
+                                            <span className="text-slate-400">Best Channel</span>
+                                            <span className="text-slate-200 text-right">{conversionPredictor.bestChannel}</span>
+                                        </div>
+                                        <div className="flex items-start justify-between gap-2">
+                                            <span className="text-slate-400">Best Hook</span>
+                                            <span className="text-slate-200 text-right">{conversionPredictor.bestHook}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                             <pre className="whitespace-pre-wrap break-words text-slate-200 font-sans text-sm">{result}</pre>
                         </div>
-                        <div className="mt-auto p-2 bg-slate-900/50 flex justify-end gap-2 border-t border-slate-800">
+                        <div className="mt-auto p-2 bg-slate-900/60 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-t border-slate-800">
+                            {actionNotice && (
+                                <div className="w-full sm:max-w-md text-xs text-slate-200 bg-slate-900/40 border border-slate-800 rounded-md px-3 py-2">
+                                    {actionNotice}
+                                </div>
+                            )}
+                            <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-xs text-slate-400 mr-1">Send Campaign to:</span>
+                                <button
+                                    type="button"
+                                    onClick={handleSendToShowPlanner}
+                                    disabled={!result || isSendingToPlanner}
+                                    className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <CalendarIcon className="w-4 h-4" />
+                                    <span>{isSendingToPlanner ? 'Sending…' : 'Show Planner'}</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleQuickExportIdea('Client Proposal')}
+                                    disabled={!result}
+                                    className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <FileTextIcon className="w-4 h-4" />
+                                    <span>Client Proposal</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleQuickExportIdea('Social Scheduler')}
+                                    disabled={!result}
+                                    className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <SendIcon className="w-4 h-4" />
+                                    <span>Social Scheduler</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleQuickExportIdea('Booking Pitch Builder')}
+                                    disabled={!result}
+                                    className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <MailIcon className="w-4 h-4" />
+                                    <span>Booking Pitch</span>
+                                </button>
+                            </div>
+
+                            <div className="flex items-center justify-end gap-2">
                             <ShareButton
                                 title={`Marketing Campaign for: ${showTitle}`}
                                 text={result}
@@ -452,6 +682,29 @@ const generateButtonLabel = useMemo(() => {
                                     </>
                                 )}
                             </button>
+
+                            <div className="relative">
+                                <button
+                                    type="button"
+                                    onClick={() => setBlueprintMenuOpen(v => !v)}
+                                    disabled={isSavingBlueprint}
+                                    className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <BlueprintIcon className="w-4 h-4" />
+                                    <span>Blueprint</span>
+                                    <ChevronDownIcon className="w-4 h-4 opacity-80" />
+                                </button>
+
+                                {blueprintMenuOpen && (
+                                    <div className="absolute right-0 bottom-12 w-56 rounded-lg border border-slate-800 bg-slate-950 shadow-lg overflow-hidden z-20">
+                                        <button type="button" onClick={() => handleBlueprintSave('Save as Template')} className="w-full text-left px-3 py-2 text-sm text-slate-200 hover:bg-slate-900">Save as Template</button>
+                                        <button type="button" onClick={() => handleBlueprintSave('Save to Campaign Library')} className="w-full text-left px-3 py-2 text-sm text-slate-200 hover:bg-slate-900">Save to Campaign Library</button>
+                                        <button type="button" onClick={() => handleBlueprintSave('Reuse Later')} className="w-full text-left px-3 py-2 text-sm text-slate-200 hover:bg-slate-900">Reuse Later</button>
+                                        <button type="button" onClick={() => handleBlueprintSave('Duplicate Campaign')} className="w-full text-left px-3 py-2 text-sm text-slate-200 hover:bg-slate-900">Duplicate Campaign</button>
+                                    </div>
+                                )}
+                            </div>
+                            </div>
                         </div>
                     </div>
                 ) : (

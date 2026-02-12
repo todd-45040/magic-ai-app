@@ -2104,7 +2104,17 @@ useEffect(() => {
         case 'show-feedback': return <ShowFeedback />;
         case 'magic-archives': return <MagicArchives onIdeaSaved={() => handleIdeaSaved('Research saved!')} />;
         case 'patter-engine': return <PatterEngine onIdeaSaved={() => handleIdeaSaved('Patter ideas saved!')} user={user} />;
-        case 'marketing-campaign': return <MarketingCampaign onIdeaSaved={() => handleIdeaSaved('Marketing campaign ideas saved!')} user={user} />;
+        case 'marketing-campaign':
+          return (
+            <MarketingCampaign
+              user={user}
+              onIdeaSaved={() => handleIdeaSaved('Marketing campaign ideas saved!')}
+              onNavigateToShowPlanner={(showId) => {
+                setInitialShowId(showId);
+                setActiveView('show-planner');
+              }}
+            />
+          );
         case 'contract-generator':
           return (
             <ContractGenerator
