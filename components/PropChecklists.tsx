@@ -11,6 +11,8 @@ import { useAppDispatch, refreshIdeas, refreshShows } from '../store';
 interface PropChecklistsProps {
   user: User;
   onIdeaSaved: () => void;
+  /** Optional: switch UI to Show Planner after creating a Show */
+  onNavigateShowPlanner?: () => void;
 }
 
 type OutputMode = 'checklist' | 'detailed' | 'director';
@@ -432,7 +434,7 @@ const CollapsibleSection: React.FC<{
   );
 };
 
-const PropChecklists: React.FC<PropChecklistsProps> = ({ user, onIdeaSaved }) => {
+const PropChecklists: React.FC<PropChecklistsProps> = ({ user, onIdeaSaved, onNavigateShowPlanner }) => {
   const dispatch = useAppDispatch();
   const tier = normalizeTier((user as any)?.membership as any);
   const isPro = tier === 'professional';
@@ -582,6 +584,7 @@ Output exactly these headings in this order (markdown):
 
       await addTasksToShow(show.id, tasks);
       await refreshShows(dispatch);
+      onNavigateShowPlanner?.();
     } catch (e) {
       const normalized = normalizeAiError(e);
       setError(normalized.userMessage);
@@ -842,7 +845,7 @@ Output exactly these headings in this order (markdown):
                   ].join(' ')}
                   title={!isPro ? 'Professional tier required' : 'Optimize this blueprint for walkaround'}
                 >
-                  🔒 Optimize for Walkaround
+                  🔒 Optimize for Walkaround (Pro)
                 </button>
 
                 <button
