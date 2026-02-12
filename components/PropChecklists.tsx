@@ -185,11 +185,40 @@ function inferInsights(params: {
 
   let pocketLoad: BlueprintInsights['pocketLoad'] = null;
   if (totalProps != null) {
-    const base = totalProps <= 6 ? 'Low' : totalProps <= 12 ? 'Moderate' : 'High';
-    pocketLoad = hasBig && base !== 'High' ? 'High' : base;
+    // Pocket Load is about how feasible this is to carry "on-body" (walkaround), not whether props are bulky stage pieces.
+    const isStageLike = selectedContexts.some((c) => ['Stage', 'Parlor', 'Corporate', 'Family Show'].includes(c)) && !selectedContexts.includes('Close-Up');
+
+    const propText = `${propsContent}\n${getSectionContent(sections, '🎬 Staging')}\n${routine}`;
+    const hasBulkyStageGear = bigKeywords.test(propText);
+    const hasLargeHandProps = /(linking\s+rings?|\brings?\b|\brope\b|\bcups?\b|\bballs?\b|\bwand\b|\bbook\b|\bclipboard\b|\bpad\b|\btube\b)/i.test(propText);
+
+    // Count "small" items roughly (cards, coins, rubber bands, sharpie, etc.) to approximate true pocket load.
+    const smallItemHints = /(cards?|deck|coins?|rubber\s*bands?|sharpie|marker|pen|business\s*cards?|wallet|keys?|ring\s*box|tt\b|thumb\s*tip)/i;
+    const smallCount = props.filter((it) => smallItemHints.test(it)).length;
+
+    // Base pocket-load: lean lower for stage-like contexts, higher for close-up/walkaround style.
+    let base: BlueprintInsights['pocketLoad'] = 'Moderate';
+    if (isStageLike) {
+      base = totalProps <= 10 ? 'Low' : totalProps <= 18 ? 'Moderate' : 'High';
+    } else {
+      // Close-Up / unspecified: pockets matter more.
+      base = totalProps <= 6 ? 'Low' : totalProps <= 12 ? 'Moderate' : 'High';
+    }
+
+    // If the list is dominated by large hand props (rings/rope/etc.), that usually reduces POCKET load (carried in case),
+    // even if total prop count is non-trivial.
+    if (hasLargeHandProps && smallCount <= 2 && base === 'High') base = 'Moderate';
+    if (hasLargeHandProps && smallCount <= 2 && base === 'Moderate') base = 'Low';
+
+    // If there are many small items and the context suggests close-up, bump up.
+    if (!isStageLike && smallCount >= 8 && base !== 'High') base = 'High';
+
+    // Stage gear (tables, cases, audio, etc.) should not inflate pocket load; it typically implies a case/table, not pockets.
+    pocketLoad = hasBulkyStageGear ? (base === 'High' ? 'Moderate' : base) : base;
   }
 
-  const tableRequired = propsContent.trim()
+  const tableRequired =
+ propsContent.trim()
     ? /\b(table|mat|close[- ]?up pad|servante|side table)\b/i.test(propsContent + '\n' + getSectionContent(sections, '🎬 Staging'))
     : null;
 
@@ -269,8 +298,6 @@ const PropChecklists: React.FC<PropChecklistsProps> = ({ onIdeaSaved }) => {
   const [rawOutput, setRawOutput] = useState<string | null>(null);
   const [sections, setSections] = useState<ParsedSection[]>([]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
   const [plannerStatus, setPlannerStatus] = useState<'idle' | 'sent'>('idle');
   const [blueprintStatus, setBlueprintStatus] = useState<'idle' | 'saved'>('idle');
   const [optimizeStatus, setOptimizeStatus] = useState<'idle' | 'optimizing' | 'done'>('idle');
@@ -299,6 +326,21 @@ const PropChecklists: React.FC<PropChecklistsProps> = ({ onIdeaSaved }) => {
 
   const toggleContext = (label: string) => {
     setSelectedContexts((prev) => (prev.includes(label) ? prev.filter((x) => x !== label) : [...prev, label]));
+  };
+
+
+  const handleClearAll = () => {
+    setRoutine('');
+    setSelectedContexts([]);
+    setError(null);
+
+    // Clear generated output + UI state
+    setRawOutput(null);
+    setSections([]);
+    setExpanded({});
+    setPlannerStatus('idle');
+    setBlueprintStatus('idle');
+    setOptimizeStatus('idle');
   };
 
   const handleGenerate = async () => {
@@ -361,20 +403,6 @@ Instructions:
       setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const handleSaveIdeaLegacy = async () => {
-    if (!rawOutput) return;
-    try {
-      const fullContent = `# Routine Blueprint: ${routine}\n\n${rawOutput}`;
-      await saveIdea('text', fullContent, `Routine Blueprint: ${routine}`);
-      onIdeaSaved();
-      await refreshIdeas(dispatch);
-      setSaveStatus('saved');
-      setTimeout(() => setSaveStatus('idle'), 2000);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save.');
     }
   };
 
@@ -540,7 +568,7 @@ Task:
                 {routine && (
                   <button
                     type="button"
-                    onClick={() => setRoutine('')}
+                    onClick={handleClearAll}
                     className="px-2 py-0.5 text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-700 rounded-md transition-colors"
                   >
                     Clear
@@ -619,10 +647,10 @@ Task:
               onClick={handleSaveBlueprint}
               disabled={!rawOutput || isLoading}
               className="w-full py-3 flex items-center justify-center gap-2 bg-slate-800/70 hover:bg-slate-700/70 rounded-md text-slate-200 font-bold transition-colors disabled:bg-slate-800/30 disabled:text-slate-500 disabled:cursor-not-allowed border border-slate-700"
-              title={!rawOutput ? 'Generate a blueprint first' : 'Save this blueprint to Saved Ideas'}
+              title={!rawOutput ? 'Generate a blueprint first' : 'Save this blueprint (tagged: routine-blueprint)'}
             >
               {blueprintStatus === 'saved' ? <CheckIcon className="w-5 h-5 text-green-400" /> : <SaveIcon className="w-5 h-5" />}
-              <span>{blueprintStatus === 'saved' ? 'Saved!' : 'Save Blueprint'}</span>
+              <span>{blueprintStatus === 'saved' ? 'Saved!' : 'Save'}</span>
             </button>
 
             <button
@@ -634,7 +662,7 @@ Task:
                 <span className="absolute -inset-10 bg-gradient-to-r from-yellow-400/10 via-purple-500/10 to-yellow-400/10 animate-pulse" />
               </span>
               <BlueprintIcon className="w-5 h-5 relative" />
-              <span className="relative">Generate</span>
+              <span className="relative">{isLoading ? 'Generating…' : rawOutput ? 'Regenerate' : 'Generate'}</span>
             </button>
           </div>
 
@@ -715,11 +743,11 @@ Task:
               {sections.map((s) => {
                 const isOpen = Boolean(expanded[s.key]);
                 return (
-                  <div key={s.key} className="rounded-lg border border-slate-800 bg-slate-950/30 overflow-hidden">
+                  <div key={s.key} className="rounded-lg border border-slate-800 bg-slate-950/30 overflow-hidden transition-shadow hover:shadow-[0_0_14px_rgba(250,204,21,0.08)]">
                     <button
                       type="button"
                       onClick={() => setExpanded((prev) => ({ ...prev, [s.key]: !prev[s.key] }))}
-                      className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-slate-900/30 transition-colors border-b border-yellow-400/20"
+                      className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-slate-900/40 transition-colors border-b border-yellow-400/20 hover:border-yellow-400/40"
                     >
                       <div className="flex items-center gap-2">
                         <span className="text-slate-200 font-semibold">{s.title}</span>
@@ -792,26 +820,7 @@ Task:
                 <ShareIcon className="w-4 h-4" />
                 <span>Share</span>
               </ShareButton>
-
-              {/* Keep the legacy Save Idea for backward compatibility */}
-              <button
-                onClick={handleSaveIdeaLegacy}
-                disabled={saveStatus === 'saved'}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 disabled:cursor-default transition-colors"
-              >
-                {saveStatus === 'saved' ? (
-                  <>
-                    <CheckIcon className="w-4 h-4 text-green-400" />
-                    <span>Saved!</span>
-                  </>
-                ) : (
-                  <>
-                    <SaveIcon className="w-4 h-4" />
-                    <span>Save Idea</span>
-                  </>
-                )}
-              </button>
-            </div>
+</div>
           </div>
         ) : (
           <div className="flex-1 flex items-center justify-center text-center text-slate-500 p-4">
