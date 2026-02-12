@@ -836,40 +836,42 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                             try {
                                                 await updateContractPayments(activeContractId, { deposit_paid: true });
 
-                                                // Refresh contracts
+                                                // Refresh contracts (always)
                                                 const rows = await listContractsForShow(selectedShow.id);
                                                 setContractRows(rows);
 
-                                                // Optional: auto-log deposit income
+                                                // Optional: auto-log deposit income (never crash the page)
                                                 const shouldAdd = window.confirm('Deposit marked paid. Add a deposit income entry in Finances?');
                                                 if (shouldAdd) {
-                                                    const parseMoney = (txt: string): number | null => {
-                                                        const m = (txt || '').match(/deposit\s+of\s*\$?([0-9,]+(?:\.[0-9]{1,2})?)/i);
-                                                        if (!m) return null;
-                                                        const n = Number(String(m[1]).replace(/,/g, ''));
-                                                        return Number.isFinite(n) ? n : null;
-                                                    };
-                                                    const amount = parseMoney(activeContractContent) ?? 0;
-                                                    const current = (selectedShow as any).finances || { income: [], expenses: [], performanceFee: (selectedShow as any).performance_fee || 0 };
-                                                    const income = Array.isArray(current.income) ? current.income : [];
-                                                    const already = income.some((e: any) => String(e?.description || '').toLowerCase().includes('contract deposit') && Number(e?.amount) === Number(amount));
-                                                    if (!already) {
-                                                        const entry = {
-                                                            id: `income-contract-deposit-${activeContractId}-${Date.now()}`,
-                                                            description: 'Contract Deposit',
-                                                            amount,
-                                                            date: new Date().toISOString().slice(0, 10),
+                                                    try {
+                                                        const parseMoney = (txt: string): number | null => {
+                                                            const m = (txt || '').match(/deposit\s+of\s*\$?([0-9,]+(?:\.[0-9]{1,2})?)/i);
+                                                            if (!m) return null;
+                                                            const n = Number(String(m[1]).replace(/,/g, ''));
+                                                            return Number.isFinite(n) ? n : null;
                                                         };
-                                                        const updatedShow = await updateShow(selectedShow.id, { finances: { ...current, income: [...income, entry] } } as any);
-                                                        setSelectedShow(updatedShow as any);
-                                                        const refreshed = await getShows();
-                                                        setShows(refreshed);
+                                                        const amount = parseMoney(activeContractContent) ?? 0;
 
-                                                        // refresh list badge meta (non-blocking)
-                                                        try {
-                                                            const meta = await getContractsMetaForShows(refreshed.map(s => s.id));
-                                                            setContractsMetaByShowId(meta);
-                                                        } catch {}
+                                                        const current: any = (selectedShow as any).finances || { income: [], expenses: [], performanceFee: (selectedShow as any).performance_fee || 0 };
+                                                        const income = Array.isArray(current.income) ? current.income : [];
+                                                        const already = income.some((e: any) =>
+                                                            String(e?.description || '').toLowerCase().includes('contract deposit') &&
+                                                            Number(e?.amount) === Number(amount)
+                                                        );
+
+                                                        if (!already) {
+                                                            const entry = {
+                                                                id: `income-contract-deposit-${activeContractId}-${Date.now()}`,
+                                                                description: 'Contract Deposit',
+                                                                amount,
+                                                                date: new Date().toISOString().slice(0, 10),
+                                                            };
+
+                                                            // NOTE: updateShow returns the full show list; use the helper to keep state consistent
+                                                            await handleUpdateShow(selectedShow.id, { finances: { ...current, income: [...income, entry] } } as any);
+                                                        }
+                                                    } catch (inner) {
+                                                        console.warn('Deposit marked paid, but finance sync failed:', inner);
                                                     }
                                                 }
 
@@ -893,8 +895,61 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                             try {
                                                 await updateContractPayments(activeContractId, { balance_paid: true });
 
+                                                // Refresh contracts (always)
                                                 const rows = await listContractsForShow(selectedShow.id);
                                                 setContractRows(rows);
+
+                                                // Optional: auto-log remaining balance income (never crash the page)
+                                                const shouldAdd = window.confirm('Balance marked paid. Add a balance income entry in Finances?');
+                                                if (shouldAdd) {
+                                                    try {
+                                                        const current: any = (selectedShow as any).finances || { income: [], expenses: [], performanceFee: (selectedShow as any).performance_fee || 0 };
+                                                        const income = Array.isArray(current.income) ? current.income : [];
+
+                                                        const perfFeeRaw = Number((selectedShow as any).performance_fee ?? current.performanceFee ?? 0);
+                                                        const perfFee = Number.isFinite(perfFeeRaw) ? perfFeeRaw : 0;
+
+                                                        const depositTotal = income
+                                                            .filter((e: any) => String(e?.description || '').toLowerCase().includes('contract deposit'))
+                                                            .reduce((sum: number, e: any) => sum + (Number(e?.amount) || 0), 0);
+
+                                                        let amount = 0;
+                                                        if (perfFee > 0) {
+                                                            amount = Math.max(0, perfFee - depositTotal);
+                                                        }
+
+                                                        if (!(amount > 0)) {
+                                                            const entered = window.prompt('Enter the balance amount received (e.g., 300):', '');
+                                                            if (entered === null) {
+                                                                // user cancelled
+                                                                amount = 0;
+                                                            } else {
+                                                                const cleaned = String(entered).replace(/[^0-9.]/g, '');
+                                                                const n = Number(cleaned);
+                                                                amount = Number.isFinite(n) ? n : 0;
+                                                            }
+                                                        }
+
+                                                        if (amount > 0) {
+                                                            const already = income.some((e: any) =>
+                                                                String(e?.description || '').toLowerCase().includes('contract balance') &&
+                                                                Number(e?.amount) === Number(amount)
+                                                            );
+
+                                                            if (!already) {
+                                                                const entry = {
+                                                                    id: `income-contract-balance-${activeContractId}-${Date.now()}`,
+                                                                    description: 'Contract Balance',
+                                                                    amount,
+                                                                    date: new Date().toISOString().slice(0, 10),
+                                                                };
+                                                                await handleUpdateShow(selectedShow.id, { finances: { ...current, income: [...income, entry] } } as any);
+                                                            }
+                                                        }
+                                                    } catch (inner) {
+                                                        console.warn('Balance marked paid, but finance sync failed:', inner);
+                                                    }
+                                                }
 
                                                 setToastMsg('Balance marked PAID.');
                                             } catch (e) {
@@ -957,8 +1012,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                                                 date: new Date().toISOString().slice(0, 10),
                                                             };
                                                             const newFinances = { ...curFin, income: [...incomeArr, entry] };
-                                                            const updatedShow = await updateShow(selectedShow.id, { finances: newFinances } as any);
-                                                            setSelectedShow(updatedShow as any);
+                                                            await handleUpdateShow(selectedShow.id, { finances: newFinances } as any);
                                                             const refreshed = await getShows();
                                                             setShows(refreshed);
 
