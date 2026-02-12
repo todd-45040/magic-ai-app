@@ -769,9 +769,15 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                     </button>
 
                                     <button
-                                        onClick={() => {
+                                        onClick={async () => {
                                             if (!activeContractContent) return;
-                                            navigator.clipboard.writeText(activeContractContent);
+                                            try {
+                                                await navigator.clipboard.writeText(activeContractContent);
+                                                setToastMsg('Copied to clipboard.');
+                                            } catch (e) {
+                                                console.warn('Clipboard copy failed', e);
+                                                setToastMsg('Copy failed — please select and copy manually.');
+                                            }
                                         }}
                                         className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-slate-700 hover:bg-slate-600 text-slate-100 text-sm"
                                         title="Copy contract text"
@@ -792,57 +798,31 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                     <button
                                         onClick={async () => {
                                             if (!activeContractId) return;
+                                            setContractError(null);
                                             try {
                                                 const updated = await updateContractStatus(activeContractId, 'sent');
                                                 setActiveContractStatus((updated.status || 'sent') as ContractStatus);
+
                                                 const rows = await listContractsForShow(selectedShow.id);
                                                 setContractRows(rows);
 
-                                                // Optional: suggest adding an income entry in Finances
-                                                try {
-                                                    const shouldAdd = window.confirm('Contract marked Signed. Add the performance fee as an income entry in Finances?');
-                                                    if (shouldAdd) {
-                                                        const parseMoney = (txt: string): number | null => {
-                                                            const m = txt.match(/\$\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)/);
-                                                            if (!m) return null;
-                                                            const n = Number(m[1].replace(/,/g, ''));
-                                                            return Number.isFinite(n) ? n : null;
-                                                        };
-                                                        const textAmt = parseMoney(activeContractContent || '');
-                                                        const amt = Number((selectedShow as any)?.performance_fee ?? (selectedShow as any)?.finances?.performanceFee ?? 0) || (textAmt ?? 0);
-                                                        const curFin: any = (selectedShow as any)?.finances || { performanceFee: 0, expenses: [], income: [] };
-                                                        const incomeArr: any[] = Array.isArray(curFin.income) ? curFin.income : [];
-                                                        const entryId = `income-contract-${activeContractId}-${Date.now()}`;
-                                                        const already = incomeArr.some(e => String(e?.id || '').includes(`income-contract-${activeContractId}`));
-                                                        if (!already) {
-                                                            const newEntry = {
-                                                                id: entryId,
-                                                                label: 'Performance Fee (Contract)',
-                                                                description: 'Performance fee from signed contract',
-                                                                amount: amt,
-                                                                date: new Date().toISOString().slice(0, 10),
-                                                                source: 'contract',
-                                                                contractId: activeContractId,
-                                                                kind: 'performance_fee'
-                                                            };
-                                                            const newFinances = { ...curFin, income: [...incomeArr, newEntry] };
-                                                            const updatedShow = await updateShow(selectedShow.id, { finances: newFinances } as any);
-                                                            setSelectedShow(updatedShow as any);
-                                                            // refresh list too
-                                                            const refreshed = await getShows();
-                                                            setShows(refreshed);
-                                                        }
-                                                    }
-                                                } catch (e) {
-                                                    console.warn('Failed to add income suggestion', e);
-                                                }
+                                                // Update list-view badge/meta
+                                                setContractsMetaByShowId(prev => ({
+                                                    ...prev,
+                                                    [selectedShow.id]: {
+                                                        latestStatus: (updated.status || 'sent') as ContractStatus,
+                                                        latestVersion: rows?.[0]?.version ?? (prev[selectedShow.id]?.latestVersion ?? 0),
+                                                        contractCount: rows.length,
+                                                    },
+                                                }));
 
+                                                setToastMsg('Contract marked SENT.');
                                             } catch (e) {
                                                 console.error(e);
                                                 setContractError('Failed to update status to SENT.');
                                             }
                                         }}
-                                        disabled={!activeContractId}
+                                        disabled={!activeContractId || activeContractStatus === 'sent' || activeContractStatus === 'signed'}
                                         className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-blue-700 hover:bg-blue-600 disabled:bg-slate-800 disabled:text-slate-500 text-white text-sm"
                                         title="Mark as Sent"
                                     >
@@ -852,11 +832,14 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                     <button
                                         onClick={async () => {
                                             if (!activeContractId) return;
+                                            setContractError(null);
                                             try {
-                                                const updated = await updateContractPayments(activeContractId, { deposit_paid: true });
+                                                await updateContractPayments(activeContractId, { deposit_paid: true });
+
                                                 // Refresh contracts
                                                 const rows = await listContractsForShow(selectedShow.id);
                                                 setContractRows(rows);
+
                                                 // Optional: auto-log deposit income
                                                 const shouldAdd = window.confirm('Deposit marked paid. Add a deposit income entry in Finances?');
                                                 if (shouldAdd) {
@@ -869,14 +852,28 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                                     const amount = parseMoney(activeContractContent) ?? 0;
                                                     const current = (selectedShow as any).finances || { income: [], expenses: [], performanceFee: (selectedShow as any).performance_fee || 0 };
                                                     const income = Array.isArray(current.income) ? current.income : [];
-                                                    const entry = {
-                                                        id: `income-${Date.now()}`,
-                                                        description: 'Contract Deposit',
-                                                        amount,
-                                                        date: new Date().toISOString().slice(0, 10),
-                                                    };
-                                                    await updateShow(selectedShow.id, { finances: { ...current, income: [...income, entry] } } as any);
+                                                    const already = income.some((e: any) => String(e?.description || '').toLowerCase().includes('contract deposit') && Number(e?.amount) === Number(amount));
+                                                    if (!already) {
+                                                        const entry = {
+                                                            id: `income-contract-deposit-${activeContractId}-${Date.now()}`,
+                                                            description: 'Contract Deposit',
+                                                            amount,
+                                                            date: new Date().toISOString().slice(0, 10),
+                                                        };
+                                                        const updatedShow = await updateShow(selectedShow.id, { finances: { ...current, income: [...income, entry] } } as any);
+                                                        setSelectedShow(updatedShow as any);
+                                                        const refreshed = await getShows();
+                                                        setShows(refreshed);
+
+                                                        // refresh list badge meta (non-blocking)
+                                                        try {
+                                                            const meta = await getContractsMetaForShows(refreshed.map(s => s.id));
+                                                            setContractsMetaByShowId(meta);
+                                                        } catch {}
+                                                    }
                                                 }
+
+                                                setToastMsg('Deposit marked PAID.');
                                             } catch (e) {
                                                 console.error(e);
                                                 setContractError('Failed to mark deposit paid. Please try again.');
@@ -884,7 +881,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                         }}
                                         className="px-3 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:bg-slate-900 disabled:text-slate-500 text-white text-sm"
                                         title="Mark deposit as paid"
-                                        disabled={!activeContractId}
+                                        disabled={!activeContractId || !!contractRows.find(r => r.id === activeContractId)?.deposit_paid}
                                     >
                                         Mark Deposit Paid
                                     </button>
@@ -892,10 +889,14 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                     <button
                                         onClick={async () => {
                                             if (!activeContractId) return;
+                                            setContractError(null);
                                             try {
-                                                const updated = await updateContractPayments(activeContractId, { balance_paid: true });
+                                                await updateContractPayments(activeContractId, { balance_paid: true });
+
                                                 const rows = await listContractsForShow(selectedShow.id);
                                                 setContractRows(rows);
+
+                                                setToastMsg('Balance marked PAID.');
                                             } catch (e) {
                                                 console.error(e);
                                                 setContractError('Failed to mark balance paid. Please try again.');
@@ -903,7 +904,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                         }}
                                         className="px-3 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:bg-slate-900 disabled:text-slate-500 text-white text-sm"
                                         title="Mark balance as paid"
-                                        disabled={!activeContractId}
+                                        disabled={!activeContractId || !!contractRows.find(r => r.id === activeContractId)?.balance_paid}
                                     >
                                         Mark Balance Paid
                                     </button>
@@ -911,17 +912,74 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                     <button
                                         onClick={async () => {
                                             if (!activeContractId) return;
+                                            setContractError(null);
                                             try {
                                                 const updated = await updateContractStatus(activeContractId, 'signed');
                                                 setActiveContractStatus((updated.status || 'signed') as ContractStatus);
+
                                                 const rows = await listContractsForShow(selectedShow.id);
                                                 setContractRows(rows);
+
+                                                // Update list-view badge/meta
+                                                setContractsMetaByShowId(prev => ({
+                                                    ...prev,
+                                                    [selectedShow.id]: {
+                                                        latestStatus: (updated.status || 'signed') as ContractStatus,
+                                                        latestVersion: rows?.[0]?.version ?? (prev[selectedShow.id]?.latestVersion ?? 0),
+                                                        contractCount: rows.length,
+                                                    },
+                                                }));
+
+                                                // Optional: suggest adding an income entry in Finances
+                                                try {
+                                                    const shouldAdd = window.confirm('Contract marked SIGNED. Add the performance fee as an income entry in Finances?');
+                                                    if (shouldAdd) {
+                                                        const parseMoney = (txt: string): number | null => {
+                                                            const m = txt.match(/\$\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)/);
+                                                            if (!m) return null;
+                                                            const n = Number(m[1].replace(/,/g, ''));
+                                                            return Number.isFinite(n) ? n : null;
+                                                        };
+                                                        const textAmt = parseMoney(activeContractContent || '');
+                                                        const amt =
+                                                            Number((selectedShow as any)?.performance_fee ?? (selectedShow as any)?.finances?.performanceFee ?? 0) ||
+                                                            (textAmt ?? 0);
+
+                                                        const curFin: any = (selectedShow as any)?.finances || { performanceFee: 0, expenses: [], income: [] };
+                                                        const incomeArr: any[] = Array.isArray(curFin.income) ? curFin.income : [];
+                                                        const entryId = `income-contract-${activeContractId}-${Date.now()}`;
+                                                        const already = incomeArr.some(e => String(e?.id || '').includes(`income-contract-${activeContractId}`));
+                                                        if (!already) {
+                                                            const entry = {
+                                                                id: entryId,
+                                                                description: 'Performance Fee (Contract Signed)',
+                                                                amount: amt,
+                                                                date: new Date().toISOString().slice(0, 10),
+                                                            };
+                                                            const newFinances = { ...curFin, income: [...incomeArr, entry] };
+                                                            const updatedShow = await updateShow(selectedShow.id, { finances: newFinances } as any);
+                                                            setSelectedShow(updatedShow as any);
+                                                            const refreshed = await getShows();
+                                                            setShows(refreshed);
+
+                                                            // refresh list badge meta (non-blocking)
+                                                            try {
+                                                                const meta = await getContractsMetaForShows(refreshed.map(s => s.id));
+                                                                setContractsMetaByShowId(meta);
+                                                            } catch {}
+                                                        }
+                                                    }
+                                                } catch (e) {
+                                                    console.warn('Failed to add income suggestion', e);
+                                                }
+
+                                                setToastMsg('Contract marked SIGNED.');
                                             } catch (e) {
                                                 console.error(e);
                                                 setContractError('Failed to update status to SIGNED.');
                                             }
                                         }}
-                                        disabled={!activeContractId}
+                                        disabled={!activeContractId || activeContractStatus === 'signed'}
                                         className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-green-700 hover:bg-green-600 disabled:bg-slate-800 disabled:text-slate-500 text-white text-sm"
                                         title="Mark as Signed"
                                     >
