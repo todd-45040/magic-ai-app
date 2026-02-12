@@ -2098,7 +2098,7 @@ useEffect(() => {
         case 'angle-risk': return <AngleRiskAnalysis user={user} onIdeaSaved={() => handleIdeaSaved('Angle/Risk analysis saved!')} />;
         case 'visual-brainstorm': return <VisualBrainstorm onIdeaSaved={() => handleIdeaSaved('Image idea saved!')} user={user} />;
         case 'saved-ideas': return <SavedIdeas onAiSpark={handleAiSpark} initialIdeaId={initialIdeaId || undefined} />;
-        case 'prop-checklists': return <PropChecklists onIdeaSaved={() => handleIdeaSaved('Checklist saved!')} />;
+        case 'prop-checklists': return <PropChecklists user={user} onIdeaSaved={() => handleIdeaSaved('Checklist saved!')} />;
         case 'show-planner': return <ShowPlanner user={user} clients={clients} onNavigateToAnalytics={handleNavigateToAnalytics} initialShowId={initialShowId} initialTaskId={initialTaskId} />;
         case 'performance-analytics': return <PerformanceAnalytics performanceId={viewingPerformanceId!} onBack={() => { setViewingPerformanceId(null); setActiveView('show-planner'); }} />;
         case 'show-feedback': return <ShowFeedback />;
