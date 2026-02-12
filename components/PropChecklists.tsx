@@ -1,8 +1,8 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { generateResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
-import { BackIcon, ChecklistIcon, WandIcon, SaveIcon, CheckIcon, CopyIcon, ShareIcon } from './icons';
+import { ChecklistIcon, WandIcon, SaveIcon, CheckIcon, ShareIcon } from './icons';
 import ShareButton from './ShareButton';
 import { useAppState } from '../store';
 
@@ -37,6 +37,25 @@ const PropChecklists: React.FC<PropChecklistsProps> = ({ onIdeaSaved }) => {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const CONTEXT_CHIPS = useMemo(() => ([
+    { label: 'Stage', emoji: '🎭' },
+    { label: 'Close-Up', emoji: '🪄' },
+    { label: 'Mentalism', emoji: '🧠' },
+    { label: 'Family Show', emoji: '👨‍👩‍👧' },
+    { label: 'Corporate', emoji: '🏢' },
+    { label: 'Gospel', emoji: '⛪' },
+    { label: 'Parlor', emoji: '🎪' },
+  ]), []);
+  const [selectedContexts, setSelectedContexts] = useState<string[]>([]);
+
+  const toggleContext = (label: string) => {
+    setSelectedContexts((prev) => (
+      prev.includes(label)
+        ? prev.filter((x) => x !== label)
+        : [...prev, label]
+    ));
+  };
+
   const handleGenerate = async () => {
     if (!routine.trim()) {
       setError("Please describe the routine or show.");
@@ -47,7 +66,10 @@ const PropChecklists: React.FC<PropChecklistsProps> = ({ onIdeaSaved }) => {
     setChecklist(null);
     setSaveStatus('idle');
 
-    const prompt = `Generate a prop and setup checklist for the following: "${routine}".`;
+    const contextLine = selectedContexts.length
+      ? `Context: ${selectedContexts.join(', ')}.`
+      : '';
+    const prompt = `${contextLine}\nGenerate a prop and setup checklist for the following: "${routine}".`.trim();
     try {
       // FIX: pass currentUser as the 3rd argument to generateResponse. 
       // Assuming user is available via useAppState or similar. 
@@ -88,8 +110,8 @@ const PropChecklists: React.FC<PropChecklistsProps> = ({ onIdeaSaved }) => {
     <div className="flex-1 overflow-y-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Control Panel */}
         <div className="flex flex-col">
-            <h2 className="text-xl font-bold text-slate-300 mb-2">Describe the Routine</h2>
-            <p className="text-slate-400 mb-4">Enter a single trick name, a list of effects, or the theme of your show to generate a detailed checklist.</p>
+            <h2 className="text-xl font-bold text-slate-300 mb-2">Routine Blueprint</h2>
+            <p className="text-slate-400 mb-4">Describe your routine, theme, or full show concept. The Wizard will generate a structured production checklist including props, staging notes, reset considerations, and performance risks.</p>
             
             <div className="space-y-4">
                 <div>
@@ -121,12 +143,38 @@ const PropChecklists: React.FC<PropChecklistsProps> = ({ onIdeaSaved }) => {
                         className="hidden"
                         accept=".txt,.md"
                     />
+                    {/* Context chips */}
+                    <div className="mb-3">
+                      <p className="text-xs font-semibold text-slate-400 mb-2">Context (optional)</p>
+                      <div className="flex flex-wrap gap-2">
+                        {CONTEXT_CHIPS.map((chip) => {
+                          const isActive = selectedContexts.includes(chip.label);
+                          return (
+                            <button
+                              key={chip.label}
+                              type="button"
+                              onClick={() => toggleContext(chip.label)}
+                              className={
+                                `px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ` +
+                                (isActive
+                                  ? 'bg-purple-600/20 border-purple-500 text-purple-200'
+                                  : 'bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-500')
+                              }
+                            >
+                              <span className="mr-1">{chip.emoji}</span>
+                              <span>{chip.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
                     <textarea
                         id="routine-description"
                         rows={8}
                         value={routine}
                         onChange={(e) => { setRoutine(e.target.value); setError(null); }}
-                        placeholder="e.g., A 5-minute silent multiplying balls routine with a musical score.&#10;e.g., My 30 minute corporate stage act, including card manipulation, a mind-reading effect, and the linking rings."
+                        placeholder="Describe your routine, theme, or full show concept...\n\nExample: A 5-minute silent multiplying balls routine with a musical score.\nExample: A 30-minute corporate stage act: card manipulation, a mind-reading segment, and linking rings."
                         className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
                     />
                 </div>
@@ -185,8 +233,12 @@ const PropChecklists: React.FC<PropChecklistsProps> = ({ onIdeaSaved }) => {
             ) : (
                 <div className="flex-1 flex items-center justify-center text-center text-slate-500 p-4">
                     <div>
-                        <ChecklistIcon className="w-24 h-24 mx-auto mb-4" />
-                        <p>Your generated checklist will appear here.</p>
+                        <div className="relative mx-auto mb-4 w-fit">
+                          <ChecklistIcon className="w-20 h-20 mx-auto text-slate-500/80 animate-pulse" />
+                          <div className="absolute -inset-2 rounded-full bg-purple-500/10 blur-xl opacity-60" />
+                        </div>
+                        <p className="text-slate-300 font-semibold">Your production checklist will appear here.</p>
+                        <p className="text-slate-500 text-sm mt-1">Includes props, staging notes, risk alerts, reset flow, and performance cues.</p>
                     </div>
                 </div>
             )}
