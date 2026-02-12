@@ -882,10 +882,10 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                             }
                                         }}
                                         className="px-3 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:bg-slate-900 disabled:text-slate-500 text-white text-sm"
-                                        title="Mark deposit as paid"
+                                        title={!!contractRows.find(r => r.id === activeContractId)?.deposit_paid ? "Deposit already marked paid" : "Mark deposit as paid"}
                                         disabled={!activeContractId || !!contractRows.find(r => r.id === activeContractId)?.deposit_paid}
                                     >
-                                        Mark Deposit Paid
+                                        {!!contractRows.find(r => r.id === activeContractId)?.deposit_paid ? "Deposit Paid ✓" : "Mark Deposit Paid"}
                                     </button>
 
                                     <button
@@ -958,10 +958,10 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                             }
                                         }}
                                         className="px-3 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:bg-slate-900 disabled:text-slate-500 text-white text-sm"
-                                        title="Mark balance as paid"
+                                        title={!!contractRows.find(r => r.id === activeContractId)?.balance_paid ? "Balance already marked paid" : "Mark balance as paid"}
                                         disabled={!activeContractId || !!contractRows.find(r => r.id === activeContractId)?.balance_paid}
                                     >
-                                        Mark Balance Paid
+                                        {!!contractRows.find(r => r.id === activeContractId)?.balance_paid ? "Balance Paid ✓" : "Mark Balance Paid"}
                                     </button>
 
                                     <button
