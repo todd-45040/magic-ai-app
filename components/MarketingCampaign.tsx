@@ -37,6 +37,25 @@ const LoadingIndicator: React.FC<{ stepText: string }> = ({ stepText }) => (
 const AUDIENCE_CATEGORIES = ['Corporate', 'Family Show', 'Private Party', 'Theater / Stage', 'Festival / Fair', 'Strolling / Close-up'];
 const STYLE_CHOICES = ['Comedic', 'Mysterious', 'Dramatic', 'Elegant', 'Storytelling', 'Interactive'];
 
+const CAMPAIGN_STYLES = [
+    'Premium Corporate',
+    'High-Energy Festival',
+    'Elegant Theater',
+    'Viral Social Push',
+] as const;
+
+const SHOW_TITLE_SUGGESTIONS = [
+    'The Mind Illusion Experience',
+    'Secrets of the Impossible',
+    'The Astonishment Project',
+];
+
+const THEME_SUGGESTIONS = [
+    'Psychological illusion',
+    'Story-driven magic',
+    'Audience prediction',
+];
+
 const LOADING_STEPS = [
     'Analyzing performance profile…',
     'Building marketing voice…',
@@ -50,6 +69,7 @@ const MarketingCampaign: React.FC<MarketingCampaignProps> = ({ user, onIdeaSaved
     const [customAudience, setCustomAudience] = useState('');
     const [selectedStyles, setSelectedStyles] = useState<string[]>([]);
     const [keyThemes, setKeyThemes] = useState('');
+    const [campaignStyle, setCampaignStyle] = useState<'Premium Corporate' | 'High-Energy Festival' | 'Elegant Theater' | 'Viral Social Push' | ''>('');
 
     const [showTitleTouched, setShowTitleTouched] = useState(false);
     const [audienceTouched, setAudienceTouched] = useState(false);
@@ -99,7 +119,73 @@ const MarketingCampaign: React.FC<MarketingCampaignProps> = ({ user, onIdeaSaved
     }, [isLoading]);
 
 
-    const generateButtonLabel = useMemo(() => {
+    
+const readinessScore = useMemo(() => {
+    // Simple, gamified completeness score (0-100)
+    let score = 0;
+
+    const titleOk = showTitle.trim().length > 0;
+    const audienceOk = selectedAudiences.length > 0 || customAudience.trim().length > 0;
+    const styleOk = selectedStyles.length > 0;
+    const templateOk = campaignStyle !== '';
+    const themesOk = keyThemes.trim().length > 0;
+
+    if (titleOk) score += 30;
+    if (audienceOk) score += 25;
+    if (styleOk) score += 15;
+    if (templateOk) score += 15;
+    if (themesOk) score += 15;
+
+    return Math.min(100, score);
+}, [campaignStyle, customAudience, keyThemes, selectedAudiences.length, selectedStyles.length, showTitle]);
+
+const conversionStrength = useMemo(() => {
+    if (readinessScore >= 85) return 'High';
+    if (readinessScore >= 65) return 'Medium';
+    return 'Low';
+}, [readinessScore]);
+
+const liveAudiencesLabel = useMemo(() => {
+    const all = [...selectedAudiences];
+    if (customAudience.trim()) all.push(customAudience.trim());
+    return all.length ? all.join(', ') : 'Not selected';
+}, [customAudience, selectedAudiences]);
+
+const campaignTone = useMemo(() => {
+    const styles = selectedStyles.length ? selectedStyles : [];
+    const tone = styles.length ? styles.join(' + ') : (campaignStyle ? campaignStyle : 'Not selected');
+    return tone;
+}, [campaignStyle, selectedStyles]);
+
+const primaryAngle = useMemo(() => {
+    // Lightweight heuristic mapping for a helpful "strategy preview" feel
+    const a = liveAudiencesLabel.toLowerCase();
+    if (campaignStyle === 'Premium Corporate' || a.includes('corporate')) return 'Professional credibility + ROI';
+    if (campaignStyle === 'High-Energy Festival' || a.includes('festival') || a.includes('fair')) return 'High-energy crowd engagement';
+    if (campaignStyle === 'Elegant Theater' || a.includes('theater') || a.includes('stage')) return 'Story + wonder + prestige';
+    if (campaignStyle === 'Viral Social Push') return 'Shareable moments + curiosity hooks';
+    if (a.includes('private')) return 'Personalized amazement + intimacy';
+    if (a.includes('family')) return 'Family-safe wonder + laughs';
+    if (a.includes('strolling') || a.includes('close-up')) return 'Up-close impossibility + interaction';
+    return 'Audience immersion';
+}, [campaignStyle, liveAudiencesLabel]);
+
+const targetHook = useMemo(() => {
+    const a = liveAudiencesLabel.toLowerCase();
+    if (campaignStyle === 'Premium Corporate' || a.includes('corporate')) return 'Corporate engagement';
+    if (campaignStyle === 'High-Energy Festival' || a.includes('festival') || a.includes('fair')) return 'Crowd momentum + repeat stops';
+    if (campaignStyle === 'Elegant Theater' || a.includes('theater') || a.includes('stage')) return 'Prestige + emotional payoff';
+    if (campaignStyle === 'Viral Social Push') return 'Curiosity + shareability';
+    if (a.includes('private')) return 'Personal connection';
+    if (a.includes('family')) return 'Family-friendly delight';
+    if (a.includes('strolling') || a.includes('close-up')) return 'Interactive moments';
+    return 'Memorable participation';
+}, [campaignStyle, liveAudiencesLabel]);
+
+const showTitleSuggestionsVisible = useMemo(() => showTitle.trim().length < 3, [showTitle]);
+const themeSuggestionsVisible = useMemo(() => keyThemes.trim().length < 8, [keyThemes]);
+
+const generateButtonLabel = useMemo(() => {
         if (isLoading) return 'Generating Campaign…';
         if (error) return 'Try Again';
         if (result) return 'Regenerate Campaign';
@@ -135,6 +221,7 @@ const MarketingCampaign: React.FC<MarketingCampaignProps> = ({ user, onIdeaSaved
             - **Show Title:** ${showTitle}
             - **Target Audience:** ${allAudiences.join(', ')}
             - **Performance Style/Persona:** ${selectedStyles.join(', ') || 'Not specified'}
+            - **Campaign Style Template:** ${campaignStyle || 'Not specified'}
             - **Key Effects or Themes:** ${keyThemes || 'Not specified'}
         `;
         
@@ -174,6 +261,24 @@ const MarketingCampaign: React.FC<MarketingCampaignProps> = ({ user, onIdeaSaved
                         {showTitleTouched && showTitle.trim() === '' && (
                             <p className="text-xs text-slate-400 mt-2">Show title helps the AI brand your campaign.</p>
                         )}
+
+{showTitleSuggestionsVisible && (
+    <div className="mt-3">
+        <p className="text-xs text-slate-500 mb-2">Suggested show titles:</p>
+        <div className="flex flex-wrap gap-2">
+            {SHOW_TITLE_SUGGESTIONS.map(s => (
+                <button
+                    key={s}
+                    type="button"
+                    onClick={() => { setShowTitle(s); setShowTitleTouched(true); }}
+                    className="px-2.5 py-1 rounded-full text-xs bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 transition-colors"
+                >
+                    {s}
+                </button>
+            ))}
+        </div>
+    </div>
+)}
                     </div>
 
                     <div>
@@ -211,8 +316,91 @@ const MarketingCampaign: React.FC<MarketingCampaignProps> = ({ user, onIdeaSaved
                     </div>
 
                     <div>
-                        <label htmlFor="key-themes" className="block text-sm font-medium text-slate-300 mb-1">Key Effects or Themes (Optional)</label>
+                        
+<div>
+    <label htmlFor="campaign-style" className="block text-sm font-medium text-slate-300 mb-1">Campaign Style</label>
+    <p className="text-xs text-slate-500 mb-2">Pick a template to shape tone, channels, and structure.</p>
+    <select
+        id="campaign-style"
+        value={campaignStyle}
+        onChange={(e) => setCampaignStyle(e.target.value as any)}
+        className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white text-sm"
+    >
+        <option value="">Select a campaign style…</option>
+        {CAMPAIGN_STYLES.map(s => (
+            <option key={s} value={s}>{s}</option>
+        ))}
+    </select>
+</div>
+
+<div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4 space-y-3">
+    <div className="flex items-center justify-between gap-3">
+        <div>
+            <p className="text-sm font-semibold text-slate-200">Campaign Strategy Preview</p>
+            <p className="text-xs text-slate-500 mt-0.5">Updates live as you select options.</p>
+        </div>
+
+        <div className="text-right">
+            <p className="text-xs text-slate-500">Campaign Readiness</p>
+            <p className="text-sm font-semibold text-slate-200">{readinessScore}%</p>
+        </div>
+    </div>
+
+    <div className="h-2 rounded-full bg-slate-800 overflow-hidden border border-slate-700">
+        <div
+            className="h-full bg-purple-600 transition-all duration-500"
+            style={{ width: `${readinessScore}%` }}
+        />
+    </div>
+
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+        <div className="flex items-start justify-between gap-2 rounded-md bg-slate-900/40 border border-slate-800 p-2">
+            <span className="text-slate-400">Campaign Tone</span>
+            <span className="text-slate-200 text-right">{campaignTone}</span>
+        </div>
+        <div className="flex items-start justify-between gap-2 rounded-md bg-slate-900/40 border border-slate-800 p-2">
+            <span className="text-slate-400">Primary Angle</span>
+            <span className="text-slate-200 text-right">{primaryAngle}</span>
+        </div>
+        <div className="flex items-start justify-between gap-2 rounded-md bg-slate-900/40 border border-slate-800 p-2">
+            <span className="text-slate-400">Target Hook</span>
+            <span className="text-slate-200 text-right">{targetHook}</span>
+        </div>
+        <div className="flex items-start justify-between gap-2 rounded-md bg-slate-900/40 border border-slate-800 p-2">
+            <span className="text-slate-400">Estimated Conversion</span>
+            <span className="text-slate-200 text-right">{conversionStrength}</span>
+        </div>
+    </div>
+</div>
+
+<label htmlFor="key-themes" className="block text-sm font-medium text-slate-300 mb-1">Key Effects or Themes (Optional)</label>
                         <textarea id="key-themes" rows={3} value={keyThemes} onChange={(e) => setKeyThemes(e.target.value)} placeholder="e.g., Classic sleight of hand, modern mind reading, story of a magical artifact" className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white" />
+
+{themeSuggestionsVisible && (
+    <div className="mt-3">
+        <p className="text-xs text-slate-500 mb-2">Suggested themes:</p>
+        <div className="flex flex-wrap gap-2">
+            {THEME_SUGGESTIONS.map(s => (
+                <button
+                    key={s}
+                    type="button"
+                    onClick={() => {
+                        setKeyThemes(prev => {
+                            const p = prev.trim();
+                            if (!p) return s;
+                            if (p.toLowerCase().includes(s.toLowerCase())) return prev;
+                            return `${p}${p.endsWith('.') ? '' : '.'} ${s}`;
+                        });
+                    }}
+                    className="px-2.5 py-1 rounded-full text-xs bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 transition-colors"
+                >
+                    {s}
+                </button>
+            ))}
+        </div>
+    </div>
+)}
+
                     </div>
                     
                     <button
