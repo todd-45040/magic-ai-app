@@ -15,6 +15,19 @@ interface PropChecklistsProps {
 
 type OutputMode = 'checklist' | 'detailed' | 'director';
 
+const LoadingOverlay: React.FC<{ label?: string; sublabel?: string }> = ({
+  label = 'Generating…',
+  sublabel = 'The Wizard is building your blueprint.',
+}) => (
+  <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm">
+    <div className="flex flex-col items-center gap-3 rounded-2xl border border-slate-700 bg-slate-900/40 px-6 py-5 shadow-lg">
+      <div className="h-10 w-10 rounded-full border-2 border-slate-500 border-t-transparent animate-spin" />
+      <div className="text-slate-100 font-semibold">{label}</div>
+      <div className="text-slate-400 text-sm">{sublabel}</div>
+    </div>
+  </div>
+);
+
 type NormalizedAiError = {
   userMessage: string;
   isQuota: boolean;
@@ -733,7 +746,9 @@ Output exactly these headings in this order (markdown):
         </div>
 
         {/* Right */}
-        <div className="rounded-2xl border border-slate-800 bg-slate-950/20 overflow-hidden flex flex-col">
+        <div className="rounded-2xl border border-slate-800 bg-slate-950/20 overflow-hidden flex flex-col relative">
+          {isLoading && <LoadingOverlay label="Generating…" sublabel="Hang tight — this usually takes a few seconds." />}
+
           {!hasOutput ? (
             <div className="flex flex-col items-center justify-center h-full text-center p-10 -mt-4">
               <ChecklistIcon className="w-14 h-14 text-slate-500 animate-pulse" />
