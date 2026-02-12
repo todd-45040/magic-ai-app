@@ -6,7 +6,7 @@ import QRCode from 'qrcode';
 import type { Show, Task, Subtask, TaskPriority, Client, Finances, Expense, Performance, User } from '../types';
 import { getShows, addShow, updateShow, deleteShow, addTaskToShow, addTasksToShow, updateTaskInShow, deleteTaskFromShow, toggleSubtask } from '../services/showsService';
 import { startPerformance, endPerformance, getPerformancesByShowId } from '../services/performanceService';
-import { listContractsForShow, updateContractStatus, type ContractRow, type ContractStatus } from '../services/contractsService';
+import { listContractsForShow, updateContractStatus, updateContractPayments, getContractsMetaForShows, type ContractRow, type ContractStatus, type ContractMeta } from '../services/contractsService';
 import { generateResponse, generateStructuredResponse } from '../services/geminiService';
 import { buildShowFeedbackUrl, rotateShowFeedbackToken } from '../services/showFeedbackService';
 import { AI_TASK_SUGGESTER_SYSTEM_INSTRUCTION, IN_TASK_PATTER_SYSTEM_INSTRUCTION } from '../constants';
@@ -263,6 +263,8 @@ interface ShowPlannerProps {
 
 const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAnalytics, initialShowId, initialTaskId }) => {
     const [shows, setShows] = useState<Show[]>([]);
+    const [contractsMetaByShowId, setContractsMetaByShowId] = useState<Record<string, ContractMeta>>({});
+
     const [isLoadingShows, setIsLoadingShows] = useState(true);
     const [showsError, setShowsError] = useState<string | null>(null);
     const [toastMsg, setToastMsg] = useState<string | null>(null);
@@ -293,6 +295,16 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                 const allShows = await getShows();
                 if (!isMounted) return;
                 setShows(allShows);
+
+                // Fetch contract meta for show list badges & delete confirmations
+                try {
+                    const meta = await getContractsMetaForShows(allShows.map(s => s.id));
+                    if (isMounted) setContractsMetaByShowId(meta);
+                } catch (e) {
+                    // Non-blocking; contract meta is a UI enhancement
+                    console.warn('Failed to load contract meta for shows', e);
+                }
+
 
                 if (initialShowId) {
                     const show = allShows.find((s) => s.id === initialShowId);
@@ -341,7 +353,9 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
         setIsShowModalOpen(false);
     };
     const handleDeleteShow = async (id: string) => {
-        if (window.confirm('Are you sure you want to delete this entire show? This cannot be undone.')) {
+        const contractCount = contractsMetaByShowId[id]?.contractCount ?? 0;
+        const contractNote = contractCount > 0 ? `\n\nNote: Deleting this show will also delete ${contractCount} contract version${contractCount === 1 ? '' : 's'}.` : '';
+        if (window.confirm('Are you sure you want to delete this entire show? This cannot be undone.' + contractNote)) {
             const newShows = await deleteShow(id);
             setShows(newShows);
         }
@@ -495,7 +509,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                     <div className="text-center py-12 text-slate-300">Loading shows…</div>
                 ) : shows.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {shows.map(show => <ShowListItem key={show.id} show={show} clients={clients} onSelect={() => setSelectedShow(show)} onDelete={() => handleDeleteShow(show.id)} />)}
+                        {shows.map(show => <ShowListItem key={show.id} show={show} clients={clients} contractMeta={contractsMetaByShowId[show.id]} onSelect={() => setSelectedShow(show)} onDelete={() => handleDeleteShow(show.id)} />)}
                     </div>
                 ) : (
                     <div className="text-center py-12"><StageCurtainsIcon className="w-16 h-16 mx-auto text-slate-600 mb-4" /><h3 className="text-lg font-bold text-slate-400">Your Stage is Bare</h3><p className="text-slate-500">Click "Create New Show" to start planning your next masterpiece.</p></div>
@@ -673,7 +687,8 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                     ) : activeTab === 'contract' ? (
                         <div className="space-y-4">
                             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                                <div className="flex items-center gap-3">
+                                <div className="flex flex-col items-start gap-1">
+                                    <div className="flex items-center gap-3">
                                     <div className="text-slate-300 text-sm font-semibold">Version</div>
                                     <select
                                         value={activeContractId}
@@ -707,6 +722,22 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                                 })
                                         )}
                                     </select>
+                                    </div>
+                                    {(() => {
+                                        const r = contractRows.find(rr => rr.id === activeContractId);
+                                        if (!r) return null;
+                                        const created = r.created_at ? new Date(r.created_at).toLocaleString() : '—';
+                                        const updated = r.updated_at ? new Date(r.updated_at).toLocaleString() : '—';
+                                        const st = String(r.status || 'draft');
+                                        const label = st.charAt(0).toUpperCase() + st.slice(1);
+                                        return (
+                                            <div className="text-xs text-slate-400 leading-5">
+                                                <div><span className="text-slate-500">Status:</span> {label}</div>
+                                                <div><span className="text-slate-500">Created:</span> {created}</div>
+                                                <div><span className="text-slate-500">Updated:</span> {updated}</div>
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
 
                                 <div className="flex items-center gap-2">
@@ -766,6 +797,46 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                                 setActiveContractStatus((updated.status || 'sent') as ContractStatus);
                                                 const rows = await listContractsForShow(selectedShow.id);
                                                 setContractRows(rows);
+
+                                                // Optional: suggest adding an income entry in Finances
+                                                try {
+                                                    const shouldAdd = window.confirm('Contract marked Signed. Add the performance fee as an income entry in Finances?');
+                                                    if (shouldAdd) {
+                                                        const parseMoney = (txt: string): number | null => {
+                                                            const m = txt.match(/\$\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)/);
+                                                            if (!m) return null;
+                                                            const n = Number(m[1].replace(/,/g, ''));
+                                                            return Number.isFinite(n) ? n : null;
+                                                        };
+                                                        const textAmt = parseMoney(activeContractContent || '');
+                                                        const amt = Number((selectedShow as any)?.performance_fee ?? (selectedShow as any)?.finances?.performanceFee ?? 0) || (textAmt ?? 0);
+                                                        const curFin: any = (selectedShow as any)?.finances || { performanceFee: 0, expenses: [], income: [] };
+                                                        const incomeArr: any[] = Array.isArray(curFin.income) ? curFin.income : [];
+                                                        const entryId = `income-contract-${activeContractId}-${Date.now()}`;
+                                                        const already = incomeArr.some(e => String(e?.id || '').includes(`income-contract-${activeContractId}`));
+                                                        if (!already) {
+                                                            const newEntry = {
+                                                                id: entryId,
+                                                                label: 'Performance Fee (Contract)',
+                                                                description: 'Performance fee from signed contract',
+                                                                amount: amt,
+                                                                date: new Date().toISOString().slice(0, 10),
+                                                                source: 'contract',
+                                                                contractId: activeContractId,
+                                                                kind: 'performance_fee'
+                                                            };
+                                                            const newFinances = { ...curFin, income: [...incomeArr, newEntry] };
+                                                            const updatedShow = await updateShow(selectedShow.id, { finances: newFinances } as any);
+                                                            setSelectedShow(updatedShow as any);
+                                                            // refresh list too
+                                                            const refreshed = await getShows();
+                                                            setShows(refreshed);
+                                                        }
+                                                    }
+                                                } catch (e) {
+                                                    console.warn('Failed to add income suggestion', e);
+                                                }
+
                                             } catch (e) {
                                                 console.error(e);
                                                 setContractError('Failed to update status to SENT.');
@@ -776,6 +847,65 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                         title="Mark as Sent"
                                     >
                                         Mark Sent
+                                    </button>
+
+                                    <button
+                                        onClick={async () => {
+                                            if (!activeContractId) return;
+                                            try {
+                                                const updated = await updateContractPayments(activeContractId, { deposit_paid: true });
+                                                // Refresh contracts
+                                                const rows = await listContractsForShow(selectedShow.id);
+                                                setContractRows(rows);
+                                                // Optional: auto-log deposit income
+                                                const shouldAdd = window.confirm('Deposit marked paid. Add a deposit income entry in Finances?');
+                                                if (shouldAdd) {
+                                                    const parseMoney = (txt: string): number | null => {
+                                                        const m = (txt || '').match(/deposit\s+of\s*\$?([0-9,]+(?:\.[0-9]{1,2})?)/i);
+                                                        if (!m) return null;
+                                                        const n = Number(String(m[1]).replace(/,/g, ''));
+                                                        return Number.isFinite(n) ? n : null;
+                                                    };
+                                                    const amount = parseMoney(activeContractContent) ?? 0;
+                                                    const current = (selectedShow as any).finances || { income: [], expenses: [], performanceFee: (selectedShow as any).performance_fee || 0 };
+                                                    const income = Array.isArray(current.income) ? current.income : [];
+                                                    const entry = {
+                                                        id: `income-${Date.now()}`,
+                                                        description: 'Contract Deposit',
+                                                        amount,
+                                                        date: new Date().toISOString().slice(0, 10),
+                                                    };
+                                                    await updateShow(selectedShow.id, { finances: { ...current, income: [...income, entry] } } as any);
+                                                }
+                                            } catch (e) {
+                                                console.error(e);
+                                                setContractError('Failed to mark deposit paid. Please try again.');
+                                            }
+                                        }}
+                                        className="px-3 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:bg-slate-900 disabled:text-slate-500 text-white text-sm"
+                                        title="Mark deposit as paid"
+                                        disabled={!activeContractId}
+                                    >
+                                        Mark Deposit Paid
+                                    </button>
+
+                                    <button
+                                        onClick={async () => {
+                                            if (!activeContractId) return;
+                                            try {
+                                                const updated = await updateContractPayments(activeContractId, { balance_paid: true });
+                                                const rows = await listContractsForShow(selectedShow.id);
+                                                setContractRows(rows);
+                                            } catch (e) {
+                                                console.error(e);
+                                                setContractError('Failed to mark balance paid. Please try again.');
+                                            }
+                                        }}
+                                        className="px-3 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:bg-slate-900 disabled:text-slate-500 text-white text-sm"
+                                        title="Mark balance as paid"
+                                        disabled={!activeContractId}
+                                    >
+                                        Mark Balance Paid
                                     </button>
 
                                     <button
@@ -969,7 +1099,7 @@ return (
     );
 };
 
-const ShowListItem: React.FC<{show: Show, clients: Client[], onSelect: () => void, onDelete: () => void}> = ({ show, clients, onSelect, onDelete }) => {
+const ShowListItem: React.FC<{show: Show, clients: Client[], contractMeta?: ContractMeta, onSelect: () => void, onDelete: () => void}> = ({ show, clients, contractMeta, onSelect, onDelete }) => {
     const completedTasks = show.tasks.filter(t => t.status === 'Completed').length;
     const totalTasks = show.tasks.length;
     const progress = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
@@ -980,7 +1110,23 @@ const ShowListItem: React.FC<{show: Show, clients: Client[], onSelect: () => voi
             <div>
                 <div className="flex justify-between items-start gap-2">
                     <div>
-                        <h3 className="font-cinzel font-bold text-lg text-white mb-1 pr-10">{show.title}</h3>
+                        <div className="flex items-center gap-2 mb-1 pr-10">
+                            <h3 className="font-cinzel font-bold text-lg text-white">{show.title}</h3>
+                            {contractMeta?.latestStatus && (
+                                <span
+                                    className={`text-[10px] px-2 py-0.5 rounded-full border ${
+                                        contractMeta.latestStatus === 'signed'
+                                            ? 'bg-emerald-500/15 text-emerald-200 border-emerald-400/30'
+                                            : contractMeta.latestStatus === 'sent'
+                                            ? 'bg-blue-500/15 text-blue-200 border-blue-400/30'
+                                            : 'bg-amber-500/15 text-amber-200 border-amber-400/30'
+                                    }`}
+                                    title={`Contract status: ${contractMeta.latestStatus}`}
+                                >
+                                    {contractMeta.latestStatus.toUpperCase()}
+                                </span>
+                            )}
+                        </div>
                         {client && <p className="text-xs text-slate-400 flex items-center gap-1"><UsersIcon className="w-3 h-3" /> {client.name}</p>}
                     </div>
                     <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-2 -mt-1 -mr-1 text-slate-400 hover:text-red-400 rounded-full hover:bg-slate-700 transition-colors"><TrashIcon className="w-5 h-5"/></button>

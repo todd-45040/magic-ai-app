@@ -10,9 +10,16 @@ export type ContractRow = {
   version: number;
   content: string;
   status: ContractStatus;
-  structured?: any;
+  deposit_paid: boolean;
+  balance_paid: boolean;
   created_at?: string;
   updated_at?: string;
+};
+
+export type ContractMeta = {
+  latestStatus: ContractStatus;
+  latestVersion: number;
+  contractCount: number;
 };
 
 type CreateContractArgs = {
@@ -20,7 +27,11 @@ type CreateContractArgs = {
   clientId: string | null;
   content: string;
   status?: ContractStatus;
-  structured?: any;
+};
+
+const isUuid = (value: string | null | undefined): boolean => {
+  if (!value) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 };
 
 const getUserIdOrThrow = async (): Promise<string> => {
@@ -46,12 +57,40 @@ export const listContractsForShow = async (showId: string): Promise<ContractRow[
   return (data || []) as any;
 };
 
-export const createContractVersion = async (args: CreateContractArgs): Promise<ContractRow> => {
-  // Debug: confirm we have a real Supabase auth session (required for RLS policies)
-  const { data: userData, error: userErr } = await supabase.auth.getUser();
-  // eslint-disable-next-line no-console
-  console.log('AUTH DEBUG:', { userErr, userId: userData?.user?.id });
+export const getContractsMetaForShows = async (showIds: string[]): Promise<Record<string, ContractMeta>> => {
+  const uid = await getUserIdOrThrow();
+  const ids = (showIds || []).filter(Boolean);
+  if (ids.length === 0) return {};
 
+  const { data, error } = await supabase
+    .from('contracts')
+    .select('show_id, status, version')
+    .eq('user_id', uid)
+    .in('show_id', ids)
+    .order('version', { ascending: false });
+
+  if (error) throw error;
+
+  const rows = (data || []) as any[];
+  const meta: Record<string, ContractMeta> = {};
+
+  for (const r of rows) {
+    const sid = r.show_id as string;
+    if (!sid) continue;
+    const st = (r.status || 'draft') as ContractStatus;
+    const ver = Number(r.version || 0);
+
+    if (!meta[sid]) {
+      meta[sid] = { latestStatus: st, latestVersion: ver, contractCount: 0 };
+    }
+    meta[sid].contractCount += 1;
+  }
+
+  // Ensure any ids with no contracts still return nothing (caller handles undefined)
+  return meta;
+};
+
+export const createContractVersion = async (args: CreateContractArgs): Promise<ContractRow> => {
   const uid = await getUserIdOrThrow();
 
   // Compute next version number for this show
@@ -67,53 +106,52 @@ export const createContractVersion = async (args: CreateContractArgs): Promise<C
 
   const nextVersion = (latest?.[0]?.version ?? 0) + 1;
 
-  // Build the insert payload using ONLY columns that exist in your contracts table.
-  // (Your current schema does NOT include a "structured" column.)
-  const basePayload: any = {
+  // client_id must be a UUID (backward compatible with legacy string ids by storing null)
+  const safeClientId = isUuid(args.clientId) ? args.clientId : null;
+
+  const payload: any = {
     show_id: args.showId,
     user_id: uid,
-    client_id: args.clientId,
+    client_id: safeClientId,
     version: nextVersion,
     content: args.content,
     status: args.status ?? 'draft',
   };
 
-  // eslint-disable-next-line no-console
-  console.log('CONTRACT INSERT PAYLOAD:', {
-    show_id: basePayload.show_id,
-    user_id: basePayload.user_id,
-    client_id: basePayload.client_id,
-    version: basePayload.version,
-    status: basePayload.status,
-    content_len: (basePayload.content || '').length,
-  });
-
-  // Insert and return the newly created contract version row.
-  let insertRes = await supabase.from('contracts').insert(basePayload).select('*').single();
-
-  if (insertRes.error) {
-    const msg = insertRes.error.message || '';
-    const looksLikeMissingColumn =
-      msg.toLowerCase().includes('column') && msg.toLowerCase().includes('does not exist');
-
-    if (looksLikeMissingColumn) {
-      // We already send only known columns; but keep a safe retry path anyway.
-      insertRes = await supabase.from('contracts').insert(basePayload).select('*').single();
-    }
-  }
-
-  if (insertRes.error) throw insertRes.error;
-  return insertRes.data as any;
+  const { data, error } = await supabase.from('contracts').insert(payload).select('*').single();
+  if (error) throw error;
+  return data as any;
 };
 
-export const updateContractStatus = async (contractId: string, status: ContractStatus): Promise<void> => {
+export const updateContractStatus = async (contractId: string, status: ContractStatus): Promise<ContractRow> => {
   const uid = await getUserIdOrThrow();
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('contracts')
     .update({ status })
     .eq('id', contractId)
-    .eq('user_id', uid);
+    .eq('user_id', uid)
+    .select('*')
+    .single();
 
   if (error) throw error;
+  return data as any;
+};
+
+export const updateContractPayments = async (
+  contractId: string,
+  patch: { deposit_paid?: boolean; balance_paid?: boolean }
+): Promise<ContractRow> => {
+  const uid = await getUserIdOrThrow();
+
+  const { data, error } = await supabase
+    .from('contracts')
+    .update({ ...patch })
+    .eq('id', contractId)
+    .eq('user_id', uid)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data as any;
 };
