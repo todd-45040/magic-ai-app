@@ -769,15 +769,9 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                     </button>
 
                                     <button
-                                        onClick={async () => {
+                                        onClick={() => {
                                             if (!activeContractContent) return;
-                                            try {
-                                                await navigator.clipboard.writeText(activeContractContent);
-                                                setToastMsg('Copied to clipboard.');
-                                            } catch (e) {
-                                                console.warn('Clipboard copy failed', e);
-                                                setToastMsg('Copy failed — please select and copy manually.');
-                                            }
+                                            navigator.clipboard.writeText(activeContractContent);
                                         }}
                                         className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-slate-700 hover:bg-slate-600 text-slate-100 text-sm"
                                         title="Copy contract text"
@@ -798,31 +792,57 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                     <button
                                         onClick={async () => {
                                             if (!activeContractId) return;
-                                            setContractError(null);
                                             try {
                                                 const updated = await updateContractStatus(activeContractId, 'sent');
                                                 setActiveContractStatus((updated.status || 'sent') as ContractStatus);
-
                                                 const rows = await listContractsForShow(selectedShow.id);
                                                 setContractRows(rows);
 
-                                                // Update list-view badge/meta
-                                                setContractsMetaByShowId(prev => ({
-                                                    ...prev,
-                                                    [selectedShow.id]: {
-                                                        latestStatus: (updated.status || 'sent') as ContractStatus,
-                                                        latestVersion: rows?.[0]?.version ?? (prev[selectedShow.id]?.latestVersion ?? 0),
-                                                        contractCount: rows.length,
-                                                    },
-                                                }));
+                                                // Optional: suggest adding an income entry in Finances
+                                                try {
+                                                    const shouldAdd = window.confirm('Contract marked Signed. Add the performance fee as an income entry in Finances?');
+                                                    if (shouldAdd) {
+                                                        const parseMoney = (txt: string): number | null => {
+                                                            const m = txt.match(/\$\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)/);
+                                                            if (!m) return null;
+                                                            const n = Number(m[1].replace(/,/g, ''));
+                                                            return Number.isFinite(n) ? n : null;
+                                                        };
+                                                        const textAmt = parseMoney(activeContractContent || '');
+                                                        const amt = Number((selectedShow as any)?.performance_fee ?? (selectedShow as any)?.finances?.performanceFee ?? 0) || (textAmt ?? 0);
+                                                        const curFin: any = (selectedShow as any)?.finances || { performanceFee: 0, expenses: [], income: [] };
+                                                        const incomeArr: any[] = Array.isArray(curFin.income) ? curFin.income : [];
+                                                        const entryId = `income-contract-${activeContractId}-${Date.now()}`;
+                                                        const already = incomeArr.some(e => String(e?.id || '').includes(`income-contract-${activeContractId}`));
+                                                        if (!already) {
+                                                            const newEntry = {
+                                                                id: entryId,
+                                                                label: 'Performance Fee (Contract)',
+                                                                description: 'Performance fee from signed contract',
+                                                                amount: amt,
+                                                                date: new Date().toISOString().slice(0, 10),
+                                                                source: 'contract',
+                                                                contractId: activeContractId,
+                                                                kind: 'performance_fee'
+                                                            };
+                                                            const newFinances = { ...curFin, income: [...incomeArr, newEntry] };
+                                                            const updatedShow = await updateShow(selectedShow.id, { finances: newFinances } as any);
+                                                            setSelectedShow(updatedShow as any);
+                                                            // refresh list too
+                                                            const refreshed = await getShows();
+                                                            setShows(refreshed);
+                                                        }
+                                                    }
+                                                } catch (e) {
+                                                    console.warn('Failed to add income suggestion', e);
+                                                }
 
-                                                setToastMsg('Contract marked SENT.');
                                             } catch (e) {
                                                 console.error(e);
                                                 setContractError('Failed to update status to SENT.');
                                             }
                                         }}
-                                        disabled={!activeContractId || activeContractStatus === 'sent' || activeContractStatus === 'signed'}
+                                        disabled={!activeContractId}
                                         className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-blue-700 hover:bg-blue-600 disabled:bg-slate-800 disabled:text-slate-500 text-white text-sm"
                                         title="Mark as Sent"
                                     >
@@ -836,11 +856,11 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                             try {
                                                 await updateContractPayments(activeContractId, { deposit_paid: true });
 
-                                                // Refresh contracts (always)
+                                                // Refresh contracts
                                                 const rows = await listContractsForShow(selectedShow.id);
                                                 setContractRows(rows);
 
-                                                // Optional: auto-log deposit income (never crash the page)
+                                                // Optional: auto-log deposit income (never crash page if finance sync fails)
                                                 const shouldAdd = window.confirm('Deposit marked paid. Add a deposit income entry in Finances?');
                                                 if (shouldAdd) {
                                                     try {
@@ -850,14 +870,11 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                                             const n = Number(String(m[1]).replace(/,/g, ''));
                                                             return Number.isFinite(n) ? n : null;
                                                         };
-                                                        const amount = parseMoney(activeContractContent) ?? 0;
 
-                                                        const current: any = (selectedShow as any).finances || { income: [], expenses: [], performanceFee: (selectedShow as any).performance_fee || 0 };
+                                                        const amount = parseMoney(activeContractContent) ?? 0;
+                                                        const current = (selectedShow as any).finances || { income: [], expenses: [], performanceFee: (selectedShow as any).performance_fee || 0 };
                                                         const income = Array.isArray(current.income) ? current.income : [];
-                                                        const already = income.some((e: any) =>
-                                                            String(e?.description || '').toLowerCase().includes('contract deposit') &&
-                                                            Number(e?.amount) === Number(amount)
-                                                        );
+                                                        const already = income.some((e: any) => String(e?.description || '').toLowerCase().includes('contract deposit') && Number(e?.amount) === Number(amount));
 
                                                         if (!already) {
                                                             const entry = {
@@ -866,12 +883,11 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                                                 amount,
                                                                 date: new Date().toISOString().slice(0, 10),
                                                             };
-
-                                                            // NOTE: updateShow returns the full show list; use the helper to keep state consistent
                                                             await handleUpdateShow(selectedShow.id, { finances: { ...current, income: [...income, entry] } } as any);
                                                         }
-                                                    } catch (inner) {
-                                                        console.warn('Deposit marked paid, but finance sync failed:', inner);
+                                                    } catch (financeErr) {
+                                                        console.warn('Deposit marked paid, but finance sync failed:', financeErr);
+                                                        setToastMsg('Deposit marked PAID (finance entry could not be added automatically).');
                                                     }
                                                 }
 
@@ -882,7 +898,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                             }
                                         }}
                                         className="px-3 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:bg-slate-900 disabled:text-slate-500 text-white text-sm"
-                                        title={!!contractRows.find(r => r.id === activeContractId)?.deposit_paid ? "Deposit already marked paid" : "Mark deposit as paid"}
+                                        title="Mark deposit as paid"
                                         disabled={!activeContractId || !!contractRows.find(r => r.id === activeContractId)?.deposit_paid}
                                     >
                                         {!!contractRows.find(r => r.id === activeContractId)?.deposit_paid ? "Deposit Paid ✓" : "Mark Deposit Paid"}
@@ -895,47 +911,56 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                             try {
                                                 await updateContractPayments(activeContractId, { balance_paid: true });
 
-                                                // Refresh contracts (always)
                                                 const rows = await listContractsForShow(selectedShow.id);
                                                 setContractRows(rows);
 
-                                                // Optional: auto-log remaining balance income (never crash the page)
+                                                // Optional: auto-log balance income
                                                 const shouldAdd = window.confirm('Balance marked paid. Add a balance income entry in Finances?');
                                                 if (shouldAdd) {
                                                     try {
-                                                        const current: any = (selectedShow as any).finances || { income: [], expenses: [], performanceFee: (selectedShow as any).performance_fee || 0 };
+                                                        const parseTotalFee = (txt: string): number | null => {
+                                                            // Handles: "total performance fee is $600.00" / "total performance fee is 600.00"
+                                                            const m = (txt || '').match(/total\s+performance\s+fee\s+is\s*\$?\s*([0-9,]+(?:\.[0-9]{1,2})?)/i);
+                                                            if (!m) return null;
+                                                            const n = Number(String(m[1]).replace(/,/g, ''));
+                                                            return Number.isFinite(n) ? n : null;
+                                                        };
+
+                                                        const current = (selectedShow as any).finances || { income: [], expenses: [], performanceFee: (selectedShow as any).performance_fee || 0 };
                                                         const income = Array.isArray(current.income) ? current.income : [];
 
-                                                        const perfFeeRaw = Number((selectedShow as any).performance_fee ?? current.performanceFee ?? 0);
-                                                        const perfFee = Number.isFinite(perfFeeRaw) ? perfFeeRaw : 0;
-
-                                                        const depositTotal = income
+                                                        const depositLogged = income
                                                             .filter((e: any) => String(e?.description || '').toLowerCase().includes('contract deposit'))
                                                             .reduce((sum: number, e: any) => sum + (Number(e?.amount) || 0), 0);
 
-                                                        let amount = 0;
-                                                        if (perfFee > 0) {
-                                                            amount = Math.max(0, perfFee - depositTotal);
-                                                        }
+                                                        const performanceFee =
+                                                            Number((selectedShow as any).performance_fee) ||
+                                                            Number((current as any).performanceFee) ||
+                                                            0;
 
-                                                        if (!(amount > 0)) {
-                                                            const entered = window.prompt('Enter the balance amount received (e.g., 300):', '');
-                                                            if (entered === null) {
-                                                                // user cancelled
-                                                                amount = 0;
-                                                            } else {
-                                                                const cleaned = String(entered).replace(/[^0-9.]/g, '');
-                                                                const n = Number(cleaned);
-                                                                amount = Number.isFinite(n) ? n : 0;
-                                                            }
-                                                        }
+                                                        const parsedFee = parseTotalFee(activeContractContent) || 0;
+                                                        const total = performanceFee > 0 ? performanceFee : parsedFee;
 
-                                                        if (amount > 0) {
-                                                            const already = income.some((e: any) =>
-                                                                String(e?.description || '').toLowerCase().includes('contract balance') &&
-                                                                Number(e?.amount) === Number(amount)
+                                                        let amount = total - depositLogged;
+
+                                                        // If we can't compute a positive balance, ask the user
+                                                        if (!Number.isFinite(amount) || amount <= 0) {
+                                                            const entered = window.prompt(
+                                                                'What amount was paid for the remaining balance?\n\nTip: Set the Performance Fee in Finances to avoid this prompt next time.',
+                                                                ''
                                                             );
+                                                            if (entered === null) {
+                                                                setToastMsg('Balance marked PAID (no finance entry added).');
+                                                                return;
+                                                            }
+                                                            const cleaned = String(entered).replace(/[^0-9.]/g, '');
+                                                            amount = Number(cleaned);
+                                                        }
 
+                                                        if (!Number.isFinite(amount) || amount <= 0) {
+                                                            setToastMsg('Balance marked PAID (amount was 0, no finance entry added).');
+                                                        } else {
+                                                            const already = income.some((e: any) => String(e?.description || '').toLowerCase().includes('contract balance') && Number(e?.amount) === Number(amount));
                                                             if (!already) {
                                                                 const entry = {
                                                                     id: `income-contract-balance-${activeContractId}-${Date.now()}`,
@@ -946,8 +971,9 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                                                 await handleUpdateShow(selectedShow.id, { finances: { ...current, income: [...income, entry] } } as any);
                                                             }
                                                         }
-                                                    } catch (inner) {
-                                                        console.warn('Balance marked paid, but finance sync failed:', inner);
+                                                    } catch (financeErr) {
+                                                        console.warn('Balance marked paid, but finance sync failed:', financeErr);
+                                                        setToastMsg('Balance marked PAID (finance entry could not be added automatically).');
                                                     }
                                                 }
 
@@ -958,7 +984,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                             }
                                         }}
                                         className="px-3 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:bg-slate-900 disabled:text-slate-500 text-white text-sm"
-                                        title={!!contractRows.find(r => r.id === activeContractId)?.balance_paid ? "Balance already marked paid" : "Mark balance as paid"}
+                                        title="Mark balance as paid"
                                         disabled={!activeContractId || !!contractRows.find(r => r.id === activeContractId)?.balance_paid}
                                     >
                                         {!!contractRows.find(r => r.id === activeContractId)?.balance_paid ? "Balance Paid ✓" : "Mark Balance Paid"}
@@ -967,73 +993,17 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                     <button
                                         onClick={async () => {
                                             if (!activeContractId) return;
-                                            setContractError(null);
                                             try {
                                                 const updated = await updateContractStatus(activeContractId, 'signed');
                                                 setActiveContractStatus((updated.status || 'signed') as ContractStatus);
-
                                                 const rows = await listContractsForShow(selectedShow.id);
                                                 setContractRows(rows);
-
-                                                // Update list-view badge/meta
-                                                setContractsMetaByShowId(prev => ({
-                                                    ...prev,
-                                                    [selectedShow.id]: {
-                                                        latestStatus: (updated.status || 'signed') as ContractStatus,
-                                                        latestVersion: rows?.[0]?.version ?? (prev[selectedShow.id]?.latestVersion ?? 0),
-                                                        contractCount: rows.length,
-                                                    },
-                                                }));
-
-                                                // Optional: suggest adding an income entry in Finances
-                                                try {
-                                                    const shouldAdd = window.confirm('Contract marked SIGNED. Add the performance fee as an income entry in Finances?');
-                                                    if (shouldAdd) {
-                                                        const parseMoney = (txt: string): number | null => {
-                                                            const m = txt.match(/\$\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)/);
-                                                            if (!m) return null;
-                                                            const n = Number(m[1].replace(/,/g, ''));
-                                                            return Number.isFinite(n) ? n : null;
-                                                        };
-                                                        const textAmt = parseMoney(activeContractContent || '');
-                                                        const amt =
-                                                            Number((selectedShow as any)?.performance_fee ?? (selectedShow as any)?.finances?.performanceFee ?? 0) ||
-                                                            (textAmt ?? 0);
-
-                                                        const curFin: any = (selectedShow as any)?.finances || { performanceFee: 0, expenses: [], income: [] };
-                                                        const incomeArr: any[] = Array.isArray(curFin.income) ? curFin.income : [];
-                                                        const entryId = `income-contract-${activeContractId}-${Date.now()}`;
-                                                        const already = incomeArr.some(e => String(e?.id || '').includes(`income-contract-${activeContractId}`));
-                                                        if (!already) {
-                                                            const entry = {
-                                                                id: entryId,
-                                                                description: 'Performance Fee (Contract Signed)',
-                                                                amount: amt,
-                                                                date: new Date().toISOString().slice(0, 10),
-                                                            };
-                                                            const newFinances = { ...curFin, income: [...incomeArr, entry] };
-                                                            await handleUpdateShow(selectedShow.id, { finances: newFinances } as any);
-                                                            const refreshed = await getShows();
-                                                            setShows(refreshed);
-
-                                                            // refresh list badge meta (non-blocking)
-                                                            try {
-                                                                const meta = await getContractsMetaForShows(refreshed.map(s => s.id));
-                                                                setContractsMetaByShowId(meta);
-                                                            } catch {}
-                                                        }
-                                                    }
-                                                } catch (e) {
-                                                    console.warn('Failed to add income suggestion', e);
-                                                }
-
-                                                setToastMsg('Contract marked SIGNED.');
                                             } catch (e) {
                                                 console.error(e);
                                                 setContractError('Failed to update status to SIGNED.');
                                             }
                                         }}
-                                        disabled={!activeContractId || activeContractStatus === 'signed'}
+                                        disabled={!activeContractId}
                                         className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-green-700 hover:bg-green-600 disabled:bg-slate-800 disabled:text-slate-500 text-white text-sm"
                                         title="Mark as Signed"
                                     >
