@@ -556,7 +556,7 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
                         const isOpen = sectionOpen[sec.key] ?? true;
 
                         return (
-                            <div key={sec.key} className="bg-slate-900/20 border border-slate-800 rounded-xl overflow-hidden">
+                            <div key={sec.key} className="bg-slate-900/20 border border-slate-800 rounded-xl overflow-hidden mb-10 bg-white/3 backdrop-blur-sm hover:border-indigo-400/20">
                                 <button
                                     type="button"
                                     onClick={() => setSectionOpen((prev) => ({ ...prev, [sec.key]: !isOpen }))}
@@ -564,8 +564,8 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
                                     aria-expanded={isOpen}
                                 >
                                     <div className="flex items-center gap-3">
-                                        <span className={`text-slate-300 transition-transform ${isOpen ? 'rotate-0' : '-rotate-90'}`}>▼</span>
-                                        <div className="font-semibold text-slate-100">{sec.label}</div>
+                                        <span className={`text-slate-300 transition-transform duration-300 ${isOpen ? 'rotate-90' : 'rotate-0'}`}>▼</span>
+                                        <div className="font-semibold tracking-tight line-clamp-2 text-slate-100">{sec.label}</div>
                                         <div className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">
                                             {sec.items.length}
                                         </div>
