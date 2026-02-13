@@ -1089,8 +1089,8 @@ const sendToPlanner = (idea: SavedIdea) => {
 
             {/* Open Idea Modal */}
             {openIdea ? (
-                <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={(e)=>{ if(e.target===e.currentTarget) setOpenIdea(null); }} role="dialog" aria-modal="true">
-                    <div className="w-full max-w-3xl bg-slate-950/90 border border-slate-800 rounded-2xl overflow-hidden shadow-xl backdrop-blur">
+                <div className="fixed inset-0 z-50 bg-black/70 flex items-start justify-center p-4 pt-6 overflow-y-auto" onClick={(e)=>{ if(e.target===e.currentTarget) setOpenIdea(null); }} role="dialog" aria-modal="true">
+                    <div className="w-full max-w-3xl mt-2 bg-slate-950/90 border border-slate-800 rounded-2xl overflow-hidden shadow-xl backdrop-blur">
                         <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-slate-800">
                             <div className="min-w-0">
                                 <div className="flex items-center gap-2">
