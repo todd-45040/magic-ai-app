@@ -83,6 +83,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ shows: showsProp, ideas: id
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState<number>(-1);
   const [notice, setNotice] = useState<string | null>(null);
+  const isDirty = Boolean(searchTerm || selectedTag || activeScope !== 'all');
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [plannerModal, setPlannerModal] = useState<PlannerModalState>({ open: false });
 
@@ -1013,7 +1014,8 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ shows: showsProp, ideas: id
       </div>
 
       {/* Scope tabs */}
-      <div className="flex flex-wrap gap-2 mt-5">
+      <div className="flex items-center justify-between mt-5 gap-3">
+        <div className="flex flex-wrap gap-2">
         {scopeOrder.map((s) => {
           const meta = scopeMeta[s];
           const active = s === activeScope;
@@ -1039,6 +1041,18 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ shows: showsProp, ideas: id
             </button>
           );
         })}
+        </div>
+
+        {isDirty && (
+          <button
+            type="button"
+            onClick={resetPage}
+            className="shrink-0 px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 text-xs text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+            title="Reset search"
+          >
+            Reset
+          </button>
+        )}
       </div>
 
       {/* Search input */}
@@ -1055,16 +1069,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ shows: showsProp, ideas: id
           className="w-full rounded-xl bg-white/5 border border-white/10 pl-4 pr-12 py-4 text-lg text-white/90 placeholder:text-white/35 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
         />
 
-        {(searchTerm || selectedTag || activeScope !== 'all') && (
-          <button
-            type="button"
-            onClick={resetPage}
-            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/70 hover:text-white hover:bg-white/10"
-            title="Reset search"
-          >
-            Reset
-          </button>
-        )}
+        
         <div className="text-xs text-white/45 mt-2">{statusText}</div>
       </div>
 
