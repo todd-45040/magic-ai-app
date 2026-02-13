@@ -18,6 +18,7 @@ import { useToast } from './ToastProvider';
 import FormattedText from './FormattedText';
 
 const TUTOR_PROGRESS_KEY = 'magic_theory_tutor_progress';
+const TUTOR_STATS_KEY = 'magic_theory_tutor_stats';
 
 const createChatMessage = (role: 'user' | 'model', text: string): ChatMessage => ({
   id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
@@ -37,6 +38,13 @@ interface Progress {
   module: number;
   lesson: number;
   concept: number;
+}
+
+interface TutorStats {
+  guidedSessions: number;
+  applyCount: number;
+  drillsCompleted: number;
+  diagnosticsRuns: number;
 }
 
 type LessonRef = { moduleIndex: number; lessonIndex: number };
@@ -83,6 +91,80 @@ const getDirectorsInsight = (lessonName: string) => {
   return 'When in doubt: simplify the effect, slow the reveal, and let the audience feel smart before you fool them.';
 };
 
+const defaultStats = (): TutorStats => ({
+  guidedSessions: 0,
+  applyCount: 0,
+  drillsCompleted: 0,
+  diagnosticsRuns: 0,
+});
+
+const loadStats = (): TutorStats => {
+  try {
+    const raw = localStorage.getItem(TUTOR_STATS_KEY);
+    if (!raw) return defaultStats();
+    const parsed = JSON.parse(raw) as Partial<TutorStats>;
+    return {
+      guidedSessions: Number(parsed.guidedSessions ?? 0) || 0,
+      applyCount: Number(parsed.applyCount ?? 0) || 0,
+      drillsCompleted: Number(parsed.drillsCompleted ?? 0) || 0,
+      diagnosticsRuns: Number(parsed.diagnosticsRuns ?? 0) || 0,
+    };
+  } catch {
+    return defaultStats();
+  }
+};
+
+const saveStats = (stats: TutorStats) => {
+  try {
+    localStorage.setItem(TUTOR_STATS_KEY, JSON.stringify(stats));
+  } catch (e) {
+    console.error('Failed to save tutor stats', e);
+  }
+};
+
+type TrackKey = 'foundation' | 'performance' | 'advanced';
+type Track = {
+  key: TrackKey;
+  title: string;
+  subtitle: string;
+  requiredLessons: number;
+};
+
+const TRACKS: Track[] = [
+  {
+    key: 'foundation',
+    title: 'Foundation Track',
+    subtitle: 'Core principles and audience psychology.',
+    requiredLessons: 0,
+  },
+  {
+    key: 'performance',
+    title: 'Performance Track',
+    subtitle: 'Timing, structure, and directing choices.',
+    requiredLessons: 2,
+  },
+  {
+    key: 'advanced',
+    title: 'Advanced Theory Track',
+    subtitle: 'Deep theory and craft refinement.',
+    requiredLessons: 4,
+  },
+];
+
+const getCanonicalReferences = (lessonName: string) => {
+  const name = lessonName.toLowerCase();
+  const base = [
+    { title: 'Strong Magic — Darwin Ortiz', note: 'Clarity, conviction, and the audience’s experience.' },
+    { title: 'Our Magic — Maskelyne & Devant', note: 'Theatrical construction and magical effect.' },
+    { title: 'Tamariz (theory concepts)', note: 'Structure, attention, and the “why” behind reactions.' },
+  ];
+  if (name.includes('clarity')) return base;
+  if (name.includes('surprise')) return base;
+  if (name.includes('pacing') || name.includes('timing')) return base;
+  if (name.includes('theatrical') || name.includes('arc')) return base;
+  return base;
+};
+
 function safeTitle(v: any) {
   const s = String(v ?? '').trim();
   return s || 'Untitled';
@@ -123,6 +205,35 @@ function formatApplyReport(report: any, lessonName: string) {
   }
   if (report?.oneSentenceEffect) lines.push(`\n**One-sentence effect**\n> ${report.oneSentenceEffect}`);
   if (report?.directorNote) lines.push(`\n> 🎩 **Director Insight:** ${report.directorNote}`);
+  return lines.join('\n');
+}
+
+function formatDiagnosticsReport(rep: any, showTitle: string) {
+  const clampScore = (v: any) => Math.max(0, Math.min(100, Number(v) || 0));
+  const scoreLine = (label: string, v: any) => `- **${label}:** ${clampScore(v)}/100`;
+  const lines: string[] = [];
+  lines.push(`**Theory Diagnostics: ${showTitle}**`);
+  if (rep?.overallSummary) lines.push(`\n${String(rep.overallSummary)}`);
+  if (rep?.scores) {
+    lines.push(`\n**Report Card**`);
+    lines.push(scoreLine('Clarity', rep.scores.clarity));
+    lines.push(scoreLine('Pacing', rep.scores.pacing));
+    lines.push(scoreLine('Surprise Structure', rep.scores.surprise));
+    lines.push(scoreLine('Theatrical Arc', rep.scores.arc));
+  }
+  if (Array.isArray(rep?.strengths) && rep.strengths.length) {
+    lines.push(`\n**Strengths**`);
+    for (const s of rep.strengths.slice(0, 5)) lines.push(`- ${String(s)}`);
+  }
+  if (Array.isArray(rep?.improvements) && rep.improvements.length) {
+    lines.push(`\n**Biggest Improvements**`);
+    for (const s of rep.improvements.slice(0, 5)) lines.push(`- ${String(s)}`);
+  }
+  if (Array.isArray(rep?.nextSteps) && rep.nextSteps.length) {
+    lines.push(`\n**Next Steps (Actionable)**`);
+    for (const s of rep.nextSteps.slice(0, 5)) lines.push(`- ${String(s)}`);
+  }
+  if (rep?.directorNote) lines.push(`\n> 🎩 **Director Insight:** ${String(rep.directorNote)}`);
   return lines.join('\n');
 }
 
@@ -273,6 +384,97 @@ const RoutinePickerModal: React.FC<{
   );
 };
 
+const DiagnosticsModal: React.FC<{
+  open: boolean;
+  onClose: () => void;
+  onAnalyze: (show: Show) => void;
+  loading: boolean;
+}> = ({ open, onClose, onAnalyze, loading }) => {
+  const { showToast } = useToast();
+  const [shows, setShows] = useState<Show[]>([]);
+  const [fetching, setFetching] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      setFetching(true);
+      try {
+        const s = await getShows();
+        if (cancelled) return;
+        setShows(s ?? []);
+      } catch (e: any) {
+        console.error(e);
+        showToast(e?.message || 'Failed to load shows.', 'error');
+      } finally {
+        if (!cancelled) setFetching(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, showToast]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-3xl rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
+          <div>
+            <div className="text-sm text-slate-400">Performance Diagnostics</div>
+            <div className="text-lg font-semibold text-white">Analyze a show through a theory lens</div>
+          </div>
+          <button
+            onClick={onClose}
+            className="px-3 py-1.5 rounded-md text-slate-300 hover:text-white hover:bg-slate-800"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="p-4 max-h-[65vh] overflow-y-auto">
+          {fetching ? (
+            <div className="text-slate-300 flex items-center gap-2">
+              <LoadingIndicator /> <span>Loading shows…</span>
+            </div>
+          ) : shows.length === 0 ? (
+            <div className="text-slate-300">
+              <div className="font-semibold">No shows found.</div>
+              <div className="text-slate-400 text-sm mt-1">Create a show in Show Planner, then come back here.</div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {shows.slice(0, 30).map((show) => (
+                <div key={show.id} className="rounded-xl border border-slate-700 bg-slate-950/40 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-white font-semibold">{safeTitle(show.title)}</div>
+                      {show.description ? <div className="text-slate-400 text-sm">{show.description}</div> : null}
+                      <div className="text-xs text-slate-500 mt-1">{(show.tasks ?? []).length} tasks</div>
+                    </div>
+                    <button
+                      disabled={loading}
+                      onClick={() => onAnalyze(show)}
+                      className={`px-3 py-2 rounded-lg text-sm font-semibold border transition ${
+                        loading
+                          ? 'border-slate-700 bg-slate-800/50 text-slate-400'
+                          : 'border-yellow-400/40 bg-yellow-500/10 text-yellow-200 hover:bg-yellow-500/15'
+                      }`}
+                    >
+                      {loading ? 'Analyzing…' : 'Analyze'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const MagicTheoryTutor: React.FC<MagicTheoryTutorProps> = ({ user }) => {
   const { showToast } = useToast();
 
@@ -290,6 +492,11 @@ const MagicTheoryTutor: React.FC<MagicTheoryTutorProps> = ({ user }) => {
   const [turns, setTurns] = useState(0);
   const [challengePrompt, setChallengePrompt] = useState<string | null>(null);
   const [routineModalOpen, setRoutineModalOpen] = useState(false);
+  const [stats, setStats] = useState<TutorStats>(defaultStats());
+  const [selectedTrack, setSelectedTrack] = useState<TrackKey>('foundation');
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const [diagnosticLoading, setDiagnosticLoading] = useState(false);
+  const [diagnosticReport, setDiagnosticReport] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -315,6 +522,9 @@ const MagicTheoryTutor: React.FC<MagicTheoryTutorProps> = ({ user }) => {
     } catch (error) {
       console.error('Failed to load tutor progress:', error);
     }
+
+    // Tier 3: mastery stats (backwards compatible, stored separately)
+    setStats(loadStats());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -337,6 +547,37 @@ const MagicTheoryTutor: React.FC<MagicTheoryTutorProps> = ({ user }) => {
       return { total, done, pct: total ? Math.round((done / total) * 100) : 0 };
     });
   }, [completedLessons]);
+
+  const totalLessons = useMemo(() => MAGIC_THEORY_CURRICULUM.reduce((acc, m) => acc + (m.lessons?.length ?? 0), 0), []);
+  const completedCount = useMemo(() => completedLessons.size, [completedLessons]);
+
+  const unlockedTracks = useMemo(() => {
+    const foundationUnlocked = true;
+    const performanceUnlocked = completedCount >= TRACKS.find((t) => t.key === 'performance')!.requiredLessons;
+    const advancedUnlocked = completedCount >= TRACKS.find((t) => t.key === 'advanced')!.requiredLessons;
+    return {
+      foundation: foundationUnlocked,
+      performance: performanceUnlocked,
+      advanced: advancedUnlocked,
+    } as Record<TrackKey, boolean>;
+  }, [completedCount]);
+
+  const masteryScore = useMemo(() => {
+    const lessonPart = totalLessons ? (completedCount / totalLessons) * 70 : 0;
+    const applyPart = Math.min(15, (stats.applyCount || 0) * 5);
+    const drillPart = Math.min(10, (stats.drillsCompleted || 0) * 2);
+    const diagPart = Math.min(5, (stats.diagnosticsRuns || 0) * 5);
+    const guidedPart = Math.min(10, (stats.guidedSessions || 0));
+    return Math.max(0, Math.min(100, Math.round(lessonPart + applyPart + drillPart + diagPart + guidedPart)));
+  }, [completedCount, totalLessons, stats]);
+
+  const showDiagnosticsCTA = completedCount >= 3;
+
+  const lessonTrack = (moduleIndex: number): TrackKey => {
+    if (moduleIndex <= 0) return 'foundation';
+    if (moduleIndex === 1) return 'performance';
+    return 'advanced';
+  };
 
   const findNextLesson = (currentModule: number, currentLesson: number): Progress | null => {
     const module = MAGIC_THEORY_CURRICULUM[currentModule];
@@ -406,6 +647,12 @@ const MagicTheoryTutor: React.FC<MagicTheoryTutorProps> = ({ user }) => {
   };
 
   const handleLessonSelect = (mIndex: number, lIndex: number) => {
+    const track = lessonTrack(mIndex);
+    if (!unlockedTracks[track]) {
+      const t = TRACKS.find((x) => x.key === track);
+      showToast(`${t?.title || 'Track'} is locked. Complete ${t?.requiredLessons || 0} lessons to unlock.`, 'info');
+      return;
+    }
     setSelectedLessonRef({ moduleIndex: mIndex, lessonIndex: lIndex });
   };
 
@@ -492,6 +739,9 @@ const MagicTheoryTutor: React.FC<MagicTheoryTutorProps> = ({ user }) => {
           `Evaluate their answer. Return JSON with status='complete', assistantText, polishedOneLiner, and up to 3 improvement bullets.`;
 
         const res = await generateStructuredResponse(prompt, systemInstruction, schema, user);
+        const nextStats = { ...stats, drillsCompleted: (stats.drillsCompleted || 0) + 1 };
+        setStats(nextStats);
+        saveStats(nextStats);
         const lines: string[] = [];
         lines.push(String(res?.assistantText || 'Great.'));
         if (res?.polishedOneLiner) lines.push(`\n**Polished one-liner:**\n> ${String(res.polishedOneLiner)}`);
@@ -555,6 +805,9 @@ const MagicTheoryTutor: React.FC<MagicTheoryTutorProps> = ({ user }) => {
     if (!selectedLesson) return;
     const mIndex = selectedLessonRef!.moduleIndex;
     const lIndex = selectedLessonRef!.lessonIndex;
+    const nextStats = { ...stats, guidedSessions: (stats.guidedSessions || 0) + 1 };
+    setStats(nextStats);
+    saveStats(nextStats);
     startConcept(mIndex, lIndex, 0, 'guided');
   };
 
@@ -573,8 +826,73 @@ const MagicTheoryTutor: React.FC<MagicTheoryTutorProps> = ({ user }) => {
     setRoutineModalOpen(true);
   };
 
+  const handleOpenDiagnostics = () => {
+    if (!showDiagnosticsCTA) {
+      showToast('Complete a few lessons first, then diagnostics will unlock.', 'info');
+      return;
+    }
+    setDiagnosticsOpen(true);
+  };
+
+  const analyzeShow = async (show: Show) => {
+    setDiagnosticReport(null);
+    setDiagnosticLoading(true);
+    try {
+      const nextStats = { ...stats, diagnosticsRuns: (stats.diagnosticsRuns || 0) + 1 };
+      setStats(nextStats);
+      saveStats(nextStats);
+
+      const showText = `Show: ${safeTitle(show.title)}\nDescription: ${String((show as any).description ?? '')}\n\nTasks:\n${(show.tasks ?? [])
+        .slice(0, 80)
+        .map((t) => `- ${taskLabel(t)}${(t as any)?.notes ? ` :: ${String((t as any).notes).slice(0, 160)}` : ''}`)
+        .join('\n')}`;
+
+      const systemInstruction =
+        `You are an expert magic director and coach. Never expose methods. Evaluate the show through theory: clarity, pacing, surprise structure, and theatrical arc.\n` +
+        `Be specific, constructive, and practical.`;
+
+      const schema = {
+        type: Type.OBJECT,
+        properties: {
+          overallSummary: { type: Type.STRING },
+          scores: {
+            type: Type.OBJECT,
+            properties: {
+              clarity: { type: Type.NUMBER },
+              pacing: { type: Type.NUMBER },
+              surprise: { type: Type.NUMBER },
+              arc: { type: Type.NUMBER },
+            },
+            required: ['clarity', 'pacing', 'surprise', 'arc'],
+          },
+          strengths: { type: Type.ARRAY, items: { type: Type.STRING } },
+          improvements: { type: Type.ARRAY, items: { type: Type.STRING } },
+          nextSteps: { type: Type.ARRAY, items: { type: Type.STRING } },
+          directorNote: { type: Type.STRING },
+        },
+        required: ['overallSummary', 'scores', 'strengths', 'improvements', 'nextSteps'],
+      };
+
+      const prompt =
+        `Analyze this show plan.\n\n${showText}\n\n` +
+        `Return JSON with: overallSummary, scores {clarity,pacing,surprise,arc} (0-100), strengths[], improvements[], nextSteps[], directorNote.`;
+
+      const rep = await generateStructuredResponse(prompt, systemInstruction, schema, user);
+      setDiagnosticReport(formatDiagnosticsReport(rep, safeTitle(show.title)));
+      setDiagnosticsOpen(false);
+    } catch (e: any) {
+      console.error(e);
+      showToast(e?.message || 'Diagnostics failed.', 'error');
+    } finally {
+      setDiagnosticLoading(false);
+    }
+  };
+
   const applyPickedRoutine = async (pick: RoutinePick) => {
     setRoutineModalOpen(false);
+    const nextStats = { ...stats, applyCount: (stats.applyCount || 0) + 1 };
+    setStats(nextStats);
+    saveStats(nextStats);
     const lessonName = (activeLesson?.lesson?.name ?? selectedLesson?.lesson?.name ?? 'Lesson');
     const conceptName = progress && activeLesson ? activeLesson.lesson.concepts[progress.concept]?.name : undefined;
 
@@ -630,10 +948,45 @@ const MagicTheoryTutor: React.FC<MagicTheoryTutorProps> = ({ user }) => {
     if (!activeLesson) {
       if (!selectedLesson) {
         return (
-          <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
-            <TutorIcon className="w-24 h-24 text-slate-600 mb-4" />
-            <h2 className="text-2xl font-bold text-slate-300 font-cinzel">Magic Theory Tutor</h2>
-            <p className="text-slate-400 max-w-md mt-2">Select a lesson from the curriculum to begin your structured journey into the art and science of magic.</p>
+          <div className="flex-1 overflow-y-auto p-6 md:p-10">
+            <div className="max-w-3xl mx-auto text-center">
+              <TutorIcon className="w-24 h-24 text-slate-600 mb-4 mx-auto" />
+              <h2 className="text-2xl font-bold text-slate-200 font-cinzel">Magic Theory Tutor</h2>
+              <p className="text-slate-400 max-w-xl mt-2 mx-auto">
+                Select a lesson from the curriculum to begin your structured journey into the art and science of magic.
+              </p>
+
+              <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+                <span className="px-3 py-1.5 rounded-full text-sm border border-yellow-400/40 bg-yellow-500/10 text-yellow-200">
+                  Theory Mastery: <span className="font-semibold text-white">{masteryScore}%</span>
+                </span>
+                {showDiagnosticsCTA && (
+                  <button
+                    onClick={handleOpenDiagnostics}
+                    className="px-4 py-1.5 rounded-full text-sm border border-yellow-400/40 bg-yellow-500/10 text-yellow-200 hover:bg-yellow-500/15"
+                  >
+                    Analyze My Show
+                  </button>
+                )}
+              </div>
+
+              {diagnosticReport && (
+                <div className="mt-8 text-left rounded-2xl border border-slate-700 bg-slate-950/30 p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-sm font-semibold text-slate-200">Latest diagnostics</div>
+                    <button
+                      onClick={() => setDiagnosticReport(null)}
+                      className="text-xs px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="mt-3 text-slate-200">
+                    <FormattedText text={diagnosticReport} />
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         );
       }
@@ -642,6 +995,7 @@ const MagicTheoryTutor: React.FC<MagicTheoryTutorProps> = ({ user }) => {
       const summary = getLessonSummary(selectedLesson.lesson);
       const why = getWhyThisMatters(selectedLesson.lesson.name);
       const insight = getDirectorsInsight(selectedLesson.lesson.name);
+      const refs = getCanonicalReferences(selectedLesson.lesson.name);
 
       return (
         <div className="flex-1 overflow-y-auto p-6 md:p-10">
@@ -678,6 +1032,19 @@ const MagicTheoryTutor: React.FC<MagicTheoryTutorProps> = ({ user }) => {
             <div className="mt-4 rounded-2xl border border-purple-700/40 bg-purple-900/20 p-5">
               <div className="text-sm font-semibold text-purple-200">🎩 Director Insight</div>
               <div className="text-purple-100/90 mt-2">{insight}</div>
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-slate-700 bg-slate-950/30 p-5">
+              <div className="text-sm font-semibold text-slate-200">Canonical references</div>
+              <div className="text-slate-400 text-sm mt-1">Attribution context only — no quoted text.</div>
+              <ul className="mt-3 space-y-2">
+                {refs.map((r) => (
+                  <li key={r.title} className="rounded-xl border border-slate-800 bg-slate-900/20 p-3">
+                    <div className="text-slate-100 font-semibold">{r.title}</div>
+                    <div className="text-slate-400 text-sm mt-0.5">{r.note}</div>
+                  </li>
+                ))}
+              </ul>
             </div>
 
             <div className="mt-6 rounded-2xl border border-slate-700 bg-slate-950/30 p-5">
@@ -847,11 +1214,23 @@ const MagicTheoryTutor: React.FC<MagicTheoryTutorProps> = ({ user }) => {
   };
 
   return (
-    <div className="flex-1 flex flex-col md:flex-row h-full overflow-hidden">
+    <div className="relative flex-1 flex flex-col md:flex-row h-full overflow-hidden">
+      {/* Tier 3: subtle "library" texture */}
+      <div className="pointer-events-none absolute inset-0 opacity-20" style={{
+        backgroundImage:
+          'radial-gradient(700px 400px at 15% 20%, rgba(234,179,8,0.10), transparent 60%), radial-gradient(600px 360px at 85% 30%, rgba(168,85,247,0.12), transparent 55%), linear-gradient(180deg, rgba(255,255,255,0.03), transparent 40%)',
+      }} />
       <RoutinePickerModal
         open={routineModalOpen}
         onClose={() => setRoutineModalOpen(false)}
         onPick={applyPickedRoutine}
+      />
+
+      <DiagnosticsModal
+        open={diagnosticsOpen}
+        onClose={() => setDiagnosticsOpen(false)}
+        onAnalyze={analyzeShow}
+        loading={diagnosticLoading}
       />
 
       {/* Curriculum Menu */}
@@ -867,8 +1246,81 @@ const MagicTheoryTutor: React.FC<MagicTheoryTutorProps> = ({ user }) => {
           </button>
         </div>
 
+        {/* Tier 3: Mastery + Track Path */}
+        <div className="rounded-2xl border border-yellow-600/30 bg-yellow-900/10 p-4 mb-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-xs uppercase tracking-wider text-yellow-200">Theory Mastery</div>
+              <div className="text-2xl font-bold text-white">{masteryScore}%</div>
+            </div>
+            <div className="text-right">
+              <div className="text-xs text-slate-300">Lessons</div>
+              <div className="text-sm text-slate-100 font-semibold">
+                {completedCount}/{totalLessons}
+              </div>
+            </div>
+          </div>
+          <div className="mt-3 h-2 w-full rounded-full bg-slate-800 border border-slate-700 overflow-hidden">
+            <div className="h-full bg-yellow-400/80" style={{ width: `${masteryScore}%` }} />
+          </div>
+          <div className="mt-2 text-xs text-slate-400">
+            Earn mastery by completing lessons, applying concepts, and doing drills.
+          </div>
+        </div>
+
+        <div className="mb-4">
+          <div className="text-xs uppercase tracking-wider text-slate-400 mb-2">Curriculum Path</div>
+          <div className="space-y-2">
+            {TRACKS.map((t) => {
+              const unlocked = unlockedTracks[t.key];
+              const active = selectedTrack === t.key;
+              return (
+                <button
+                  key={t.key}
+                  onClick={() => unlocked && setSelectedTrack(t.key)}
+                  className={`w-full text-left rounded-xl border px-3 py-2 transition ${
+                    active
+                      ? 'border-purple-500 bg-purple-900/20'
+                      : unlocked
+                        ? 'border-slate-700 bg-slate-900/30 hover:bg-slate-800/40'
+                        : 'border-slate-800 bg-slate-950/30 opacity-70'
+                  }`}
+                  title={
+                    unlocked
+                      ? t.subtitle
+                      : `Locked — complete ${t.requiredLessons} lessons to unlock.`
+                  }
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="text-sm font-semibold text-slate-100">
+                        {t.title}
+                        {!unlocked && <span className="ml-2 text-xs text-slate-400">(Locked)</span>}
+                      </div>
+                      <div className="text-xs text-slate-400 mt-0.5">{t.subtitle}</div>
+                    </div>
+                    <div className="text-xs text-slate-400 whitespace-nowrap">{t.requiredLessons ? `${t.requiredLessons}+` : 'Start'}</div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {showDiagnosticsCTA && (
+          <button
+            onClick={handleOpenDiagnostics}
+            className="w-full mb-4 px-4 py-3 rounded-xl border border-yellow-400/40 bg-yellow-500/10 text-yellow-200 font-semibold hover:bg-yellow-500/15"
+            title="Analyze a show through a theory lens"
+          >
+            Analyze My Show Through Theory Lens
+          </button>
+        )}
+
         <div className="space-y-4">
-          {MAGIC_THEORY_CURRICULUM.map((module, mIndex) => (
+          {MAGIC_THEORY_CURRICULUM.filter((_m, mIndex) => lessonTrack(mIndex) === selectedTrack).map((module, idx) => {
+            const mIndex = MAGIC_THEORY_CURRICULUM.indexOf(module);
+            return (
             <div key={module.name} className="space-y-2">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold uppercase tracking-wider text-purple-400">{module.name}</h3>
@@ -913,7 +1365,14 @@ const MagicTheoryTutor: React.FC<MagicTheoryTutorProps> = ({ user }) => {
                 })}
               </ul>
             </div>
-          ))}
+          );
+          })}
+
+          {MAGIC_THEORY_CURRICULUM.filter((_m, mIndex) => lessonTrack(mIndex) === selectedTrack).length === 0 && (
+            <div className="text-slate-400 text-sm rounded-xl border border-slate-800 bg-slate-950/30 p-4">
+              No lessons are available in this track yet.
+            </div>
+          )}
         </div>
       </nav>
 
