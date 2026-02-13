@@ -75,6 +75,9 @@ const LOADING_STEPS = [
     'Drafting campaign assets…',
 ];
 
+// Brand gold for section headings
+const GOLD_HEADING_CLASS = 'text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-300 to-amber-200 drop-shadow-sm';
+
 
 const MarketingCampaign: React.FC<MarketingCampaignProps> = ({ user, onIdeaSaved, onNavigateToShowPlanner, onNavigate }) => {
     const [showTitle, setShowTitle] = useState('');
@@ -753,12 +756,12 @@ const handleCreateBookingPitch = async () => {
         <main className="flex-1 overflow-y-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
             {/* Control Panel */}
             <div className="flex flex-col">
-                <h2 className="text-xl font-bold text-slate-300 mb-2">Marketing Campaign Generator</h2>
+                <h2 className={`text-xl font-bold mb-2 ${GOLD_HEADING_CLASS}`}>Marketing Campaign Generator</h2>
                 <p className="text-slate-400 mb-4">Fill in your show details to generate a complete promotional toolkit, including press releases, social media posts, and more.</p>
                 
                 <div className="space-y-6">
                     <div>
-                        <label htmlFor="show-title" className="block text-sm font-medium text-slate-300 mb-1">Show Title*</label>
+                        <label htmlFor="show-title" className={`block text-sm font-medium mb-1 ${GOLD_HEADING_CLASS}`}>Show Title*</label>
                         <p className="text-xs text-slate-500 mb-2">The headline name of your performance.</p>
                         <input id="show-title" type="text" value={showTitle} onChange={(e) => setShowTitle(e.target.value)} placeholder="e.g., Echoes of the Enchanted" className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white" />
                         {showTitleTouched && showTitle.trim() === '' && (
@@ -785,7 +788,7 @@ const handleCreateBookingPitch = async () => {
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-2 flex items-center gap-2">
+                        <label className={`block text-sm font-medium mb-2 flex items-center gap-2 ${GOLD_HEADING_CLASS}`}>
                             <UsersIcon className="w-5 h-5 text-slate-400" />
                             Target Audience*
                         </label>
@@ -804,7 +807,7 @@ const handleCreateBookingPitch = async () => {
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-2 flex items-center gap-2">
+                        <label className={`block text-sm font-medium mb-2 flex items-center gap-2 ${GOLD_HEADING_CLASS}`}>
                             <StageCurtainsIcon className="w-5 h-5 text-slate-400" />
                             Performance Style
                         </label>
@@ -821,7 +824,7 @@ const handleCreateBookingPitch = async () => {
                     <div>
                         
 <div>
-    <label htmlFor="campaign-style" className="block text-sm font-medium text-slate-300 mb-1">Campaign Style</label>
+    <label htmlFor="campaign-style" className={`block text-sm font-medium mb-1 ${GOLD_HEADING_CLASS}`}>Campaign Style</label>
     <p className="text-xs text-slate-500 mb-2">Pick a template to shape tone, channels, and structure.</p>
     <select
         id="campaign-style"
@@ -839,7 +842,7 @@ const handleCreateBookingPitch = async () => {
 <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4 space-y-3">
     <div className="flex items-center justify-between gap-3">
         <div>
-            <p className="text-sm font-semibold text-slate-200">Campaign Strategy Preview</p>
+            <p className={`text-sm font-semibold ${GOLD_HEADING_CLASS}`}>Campaign Strategy Preview</p>
             <p className="text-xs text-slate-500 mt-0.5">Updates live as you select options.</p>
         </div>
 
@@ -876,7 +879,7 @@ const handleCreateBookingPitch = async () => {
     </div>
 </div>
 
-<label htmlFor="key-themes" className="block text-sm font-medium text-slate-300 mb-1">Key Effects or Themes (Optional)</label>
+<label htmlFor="key-themes" className={`block text-sm font-medium mb-1 ${GOLD_HEADING_CLASS}`}>Key Effects or Themes (Optional)</label>
                         <textarea id="key-themes" rows={3} value={keyThemes} onChange={(e) => setKeyThemes(e.target.value)} placeholder="e.g., Classic sleight of hand, modern mind reading, story of a magical artifact" className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white" />
 
 {themeSuggestionsVisible && (
@@ -937,7 +940,7 @@ const handleCreateBookingPitch = async () => {
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
-                                    <p className="text-sm font-semibold text-slate-200">AI Strategy Notes</p>
+                                    <p className={`text-sm font-semibold ${GOLD_HEADING_CLASS}`}>AI Strategy Notes</p>
                                     <ul className="mt-2 space-y-1 text-sm text-slate-300">
                                         {advisorNotes.map((n, idx) => (
                                             <li key={idx}>• {n}</li>
@@ -945,7 +948,7 @@ const handleCreateBookingPitch = async () => {
                                     </ul>
                                 </div>
                                 <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
-                                    <p className="text-sm font-semibold text-slate-200">Audience Conversion Predictor</p>
+                                    <p className={`text-sm font-semibold ${GOLD_HEADING_CLASS}`}>Audience Conversion Predictor</p>
                                     <div className="mt-2 grid grid-cols-1 gap-1 text-sm">
                                         <div className="flex items-start justify-between gap-2">
                                             <span className="text-slate-400">Predicted Response Rate</span>
@@ -965,7 +968,7 @@ const handleCreateBookingPitch = async () => {
 
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
                                 <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
-                                    <p className="text-sm font-semibold text-slate-200">Competitive Positioning Analyzer</p>
+                                    <p className={`text-sm font-semibold ${GOLD_HEADING_CLASS}`}>Competitive Positioning Analyzer</p>
                                     <p className="mt-2 text-sm text-slate-300">Compared to similar performers:</p>
                                     <ul className="mt-2 space-y-1 text-sm text-slate-300">
                                         <li>• You rank strongest in <span className="text-slate-100 font-semibold">{competitivePositioning.strongest}</span></li>
@@ -975,7 +978,7 @@ const handleCreateBookingPitch = async () => {
                                 </div>
 
                                 <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
-                                    <p className="text-sm font-semibold text-slate-200">Persona-Based Marketing Versions</p>
+                                    <p className={`text-sm font-semibold ${GOLD_HEADING_CLASS}`}>Persona-Based Marketing Versions</p>
                                     <p className="mt-2 text-xs text-slate-400">Generate tailored variations for different buyers. Switch personas to view versions.</p>
 
                                     <div className="mt-3 flex flex-wrap gap-2">
@@ -1016,7 +1019,7 @@ const handleCreateBookingPitch = async () => {
                                 </div>
 
                                 <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
-                                    <p className="text-sm font-semibold text-slate-200">ROI Projection</p>
+                                    <p className={`text-sm font-semibold ${GOLD_HEADING_CLASS}`}>ROI Projection</p>
                                     <p className="mt-2 text-sm text-slate-300">Estimated bookings from campaign:</p>
                                     <p className="mt-2 text-xl font-bold text-slate-100">{roiProjection}</p>
                                     <p className="mt-2 text-xs text-slate-400">Heuristic estimate based on campaign completeness + channel fit. Improve readiness to push the range upward.</p>
@@ -1139,7 +1142,7 @@ const handleCreateBookingPitch = async () => {
                     <div className="flex-1 flex items-center justify-center text-center text-slate-500 p-6">
                         <div className="max-w-md">
                             <MegaphoneIcon className="w-20 h-20 mx-auto mb-4" />
-                            <h3 className="text-slate-200 font-semibold text-lg">Marketing Intelligence Ready</h3>
+                            <h3 className={`font-semibold text-lg ${GOLD_HEADING_CLASS}`}>Marketing Intelligence Ready</h3>
                             <p className="text-slate-400 text-sm mt-2">Fill in your show details and generate a complete campaign package including:</p>
                             <ul className="text-slate-400 text-sm mt-4 space-y-1">
                                 <li>• Press Release</li>
