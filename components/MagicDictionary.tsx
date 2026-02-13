@@ -1643,9 +1643,11 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
           </div>
           )
         ) : (
-          <div className="flex flex-col lg:flex-row gap-4">
+          // Technique & Terms: use a real grid (not flex) so the term cards start at the top
+          // alongside the taxonomy, even on mid-sized screens.
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
             {/* Left taxonomy sidebar */}
-            <aside className="w-full lg:w-[280px] lg:shrink-0 bg-slate-800/30 border border-slate-700 rounded-xl p-3 lg:sticky lg:top-20 h-fit">
+            <aside className="md:col-span-4 xl:col-span-3 bg-slate-800/30 border border-slate-700 rounded-xl p-3 md:sticky md:top-20 h-fit">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-semibold text-slate-400">Technique Categories</p>
                 <button
@@ -1698,7 +1700,7 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
             </aside>
 
             {/* Term cards */}
-            <section className="flex-1 min-w-0">
+            <section className="md:col-span-8 xl:col-span-9 min-w-0">
               {filteredTechniqueTerms.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                   {filteredTechniqueTerms.map((t) => {
