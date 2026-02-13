@@ -1643,9 +1643,9 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
           </div>
           )
         ) : (
-          <div className="grid grid-cols-12 gap-4">
+          <div className="flex flex-col lg:flex-row gap-4">
             {/* Left taxonomy sidebar */}
-            <div className="col-span-12 lg:col-span-2 bg-slate-800/30 border border-slate-700 rounded-xl p-3 lg:sticky lg:top-20 h-fit">
+            <aside className="w-full lg:w-[280px] lg:shrink-0 bg-slate-800/30 border border-slate-700 rounded-xl p-3 lg:sticky lg:top-20 h-fit">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-semibold text-slate-400">Technique Categories</p>
                 <button
@@ -1695,12 +1695,12 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
                   construction details, and step-by-step handling.
                 </p>
               </div>
-            </div>
+            </aside>
 
             {/* Term cards */}
-            <div className="col-span-12 lg:col-span-10">
+            <section className="flex-1 min-w-0">
               {filteredTechniqueTerms.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                   {filteredTechniqueTerms.map((t) => {
                     const open = expandedTechTerm === t.term;
                     return (
@@ -1757,8 +1757,9 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
                   <p className="mt-2 text-sm text-slate-600">Try a different keyword or choose another category.</p>
                 </div>
               )}
-            </div>
+            </section>
           </div>
+</div>
         )}
       </div>
 
@@ -1851,14 +1852,13 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
                   })()}
 
                   {/* Quiz */}
-      {/* Technique view should sit closer to the controls to avoid empty vertical space. */}
-      <div className={layer === 'core' ? 'mt-4' : 'mt-2'}>
-                    <div className="text-sm font-semibold text-slate-200">Quiz</div>
-                    <p className="mt-1 text-sm text-slate-300 leading-relaxed">{currentTutorStep.quiz}</p>
-                    {currentTutorStep.tip ? <p className="mt-2 text-xs text-slate-500">{currentTutorStep.tip}</p> : null}
-                  </div>
+<div className="mt-4">
+  <div className="text-sm font-semibold text-slate-200">Quiz</div>
+  <p className="mt-1 text-sm text-slate-300 leading-relaxed">{currentTutorStep.quiz}</p>
+  {currentTutorStep.tip ? <p className="mt-2 text-xs text-slate-500">{currentTutorStep.tip}</p> : null}
+</div>
 
-                  <div className="mt-3">
+<div className="mt-3">
                     <label className="block text-xs font-semibold text-slate-400 mb-1">Your answer</label>
                     <textarea
                       value={tutorAnswer}
