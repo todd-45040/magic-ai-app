@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+
+// BUILD STAMP: fully-wired GlobalSearch patch (createShow signature + planner task defaults) - 2026-02-12
 import type { Client, MagicianView, SavedIdea, Show, Task } from '../types';
 import { SearchIcon, TagIcon, ChecklistIcon, BookmarkIcon, StageCurtainsIcon } from './icons';
 import { useAppDispatch, useAppState } from '../store';
@@ -226,7 +228,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ shows: showsProp, ideas: id
     try {
       if (cmd.key === 'add_show') {
         const title = (cmd.payload || '').trim() || 'New Show';
-        const newShow = await showsService.createShow({ title, description: '' });
+        const newShow = await showsService.createShow(title, '');
         await refreshAll();
         onNavigate('show-planner', newShow.id);
         setNotice(`Created show: ${title}`);
@@ -239,7 +241,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ shows: showsProp, ideas: id
           onNavigate('show-planner', shows[0].id);
           setNotice('Opened Show Planner.');
         } else {
-          const newShow = await showsService.createShow({ title: 'New Show', description: '' });
+          const newShow = await showsService.createShow('New Show', '');
           await refreshAll();
           onNavigate('show-planner', newShow.id);
           setNotice('Created and opened your first show.');
@@ -548,7 +550,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ shows: showsProp, ideas: id
         if (!src) throw new Error('Show not found');
 
         const copyTitle = `${src.title} (Copy)`;
-        const newShow = await showsService.createShow({ title: copyTitle, description: src.description || '' });
+        const newShow = await showsService.createShow(copyTitle, (src as any).description || '');
 
         // copy tasks (best-effort)
         const taskCopies: Partial<Task>[] = (src.tasks || []).map((t) => ({
@@ -679,8 +681,8 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ shows: showsProp, ideas: id
       const updated = await showsService.addTaskToShow(showId, {
         title,
         notes,
-        priority: 'medium',
-        status: 'todo',
+        priority: 'Medium',
+        status: 'To-Do',
         tags,
       });
       dispatch({ type: 'SET_SHOWS', payload: updated });
