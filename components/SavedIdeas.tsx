@@ -859,7 +859,17 @@ const sendToPlanner = (idea: SavedIdea) => {
                         />
                     </div>
 
+                    
                     <button
+                        onClick={runOrganization}
+                        className="px-3 py-2 text-xs font-semibold bg-purple-900/30 hover:bg-purple-900/50 border border-purple-500/30 rounded-md text-purple-100 transition flex items-center gap-2"
+                        title="Organize and prioritize your ideas"
+                    >
+                        <WandIcon className="w-4 h-4" />
+                        Organize My Ideas
+                    </button>
+
+<button
                         onClick={resetView}
                         className="px-3 py-2 text-xs font-semibold bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-md text-slate-200 transition"
                         title="Reset filters and view"
@@ -1432,16 +1442,6 @@ const sendToPlanner = (idea: SavedIdea) => {
                     <button onClick={bulkDuplicateToClipboard} className="px-3 py-1.5 text-xs rounded-full bg-slate-800/60 border border-slate-700 text-slate-200 hover:border-slate-500 transition">Copy</button>
                     <button onClick={bulkAddTag} className="px-3 py-1.5 text-xs rounded-full bg-slate-800/60 border border-slate-700 text-slate-200 hover:border-slate-500 transition">Tag</button>
                     <button onClick={bulkArchive} className="px-3 py-1.5 text-xs rounded-full bg-slate-800/60 border border-slate-700 text-slate-200 hover:border-slate-500 transition">Archive</button>
-                    
-                    <button
-                        onClick={runOrganization}
-                        className="px-3 py-2 text-xs font-semibold bg-purple-900/30 hover:bg-purple-900/50 border border-purple-500/30 rounded-md text-purple-100 transition flex items-center gap-2"
-                        title="Organize and prioritize your ideas"
-                    >
-                        <WandIcon className="w-4 h-4" />
-                        Organize My Ideas
-                    </button>
-
 <button onClick={clearSelection} className="px-3 py-1.5 text-xs rounded-full bg-slate-900/60 border border-slate-700 text-slate-300 hover:border-slate-500 transition">Clear</button>
                 </div>
             ) : null}
