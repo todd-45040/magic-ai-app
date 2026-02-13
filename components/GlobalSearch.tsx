@@ -583,26 +583,6 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ shows, ideas, onNavigate, o
             </div>
         );
     };
-                                return (
-                                    <span
-                                        key={tag}
-                                        className={[
-                                            'px-1.5 py-0.5 text-xs font-semibold rounded border',
-                                            isMatch
-                                                ? 'bg-purple-500/25 text-purple-200 border-purple-500/40'
-                                                : 'bg-purple-500/15 text-purple-300 border-purple-500/25',
-                                        ].join(' ')}
-                                    >
-                                        {tag}
-                                    </span>
-                                );
-                            })}
-                        </div>
-                    )}
-                </div>
-            </div>
-        </button>
-    );
 
     const hasAnyResults =
         !!searchResults &&
