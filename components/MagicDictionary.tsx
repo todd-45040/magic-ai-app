@@ -1119,9 +1119,19 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
 
       {/* Filters Bar */}
       <div className="sticky top-0 bg-slate-900/80 backdrop-blur-sm py-3 z-10">
-        <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3">
+        {/*
+          Core view needs a denser control matrix (chips + difficulty + tools).
+          Technique view should stay lean to avoid wasted horizontal space.
+        */}
+        <div
+          className={
+            layer === 'core'
+              ? 'grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3'
+              : 'flex flex-col lg:flex-row lg:items-center gap-3'
+          }
+        >
           {/* Layer Toggle */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className={layer === 'core' ? 'flex flex-wrap items-center gap-2' : 'flex flex-wrap items-center gap-2 lg:shrink-0'}>
             <div className="inline-flex rounded-full border border-slate-700 bg-slate-800/40 overflow-hidden">
               <button
                 type="button"
@@ -1161,12 +1171,24 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
               </button>
             </div>
 
-            <div className="ml-auto text-xs text-slate-400">
+            <div
+              className={
+                layer === 'core'
+                  ? 'ml-auto text-xs text-slate-400'
+                  : 'w-full mt-2 lg:mt-0 lg:w-auto lg:ml-auto text-xs text-slate-400'
+              }
+            >
               {layer === 'core' ? 'Deep concepts + coaching tools' : 'High-level taxonomy (non-exposure)'}
             </div>
           </div>
           {/* Search */}
-          <div className="flex items-center bg-slate-800 border border-slate-700 rounded-lg overflow-hidden">
+          <div
+            className={
+              layer === 'core'
+                ? 'flex items-center bg-slate-800 border border-slate-700 rounded-lg overflow-hidden'
+                : 'flex items-center bg-slate-800 border border-slate-700 rounded-lg overflow-hidden w-full lg:flex-1'
+            }
+          >
             <div className="pl-4 pr-2 text-slate-500">
               <SearchIcon className="w-5 h-5" />
             </div>
@@ -1230,7 +1252,7 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
             ) : null}
           </div>
 
-          {layer === 'core' ? (
+            {layer === 'core' ? (
             <>
               {/* Concept Category Chips */}
               <div className="flex items-center gap-2 overflow-x-auto pb-1">
@@ -1619,7 +1641,8 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
           )
         ) : (
           <div className="grid grid-cols-12 gap-4">
-            <div className="col-span-12 lg:col-span-3 bg-slate-800/30 border border-slate-700 rounded-xl p-3 lg:sticky lg:top-24 h-fit">
+            {/* Left taxonomy sidebar */}
+            <div className="col-span-12 lg:col-span-2 bg-slate-800/30 border border-slate-700 rounded-xl p-3 lg:sticky lg:top-24 h-fit">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-semibold text-slate-400">Technique Categories</p>
                 <button
@@ -1671,9 +1694,10 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
               </div>
             </div>
 
-            <div className="col-span-12 lg:col-span-9">
+            {/* Term cards */}
+            <div className="col-span-12 lg:col-span-10">
               {filteredTechniqueTerms.length > 0 ? (
-                <div className="grid grid-cols-1 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3">
                   {filteredTechniqueTerms.map((t) => {
                     const open = expandedTechTerm === t.term;
                     return (
@@ -1684,7 +1708,7 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
                         <button
                           type="button"
                           onClick={() => setExpandedTechTerm(open ? null : t.term)}
-                          className="w-full text-left p-4 hover:bg-slate-700/40 transition-colors"
+                          className="w-full text-left p-3 hover:bg-slate-700/40 transition-colors"
                           aria-expanded={open}
                         >
                           <div className="flex items-start justify-between gap-4">
