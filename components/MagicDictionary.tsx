@@ -1759,7 +1759,6 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
               )}
             </section>
           </div>
-</div>
         )}
       </div>
 
