@@ -8,9 +8,13 @@ interface GlobalSearchProps {
     onNavigate: (view: MagicianView, id: string, secondaryId?: string) => void;
 }
 
+
+type SearchScope = 'all' | 'shows' | 'tasks' | 'ideas' | 'clients' | 'files';
+
 const GlobalSearch: React.FC<GlobalSearchProps> = ({ shows, ideas, onNavigate }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedTag, setSelectedTag] = useState<string | null>(null);
+    const [activeScope, setActiveScope] = useState<SearchScope>('all');
 
     const allTags = useMemo(() => {
         const tags = new Set<string>();
@@ -25,6 +29,42 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ shows, ideas, onNavigate })
         });
         return Array.from(tags).sort((a, b) => a.localeCompare(b));
     }, [shows, ideas]);
+
+    const totals = useMemo(() => {
+        const showCount = shows.length;
+        const taskCount = shows.reduce((sum, s) => sum + (s.tasks?.length || 0), 0);
+        const ideaCount = ideas.length;
+        return { showCount, taskCount, ideaCount, allCount: showCount + taskCount + ideaCount };
+    }, [shows, ideas]);
+
+    const scopeMeta = useMemo(() => {
+        const meta: Record<SearchScope, { label: string; includes: string; total: number; disabled?: boolean }> = {
+            all: { label: 'All', includes: 'Shows + Tasks + Ideas', total: totals.allCount },
+            shows: { label: 'Shows', includes: 'Shows', total: totals.showCount },
+            tasks: { label: 'Tasks', includes: 'Tasks', total: totals.taskCount },
+            ideas: { label: 'Ideas', includes: 'Ideas', total: totals.ideaCount },
+            clients: { label: 'Clients', includes: 'Clients', total: 0, disabled: true },
+            files: { label: 'Files', includes: 'Files', total: 0, disabled: true },
+        };
+        return meta;
+    }, [totals]);
+
+    const statusText = useMemo(() => {
+        const meta = scopeMeta[activeScope];
+        const query = (selectedTag || searchTerm).trim();
+
+        if (meta.disabled) {
+            return `${meta.label} search is coming soon. For now, search Shows, Tasks, and Ideas.`;
+        }
+
+        if (!query) {
+            return `Search across ${totals.showCount} shows, ${totals.taskCount} tasks, and ${totals.ideaCount} ideas.`;
+        }
+
+        return `Searching across ${meta.total} items… Showing results from ${meta.includes}.`;
+    }, [activeScope, scopeMeta, totals, searchTerm, selectedTag]);
+
+    const scopeOrder: SearchScope[] = ['all', 'shows', 'clients', 'ideas', 'tasks', 'files'];
     
     const searchResults = useMemo(() => {
         const query = (selectedTag || searchTerm).toLowerCase();
@@ -63,9 +103,23 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ shows, ideas, onNavigate })
         // Search Ideas
         results.ideas = ideas.filter(idea => hasTagOrText(idea));
 
-        return results;
+        const scoped = { ...results };
 
-    }, [shows, ideas, searchTerm, selectedTag]);
+        if (activeScope !== 'all') {
+            if (activeScope !== 'shows') scoped.shows = [];
+            if (activeScope !== 'tasks') scoped.tasks = [];
+            if (activeScope !== 'ideas') scoped.ideas = [];
+            // clients/files are not yet indexed in this page – keep results empty for those scopes
+            if (activeScope === 'clients' || activeScope === 'files') {
+                scoped.shows = [];
+                scoped.tasks = [];
+                scoped.ideas = [];
+            }
+        }
+
+        return scoped;
+
+    }, [shows, ideas, searchTerm, selectedTag, activeScope]);
 
     const handleTagClick = (tag: string) => {
         setSearchTerm('');
@@ -104,15 +158,38 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ shows, ideas, onNavigate })
                 <p className="text-slate-400 mt-1">Find anything across your shows, tasks, and ideas.</p>
             </header>
 
-            <div className="flex items-center bg-slate-800 border border-slate-700 rounded-lg mb-6">
+<div className="flex flex-wrap items-center gap-2 mb-3">
+    {scopeOrder.map(scope => {
+        const meta = scopeMeta[scope];
+        const isActive = activeScope === scope;
+        return (
+            <button
+                key={scope}
+                type="button"
+                disabled={!!meta.disabled}
+                onClick={() => setActiveScope(scope)}
+                className={[
+                    'px-3 py-1 text-xs font-semibold rounded-full border transition-colors',
+                    meta.disabled ? 'opacity-40 cursor-not-allowed border-slate-700 text-slate-500' : 'border-slate-700 text-slate-300 hover:bg-slate-800',
+                    isActive ? 'bg-purple-600 text-white border-purple-500' : 'bg-slate-900/40',
+                ].join(' ')}
+            >
+                {meta.label}
+            </button>
+        );
+    })}
+</div>
+
+            <div className="flex items-center bg-slate-800 border border-slate-700 rounded-lg mb-2">
                 <input
                     type="text"
                     value={searchTerm}
                     onChange={handleSearchChange}
-                    placeholder="Search by keyword..."
+                    placeholder='Search shows, tasks, or ideas... Try: "birthday", "corporate", "closer trick"'
                     className="flex-1 w-full bg-transparent px-4 py-3 text-white placeholder-slate-400 focus:outline-none"
                 />
             </div>
+            <p className="text-xs text-slate-500 mb-6">{statusText}</p>
 
             {searchResults ? (
                 <div>
