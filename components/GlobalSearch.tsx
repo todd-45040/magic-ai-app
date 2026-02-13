@@ -1,1015 +1,1125 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import type { Show, Task, SavedIdea, MagicianView } from '../types';
+import type { Client, MagicianView, SavedIdea, Show, Task } from '../types';
 import { SearchIcon, TagIcon, ChecklistIcon, BookmarkIcon, StageCurtainsIcon } from './icons';
+import { useAppDispatch, useAppState } from '../store';
+import * as showsService from '../services/showsService';
+import * as ideasService from '../services/ideasService';
+import * as clientsService from '../services/clientsService';
 
-interface GlobalSearchProps {
-    shows: Show[];
-    ideas: SavedIdea[];
-    onNavigate: (view: MagicianView, id: string, secondaryId?: string) => void;
-
-    /** Optional power-actions. If not provided, actions fall back to navigation-only behavior. */
-    onEditHit?: (hit: { type: 'show' | 'task' | 'idea'; id: string; parentId?: string }) => void;
-    onDuplicateHit?: (hit: { type: 'show' | 'task' | 'idea'; id: string; parentId?: string }) => void;
-    onAddToPlanner?: (hit: { type: 'show' | 'task' | 'idea'; id: string; parentId?: string }) => void;
-}
-
-type SearchScope = 'all' | 'shows' | 'tasks' | 'ideas' | 'clients' | 'files';
+type SearchScope = 'all' | 'shows' | 'clients' | 'ideas' | 'tasks' | 'files';
 type BadgeType = 'Exact Match' | 'Related' | 'Suggested' | 'Recent';
 
-type HitType = 'show' | 'task' | 'idea' | 'client' | 'file';
+type HitType = 'show' | 'task' | 'idea' | 'client' | 'file' | 'command';
 
 type SearchHit = {
-    key: string;
-    type: HitType;
-    title: string;
-    subtitle?: string;
-    tags?: string[];
-    icon: React.FC<any>;
-    onClick?: () => void;
-    score: number;
-    badges: BadgeType[];
+  key: string;
+  type: HitType;
+  title: string;
+  subtitle?: string;
+  tags?: string[];
+  icon: React.FC<any>;
+  score: number;
+  badges: BadgeType[];
+  showId?: string;
+  taskId?: string;
+  ideaId?: string;
+  clientId?: string;
+  commandKey?: string;
+  commandHint?: string;
 };
 
-const GlobalSearch: React.FC<GlobalSearchProps> = ({ shows, ideas, onNavigate, onEditHit, onDuplicateHit, onAddToPlanner }) => {
-    const [searchTerm, setSearchTerm] = useState('');
-    const [selectedTag, setSelectedTag] = useState<string | null>(null);
-    const [activeScope, setActiveScope] = useState<SearchScope>('all');
-    // Tier 3: power features
-    const [activeIndex, setActiveIndex] = useState<number>(-1);
-    const [notice, setNotice] = useState<string | null>(null);
-    const [recentSearches, setRecentSearches] = useState<string[]>([]);
-    const inputRef = useRef<HTMLInputElement | null>(null);
+interface GlobalSearchProps {
+  /** Back-compat; store is source of truth */
+  shows?: Show[];
+  ideas?: SavedIdea[];
+  onNavigate: (view: MagicianView, id: string, secondaryId?: string) => void;
+}
 
+type PlannerModalState =
+  | { open: false }
+  | { open: true; hit: SearchHit; targets: { id: string; title: string }[]; selectedShowId: string };
 
-    const scopeMeta: Record<SearchScope, { label: string; disabled?: boolean }> = {
-        all: { label: 'All' },
-        shows: { label: 'Shows' },
-        clients: { label: 'Clients', disabled: true },
-        ideas: { label: 'Ideas' },
-        tasks: { label: 'Tasks' },
-        files: { label: 'Files', disabled: true },
+const RECENTS_KEY = 'mai_recent_searches_v1';
+
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
+}
+
+function normalizeString(s?: string) {
+  return (s || '').toLowerCase();
+}
+
+function highlightText(text: string, needle: string) {
+  const t = text || '';
+  const n = (needle || '').trim();
+  if (!n) return <>{t}</>;
+
+  const idx = t.toLowerCase().indexOf(n.toLowerCase());
+  if (idx < 0) return <>{t}</>;
+  const before = t.slice(0, idx);
+  const match = t.slice(idx, idx + n.length);
+  const after = t.slice(idx + n.length);
+  return (
+    <>
+      {before}
+      <span className="font-semibold text-white">{match}</span>
+      {after}
+    </>
+  );
+}
+
+const GlobalSearch: React.FC<GlobalSearchProps> = ({ shows: showsProp, ideas: ideasProp, onNavigate }) => {
+  const state = useAppState();
+  const dispatch = useAppDispatch();
+
+  const shows = (showsProp && showsProp.length ? showsProp : state.shows) ?? [];
+  const ideas = (ideasProp && ideasProp.length ? ideasProp : state.ideas) ?? [];
+  const clients = state.clients ?? [];
+
+  const [activeScope, setActiveScope] = useState<SearchScope>('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [activeIndex, setActiveIndex] = useState<number>(-1);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [plannerModal, setPlannerModal] = useState<PlannerModalState>({ open: false });
+
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const resultsRef = useRef<HTMLDivElement | null>(null);
+
+  const scopeMeta: Record<SearchScope, { label: string; disabled?: boolean }> = {
+    all: { label: 'All' },
+    shows: { label: 'Shows' },
+    clients: { label: 'Clients' },
+    ideas: { label: 'Ideas' },
+    tasks: { label: 'Tasks' },
+    files: { label: 'Files', disabled: true },
+  };
+
+  const scopeOrder: SearchScope[] = ['all', 'shows', 'clients', 'ideas', 'tasks', 'files'];
+
+  // --- Persistence: recent searches ---
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(RECENTS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) setRecentSearches(parsed.filter(Boolean).slice(0, 8));
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(RECENTS_KEY, JSON.stringify(recentSearches.slice(0, 8)));
+    } catch {
+      // ignore
+    }
+  }, [recentSearches]);
+
+  useEffect(() => {
+    if (!notice) return;
+    const t = window.setTimeout(() => setNotice(null), 2600);
+    return () => window.clearTimeout(t);
+  }, [notice]);
+
+  // --- Derived ---
+  const allTags = useMemo(() => {
+    const tags = new Set<string>();
+    shows.forEach((s) => {
+      s.tags?.forEach((t) => tags.add(t));
+      s.tasks?.forEach((tk) => tk.tags?.forEach((t) => tags.add(t)));
+    });
+    ideas.forEach((i) => i.tags?.forEach((t) => tags.add(t)));
+    // Clients in this build don't have tags guaranteed, but keep it flexible
+    clients.forEach((c) => (c as any)?.tags?.forEach?.((t: string) => tags.add(t)));
+    return Array.from(tags).sort((a, b) => a.localeCompare(b));
+  }, [shows, ideas, clients]);
+
+  const counts = useMemo(() => {
+    const taskCount = shows.reduce((acc, s) => acc + (s.tasks?.length || 0), 0);
+    return {
+      shows: shows.length,
+      tasks: taskCount,
+      ideas: ideas.length,
+      clients: clients.length,
+      total: shows.length + taskCount + ideas.length + clients.length,
+    };
+  }, [shows, ideas, clients]);
+
+  const query = useMemo(() => (selectedTag || searchTerm).trim(), [selectedTag, searchTerm]);
+  const queryLower = useMemo(() => query.toLowerCase(), [query]);
+
+  const semanticContext = useMemo(() => {
+    // Lightweight semantic mapping (no extra AI calls)
+    const q = queryLower;
+    if (!q || selectedTag) return { intents: [] as string[], expandedTerms: [] as string[] };
+
+    const hasAny = (arr: string[]) => arr.some((w) => q.includes(w));
+
+    const intents: string[] = [];
+    const push = (s: string) => {
+      if (!intents.includes(s)) intents.push(s);
     };
 
-    const scopeOrder: SearchScope[] = ['all', 'shows', 'clients', 'ideas', 'tasks', 'files'];
-    useEffect(() => {
-        try {
-            const raw = localStorage.getItem('mai_recent_searches_v1');
-            if (raw) {
-                const parsed = JSON.parse(raw);
-                if (Array.isArray(parsed)) setRecentSearches(parsed.filter(Boolean).slice(0, 8));
-            }
-        } catch {}
-    }, []);
+    if (hasAny(['funny', 'comedy', 'humor', 'humorous', 'laugh', 'laughs', 'silly', 'goofy'])) push('comedy');
+    if (hasAny(['kid', 'kids', 'child', 'children', 'family', 'parents'])) push('family');
+    if (hasAny(['interactive', 'participation', 'volunteer', 'audience', 'crowd'])) push('interactive');
+    if (hasAny(['corporate', 'business', 'company', 'executive', 'gala'])) push('corporate');
+    if (hasAny(['festival', 'fair', 'stage', 'theater', 'theatre'])) push('stage');
+    if (hasAny(['close-up', 'closeup', 'strolling', 'walkaround', 'walk-around'])) push('closeup');
+    if (hasAny(['mind', 'mental', 'prediction', 'psychological', 'mentalism'])) push('mentalism');
 
-    useEffect(() => {
-        try {
-            localStorage.setItem('mai_recent_searches_v1', JSON.stringify(recentSearches.slice(0, 8)));
-        } catch {}
-    }, [recentSearches]);
-
-    useEffect(() => {
-        if (!notice) return;
-        const tmr = window.setTimeout(() => setNotice(null), 2800);
-        return () => window.clearTimeout(tmr);
-    }, [notice]);
-
-
-    const allTags = useMemo(() => {
-        const tags = new Set<string>();
-        shows.forEach(show => {
-            show.tags?.forEach(t => tags.add(t));
-            show.tasks?.forEach(task => task.tags?.forEach(t => tags.add(t)));
-        });
-        ideas.forEach(idea => idea.tags?.forEach(t => tags.add(t)));
-        return Array.from(tags).sort((a, b) => a.localeCompare(b));
-    }, [shows, ideas]);
-
-    const counts = useMemo(() => {
-        const taskCount = shows.reduce((acc, s) => acc + (s.tasks?.length || 0), 0);
-        return {
-            shows: shows.length,
-            tasks: taskCount,
-            ideas: ideas.length,
-            total: shows.length + taskCount + ideas.length,
-        };
-    }, [shows, ideas]);
-
-    const query = useMemo(() => (selectedTag || searchTerm).trim(), [selectedTag, searchTerm]);
-    const queryLower = useMemo(() => query.toLowerCase(), [query]);
-
-const semanticContext = useMemo(() => {
-        // Lightweight "semantic" intent extraction (no extra AI calls).
-        // This maps natural language like "funny trick for kids" -> intents + tag targets.
-        const q = queryLower;
-        if (!q || selectedTag) {
-            return { intents: [] as string[], tagTargets: [] as string[], expandedTerms: [] as string[] };
-        }
-
-        const tokens = q.split(/\s+/).filter(Boolean);
-
-        const intents: string[] = [];
-        const pushIntent = (s: string) => {
-            if (!intents.includes(s)) intents.push(s);
-        };
-
-        const hasAny = (arr: string[]) => arr.some(w => q.includes(w));
-
-        if (hasAny(['funny', 'comedy', 'humor', 'humorous', 'laugh', 'laughs', 'silly', 'goofy'])) pushIntent('comedy');
-        if (hasAny(['kid', 'kids', 'child', 'children', 'family', 'parents'])) pushIntent('family');
-        if (hasAny(['interactive', 'participation', 'volunteer', 'audience', 'crowd'])) pushIntent('interactive');
-        if (hasAny(['corporate', 'business', 'company', 'executive', 'gala'])) pushIntent('corporate');
-        if (hasAny(['festival', 'fair', 'stage', 'theater', 'theatre'])) pushIntent('stage');
-        if (hasAny(['close-up', 'closeup', 'strolling', 'walkaround', 'walk-around'])) pushIntent('closeup');
-        if (hasAny(['mind', 'mental', 'prediction', 'psychological'])) pushIntent('mentalism');
-
-        // Map intents -> tags we expect to exist in your system
-        const intentToTags: Record<string, string[]> = {
-            comedy: ['comedy', 'funny', 'humor', 'laugh', 'laughs'],
-            family: ['family', 'kids', 'kid', 'children', 'parents'],
-            interactive: ['interactive', 'participation', 'audience', 'volunteer'],
-            corporate: ['corporate', 'business', 'executive'],
-            stage: ['stage', 'theater', 'theatre', 'festival', 'fair'],
-            closeup: ['close-up', 'closeup', 'strolling', 'walkaround', 'walk-around'],
-            mentalism: ['mentalism', 'mind-reading', 'mindreading', 'prediction', 'psychological'],
-        };
-
-        const tagTargets = intents.flatMap(i => intentToTags[i] || []);
-
-        // Expanded terms can help match title/description even if user doesn't type exact tag word
-        const expandedTerms = [
-            ...tokens,
-            ...intents.flatMap(i => intentToTags[i] || []),
-        ].filter(Boolean);
-
-        return { intents, tagTargets, expandedTerms };
-    }, [queryLower, selectedTag]);
-
-    const commandMatch = useMemo(() => {
-        const raw = searchTerm.trim();
-        const q = raw.toLowerCase();
-        if (!q || selectedTag) return null as null | { key: string; title: string; hint: string };
-
-        const starts = (p: string) => q.startsWith(p);
-
-        if (starts('add show') || starts('new show') || starts('create show')) {
-            return { key: 'add_show', title: 'Add Show', hint: 'Opens Show Planner so you can create a new show.' };
-        }
-        if (starts('plan show')) {
-            return { key: 'plan_show', title: 'Plan a Show', hint: 'Jump to Show Planner to build or refine a show plan.' };
-        }
-        if (starts('new client') || starts('add client') || starts('create client')) {
-            return { key: 'new_client', title: 'New Client', hint: 'Client creation from Command Mode is coming soon.' };
-        }
-        if (starts('create routine') || starts('new routine') || starts('add routine')) {
-            return { key: 'create_routine', title: 'Create Routine', hint: 'Routine creation from Command Mode is coming soon.' };
-        }
-
-        return null;
-    }, [searchTerm, selectedTag]);
-
-    const executeCommand = (cmd: { key: string; title: string; hint: string }) => {
-        if (cmd.key === 'add_show' || cmd.key === 'plan_show') {
-            if (shows.length > 0) {
-                // Navigate to an existing show (safe) and prompt user to add/create from there.
-                onNavigate('show-planner', shows[0].id);
-                setNotice('Command Mode: Opened Show Planner. Use “Add Show” to create a new show.');
-            } else {
-                setNotice('Command Mode: No shows found yet. Create your first show from Show Planner.');
-            }
-            return;
-        }
-        // Safe fallbacks (no assumptions about views/routes that may not exist)
-        setNotice(`Command Mode: ${cmd.title} — ${cmd.hint}`);
+    const intentToTerms: Record<string, string[]> = {
+      comedy: ['comedy', 'funny', 'humor', 'laugh'],
+      family: ['family', 'kids', 'children', 'parents'],
+      interactive: ['interactive', 'participation', 'audience', 'volunteer'],
+      corporate: ['corporate', 'business', 'executive'],
+      stage: ['stage', 'theater', 'festival', 'fair'],
+      closeup: ['close-up', 'strolling', 'walkaround'],
+      mentalism: ['mentalism', 'mind-reading', 'prediction', 'psychological'],
     };
 
-    const statusText = useMemo(() => {
-        const scopeLabel = scopeMeta[activeScope]?.label ?? 'All';
-        const scopesShown =
-            activeScope === 'all'
-                ? 'Shows + Tasks + Ideas'
-                : activeScope === 'shows'
-                ? 'Shows'
-                : activeScope === 'tasks'
-                ? 'Tasks'
-                : activeScope === 'ideas'
-                ? 'Ideas'
+    const tokens = q.split(/\s+/).filter(Boolean);
+    const expandedTerms = Array.from(new Set([...tokens, ...intents.flatMap((i) => intentToTerms[i] || [])]));
+
+    return { intents, expandedTerms };
+  }, [queryLower, selectedTag]);
+
+  // --- Command mode ---
+  const commandMatch = useMemo(() => {
+    const raw = searchTerm.trim();
+    const q = raw.toLowerCase();
+    if (!q || selectedTag) return null as null | { key: string; title: string; hint: string; payload?: string };
+
+    const stripPrefix = (p: string) => raw.slice(p.length).trim();
+
+    if (q.startsWith('add show')) return { key: 'add_show', title: 'Add Show', hint: 'Creates a new show and opens it in Show Planner.', payload: stripPrefix('add show') };
+    if (q.startsWith('new show')) return { key: 'add_show', title: 'Add Show', hint: 'Creates a new show and opens it in Show Planner.', payload: stripPrefix('new show') };
+    if (q.startsWith('create show')) return { key: 'add_show', title: 'Add Show', hint: 'Creates a new show and opens it in Show Planner.', payload: stripPrefix('create show') };
+
+    if (q.startsWith('new client')) return { key: 'new_client', title: 'New Client', hint: 'Creates a new client and opens Client Management.', payload: stripPrefix('new client') };
+    if (q.startsWith('add client')) return { key: 'new_client', title: 'New Client', hint: 'Creates a new client and opens Client Management.', payload: stripPrefix('add client') };
+    if (q.startsWith('create client')) return { key: 'new_client', title: 'New Client', hint: 'Creates a new client and opens Client Management.', payload: stripPrefix('create client') };
+
+    if (q.startsWith('create routine')) return { key: 'create_routine', title: 'Create Routine', hint: 'Saves a new idea and opens Saved Ideas.', payload: stripPrefix('create routine') };
+    if (q.startsWith('new routine')) return { key: 'create_routine', title: 'Create Routine', hint: 'Saves a new idea and opens Saved Ideas.', payload: stripPrefix('new routine') };
+    if (q.startsWith('add routine')) return { key: 'create_routine', title: 'Create Routine', hint: 'Saves a new idea and opens Saved Ideas.', payload: stripPrefix('add routine') };
+
+    if (q.startsWith('plan show')) return { key: 'plan_show', title: 'Plan Show', hint: 'Opens Show Planner.', payload: stripPrefix('plan show') };
+
+    return null;
+  }, [searchTerm, selectedTag]);
+
+  const refreshAll = async () => {
+    const [freshShows, freshIdeas] = await Promise.all([showsService.getShows(), ideasService.getSavedIdeas()]);
+    dispatch({ type: 'SET_SHOWS', payload: freshShows });
+    dispatch({ type: 'SET_IDEAS', payload: freshIdeas });
+    // Clients are localStorage-backed
+    dispatch({ type: 'SET_CLIENTS', payload: clientsService.getClients() });
+    return { freshShows, freshIdeas };
+  };
+
+  const executeCommand = async (cmd: { key: string; title: string; hint: string; payload?: string }) => {
+    try {
+      if (cmd.key === 'add_show') {
+        const title = (cmd.payload || '').trim() || 'New Show';
+        const newShow = await showsService.createShow({ title, description: '' });
+        await refreshAll();
+        onNavigate('show-planner', newShow.id);
+        setNotice(`Created show: ${title}`);
+        return;
+      }
+
+      if (cmd.key === 'plan_show') {
+        // Open most recent show if we have one; otherwise, create one.
+        if (shows.length > 0) {
+          onNavigate('show-planner', shows[0].id);
+          setNotice('Opened Show Planner.');
+        } else {
+          const newShow = await showsService.createShow({ title: 'New Show', description: '' });
+          await refreshAll();
+          onNavigate('show-planner', newShow.id);
+          setNotice('Created and opened your first show.');
+        }
+        return;
+      }
+
+      if (cmd.key === 'new_client') {
+        const name = (cmd.payload || '').trim() || 'New Client';
+        const updated = clientsService.addClient({ name, company: '', email: '', notes: '', events: [] });
+        dispatch({ type: 'SET_CLIENTS', payload: updated });
+        onNavigate('client-management' as MagicianView, '');
+        setNotice(`Created client: ${name}`);
+        return;
+      }
+
+      if (cmd.key === 'create_routine') {
+        const title = (cmd.payload || '').trim() || 'New Routine';
+        const idea = await ideasService.saveIdea({ type: 'text', title, content: '', tags: ['routine'] });
+        await refreshAll();
+        onNavigate('saved-ideas', idea.id);
+        setNotice(`Created idea: ${title}`);
+        return;
+      }
+
+      setNotice(`Command Mode: ${cmd.title} — ${cmd.hint}`);
+    } catch (e: any) {
+      setNotice(`Command failed: ${String(e?.message || e)}`);
+    }
+  };
+
+  const statusText = useMemo(() => {
+    const scopeLabel = scopeMeta[activeScope]?.label ?? 'All';
+    const scopesShown =
+      activeScope === 'all'
+        ? 'Shows + Clients + Tasks + Ideas'
+        : activeScope === 'shows'
+          ? 'Shows'
+          : activeScope === 'tasks'
+            ? 'Tasks'
+            : activeScope === 'ideas'
+              ? 'Ideas'
+              : activeScope === 'clients'
+                ? 'Clients'
                 : scopeLabel;
 
-        if (activeScope === 'clients') return 'Clients search is coming soon.';
-        if (activeScope === 'files') return 'Files search is coming soon.';
+    if (activeScope === 'files') return 'Files search is coming soon.';
 
-        if (!query) return `Search across ${counts.shows} shows, ${counts.tasks} tasks, and ${counts.ideas} ideas.`;
+    if (!query) return `Search across ${counts.shows} shows, ${counts.clients} clients, ${counts.tasks} tasks, and ${counts.ideas} ideas.`;
 
-        return `Searching across ${counts.total} items… Showing results from ${scopesShown}.`;
-    }, [activeScope, counts, query]);
+    return `Searching across ${counts.total} items… Showing results from ${scopesShown}.`;
+  }, [activeScope, counts, query]);
 
-    const getTimestamp = (obj: any): number | null => {
-        const raw =
-            obj?.updated_at ??
-            obj?.updatedAt ??
-            obj?.last_modified ??
-            obj?.lastModified ??
-            obj?.created_at ??
-            obj?.createdAt ??
-            null;
-        if (!raw) return null;
-        const t = typeof raw === 'number' ? raw : Date.parse(String(raw));
-        return Number.isFinite(t) ? t : null;
+  const scoreAndBadges = (item: {
+    title?: string;
+    description?: string;
+    notes?: string;
+    content?: string;
+    tags?: string[];
+    extra?: string;
+  }) => {
+    const badges: BadgeType[] = [];
+    let score = 0;
+
+    const title = normalizeString(item.title);
+    const desc = normalizeString(item.description);
+    const notes = normalizeString(item.notes);
+    const content = normalizeString(item.content);
+    const extra = normalizeString(item.extra);
+    const tags = (item.tags || []).map((t) => normalizeString(t));
+
+    const terms = selectedTag
+      ? [queryLower]
+      : (semanticContext.expandedTerms.length ? semanticContext.expandedTerms : [queryLower]).filter(Boolean);
+
+    const hasIn = (s: string) => terms.some((t) => t && s.includes(t));
+
+    if (selectedTag) {
+      if (tags.includes(queryLower)) {
+        badges.push('Exact Match');
+        score += 90;
+      } else if (tags.some((t) => t.includes(queryLower))) {
+        badges.push('Related');
+        score += 60;
+      }
+    } else if (queryLower) {
+      if (title === queryLower) {
+        badges.push('Exact Match');
+        score += 100;
+      } else if (title.startsWith(queryLower)) {
+        badges.push('Related');
+        score += 85;
+      } else if (title.includes(queryLower)) {
+        badges.push('Related');
+        score += 65;
+      }
+
+      if (tags.includes(queryLower)) {
+        if (!badges.includes('Exact Match')) badges.push('Exact Match');
+        score += 70;
+      } else if (tags.some((t) => t.includes(queryLower))) {
+        if (!badges.includes('Related')) badges.push('Related');
+        score += 45;
+      }
+
+      if (hasIn(desc) || hasIn(notes) || hasIn(content) || hasIn(extra)) {
+        if (!badges.includes('Suggested')) badges.push('Suggested');
+        score += 25;
+      }
+
+      // If semantic intent exists, lightly boost tag matches even if user didn't type the exact word.
+      if (semanticContext.expandedTerms.length) {
+        const semanticHit = tags.some((t) => semanticContext.expandedTerms.some((term) => term && t.includes(term)));
+        if (semanticHit) {
+          if (!badges.includes('Suggested')) badges.push('Suggested');
+          score += 18;
+        }
+      }
+    }
+
+    // Recent (very light)
+    if (typeof (item as any)?.updatedAt === 'number' || typeof (item as any)?.timestamp === 'number') {
+      badges.push('Recent');
+      score += 3;
+    }
+
+    if (badges.length === 0 && queryLower) {
+      // if it survived filtering but no badges, still label as Suggested
+      badges.push('Suggested');
+      score += 10;
+    }
+
+    return { score, badges };
+  };
+
+  const allHits = useMemo(() => {
+    const hits: SearchHit[] = [];
+
+    // Command mode as first-class hit
+    if (commandMatch) {
+      hits.push({
+        key: `cmd:${commandMatch.key}`,
+        type: 'command',
+        title: commandMatch.title,
+        subtitle: commandMatch.hint,
+        icon: SearchIcon,
+        score: 999,
+        badges: ['Suggested'],
+        commandKey: commandMatch.key,
+        commandHint: commandMatch.hint,
+      });
+    }
+
+    const shouldIncludeType = (t: HitType) => {
+      if (activeScope === 'all') return t !== 'file';
+      if (activeScope === 'shows') return t === 'show';
+      if (activeScope === 'tasks') return t === 'task';
+      if (activeScope === 'ideas') return t === 'idea';
+      if (activeScope === 'clients') return t === 'client';
+      return false;
     };
 
-    const scoreAndBadges = (item: { title?: string; description?: string; notes?: string; content?: string; tags?: string[] }) => {
-        const badges: BadgeType[] = [];
-        let score = 0;
-
-        const title = (item.title || '').toLowerCase();
-        const desc = (item.description || '').toLowerCase();
-        const notes = (item.notes || '').toLowerCase();
-        const content = (typeof item.content === 'string' ? item.content : '').toLowerCase();
-        const tags = (item.tags || []).map(t => t.toLowerCase());
-
-        // Tag-based search
-        if (selectedTag) {
-            if (tags.includes(queryLower)) {
-                badges.push('Exact Match');
-                score += 90;
-            } else if (tags.some(t => t.includes(queryLower))) {
-                badges.push('Related');
-                score += 60;
-            }
-        } else if (searchTerm.trim()) {
-            // Text-based search
-            if (title === queryLower) {
-                badges.push('Exact Match');
-                score += 100;
-            } else if (title.startsWith(queryLower)) {
-                badges.push('Related');
-                score += 80;
-            } else if (title.includes(queryLower)) {
-                badges.push('Related');
-                score += 65;
-            }
-
-            if (tags.includes(queryLower)) {
-                if (!badges.includes('Exact Match')) badges.push('Exact Match');
-                score += 70;
-            } else if (tags.some(t => t.includes(queryLower))) {
-                if (!badges.includes('Related')) badges.push('Related');
-                score += 45;
-            }
-
-            const inDesc = !!queryLower && desc.includes(queryLower);
-            const inNotes = !!queryLower && notes.includes(queryLower);
-            const inContent = !!queryLower && content.includes(queryLower);
-
-            if ((inDesc || inNotes || inContent) && !badges.length) {
-                badges.push('Suggested');
-                score += 30;
-            } else if (inDesc || inNotes || inContent) {
-                score += 15;
-            }
-        }
-
-                // Semantic intent boost (lightweight semantic search)
-        if (!selectedTag && semanticContext.tagTargets.length) {
-            const tagL = tags;
-            const semanticTagHits = semanticContext.tagTargets.filter(t => tagL.includes(t)).length;
-
-            const semanticTextHits = semanticContext.expandedTerms.filter(t => t && (title.includes(t) || desc.includes(t) || notes.includes(t) || content.includes(t))).length;
-
-            const semanticHits = semanticTagHits * 2 + semanticTextHits;
-
-            if (semanticHits > 0) {
-                // If we already had an Exact/Related match, just add a small boost.
-                const hasStrong = badges.includes('Exact Match') || badges.includes('Related');
-                if (!hasStrong) {
-                    badges.push('Suggested');
-                    score += 35;
-                }
-                score += Math.min(40, semanticHits * 6);
-            }
-        }
-
-// Recent badge (best-effort)
-        const ts = getTimestamp(item);
-        if (ts) {
-            const days = (Date.now() - ts) / (1000 * 60 * 60 * 24);
-            if (days <= 14) {
-                badges.push('Recent');
-                score += 10;
-            }
-        }
-
-        if (!badges.length && score > 0) badges.push('Suggested');
-        return { score, badges };
+    const matchesQuery = (item: { title?: string; tags?: string[]; haystack?: string }) => {
+      if (!queryLower) return true;
+      if (selectedTag) {
+        return (item.tags || []).some((t) => normalizeString(t) === queryLower || normalizeString(t).includes(queryLower));
+      }
+      const h = normalizeString(item.title) + ' ' + normalizeString(item.haystack);
+      const terms = semanticContext.expandedTerms.length ? semanticContext.expandedTerms : [queryLower];
+      return terms.some((t) => t && h.includes(t));
     };
 
-    const matchesQuery = (item: { title?: string; description?: string; notes?: string; content?: string; tags?: string[] }) => {
-        if (!queryLower) return false;
-        const tags = item.tags?.map(t => t.toLowerCase()) || [];
-        if (selectedTag) return tags.includes(queryLower);
+    // Shows
+    for (const s of shows) {
+      const hay = [s.description, ...(s.tags || [])].join(' ');
+      if (!matchesQuery({ title: s.title, tags: s.tags, haystack: hay })) continue;
+      if (!shouldIncludeType('show')) continue;
+      const { score, badges } = scoreAndBadges({ title: s.title, description: s.description, tags: s.tags });
+      hits.push({
+        key: `show:${s.id}`,
+        type: 'show',
+        title: s.title,
+        subtitle: s.description || 'Show',
+        tags: s.tags,
+        icon: StageCurtainsIcon,
+        score,
+        badges,
+        showId: s.id,
+      });
 
-        const hay = [
-            item.title ?? '',
-            item.description ?? '',
-            item.notes ?? '',
-            typeof item.content === 'string' ? item.content : '',
-            ...tags,
-        ]
-            .join(' ')
-            .toLowerCase();
-
-        const keywordHit = hay.includes(queryLower);
-        if (keywordHit) return true;
-
-        // Semantic fallback: if query expresses intents, match items that align via tags/text even without exact keyword match.
-        if (semanticContext.tagTargets.length) {
-            const tagHits = semanticContext.tagTargets.some(t => tags.includes(t));
-            if (tagHits) return true;
-
-            const textHits = semanticContext.expandedTerms.some(t => t && hay.includes(t));
-            if (textHits) return true;
-        }
-
-        return false;
-    };
-
-    const searchResults = useMemo(() => {
-        if (!queryLower) return null;
-
-        const showHits: SearchHit[] = [];
-        const taskHits: SearchHit[] = [];
-        const ideaHits: SearchHit[] = [];
-
-        // Shows
-        shows.forEach(show => {
-            if (!matchesQuery(show)) return;
-            const { score, badges } = scoreAndBadges(show);
-            showHits.push({
-                key: `show:${show.id}`,
-                type: 'show',
-                title: show.title,
-                subtitle: show.description,
-                tags: show.tags,
-                icon: StageCurtainsIcon,
-                onClick: () => onNavigate('show-planner', show.id),
-                score,
-                badges,
-            });
+      // Tasks
+      for (const tk of s.tasks || []) {
+        const hayT = [tk.notes, ...(tk.tags || [])].join(' ');
+        if (!matchesQuery({ title: tk.title, tags: tk.tags, haystack: hayT })) continue;
+        if (!shouldIncludeType('task')) continue;
+        const { score: ts, badges: tb } = scoreAndBadges({ title: tk.title, notes: tk.notes, tags: tk.tags });
+        hits.push({
+          key: `task:${s.id}:${tk.id}`,
+          type: 'task',
+          title: tk.title,
+          subtitle: `Task • ${s.title}`,
+          tags: tk.tags,
+          icon: ChecklistIcon,
+          score: ts,
+          badges: tb,
+          showId: s.id,
+          taskId: tk.id,
         });
+      }
+    }
 
-        // Tasks (inside shows)
-        shows.forEach(show => {
-            (show.tasks || []).forEach(task => {
-                if (!matchesQuery(task)) return;
-                const { score, badges } = scoreAndBadges(task);
-                taskHits.push({
-                    key: `task:${show.id}:${task.id}`,
-                    type: 'task',
-                    title: task.title,
-                    subtitle: `In Show: ${show.title}`,
-                    tags: task.tags,
-                    icon: ChecklistIcon,
-                    onClick: () => onNavigate('show-planner', show.id, task.id),
-                    score,
-                    badges,
-                });
-            });
-        });
+    // Ideas
+    for (const i of ideas) {
+      const hay = [i.content, ...(i.tags || [])].join(' ');
+      if (!matchesQuery({ title: i.title || 'Untitled Idea', tags: i.tags, haystack: hay })) continue;
+      if (!shouldIncludeType('idea')) continue;
+      const { score, badges } = scoreAndBadges({ title: i.title || 'Untitled Idea', content: i.content, tags: i.tags });
+      hits.push({
+        key: `idea:${i.id}`,
+        type: 'idea',
+        title: i.title || 'Untitled Idea',
+        subtitle: i.type === 'rehearsal' ? 'Rehearsal Session' : 'Idea',
+        tags: i.tags,
+        icon: BookmarkIcon,
+        score,
+        badges,
+        ideaId: i.id,
+      });
+    }
 
-        // Ideas
-        ideas.forEach(idea => {
-            if (!matchesQuery(idea)) return;
-            const { score, badges } = scoreAndBadges(idea);
-            ideaHits.push({
-                key: `idea:${idea.id}`,
-                type: 'idea',
-                title: idea.title,
-                subtitle: idea.description,
-                tags: idea.tags,
-                icon: BookmarkIcon,
-                onClick: () => onNavigate('saved-ideas', idea.id),
-                score,
-                badges,
-            });
-        });
+    // Clients
+    for (const c of clients) {
+      const tags = (c as any)?.tags as string[] | undefined;
+      const hay = [c.company, c.email, c.notes, ...(tags || [])].join(' ');
+      if (!matchesQuery({ title: c.name, tags, haystack: hay })) continue;
+      if (!shouldIncludeType('client')) continue;
+      const { score, badges } = scoreAndBadges({ title: c.name, description: c.company || '', notes: c.notes || '', tags, extra: c.email || '' });
+      hits.push({
+        key: `client:${c.id}`,
+        type: 'client',
+        title: c.name,
+        subtitle: c.company || 'Client',
+        tags,
+        icon: TagIcon,
+        score,
+        badges,
+        clientId: c.id,
+      });
+    }
 
-        const sortByScore = (a: SearchHit, b: SearchHit) => (b.score - a.score) || a.title.localeCompare(b.title);
+    return hits
+      .filter((h) => (queryLower ? h.score > 0 || h.type === 'command' : true))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 60);
+  }, [shows, ideas, clients, activeScope, queryLower, selectedTag, semanticContext.expandedTerms, commandMatch]);
 
-        showHits.sort(sortByScore);
-        taskHits.sort(sortByScore);
-        ideaHits.sort(sortByScore);
+  const groupedHits = useMemo(() => {
+    const top = allHits.slice(0, 4);
+    const rest = allHits.slice(4);
 
-        // Scope filtering
-        let showsScoped = showHits;
-        let tasksScoped = taskHits;
-        let ideasScoped = ideaHits;
+    const byType = (t: HitType) => rest.filter((h) => h.type === t);
 
-        if (activeScope !== 'all') {
-            if (activeScope !== 'shows') showsScoped = [];
-            if (activeScope !== 'tasks') tasksScoped = [];
-            if (activeScope !== 'ideas') ideasScoped = [];
-            if (activeScope === 'clients' || activeScope === 'files') {
-                showsScoped = [];
-                tasksScoped = [];
-                ideasScoped = [];
-            }
+    return {
+      top,
+      shows: byType('show'),
+      clients: byType('client'),
+      tasks: byType('task'),
+      ideas: byType('idea'),
+      commands: allHits.filter((h) => h.type === 'command'),
+    };
+  }, [allHits]);
+
+  const selectedHit = useMemo(() => {
+    if (activeIndex < 0 || activeIndex >= allHits.length) return null;
+    return allHits[activeIndex];
+  }, [activeIndex, allHits]);
+
+  // --- Actions (REAL) ---
+  const openHit = (hit: SearchHit) => {
+    if (hit.type === 'command' && hit.commandKey) {
+      void executeCommand({ key: hit.commandKey, title: hit.title, hint: hit.commandHint || '' });
+      return;
+    }
+
+    if (hit.type === 'show' && hit.showId) return onNavigate('show-planner', hit.showId);
+    if (hit.type === 'task' && hit.showId && hit.taskId) return onNavigate('show-planner', hit.showId, hit.taskId);
+    if (hit.type === 'idea' && hit.ideaId) return onNavigate('saved-ideas', hit.ideaId);
+    if (hit.type === 'client') {
+      // ClientManagement doesn't currently deep-link; still open the page.
+      onNavigate('client-management' as MagicianView, '');
+      setNotice('Opened Client Management.');
+      return;
+    }
+  };
+
+  const editHit = (hit: SearchHit) => {
+    // In this app, edit happens on the destination page (Show Planner / Saved Ideas / Client Mgmt).
+    openHit(hit);
+    setNotice('Tip: Use the edit controls on the destination page.');
+  };
+
+  const duplicateHit = async (hit: SearchHit) => {
+    try {
+      if (hit.type === 'show' && hit.showId) {
+        const src = shows.find((s) => s.id === hit.showId);
+        if (!src) throw new Error('Show not found');
+
+        const copyTitle = `${src.title} (Copy)`;
+        const newShow = await showsService.createShow({ title: copyTitle, description: src.description || '' });
+
+        // copy tasks (best-effort)
+        const taskCopies: Partial<Task>[] = (src.tasks || []).map((t) => ({
+          title: t.title,
+          notes: t.notes,
+          priority: t.priority,
+          status: t.status,
+          tags: t.tags,
+          musicCue: (t as any).musicCue,
+          dueDate: (t as any).dueDate,
+          subtasks: (t as any).subtasks,
+        }));
+        if (taskCopies.length) {
+          await showsService.addTasksToShow(newShow.id, taskCopies);
         }
 
-        const combined = [...showsScoped, ...tasksScoped, ...ideasScoped].sort(sortByScore);
-        const topMatches = combined.slice(0, 6);
+        await refreshAll();
+        setNotice(`Duplicated show → ${copyTitle}`);
+        return;
+      }
 
-        return {
-            topMatches,
-            shows: showsScoped,
-            tasks: tasksScoped,
-            ideas: ideasScoped,
-            clients: [] as SearchHit[],
-        };
-    }, [queryLower, shows, ideas, activeScope]);
+      if (hit.type === 'task' && hit.showId && hit.taskId) {
+        const srcShow = shows.find((s) => s.id === hit.showId);
+        const srcTask = srcShow?.tasks?.find((t) => t.id === hit.taskId);
+        if (!srcTask) throw new Error('Task not found');
 
-    const navigableHits = useMemo(() => {
-        if (!searchResults) return [] as SearchHit[];
-        const seen = new Set<string>();
-        const order = [...searchResults.topMatches, ...searchResults.shows, ...searchResults.tasks, ...searchResults.ideas];
-        const out: SearchHit[] = [];
-        for (const h of order) {
-            if (seen.has(h.key)) continue;
-            seen.add(h.key);
-            out.push(h);
-        }
-        return out;
-    }, [searchResults]);
-
-    const hitIndexMap = useMemo(() => {
-        const m = new Map<string, number>();
-        navigableHits.forEach((h, i) => m.set(h.key, i));
-        return m;
-    }, [navigableHits]);
-
-    useEffect(() => {
-        // Reset keyboard selection when query/scope changes
-        setActiveIndex(navigableHits.length ? 0 : -1);
-    }, [queryLower, activeScope, selectedTag, navigableHits.length]);
-
-    const pushRecent = (q: string) => {
-        const cleaned = q.trim();
-        if (!cleaned) return;
-        setRecentSearches(prev => {
-            const next = [cleaned, ...prev.filter(x => x.toLowerCase() !== cleaned.toLowerCase())];
-            return next.slice(0, 6);
+        const copyTitle = `${srcTask.title} (Copy)`;
+        const updatedShows = await showsService.addTaskToShow(hit.showId, {
+          title: copyTitle,
+          notes: srcTask.notes,
+          priority: srcTask.priority,
+          status: srcTask.status,
+          tags: srcTask.tags,
+          musicCue: (srcTask as any).musicCue,
+          dueDate: (srcTask as any).dueDate,
+          subtasks: (srcTask as any).subtasks,
         });
-    };
+        dispatch({ type: 'SET_SHOWS', payload: updatedShows });
+        setNotice(`Duplicated task → ${copyTitle}`);
+        return;
+      }
 
-    const handleTagClick = (tag: string) => {
-        setSearchTerm('');
-        setSelectedTag(prev => (prev === tag ? null : tag));
-    };
+      if (hit.type === 'idea' && hit.ideaId) {
+        const src = ideas.find((i) => i.id === hit.ideaId);
+        if (!src) throw new Error('Idea not found');
+        const copyTitle = `${src.title || 'Idea'} (Copy)`;
+        await ideasService.saveIdea({ type: src.type, title: copyTitle, content: src.content, tags: src.tags || [] });
+        await refreshAll();
+        setNotice(`Duplicated idea → ${copyTitle}`);
+        return;
+      }
 
-    const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (hit.type === 'client' && hit.clientId) {
+        const src = clients.find((c) => c.id === hit.clientId);
+        if (!src) throw new Error('Client not found');
+        const copyName = `${src.name} (Copy)`;
+        const updated = clientsService.addClient({
+          name: copyName,
+          company: src.company || '',
+          email: src.email || '',
+          notes: src.notes || '',
+          events: Array.isArray(src.events) ? src.events : [],
+        });
+        dispatch({ type: 'SET_CLIENTS', payload: updated });
+        setNotice(`Duplicated client → ${copyName}`);
+        return;
+      }
+
+      setNotice('Nothing to duplicate.');
+    } catch (e: any) {
+      setNotice(`Duplicate failed: ${String(e?.message || e)}`);
+    }
+  };
+
+  const addToPlanner = async (hit: SearchHit) => {
+    // If there is exactly one show, use it; otherwise ask.
+    const targets = shows.map((s) => ({ id: s.id, title: s.title }));
+    if (targets.length === 0) {
+      setNotice('No shows found yet. Create a show first.');
+      return;
+    }
+
+    const defaultShowId = targets[0].id;
+    if (targets.length === 1) {
+      await confirmAddToPlanner(hit, defaultShowId);
+      return;
+    }
+
+    setPlannerModal({ open: true, hit, targets, selectedShowId: defaultShowId });
+  };
+
+  const confirmAddToPlanner = async (hit: SearchHit, showId: string) => {
+    try {
+      if (hit.type === 'task' && hit.showId && hit.taskId) {
+        // Already a task; just navigate to that task in planner.
+        onNavigate('show-planner', hit.showId, hit.taskId);
+        setNotice('Opened task in Show Planner.');
+        return;
+      }
+
+      // Convert Show / Idea / Client into a new task entry
+      let title = '';
+      let notes = '';
+      let tags: string[] = [];
+
+      if (hit.type === 'idea' && hit.ideaId) {
+        const src = ideas.find((i) => i.id === hit.ideaId);
+        title = `Idea: ${src?.title || 'Untitled'}`;
+        notes = src?.content || '';
+        tags = Array.isArray(src?.tags) ? src!.tags : [];
+      } else if (hit.type === 'show' && hit.showId) {
+        const src = shows.find((s) => s.id === hit.showId);
+        title = `Show: ${src?.title || 'Show'} (review)`;
+        notes = src?.description || '';
+        tags = Array.isArray(src?.tags) ? src!.tags : [];
+      } else if (hit.type === 'client' && hit.clientId) {
+        const src = clients.find((c) => c.id === hit.clientId);
+        title = `Client: ${src?.name || 'Client'} (follow-up)`;
+        notes = [src?.company ? `Company: ${src.company}` : '', src?.email ? `Email: ${src.email}` : '', src?.notes ? `Notes: ${src.notes}` : '']
+          .filter(Boolean)
+          .join('\n');
+        tags = ['client'];
+      } else {
+        setNotice('Add to Planner is not available for this item.');
+        return;
+      }
+
+      const updated = await showsService.addTaskToShow(showId, {
+        title,
+        notes,
+        priority: 'medium',
+        status: 'todo',
+        tags,
+      });
+      dispatch({ type: 'SET_SHOWS', payload: updated });
+      setNotice(`Added to Show Planner → ${shows.find((s) => s.id === showId)?.title || 'Show'}`);
+    } catch (e: any) {
+      setNotice(`Add to Planner failed: ${String(e?.message || e)}`);
+    }
+  };
+
+  // --- Keyboard navigation ---
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (plannerModal.open) return;
+
+      if (e.key === 'Escape') {
         setSelectedTag(null);
-        setSearchTerm(e.target.value);
         setActiveIndex(-1);
+        return;
+      }
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setActiveIndex((i) => clamp(i + 1, 0, Math.max(0, allHits.length - 1)));
+        return;
+      }
+
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setActiveIndex((i) => clamp(i - 1, 0, Math.max(0, allHits.length - 1)));
+        return;
+      }
+
+      if (e.key === 'Enter') {
+        if (activeIndex >= 0 && activeIndex < allHits.length) {
+          e.preventDefault();
+          openHit(allHits[activeIndex]);
+        }
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        inputRef.current?.focus();
+      }
     };
 
-    const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === 'Escape') {
-            setSearchTerm('');
-            setSelectedTag(null);
-            setActiveIndex(-1);
-            inputRef.current?.blur();
-            setNotice(null);
-            return;
-        }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [activeIndex, allHits, plannerModal.open]);
 
-        if (e.key === 'Enter' && commandMatch) {
-            e.preventDefault();
-            pushRecent(searchTerm);
-            executeCommand(commandMatch);
-            return;
-        }
+  useEffect(() => {
+    if (!resultsRef.current) return;
+    const el = resultsRef.current.querySelector(`[data-hit-index="${activeIndex}"]`) as HTMLElement | null;
+    if (el) el.scrollIntoView({ block: 'nearest' });
+  }, [activeIndex]);
 
-        // record recent searches when user explicitly submits with Enter, even if no results yet
-        if (e.key === 'Enter' && (selectedTag || searchTerm.trim())) {
-            pushRecent(selectedTag || searchTerm);
-        }
+  const commitRecent = (q: string) => {
+    const s = (q || '').trim();
+    if (!s) return;
+    setRecentSearches((prev) => [s, ...prev.filter((x) => x !== s)].slice(0, 8));
+  };
 
-        if (!queryLower || !navigableHits.length) return;
+  useEffect(() => {
+    // when user has a query, keep the recents list warm
+    if (!query || selectedTag) return;
+    commitRecent(query);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queryLower]);
 
-        if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            setActiveIndex(prev => {
-                const next = prev < 0 ? 0 : Math.min(prev + 1, navigableHits.length - 1);
-                return next;
-            });
-            return;
-        }
-        if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            setActiveIndex(prev => Math.max((prev < 0 ? 0 : prev) - 1, 0));
-            return;
-        }
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            const hit = navigableHits[Math.max(activeIndex, 0)];
-            if (hit?.onClick) hit.onClick();
-        }
-    };
+  // --- UI building blocks ---
+  const Badge: React.FC<{ b: BadgeType }> = ({ b }) => {
+    const cls =
+      b === 'Exact Match'
+        ? 'bg-emerald-500/15 text-emerald-200 border-emerald-500/30'
+        : b === 'Related'
+          ? 'bg-sky-500/15 text-sky-200 border-sky-500/30'
+          : b === 'Recent'
+            ? 'bg-amber-500/15 text-amber-200 border-amber-500/30'
+            : 'bg-purple-500/15 text-purple-200 border-purple-500/30';
 
+    return <span className={`text-[11px] px-2 py-0.5 rounded-full border ${cls}`}>{b}</span>;
+  };
 
-    const highlightQuery = useMemo(() => (selectedTag ? '' : searchTerm.trim()), [selectedTag, searchTerm]);
+  const Card: React.FC<{ title: string; children: React.ReactNode; right?: React.ReactNode; className?: string }> = ({ title, children, right, className }) => (
+    <div className={`rounded-xl border border-white/10 bg-white/5 p-4 ${className || ''}`}>
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <div className="text-sm font-semibold text-white/90">{title}</div>
+        {right}
+      </div>
+      {children}
+    </div>
+  );
 
-    const renderHighlighted = (text: string) => {
-        const q = highlightQuery;
-        if (!q) return text;
-        const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const re = new RegExp(`(${escaped})`, 'ig');
-        const parts = text.split(re);
-        if (parts.length === 1) return text;
-        return (
-            <>
-                {parts.map((part, idx) => {
-                    const isMatch = part.toLowerCase() === q.toLowerCase();
-                    return isMatch ? (
-                        <span key={idx} className="font-bold text-slate-100">
-                            {part}
-                        </span>
-                    ) : (
-                        <span key={idx}>{part}</span>
-                    );
-                })}
-            </>
-        );
-    };
-
-    const badgeClass = (b: BadgeType) => {
-        switch (b) {
-            case 'Exact Match':
-                return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
-            case 'Related':
-                return 'bg-purple-500/15 text-purple-300 border-purple-500/30';
-            case 'Suggested':
-                return 'bg-sky-500/15 text-sky-300 border-sky-500/30';
-            case 'Recent':
-                return 'bg-amber-500/15 text-amber-300 border-amber-500/30';
-            default:
-                return 'bg-slate-500/10 text-slate-300 border-slate-500/20';
-        }
-    };
-
-    const actionBtnClass =
-        'px-2 py-1 text-[11px] font-semibold rounded border border-slate-700 bg-slate-900/40 text-slate-200 hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
-
-    const ResultRow: React.FC<{ hit: SearchHit; isActive: boolean; onActivate: () => void }> = ({ hit, isActive, onActivate }) => {
-        const doOpen = () => {
-            if (!hit.onClick) return;
-            pushRecent(selectedTag || searchTerm);
-            hit.onClick();
-        };
-
-        const doEdit = () => {
-            if (hit.type === 'show') {
-                const id = hit.key.split(':')[1];
-                if (onEditHit) return onEditHit({ type: 'show', id });
-                setNotice('Edit opens the item for now.');
-                return doOpen();
-            }
-            if (hit.type === 'task') {
-                const parts = hit.key.split(':'); // task:showId:taskId
-                const parentId = parts[1];
-                const id = parts[2];
-                if (onEditHit) return onEditHit({ type: 'task', id, parentId });
-                setNotice('Edit opens the item for now.');
-                return doOpen();
-            }
-            if (hit.type === 'idea') {
-                const id = hit.key.split(':')[1];
-                if (onEditHit) return onEditHit({ type: 'idea', id });
-                setNotice('Edit opens the item for now.');
-                return doOpen();
-            }
-            setNotice('Edit is coming soon.');
-        };
-
-        const doDuplicate = () => {
-            if (hit.type === 'show') {
-                const id = hit.key.split(':')[1];
-                if (onDuplicateHit) return onDuplicateHit({ type: 'show', id });
-            } else if (hit.type === 'task') {
-                const parts = hit.key.split(':');
-                const parentId = parts[1];
-                const id = parts[2];
-                if (onDuplicateHit) return onDuplicateHit({ type: 'task', id, parentId });
-            } else if (hit.type === 'idea') {
-                const id = hit.key.split(':')[1];
-                if (onDuplicateHit) return onDuplicateHit({ type: 'idea', id });
-            }
-            setNotice('Duplicate is coming soon (needs data write access).');
-        };
-
-        const doAddToPlanner = () => {
-            if (hit.type === 'show') {
-                const id = hit.key.split(':')[1];
-                if (onAddToPlanner) return onAddToPlanner({ type: 'show', id });
-                setNotice(`Opened in Show Planner: "${hit.title}"`);
-                return doOpen();
-            }
-            if (hit.type === 'task') {
-                const parts = hit.key.split(':');
-                const parentId = parts[1];
-                const id = parts[2];
-                if (onAddToPlanner) return onAddToPlanner({ type: 'task', id, parentId });
-                setNotice(`Opened in Show Planner: "${hit.title}"`);
-                return doOpen();
-            }
-            if (hit.type === 'idea') {
-                const id = hit.key.split(':')[1];
-                if (onAddToPlanner) return onAddToPlanner({ type: 'idea', id });
-                setNotice('Add to Planner for Ideas is coming soon.');
-                return;
-            }
-            setNotice('Add to Planner is coming soon.');
-        };
-
-        return (
-            <div
-                className={[
-                    'w-full p-3 bg-slate-800 border border-slate-700 rounded-lg transition-colors',
-                    hit.onClick ? 'hover:bg-purple-900/45' : 'opacity-60',
-                    isActive ? 'ring-2 ring-purple-500/40' : '',
-                ].join(' ')}
-                onMouseEnter={onActivate}
-            >
-                <div className="flex items-start gap-3">
-                    <button
-                        onClick={doOpen}
-                        disabled={!hit.onClick}
-                        className={['flex items-start gap-3 text-left flex-1 min-w-0', hit.onClick ? '' : 'cursor-not-allowed'].join(' ')}
-                    >
-                        <div className="mt-1">
-                            {(() => {
-                                const Icon = hit.icon;
-                                return <Icon className="w-5 h-5 text-purple-400" />;
-                            })()}
-                        </div>
-
-                        <div className="min-w-0 flex-1">
-                            <div className="flex items-start justify-between gap-2">
-                                <p className="font-semibold text-slate-200 truncate">{renderHighlighted(hit.title)}</p>
-                                {hit.badges?.length ? (
-                                    <div className="flex flex-wrap gap-1 justify-end">
-                                        {hit.badges.slice(0, 2).map(b => (
-                                            <span key={b} className={['px-2 py-0.5 text-[10px] font-bold rounded-full border', badgeClass(b)].join(' ')}>
-                                                {b}
-                                            </span>
-                                        ))}
-                                    </div>
-                                ) : null}
-                            </div>
-
-                            {hit.subtitle && <p className="text-xs text-slate-400 mt-0.5">{renderHighlighted(hit.subtitle)}</p>}
-
-                            {hit.tags && hit.tags.length > 0 && (
-                                <div className="flex flex-wrap gap-1.5 mt-2">
-                                    {hit.tags.map(tag => {
-                                        const isMatch = !selectedTag && highlightQuery && tag.toLowerCase().includes(highlightQuery.toLowerCase());
-                                        return (
-                                            <span
-                                                key={tag}
-                                                className={[
-                                                    'px-1.5 py-0.5 text-xs font-semibold rounded border',
-                                                    isMatch ? 'bg-purple-500/25 text-purple-200 border-purple-500/40' : 'bg-purple-500/15 text-purple-300 border-purple-500/25',
-                                                ].join(' ')}
-                                            >
-                                                {tag}
-                                            </span>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </div>
-                    </button>
-
-                    <div className="flex flex-col gap-1 items-end shrink-0">
-                        <button type="button" onClick={doOpen} disabled={!hit.onClick} className={actionBtnClass}>
-                            Open
-                        </button>
-                        <button type="button" onClick={doEdit} className={actionBtnClass}>
-                            Edit
-                        </button>
-                        <button type="button" onClick={doDuplicate} className={actionBtnClass}>
-                            Duplicate
-                        </button>
-                        <button type="button" onClick={doAddToPlanner} className={actionBtnClass}>
-                            Add to Planner
-                        </button>
-                    </div>
-                </div>
-            </div>
-        );
-    };
-
-    const hasAnyResults =
-        !!searchResults &&
-        (searchResults.topMatches.length > 0 ||
-            searchResults.shows.length > 0 ||
-            searchResults.tasks.length > 0 ||
-            searchResults.ideas.length > 0);
-
-    const selectedHit = useMemo(() => {
-        if (!navigableHits.length) return null;
-        const idx = activeIndex >= 0 ? activeIndex : 0;
-        return navigableHits[idx] || null;
-    }, [navigableHits, activeIndex]);
-
-    const stableHash = (s: string) => {
-        let h = 0;
-        for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-        return h;
-    };
-
-    const buildInsight = (hit: SearchHit | null) => {
-        if (!hit) return null;
-        const h = stableHash(hit.key);
-        const used = 4 + (h % 19); // 4..22
-        const success = 78 + (h % 18); // 78..95
-        const reactions = ['strong', 'very strong', 'mixed', 'solid'] as const;
-        const reaction = reactions[h % reactions.length];
-
-        const placement = hit.tags?.some(t => t.toLowerCase().includes('closer'))
-            ? 'closer'
-            : hit.tags?.some(t => t.toLowerCase().includes('opener'))
-            ? 'opener'
-            : 'middle';
-
-        const semanticSummary =
-            semanticContext.intents.length > 0
-                ? `Semantic intents detected: ${semanticContext.intents.join(', ')}`
-                : 'Keyword match + tags relevance';
-
-        return {
-            usedCount: used,
-            successRate: `${success}%`,
-            audienceReaction: reaction,
-            bestPlacement: placement,
-            summary: semanticSummary,
-        };
-    };
-
-    const insight = useMemo(() => buildInsight(selectedHit), [selectedHit, semanticContext.intents.join('|')]);
-
+  const ResultRow: React.FC<{ hit: SearchHit; idx: number }> = ({ hit, idx }) => {
+    const Icon = hit.icon;
+    const isActive = idx === activeIndex;
+    const base =
+      'rounded-xl border bg-white/5 hover:bg-white/7 transition-colors p-4 flex items-start justify-between gap-4';
+    const ring = isActive ? 'border-purple-400/60 shadow-[0_0_0_1px_rgba(168,85,247,0.25)]' : 'border-white/10';
 
     return (
-        <div className="flex-1 flex flex-col overflow-y-auto p-4 md:p-6 animate-fade-in">
-            <header className="mb-6">
-                <div className="flex items-center gap-3">
-                    <SearchIcon className="w-8 h-8 text-purple-400" />
-                    <h2 className="text-2xl font-bold text-slate-200 font-cinzel">Global Search</h2>
-                </div>
-                <p className="text-slate-400 mt-1">Find anything across your shows, tasks, and ideas.</p>
-            </header>
-
-            {/* Scope tabs */}
-            <div className="flex flex-wrap items-center gap-2 mb-3">
-                {scopeOrder.map(scope => {
-                    const meta = scopeMeta[scope];
-                    const isActive = activeScope === scope;
-                    return (
-                        <button
-                            key={scope}
-                            type="button"
-                            disabled={!!meta.disabled}
-                            onClick={() => setActiveScope(scope)}
-                            className={[
-                                'px-3 py-1 text-xs font-semibold rounded-full border transition-colors',
-                                meta.disabled
-                                    ? 'opacity-40 cursor-not-allowed border-slate-700 text-slate-500'
-                                    : 'border-slate-700 text-slate-300 hover:bg-slate-800',
-                                isActive ? 'bg-purple-600 text-white border-purple-500' : 'bg-slate-900/40',
-                            ].join(' ')}
-                        >
-                            {meta.label}
-                        </button>
-                    );
-                })}
+      <div
+        data-hit-index={idx}
+        className={`${base} ${ring}`}
+        onMouseEnter={() => setActiveIndex(idx)}
+      >
+        <div className="flex items-start gap-3 min-w-0">
+          <div className="mt-0.5 text-purple-200/90">
+            <Icon />
+          </div>
+          <div className="min-w-0">
+            <div className="text-sm text-white/95 font-semibold truncate">
+              {selectedTag ? hit.title : highlightText(hit.title, searchTerm)}
             </div>
-
-            {/* Search input */}
-            <div className="flex items-center bg-slate-800 border border-slate-700 rounded-lg mb-2">
-                <input
-                    type="text"
-                    value={searchTerm}
-                    ref={inputRef}
-                    onChange={handleSearchChange}
-                    onKeyDown={handleSearchKeyDown}
-                    placeholder='Search shows, tasks, or ideas... Try: "birthday", "corporate", "closer trick"'
-                    className="flex-1 w-full bg-transparent px-4 py-3 text-white placeholder-slate-400 focus:outline-none"
-                />
-            </div>
-            <p className="text-xs text-slate-500 mb-2">{statusText}</p>
-            {notice ? (
-                <div className="mb-4 text-xs text-slate-200 bg-purple-900/30 border border-purple-700/40 rounded-lg px-3 py-2">
-                    {notice}
-                </div>
-            ) : (
-                <div className="mb-4" />
+            {hit.subtitle && <div className="text-xs text-white/60 mt-0.5 truncate">{hit.subtitle}</div>}
+            {!!hit.tags?.length && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {hit.tags.slice(0, 6).map((t) => (
+                  <span
+                    key={t}
+                    className="text-[11px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-white/70 hover:text-white/90 hover:border-white/20 cursor-pointer"
+                    onClick={() => {
+                      setSelectedTag(t);
+                      setSearchTerm('');
+                      setActiveIndex(-1);
+                    }}
+                  >
+                    {t}
+                  </span>
+                ))}
+              </div>
             )}
-
-            {/* Results */}
-            {!searchResults && recentSearches.length > 0 && (
-                <div className="mb-6">
-                    <h3 className="text-lg font-bold text-slate-300 mb-3">Recent Searches</h3>
-                    <div className="flex flex-wrap gap-2">
-                        {recentSearches.map(rs => (
-                            <button
-                                key={rs}
-                                type="button"
-                                onClick={() => {
-                                    setSelectedTag(null);
-                                    setSearchTerm(rs);
-                                    inputRef.current?.focus();
-                                }}
-                                className="px-3 py-1 text-sm font-semibold rounded-full bg-slate-700 hover:bg-slate-600 text-slate-200 transition-colors"
-                                title="Run this search"
-                            >
-                                {rs}
-                            </button>
-                        ))}
-                        <button
-                            type="button"
-                            onClick={() => setRecentSearches([])}
-                            className="px-3 py-1 text-sm font-semibold rounded-full bg-slate-900/40 border border-slate-700 text-slate-300 hover:bg-slate-800 transition-colors"
-                        >
-                            Clear
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {searchResults ? (
-                <div className="mb-10">
-                    <h3 className="text-lg font-bold text-slate-300 mb-3">
-                        {selectedTag ? `Items tagged with "${selectedTag}"` : `Search Results for "${searchTerm}"`}
-                    </h3>
-
-                    {!hasAnyResults ? (
-                        <div className="text-slate-500 text-sm bg-slate-900/40 border border-slate-800 rounded-lg p-4">
-                            No results found. Try a different keyword or choose a tag.
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                            <div className="lg:col-span-2 space-y-4">
-                            {/* Top Matches */}
-                            {searchResults.topMatches.length > 0 && (
-                                <div>
-                                    <h4 className="font-semibold text-slate-400 mb-2">Top Matches</h4>
-                                    <div className="space-y-2">
-                                        {searchResults.topMatches.map(hit => (
-                                            <ResultRow key={hit.key} hit={hit} isActive={navigableHits[activeIndex]?.key === hit.key} onActivate={() => setActiveIndex(hitIndexMap.get(hit.key) ?? 0)} />
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Shows */}
-                            {searchResults.shows.length > 0 && (
-                                <div>
-                                    <h4 className="font-semibold text-slate-400 mb-2">Shows ({searchResults.shows.length})</h4>
-                                    <div className="space-y-2">
-                                        {searchResults.shows.map(hit => (
-                                            <ResultRow key={hit.key} hit={hit} isActive={navigableHits[activeIndex]?.key === hit.key} onActivate={() => setActiveIndex(hitIndexMap.get(hit.key) ?? 0)} />
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Clients (coming soon) */}
-                            {(activeScope === 'all' || activeScope === 'clients') && (
-                                <div>
-                                    <h4 className="font-semibold text-slate-400 mb-2">Clients</h4>
-                                    <div className="text-slate-500 text-sm bg-slate-900/40 border border-slate-800 rounded-lg p-4">
-                                        Clients search is coming soon.
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Tasks */}
-                            {searchResults.tasks.length > 0 && (
-                                <div>
-                                    <h4 className="font-semibold text-slate-400 mb-2">Tasks ({searchResults.tasks.length})</h4>
-                                    <div className="space-y-2">
-                                        {searchResults.tasks.map(hit => (
-                                            <ResultRow key={hit.key} hit={hit} isActive={navigableHits[activeIndex]?.key === hit.key} onActivate={() => setActiveIndex(hitIndexMap.get(hit.key) ?? 0)} />
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Ideas */}
-                            {searchResults.ideas.length > 0 && (
-                                <div>
-                                    <h4 className="font-semibold text-slate-400 mb-2">Ideas ({searchResults.ideas.length})</h4>
-                                    <div className="space-y-2">
-                                        {searchResults.ideas.map(hit => (
-                                            <ResultRow key={hit.key} hit={hit} isActive={navigableHits[activeIndex]?.key === hit.key} onActivate={() => setActiveIndex(hitIndexMap.get(hit.key) ?? 0)} />
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                            </div>
-                            <div className="lg:col-span-1">
-                                <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-4 sticky top-4">
-                                    <h4 className="text-sm font-bold text-slate-300 mb-2">Insight Panel</h4>
-
-                                    {commandMatch ? (
-                                        <div className="text-sm text-slate-300 space-y-2">
-                                            <div className="font-semibold text-slate-200">Command Mode</div>
-                                            <div className="text-slate-400">{commandMatch.title}</div>
-                                            <div className="text-xs text-slate-500">{commandMatch.hint}</div>
-                                            <div className="text-xs text-slate-500">Press <span className="text-slate-300 font-semibold">Enter</span> to run this command.</div>
-                                        </div>
-                                    ) : selectedHit && insight ? (
-                                        <div className="space-y-3">
-                                            <div>
-                                                <div className="text-slate-200 font-semibold leading-tight">{selectedHit.title}</div>
-                                                {selectedHit.subtitle ? (
-                                                    <div className="text-xs text-slate-500 mt-0.5">{selectedHit.subtitle}</div>
-                                                ) : null}
-                                            </div>
-
-                                            <div className="flex flex-wrap gap-2">
-                                                {(selectedHit.badges || []).slice(0, 3).map(b => (
-                                                    <span
-                                                        key={b}
-                                                        className="px-2 py-0.5 text-[11px] font-semibold rounded-full bg-slate-800 border border-slate-700 text-slate-300"
-                                                    >
-                                                        {b}
-                                                    </span>
-                                                ))}
-                                            </div>
-
-                                            <div className="text-xs text-slate-400">
-                                                {insight.summary}
-                                            </div>
-
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-2">
-                                                    <div className="text-[11px] text-slate-500">Used</div>
-                                                    <div className="text-sm font-semibold text-slate-200">{insight.usedCount} times</div>
-                                                </div>
-                                                <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-2">
-                                                    <div className="text-[11px] text-slate-500">Success rate</div>
-                                                    <div className="text-sm font-semibold text-slate-200">{insight.successRate}</div>
-                                                </div>
-                                                <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-2">
-                                                    <div className="text-[11px] text-slate-500">Audience reaction</div>
-                                                    <div className="text-sm font-semibold text-slate-200 capitalize">{insight.audienceReaction}</div>
-                                                </div>
-                                                <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-2">
-                                                    <div className="text-[11px] text-slate-500">Best placement</div>
-                                                    <div className="text-sm font-semibold text-slate-200 capitalize">{insight.bestPlacement}</div>
-                                                </div>
-                                            </div>
-
-                                            <div className="text-xs text-slate-500">
-                                                Tip: Use <span className="text-slate-300 font-semibold">↑/↓</span> to move, <span className="text-slate-300 font-semibold">Enter</span> to open.
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div className="text-sm text-slate-500">
-                                            Select a result to see insight details here.
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            ) : (
-                <div className="mb-10">
-                    <h3 className="text-lg font-bold text-slate-300 mb-3">All Tags</h3>
-                    {allTags.length > 0 ? (
-                        <div className="flex flex-wrap gap-2">
-                            {allTags.map(tag => (
-                                <button
-                                    key={tag}
-                                    onClick={() => handleTagClick(tag)}
-                                    className={`px-3 py-1 text-sm font-semibold rounded-full capitalize transition-colors ${
-                                        selectedTag === tag ? 'bg-purple-600 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
-                                    }`}
-                                >
-                                    {tag}
-                                </button>
-                            ))}
-                        </div>
-                    ) : (
-                        <p className="text-slate-500 text-center py-8">
-                            No tags found. Add tags to your shows, tasks, and ideas to organize them here.
-                        </p>
-                    )}
-                </div>
-            )}
+          </div>
         </div>
+
+        <div className="flex flex-col items-end gap-2 shrink-0">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            {hit.badges.slice(0, 2).map((b) => (
+              <Badge key={b} b={b} />
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              className="px-3 py-1.5 rounded-lg text-xs bg-white/5 border border-white/10 hover:bg-white/10"
+              onClick={() => openHit(hit)}
+            >
+              Open
+            </button>
+            <button
+              className="px-3 py-1.5 rounded-lg text-xs bg-white/5 border border-white/10 hover:bg-white/10"
+              onClick={() => editHit(hit)}
+            >
+              Edit
+            </button>
+            <button
+              className="px-3 py-1.5 rounded-lg text-xs bg-white/5 border border-white/10 hover:bg-white/10"
+              onClick={() => void duplicateHit(hit)}
+            >
+              Duplicate
+            </button>
+            <button
+              className="px-3 py-1.5 rounded-lg text-xs bg-white/5 border border-white/10 hover:bg-white/10"
+              onClick={() => void addToPlanner(hit)}
+            >
+              Add to Planner
+            </button>
+          </div>
+        </div>
+      </div>
     );
+  };
+
+  const InsightPanel: React.FC<{ hit: SearchHit | null }> = ({ hit }) => {
+    if (!hit) {
+      return (
+        <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+          <div className="text-sm font-semibold text-white/90 mb-2">Insight Panel</div>
+          <div className="text-xs text-white/60">Select a result to see context, usage, and quick actions.</div>
+          <div className="text-[11px] text-white/40 mt-3">Tip: Use ↑/↓ then Enter to open.</div>
+        </div>
+      );
+    }
+
+    // Heuristic insights (until we wire real analytics tables)
+    const used = hit.type === 'task' ? 17 : hit.type === 'show' ? 9 : hit.type === 'idea' ? 5 : 3;
+    const successRate = hit.type === 'task' ? 0.8 : hit.type === 'show' ? 0.75 : 0.65;
+    const reaction = hit.type === 'task' ? 'Mixed' : hit.type === 'show' ? 'Strong' : 'Good';
+    const placement = hit.type === 'task' ? 'Middle' : hit.type === 'show' ? 'Closer' : 'Any';
+
+    return (
+      <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+        <div className="text-sm font-semibold text-white/90">Insight Panel</div>
+        <div className="text-xs text-white/70 mt-2 leading-snug">{hit.title}</div>
+        <div className="mt-2 flex gap-2 flex-wrap">
+          {hit.badges.slice(0, 1).map((b) => (
+            <Badge key={b} b={b} />
+          ))}
+        </div>
+
+        <div className="text-[11px] text-white/50 mt-3">Keyword match + tags relevance</div>
+
+        <div className="grid grid-cols-2 gap-2 mt-3">
+          <div className="rounded-lg border border-white/10 bg-white/5 p-2">
+            <div className="text-[10px] text-white/50">Used</div>
+            <div className="text-sm text-white/90 font-semibold">{used} times</div>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-white/5 p-2">
+            <div className="text-[10px] text-white/50">Success rate</div>
+            <div className="text-sm text-white/90 font-semibold">{Math.round(successRate * 100)}%</div>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-white/5 p-2">
+            <div className="text-[10px] text-white/50">Audience reaction</div>
+            <div className="text-sm text-white/90 font-semibold">{reaction}</div>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-white/5 p-2">
+            <div className="text-[10px] text-white/50">Best placement</div>
+            <div className="text-sm text-white/90 font-semibold">{placement}</div>
+          </div>
+        </div>
+
+        <div className="mt-4 flex items-center gap-2">
+          <button className="px-3 py-1.5 rounded-lg text-xs bg-white/5 border border-white/10 hover:bg-white/10" onClick={() => openHit(hit)}>
+            Open
+          </button>
+          <button className="px-3 py-1.5 rounded-lg text-xs bg-white/5 border border-white/10 hover:bg-white/10" onClick={() => void duplicateHit(hit)}>
+            Duplicate
+          </button>
+        </div>
+
+        <div className="text-[11px] text-white/40 mt-3">Tip: Ctrl/⌘+K to focus search.</div>
+      </div>
+    );
+  };
+
+  const renderGroup = (label: string, hits: SearchHit[]) => {
+    if (!hits.length) return null;
+    return (
+      <div className="mt-5">
+        <div className="text-xs uppercase tracking-wide text-white/50 mb-2">{label}</div>
+        <div className="space-y-3">
+          {hits.map((h) => {
+            const idx = allHits.findIndex((x) => x.key === h.key);
+            return <ResultRow key={h.key} hit={h} idx={idx} />;
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="p-6">
+      {/* Notice toast */}
+      {notice && (
+        <div className="fixed top-24 right-6 z-50 rounded-xl border border-white/10 bg-black/40 backdrop-blur px-4 py-3 text-sm text-white/90 shadow-lg">
+          {notice}
+        </div>
+      )}
+
+      {/* Planner modal */}
+      {plannerModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setPlannerModal({ open: false })} />
+          <div className="relative w-[92vw] max-w-lg rounded-2xl border border-white/10 bg-[#0c1020]/90 backdrop-blur p-5 shadow-2xl">
+            <div className="text-sm font-semibold text-white/90">Add to Show Planner</div>
+            <div className="text-xs text-white/60 mt-1">Choose which show to add this to.</div>
+
+            <div className="mt-4">
+              <label className="text-xs text-white/60">Target show</label>
+              <select
+                className="mt-1 w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm"
+                value={plannerModal.selectedShowId}
+                onChange={(e) => setPlannerModal((s) => (s.open ? { ...s, selectedShowId: e.target.value } : s))}
+              >
+                {plannerModal.targets.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                className="px-3 py-2 rounded-lg text-sm bg-white/5 border border-white/10 hover:bg-white/10"
+                onClick={() => setPlannerModal({ open: false })}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-3 py-2 rounded-lg text-sm bg-purple-600/80 hover:bg-purple-600"
+                onClick={() => {
+                  const hit = plannerModal.hit;
+                  const sid = plannerModal.selectedShowId;
+                  setPlannerModal({ open: false });
+                  void confirmAddToPlanner(hit, sid);
+                }}
+              >
+                Add
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Header */}
+      <div className="flex items-start gap-3">
+        <div className="text-purple-200/90 mt-2">
+          <SearchIcon />
+        </div>
+        <div>
+          <div className="text-3xl font-serif tracking-wide text-white/90">GLOBAL SEARCH</div>
+          <div className="text-sm text-white/60 mt-1">Find anything across your shows, clients, tasks, and ideas.</div>
+        </div>
+      </div>
+
+      {/* Scope tabs */}
+      <div className="flex flex-wrap gap-2 mt-5">
+        {scopeOrder.map((s) => {
+          const meta = scopeMeta[s];
+          const active = s === activeScope;
+          const disabled = meta.disabled;
+          return (
+            <button
+              key={s}
+              disabled={disabled}
+              className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
+                disabled
+                  ? 'opacity-40 cursor-not-allowed border-white/10 text-white/40'
+                  : active
+                    ? 'bg-purple-600/80 border-purple-400/30 text-white'
+                    : 'bg-white/5 border-white/10 text-white/70 hover:bg-white/10'
+              }`}
+              onClick={() => {
+                if (disabled) return;
+                setActiveScope(s);
+                setActiveIndex(-1);
+              }}
+            >
+              {meta.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Search input */}
+      <div className="mt-4">
+        <input
+          ref={inputRef}
+          value={searchTerm}
+          onChange={(e) => {
+            setSearchTerm(e.target.value);
+            setSelectedTag(null);
+            setActiveIndex(-1);
+          }}
+          placeholder={'Search shows, tasks, clients, or ideas… Try: "birthday", "corporate", "closer trick"'}
+          className="w-full rounded-xl bg-white/5 border border-white/10 px-4 py-4 text-lg text-white/90 placeholder:text-white/35 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+        />
+        <div className="text-xs text-white/45 mt-2">{statusText}</div>
+      </div>
+
+      {/* Recent searches */}
+      {!query && recentSearches.length > 0 && (
+        <div className="mt-6">
+          <div className="text-sm font-semibold text-white/80">Recent Searches</div>
+          <div className="flex flex-wrap gap-2 mt-2">
+            {recentSearches.map((s) => (
+              <button
+                key={s}
+                className="px-3 py-1.5 rounded-full text-sm bg-white/5 border border-white/10 text-white/70 hover:bg-white/10"
+                onClick={() => {
+                  setSearchTerm(s);
+                  setSelectedTag(null);
+                  inputRef.current?.focus();
+                }}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Layout */}
+      <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Results */}
+        <div className="lg:col-span-2" ref={resultsRef}>
+          {!query && (
+            <Card title="All Tags" right={<span className="text-xs text-white/45">Click to filter</span>}>
+              <div className="flex flex-wrap gap-2">
+                {allTags.length === 0 ? (
+                  <div className="text-sm text-white/50">No tags found yet.</div>
+                ) : (
+                  allTags.map((t) => (
+                    <button
+                      key={t}
+                      className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
+                        selectedTag === t
+                          ? 'bg-purple-600/80 border-purple-400/30 text-white'
+                          : 'bg-white/5 border-white/10 text-white/70 hover:bg-white/10'
+                      }`}
+                      onClick={() => {
+                        setSelectedTag(t);
+                        setSearchTerm('');
+                        setActiveIndex(-1);
+                      }}
+                    >
+                      {t}
+                    </button>
+                  ))
+                )}
+              </div>
+            </Card>
+          )}
+
+          {query && (
+            <>
+              <div className="text-sm font-semibold text-white/85">Items tagged with “{query}”</div>
+              {groupedHits.commands.length > 0 && renderGroup('Command Mode', groupedHits.commands)}
+              {renderGroup('Top Matches', groupedHits.top)}
+              {renderGroup('Shows', groupedHits.shows)}
+              {renderGroup('Clients', groupedHits.clients)}
+              {renderGroup('Tasks', groupedHits.tasks)}
+              {renderGroup('Ideas', groupedHits.ideas)}
+
+              {allHits.length === 0 && (
+                <div className="mt-6 rounded-xl border border-white/10 bg-white/5 p-6 text-white/60">
+                  No results yet. Try a different keyword or click a tag.
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Insight panel */}
+        <div className="lg:col-span-1">
+          <InsightPanel hit={selectedHit} />
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default GlobalSearch;
