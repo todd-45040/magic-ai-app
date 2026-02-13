@@ -24,6 +24,11 @@ type DictionaryTerm = {
   definition: string;
   references?: DictionaryReference[];
 
+  // Tier-4: Modern interpretations + ethics (optional; inferred if missing)
+  classicDefinition?: string;
+  modernApplication?: string;
+  ethicalReminder?: string;
+
   // Optional “Mini Knowledge Base” fields (gracefully handled if missing)
   category?: string; // legacy / source category
   whyItMatters?: string;
@@ -55,6 +60,63 @@ const SCENARIO_PERSONAS: ScenarioPersona[] = [
   'Distracted Corporate Guest',
   'Enthusiastic Child',
   'Quiet Analytical Viewer',
+];
+
+// Tier 4 — Magic Theory Tutor
+type TutorLevel = 1 | 2 | 3;
+type TutorStep = {
+  level: TutorLevel;
+  title: string;
+  term: string;
+  quiz: string;
+  tip?: string;
+};
+
+const TUTOR_STEPS: TutorStep[] = [
+  {
+    level: 1,
+    title: 'Level 1 — Fundamentals',
+    term: 'Beat',
+    quiz: 'In a 3-phase routine, where would you place a clear beat so the audience understands what just changed?',
+    tip: 'Hint: a beat is usually a pause or a marked moment right after an action lands.'
+  },
+  {
+    level: 1,
+    title: 'Level 1 — Fundamentals',
+    term: 'Clarity',
+    quiz: 'What is one sentence you could add that makes the “moment of magic” unmistakable for the audience?',
+  },
+  {
+    level: 1,
+    title: 'Level 1 — Fundamentals',
+    term: 'Framing',
+    quiz: 'How would you frame the premise so spectators know their role and what success looks like?',
+  },
+  {
+    level: 2,
+    title: 'Level 2 — Advanced Tools',
+    term: 'Dual Reality',
+    quiz: 'Where could dual reality help create a stronger reveal without confusing the rest of the audience?',
+  },
+  {
+    level: 2,
+    title: 'Level 2 — Advanced Tools',
+    term: 'Psychological Forces',
+    quiz: 'Give one ethical way you could use psychological forces to guide a choice while keeping it fair and fun.',
+    tip: 'We keep this high-level: no exposure, no step-by-step methods. Focus on framing and participant experience.'
+  },
+  {
+    level: 3,
+    title: 'Level 3 — Structure Mastery',
+    term: 'Narrative Structure',
+    quiz: 'Describe a simple story arc (setup → tension → payoff) that could connect two effects into one routine.',
+  },
+  {
+    level: 3,
+    title: 'Level 3 — Structure Mastery',
+    term: 'Time Misdirection',
+    quiz: 'Where would you place the offbeat in this routine, and what would you do during it to protect the method?',
+  },
 ];
 
 const GOLD = 'text-amber-300';
@@ -188,6 +250,34 @@ const inferScenario = (t: DictionaryTerm): string => {
   return 'Use this concept in a real routine: identify the “moment of magic,” then decide what the audience should be thinking and feeling right before and right after it.';
 };
 
+const inferClassicDefinition = (t: DictionaryTerm): string => {
+  const v = (t.classicDefinition || '').trim();
+  if (v) return v;
+  return (t.definition || '').trim();
+};
+
+const inferModernApplication = (t: DictionaryTerm): string => {
+  const v = (t.modernApplication || '').trim();
+  if (v) return v;
+
+  // If the term has an explicit “why it matters”, reframe it as practical application.
+  if (t.whyItMatters && t.whyItMatters.trim()) {
+    return `${t.whyItMatters.trim()}\n\nModern takeaway: identify the audience’s focus *right now* (eyes + thoughts), then design your words, timing, and staging so the focus lands where you want—without looking like you are “steering” it.`;
+  }
+
+  // Fallback: use the scenario as an applied example.
+  return `Modern application: ${inferScenario(t)}`;
+};
+
+const inferEthicalReminder = (t: DictionaryTerm): string => {
+  const v = (t.ethicalReminder || '').trim();
+  if (v) return v;
+  return 'Use this concept to strengthen clarity and wonder—not to embarrass spectators. Keep interactions safe, respectful, and consent-based.';
+};
+
+const NO_EXPOSURE_POLICY =
+  'No exposure policy: do not reveal methods, gimmicks, secret setups, or step-by-step instructions in public-facing contexts. Focus on presentation, structure, and audience experience.';
+
 type StudyList = {
   id: string;
   name: string;
@@ -253,6 +343,12 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark }) => {
   const [studyOpen, setStudyOpen] = useState(false);
   const [newListName, setNewListName] = useState('');
 
+  // Tier-4: Magic Theory Tutor Mode
+  const [tutorOpen, setTutorOpen] = useState(false);
+  const [tutorLevel, setTutorLevel] = useState<TutorLevel>(1);
+  const [tutorIndex, setTutorIndex] = useState(0); // index within filtered steps for selected level
+  const [tutorAnswer, setTutorAnswer] = useState('');
+
   // Tier-2: Apply concept to a show
   const [applyOpen, setApplyOpen] = useState(false);
   const [applyTerm, setApplyTerm] = useState<DictionaryTerm | null>(null);
@@ -294,6 +390,19 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark }) => {
       return matchesSearch && matchesConcept && matchesDifficulty;
     });
   }, [searchTerm, sortedTerms, conceptFilter, difficultyFilter]);
+
+  // Tier-4: Tutor steps for current level
+  const tutorSteps = useMemo(() => {
+    return TUTOR_STEPS.filter((s) => s.level === tutorLevel);
+  }, [tutorLevel]);
+
+  const currentTutorStep = tutorSteps[Math.max(0, Math.min(tutorSteps.length - 1, tutorIndex))];
+
+  const findTerm = (name: string): DictionaryTerm | null => {
+    const n = (name || '').trim().toLowerCase();
+    const hit = sortedTerms.find((t) => (t.term || '').trim().toLowerCase() === n);
+    return hit || null;
+  };
 
   const clearFilters = () => {
     setSearchTerm('');
@@ -757,6 +866,60 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark }) => {
     setDiagnosticOpen(true);
   };
 
+  // Tier 4: Magic Theory Tutor
+  const openTutor = () => {
+    setTutorOpen(true);
+    // Ensure index stays in range when reopening
+    setTutorIndex((idx) => Math.max(0, Math.min((TUTOR_STEPS.filter((s) => s.level === tutorLevel).length || 1) - 1, idx)));
+  };
+
+  const startTutorLevel = (lvl: TutorLevel) => {
+    setTutorLevel(lvl);
+    setTutorIndex(0);
+    setTutorAnswer('');
+  };
+
+  const tutorGoPrev = () => {
+    setTutorIndex((i) => Math.max(0, i - 1));
+    setTutorAnswer('');
+  };
+
+  const tutorGoNext = () => {
+    setTutorIndex((i) => Math.min(Math.max(0, tutorSteps.length - 1), i + 1));
+    setTutorAnswer('');
+  };
+
+  const tutorAskAiFeedback = () => {
+    if (!onAiSpark) return;
+    const step = currentTutorStep;
+    if (!step) return;
+
+    const termObj = findTerm(step.term);
+    const answer = tutorAnswer.trim();
+    if (!answer) return;
+
+    const prompt = [
+      `You are my Magic Theory Tutor. Stay ethical and DO NOT expose secrets or methods.`,
+      `I'm studying "${step.term}" (${step.title}).`,
+      '',
+      termObj
+        ? `Dictionary context:\n- Classic definition: ${inferClassicDefinition(termObj)}\n- Modern application: ${inferModernApplication(termObj)}`
+        : `Dictionary context: term may not exist yet; treat it as a performance theory concept and stay high-level.`,
+      '',
+      `Quiz question: ${step.quiz}`,
+      `My answer: ${answer}`,
+      '',
+      `Give feedback in this format:`,
+      `1) What I did well (2 bullets)`,
+      `2) What to improve (2 bullets)`,
+      `3) A stronger example answer (short)`,
+      `4) A mini-drill I can do in rehearsal (1 drill)`,
+      `5) Dictionary References: list 2–4 related concept names (e.g., "Dictionary → Offbeat")`,
+    ].join('\n');
+
+    onAiSpark({ type: 'custom-prompt', payload: { prompt } });
+  };
+
   const runDiagnostic = () => {
     if (!onAiSpark) return;
     const script = diagnosticScript.trim();
@@ -836,6 +999,16 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark }) => {
                 Reset
               </button>
             ) : null}
+
+            <button
+              type="button"
+              onClick={openTutor}
+              className="mr-3 px-3 py-2 text-sm rounded-lg border border-amber-400/30 bg-amber-400/10 text-amber-200 hover:bg-amber-400/15 hover:border-amber-300/40 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60"
+              aria-label="Open Magic Theory Tutor"
+              title="Guided study path + quizzes (Tier 4)"
+            >
+              Tutor
+            </button>
 
             <button
               type="button"
@@ -1009,6 +1182,21 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark }) => {
                           <p className="text-slate-200 leading-relaxed">{item.definition}</p>
                         </div>
 
+                        {/* Tier-4: Modern interpretations */}
+                        <div className="rounded-xl border border-slate-700 bg-slate-900/30 p-4">
+                          <h4 className={`text-sm font-semibold ${GOLD_MUTED} mb-3`}>🧠 Modern Interpretations</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <div className="text-xs font-semibold text-slate-400 mb-1">Classic Definition</div>
+                              <p className="text-slate-200 leading-relaxed whitespace-pre-line">{inferClassicDefinition(item)}</p>
+                            </div>
+                            <div>
+                              <div className="text-xs font-semibold text-slate-400 mb-1">Modern Application</div>
+                              <p className="text-slate-300 leading-relaxed whitespace-pre-line">{inferModernApplication(item)}</p>
+                            </div>
+                          </div>
+                        </div>
+
                         {/* Why it matters */}
                         {item.whyItMatters ? (
                           <div>
@@ -1034,6 +1222,13 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark }) => {
 
                         {/* References */}
                         {renderReferences(item)}
+
+                        {/* Tier-4: Ethical + no exposure guardrails */}
+                        <div className="rounded-xl border border-slate-700 bg-slate-900/30 p-4">
+                          <h4 className={`text-sm font-semibold ${GOLD_MUTED} mb-2`}>🛡 Ethics & Guardrails</h4>
+                          <p className="text-slate-300 leading-relaxed">{inferEthicalReminder(item)}</p>
+                          <p className="mt-2 text-sm text-slate-400 leading-relaxed">{NO_EXPOSURE_POLICY}</p>
+                        </div>
 
                         {/* Saved Study Concepts */}
                         <div className="rounded-xl border border-slate-700 bg-slate-900/30 p-4">
@@ -1216,6 +1411,165 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark }) => {
       </div>
 
       {/* Tier-2 Modals */}
+
+      {/* Tier-4: Magic Theory Tutor Modal */}
+      {tutorOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" onClick={() => setTutorOpen(false)} />
+          <div className="relative w-full max-w-3xl rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-slate-700">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-100">Magic Theory Tutor</h3>
+                <p className="text-sm text-slate-400">Guided study paths + quizzes (no exposure, practical coaching).</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTutorOpen(false)}
+                className="px-3 py-2 text-sm rounded-lg border border-slate-700 bg-slate-950/40 text-slate-200 hover:text-white hover:border-slate-600 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="p-5 space-y-5">
+              {/* Level selector */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold text-slate-400 mr-1">Level:</span>
+                {([1, 2, 3] as TutorLevel[]).map((lvl) => {
+                  const active = tutorLevel === lvl;
+                  const label = lvl === 1 ? 'Level 1: Fundamentals' : lvl === 2 ? 'Level 2: Advanced Tools' : 'Level 3: Structure Mastery';
+                  return (
+                    <button
+                      key={lvl}
+                      type="button"
+                      onClick={() => startTutorLevel(lvl)}
+                      className={[
+                        'px-3 py-2 text-sm rounded-lg border transition-colors',
+                        active ? 'bg-purple-600/20 border-purple-500/40 text-purple-100' : 'bg-slate-950/30 border-slate-700 text-slate-300 hover:text-white hover:border-slate-600',
+                        'focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60',
+                      ].join(' ')}
+                      aria-pressed={active}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Step content */}
+              {currentTutorStep ? (
+                <div className="rounded-2xl border border-slate-700 bg-slate-950/30 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-xs text-slate-500">{currentTutorStep.title}</div>
+                      <div className="text-xl font-bold text-amber-200 mt-1">{currentTutorStep.term}</div>
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      Step {Math.min(tutorSteps.length, tutorIndex + 1)} of {tutorSteps.length || 1}
+                    </div>
+                  </div>
+
+                  {/* Dictionary context */}
+                  {(() => {
+                    const termObj = findTerm(currentTutorStep.term);
+                    if (!termObj) {
+                      return (
+                        <p className="mt-3 text-sm text-slate-400">
+                          This concept isn’t in your dictionary yet. Tutor mode will stay high-level and focus on performance principles.
+                        </p>
+                      );
+                    }
+                    return (
+                      <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <div className="text-xs font-semibold text-slate-400 mb-1">Classic Definition</div>
+                          <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-line">{inferClassicDefinition(termObj)}</p>
+                        </div>
+                        <div>
+                          <div className="text-xs font-semibold text-slate-400 mb-1">Modern Application</div>
+                          <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-line">{inferModernApplication(termObj)}</p>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Quiz */}
+                  <div className="mt-4">
+                    <div className="text-sm font-semibold text-slate-200">Quiz</div>
+                    <p className="mt-1 text-sm text-slate-300 leading-relaxed">{currentTutorStep.quiz}</p>
+                    {currentTutorStep.tip ? <p className="mt-2 text-xs text-slate-500">{currentTutorStep.tip}</p> : null}
+                  </div>
+
+                  <div className="mt-3">
+                    <label className="block text-xs font-semibold text-slate-400 mb-1">Your answer</label>
+                    <textarea
+                      value={tutorAnswer}
+                      onChange={(e) => setTutorAnswer(e.target.value)}
+                      placeholder="Write a short, practical answer…"
+                      className="w-full min-h-[96px] rounded-lg bg-slate-950/40 border border-slate-700 px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60"
+                    />
+                    <div className="mt-3 rounded-xl border border-slate-700 bg-slate-900/30 p-3">
+                      <div className="text-xs font-semibold text-slate-400 mb-1">Ethics</div>
+                      <p className="text-xs text-slate-500 leading-relaxed">{NO_EXPOSURE_POLICY}</p>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={tutorGoPrev}
+                        disabled={tutorIndex <= 0}
+                        className={[
+                          'px-3 py-2 text-sm rounded-lg border transition-colors',
+                          tutorIndex <= 0 ? 'border-slate-700 bg-slate-900/40 text-slate-500 cursor-not-allowed' : 'border-slate-700 bg-slate-950/40 text-slate-200 hover:text-white hover:border-slate-600',
+                          'focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60',
+                        ].join(' ')}
+                      >
+                        Prev
+                      </button>
+                      <button
+                        type="button"
+                        onClick={tutorGoNext}
+                        disabled={tutorIndex >= Math.max(0, tutorSteps.length - 1)}
+                        className={[
+                          'px-3 py-2 text-sm rounded-lg border transition-colors',
+                          tutorIndex >= Math.max(0, tutorSteps.length - 1)
+                            ? 'border-slate-700 bg-slate-900/40 text-slate-500 cursor-not-allowed'
+                            : 'border-slate-700 bg-slate-950/40 text-slate-200 hover:text-white hover:border-slate-600',
+                          'focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60',
+                        ].join(' ')}
+                      >
+                        Next
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={tutorAskAiFeedback}
+                      disabled={!onAiSpark || !currentTutorStep || !tutorAnswer.trim()}
+                      className={[
+                        'px-4 py-2 text-sm rounded-lg border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60',
+                        !onAiSpark || !tutorAnswer.trim()
+                          ? 'border-slate-700 bg-slate-900/40 text-slate-500 cursor-not-allowed'
+                          : 'border-amber-400/30 bg-amber-400/10 text-amber-200 hover:bg-amber-400/15 hover:border-amber-300/40',
+                      ].join(' ')}
+                      title={!onAiSpark ? 'AI actions unavailable in this view' : 'Send your answer to the AI Tutor for feedback'}
+                    >
+                      Get AI Feedback
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-slate-700 bg-slate-950/30 p-4">
+                  <p className="text-sm text-slate-300">No tutor steps found for this level.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {studyOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

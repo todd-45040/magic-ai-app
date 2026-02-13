@@ -1017,6 +1017,46 @@ export const MAGIC_DICTIONARY_TERMS = [
     references: [],
   },
   {
+    term: 'Psychological Forces',
+    category: 'Theory',
+    skillLevel: 'Pro',
+    definition:
+      'A high-level approach to guiding choices and decisions by shaping context, expectations, and attention—without making the participant feel controlled.',
+    whyItMatters:
+      'When used ethically, psychological forces can make interactions feel personal and impossible while keeping the performance playful and fair. The real power is in framing and participant experience, not “gotcha” moments.',
+    beginnerMistakes: [
+      'Treating it like a trick on the volunteer instead of a collaborative experience',
+      'Over-claiming certainty (which invites challenge)',
+      'Using it in high-stakes contexts where consent or comfort is unclear',
+    ],
+    relatedTerms: ['Framing', 'Misdirection', 'Audience Control', 'Clarity'],
+    usedInWizard: [
+      { feature: 'Director Mode', note: 'Builds ethical framing and audience-safe language.' },
+      { feature: 'Persona Simulator', note: 'Test how different audience types respond to guided choices.' },
+    ],
+    references: [],
+  },
+  {
+    term: 'Narrative Structure',
+    category: 'Theory',
+    skillLevel: 'Intermediate',
+    definition:
+      'Using a story arc (setup → tension → payoff) to connect moments so a routine feels like one cohesive experience, not separate tricks.',
+    whyItMatters:
+      'Narrative makes magic memorable. It gives the audience an emotional thread to follow, increases clarity, and creates stronger applause moments because the payoff feels earned.',
+    beginnerMistakes: [
+      'Adding story text that slows the pace but doesn’t increase stakes',
+      'Confusing plot with procedure (explaining steps instead of meaning)',
+      'Forgetting to give the audience a role in the story',
+    ],
+    relatedTerms: ['Framing', 'Clarity', 'Beat', 'Pacing'],
+    usedInWizard: [
+      { feature: 'Patter Engine', note: 'Helps generate meaningful lines that carry a story thread.' },
+      { feature: 'Show Planner', note: 'Plan routines so beats connect and tension builds.' },
+    ],
+    references: [],
+  },
+  {
     term: 'Heckler Management',
     category: 'Audience Management',
     skillLevel: 'Pro',
