@@ -325,6 +325,8 @@ const MagicTheoryTutor: React.FC<MagicTheoryTutorProps> = ({ user }) => {
                         </div>
                     </button>
                 
+                )}
+
                 {/* Tier 3: Theory Mastery + Curriculum Path */}
                 <div className="mb-4 rounded-xl border border-amber-500/30 bg-slate-900/40 p-4">
                     <div className="flex items-start justify-between gap-3">
