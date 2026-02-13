@@ -61,6 +61,14 @@ const THEME_SUGGESTIONS = [
     'Audience prediction',
 ];
 
+const PERSONA_VERSIONS = [
+    { key: 'Base', label: 'Default' },
+    { key: 'Corporate buyers', label: 'Corporate buyers' },
+    { key: 'Parents', label: 'Parents' },
+    { key: 'Event planners', label: 'Event planners' },
+    { key: 'Festival coordinators', label: 'Festival coordinators' },
+] as const;
+
 const LOADING_STEPS = [
     'Analyzing performance profile…',
     'Building marketing voice…',
@@ -89,6 +97,9 @@ const MarketingCampaign: React.FC<MarketingCampaignProps> = ({ user, onIdeaSaved
     const [isSendingToPlanner, setIsSendingToPlanner] = useState(false);
     const [isSavingBlueprint, setIsSavingBlueprint] = useState(false);
     const [blueprintMenuOpen, setBlueprintMenuOpen] = useState(false);
+    const [personaView, setPersonaView] = useState<(typeof PERSONA_VERSIONS)[number]['key']>('Base');
+    const [personaResults, setPersonaResults] = useState<Record<string, string>>({});
+    const [isGeneratingPersona, setIsGeneratingPersona] = useState(false);
 
 
     useEffect(() => {
@@ -252,6 +263,60 @@ const conversionPredictor = useMemo(() => {
     };
 }, [campaignStyle, liveAudiencesLabel, readinessScore, targetHook]);
 
+const competitivePositioning = useMemo(() => {
+    // Lightweight, on-brand heuristics (no hard claims). Keeps the feature useful even without external benchmarking.
+    const styles = selectedStyles.map(s => s.toLowerCase());
+    const a = liveAudiencesLabel.toLowerCase();
+    const template = campaignStyle.toLowerCase();
+
+    const engagementSignals = (styles.some(s => ['interactive', 'comedic', 'storytelling'].includes(s)) ? 2 : 0)
+        + (template.includes('high-energy') || template.includes('viral') ? 2 : 0)
+        + (a.includes('family') || a.includes('festival') || a.includes('fair') ? 1 : 0);
+
+    const prestigeSignals = (styles.some(s => ['elegant', 'mysterious', 'dramatic'].includes(s)) ? 2 : 0)
+        + (template.includes('elegant') || a.includes('theater') || a.includes('stage') ? 2 : 0)
+        + (a.includes('corporate') ? 1 : 0);
+
+    // Defaults requested by Tier 4: strongest engagement tone / weakest prestige positioning.
+    // If the inputs clearly skew prestige, invert so it still feels intelligent.
+    let strongest = 'Engagement tone';
+    let weakest = 'Prestige positioning';
+
+    if (prestigeSignals - engagementSignals >= 2) {
+        strongest = 'Prestige positioning';
+        weakest = 'Engagement tone';
+    } else if (Math.abs(prestigeSignals - engagementSignals) <= 1) {
+        strongest = 'Clarity of offer';
+        weakest = 'Differentiated proof';
+    }
+
+    return { strongest, weakest };
+}, [campaignStyle, liveAudiencesLabel, selectedStyles]);
+
+const roiProjection = useMemo(() => {
+    // Estimated bookings per 1,000 views (heuristic). Range scales with readiness and audience fit.
+    const a = liveAudiencesLabel.toLowerCase();
+    let low = 2;
+    let high = 6;
+
+    if (readinessScore >= 85) { low = 5; high = 11; }
+    else if (readinessScore >= 65) { low = 4; high = 9; }
+    else { low = 2; high = 6; }
+
+    // Slight adjustments based on channel fit
+    if (a.includes('corporate')) { low += 0; high += 1; }
+    if (a.includes('festival') || a.includes('fair')) { low += 1; high += 0; }
+    if (campaignStyle === 'Viral Social Push') { low += 1; high += 2; }
+
+    return `${low}–${high} bookings / 1,000 views`;
+}, [campaignStyle, liveAudiencesLabel, readinessScore]);
+
+const activeResult = useMemo(() => {
+    if (!result) return null;
+    if (personaView === 'Base') return result;
+    return personaResults[personaView] || result;
+}, [personaResults, personaView, result]);
+
 
 const generateButtonLabel = useMemo(() => {
         if (isLoading) return 'Generating Campaign…';
@@ -277,6 +342,8 @@ const generateButtonLabel = useMemo(() => {
         setIsLoading(true);
         setError(null);
         setResult(null);
+        setPersonaResults({});
+        setPersonaView('Base');
         setSaveStatus('idle');
 
         const allAudiences = [...selectedAudiences];
@@ -304,9 +371,58 @@ const generateButtonLabel = useMemo(() => {
         }
     };
   
-    const handleSave = () => {
-        if (result) {
-            const fullContent = `## Marketing Campaign for: ${showTitle}\n\n${result}`;
+    
+    const handleGeneratePersona = async (personaKey: (typeof PERSONA_VERSIONS)[number]['key']) => {
+        if (!result) return;
+        if (personaKey === 'Base') {
+            setPersonaView('Base');
+            return;
+        }
+
+        setIsGeneratingPersona(true);
+        setError(null);
+        setActionNotice(null);
+
+        const allAudiences = [...selectedAudiences];
+        if (customAudience.trim()) allAudiences.push(customAudience.trim());
+
+        const personaInstruction = `Create a tailored version of the campaign specifically for: ${personaKey}. Keep the same show identity, but adjust tone, benefits, and hooks for that buyer/audience.`;
+
+        const prompt = `
+            You previously generated a marketing campaign toolkit for this show.
+            Now generate a persona-specific version.
+
+            - **Show Title:** ${showTitle}
+            - **Target Audience:** ${allAudiences.join(', ')}
+            - **Performance Style/Persona:** ${selectedStyles.join(', ') || 'Not specified'}
+            - **Campaign Style Template:** ${campaignStyle || 'Not specified'}
+            - **Key Effects or Themes:** ${keyThemes || 'Not specified'}
+
+            Persona request:
+            - ${personaInstruction}
+
+            Output:
+            - Keep the same section structure (Press Release, Social Posts, Email Campaign, Taglines, Poster Copy, Booking Pitch)
+            - Replace placeholders where possible with high-quality examples (keep venue/date placeholders if unknown)
+        `;
+
+        try {
+            const response = await generateResponse(prompt, MARKETING_ASSISTANT_SYSTEM_INSTRUCTION, user);
+            setPersonaResults(prev => ({ ...prev, [personaKey]: response }));
+            setPersonaView(personaKey);
+            setActionNotice(`Persona version generated for “${personaKey}”.`);
+            window.setTimeout(() => setActionNotice(null), 4500);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+        } finally {
+            setIsGeneratingPersona(false);
+        }
+    };
+
+const handleSave = () => {
+        if (activeResult) {
+            const personaSuffix = personaView !== 'Base' ? ` (Persona: ${personaView})` : '';
+            const fullContent = `## Marketing Campaign for: ${showTitle}${personaSuffix}\n\n${activeResult}`;
             saveIdea('text', fullContent, `Marketing for ${showTitle}`);
             onIdeaSaved();
             setSaveStatus('saved');
@@ -349,7 +465,7 @@ const generateButtonLabel = useMemo(() => {
     };
 
     const handleSendToShowPlanner = async () => {
-        if (!result) return;
+        if (!activeResult) return;
         if (!showTitle.trim()) {
             setShowTitleTouched(true);
             setActionNotice('Add a show title so we can create a show plan.');
@@ -392,7 +508,7 @@ const generateButtonLabel = useMemo(() => {
     };
 
     const handleQuickExportIdea = (kind: 'Client Proposal' | 'Social Scheduler' | 'Booking Pitch Builder') => {
-        if (!result) return;
+        if (!activeResult) return;
         const label = kind === 'Client Proposal'
             ? 'Client Proposal Draft'
             : kind === 'Social Scheduler'
@@ -408,14 +524,14 @@ const generateButtonLabel = useMemo(() => {
 
 
 const handleCreateClientProposal = async () => {
-    if (!result) return;
+    if (!activeResult) return;
     setIsSendingToPlanner(false);
     setActionNotice(null);
     try {
         const title = `${showTitle || 'Marketing Campaign'} — Client Proposal`;
         const { proposal, savedToIdeasFallback } = await createClientProposal({
             title,
-            content: result,
+            content: activeResult,
             source: {
                 showTitle,
                 targetAudience: targetAudience === 'Other' ? otherAudience : targetAudience,
@@ -440,14 +556,14 @@ const handleCreateClientProposal = async () => {
 };
 
 const handleCreateBookingPitch = async () => {
-    if (!result) return;
+    if (!activeResult) return;
     setIsSendingToPlanner(false);
     setActionNotice(null);
     try {
         const title = `${showTitle || 'Marketing Campaign'} — Booking Pitch`;
         const { pitch, savedToIdeasFallback } = await createBookingPitch({
             title,
-            content: result,
+            content: activeResult,
             source: {
                 showTitle,
                 targetAudience: targetAudience === 'Other' ? otherAudience : targetAudience,
@@ -675,7 +791,67 @@ const handleCreateBookingPitch = async () => {
                                     </div>
                                 </div>
                             </div>
-                            <pre className="whitespace-pre-wrap break-words text-slate-200 font-sans text-sm">{result}</pre>
+
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+                                <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
+                                    <p className="text-sm font-semibold text-slate-200">Competitive Positioning Analyzer</p>
+                                    <p className="mt-2 text-sm text-slate-300">Compared to similar performers:</p>
+                                    <ul className="mt-2 space-y-1 text-sm text-slate-300">
+                                        <li>• You rank strongest in <span className="text-slate-100 font-semibold">{competitivePositioning.strongest}</span></li>
+                                        <li>• You rank weakest in <span className="text-slate-100 font-semibold">{competitivePositioning.weakest}</span></li>
+                                    </ul>
+                                    <p className="mt-3 text-xs text-slate-400">Tip: strengthen “{competitivePositioning.weakest}” by adding proof (logos, testimonials, awards, or a short credibility line).</p>
+                                </div>
+
+                                <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
+                                    <p className="text-sm font-semibold text-slate-200">Persona-Based Marketing Versions</p>
+                                    <p className="mt-2 text-xs text-slate-400">Generate tailored variations for different buyers. Switch personas to view versions.</p>
+
+                                    <div className="mt-3 flex flex-wrap gap-2">
+                                        {PERSONA_VERSIONS.map(p => (
+                                            <button
+                                                key={p.key}
+                                                type="button"
+                                                onClick={() => {
+                                                    setPersonaView(p.key);
+                                                    if (p.key !== 'Base' && !personaResults[p.key]) {
+                                                        // Generate on first click for non-base personas
+                                                        handleGeneratePersona(p.key);
+                                                    }
+                                                }}
+                                                disabled={isGeneratingPersona && personaView === p.key}
+                                                className={`px-3 py-1.5 rounded-md text-sm border transition-colors ${
+                                                    personaView === p.key
+                                                        ? 'bg-purple-600 border-purple-500 text-white'
+                                                        : 'bg-slate-900/30 border-slate-700 text-slate-200 hover:bg-slate-800'
+                                                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                                            >
+                                                {p.label}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    {personaView !== 'Base' && !personaResults[personaView] && (
+                                        <div className="mt-3 flex items-center justify-between gap-2 text-xs text-slate-300">
+                                            <span>Generating “{personaView}” version…</span>
+                                            <span className="text-slate-400">{isGeneratingPersona ? 'Working…' : ''}</span>
+                                        </div>
+                                    )}
+
+                                    {personaView !== 'Base' && personaResults[personaView] && (
+                                        <p className="mt-3 text-xs text-slate-400">Viewing: <span className="text-slate-200 font-semibold">{personaView}</span></p>
+                                    )}
+                                </div>
+
+                                <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
+                                    <p className="text-sm font-semibold text-slate-200">ROI Projection</p>
+                                    <p className="mt-2 text-sm text-slate-300">Estimated bookings from campaign:</p>
+                                    <p className="mt-2 text-xl font-bold text-slate-100">{roiProjection}</p>
+                                    <p className="mt-2 text-xs text-slate-400">Heuristic estimate based on campaign completeness + channel fit. Improve readiness to push the range upward.</p>
+                                </div>
+                            </div>
+
+                            <pre className="whitespace-pre-wrap break-words text-slate-200 font-sans text-sm">{activeResult}</pre>
                         </div>
                         <div className="mt-auto p-2 bg-slate-900/60 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-t border-slate-800">
                             {actionNotice && (
@@ -688,7 +864,7 @@ const handleCreateBookingPitch = async () => {
                                 <button
                                     type="button"
                                     onClick={handleSendToShowPlanner}
-                                    disabled={!result || isSendingToPlanner}
+                                    disabled={!activeResult || isSendingToPlanner}
                                     className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     <CalendarIcon className="w-4 h-4" />
@@ -697,7 +873,7 @@ const handleCreateBookingPitch = async () => {
                                 <button
                                     type="button"
                                     onClick={handleCreateClientProposal}
-                                    disabled={!result}
+                                    disabled={!activeResult}
                                     className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     <FileTextIcon className="w-4 h-4" />
@@ -706,7 +882,7 @@ const handleCreateBookingPitch = async () => {
                                 <button
                                     type="button"
                                     onClick={() => handleQuickExportIdea('Social Scheduler')}
-                                    disabled={!result}
+                                    disabled={!activeResult}
                                     className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     <SendIcon className="w-4 h-4" />
@@ -715,7 +891,7 @@ const handleCreateBookingPitch = async () => {
                                 <button
                                     type="button"
                                     onClick={handleCreateBookingPitch}
-                                    disabled={!result}
+                                    disabled={!activeResult}
                                     className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     <MailIcon className="w-4 h-4" />
@@ -726,7 +902,7 @@ const handleCreateBookingPitch = async () => {
                             <div className="flex items-center justify-end gap-2">
                             <ShareButton
                                 title={`Marketing Campaign for: ${showTitle}`}
-                                text={result}
+                                text={activeResult || ''}
                                 className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 transition-colors"
                             >
                                 <ShareIcon className="w-4 h-4" />
