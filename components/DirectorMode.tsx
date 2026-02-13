@@ -3,7 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { Type } from "@google/genai";
 import { saveIdea } from '../services/ideasService';
 import { createShow, addTasksToShow } from '../services/showsService';
-import { DIRECTOR_MODE_SYSTEM_INSTRUCTION } from '../constants';
+import { DIRECTOR_MODE_SYSTEM_INSTRUCTION, MAGIC_DICTIONARY_TERMS } from '../constants';
 import type { DirectorModeResponse } from '../types';
 import { StageCurtainsIcon, WandIcon, SaveIcon, CheckIcon, ChecklistIcon } from './icons';
 import { generateStructuredResponse } from '../services/geminiService';
@@ -25,6 +25,38 @@ const LoadingIndicator: React.FC = () => (
         <p className="text-slate-400 text-sm">Structuring the narrative and flow.</p>
     </div>
 );
+
+const slugify = (s: string) =>
+    (s || '')
+        .toLowerCase()
+        .trim()
+        .replace(/['"]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '');
+
+const extractDictionaryTerms = (textBlocks: string[]): string[] => {
+    const dictTerms = (MAGIC_DICTIONARY_TERMS as any[])
+        .map((t) => String(t?.term || '').trim())
+        .filter(Boolean);
+    const lower = dictTerms.map((t) => t.toLowerCase());
+
+    const hay = textBlocks.join(' \n ').toLowerCase();
+    const found = new Set<string>();
+
+    // Try exact name matches first; keep list small enough to be fast.
+    lower.forEach((t, i) => {
+        if (!t) return;
+        // Simple contains check; avoids regex complexity and is adequate for our short strings.
+        if (hay.includes(t)) found.add(dictTerms[i]);
+    });
+
+    // Add a few “high value” theory terms even if not in dictionary yet (safe no-op if missing)
+    ['Framing', 'Beat', 'Offbeat', 'Conviction', 'Clarity', 'Misdirection', 'Audience Control'].forEach((t) => {
+        if (hay.includes(t.toLowerCase())) found.add(t);
+    });
+
+    return Array.from(found).sort((a, b) => a.localeCompare(b));
+};
 
 const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
     // Form State
@@ -87,6 +119,54 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
         }
         return parts.join('\n');
     }, [showPlan]);
+
+    const dictionaryLinks = useMemo(() => {
+        if (!showPlan) return [] as string[];
+        const blocks: string[] = [];
+        blocks.push(showPlan.show_description || '');
+        blocks.push(showPlan.pacing_notes?.energy_flow || '');
+        (showPlan.pacing_notes?.reset_moments || []).forEach((x) => blocks.push(x));
+        (showPlan.pacing_notes?.volunteer_moments || []).forEach((x) => blocks.push(x));
+        (showPlan.directors_notes?.risk_points || []).forEach((x) => blocks.push(x));
+        (showPlan.directors_notes?.adaptation_suggestions || []).forEach((x) => blocks.push(x));
+        return extractDictionaryTerms(blocks);
+    }, [showPlan]);
+
+    // Tier 3: Director Mode -> Magic Dictionary integration
+    const dictionaryTermSet = useMemo(() => {
+        const set = new Set<string>();
+        (MAGIC_DICTIONARY_TERMS as any[]).forEach((t) => {
+            const name = String(t?.term || '').trim();
+            if (name) set.add(name);
+        });
+        return set;
+    }, []);
+
+    const extractDictionaryMentions = useMemo(() => {
+        if (!showPlan) return [] as string[];
+        const blobs: string[] = [];
+        const push = (arr?: string[]) => {
+            if (!arr?.length) return;
+            arr.forEach((x) => blobs.push(String(x || '')));
+        };
+        push(showPlan.pacing_notes?.reset_moments);
+        push(showPlan.pacing_notes?.volunteer_moments);
+        push(showPlan.directors_notes?.risk_points);
+        push(showPlan.directors_notes?.adaptation_suggestions);
+
+        const text = blobs.join(' \n ').toLowerCase();
+        const matches: string[] = [];
+        Array.from(dictionaryTermSet).forEach((term) => {
+            const t = term.toLowerCase();
+            if (!t || t.length < 3) return;
+            // Word-ish boundary match to reduce false positives
+            const re = new RegExp(`(^|[^a-z0-9])${t.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}([^a-z0-9]|$)`, 'i');
+            if (re.test(text)) matches.push(term);
+        });
+        return matches
+            .sort((a, b) => a.localeCompare(b))
+            .slice(0, 12);
+    }, [showPlan, dictionaryTermSet]);
 
     // Show Title is optional: AI can generate a strong title if the user leaves it blank.
     const isFormValid = Boolean(showLength && computedAudience && theme.trim());
@@ -555,6 +635,33 @@ ${prettyJson}
                                     <ul className="list-disc list-inside">
                                         {showPlan.directors_notes.adaptation_suggestions.map((x, i) => <li key={i}>{x}</li>)}
                                     </ul>
+                                </div>
+                            ) : null}
+
+                            {dictionaryLinks.length ? (
+                                <div className="pt-2">
+                                    <p className="text-slate-400">Dictionary references</p>
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                        {dictionaryLinks.map((t) => (
+                                            <button
+                                                key={t}
+                                                type="button"
+                                                onClick={() => {
+                                                    if (typeof window === 'undefined') return;
+                                                    window.dispatchEvent(
+                                                        new CustomEvent('maw:navigate', {
+                                                            detail: { view: 'magic-dictionary', hash: slugify(t) },
+                                                        })
+                                                    );
+                                                }}
+                                                className="text-xs px-2 py-1 rounded-full bg-slate-900/50 border border-slate-700 text-purple-200 hover:text-white hover:border-purple-500/40 transition-colors"
+                                                title="Open this term in Magic Dictionary"
+                                            >
+                                                Dictionary → {t}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <p className="text-xs text-slate-500 mt-2">Tip: these are the theory concepts the AI referenced in your plan.</p>
                                 </div>
                             ) : null}
                         </div>

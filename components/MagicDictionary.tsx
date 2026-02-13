@@ -42,6 +42,21 @@ type Props = {
   onAiSpark?: (action: AiSparkAction) => void;
 };
 
+type ScenarioPersona =
+  | 'Skeptical Heckler'
+  | 'Friendly Volunteer'
+  | 'Distracted Corporate Guest'
+  | 'Enthusiastic Child'
+  | 'Quiet Analytical Viewer';
+
+const SCENARIO_PERSONAS: ScenarioPersona[] = [
+  'Skeptical Heckler',
+  'Friendly Volunteer',
+  'Distracted Corporate Guest',
+  'Enthusiastic Child',
+  'Quiet Analytical Viewer',
+];
+
 const GOLD = 'text-amber-300';
 const GOLD_MUTED = 'text-amber-200/90';
 
@@ -218,6 +233,18 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark }) => {
   const { shows } = useAppState();
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedTerm, setExpandedTerm] = useState<string | null>(null);
+
+  // Tier 3 – Scenario Simulator
+  const [scenarioOpen, setScenarioOpen] = useState(false);
+  const [scenarioTerm, setScenarioTerm] = useState<DictionaryTerm | null>(null);
+  const [scenarioPersona, setScenarioPersona] = useState<ScenarioPersona>('Skeptical Heckler');
+  const [scenarioGoal, setScenarioGoal] = useState('');
+
+  // Tier 3 – Performance Diagnostic
+  const [diagnosticOpen, setDiagnosticOpen] = useState(false);
+  const [diagnosticScript, setDiagnosticScript] = useState('');
+  const [diagnosticShowId, setDiagnosticShowId] = useState<string>('');
+  const [diagnosticRoutine, setDiagnosticRoutine] = useState('');
   const [conceptFilter, setConceptFilter] = useState<'All' | ConceptCategory>('All');
   const [difficultyFilter, setDifficultyFilter] = useState<'All' | DifficultyLevel>('All');
 
@@ -685,6 +712,91 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark }) => {
     setMapOpen(true);
   };
 
+  // Tier 3: Scenario Simulator (turn concept → rehearsal interaction)
+  const openScenario = (item: DictionaryTerm) => {
+    setScenarioTerm(item);
+    setScenarioGoal('');
+    setScenarioPersona('Skeptical Heckler');
+    setScenarioOpen(true);
+  };
+
+  const runScenario = () => {
+    if (!onAiSpark || !scenarioTerm) return;
+
+    const concept = inferConceptCategory(scenarioTerm);
+    const difficulty = inferDifficulty(scenarioTerm);
+    const goal = scenarioGoal.trim();
+
+    const prompt = [
+      `You are an AI audience member simulator for a live magic show. You MUST stay in character and help me rehearse without exposing secrets or methods.`,
+      '',
+      `CONCEPT TO TEST: ${scenarioTerm.term}`,
+      `CATEGORY: ${concept}`,
+      `DIFFICULTY: ${difficulty}`,
+      '',
+      `PERSONA: ${scenarioPersona}`,
+      goal ? `MY GOAL: ${goal}` : '',
+      '',
+      `Instructions:`,
+      `- Start by creating a realistic moment where this concept matters (e.g., a heckler challenges me, a volunteer hesitates, a corporate guest interrupts).`,
+      `- Ask me (the magician) to respond. After I respond, react as the persona would.`,
+      `- Run 4 rounds total. Keep each of your replies short (1–3 sentences).`,
+      `- After the 4th round, break character and give me a short coaching debrief using the concept name (and 2–3 related concepts if relevant).`,
+      '',
+      `Begin now with Round 1.`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    setScenarioOpen(false);
+    onAiSpark({ type: 'custom-prompt', payload: { prompt } });
+  };
+
+  // Tier 3: Performance Diagnostic (script → concept-based critique)
+  const openDiagnostic = () => {
+    setDiagnosticOpen(true);
+  };
+
+  const runDiagnostic = () => {
+    if (!onAiSpark) return;
+    const script = diagnosticScript.trim();
+    if (!script) return;
+
+    const show = (shows || []).find((s) => s.id === diagnosticShowId);
+    const dictCore = ['Clarity', 'Conviction', 'Framing', 'Beat', 'Offbeat', 'Misdirection', 'Applause Cue', 'Angle Sensitivity', 'Audience Control'];
+
+    const prompt = [
+      `You are my performance director + magic theory coach. Diagnose my script WITHOUT exposing secrets.`,
+      `Your job is to find weaknesses and opportunities using Magic Dictionary concepts by name (so I can look them up).`,
+      '',
+      show ? `SHOW CONTEXT: ${show.title}${show.description ? ` — ${show.description}` : ''}` : '',
+      diagnosticRoutine.trim() ? `ROUTINE: ${diagnosticRoutine.trim()}` : '',
+      '',
+      `SCRIPT:`,
+      script,
+      '',
+      `Analyze for:`,
+      `- Missing Clarity (confusing beats, unclear moments, weak “this is the moment”)`,
+      `- Weak Conviction (apology words, hedging, low-status phrasing)`,
+      `- Poor Framing (unclear premise, stakes, or role for the audience)`,
+      `- Misplaced Beat / Offbeat (pauses, transitions, resets, applause timing)`,
+      `- Misdirection / Attention Control issues (where focus should go)`,
+      '',
+      `Output format (keep it practical):`,
+      `1) Quick Diagnosis (3–6 bullets)`,
+      `2) Line-level edits (quote short fragments, then show improved versions)`,
+      `3) Rehearsal Drills (3 drills)`,
+      `4) Dictionary References: list concept names you used, like “Dictionary → Framing”, “Dictionary → Offbeat”, etc.`,
+      '',
+      `Core concepts you should try to use when applicable: ${dictCore.join(', ')}`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    setDiagnosticOpen(false);
+    onAiSpark({ type: 'custom-prompt', payload: { prompt } });
+  };
+
   return (
     <div className="flex-1 flex flex-col overflow-y-auto p-4 md:p-6 animate-fade-in">
       <header className="mb-6">
@@ -733,6 +845,16 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark }) => {
               title="Bookmarked concepts, study lists, and notes"
             >
               Study
+            </button>
+
+            <button
+              type="button"
+              onClick={openDiagnostic}
+              className="mr-3 px-3 py-2 text-sm rounded-lg border border-purple-500/40 bg-purple-600/15 text-purple-100 hover:bg-purple-600/25 hover:border-purple-400/60 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60"
+              aria-label="Open performance diagnostic"
+              title="Paste a script and get a dictionary-based performance diagnosis"
+            >
+              Diagnose Script
             </button>
           </div>
 
@@ -1033,6 +1155,23 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark }) => {
                             title={!onAiSpark ? 'AI actions unavailable in this view' : 'Apply this concept to a show or routine'}
                           >
                             Apply This to My Show
+                          </button>
+
+                          <button
+                            type="button"
+                            className={[
+                              'inline-flex items-center gap-2 px-3 py-2 text-sm rounded-lg border',
+                              onAiSpark
+                                ? 'border-purple-500/40 bg-slate-900/40 text-slate-200 hover:text-white hover:border-purple-400/60 hover:bg-slate-900/55'
+                                : 'border-slate-700 bg-slate-900/40 text-slate-500 cursor-not-allowed',
+                              'transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60',
+                            ].join(' ')}
+                            onClick={() => openScenario(item)}
+                            disabled={!onAiSpark}
+                            aria-label="Test this concept"
+                            title={!onAiSpark ? 'AI actions unavailable in this view' : 'Run a rehearsal-style scenario in chat'}
+                          >
+                            Test This Concept
                           </button>
 
                           <button
@@ -1358,6 +1497,174 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark }) => {
                   </p>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Tier-3: Scenario Simulator Modal */}
+      {scenarioOpen && scenarioTerm ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" onClick={() => setScenarioOpen(false)} />
+          <div className="relative w-full max-w-2xl rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-700 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-100">Test This Concept</h3>
+                <p className="text-sm text-slate-400">Run a short rehearsal scenario in the AI Assistant chat.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setScenarioOpen(false)}
+                className="px-3 py-2 text-sm rounded-lg border border-slate-700 bg-slate-950/40 text-slate-200 hover:text-white hover:border-slate-600 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="rounded-xl border border-purple-500/30 bg-purple-600/10 p-4">
+                <div className="text-xs text-purple-200/80">Concept</div>
+                <div className="text-xl font-bold text-amber-200 mt-1">{scenarioTerm.term}</div>
+                <div className="text-sm text-slate-300 mt-2">{clipOneLine(scenarioTerm.definition)}</div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Audience Persona</label>
+                <select
+                  value={scenarioPersona}
+                  onChange={(e) => setScenarioPersona(e.target.value as ScenarioPersona)}
+                  className="w-full rounded-lg bg-slate-950/40 border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60"
+                >
+                  {SCENARIO_PERSONAS.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-slate-500 mt-1">This will run a 4-round simulation and end with a coaching debrief.</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Goal (optional)</label>
+                <input
+                  value={scenarioGoal}
+                  onChange={(e) => setScenarioGoal(e.target.value)}
+                  placeholder="Example: Keep control without sounding defensive"
+                  className="w-full rounded-lg bg-slate-950/40 border border-slate-700 px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60"
+                />
+              </div>
+            </div>
+
+            <div className="px-5 py-4 border-t border-slate-700 flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => setScenarioOpen(false)}
+                className="px-4 py-2 text-sm rounded-lg border border-slate-700 bg-slate-950/40 text-slate-200 hover:text-white hover:border-slate-600 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={runScenario}
+                disabled={!onAiSpark}
+                className={[
+                  'px-4 py-2 text-sm rounded-lg border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60',
+                  !onAiSpark
+                    ? 'border-slate-700 bg-slate-900/40 text-slate-500 cursor-not-allowed'
+                    : 'border-purple-500/40 bg-purple-600/15 text-purple-100 hover:bg-purple-600/25 hover:border-purple-400/60',
+                ].join(' ')}
+              >
+                Start Scenario
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Tier-3: Performance Diagnostic Modal */}
+      {diagnosticOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" onClick={() => setDiagnosticOpen(false)} />
+          <div className="relative w-full max-w-3xl rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-700 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-100">Diagnose Script</h3>
+                <p className="text-sm text-slate-400">Paste a script and get concept-based notes that reference the Magic Dictionary.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDiagnosticOpen(false)}
+                className="px-3 py-2 text-sm rounded-lg border border-slate-700 bg-slate-950/40 text-slate-200 hover:text-white hover:border-slate-600 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Show (optional)</label>
+                  <select
+                    value={diagnosticShowId}
+                    onChange={(e) => setDiagnosticShowId(e.target.value)}
+                    className="w-full rounded-lg bg-slate-950/40 border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60"
+                  >
+                    <option value="">(No show selected)</option>
+                    {(shows || [])
+                      .slice()
+                      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+                      .map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.title}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Routine name (optional)</label>
+                  <input
+                    value={diagnosticRoutine}
+                    onChange={(e) => setDiagnosticRoutine(e.target.value)}
+                    placeholder="Example: Ambitious Card"
+                    className="w-full rounded-lg bg-slate-950/40 border border-slate-700 px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Script</label>
+                <textarea
+                  value={diagnosticScript}
+                  onChange={(e) => setDiagnosticScript(e.target.value)}
+                  placeholder="Paste your script or routine outline here…"
+                  className="w-full min-h-[220px] rounded-lg bg-slate-950/40 border border-slate-700 px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60"
+                />
+                <p className="text-xs text-slate-500 mt-1">Tip: include stage directions like (pause), (gesture), (volunteer), etc.</p>
+              </div>
+            </div>
+
+            <div className="px-5 py-4 border-t border-slate-700 flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => setDiagnosticOpen(false)}
+                className="px-4 py-2 text-sm rounded-lg border border-slate-700 bg-slate-950/40 text-slate-200 hover:text-white hover:border-slate-600 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={runDiagnostic}
+                disabled={!onAiSpark || !diagnosticScript.trim()}
+                className={[
+                  'px-4 py-2 text-sm rounded-lg border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60',
+                  !onAiSpark || !diagnosticScript.trim()
+                    ? 'border-slate-700 bg-slate-900/40 text-slate-500 cursor-not-allowed'
+                    : 'border-amber-400/30 bg-amber-400/10 text-amber-200 hover:bg-amber-400/15 hover:border-amber-300/40',
+                ].join(' ')}
+              >
+                Run Diagnosis
+              </button>
             </div>
           </div>
         </div>

@@ -1994,8 +1994,49 @@ ${action.payload.content}`;
             break;
         default: return;
     }
+    // Tier 3: When other tools (Dictionary, Search, etc.) trigger an AI action,
+    // jump the user into the AI Assistant chat so it feels connected.
+    setActiveView('chat');
     handleSend(prompt);
   };
+
+  // Tier 3: Allow other views to request navigation without threading props everywhere.
+  // Usage: window.dispatchEvent(new CustomEvent('maw:navigate', { detail: { view: 'magic-dictionary', hash: 'framing' } }))
+  useEffect(() => {
+    const onNav = (e: Event) => {
+      const ce = e as CustomEvent;
+      const view = (ce?.detail?.view || '') as MagicianView;
+      const hash = (ce?.detail?.hash || '') as string;
+      if (!view) return;
+
+      // Reset any deep-link selections when swapping tools
+      setInitialShowId(null);
+      setInitialTaskId(null);
+      setInitialIdeaId(null);
+
+      setActiveView(view);
+
+      if (hash && typeof window !== 'undefined') {
+        // Let the target view mount first
+        window.setTimeout(() => {
+          try {
+            window.location.hash = encodeURIComponent(hash);
+          } catch {
+            window.location.hash = hash;
+          }
+        }, 0);
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('maw:navigate', onNav as any);
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('maw:navigate', onNav as any);
+      }
+    };
+  }, []);
 
   const handleNavigateToAnalytics = (performanceId: string) => {
     setViewingPerformanceId(performanceId);
