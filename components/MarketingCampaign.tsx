@@ -891,7 +891,7 @@ const handleCreateBookingPitch = async () => {
                     </div>
                 ) : result ? (
                      <div className="relative group flex-1 flex flex-col">
-                        <div className="p-4 overflow-y-auto space-y-4">
+                        <div className="p-4 overflow-y-auto space-y-4 pb-32">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
                                     <p className="text-sm font-semibold text-slate-200">AI Strategy Notes</p>
@@ -981,7 +981,7 @@ const handleCreateBookingPitch = async () => {
 
                             <pre className="whitespace-pre-wrap break-words text-slate-200 font-sans text-sm">{activeResult}</pre>
                         </div>
-                        <div className="mt-auto p-2 bg-slate-900/60 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-t border-slate-800">
+                        <div className="sticky bottom-0 z-30 p-2.5 bg-slate-950/90 backdrop-blur-md flex flex-col gap-2 border-t border-slate-800 shadow-[0_-8px_24px_rgba(0,0,0,0.35)]">
                             {actionNotice && (
                                 <div className="w-full sm:max-w-md text-xs text-slate-200 bg-slate-900/40 border border-slate-800 rounded-md px-3 py-2">
                                     <div className="flex items-center justify-between gap-3">
@@ -998,6 +998,7 @@ const handleCreateBookingPitch = async () => {
                                     </div>
                                 </div>
                             )}
+                            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
                             <div className="flex flex-wrap items-center gap-2">
                                 <span className="text-xs text-slate-400 mr-1">Send Campaign to:</span>
                                 <button
@@ -1038,7 +1039,7 @@ const handleCreateBookingPitch = async () => {
                                 </button>
                             </div>
 
-                            <div className="flex items-center justify-end gap-2">
+                            <div className="flex flex-wrap items-center justify-end gap-2">
                             <ShareButton
                                 title={`Marketing Campaign for: ${showTitle}`}
                                 text={activeResult || ''}
@@ -1078,13 +1079,14 @@ const handleCreateBookingPitch = async () => {
                                 </button>
 
                                 {blueprintMenuOpen && (
-                                    <div className="absolute right-0 bottom-12 w-56 rounded-lg border border-slate-800 bg-slate-950 shadow-lg overflow-hidden z-20">
+                                    <div className="absolute right-0 bottom-full mb-2 w-56 rounded-lg border border-slate-800 bg-slate-950 shadow-lg overflow-hidden z-40">
                                         <button type="button" onClick={() => handleBlueprintSave('Save as Template')} className="w-full text-left px-3 py-2 text-sm text-slate-200 hover:bg-slate-900">Save as Template</button>
                                         <button type="button" onClick={() => handleBlueprintSave('Save to Campaign Library')} className="w-full text-left px-3 py-2 text-sm text-slate-200 hover:bg-slate-900">Save to Campaign Library</button>
                                         <button type="button" onClick={() => handleBlueprintSave('Reuse Later')} className="w-full text-left px-3 py-2 text-sm text-slate-200 hover:bg-slate-900">Reuse Later</button>
                                         <button type="button" onClick={() => handleBlueprintSave('Duplicate Campaign')} className="w-full text-left px-3 py-2 text-sm text-slate-200 hover:bg-slate-900">Duplicate Campaign</button>
                                     </div>
                                 )}
+                            </div>
                             </div>
                             </div>
                         </div>
