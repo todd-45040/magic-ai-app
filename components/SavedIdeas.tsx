@@ -103,7 +103,24 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
         try { return JSON.parse(localStorage.getItem('savedIdeas:stars') || '[]'); } catch { return []; }
     });
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
-    const [lastOpenedMap, setLastOpenedMap] = useState<Record<string, number>>(() => {
+    
+
+    const resetView = () => {
+        setSearchQuery('');
+        setTagFilter(null);
+        setTypeFilter('all');
+        setSortBy('recent');
+        setSmartTab('all');
+        setSelectedIds([]);
+        setSectionOpen({
+            saved_notes: true,
+            blueprints: true,
+            video_analyses: true,
+            rehearsal_sessions: true
+        });
+    };
+
+const [lastOpenedMap, setLastOpenedMap] = useState<Record<string, number>>(() => {
         try { return JSON.parse(localStorage.getItem('savedIdeas:lastOpened') || '{}'); } catch { return {}; }
     });
     const [openIdea, setOpenIdea] = useState<SavedIdea | null>(null);
@@ -662,6 +679,15 @@ const sendToPlanner = (idea: SavedIdea) => {
                             aria-label="Search ideas"
                         />
                     </div>
+
+                    <button
+                        onClick={resetView}
+                        className="px-3 py-2 text-xs font-semibold bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-md text-slate-200 transition"
+                        title="Reset filters and view"
+                    >
+                        Reset
+                    </button>
+
 
                     <div className="flex flex-wrap items-center gap-2">
                         <label className="text-xs font-semibold text-slate-400">Sort:</label>
