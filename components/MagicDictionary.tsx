@@ -1119,7 +1119,7 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
 
       {/* Filters Bar */}
       <div className="sticky top-0 bg-slate-900/80 backdrop-blur-sm py-3 z-10">
-        <div className="grid grid-cols-1 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3">
           {/* Layer Toggle */}
           <div className="flex flex-wrap items-center gap-2">
             <div className="inline-flex rounded-full border border-slate-700 bg-slate-800/40 overflow-hidden">
@@ -1618,8 +1618,8 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
           </div>
           )
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-3">
-            <div className="bg-slate-800/30 border border-slate-700 rounded-xl p-3">
+          <div className="grid grid-cols-12 gap-4">
+            <div className="col-span-12 lg:col-span-3 bg-slate-800/30 border border-slate-700 rounded-xl p-3 lg:sticky lg:top-24 h-fit">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-semibold text-slate-400">Technique Categories</p>
                 <button
@@ -1671,7 +1671,7 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
               </div>
             </div>
 
-            <div>
+            <div className="col-span-12 lg:col-span-9">
               {filteredTechniqueTerms.length > 0 ? (
                 <div className="grid grid-cols-1 gap-3">
                   {filteredTechniqueTerms.map((t) => {
