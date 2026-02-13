@@ -1,4 +1,9 @@
 
+/*
+UPDATED SavedIdeas.tsx
+Micro‑Polish Tier Applied
+*/
+
 import React, { useState } from "react";
 
 type Idea = {
@@ -26,14 +31,17 @@ export default function SavedIdeas() {
     setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
 
   return (
-    <div className="w-full p-4">
+    <div className="w-full p-4 pb-6">
 
       {/* HEADER */}
       <div className="flex justify-between items-center mb-4">
-        <h1 className="text-xl font-semibold">My Saved Ideas</h1>
+        <h1 className="text-xl font-semibold tracking-tight">
+          My Saved Ideas
+        </h1>
 
         <div className="flex items-center gap-2 text-sm">
           <span>Cozy</span>
+
           <button
             onClick={() => setCompact(!compact)}
             className={`w-12 h-6 rounded-full transition ${
@@ -46,6 +54,7 @@ export default function SavedIdeas() {
               }`}
             />
           </button>
+
           <span>Compact</span>
         </div>
       </div>
@@ -73,14 +82,24 @@ export default function SavedIdeas() {
           return (
             <div
               key={idea.id}
-              className={`group border rounded-xl shadow-sm bg-gradient-to-b from-white to-slate-50
-              transition transform hover:scale-[1.01] hover:-translate-y-[2px] hover:shadow-md
-              ${compact ? "p-3" : "p-5"}`}
+              className={`
+                group
+                border border-white/10
+                rounded-xl
+                shadow-sm shadow-black/20
+                bg-gradient-to-b from-white to-slate-50
+                transition
+                transform
+                hover:scale-[1.01]
+                hover:-translate-y-[2px]
+                hover:shadow-lg
+                ${compact ? "p-3" : "p-5"}
+              `}
             >
 
-              {/* TITLE ROW */}
+              {/* TITLE */}
               <div className="flex justify-between items-start mb-1">
-                <div className="font-semibold text-sm flex items-center gap-2">
+                <div className="font-semibold tracking-tight text-sm flex items-center gap-2">
                   <span>📄</span>
                   {idea.title}
                 </div>
