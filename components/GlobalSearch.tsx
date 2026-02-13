@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
-// BUILD STAMP: fully-wired GlobalSearch patch (createShow signature + planner task defaults) - 2026-02-12
+// BUILD STAMP: fully-wired GlobalSearch + reset button - 2026-02-13
 import type { Client, MagicianView, SavedIdea, Show, Task } from '../types';
 import { SearchIcon, TagIcon, ChecklistIcon, BookmarkIcon, StageCurtainsIcon } from './icons';
 import { useAppDispatch, useAppState } from '../store';
@@ -88,6 +88,21 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ shows: showsProp, ideas: id
 
   const inputRef = useRef<HTMLInputElement | null>(null);
   const resultsRef = useRef<HTMLDivElement | null>(null);
+
+
+  const resetPage = () => {
+    setActiveScope('all');
+    setSearchTerm('');
+    setSelectedTag(null);
+    setActiveIndex(-1);
+    setNotice(null);
+    setPlannerModal({ open: false });
+    // Keep recent searches (user value), but return UI to the starting point.
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+  };
+
 
   const scopeMeta: Record<SearchScope, { label: string; disabled?: boolean }> = {
     all: { label: 'All' },
@@ -948,7 +963,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ shows: showsProp, ideas: id
             <div className="text-sm font-semibold text-white/90">Add to Show Planner</div>
             <div className="text-xs text-white/60 mt-1">Choose which show to add this to.</div>
 
-            <div className="mt-4">
+            <div className="mt-4 relative">
               <label className="text-xs text-white/60">Target show</label>
               <select
                 className="mt-1 w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm"
@@ -1037,8 +1052,19 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ shows: showsProp, ideas: id
             setActiveIndex(-1);
           }}
           placeholder={'Search shows, tasks, clients, or ideas… Try: "birthday", "corporate", "closer trick"'}
-          className="w-full rounded-xl bg-white/5 border border-white/10 px-4 py-4 text-lg text-white/90 placeholder:text-white/35 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+          className="w-full rounded-xl bg-white/5 border border-white/10 pl-4 pr-12 py-4 text-lg text-white/90 placeholder:text-white/35 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
         />
+
+        {(searchTerm || selectedTag || activeScope !== 'all') && (
+          <button
+            type="button"
+            onClick={resetPage}
+            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/70 hover:text-white hover:bg-white/10"
+            title="Reset search"
+          >
+            Reset
+          </button>
+        )}
         <div className="text-xs text-white/45 mt-2">{statusText}</div>
       </div>
 
