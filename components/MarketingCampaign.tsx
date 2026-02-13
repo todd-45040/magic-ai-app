@@ -1,5 +1,5 @@
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { generateResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
 import { createClientProposal } from '../services/proposalsService';
@@ -75,8 +75,9 @@ const LOADING_STEPS = [
     'Drafting campaign assets…',
 ];
 
-// Brand gold for section headings
-const GOLD_HEADING_CLASS = 'text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-300 to-amber-200 drop-shadow-sm';
+    // Gold heading accents (brand hierarchy)
+    const goldHeading = "text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-300 to-amber-200 drop-shadow-[0_1px_0_rgba(0,0,0,0.35)] transition duration-150 hover:drop-shadow-[0_0_10px_rgba(245,208,110,0.35)]";
+    const goldHeadingSmall = "text-amber-200/90 drop-shadow-[0_1px_0_rgba(0,0,0,0.35)] transition duration-150 hover:text-amber-200 hover:drop-shadow-[0_0_10px_rgba(245,208,110,0.35)]";
 
 
 const MarketingCampaign: React.FC<MarketingCampaignProps> = ({ user, onIdeaSaved, onNavigateToShowPlanner, onNavigate }) => {
@@ -92,15 +93,6 @@ const MarketingCampaign: React.FC<MarketingCampaignProps> = ({ user, onIdeaSaved
     const [loadingStepIndex, setLoadingStepIndex] = useState(0);
 
     const [isLoading, setIsLoading] = useState(false);
-    const [celebrate, setCelebrate] = useState(false);
-    const celebrateTimerRef = useRef<number | null>(null);
-
-    useEffect(() => {
-        return () => {
-            if (celebrateTimerRef.current) window.clearTimeout(celebrateTimerRef.current);
-        };
-    }, []);
-
     const [error, setError] = useState<string | null>(null);
     const [result, setResult] = useState<string | null>(null);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
@@ -113,6 +105,7 @@ const MarketingCampaign: React.FC<MarketingCampaignProps> = ({ user, onIdeaSaved
     const [personaView, setPersonaView] = useState<(typeof PERSONA_VERSIONS)[number]['key']>('Base');
     const [personaResults, setPersonaResults] = useState<Record<string, string>>({});
     const [isGeneratingPersona, setIsGeneratingPersona] = useState(false);
+    const [showSparkle, setShowSparkle] = useState(false);
 
 
     useEffect(() => {
@@ -331,20 +324,6 @@ const activeResult = useMemo(() => {
 }, [personaResults, personaView, result]);
 
 
-const displayResult = useMemo(() => {
-    if (!activeResult) return activeResult;
-    // Add extra breathing room between major sections for easier scanning.
-    // This mimics a ~1.1rem "section margin" in preformatted output.
-    return activeResult
-        // Ensure a blank line before markdown-like headings
-        .replace(/([^\n])\n(#{1,6}\s)/g, '$1\n\n$2')
-        // Ensure a blank line before horizontal rule separators (***)
-        .replace(/([^\n])\n(\*{3,}\s*$)/gm, '$1\n\n$2')
-        // Ensure a blank line before numbered section headers like "## 1."
-        .replace(/([^\n])\n((?:\*\*)?#{1,6}\s*\d+\.)/g, '$1\n\n$2');
-}, [activeResult]);
-
-
 const generateButtonLabel = useMemo(() => {
         if (isLoading) return 'Generating Campaign…';
         if (error) return 'Try Again';
@@ -391,10 +370,9 @@ const generateButtonLabel = useMemo(() => {
           // FIX: Pass the user object to generateResponse as the 3rd argument.
           const response = await generateResponse(prompt, MARKETING_ASSISTANT_SYSTEM_INSTRUCTION, user);
           setResult(response);
-          // Micro-delight: brief success pulse + check flash
-          setCelebrate(true);
-          if (celebrateTimerRef.current) window.clearTimeout(celebrateTimerRef.current);
-          celebrateTimerRef.current = window.setTimeout(() => setCelebrate(false), 1200);
+          // Micro-delight: brief sparkle/pulse on successful generation
+          setShowSparkle(true);
+          window.setTimeout(() => setShowSparkle(false), 350);
         } catch (err) {
           setError(err instanceof Error ? err.message : "An unknown error occurred.");
         } finally {
@@ -745,23 +723,15 @@ const handleCreateBookingPitch = async () => {
 };
 
     return (
-        <>
-        <style>{`
-            .mcg-celebrate { box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.35), 0 0 40px rgba(52, 211, 153, 0.12); }
-            .mcg-generated-badge { animation: mcg-pop 520ms ease-out 1; }
-            .mcg-sparkle { display: inline-block; animation: mcg-sparkle 900ms ease-out 1; }
-            @keyframes mcg-pop { 0% { transform: translateY(-6px) scale(0.96); opacity: 0; } 100% { transform: translateY(0) scale(1); opacity: 1; } }
-            @keyframes mcg-sparkle { 0% { transform: scale(0.8) rotate(-8deg); opacity: 0.2; } 60% { transform: scale(1.1) rotate(6deg); opacity: 1; } 100% { transform: scale(1) rotate(0deg); opacity: 0.9; } }
-        `}</style>
         <main className="flex-1 overflow-y-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
             {/* Control Panel */}
             <div className="flex flex-col">
-                <h2 className={`text-xl font-bold mb-2 ${GOLD_HEADING_CLASS}`}>Marketing Campaign Generator</h2>
+                <h2 className={`text-xl font-bold mb-2 ${goldHeading}`}>Marketing Campaign Generator</h2>
                 <p className="text-slate-400 mb-4">Fill in your show details to generate a complete promotional toolkit, including press releases, social media posts, and more.</p>
                 
                 <div className="space-y-6">
                     <div>
-                        <label htmlFor="show-title" className={`block text-sm font-medium mb-1 ${GOLD_HEADING_CLASS}`}>Show Title*</label>
+                        <label htmlFor="show-title" className={`block text-sm font-medium mb-1 ${goldHeadingSmall}`}>Show Title*</label>
                         <p className="text-xs text-slate-500 mb-2">The headline name of your performance.</p>
                         <input id="show-title" type="text" value={showTitle} onChange={(e) => setShowTitle(e.target.value)} placeholder="e.g., Echoes of the Enchanted" className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white" />
                         {showTitleTouched && showTitle.trim() === '' && (
@@ -788,7 +758,7 @@ const handleCreateBookingPitch = async () => {
                     </div>
 
                     <div>
-                        <label className={`block text-sm font-medium mb-2 flex items-center gap-2 ${GOLD_HEADING_CLASS}`}>
+                        <label className={`block text-sm font-medium mb-2 flex items-center gap-2 ${goldHeadingSmall}`}>
                             <UsersIcon className="w-5 h-5 text-slate-400" />
                             Target Audience*
                         </label>
@@ -807,7 +777,7 @@ const handleCreateBookingPitch = async () => {
                     </div>
 
                     <div>
-                        <label className={`block text-sm font-medium mb-2 flex items-center gap-2 ${GOLD_HEADING_CLASS}`}>
+                        <label className={`block text-sm font-medium mb-2 flex items-center gap-2 ${goldHeadingSmall}`}>
                             <StageCurtainsIcon className="w-5 h-5 text-slate-400" />
                             Performance Style
                         </label>
@@ -824,7 +794,7 @@ const handleCreateBookingPitch = async () => {
                     <div>
                         
 <div>
-    <label htmlFor="campaign-style" className={`block text-sm font-medium mb-1 ${GOLD_HEADING_CLASS}`}>Campaign Style</label>
+    <label htmlFor="campaign-style" className={`block text-sm font-medium mb-1 ${goldHeadingSmall}`}>Campaign Style</label>
     <p className="text-xs text-slate-500 mb-2">Pick a template to shape tone, channels, and structure.</p>
     <select
         id="campaign-style"
@@ -842,13 +812,13 @@ const handleCreateBookingPitch = async () => {
 <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4 space-y-3">
     <div className="flex items-center justify-between gap-3">
         <div>
-            <p className={`text-sm font-semibold ${GOLD_HEADING_CLASS}`}>Campaign Strategy Preview</p>
+            <p className={`text-sm font-semibold ${goldHeadingSmall}`}>\1</p>
             <p className="text-xs text-slate-500 mt-0.5">Updates live as you select options.</p>
         </div>
 
         <div className="text-right">
             <p className="text-xs text-slate-500">Campaign Readiness</p>
-            <p className="text-sm font-semibold text-slate-200">{readinessScore}%</p>
+            <p className={`text-sm font-semibold ${goldHeadingSmall}`}>\1</p>
         </div>
     </div>
 
@@ -879,7 +849,7 @@ const handleCreateBookingPitch = async () => {
     </div>
 </div>
 
-<label htmlFor="key-themes" className={`block text-sm font-medium mb-1 ${GOLD_HEADING_CLASS}`}>Key Effects or Themes (Optional)</label>
+<label htmlFor="key-themes" className={`block text-sm font-medium mb-1 ${goldHeadingSmall}`}>Key Effects or Themes (Optional)</label>
                         <textarea id="key-themes" rows={3} value={keyThemes} onChange={(e) => setKeyThemes(e.target.value)} placeholder="e.g., Classic sleight of hand, modern mind reading, story of a magical artifact" className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white" />
 
 {themeSuggestionsVisible && (
@@ -928,19 +898,20 @@ const handleCreateBookingPitch = async () => {
                         <LoadingIndicator stepText={LOADING_STEPS[loadingStepIndex]} />
                     </div>
                 ) : result ? (
-                     <div className={`relative group flex-1 flex flex-col ${celebrate ? 'mcg-celebrate' : ''}`}>
-                        <div className="p-4 overflow-y-auto space-y-4 pb-32">
-                            {celebrate && (
-                                <div className="mcg-generated-badge pointer-events-none absolute top-3 right-3 flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-emerald-400/30 bg-emerald-500/10 text-emerald-100 text-xs shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
-                                    <CheckIcon className="w-4 h-4" />
-                                    <span>Campaign generated</span>
-                                    <span className="mcg-sparkle">✨</span>
-                                </div>
-                            )}
+                     <div className={`relative group flex-1 flex flex-col ${showSparkle ? "ring-1 ring-amber-400/30 shadow-[0_0_18px_rgba(245,208,110,0.12)]" : ""}`}>
+                    {showSparkle && (
+                        <div className="pointer-events-none absolute top-3 right-3 z-40">
+                            <div className="relative">
+                                <span className="absolute inline-flex h-6 w-6 rounded-full bg-amber-400/30 animate-ping" />
+                                <span className="relative inline-flex items-center justify-center h-6 w-6 rounded-full bg-slate-950/60 border border-amber-400/40 text-amber-200 text-sm">✨</span>
+                            </div>
+                        </div>
+                    )}
 
+                        <div className="p-4 overflow-y-auto space-y-4 pb-32">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
-                                    <p className={`text-sm font-semibold ${GOLD_HEADING_CLASS}`}>AI Strategy Notes</p>
+                                    <p className={`text-sm font-semibold ${goldHeadingSmall}`}>\1</p>
                                     <ul className="mt-2 space-y-1 text-sm text-slate-300">
                                         {advisorNotes.map((n, idx) => (
                                             <li key={idx}>• {n}</li>
@@ -948,7 +919,7 @@ const handleCreateBookingPitch = async () => {
                                     </ul>
                                 </div>
                                 <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
-                                    <p className={`text-sm font-semibold ${GOLD_HEADING_CLASS}`}>Audience Conversion Predictor</p>
+                                    <p className={`text-sm font-semibold ${goldHeadingSmall}`}>\1</p>
                                     <div className="mt-2 grid grid-cols-1 gap-1 text-sm">
                                         <div className="flex items-start justify-between gap-2">
                                             <span className="text-slate-400">Predicted Response Rate</span>
@@ -968,7 +939,7 @@ const handleCreateBookingPitch = async () => {
 
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
                                 <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
-                                    <p className={`text-sm font-semibold ${GOLD_HEADING_CLASS}`}>Competitive Positioning Analyzer</p>
+                                    <p className={`text-sm font-semibold ${goldHeadingSmall}`}>\1</p>
                                     <p className="mt-2 text-sm text-slate-300">Compared to similar performers:</p>
                                     <ul className="mt-2 space-y-1 text-sm text-slate-300">
                                         <li>• You rank strongest in <span className="text-slate-100 font-semibold">{competitivePositioning.strongest}</span></li>
@@ -978,7 +949,7 @@ const handleCreateBookingPitch = async () => {
                                 </div>
 
                                 <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
-                                    <p className={`text-sm font-semibold ${GOLD_HEADING_CLASS}`}>Persona-Based Marketing Versions</p>
+                                    <p className={`text-sm font-semibold ${goldHeadingSmall}`}>\1</p>
                                     <p className="mt-2 text-xs text-slate-400">Generate tailored variations for different buyers. Switch personas to view versions.</p>
 
                                     <div className="mt-3 flex flex-wrap gap-2">
@@ -986,7 +957,6 @@ const handleCreateBookingPitch = async () => {
                                             <button
                                                 key={p.key}
                                                 type="button"
-                                                title={`Rewrites campaign for ${p.label}`}
                                                 onClick={() => {
                                                     setPersonaView(p.key);
                                                     if (p.key !== 'Base' && !personaResults[p.key]) {
@@ -1019,14 +989,15 @@ const handleCreateBookingPitch = async () => {
                                 </div>
 
                                 <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
-                                    <p className={`text-sm font-semibold ${GOLD_HEADING_CLASS}`}>ROI Projection</p>
+                                    <p className={`text-sm font-semibold ${goldHeadingSmall}`}>\1</p>
                                     <p className="mt-2 text-sm text-slate-300">Estimated bookings from campaign:</p>
                                     <p className="mt-2 text-xl font-bold text-slate-100">{roiProjection}</p>
                                     <p className="mt-2 text-xs text-slate-400">Heuristic estimate based on campaign completeness + channel fit. Improve readiness to push the range upward.</p>
                                 </div>
                             </div>
 
-                            <pre className="mcg-output whitespace-pre-wrap break-words text-slate-200 font-sans text-sm leading-relaxed">{displayResult}</pre>
+                            <div className="h-px my-4 bg-gradient-to-r from-transparent via-slate-400/20 to-transparent opacity-60" />
+                            <pre className="whitespace-pre-wrap break-words text-slate-200 font-sans text-sm">{activeResult}</pre>
                         </div>
                         <div className="sticky bottom-0 z-30 p-2.5 bg-slate-950/90 backdrop-blur-md flex flex-col gap-2 border-t border-slate-800 shadow-[0_-8px_24px_rgba(0,0,0,0.35)]">
                             {actionNotice && (
@@ -1142,7 +1113,7 @@ const handleCreateBookingPitch = async () => {
                     <div className="flex-1 flex items-center justify-center text-center text-slate-500 p-6">
                         <div className="max-w-md">
                             <MegaphoneIcon className="w-20 h-20 mx-auto mb-4" />
-                            <h3 className={`font-semibold text-lg ${GOLD_HEADING_CLASS}`}>Marketing Intelligence Ready</h3>
+                            <h3 className={`font-semibold text-lg ${goldHeading}`}>Marketing Intelligence Ready</h3>
                             <p className="text-slate-400 text-sm mt-2">Fill in your show details and generate a complete campaign package including:</p>
                             <ul className="text-slate-400 text-sm mt-4 space-y-1">
                                 <li>• Press Release</li>
@@ -1157,8 +1128,6 @@ const handleCreateBookingPitch = async () => {
                 )}
             </div>
         </main>
-        </>
-
     );
 };
 
