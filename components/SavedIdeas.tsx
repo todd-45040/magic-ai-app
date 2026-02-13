@@ -865,7 +865,7 @@ const sendToPlanner = (idea: SavedIdea) => {
                         className="px-3 py-2 text-xs font-semibold bg-purple-900/30 hover:bg-purple-900/50 border border-purple-500/30 rounded-md text-purple-100 transition flex items-center gap-2"
                         title="Organize and prioritize your ideas"
                     >
-                        <WandIcon className="w-4 h-4" />
+                        <WandIcon className={`w-4 h-4${orgResults ? ' ring-1 ring-purple-400/40 hover:ring-purple-300/60' : ''}`} />
                         Organize My Ideas
                     </button>
 
