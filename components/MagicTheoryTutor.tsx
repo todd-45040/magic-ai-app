@@ -94,6 +94,8 @@ const MagicTheoryTutor: React.FC<MagicTheoryTutorProps> = ({ user }) => {
     const [completedLessons, setCompletedLessons] = useState<Set<string>>(new Set());
     const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
     const [userInput, setUserInput] = useState('');
+    const [showReflectionSaved, setShowReflectionSaved] = useState(false);
+
     const [isLoading, setIsLoading] = useState(false);
     const [lessonPhase, setLessonPhase] = useState<'intro' | 'feedback' | 'complete'>('intro');
 
@@ -114,6 +116,16 @@ const MagicTheoryTutor: React.FC<MagicTheoryTutorProps> = ({ user }) => {
             console.error("Failed to load tutor progress:", error);
         }
     }, []);
+
+    // Tier 3.5: Celebrate when Performance Diagnostics becomes available (after 3 completed lessons)
+    useEffect(() => {
+        const unlockFlag = 'magic_theory_diagnostics_unlocked_toast';
+        if (completedLessons.size >= 3 && !sessionStorage.getItem(unlockFlag)) {
+            sessionStorage.setItem(unlockFlag, '1');
+            showToast('🎓 New Capability Unlocked: Performance Diagnostics');
+        }
+    }, [completedLessons, showToast]);
+
 
     const selectedLesson = useMemo(() => {
         if (!selectedLessonRef) return null;
@@ -247,6 +259,11 @@ const MagicTheoryTutor: React.FC<MagicTheoryTutorProps> = ({ user }) => {
         const response = await generateResponse(userInput, systemInstruction, user, history);
 
         setChatMessages(prev => [...prev, createChatMessage('model', response)]);
+
+        // Tier 3.5: micro feedback that the reflection was captured
+        setShowReflectionSaved(true);
+        window.setTimeout(() => setShowReflectionSaved(false), 2000);
+
         setIsLoading(false);
         setLessonPhase('feedback');
     };
@@ -431,6 +448,7 @@ const MagicTheoryTutor: React.FC<MagicTheoryTutorProps> = ({ user }) => {
                                     <div>
                                         <div className="text-xs uppercase tracking-wider text-slate-400">{selectedLesson.module.name}</div>
                                         <h2 className="text-3xl font-bold text-white font-cinzel">{selectedLesson.lesson.name}</h2>
+                                        <div className="mt-1 text-xs text-slate-400">Lesson {(selectedLessonRef?.lessonIndex ?? 0) + 1} • {TRACKS.find(t => t.id === selectedTrack)?.title ?? 'Foundation Track'}</div>
                                         <p className="text-slate-300 mt-2">{getLessonSummary(selectedLesson.lesson)}</p>
                                         <div className="mt-3 inline-flex items-center gap-2 text-xs text-slate-400">
                                             <BookIcon className="w-4 h-4" />
@@ -481,9 +499,21 @@ const MagicTheoryTutor: React.FC<MagicTheoryTutorProps> = ({ user }) => {
                 ) : (
                     <>
                         <header className="p-4 border-b border-slate-700 flex-shrink-0">
-                            <h3 className="text-xs uppercase text-slate-400">{activeLesson.module.name}</h3>
-                            <h2 className="text-lg font-bold text-white">{activeLesson.lesson.name}</h2>
-                            {progress && <p className="text-sm text-purple-300">{activeLesson.lesson.concepts[progress.concept].name}</p>}
+                            <div className="flex items-start justify-between gap-3">
+                                <div>
+                                    <h3 className="text-xs uppercase text-slate-400">{activeLesson.module.name}</h3>
+                                    <h2 className="text-lg font-bold text-white">{activeLesson.lesson.name}</h2>
+                                    <div className="mt-0.5 text-xs text-slate-400">
+                                        Lesson {(progress?.lesson ?? 0) + 1} • {TRACKS.find(t => t.id === selectedTrack)?.title ?? 'Foundation Track'}
+                                    </div>
+                                    {progress && <p className="text-sm text-purple-300">{activeLesson.lesson.concepts[progress.concept].name}</p>}
+                                </div>
+                                {progress && (
+                                    <div className="shrink-0 mt-1 inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs text-amber-200">
+                                        Concept {progress.concept + 1} of {activeLesson.lesson.concepts.length}
+                                    </div>
+                                )}
+                            </div>
                             <div className="mt-2 p-3 rounded-lg bg-slate-900/40 border border-slate-700">
                                 <div className="text-xs uppercase tracking-wider text-purple-300">🎩 Director Insight</div>
                                 <p className="text-sm text-slate-200">{getDirectorsInsight(activeLesson.lesson.name)}</p>
@@ -497,7 +527,7 @@ const MagicTheoryTutor: React.FC<MagicTheoryTutorProps> = ({ user }) => {
                                         <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center flex-shrink-0">
                                             <TutorIcon className="w-5 h-5 text-purple-400" />
                                         </div>
-                                        <div className="max-w-lg px-4 py-2 rounded-xl bg-slate-700 text-slate-200">
+                                        <div className="max-w-lg px-4 py-2 rounded-xl bg-slate-700 text-slate-200 leading-relaxed text-[15px] [&_p]:my-2 [&_h3]:mt-4 [&_h3]:mb-2 [&_h4]:mt-3 [&_h4]:mb-1 [&_strong]:text-slate-100">
                                             <FormattedText text={msg.text} />
                                         </div>
                                     </>
@@ -539,7 +569,15 @@ const MagicTheoryTutor: React.FC<MagicTheoryTutorProps> = ({ user }) => {
                                     </div>
                                 </div>
                             ) : lessonPhase === 'feedback' ? (
-                                <button onClick={handleNextConcept} className="w-full py-3 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold">Continue</button>
+                                <div className="space-y-2">
+                                    {showReflectionSaved && (
+                                        <div className="flex items-center justify-center gap-2 text-xs text-emerald-300">
+                                            <CheckIcon className="w-4 h-4" />
+                                            <span>Reflection saved to your mastery profile</span>
+                                        </div>
+                                    )}
+                                    <button onClick={handleNextConcept} className="w-full py-3 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold">Continue</button>
+                                </div>
                             ) : (
                                 <div className="text-center p-4 bg-green-900/30 rounded-lg border border-green-700/50">
                                     <h3 className="font-bold text-green-300">Lesson Complete!</h3>
