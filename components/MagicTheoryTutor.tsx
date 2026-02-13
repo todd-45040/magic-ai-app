@@ -378,7 +378,6 @@ const MagicTheoryTutor: React.FC<MagicTheoryTutorProps> = ({ user }) => {
                     </div>
                 </div>
 
-)}
                 <div className="space-y-4">
                     {displayModules.map(({ module, mIndex }) => (
                         <div key={module.name}>
