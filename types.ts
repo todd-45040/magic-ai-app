@@ -281,8 +281,8 @@ export interface DashboardLayout {
 }
 
 export interface AiSparkAction {
-  type: 'refine-idea' | 'draft-email';
-  payload: any; 
+  type: 'refine-idea' | 'draft-email' | 'custom-prompt';
+  payload: any;
 }
 
 export type ReactionType = 'amazed' | 'laughing' | 'confused';

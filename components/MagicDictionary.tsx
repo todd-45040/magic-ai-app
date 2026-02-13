@@ -1,11 +1,22 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { MAGIC_DICTIONARY_TERMS } from '../constants';
-import { TutorIcon, SearchIcon, BookIcon, ChevronDownIcon } from './icons';
+import type { AiSparkAction } from '../types';
+import { TutorIcon, SearchIcon, BookIcon, ChevronDownIcon, WandIcon } from './icons';
 
-type SkillLevel = 'Beginner' | 'Pro';
-type Category = string;
+type DifficultyLevel = 'Beginner' | 'Intermediate' | 'Advanced' | 'Mastery';
 
 type DictionaryReference = { title: string; url: string };
+
+type ConceptCategory =
+  | 'Performance Psychology'
+  | 'Misdirection'
+  | 'Structure & Theory'
+  | 'Stagecraft'
+  | 'Audience Control'
+  | 'Business'
+  | 'Mentalism'
+  | 'Close-Up'
+  | 'Stage';
 
 type DictionaryTerm = {
   term: string;
@@ -13,16 +24,38 @@ type DictionaryTerm = {
   references?: DictionaryReference[];
 
   // Optional “Mini Knowledge Base” fields (gracefully handled if missing)
-  category?: Category;
-  skillLevel?: SkillLevel;
+  category?: string; // legacy / source category
   whyItMatters?: string;
   beginnerMistakes?: string[];
   relatedTerms?: string[];
   usedInWizard?: Array<{ feature: string; note?: string } | string>;
+
+  // Tier-1 upgrades (optional; can be inferred)
+  conceptCategory?: ConceptCategory;
+  difficulty?: DifficultyLevel;
+  strength?: number; // 0..100 (Fundamental -> Advanced)
+  exampleScenario?: string;
 };
 
-const GOLD = 'text-amber-300'; // richer gold accent
+type Props = {
+  onAiSpark?: (action: AiSparkAction) => void;
+};
+
+const GOLD = 'text-amber-300';
 const GOLD_MUTED = 'text-amber-200/90';
+
+const CONCEPT_CATEGORIES: Array<'All' | ConceptCategory> = [
+  'All',
+  'Performance Psychology',
+  'Misdirection',
+  'Structure & Theory',
+  'Stagecraft',
+  'Audience Control',
+  'Business',
+  'Mentalism',
+  'Close-Up',
+  'Stage',
+];
 
 const slugify = (s: string) =>
   (s || '')
@@ -41,11 +74,109 @@ const normalizeHash = (hash: string) => {
   }
 };
 
-const MagicDictionary: React.FC = () => {
+const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
+
+const starsForDifficulty = (d: DifficultyLevel) => {
+  switch (d) {
+    case 'Beginner':
+      return '⭐';
+    case 'Intermediate':
+      return '⭐⭐';
+    case 'Advanced':
+      return '⭐⭐⭐';
+    case 'Mastery':
+      return '🎓';
+    default:
+      return '⭐';
+  }
+};
+
+const inferConceptCategory = (t: DictionaryTerm): ConceptCategory => {
+  if (t.conceptCategory) return t.conceptCategory;
+
+  const term = (t.term || '').toLowerCase();
+  const legacy = (t.category || '').toLowerCase();
+
+  // Strong signals first
+  if (term.includes('misdirection') || legacy.includes('misdirection')) return 'Misdirection';
+  if (legacy.includes('stagecraft') || term.includes('angle') || term.includes('blocking') || term.includes('lighting')) return 'Stagecraft';
+  if (legacy.includes('business') || term.includes('reset') || term.includes('booking') || term.includes('contract')) return 'Business';
+  if (legacy.includes('mentalism') || term.includes('mentalism') || term.includes('cold reading')) return 'Mentalism';
+  if (legacy.includes('close') || term.includes('close-up') || term.includes('table') || term.includes('walk-around')) return 'Close-Up';
+  if (legacy.includes('stage') || term.includes('stage')) return 'Stage';
+  if (term.includes('heckler') || term.includes('audience') || term.includes('spectator') || legacy.includes('audience')) return 'Audience Control';
+
+  // Fallbacks
+  if (legacy.includes('theory')) return 'Structure & Theory';
+  return 'Performance Psychology';
+};
+
+const inferDifficulty = (t: DictionaryTerm): DifficultyLevel => {
+  if (t.difficulty) return t.difficulty;
+
+  const term = (t.term || '').toLowerCase();
+  const legacy = (t.category || '').toLowerCase();
+
+  if (term.includes('dual reality') || term.includes('time misdirection')) return 'Advanced';
+  if (term.includes('out') || term.includes('heckler')) return 'Advanced';
+  if (legacy.includes('theory')) return 'Intermediate';
+  return 'Beginner';
+};
+
+const inferStrength = (t: DictionaryTerm): number => {
+  if (typeof t.strength === 'number' && !Number.isNaN(t.strength)) {
+    return Math.max(0, Math.min(100, t.strength));
+  }
+
+  const d = inferDifficulty(t);
+  switch (d) {
+    case 'Beginner':
+      return 25;
+    case 'Intermediate':
+      return 45;
+    case 'Advanced':
+      return 70;
+    case 'Mastery':
+      return 90;
+    default:
+      return 45;
+  }
+};
+
+const inferScenario = (t: DictionaryTerm): string => {
+  if (t.exampleScenario && t.exampleScenario.trim()) return t.exampleScenario.trim();
+
+  const term = (t.term || '').toLowerCase();
+  if (term.includes('misdirection')) {
+    return 'You get a laugh from a quick line, then casually adjust your grip as you gesture toward a spectator. The audience’s focus stays on the interaction—not the hands.';
+  }
+  if (term.includes('time misdirection')) {
+    return 'You make an important action early, then shift into a short story beat. When the revelation happens later, the audience no longer connects the earlier moment to the method.';
+  }
+  if (term.includes('beat')) {
+    return 'You pause after a key moment (a card is lost / a coin vanishes) so the audience registers what changed before you move on.';
+  }
+  if (term.includes('offbeat')) {
+    return 'Right after applause, you reset and reposition naturally while the audience’s attention drops—then you cleanly transition to the next phase.';
+  }
+  if (term.includes('angle')) {
+    return 'At a corporate cocktail hour, guests gather behind you. You pivot your stance and bring the action higher so the side angles can’t see anything suspicious.';
+  }
+  if (term.includes('reset')) {
+    return 'During walk-around, you finish an effect and immediately pocket the props in a set order so you can perform the same piece again at the next table without fumbling.';
+  }
+  if (term.includes('out')) {
+    return 'A selection is unclear, so you smoothly reframe: “Let’s try something even cleaner…” and transition to a backup phase that preserves the mystery.';
+  }
+
+  return 'Use this concept in a real routine: identify the “moment of magic,” then decide what the audience should be thinking and feeling right before and right after it.';
+};
+
+const MagicDictionary: React.FC<Props> = ({ onAiSpark }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedTerm, setExpandedTerm] = useState<string | null>(null);
-  const [categoryFilter, setCategoryFilter] = useState<string>('All');
-  const [skillFilter, setSkillFilter] = useState<'All' | SkillLevel>('All');
+  const [conceptFilter, setConceptFilter] = useState<'All' | ConceptCategory>('All');
+  const [difficultyFilter, setDifficultyFilter] = useState<'All' | DifficultyLevel>('All');
 
   // Used to scroll after state updates (expand + filter + search)
   const pendingScrollTermRef = useRef<string | null>(null);
@@ -55,22 +186,6 @@ const MagicDictionary: React.FC = () => {
       .filter(Boolean)
       .sort((a, b) => a.term.localeCompare(b.term));
   }, []);
-
-  const categories = useMemo(() => {
-    const set = new Set<string>();
-    let hasUncategorized = false;
-
-    for (const t of sortedTerms) {
-      if (!t) continue;
-      const c = (t.category || '').trim();
-      if (c) set.add(c);
-      else hasUncategorized = true;
-    }
-
-    const list = ['All', ...Array.from(set).sort((a, b) => a.localeCompare(b))];
-    if (hasUncategorized) list.push('Uncategorized');
-    return list;
-  }, [sortedTerms]);
 
   const filteredTerms = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
@@ -85,23 +200,23 @@ const MagicDictionary: React.FC = () => {
         (item.whyItMatters || '').toLowerCase().includes(q) ||
         (item.beginnerMistakes || []).some((m) => m.toLowerCase().includes(q));
 
-      const itemCategory = (item.category || '').trim() || 'Uncategorized';
-      const matchesCategory = categoryFilter === 'All' || itemCategory === categoryFilter;
+      const itemConcept = inferConceptCategory(item);
+      const matchesConcept = conceptFilter === 'All' || itemConcept === conceptFilter;
 
-      const itemSkill = item.skillLevel || 'Beginner';
-      const matchesSkill = skillFilter === 'All' || itemSkill === skillFilter;
+      const itemDifficulty = inferDifficulty(item);
+      const matchesDifficulty = difficultyFilter === 'All' || itemDifficulty === difficultyFilter;
 
-      return matchesSearch && matchesCategory && matchesSkill;
+      return matchesSearch && matchesConcept && matchesDifficulty;
     });
-  }, [searchTerm, sortedTerms, categoryFilter, skillFilter]);
+  }, [searchTerm, sortedTerms, conceptFilter, difficultyFilter]);
 
   const clearFilters = () => {
     setSearchTerm('');
-    setCategoryFilter('All');
-    setSkillFilter('All');
+    setConceptFilter('All');
+    setDifficultyFilter('All');
   };
 
-  const isFiltered = searchTerm.trim() !== '' || categoryFilter !== 'All' || skillFilter !== 'All';
+  const isFiltered = searchTerm.trim() !== '' || conceptFilter !== 'All' || difficultyFilter !== 'All';
 
   const setHashToTerm = (term: string | null) => {
     if (typeof window === 'undefined') return;
@@ -134,8 +249,8 @@ const MagicDictionary: React.FC = () => {
   const handleRelatedClick = (related: string) => {
     // Make sure the related term is visible, then expand + deep-link + scroll.
     setSearchTerm(related);
-    setCategoryFilter('All');
-    setSkillFilter('All');
+    setConceptFilter('All');
+    setDifficultyFilter('All');
 
     pendingScrollTermRef.current = related;
 
@@ -145,7 +260,6 @@ const MagicDictionary: React.FC = () => {
       setExpandedTerm(match.term);
       setHashToTerm(match.term);
     } else {
-      // If it doesn't exist as a term, we still update search to show matches.
       setExpandedTerm(null);
       setHashToTerm(null);
     }
@@ -167,11 +281,10 @@ const MagicDictionary: React.FC = () => {
       });
 
       if (match) {
-        // Ensure it appears even if filters were previously set (fresh load: should be defaults)
         pendingScrollTermRef.current = match.term;
         setSearchTerm('');
-        setCategoryFilter('All');
-        setSkillFilter('All');
+        setConceptFilter('All');
+        setDifficultyFilter('All');
         setExpandedTerm(match.term);
         setHashToTerm(match.term);
       }
@@ -192,11 +305,9 @@ const MagicDictionary: React.FC = () => {
     const t = pendingScrollTermRef.current;
     if (!t) return;
 
-    // Only scroll when the term is visible in the current filtered list
     const visible = filteredTerms.some((x) => x && x.term.toLowerCase() === t.toLowerCase());
     if (!visible) return;
 
-    // Wait a tick for DOM to reflect expanded state and filtering
     const handle = window.setTimeout(() => {
       scrollToTerm(t);
       pendingScrollTermRef.current = null;
@@ -262,7 +373,7 @@ const MagicDictionary: React.FC = () => {
 
     return (
       <div>
-        <h4 className={`text-sm font-semibold ${GOLD_MUTED} mb-2`}>Common Beginner Mistakes</h4>
+        <h4 className={`text-sm font-semibold ${GOLD_MUTED} mb-2`}>Common Mistakes</h4>
         <ul className="space-y-1">
           {item.beginnerMistakes.map((m, idx) => (
             <li key={`${item.term}-mist-${idx}`} className="text-slate-300 text-sm">
@@ -302,22 +413,72 @@ const MagicDictionary: React.FC = () => {
     );
   };
 
-  const CategoryBadge: React.FC<{ category?: string }> = ({ category }) => {
-    const label = (category && category.trim()) ? category.trim() : 'Uncategorized';
+  const ConceptBadge: React.FC<{ concept: ConceptCategory }> = ({ concept }) => (
+    <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold bg-slate-700/70 border border-slate-600 text-purple-200">
+      {concept}
+    </span>
+  );
+
+  const DifficultyBadge: React.FC<{ difficulty: DifficultyLevel }> = ({ difficulty }) => (
+    <span
+      className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold bg-slate-900/40 border border-slate-700 text-slate-200"
+      title={difficulty}
+    >
+      <span className="mr-1">{starsForDifficulty(difficulty)}</span>
+      <span className="text-slate-300">{difficulty}</span>
+    </span>
+  );
+
+  const StrengthMeter: React.FC<{ strength: number }> = ({ strength }) => {
+    const pct = Math.round(Math.max(0, Math.min(100, strength)));
+    const w = clamp01(pct / 100) * 100;
+
     return (
-      <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold bg-slate-700/70 border border-slate-600 text-purple-200">
-        {label}
-      </span>
+      <div className="w-full">
+        <div className="flex items-center justify-between text-[11px] text-slate-400">
+          <span>Fundamental</span>
+          <span>Advanced Theory</span>
+        </div>
+        <div className="mt-1 h-2 rounded-full bg-slate-900/50 border border-slate-700 overflow-hidden">
+          <div
+            className="h-full bg-gradient-to-r from-purple-500/40 to-amber-400/50"
+            style={{ width: `${w}%` }}
+          />
+        </div>
+      </div>
     );
   };
 
-  const SkillBadge: React.FC<{ skill?: SkillLevel }> = ({ skill }) => {
-    const label = skill || 'Beginner';
-    return (
-      <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold bg-slate-800/60 border border-slate-700 text-slate-300">
-        {label}
-      </span>
-    );
+  const askAiForTerm = (item: DictionaryTerm) => {
+    if (!onAiSpark) return;
+
+    const concept = inferConceptCategory(item);
+    const difficulty = inferDifficulty(item);
+
+    const prompt = [
+      `You are my magic theory coach. Help me apply this concept to real performance without exposing secrets.`,
+      '',
+      `CONCEPT: ${item.term}`,
+      `CATEGORY: ${concept}`,
+      `DIFFICULTY: ${difficulty}`,
+      '',
+      `Definition: ${item.definition}`,
+      item.whyItMatters ? `Why it matters: ${item.whyItMatters}` : '',
+      item.beginnerMistakes?.length ? `Common mistakes: ${item.beginnerMistakes.map((m) => `- ${m}`).join('
+')}` : '',
+      item.relatedTerms?.length ? `Related terms: ${item.relatedTerms.join(', ')}` : '',
+      '',
+      `Give me:`,
+      `1) A practical performance explanation (plain English)`,
+      `2) A short example scenario (what I would do/say on stage)`,
+      `3) 3 quick drills I can practice`,
+      `4) One “upgrade” tip appropriate for my level`,
+    ]
+      .filter(Boolean)
+      .join('
+');
+
+    onAiSpark({ type: 'custom-prompt', payload: { prompt } });
   };
 
   return (
@@ -327,16 +488,16 @@ const MagicDictionary: React.FC = () => {
           <TutorIcon className="w-8 h-8 text-purple-400" />
           <div>
             <h2 className="text-2xl font-bold text-slate-200 font-cinzel">Magic Dictionary</h2>
-            <p className="text-slate-400 mt-1">A curated glossary of professional magic terms and concepts.</p>
+            <p className="text-slate-400 mt-1">A curated reference of professional magic terms and performance concepts.</p>
           </div>
         </div>
       </header>
 
       {/* Filters Bar */}
       <div className="sticky top-0 bg-slate-900/80 backdrop-blur-sm py-3 z-10">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           {/* Search */}
-          <div className="flex items-center bg-slate-800 border border-slate-700 rounded-lg overflow-hidden md:col-span-2">
+          <div className="flex items-center bg-slate-800 border border-slate-700 rounded-lg overflow-hidden">
             <div className="pl-4 pr-2 text-slate-500">
               <SearchIcon className="w-5 h-5" />
             </div>
@@ -344,68 +505,72 @@ const MagicDictionary: React.FC = () => {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search magic terms…"
+              placeholder="Search terms, definitions, mistakes…"
               className="flex-1 w-full bg-transparent pr-4 py-3 text-white placeholder-slate-400 focus:outline-none"
               aria-label="Search magic dictionary"
             />
-          </div>
-
-          {/* Category */}
-          <div className="flex items-center bg-slate-800 border border-slate-700 rounded-lg px-3">
-            <label className="text-xs font-semibold text-slate-400 mr-3 whitespace-nowrap">Category</label>
-            <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className="w-full bg-transparent py-3 text-white focus:outline-none"
-              aria-label="Filter by category"
-            >
-              {categories.map((c) => (
-                <option key={c} value={c} className="bg-slate-900">
-                  {c}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Skill + Clear */}
-          <div className="flex items-center gap-2">
-            <div className="flex items-center bg-slate-800 border border-slate-700 rounded-lg px-3 flex-1">
-              <span className="text-xs font-semibold text-slate-400 mr-3 whitespace-nowrap">Skill</span>
-              <div className="flex-1 flex items-center justify-end">
-                <div className="inline-flex rounded-lg border border-slate-700 overflow-hidden">
-                  {(['All', 'Beginner', 'Pro'] as const).map((lvl) => {
-                    const active = skillFilter === lvl;
-                    return (
-                      <button
-                        key={lvl}
-                        type="button"
-                        onClick={() => setSkillFilter(lvl)}
-                        className={[
-                          'px-3 py-2 text-sm transition-colors',
-                          active ? 'bg-purple-600/20 text-purple-200' : 'bg-transparent text-slate-300 hover:text-white',
-                          'focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60',
-                        ].join(' ')}
-                        aria-pressed={active}
-                      >
-                        {lvl}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
             {isFiltered ? (
               <button
                 type="button"
                 onClick={clearFilters}
-                className="px-3 py-3 rounded-lg border border-slate-700 bg-slate-900/40 text-purple-300 hover:text-white hover:border-purple-500/40 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60 whitespace-nowrap"
+                className="mr-2 px-3 py-2 text-sm rounded-lg border border-slate-700 bg-slate-900/40 text-purple-300 hover:text-white hover:border-purple-500/40 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60"
                 aria-label="Clear filters"
                 title="Clear search and filters"
               >
-                Clear
+                Reset
               </button>
             ) : null}
+          </div>
+
+          {/* Concept Category Chips */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1">
+            {CONCEPT_CATEGORIES.map((c) => {
+              const active = conceptFilter === c;
+              return (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setConceptFilter(c)}
+                  className={[
+                    'shrink-0 px-3 py-1.5 rounded-full border text-sm transition-colors',
+                    active
+                      ? 'bg-purple-600/20 border-purple-500/40 text-purple-100'
+                      : 'bg-slate-800/60 border-slate-700 text-slate-300 hover:text-white hover:border-slate-600',
+                    'focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60',
+                  ].join(' ')}
+                  aria-pressed={active}
+                >
+                  {c}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Difficulty */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold text-slate-400 mr-1">Difficulty:</span>
+            <div className="inline-flex rounded-full border border-slate-700 overflow-hidden">
+              {(['All', 'Beginner', 'Intermediate', 'Advanced', 'Mastery'] as const).map((lvl) => {
+                const active = difficultyFilter === lvl;
+                return (
+                  <button
+                    key={lvl}
+                    type="button"
+                    onClick={() => setDifficultyFilter(lvl)}
+                    className={[
+                      'px-3 py-2 text-sm transition-colors',
+                      active ? 'bg-purple-600/20 text-purple-200' : 'bg-transparent text-slate-300 hover:text-white',
+                      'focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60',
+                    ].join(' ')}
+                    aria-pressed={active}
+                    title={lvl === 'All' ? 'All levels' : lvl}
+                  >
+                    {lvl === 'All' ? 'All' : starsForDifficulty(lvl)}
+                  </button>
+                );
+              })}
+            </div>
+            <span className="text-xs text-slate-500">(tap stars)</span>
           </div>
         </div>
       </div>
@@ -417,6 +582,9 @@ const MagicDictionary: React.FC = () => {
             {filteredTerms.filter(Boolean).map((item) => {
               const isExpanded = expandedTerm === item.term;
               const cardId = `term-${slugify(item.term)}`;
+              const concept = inferConceptCategory(item);
+              const difficulty = inferDifficulty(item);
+              const strength = inferStrength(item);
 
               return (
                 <div
@@ -436,15 +604,19 @@ const MagicDictionary: React.FC = () => {
                     aria-controls={`${cardId}-panel`}
                   >
                     <div className="flex items-start justify-between gap-4">
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <h3 className={`font-bold text-lg ${GOLD} tracking-wide`}>{item.term}</h3>
-                          <CategoryBadge category={item.category} />
-                          <SkillBadge skill={item.skillLevel} />
+                          <ConceptBadge concept={concept} />
+                          <DifficultyBadge difficulty={difficulty} />
                         </div>
                         <p className="mt-2 text-slate-300 text-sm leading-relaxed line-clamp-2">
                           {clipOneLine(item.definition)}
                         </p>
+
+                        <div className="mt-3">
+                          <StrengthMeter strength={strength} />
+                        </div>
                       </div>
 
                       <ChevronDownIcon
@@ -475,20 +647,26 @@ const MagicDictionary: React.FC = () => {
                       <div className="px-4 md:px-5 pb-5 space-y-5">
                         {/* Definition */}
                         <div className="pt-1">
-                          <h4 className={`text-sm font-semibold ${GOLD} mb-2`}>Definition (Plain English)</h4>
+                          <h4 className={`text-sm font-semibold ${GOLD} mb-2`}>📖 Definition</h4>
                           <p className="text-slate-200 leading-relaxed">{item.definition}</p>
                         </div>
 
                         {/* Why it matters */}
                         {item.whyItMatters ? (
                           <div>
-                            <h4 className={`text-sm font-semibold ${GOLD} mb-2`}>Why It Matters in Performance</h4>
+                            <h4 className={`text-sm font-semibold ${GOLD} mb-2`}>🎭 Why It Matters in Performance</h4>
                             <p className="text-slate-300 leading-relaxed">{item.whyItMatters}</p>
                           </div>
                         ) : null}
 
-                        {/* Beginner mistakes */}
+                        {/* Common mistakes */}
                         {renderBeginnerMistakes(item)}
+
+                        {/* Example */}
+                        <div>
+                          <h4 className={`text-sm font-semibold ${GOLD} mb-2`}>🎬 Real Example Scenario</h4>
+                          <p className="text-slate-300 leading-relaxed">{inferScenario(item)}</p>
+                        </div>
 
                         {/* Related terms */}
                         {renderRelatedTerms(item)}
@@ -499,28 +677,40 @@ const MagicDictionary: React.FC = () => {
                         {/* References */}
                         {renderReferences(item)}
 
-                        {/* Optional future action row */}
+                        {/* Action row */}
                         <div className="pt-2 flex flex-wrap items-center gap-2">
                           <button
                             type="button"
-                            className="px-3 py-2 text-sm rounded-lg border border-slate-700 bg-slate-900/40 text-purple-300 hover:text-white hover:border-purple-500/40 transition-colors"
-                            onClick={() => {
-                              // Future hook: launch AI modal, or prefill prompts
-                            }}
-                            aria-label="Ask AI about this term"
+                            className={[
+                              'inline-flex items-center gap-2 px-3 py-2 text-sm rounded-lg border',
+                              onAiSpark
+                                ? 'border-purple-500/40 bg-purple-600/15 text-purple-100 hover:bg-purple-600/25 hover:border-purple-400/60'
+                                : 'border-slate-700 bg-slate-900/40 text-slate-500 cursor-not-allowed',
+                              'transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60',
+                            ].join(' ')}
+                            onClick={() => askAiForTerm(item)}
+                            disabled={!onAiSpark}
+                            aria-label="Ask AI about this concept"
+                            title={!onAiSpark ? 'AI actions unavailable in this view' : 'Ask AI about this concept'}
                           >
-                            🔮 Ask AI (coming soon)
+                            <WandIcon className="w-4 h-4" />
+                            Ask AI About This Concept
                           </button>
 
                           <button
                             type="button"
-                            className="px-3 py-2 text-sm rounded-lg border border-slate-700 bg-slate-900/40 text-purple-300 hover:text-white hover:border-purple-500/40 transition-colors"
+                            className="px-3 py-2 text-sm rounded-lg border border-slate-700 bg-slate-900/40 text-slate-300 hover:text-white hover:border-slate-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60"
                             onClick={() => {
-                              // Future hook: save favorite
+                              // Copy a sharable deep-link
+                              if (typeof window === 'undefined') return;
+                              const url = new URL(window.location.href);
+                              url.hash = encodeURIComponent(slugify(item.term));
+                              navigator.clipboard?.writeText(url.toString());
                             }}
-                            aria-label="Save term"
+                            aria-label="Copy link to this term"
+                            title="Copy a link to this term"
                           >
-                            ⭐ Save (coming soon)
+                            Copy Link
                           </button>
                         </div>
                       </div>
@@ -532,7 +722,7 @@ const MagicDictionary: React.FC = () => {
           </div>
         ) : (
           <div className="text-center py-12 text-slate-500">
-            <p>No terms found for &quot;{searchTerm}&quot;.</p>
+            <p>No terms found for “{searchTerm}”.</p>
             <p className="mt-2 text-sm text-slate-600">Try clearing filters or using fewer keywords.</p>
           </div>
         )}

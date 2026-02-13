@@ -1978,8 +1978,15 @@ useEffect(() => {
     let prompt = '';
 
     switch (action.type) {
+        case 'custom-prompt':
+            prompt = String(action.payload?.prompt || '').trim();
+            break;
         case 'refine-idea':
-            prompt = `As an expert scriptwriter, please review and refine the following piece of content:\n\n---\n\n${action.payload.content}`;
+            prompt = `As an expert scriptwriter, please review and refine the following piece of content:
+
+---
+
+${action.payload.content}`;
             break;
         case 'draft-email':
             const client: Client = action.payload.client;
@@ -2163,7 +2170,7 @@ useEffect(() => {
         case 'director-mode': return <DirectorMode onIdeaSaved={() => handleIdeaSaved('Show Plan saved!')} />;
         case 'illusion-blueprint': return <IllusionBlueprint onIdeaSaved={() => handleIdeaSaved('Illusion Blueprint saved!')} user={user} />;
         case 'magic-theory-tutor': return <MagicTheoryTutor user={user} />;
-        case 'magic-dictionary': return <MagicDictionary />;
+        case 'magic-dictionary': return <MagicDictionary onAiSpark={handleAiSpark} />;
         case 'persona-simulator': return <PersonaSimulator onIdeaSaved={() => handleIdeaSaved('Persona simulation saved!')} user={user} />;
         case 'gospel-magic-assistant': return <GospelMagicAssistant onIdeaSaved={() => handleIdeaSaved('Gospel routine idea saved!')} />;
         case 'mentalism-assistant': return <MentalismAssistant onIdeaSaved={() => handleIdeaSaved('Mentalism idea saved!')} user={user} />;
