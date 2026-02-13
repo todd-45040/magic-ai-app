@@ -2211,7 +2211,14 @@ ${action.payload.content}`;
         case 'director-mode': return <DirectorMode onIdeaSaved={() => handleIdeaSaved('Show Plan saved!')} />;
         case 'illusion-blueprint': return <IllusionBlueprint onIdeaSaved={() => handleIdeaSaved('Illusion Blueprint saved!')} user={user} />;
         case 'magic-theory-tutor': return <MagicTheoryTutor user={user} />;
-        case 'magic-dictionary': return <MagicDictionary onAiSpark={handleAiSpark} />;
+        case 'magic-dictionary':
+          return (
+            <MagicDictionary
+              onAiSpark={handleAiSpark}
+              membership={user?.membership}
+              onRequestUpgrade={() => setIsUpgradeModalOpen(true)}
+            />
+          );
         case 'persona-simulator': return <PersonaSimulator onIdeaSaved={() => handleIdeaSaved('Persona simulation saved!')} user={user} />;
         case 'gospel-magic-assistant': return <GospelMagicAssistant onIdeaSaved={() => handleIdeaSaved('Gospel routine idea saved!')} />;
         case 'mentalism-assistant': return <MentalismAssistant onIdeaSaved={() => handleIdeaSaved('Mentalism idea saved!')} user={user} />;

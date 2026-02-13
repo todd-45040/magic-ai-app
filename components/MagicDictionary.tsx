@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { MAGIC_DICTIONARY_TERMS } from '../constants';
-import type { AiSparkAction } from '../types';
+import type { AiSparkAction, Membership } from '../types';
 import { useAppState } from '../store';
 import { TutorIcon, SearchIcon, BookIcon, ChevronDownIcon, WandIcon } from './icons';
 
@@ -45,7 +45,74 @@ type DictionaryTerm = {
 
 type Props = {
   onAiSpark?: (action: AiSparkAction) => void;
+  /** Used for soft-gating + pro badges (Tier 5). */
+  membership?: Membership;
+  /** Opens the app-level upgrade modal (Tier 5). */
+  onRequestUpgrade?: () => void;
 };
+
+// --- Tier 5 (Soft Monetization): local analytics + thresholds ---
+// We keep everything functional, but:
+//  - show subtle "Pro" badges
+//  - trigger the Upgrade modal once a user crosses a soft usage threshold
+// This gives you real-world activation signals without hard-locking users.
+type SoftGateKey = 'scenario' | 'diagnostic' | 'tutor-l2' | 'tutor-l3';
+
+type SoftGateState = {
+  day: string; // YYYY-MM-DD
+  counts: Record<SoftGateKey, number>;
+  prompted: Record<SoftGateKey, boolean>; // only prompt once per day per feature
+};
+
+const SOFT_GATE_STORAGE_KEY = 'maw_dictionary_softgate_v1';
+
+const SOFT_GATE_DEFAULT: SoftGateState = {
+  day: '',
+  counts: { scenario: 0, diagnostic: 0, 'tutor-l2': 0, 'tutor-l3': 0 },
+  prompted: { scenario: false, diagnostic: false, 'tutor-l2': false, 'tutor-l3': false },
+};
+
+const SOFT_GATE_THRESHOLDS: Record<SoftGateKey, number> = {
+  scenario: 3,
+  diagnostic: 2,
+  'tutor-l2': 2,
+  'tutor-l3': 1,
+};
+
+function todayKey(): string {
+  const d = new Date();
+  const y = String(d.getFullYear());
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function readSoftGateState(): SoftGateState {
+  try {
+    const raw = localStorage.getItem(SOFT_GATE_STORAGE_KEY);
+    const parsed = raw ? (JSON.parse(raw) as SoftGateState) : null;
+    const t = todayKey();
+    if (!parsed || parsed.day !== t) {
+      return { ...SOFT_GATE_DEFAULT, day: t };
+    }
+    // Merge defensively in case schema evolves.
+    return {
+      day: parsed.day || t,
+      counts: { ...SOFT_GATE_DEFAULT.counts, ...(parsed.counts || {}) },
+      prompted: { ...SOFT_GATE_DEFAULT.prompted, ...(parsed.prompted || {}) },
+    };
+  } catch {
+    return { ...SOFT_GATE_DEFAULT, day: todayKey() };
+  }
+}
+
+function writeSoftGateState(state: SoftGateState) {
+  try {
+    localStorage.setItem(SOFT_GATE_STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // ignore
+  }
+}
 
 type ScenarioPersona =
   | 'Skeptical Heckler'
@@ -319,8 +386,28 @@ const saveStudyState = (state: StudyState) => {
   }
 };
 
-const MagicDictionary: React.FC<Props> = ({ onAiSpark }) => {
+const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onRequestUpgrade }) => {
   const { shows } = useAppState();
+
+  const isProfessional = membership === 'professional';
+
+  const bumpSoftGate = (key: SoftGateKey) => {
+    if (typeof window === 'undefined') return;
+    const st = readSoftGateState();
+    st.counts[key] = (st.counts[key] || 0) + 1;
+
+    const threshold = SOFT_GATE_THRESHOLDS[key] ?? 0;
+    const over = st.counts[key] > threshold;
+    const shouldPrompt = !isProfessional && over && !st.prompted[key];
+
+    if (shouldPrompt) {
+      st.prompted[key] = true;
+      // Soft prompt: open upgrade modal, but do not block the action.
+      try { onRequestUpgrade && onRequestUpgrade(); } catch { /* ignore */ }
+    }
+
+    writeSoftGateState(st);
+  };
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedTerm, setExpandedTerm] = useState<string | null>(null);
 
@@ -857,6 +944,7 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark }) => {
       .filter(Boolean)
       .join('\n');
 
+    bumpSoftGate('scenario');
     setScenarioOpen(false);
     onAiSpark({ type: 'custom-prompt', payload: { prompt } });
   };
@@ -874,6 +962,8 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark }) => {
   };
 
   const startTutorLevel = (lvl: TutorLevel) => {
+    if (lvl === 2) bumpSoftGate('tutor-l2');
+    if (lvl === 3) bumpSoftGate('tutor-l3');
     setTutorLevel(lvl);
     setTutorIndex(0);
     setTutorAnswer('');
@@ -956,6 +1046,7 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark }) => {
       .filter(Boolean)
       .join('\n');
 
+    bumpSoftGate('diagnostic');
     setDiagnosticOpen(false);
     onAiSpark({ type: 'custom-prompt', payload: { prompt } });
   };
@@ -1027,7 +1118,12 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark }) => {
               aria-label="Open performance diagnostic"
               title="Paste a script and get a dictionary-based performance diagnosis"
             >
-              Diagnose Script
+              <span className="flex items-center gap-2">
+                Diagnose Script
+                {!isProfessional ? (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full border border-amber-400/35 bg-amber-400/10 text-amber-200">PRO</span>
+                ) : null}
+              </span>
             </button>
           </div>
 
@@ -1366,7 +1462,12 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark }) => {
                             aria-label="Test this concept"
                             title={!onAiSpark ? 'AI actions unavailable in this view' : 'Run a rehearsal-style scenario in chat'}
                           >
-                            Test This Concept
+                            <span className="flex items-center gap-2">
+                              Test This Concept
+                              {!isProfessional ? (
+                                <span className="text-[10px] px-2 py-0.5 rounded-full border border-amber-400/35 bg-amber-400/10 text-amber-200">PRO</span>
+                              ) : null}
+                            </span>
                           </button>
 
                           <button
@@ -1450,7 +1551,12 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark }) => {
                       ].join(' ')}
                       aria-pressed={active}
                     >
-                      {label}
+                      <span className="flex items-center gap-2">
+                        {label}
+                        {!isProfessional && lvl !== 1 ? (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full border border-amber-400/35 bg-amber-400/10 text-amber-200">PRO</span>
+                        ) : null}
+                      </span>
                     </button>
                   );
                 })}
