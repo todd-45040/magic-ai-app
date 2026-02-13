@@ -125,6 +125,16 @@ const [lastOpenedMap, setLastOpenedMap] = useState<Record<string, number>>(() =>
     });
     const [openIdea, setOpenIdea] = useState<SavedIdea | null>(null);
 
+    useEffect(() => {
+        if (!openIdea) return;
+        const handler = (e: KeyboardEvent) => {
+            if (e.key === "Escape") setOpenIdea(null);
+        };
+        window.addEventListener("keydown", handler);
+        return () => window.removeEventListener("keydown", handler);
+    }, [openIdea]);
+
+
     const [sectionOpen, setSectionOpen] = useState<Record<string, boolean>>({
         saved_notes: true,
         blueprints: true,
@@ -1079,7 +1089,7 @@ const sendToPlanner = (idea: SavedIdea) => {
 
             {/* Open Idea Modal */}
             {openIdea ? (
-                <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+                <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={(e)=>{ if(e.target===e.currentTarget) setOpenIdea(null); }} role="dialog" aria-modal="true">
                     <div className="w-full max-w-3xl bg-slate-950/90 border border-slate-800 rounded-2xl overflow-hidden shadow-xl backdrop-blur">
                         <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-slate-800">
                             <div className="min-w-0">
