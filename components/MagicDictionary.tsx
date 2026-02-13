@@ -1102,13 +1102,14 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
 
   return (
     <div className="flex-1 flex flex-col overflow-y-auto p-4 md:p-6 animate-fade-in">
-      <header className={layer === 'core' ? "mb-6" : "mb-3"}>
+      {/* Technique view should start higher to avoid a “blank band” above the taxonomy/cards. */}
+      <header className={layer === 'core' ? "mb-6" : "mb-2"}>
         <div className="flex items-center gap-3">
           <TutorIcon className="w-8 h-8 text-purple-400" />
           <div>
             <h2 className="text-2xl font-bold text-slate-200 font-cinzel">Magic Dictionary</h2>
             <p className="text-slate-400 mt-1">A curated reference of professional magic terms and performance concepts.</p>
-            <p className="text-xs text-slate-500 mt-1">
+            <p className={layer === 'core' ? 'text-xs text-slate-500 mt-1' : 'text-xs text-slate-500 mt-0.5'}>
               {layer === 'core'
                 ? `Performance Intelligence Framework • ${sortedTerms.length} curated principles`
                 : `Technique & Term Reference • ${sortedTechniqueTerms.length} high-level terms`}
@@ -1118,7 +1119,7 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
       </header>
 
       {/* Filters Bar */}
-      <div className="sticky top-0 bg-slate-900/80 backdrop-blur-sm py-2 z-10">
+      <div className={layer === 'core' ? 'sticky top-0 bg-slate-900/80 backdrop-blur-sm py-2 z-10' : 'sticky top-0 bg-slate-900/80 backdrop-blur-sm py-1.5 z-10'}>
         {/*
           Core view needs a denser control matrix (chips + difficulty + tools).
           Technique view should stay lean to avoid wasted horizontal space.
@@ -1197,7 +1198,9 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder={layer === 'core' ? 'Search terms, definitions, mistakes…' : 'Search technique terms…'}
-              className="flex-1 w-full bg-transparent pr-4 py-2 text-white placeholder-slate-400 focus:outline-none"
+              className={layer === 'core'
+                ? 'flex-1 w-full bg-transparent pr-4 py-2 text-white placeholder-slate-400 focus:outline-none'
+                : 'flex-1 w-full bg-transparent pr-4 py-1.5 text-white placeholder-slate-400 focus:outline-none'}
               aria-label="Search magic dictionary"
             />
             {isFiltered ? (
@@ -1310,7 +1313,7 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
       </div>
 
       {/* Cards */}
-      <div className="mt-4">
+      <div className={layer === 'core' ? 'mt-4' : 'mt-2'}>
         {layer === 'core' ? (
           filteredTerms.length > 0 ? (
           <div className="grid grid-cols-1 gap-3">
@@ -1642,7 +1645,7 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
         ) : (
           <div className="grid grid-cols-12 gap-4">
             {/* Left taxonomy sidebar */}
-            <div className="col-span-12 lg:col-span-2 bg-slate-800/30 border border-slate-700 rounded-xl p-3 lg:sticky lg:top-24 h-fit">
+            <div className="col-span-12 lg:col-span-2 bg-slate-800/30 border border-slate-700 rounded-xl p-3 lg:sticky lg:top-20 h-fit">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-semibold text-slate-400">Technique Categories</p>
                 <button
@@ -1848,7 +1851,8 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
                   })()}
 
                   {/* Quiz */}
-                  <div className="mt-4">
+      {/* Technique view should sit closer to the controls to avoid empty vertical space. */}
+      <div className={layer === 'core' ? 'mt-4' : 'mt-2'}>
                     <div className="text-sm font-semibold text-slate-200">Quiz</div>
                     <p className="mt-1 text-sm text-slate-300 leading-relaxed">{currentTutorStep.quiz}</p>
                     {currentTutorStep.tip ? <p className="mt-2 text-xs text-slate-500">{currentTutorStep.tip}</p> : null}
