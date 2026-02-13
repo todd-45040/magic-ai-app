@@ -742,6 +742,7 @@ const handleCreateBookingPitch = async () => {
 };
 
     return (
+        <>
         <style>{`
             .mcg-celebrate { box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.35), 0 0 40px rgba(52, 211, 153, 0.12); }
             .mcg-generated-badge { animation: mcg-pop 520ms ease-out 1; }
@@ -1153,6 +1154,8 @@ const handleCreateBookingPitch = async () => {
                 )}
             </div>
         </main>
+        </>
+
     );
 };
 
