@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { MAGIC_DICTIONARY_TERMS } from '../constants';
+import { MAGIC_DICTIONARY_TERMS, MAGIC_TECHNIQUE_TERMS } from '../constants';
 import type { AiSparkAction, Membership } from '../types';
 import { useAppState } from '../store';
 import { TutorIcon, SearchIcon, BookIcon, ChevronDownIcon, WandIcon } from './icons';
@@ -49,6 +49,24 @@ type Props = {
   membership?: Membership;
   /** Opens the app-level upgrade modal (Tier 5). */
   onRequestUpgrade?: () => void;
+};
+
+type DictionaryLayer = 'core' | 'terms';
+
+type TechniqueCategory =
+  | 'All'
+  | 'Sleights'
+  | 'Forces'
+  | 'Gimmicks'
+  | 'Stage Terminology'
+  | 'Equipment'
+  | 'Method Classifications';
+
+type TechniqueTerm = {
+  term: string;
+  category: Exclude<TechniqueCategory, 'All'>;
+  definition: string;
+  historicalNote?: string;
 };
 
 // --- Tier 5 (Soft Monetization): local analytics + thresholds ---
@@ -410,6 +428,13 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
   };
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedTerm, setExpandedTerm] = useState<string | null>(null);
+  const [expandedTechTerm, setExpandedTechTerm] = useState<string | null>(null);
+
+  // Two-layer dictionary architecture:
+  //  - core: curated Performance Intelligence concepts (deep + AI-powered)
+  //  - terms: static Technique & Terms taxonomy (high-level, non-exposure)
+  const [layer, setLayer] = useState<DictionaryLayer>('core');
+  const [techCategory, setTechCategory] = useState<TechniqueCategory>('All');
 
   // Tier 3 – Scenario Simulator
   const [scenarioOpen, setScenarioOpen] = useState(false);
@@ -478,6 +503,27 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
     });
   }, [searchTerm, sortedTerms, conceptFilter, difficultyFilter]);
 
+  // Layer 2: Technique & Terms (static taxonomy)
+  const sortedTechniqueTerms = useMemo(() => {
+    return [...(MAGIC_TECHNIQUE_TERMS as TechniqueTerm[])]
+      .filter(Boolean)
+      .sort((a, b) => a.term.localeCompare(b.term));
+  }, []);
+
+  const filteredTechniqueTerms = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    return sortedTechniqueTerms.filter((t) => {
+      if (!t) return false;
+      const matchesCategory = techCategory === 'All' || t.category === techCategory;
+      const matchesSearch =
+        !q ||
+        t.term.toLowerCase().includes(q) ||
+        (t.definition || '').toLowerCase().includes(q) ||
+        (t.historicalNote || '').toLowerCase().includes(q);
+      return matchesCategory && matchesSearch;
+    });
+  }, [sortedTechniqueTerms, techCategory, searchTerm]);
+
   // Tier-4: Tutor steps for current level
   const tutorSteps = useMemo(() => {
     return TUTOR_STEPS.filter((s) => s.level === tutorLevel);
@@ -495,9 +541,12 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
     setSearchTerm('');
     setConceptFilter('All');
     setDifficultyFilter('All');
+    setTechCategory('All');
   };
 
-  const isFiltered = searchTerm.trim() !== '' || conceptFilter !== 'All' || difficultyFilter !== 'All';
+  const isFiltered =
+    searchTerm.trim() !== '' ||
+    (layer === 'core' ? conceptFilter !== 'All' || difficultyFilter !== 'All' : techCategory !== 'All');
 
   useEffect(() => {
     saveStudyState(study);
@@ -1059,6 +1108,11 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
           <div>
             <h2 className="text-2xl font-bold text-slate-200 font-cinzel">Magic Dictionary</h2>
             <p className="text-slate-400 mt-1">A curated reference of professional magic terms and performance concepts.</p>
+            <p className="text-xs text-slate-500 mt-1">
+              {layer === 'core'
+                ? `Performance Intelligence Framework • ${sortedTerms.length} curated principles`
+                : `Technique & Term Reference • ${sortedTechniqueTerms.length} high-level terms`}
+            </p>
           </div>
         </div>
       </header>
@@ -1066,6 +1120,51 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
       {/* Filters Bar */}
       <div className="sticky top-0 bg-slate-900/80 backdrop-blur-sm py-3 z-10">
         <div className="grid grid-cols-1 gap-3">
+          {/* Layer Toggle */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex rounded-full border border-slate-700 bg-slate-800/40 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => {
+                  setLayer('core');
+                  // keep search, but reset technique category for cleanliness
+                  setTechCategory('All');
+                  setExpandedTechTerm(null);
+                }}
+                className={[
+                  'px-4 py-2 text-sm transition-colors',
+                  layer === 'core' ? 'bg-purple-600/20 text-purple-100' : 'bg-transparent text-slate-300 hover:text-white',
+                  'focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60',
+                ].join(' ')}
+                aria-pressed={layer === 'core'}
+              >
+                Core Performance Intelligence
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setLayer('terms');
+                  // Technique view shouldn't inherit core-only filters
+                  setConceptFilter('All');
+                  setDifficultyFilter('All');
+                  setExpandedTerm(null);
+                  setExpandedTechTerm(null);
+                }}
+                className={[
+                  'px-4 py-2 text-sm transition-colors',
+                  layer === 'terms' ? 'bg-purple-600/20 text-purple-100' : 'bg-transparent text-slate-300 hover:text-white',
+                  'focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60',
+                ].join(' ')}
+                aria-pressed={layer === 'terms'}
+              >
+                Technique & Terms
+              </button>
+            </div>
+
+            <div className="ml-auto text-xs text-slate-400">
+              {layer === 'core' ? 'Deep concepts + coaching tools' : 'High-level taxonomy (non-exposure)'}
+            </div>
+          </div>
           {/* Search */}
           <div className="flex items-center bg-slate-800 border border-slate-700 rounded-lg overflow-hidden">
             <div className="pl-4 pr-2 text-slate-500">
@@ -1075,7 +1174,7 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search terms, definitions, mistakes…"
+              placeholder={layer === 'core' ? 'Search terms, definitions, mistakes…' : 'Search technique terms…'}
               className="flex-1 w-full bg-transparent pr-4 py-3 text-white placeholder-slate-400 focus:outline-none"
               aria-label="Search magic dictionary"
             />
@@ -1091,98 +1190,107 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
               </button>
             ) : null}
 
-            <button
-              type="button"
-              onClick={openTutor}
-              className="mr-3 px-3 py-2 text-sm rounded-lg border border-amber-400/30 bg-amber-400/10 text-amber-200 hover:bg-amber-400/15 hover:border-amber-300/40 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60"
-              aria-label="Open Magic Theory Tutor"
-              title="Guided study path + quizzes (Tier 4)"
-            >
-              Tutor
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setStudyOpen(true)}
-              className="mr-3 px-3 py-2 text-sm rounded-lg border border-slate-700 bg-slate-900/40 text-slate-200 hover:text-white hover:border-slate-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60"
-              aria-label="Open Study Concepts"
-              title="Bookmarked concepts, study lists, and notes"
-            >
-              Study
-            </button>
-
-            <button
-              type="button"
-              onClick={openDiagnostic}
-              className="mr-3 px-3 py-2 text-sm rounded-lg border border-purple-500/40 bg-purple-600/15 text-purple-100 hover:bg-purple-600/25 hover:border-purple-400/60 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60"
-              aria-label="Open performance diagnostic"
-              title="Paste a script and get a dictionary-based performance diagnosis"
-            >
-              <span className="flex items-center gap-2">
-                Diagnose Script
-                {!isProfessional ? (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full border border-amber-400/35 bg-amber-400/10 text-amber-200">PRO</span>
-                ) : null}
-              </span>
-            </button>
-          </div>
-
-          {/* Concept Category Chips */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-1">
-            {CONCEPT_CATEGORIES.map((c) => {
-              const active = conceptFilter === c;
-              return (
+            {layer === 'core' ? (
+              <>
                 <button
-                  key={c}
                   type="button"
-                  onClick={() => setConceptFilter(c)}
-                  className={[
-                    'shrink-0 px-3 py-1.5 rounded-full border text-sm transition-colors',
-                    active
-                      ? 'bg-purple-600/20 border-purple-500/40 text-purple-100'
-                      : 'bg-slate-800/60 border-slate-700 text-slate-300 hover:text-white hover:border-slate-600',
-                    'focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60',
-                  ].join(' ')}
-                  aria-pressed={active}
+                  onClick={openTutor}
+                  className="mr-3 px-3 py-2 text-sm rounded-lg border border-amber-400/30 bg-amber-400/10 text-amber-200 hover:bg-amber-400/15 hover:border-amber-300/40 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60"
+                  aria-label="Open Magic Theory Tutor"
+                  title="Guided study path + quizzes (Tier 4)"
                 >
-                  {c}
+                  Tutor
                 </button>
-              );
-            })}
+
+                <button
+                  type="button"
+                  onClick={() => setStudyOpen(true)}
+                  className="mr-3 px-3 py-2 text-sm rounded-lg border border-slate-700 bg-slate-900/40 text-slate-200 hover:text-white hover:border-slate-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60"
+                  aria-label="Open Study Concepts"
+                  title="Bookmarked concepts, study lists, and notes"
+                >
+                  Study
+                </button>
+
+                <button
+                  type="button"
+                  onClick={openDiagnostic}
+                  className="mr-3 px-3 py-2 text-sm rounded-lg border border-purple-500/40 bg-purple-600/15 text-purple-100 hover:bg-purple-600/25 hover:border-purple-400/60 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60"
+                  aria-label="Open performance diagnostic"
+                  title="Paste a script and get a dictionary-based performance diagnosis"
+                >
+                  <span className="flex items-center gap-2">
+                    Diagnose Script
+                    {!isProfessional ? (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full border border-amber-400/35 bg-amber-400/10 text-amber-200">PRO</span>
+                    ) : null}
+                  </span>
+                </button>
+              </>
+            ) : null}
           </div>
 
-          {/* Difficulty */}
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold text-slate-400 mr-1">Difficulty:</span>
-            <div className="inline-flex rounded-full border border-slate-700 overflow-hidden">
-              {(['All', 'Beginner', 'Intermediate', 'Advanced', 'Mastery'] as const).map((lvl) => {
-                const active = difficultyFilter === lvl;
-                return (
-                  <button
-                    key={lvl}
-                    type="button"
-                    onClick={() => setDifficultyFilter(lvl)}
-                    className={[
-                      'px-3 py-2 text-sm transition-colors',
-                      active ? 'bg-purple-600/20 text-purple-200' : 'bg-transparent text-slate-300 hover:text-white',
-                      'focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60',
-                    ].join(' ')}
-                    aria-pressed={active}
-                    title={lvl === 'All' ? 'All levels' : lvl}
-                  >
-                    {lvl === 'All' ? 'All' : starsForDifficulty(lvl)}
-                  </button>
-                );
-              })}
-            </div>
-            <span className="text-xs text-slate-500">(tap stars)</span>
-          </div>
+          {layer === 'core' ? (
+            <>
+              {/* Concept Category Chips */}
+              <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                {CONCEPT_CATEGORIES.map((c) => {
+                  const active = conceptFilter === c;
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setConceptFilter(c)}
+                      className={[
+                        'shrink-0 px-3 py-1.5 rounded-full border text-sm transition-colors',
+                        active
+                          ? 'bg-purple-600/20 border-purple-500/40 text-purple-100'
+                          : 'bg-slate-800/60 border-slate-700 text-slate-300 hover:text-white hover:border-slate-600',
+                        'focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60',
+                      ].join(' ')}
+                      aria-pressed={active}
+                    >
+                      {c}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Difficulty */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold text-slate-400 mr-1">Difficulty:</span>
+                <div className="inline-flex rounded-full border border-slate-700 overflow-hidden">
+                  {(['All', 'Beginner', 'Intermediate', 'Advanced', 'Mastery'] as const).map((lvl) => {
+                    const active = difficultyFilter === lvl;
+                    return (
+                      <button
+                        key={lvl}
+                        type="button"
+                        onClick={() => setDifficultyFilter(lvl)}
+                        className={[
+                          'px-3 py-2 text-sm transition-colors',
+                          active ? 'bg-purple-600/20 text-purple-200' : 'bg-transparent text-slate-300 hover:text-white',
+                          'focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60',
+                        ].join(' ')}
+                        aria-pressed={active}
+                        title={lvl === 'All' ? 'All levels' : lvl}
+                      >
+                        {lvl === 'All' ? 'All' : starsForDifficulty(lvl)}
+                      </button>
+                    );
+                  })}
+                </div>
+                <span className="text-xs text-slate-500">(tap stars)</span>
+              </div>
+            </>
+          ) : null}
         </div>
       </div>
 
       {/* Cards */}
       <div className="mt-4">
-        {filteredTerms.length > 0 ? (
+        {layer === 'core' ? (
+          filteredTerms.length > 0 ? (
           <div className="grid grid-cols-1 gap-3">
             {filteredTerms.filter(Boolean).map((item) => {
               const isExpanded = expandedTerm === item.term;
@@ -1503,10 +1611,126 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
               );
             })}
           </div>
-        ) : (
+          ) : (
           <div className="text-center py-12 text-slate-500">
             <p>No terms found for “{searchTerm}”.</p>
             <p className="mt-2 text-sm text-slate-600">Try clearing filters or using fewer keywords.</p>
+          </div>
+          )
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-3">
+            <div className="bg-slate-800/30 border border-slate-700 rounded-xl p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-slate-400">Technique Categories</p>
+                <button
+                  type="button"
+                  onClick={() => setTechCategory('All')}
+                  className="text-xs text-slate-400 hover:text-slate-200 transition-colors"
+                >
+                  All
+                </button>
+              </div>
+
+              <div className="mt-2 space-y-1">
+                {(
+                  [
+                    'Sleights',
+                    'Forces',
+                    'Gimmicks',
+                    'Stage Terminology',
+                    'Equipment',
+                    'Method Classifications',
+                  ] as Exclude<TechniqueCategory, 'All'>[]
+                ).map((c) => {
+                  const active = techCategory === c;
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setTechCategory(c)}
+                      className={[
+                        'w-full text-left px-3 py-2 rounded-lg border text-sm transition-colors',
+                        active
+                          ? 'bg-purple-600/20 border-purple-500/40 text-purple-100'
+                          : 'bg-slate-900/30 border-slate-700 text-slate-300 hover:text-white hover:border-slate-600',
+                        'focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60',
+                      ].join(' ')}
+                      aria-pressed={active}
+                    >
+                      {c}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="mt-4 pt-4 border-t border-slate-700/60">
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  This tab is a <span className="text-slate-300">high-level reference</span>. It avoids method mechanics,
+                  construction details, and step-by-step handling.
+                </p>
+              </div>
+            </div>
+
+            <div>
+              {filteredTechniqueTerms.length > 0 ? (
+                <div className="grid grid-cols-1 gap-3">
+                  {filteredTechniqueTerms.map((t) => {
+                    const open = expandedTechTerm === t.term;
+                    return (
+                      <div
+                        key={`${t.category}-${t.term}`}
+                        className="bg-slate-800/50 border border-slate-700 rounded-xl overflow-hidden"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setExpandedTechTerm(open ? null : t.term)}
+                          className="w-full text-left p-4 hover:bg-slate-700/40 transition-colors"
+                          aria-expanded={open}
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h3 className={`font-bold text-lg ${GOLD} tracking-wide`}>{t.term}</h3>
+                                <span className="text-[11px] px-2 py-0.5 rounded-full border border-slate-700 bg-slate-950/30 text-slate-300">
+                                  {t.category}
+                                </span>
+                              </div>
+                              <p className="mt-2 text-slate-300 text-sm leading-relaxed line-clamp-2">{clipOneLine(t.definition)}</p>
+                            </div>
+                            <div className="text-slate-400">
+                              <ChevronDownIcon className={['w-5 h-5 transition-transform', open ? 'rotate-180 text-purple-300' : ''].join(' ')} />
+                            </div>
+                          </div>
+                        </button>
+
+                        {open ? (
+                          <div className="px-4 pb-4">
+                            <div className="pt-2 text-sm text-slate-200">
+                              <p className="text-slate-300 leading-relaxed">{t.definition}</p>
+                              {t.historicalNote ? (
+                                <div className="mt-3 rounded-lg border border-slate-700 bg-slate-950/20 p-3">
+                                  <p className="text-xs font-semibold text-slate-400">Historical Note</p>
+                                  <p className="mt-1 text-sm text-slate-300 leading-relaxed">{t.historicalNote}</p>
+                                </div>
+                              ) : null}
+
+                              <div className="mt-3 text-xs text-slate-500 border-t border-slate-700/60 pt-3">
+                                Structural overview only. Study specific mechanics through proper instructional materials.
+                              </div>
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-12 text-slate-500">
+                  <p>No terms found for “{searchTerm}”.</p>
+                  <p className="mt-2 text-sm text-slate-600">Try a different keyword or choose another category.</p>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

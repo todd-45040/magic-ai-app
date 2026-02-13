@@ -1077,3 +1077,216 @@ export const MAGIC_DICTIONARY_TERMS = [
   },
 ] as any[];
 
+// --- Layer 2: Technique & Terms (High-level, non-exposure, static taxonomy) ---
+// This layer is intentionally NOT exhaustive. It is a structured reference taxonomy.
+// Guardrails:
+//  - No method mechanics
+//  - No construction instructions
+//  - No step-by-step handling
+//  - Prefer contextual, historical, and high-level framing
+
+export type MagicTechniqueCategory =
+  | 'Sleights'
+  | 'Forces'
+  | 'Gimmicks'
+  | 'Stage Terminology'
+  | 'Equipment'
+  | 'Method Classifications';
+
+export type MagicTechniqueTerm = {
+  term: string;
+  category: MagicTechniqueCategory;
+  definition: string;
+  historicalNote?: string;
+};
+
+export const MAGIC_TECHNIQUE_TERMS: MagicTechniqueTerm[] = [
+  // --- Sleights ---
+  {
+    term: 'Double Lift',
+    category: 'Sleights',
+    definition:
+      'A broad family of techniques where two cards are handled as one to create the impression of a single, ordinary action.',
+    historicalNote:
+      'Popularized through 20th-century card literature; the “double” became a foundational utility move in close-up card magic.',
+  },
+  {
+    term: 'Elmsley Count',
+    category: 'Sleights',
+    definition:
+      'A false count used to display a small packet while concealing one card’s true status (for example, a face or position).',
+    historicalNote:
+      'Associated with Alex Elmsley; it became central to packet effects and modern small-packet constructions.',
+  },
+  {
+    term: 'Classic Pass',
+    category: 'Sleights',
+    definition:
+      'A secret, in-the-hands control concept that retains an apparently fair condition while changing the apparent position of a selection.',
+    historicalNote:
+      'One of the most discussed “controls” in card magic history; valued for its directness when used under strong misdirection.',
+  },
+  {
+    term: 'Top Change',
+    category: 'Sleights',
+    definition:
+      'A utility switching concept where one item is exchanged for another under the cover of natural timing and attention control.',
+    historicalNote:
+      'A classic tool in sleight-of-hand; long used as a “quiet” switch when framed as a normal gesture or beat.',
+  },
+  {
+    term: 'False Transfer',
+    category: 'Sleights',
+    definition:
+      'A family of actions that appear to place an object into a hand while the object remains elsewhere (or is retained).',
+    historicalNote:
+      'Core to coin and ball work; the modern emphasis is on conviction, rhythm, and a believable “after” moment.',
+  },
+
+  // --- Forces ---
+  {
+    term: 'Classic Force',
+    category: 'Forces',
+    definition:
+      'A selection strategy where the participant feels free to choose, while the performer guides toward a specific outcome.',
+    historicalNote:
+      'Considered a benchmark of audience management and timing; often framed as an art rather than a single technique.',
+  },
+  {
+    term: 'Riffle Force',
+    category: 'Forces',
+    definition:
+      'A family of card-selection procedures using a riffle or dribble action to create the perception of an open choice.',
+    historicalNote:
+      'Popular in practical working repertoires; valued for speed and repeatability under performance conditions.',
+  },
+  {
+    term: 'Hindu Shuffle Force',
+    category: 'Forces',
+    definition:
+      'A selection procedure built around a shuffle action that maintains control of outcomes while appearing casual.',
+    historicalNote:
+      'Became common through global card handling traditions; frequently used in strolling and informal close-up settings.',
+  },
+  {
+    term: 'Psychological Force',
+    category: 'Forces',
+    definition:
+      'A choice-guiding approach that relies on context, language, and expectation rather than physical control.',
+    historicalNote:
+      'A modern category influenced by mentalism and behavioral framing; results vary, so performers often build “outs.”',
+  },
+
+  // --- Gimmicks ---
+  {
+    term: 'Thumb Tip',
+    category: 'Gimmicks',
+    definition:
+      'A classic utility prop used to enable transformations, vanishes, and productions in a way that looks impossibly clean when well managed.',
+    historicalNote:
+      'A staple of practical magic for decades; its longevity comes from versatility and the power of natural handling.',
+  },
+  {
+    term: 'Pull',
+    category: 'Gimmicks',
+    definition:
+      'A concealed assistant device designed to remove or reposition a small object at a controlled moment.',
+    historicalNote:
+      'Historically tied to stage and parlor production work; modern versions evolved alongside improved materials and clothing styles.',
+  },
+  {
+    term: 'Invisible Thread',
+    category: 'Gimmicks',
+    definition:
+      'A family of fine filaments used to create the illusion of movement or animation under careful lighting and audience conditions.',
+    historicalNote:
+      'Used for levitations and animations throughout modern magic; success depends heavily on venue conditions and audience sightlines.',
+  },
+  {
+    term: 'Flap Card',
+    category: 'Gimmicks',
+    definition:
+      'A gaffed card category that allows a quick, visual change or reveal under controlled handling and viewing conditions.',
+    historicalNote:
+      'A long-running close-up utility concept; variations exist across creators and eras, often optimized for clarity and contrast.',
+  },
+
+  // --- Stage Terminology ---
+  {
+    term: 'Sightlines',
+    category: 'Stage Terminology',
+    definition:
+      'The angles from which the audience can see the performer and stage area; crucial for staging, concealment, and clarity.',
+    historicalNote:
+      'A foundational theatre concept adopted into magic; “clean sightlines” became a standard planning phrase for directors and illusion designers.',
+  },
+  {
+    term: 'Black Art',
+    category: 'Stage Terminology',
+    definition:
+      'A broad staging principle that uses controlled contrast and environment design to keep attention on what the audience should perceive.',
+    historicalNote:
+      'Associated with stagecraft traditions and classic illusion staging; modern practice emphasizes ethics and venue suitability.',
+  },
+  {
+    term: 'Servante',
+    category: 'Stage Terminology',
+    definition:
+      'A concealed working area attached to or behind a table that supports efficient handling and clean displays.',
+    historicalNote:
+      'A standard tool in professional close-up and parlor work; valued because it improves flow and reduces “dead time.”',
+  },
+  {
+    term: 'Cue Stack',
+    category: 'Stage Terminology',
+    definition:
+      'A planned sequence of technical cues (music, lights, visuals) organized to support pacing, reveals, and transitions.',
+    historicalNote:
+      'Borrowed from theatre and live events; modern performers often manage cues through compact audio systems and show control apps.',
+  },
+
+  // --- Equipment ---
+  {
+    term: 'Close-Up Mat',
+    category: 'Equipment',
+    definition:
+      'A working surface that improves visibility, control, and sound management for small-object routines.',
+    historicalNote:
+      'Evolved from card-table coverings and performance surfaces; now common in professional close-up and instructional presentations.',
+  },
+  {
+    term: 'Parlor Table',
+    category: 'Equipment',
+    definition:
+      'A portable table designed for visibility, stability, and quick access in small-stage or stand-up performances.',
+    historicalNote:
+      'A practical response to real-world venues; modern designs emphasize portability and integrated storage.',
+  },
+  {
+    term: 'Bodypack Microphone',
+    category: 'Equipment',
+    definition:
+      'A wireless microphone system worn on the performer to ensure consistent audio clarity for spoken presentations.',
+    historicalNote:
+      'Adopted widely as venues grew noisier and expectations rose; strong audio is now a baseline professional standard.',
+  },
+
+  // --- Method Classifications ---
+  {
+    term: 'Equivoque',
+    category: 'Method Classifications',
+    definition:
+      'A decision-tree framing method where multiple apparent choices can be guided toward a desired outcome while maintaining participant comfort.',
+    historicalNote:
+      'A long-standing mentalism structure; modern framing emphasizes fairness, clarity, and minimizing “procedural” feel.',
+  },
+  {
+    term: 'One-Ahead Principle',
+    category: 'Method Classifications',
+    definition:
+      'A high-level structure where the performer stays one step ahead in information or planning, allowing progressive revelations.',
+    historicalNote:
+      'A classic backbone in mentalism; prized for reliability and adaptability when combined with strong presentation.',
+  },
+];
+
