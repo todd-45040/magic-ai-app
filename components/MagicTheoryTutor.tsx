@@ -1,9 +1,10 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { MAGIC_THEORY_CURRICULUM, MAGIC_THEORY_TUTOR_SYSTEM_INSTRUCTION } from '../constants';
-import type { ChatMessage, MagicTheoryModule, MagicTheoryLesson, MagicTheoryConcept, User } from '../types';
+import type { ChatMessage, MagicTheoryModule, MagicTheoryLesson, User } from '../types';
 import { generateResponse } from '../services/geminiService';
-import { TutorIcon, WandIcon, SendIcon, CheckIcon, BackIcon, BookIcon } from './icons';
+import { TutorIcon, WandIcon, SendIcon, CheckIcon, BookIcon } from './icons';
+import { useToast } from './ToastProvider';
 import FormattedText from './FormattedText';
 
 const TUTOR_PROGRESS_KEY = 'magic_theory_tutor_progress';
@@ -28,6 +29,47 @@ interface Progress {
     concept: number;
 }
 
+type LessonRef = { moduleIndex: number; lessonIndex: number };
+
+const estimateMinutes = (lesson: MagicTheoryLesson) => {
+    // Simple, predictable estimate for Tier 1.
+    const mins = 6 + lesson.concepts.length * 3;
+    return Math.max(8, Math.min(12, mins));
+};
+
+const getLessonSummary = (lesson: MagicTheoryLesson) => {
+    const first = lesson.concepts?.[0]?.description?.trim();
+    if (!first) return 'A focused lesson to strengthen your performance craft through practical magic theory.';
+    // Keep it short so the right panel reads like a “lesson card”.
+    return first.length > 180 ? `${first.slice(0, 177)}...` : first;
+};
+
+const getWhyThisMatters = (lessonName: string) => {
+    const name = lessonName.toLowerCase();
+    if (name.includes('clarity')) {
+        return 'Clarity of effect determines how strongly the audience remembers your magic — and how impossible it feels.';
+    }
+    if (name.includes('surprise')) {
+        return 'Surprise is the emotional spike that turns a good trick into a moment people talk about afterward.';
+    }
+    if (name.includes('pacing') || name.includes('timing')) {
+        return 'Timing is misdirection. The right pause makes the method invisible and the revelation unforgettable.';
+    }
+    if (name.includes('theatrical') || name.includes('arc')) {
+        return 'Structure creates meaning. A strong arc gives your magic momentum and a satisfying finish.';
+    }
+    return 'Theory turns “moves” into “moments.” It helps you shape reactions, not just methods.';
+};
+
+const getDirectorsInsight = (lessonName: string) => {
+    const name = lessonName.toLowerCase();
+    if (name.includes('clarity')) return 'Most magicians explain too much. Give the audience one simple sentence they can repeat.';
+    if (name.includes('surprise')) return 'Telegraph the obvious ending… then break it. The contrast creates the gasp.';
+    if (name.includes('pacing') || name.includes('timing')) return 'Most magicians rush the surprise moment. The pause creates the miracle.';
+    if (name.includes('theatrical') || name.includes('arc')) return 'If your opener wins attention, your closer must earn meaning.';
+    return 'When in doubt: simplify the effect, slow the reveal, and let the audience feel smart before you fool them.';
+};
+
 interface MagicTheoryTutorProps {
     user: User;
 }
@@ -35,11 +77,15 @@ interface MagicTheoryTutorProps {
 const MagicTheoryTutor: React.FC<MagicTheoryTutorProps> = ({ user }) => {
     const [progress, setProgress] = useState<Progress | null>(null);
     const [activeLesson, setActiveLesson] = useState<{ module: MagicTheoryModule; lesson: MagicTheoryLesson; } | null>(null);
+    const [selectedLessonRef, setSelectedLessonRef] = useState<LessonRef | null>(null);
+    const [resumeProgress, setResumeProgress] = useState<Progress | null>(null);
     const [completedLessons, setCompletedLessons] = useState<Set<string>>(new Set());
     const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
     const [userInput, setUserInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [lessonPhase, setLessonPhase] = useState<'intro' | 'feedback' | 'complete'>('intro');
+
+    const { showToast } = useToast();
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -49,12 +95,29 @@ const MagicTheoryTutor: React.FC<MagicTheoryTutorProps> = ({ user }) => {
             const savedProgress = localStorage.getItem(TUTOR_PROGRESS_KEY);
             if (savedProgress) {
                 const parsed = JSON.parse(savedProgress) as Progress;
+                setResumeProgress(parsed);
                 setCompletedLessons(getCompletedLessons(parsed));
             }
         } catch (error) {
             console.error("Failed to load tutor progress:", error);
         }
     }, []);
+
+    const selectedLesson = useMemo(() => {
+        if (!selectedLessonRef) return null;
+        const module = MAGIC_THEORY_CURRICULUM[selectedLessonRef.moduleIndex];
+        const lesson = module?.lessons?.[selectedLessonRef.lessonIndex];
+        if (!module || !lesson) return null;
+        return { module, lesson };
+    }, [selectedLessonRef]);
+
+    const moduleProgress = useMemo(() => {
+        return MAGIC_THEORY_CURRICULUM.map((module, mIndex) => {
+            const total = module.lessons.length;
+            const done = module.lessons.reduce((acc, _lesson, lIndex) => acc + (completedLessons.has(`${mIndex}-${lIndex}`) ? 1 : 0), 0);
+            return { total, done, pct: total ? Math.round((done / total) * 100) : 0 };
+        });
+    }, [completedLessons]);
 
     const getCompletedLessons = (p: Progress | null): Set<string> => {
         if (!p) return new Set();
@@ -73,7 +136,12 @@ const MagicTheoryTutor: React.FC<MagicTheoryTutorProps> = ({ user }) => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [chatMessages]);
 
-    const startConcept = async (moduleIndex: number, lessonIndex: number, conceptIndex: number) => {
+    const startConcept = async (
+        moduleIndex: number,
+        lessonIndex: number,
+        conceptIndex: number,
+        options?: { mode?: 'guided' | 'quick' | 'apply' }
+    ) => {
         const module = MAGIC_THEORY_CURRICULUM[moduleIndex];
         const lesson = module.lessons[lessonIndex];
         const concept = lesson.concepts[conceptIndex];
@@ -81,14 +149,21 @@ const MagicTheoryTutor: React.FC<MagicTheoryTutorProps> = ({ user }) => {
         if (!module || !lesson || !concept) return;
 
         setActiveLesson({ module, lesson });
+        setSelectedLessonRef({ moduleIndex, lessonIndex });
         setProgress({ module: moduleIndex, lesson: lessonIndex, concept: conceptIndex });
         setLessonPhase('intro');
         setIsLoading(true);
         setChatMessages([]);
 
         const systemInstruction = MAGIC_THEORY_TUTOR_SYSTEM_INSTRUCTION(concept.name, concept.description);
-        // FIX: Pass the user object to generateResponse as the 3rd argument.
-        const response = await generateResponse("Let's begin with this concept.", systemInstruction, user);
+
+        const opener =
+            options?.mode === 'quick'
+                ? "Give me a quick overview, 3 practical takeaways, and 1 short drill question to apply this concept."
+                : "Let's begin with this concept.";
+
+        // Pass the user object to generateResponse as the 3rd argument.
+        const response = await generateResponse(opener, systemInstruction, user);
 
         setChatMessages([createChatMessage('model', response)]);
         setIsLoading(false);
@@ -137,6 +212,7 @@ const MagicTheoryTutor: React.FC<MagicTheoryTutorProps> = ({ user }) => {
             if (nextProgress) {
                 try {
                     localStorage.setItem(TUTOR_PROGRESS_KEY, JSON.stringify(nextProgress));
+                    setResumeProgress(nextProgress);
                 } catch (error) {
                      console.error("Failed to save tutor progress:", error);
                 }
@@ -168,18 +244,49 @@ const MagicTheoryTutor: React.FC<MagicTheoryTutorProps> = ({ user }) => {
             {/* Curriculum Menu */}
             <nav className="w-full md:w-1/3 lg:w-1/4 p-4 border-b md:border-b-0 md:border-r border-slate-700 overflow-y-auto">
                 <h2 className="text-xl font-bold text-slate-200 font-cinzel mb-4">Curriculum</h2>
+                {resumeProgress && (
+                    <button
+                        onClick={() => {
+                            const m = resumeProgress.module;
+                            const l = resumeProgress.lesson;
+                            setSelectedLessonRef({ moduleIndex: m, lessonIndex: l });
+                            showToast('Ready to resume — choose a mode to continue.', {
+                                label: 'Start',
+                                onClick: () => startConcept(m, l, resumeProgress.concept ?? 0, { mode: 'guided' })
+                            });
+                        }}
+                        className="w-full mb-4 px-3 py-2 rounded-lg border border-purple-500/40 bg-slate-900/40 hover:bg-slate-900/60 text-left"
+                    >
+                        <div className="flex items-center justify-between gap-3">
+                            <div>
+                                <div className="text-xs uppercase tracking-wider text-slate-400">Resume</div>
+                                <div className="text-sm font-semibold text-white">Resume Last Lesson</div>
+                            </div>
+                            <div className="text-xs text-purple-300">→</div>
+                        </div>
+                    </button>
+                )}
                 <div className="space-y-4">
                     {MAGIC_THEORY_CURRICULUM.map((module, mIndex) => (
                         <div key={module.name}>
                             <h3 className="text-sm font-semibold uppercase tracking-wider text-purple-400 mb-2">{module.name}</h3>
+                            <div className="mb-2">
+                                <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+                                    <span>{moduleProgress[mIndex]?.done ?? 0}/{moduleProgress[mIndex]?.total ?? module.lessons.length} lessons</span>
+                                    <span>{moduleProgress[mIndex]?.pct ?? 0}%</span>
+                                </div>
+                                <div className="h-2 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
+                                    <div className="h-full bg-purple-600" style={{ width: `${moduleProgress[mIndex]?.pct ?? 0}%` }} />
+                                </div>
+                            </div>
                             <ul className="space-y-1">
                                 {module.lessons.map((lesson, lIndex) => {
                                     const isCompleted = completedLessons.has(`${mIndex}-${lIndex}`);
-                                    const isActive = progress?.module === mIndex && progress?.lesson === lIndex;
+                                    const isActive = (progress?.module === mIndex && progress?.lesson === lIndex) || (selectedLessonRef?.moduleIndex === mIndex && selectedLessonRef?.lessonIndex === lIndex);
                                     return (
                                         <li key={lesson.name}>
                                             <button 
-                                                onClick={() => startConcept(mIndex, lIndex, 0)}
+                                                onClick={() => setSelectedLessonRef({ moduleIndex: mIndex, lessonIndex: lIndex })}
                                                 className={`w-full text-left px-3 py-2 rounded-md flex items-center gap-3 transition-colors ${
                                                     isActive ? 'bg-purple-800 text-white' : 'hover:bg-slate-700'
                                                 }`}
@@ -199,10 +306,65 @@ const MagicTheoryTutor: React.FC<MagicTheoryTutorProps> = ({ user }) => {
             {/* Main Content */}
             <main className="flex-1 flex flex-col overflow-hidden">
                 {!activeLesson ? (
-                    <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
-                        <TutorIcon className="w-24 h-24 text-slate-600 mb-4" />
-                        <h2 className="text-2xl font-bold text-slate-300 font-cinzel">Magic Theory Tutor</h2>
-                        <p className="text-slate-400 max-w-md mt-2">Select a lesson from the curriculum to begin your structured journey into the art and science of magic.</p>
+                    <div className="flex-1 overflow-y-auto p-6 md:p-8">
+                        {!selectedLesson ? (
+                            <div className="min-h-[50vh] flex flex-col items-center justify-center text-center">
+                                <TutorIcon className="w-24 h-24 text-slate-600 mb-4" />
+                                <h2 className="text-2xl font-bold text-slate-300 font-cinzel">Magic Theory Tutor</h2>
+                                <p className="text-slate-400 max-w-md mt-2">Select a lesson from the curriculum to begin your structured journey into the art and science of magic.</p>
+                            </div>
+                        ) : (
+                            <div className="max-w-3xl mx-auto">
+                                <div className="flex items-start justify-between gap-4 mb-6">
+                                    <div>
+                                        <div className="text-xs uppercase tracking-wider text-slate-400">{selectedLesson.module.name}</div>
+                                        <h2 className="text-3xl font-bold text-white font-cinzel">{selectedLesson.lesson.name}</h2>
+                                        <p className="text-slate-300 mt-2">{getLessonSummary(selectedLesson.lesson)}</p>
+                                        <div className="mt-3 inline-flex items-center gap-2 text-xs text-slate-400">
+                                            <BookIcon className="w-4 h-4" />
+                                            <span>Estimated time: <span className="text-slate-200 font-semibold">{estimateMinutes(selectedLesson.lesson)} min</span></span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Actions */}
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+                                    <button
+                                        onClick={() => startConcept(selectedLessonRef!.moduleIndex, selectedLessonRef!.lessonIndex, 0, { mode: 'guided' })}
+                                        className="px-4 py-3 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-semibold flex items-center justify-center gap-2"
+                                    >
+                                        <WandIcon className="w-5 h-5" />
+                                        Begin Guided Session
+                                    </button>
+                                    <button
+                                        onClick={() => startConcept(selectedLessonRef!.moduleIndex, selectedLessonRef!.lessonIndex, 0, { mode: 'quick' })}
+                                        className="px-4 py-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-semibold border border-slate-700"
+                                    >
+                                        Quick Insight Mode
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            showToast('Apply to My Routine is coming in Tier 2 (will connect to Saved Ideas / Show Planner).');
+                                        }}
+                                        className="px-4 py-3 rounded-lg bg-slate-900/40 hover:bg-slate-900/60 text-white font-semibold border border-slate-700"
+                                    >
+                                        Apply to My Routine
+                                    </button>
+                                </div>
+
+                                {/* Why this matters */}
+                                <div className="mb-4 p-4 rounded-xl border border-yellow-600/40 bg-yellow-900/10">
+                                    <div className="text-xs uppercase tracking-wider text-yellow-300 mb-1">Why This Matters</div>
+                                    <p className="text-slate-200">{getWhyThisMatters(selectedLesson.lesson.name)}</p>
+                                </div>
+
+                                {/* Director Insight */}
+                                <div className="p-4 rounded-xl border border-slate-700 bg-slate-900/30">
+                                    <div className="text-xs uppercase tracking-wider text-purple-300 mb-1">🎩 Director Insight</div>
+                                    <p className="text-slate-200">{getDirectorsInsight(selectedLesson.lesson.name)}</p>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 ) : (
                     <>
@@ -210,6 +372,10 @@ const MagicTheoryTutor: React.FC<MagicTheoryTutorProps> = ({ user }) => {
                             <h3 className="text-xs uppercase text-slate-400">{activeLesson.module.name}</h3>
                             <h2 className="text-lg font-bold text-white">{activeLesson.lesson.name}</h2>
                             {progress && <p className="text-sm text-purple-300">{activeLesson.lesson.concepts[progress.concept].name}</p>}
+                            <div className="mt-2 p-3 rounded-lg bg-slate-900/40 border border-slate-700">
+                                <div className="text-xs uppercase tracking-wider text-purple-300">🎩 Director Insight</div>
+                                <p className="text-sm text-slate-200">{getDirectorsInsight(activeLesson.lesson.name)}</p>
+                            </div>
                         </header>
                         <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
                              {chatMessages.map((msg) => (
