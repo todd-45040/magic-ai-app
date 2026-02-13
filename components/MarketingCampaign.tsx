@@ -93,7 +93,8 @@ const MarketingCampaign: React.FC<MarketingCampaignProps> = ({ user, onIdeaSaved
     const [result, setResult] = useState<string | null>(null);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
 
-    const [actionNotice, setActionNotice] = useState<string | null>(null);
+    type ActionNotice = { message: string; actionLabel?: string; action?: () => void };
+    const [actionNotice, setActionNotice] = useState<ActionNotice | null>(null);
     const [isSendingToPlanner, setIsSendingToPlanner] = useState(false);
     const [isSavingBlueprint, setIsSavingBlueprint] = useState(false);
     const [blueprintMenuOpen, setBlueprintMenuOpen] = useState(false);
@@ -532,7 +533,7 @@ const generateButtonLabel = useMemo(() => {
             const transformed = localPersonaTransform(result, personaKey);
             setPersonaResults(prev => ({ ...prev, [personaKey]: transformed }));
             setPersonaView(personaKey);
-            setActionNotice(`Persona version generated locally for “${personaKey}”.`);
+            setActionNotice({ message: `Persona version generated locally for “${personaKey}”.` });
             window.setTimeout(() => setActionNotice(null), 4500);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'An unknown error occurred.');
@@ -568,7 +569,7 @@ const handleSave = () => {
     const handleBlueprintSave = (label: 'Save as Template' | 'Save to Campaign Library' | 'Reuse Later' | 'Duplicate Campaign') => {
         if (!showTitle.trim()) {
             setShowTitleTouched(true);
-            setActionNotice('Add a show title before saving a blueprint.');
+            setActionNotice({ message: 'Add a show title before saving a blueprint.' });
             window.setTimeout(() => setActionNotice(null), 2200);
             return;
         }
@@ -579,7 +580,7 @@ const handleSave = () => {
             const title = `Marketing Blueprint — ${label} — ${showTitle}`;
             saveIdea('text', content, title);
             onIdeaSaved();
-            setActionNotice('Blueprint saved to Saved Ideas.');
+            setActionNotice({ message: 'Blueprint saved to Saved Ideas.' });
         } finally {
             setIsSavingBlueprint(false);
             window.setTimeout(() => setActionNotice(null), 2200);
@@ -590,7 +591,7 @@ const handleSave = () => {
         if (!activeResult) return;
         if (!showTitle.trim()) {
             setShowTitleTouched(true);
-            setActionNotice('Add a show title so we can create a show plan.');
+            setActionNotice({ message: 'Add a show title so we can create a show plan.' });
             window.setTimeout(() => setActionNotice(null), 2200);
             return;
         }
@@ -618,8 +619,8 @@ const handleSave = () => {
 
             await addTasksToShow(created.id, tasks as any);
 
-            setActionNotice('Added marketing tasks to Show Planner.');
-            onNavigateToShowPlanner?.(created.id);
+            setActionNotice({ message: `Saved to Show Planner: “${showTitle.trim()}”`, actionLabel: 'Open Show Planner', action: () => onNavigateToShowPlanner?.(created.id) });
+            // Stay on this page; user can open Show Planner via the notice button.
         } catch (e) {
             const msg = e instanceof Error ? e.message : 'Unable to send to Show Planner.';
             setActionNotice(msg);
@@ -640,7 +641,7 @@ const handleSave = () => {
         const content = buildBlueprintContent(label);
         saveIdea('text', content, `${label} — ${showTitle || 'Untitled'}`);
         onIdeaSaved();
-        setActionNotice(`${label} saved to Saved Ideas.`);
+        setActionNotice({ message: `${label} saved to Saved Ideas.` });
         window.setTimeout(() => setActionNotice(null), 2200);
     };
 
@@ -663,17 +664,20 @@ const handleCreateClientProposal = async () => {
         });
 
         if (savedToIdeasFallback) {
-            setActionNotice('Client Proposal created (saved to Saved Ideas because proposals table is not configured yet).');
+            setActionNotice({
+                message: 'Client Proposal created (saved to Saved Ideas because proposals table is not configured yet).',
+                            });
         } else {
-            setActionNotice('Client Proposal created ✓');
+            setActionNotice({
+                message: 'Client Proposal created ✓',
+                actionLabel: 'Open Proposal',
+                action: () => onNavigate?.('client-proposals', proposal.id),
+            });
         }
         window.setTimeout(() => setActionNotice(null), 2600);
-
-        // Navigate to the proposals hub if available
-        onNavigate?.('client-proposals', proposal.id);
     } catch (err: any) {
         const msg = String(err?.message ?? 'Failed to create proposal');
-        setActionNotice(`Client Proposal: ${msg}`);
+        setActionNotice({ message: `Client Proposal: ${msg}` });
     }
 };
 
@@ -695,16 +699,18 @@ const handleCreateBookingPitch = async () => {
         });
 
         if (savedToIdeasFallback) {
-            setActionNotice('Booking Pitch created (saved to Saved Ideas because pitches table is not configured yet).');
+            setActionNotice({ message: 'Booking Pitch created (saved to Saved Ideas because pitches table is not configured yet).' });
         } else {
-            setActionNotice('Booking Pitch created ✓');
+            setActionNotice({
+                message: 'Booking Pitch created ✓',
+                actionLabel: 'Open Pitch',
+                action: () => onNavigate?.('booking-pitches', pitch.id),
+            });
         }
         window.setTimeout(() => setActionNotice(null), 2600);
-
-        onNavigate?.('booking-pitches', pitch.id);
     } catch (err: any) {
         const msg = String(err?.message ?? 'Failed to create pitch');
-        setActionNotice(`Booking Pitch: ${msg}`);
+        setActionNotice({ message: `Booking Pitch: ${msg}` });
     }
 };
 
@@ -978,7 +984,18 @@ const handleCreateBookingPitch = async () => {
                         <div className="mt-auto p-2 bg-slate-900/60 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-t border-slate-800">
                             {actionNotice && (
                                 <div className="w-full sm:max-w-md text-xs text-slate-200 bg-slate-900/40 border border-slate-800 rounded-md px-3 py-2">
-                                    {actionNotice}
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div className="pr-2">{actionNotice.message}</div>
+                                        {actionNotice.actionLabel && actionNotice.action && (
+                                            <button
+                                                type="button"
+                                                className="shrink-0 px-2 py-1 rounded-md bg-purple-600/30 hover:bg-purple-600/40 border border-purple-500/40 text-purple-100"
+                                                onClick={actionNotice.action}
+                                            >
+                                                {actionNotice.actionLabel}
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             )}
                             <div className="flex flex-wrap items-center gap-2">
