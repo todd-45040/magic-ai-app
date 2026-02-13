@@ -743,6 +743,37 @@ const sendToPlanner = (idea: SavedIdea) => {
                     ))}
                 </div>
 
+                {/* Active filter indicators */}
+                {(() => {
+                    const items: string[] = [];
+                    if (smartTab !== 'all') {
+                        const tabLabel: Record<string, string> = {
+                            recent: 'Recent',
+                            starred: 'Starred',
+                            used: 'Used in Shows',
+                            unused: 'Unused',
+                            ai: 'AI Generated',
+                        };
+                        items.push(`Tab=${tabLabel[smartTab] ?? smartTab}`);
+                    }
+                    if (typeFilter !== 'all') items.push(`Type=${typeFilter}`);
+                    if (tagFilter) items.push(`Tag=${tagFilter}`);
+                    if (searchQuery.trim()) items.push('Search active');
+                    if (!items.length) return null;
+
+                    return (
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-300">
+                            <span className="text-slate-400">Filters active:</span>
+                            {items.map((s) => (
+                                <span key={s} className="px-2 py-0.5 rounded-full bg-slate-900/40 border border-slate-700">
+                                    {s}
+                                </span>
+                            ))}
+                        </div>
+                    );
+                })()}
+
+
             </div>
 
             {/* Empty / No Results */}
