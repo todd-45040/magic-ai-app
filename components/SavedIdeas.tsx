@@ -27,7 +27,8 @@ export default function SavedIdeas() {
 
   return (
     <div className="w-full p-4">
-      {/* Header */}
+
+      {/* HEADER */}
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-xl font-semibold">My Saved Ideas</h1>
 
@@ -49,7 +50,18 @@ export default function SavedIdeas() {
         </div>
       </div>
 
-      {/* Grid */}
+      {/* EMPTY STATE */}
+      {mockIdeas.length === 0 && (
+        <div className="text-center py-24 text-gray-500">
+          <div className="text-3xl mb-2">✨</div>
+          <div className="text-lg font-medium">No saved ideas yet</div>
+          <div className="text-sm">
+            Generate your first idea to begin building your library.
+          </div>
+        </div>
+      )}
+
+      {/* GRID */}
       <div
         className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 ${
           compact ? "gap-3" : "gap-6"
@@ -61,11 +73,12 @@ export default function SavedIdeas() {
           return (
             <div
               key={idea.id}
-              className={`border rounded-xl shadow-sm bg-white transition hover:shadow-md ${
-                compact ? "p-3" : "p-5"
-              }`}
+              className={`group border rounded-xl shadow-sm bg-gradient-to-b from-white to-slate-50
+              transition transform hover:scale-[1.01] hover:-translate-y-[2px] hover:shadow-md
+              ${compact ? "p-3" : "p-5"}`}
             >
-              {/* Header Row */}
+
+              {/* TITLE ROW */}
               <div className="flex justify-between items-start mb-1">
                 <div className="font-semibold text-sm flex items-center gap-2">
                   <span>📄</span>
@@ -77,28 +90,28 @@ export default function SavedIdeas() {
                 </span>
               </div>
 
-              {/* Tags */}
+              {/* TAGS */}
               <div className="flex flex-wrap gap-1 mb-1">
                 {idea.tags.map(tag => (
                   <span
                     key={tag}
-                    className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded"
+                    className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-[2px] rounded"
                   >
                     {tag}
                   </span>
                 ))}
               </div>
 
-              {/* Description */}
+              {/* DESCRIPTION */}
               <p
-                className={`text-sm text-gray-600 transition-all ${
+                className={`text-sm text-gray-600 ${
                   compact && !isExpanded ? "line-clamp-3" : ""
                 }`}
               >
                 {idea.description}
               </p>
 
-              {/* Expand */}
+              {/* EXPAND */}
               {compact && (
                 <button
                   onClick={() => toggleExpand(idea.id)}
@@ -108,12 +121,13 @@ export default function SavedIdeas() {
                 </button>
               )}
 
-              {/* Actions */}
-              <div className="flex gap-3 mt-2 text-xs text-gray-500 opacity-70 hover:opacity-100 transition">
+              {/* ACTIONS */}
+              <div className="flex gap-3 mt-2 text-xs text-gray-500 opacity-0 group-hover:opacity-100 transition">
                 <button>Open</button>
                 <button>Duplicate</button>
                 <button>Send</button>
               </div>
+
             </div>
           );
         })}
