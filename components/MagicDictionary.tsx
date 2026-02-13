@@ -464,8 +464,7 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark }) => {
       '',
       `Definition: ${item.definition}`,
       item.whyItMatters ? `Why it matters: ${item.whyItMatters}` : '',
-      item.beginnerMistakes?.length ? `Common mistakes: ${item.beginnerMistakes.map((m) => `- ${m}`).join('
-')}` : '',
+      item.beginnerMistakes?.length ? `Common mistakes: ${item.beginnerMistakes.map((m) => `- ${m}`).join('\n')}` : '',
       item.relatedTerms?.length ? `Related terms: ${item.relatedTerms.join(', ')}` : '',
       '',
       `Give me:`,
@@ -475,8 +474,7 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark }) => {
       `4) One “upgrade” tip appropriate for my level`,
     ]
       .filter(Boolean)
-      .join('
-');
+      .join('\n');
 
     onAiSpark({ type: 'custom-prompt', payload: { prompt } });
   };
