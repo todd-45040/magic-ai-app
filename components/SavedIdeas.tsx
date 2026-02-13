@@ -871,7 +871,7 @@ const sendToPlanner = (idea: SavedIdea) => {
 
 <button
                         onClick={resetView}
-                        className="px-3 py-2 text-xs font-semibold bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-md text-slate-200 transition"
+                        className="px-3 py-2 text-xs font-semibold bg-transparent border border-slate-600 hover:border-slate-400 border border-slate-600 rounded-md text-slate-200 transition"
                         title="Reset filters and view"
                     >
                         Reset
