@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { Show, Task, SavedIdea, MagicianView } from '../types';
 import { SearchIcon, TagIcon, ChecklistIcon, BookmarkIcon, StageCurtainsIcon } from './icons';
 
@@ -6,6 +6,11 @@ interface GlobalSearchProps {
     shows: Show[];
     ideas: SavedIdea[];
     onNavigate: (view: MagicianView, id: string, secondaryId?: string) => void;
+
+    /** Optional power-actions. If not provided, actions fall back to navigation-only behavior. */
+    onEditHit?: (hit: { type: 'show' | 'task' | 'idea'; id: string; parentId?: string }) => void;
+    onDuplicateHit?: (hit: { type: 'show' | 'task' | 'idea'; id: string; parentId?: string }) => void;
+    onAddToPlanner?: (hit: { type: 'show' | 'task' | 'idea'; id: string; parentId?: string }) => void;
 }
 
 type SearchScope = 'all' | 'shows' | 'tasks' | 'ideas' | 'clients' | 'files';
@@ -25,10 +30,16 @@ type SearchHit = {
     badges: BadgeType[];
 };
 
-const GlobalSearch: React.FC<GlobalSearchProps> = ({ shows, ideas, onNavigate }) => {
+const GlobalSearch: React.FC<GlobalSearchProps> = ({ shows, ideas, onNavigate, onEditHit, onDuplicateHit, onAddToPlanner }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedTag, setSelectedTag] = useState<string | null>(null);
     const [activeScope, setActiveScope] = useState<SearchScope>('all');
+    // Tier 3: power features
+    const [activeIndex, setActiveIndex] = useState<number>(-1);
+    const [notice, setNotice] = useState<string | null>(null);
+    const [recentSearches, setRecentSearches] = useState<string[]>([]);
+    const inputRef = useRef<HTMLInputElement | null>(null);
+
 
     const scopeMeta: Record<SearchScope, { label: string; disabled?: boolean }> = {
         all: { label: 'All' },
@@ -40,6 +51,28 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ shows, ideas, onNavigate })
     };
 
     const scopeOrder: SearchScope[] = ['all', 'shows', 'clients', 'ideas', 'tasks', 'files'];
+    useEffect(() => {
+        try {
+            const raw = localStorage.getItem('mai_recent_searches_v1');
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed)) setRecentSearches(parsed.filter(Boolean).slice(0, 8));
+            }
+        } catch {}
+    }, []);
+
+    useEffect(() => {
+        try {
+            localStorage.setItem('mai_recent_searches_v1', JSON.stringify(recentSearches.slice(0, 8)));
+        } catch {}
+    }, [recentSearches]);
+
+    useEffect(() => {
+        if (!notice) return;
+        const tmr = window.setTimeout(() => setNotice(null), 2800);
+        return () => window.clearTimeout(tmr);
+    }, [notice]);
+
 
     const allTags = useMemo(() => {
         const tags = new Set<string>();
@@ -277,6 +310,39 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ shows, ideas, onNavigate })
         };
     }, [queryLower, shows, ideas, activeScope]);
 
+    const navigableHits = useMemo(() => {
+        if (!searchResults) return [] as SearchHit[];
+        const seen = new Set<string>();
+        const order = [...searchResults.topMatches, ...searchResults.shows, ...searchResults.tasks, ...searchResults.ideas];
+        const out: SearchHit[] = [];
+        for (const h of order) {
+            if (seen.has(h.key)) continue;
+            seen.add(h.key);
+            out.push(h);
+        }
+        return out;
+    }, [searchResults]);
+
+    const hitIndexMap = useMemo(() => {
+        const m = new Map<string, number>();
+        navigableHits.forEach((h, i) => m.set(h.key, i));
+        return m;
+    }, [navigableHits]);
+
+    useEffect(() => {
+        // Reset keyboard selection when query/scope changes
+        setActiveIndex(navigableHits.length ? 0 : -1);
+    }, [queryLower, activeScope, selectedTag, navigableHits.length]);
+
+    const pushRecent = (q: string) => {
+        const cleaned = q.trim();
+        if (!cleaned) return;
+        setRecentSearches(prev => {
+            const next = [cleaned, ...prev.filter(x => x.toLowerCase() !== cleaned.toLowerCase())];
+            return next.slice(0, 6);
+        });
+    };
+
     const handleTagClick = (tag: string) => {
         setSearchTerm('');
         setSelectedTag(prev => (prev === tag ? null : tag));
@@ -285,7 +351,46 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ shows, ideas, onNavigate })
     const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setSelectedTag(null);
         setSearchTerm(e.target.value);
+        setActiveIndex(-1);
     };
+
+    const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Escape') {
+            setSearchTerm('');
+            setSelectedTag(null);
+            setActiveIndex(-1);
+            inputRef.current?.blur();
+            setNotice(null);
+            return;
+        }
+
+        // record recent searches when user explicitly submits with Enter, even if no results yet
+        if (e.key === 'Enter' && (selectedTag || searchTerm.trim())) {
+            pushRecent(selectedTag || searchTerm);
+        }
+
+        if (!queryLower || !navigableHits.length) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setActiveIndex(prev => {
+                const next = prev < 0 ? 0 : Math.min(prev + 1, navigableHits.length - 1);
+                return next;
+            });
+            return;
+        }
+        if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setActiveIndex(prev => Math.max((prev < 0 ? 0 : prev) - 1, 0));
+            return;
+        }
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const hit = navigableHits[Math.max(activeIndex, 0)];
+            if (hit?.onClick) hit.onClick();
+        }
+    };
+
 
     const highlightQuery = useMemo(() => (selectedTag ? '' : searchTerm.trim()), [selectedTag, searchTerm]);
 
@@ -327,43 +432,157 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ shows, ideas, onNavigate })
         }
     };
 
-    const ResultRow: React.FC<{ hit: SearchHit }> = ({ hit }) => (
-        <button
-            onClick={hit.onClick}
-            disabled={!hit.onClick}
-            className={[
-                'w-full text-left p-3 bg-slate-800 border border-slate-700 rounded-lg transition-colors',
-                hit.onClick ? 'hover:bg-purple-900/50' : 'opacity-60 cursor-not-allowed',
-            ].join(' ')}
-        >
-            <div className="flex items-start gap-3">
-                <div className="mt-1">
-                    {(() => { const Icon = hit.icon; return <Icon className="w-5 h-5 text-purple-400" />; })()}
-                </div>
-                <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-2">
-                        <p className="font-semibold text-slate-200 truncate">{renderHighlighted(hit.title)}</p>
-                        {hit.badges?.length ? (
-                            <div className="flex flex-wrap gap-1 justify-end">
-                                {hit.badges.slice(0, 2).map(b => (
-                                    <span
-                                        key={b}
-                                        className={[
-                                            'px-2 py-0.5 text-[10px] font-bold rounded-full border',
-                                            badgeClass(b),
-                                        ].join(' ')}
-                                    >
-                                        {b}
-                                    </span>
-                                ))}
+    const actionBtnClass =
+        'px-2 py-1 text-[11px] font-semibold rounded border border-slate-700 bg-slate-900/40 text-slate-200 hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+
+    const ResultRow: React.FC<{ hit: SearchHit; isActive: boolean; onActivate: () => void }> = ({ hit, isActive, onActivate }) => {
+        const doOpen = () => {
+            if (!hit.onClick) return;
+            pushRecent(selectedTag || searchTerm);
+            hit.onClick();
+        };
+
+        const doEdit = () => {
+            if (hit.type === 'show') {
+                const id = hit.key.split(':')[1];
+                if (onEditHit) return onEditHit({ type: 'show', id });
+                setNotice('Edit opens the item for now.');
+                return doOpen();
+            }
+            if (hit.type === 'task') {
+                const parts = hit.key.split(':'); // task:showId:taskId
+                const parentId = parts[1];
+                const id = parts[2];
+                if (onEditHit) return onEditHit({ type: 'task', id, parentId });
+                setNotice('Edit opens the item for now.');
+                return doOpen();
+            }
+            if (hit.type === 'idea') {
+                const id = hit.key.split(':')[1];
+                if (onEditHit) return onEditHit({ type: 'idea', id });
+                setNotice('Edit opens the item for now.');
+                return doOpen();
+            }
+            setNotice('Edit is coming soon.');
+        };
+
+        const doDuplicate = () => {
+            if (hit.type === 'show') {
+                const id = hit.key.split(':')[1];
+                if (onDuplicateHit) return onDuplicateHit({ type: 'show', id });
+            } else if (hit.type === 'task') {
+                const parts = hit.key.split(':');
+                const parentId = parts[1];
+                const id = parts[2];
+                if (onDuplicateHit) return onDuplicateHit({ type: 'task', id, parentId });
+            } else if (hit.type === 'idea') {
+                const id = hit.key.split(':')[1];
+                if (onDuplicateHit) return onDuplicateHit({ type: 'idea', id });
+            }
+            setNotice('Duplicate is coming soon (needs data write access).');
+        };
+
+        const doAddToPlanner = () => {
+            if (hit.type === 'show') {
+                const id = hit.key.split(':')[1];
+                if (onAddToPlanner) return onAddToPlanner({ type: 'show', id });
+                setNotice(`Opened in Show Planner: "${hit.title}"`);
+                return doOpen();
+            }
+            if (hit.type === 'task') {
+                const parts = hit.key.split(':');
+                const parentId = parts[1];
+                const id = parts[2];
+                if (onAddToPlanner) return onAddToPlanner({ type: 'task', id, parentId });
+                setNotice(`Opened in Show Planner: "${hit.title}"`);
+                return doOpen();
+            }
+            if (hit.type === 'idea') {
+                const id = hit.key.split(':')[1];
+                if (onAddToPlanner) return onAddToPlanner({ type: 'idea', id });
+                setNotice('Add to Planner for Ideas is coming soon.');
+                return;
+            }
+            setNotice('Add to Planner is coming soon.');
+        };
+
+        return (
+            <div
+                className={[
+                    'w-full p-3 bg-slate-800 border border-slate-700 rounded-lg transition-colors',
+                    hit.onClick ? 'hover:bg-purple-900/45' : 'opacity-60',
+                    isActive ? 'ring-2 ring-purple-500/40' : '',
+                ].join(' ')}
+                onMouseEnter={onActivate}
+            >
+                <div className="flex items-start gap-3">
+                    <button
+                        onClick={doOpen}
+                        disabled={!hit.onClick}
+                        className={['flex items-start gap-3 text-left flex-1 min-w-0', hit.onClick ? '' : 'cursor-not-allowed'].join(' ')}
+                    >
+                        <div className="mt-1">
+                            {(() => {
+                                const Icon = hit.icon;
+                                return <Icon className="w-5 h-5 text-purple-400" />;
+                            })()}
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-2">
+                                <p className="font-semibold text-slate-200 truncate">{renderHighlighted(hit.title)}</p>
+                                {hit.badges?.length ? (
+                                    <div className="flex flex-wrap gap-1 justify-end">
+                                        {hit.badges.slice(0, 2).map(b => (
+                                            <span key={b} className={['px-2 py-0.5 text-[10px] font-bold rounded-full border', badgeClass(b)].join(' ')}>
+                                                {b}
+                                            </span>
+                                        ))}
+                                    </div>
+                                ) : null}
                             </div>
-                        ) : null}
+
+                            {hit.subtitle && <p className="text-xs text-slate-400 mt-0.5">{renderHighlighted(hit.subtitle)}</p>}
+
+                            {hit.tags && hit.tags.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 mt-2">
+                                    {hit.tags.map(tag => {
+                                        const isMatch = !selectedTag && highlightQuery && tag.toLowerCase().includes(highlightQuery.toLowerCase());
+                                        return (
+                                            <span
+                                                key={tag}
+                                                className={[
+                                                    'px-1.5 py-0.5 text-xs font-semibold rounded border',
+                                                    isMatch ? 'bg-purple-500/25 text-purple-200 border-purple-500/40' : 'bg-purple-500/15 text-purple-300 border-purple-500/25',
+                                                ].join(' ')}
+                                            >
+                                                {tag}
+                                            </span>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    </button>
+
+                    <div className="flex flex-col gap-1 items-end shrink-0">
+                        <button type="button" onClick={doOpen} disabled={!hit.onClick} className={actionBtnClass}>
+                            Open
+                        </button>
+                        <button type="button" onClick={doEdit} className={actionBtnClass}>
+                            Edit
+                        </button>
+                        <button type="button" onClick={doDuplicate} className={actionBtnClass}>
+                            Duplicate
+                        </button>
+                        <button type="button" onClick={doAddToPlanner} className={actionBtnClass}>
+                            Add to Planner
+                        </button>
                     </div>
-                    {hit.subtitle && <p className="text-xs text-slate-400 mt-0.5">{renderHighlighted(hit.subtitle)}</p>}
-                    {hit.tags && hit.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 mt-2">
-                            {hit.tags.map(tag => {
-                                const isMatch = !selectedTag && highlightQuery && tag.toLowerCase().includes(highlightQuery.toLowerCase());
+                </div>
+            </div>
+        );
+    };
                                 return (
                                     <span
                                         key={tag}
@@ -432,14 +651,53 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ shows, ideas, onNavigate })
                 <input
                     type="text"
                     value={searchTerm}
+                    ref={inputRef}
                     onChange={handleSearchChange}
+                    onKeyDown={handleSearchKeyDown}
                     placeholder='Search shows, tasks, or ideas... Try: "birthday", "corporate", "closer trick"'
                     className="flex-1 w-full bg-transparent px-4 py-3 text-white placeholder-slate-400 focus:outline-none"
                 />
             </div>
-            <p className="text-xs text-slate-500 mb-6">{statusText}</p>
+            <p className="text-xs text-slate-500 mb-2">{statusText}</p>
+            {notice ? (
+                <div className="mb-4 text-xs text-slate-200 bg-purple-900/30 border border-purple-700/40 rounded-lg px-3 py-2">
+                    {notice}
+                </div>
+            ) : (
+                <div className="mb-4" />
+            )}
 
             {/* Results */}
+            {!searchResults && recentSearches.length > 0 && (
+                <div className="mb-6">
+                    <h3 className="text-lg font-bold text-slate-300 mb-3">Recent Searches</h3>
+                    <div className="flex flex-wrap gap-2">
+                        {recentSearches.map(rs => (
+                            <button
+                                key={rs}
+                                type="button"
+                                onClick={() => {
+                                    setSelectedTag(null);
+                                    setSearchTerm(rs);
+                                    inputRef.current?.focus();
+                                }}
+                                className="px-3 py-1 text-sm font-semibold rounded-full bg-slate-700 hover:bg-slate-600 text-slate-200 transition-colors"
+                                title="Run this search"
+                            >
+                                {rs}
+                            </button>
+                        ))}
+                        <button
+                            type="button"
+                            onClick={() => setRecentSearches([])}
+                            className="px-3 py-1 text-sm font-semibold rounded-full bg-slate-900/40 border border-slate-700 text-slate-300 hover:bg-slate-800 transition-colors"
+                        >
+                            Clear
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {searchResults ? (
                 <div className="mb-10">
                     <h3 className="text-lg font-bold text-slate-300 mb-3">
@@ -458,7 +716,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ shows, ideas, onNavigate })
                                     <h4 className="font-semibold text-slate-400 mb-2">Top Matches</h4>
                                     <div className="space-y-2">
                                         {searchResults.topMatches.map(hit => (
-                                            <ResultRow key={hit.key} hit={hit} />
+                                            <ResultRow key={hit.key} hit={hit} isActive={navigableHits[activeIndex]?.key === hit.key} onActivate={() => setActiveIndex(hitIndexMap.get(hit.key) ?? 0)} />
                                         ))}
                                     </div>
                                 </div>
@@ -470,7 +728,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ shows, ideas, onNavigate })
                                     <h4 className="font-semibold text-slate-400 mb-2">Shows ({searchResults.shows.length})</h4>
                                     <div className="space-y-2">
                                         {searchResults.shows.map(hit => (
-                                            <ResultRow key={hit.key} hit={hit} />
+                                            <ResultRow key={hit.key} hit={hit} isActive={navigableHits[activeIndex]?.key === hit.key} onActivate={() => setActiveIndex(hitIndexMap.get(hit.key) ?? 0)} />
                                         ))}
                                     </div>
                                 </div>
@@ -492,7 +750,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ shows, ideas, onNavigate })
                                     <h4 className="font-semibold text-slate-400 mb-2">Tasks ({searchResults.tasks.length})</h4>
                                     <div className="space-y-2">
                                         {searchResults.tasks.map(hit => (
-                                            <ResultRow key={hit.key} hit={hit} />
+                                            <ResultRow key={hit.key} hit={hit} isActive={navigableHits[activeIndex]?.key === hit.key} onActivate={() => setActiveIndex(hitIndexMap.get(hit.key) ?? 0)} />
                                         ))}
                                     </div>
                                 </div>
@@ -504,7 +762,7 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ shows, ideas, onNavigate })
                                     <h4 className="font-semibold text-slate-400 mb-2">Ideas ({searchResults.ideas.length})</h4>
                                     <div className="space-y-2">
                                         {searchResults.ideas.map(hit => (
-                                            <ResultRow key={hit.key} hit={hit} />
+                                            <ResultRow key={hit.key} hit={hit} isActive={navigableHits[activeIndex]?.key === hit.key} onActivate={() => setActiveIndex(hitIndexMap.get(hit.key) ?? 0)} />
                                         ))}
                                     </div>
                                 </div>
