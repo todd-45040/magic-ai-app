@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { FileTextIcon, TrashIcon, BackIcon, SearchIcon, CopyIcon } from './icons';
-import { getBookingPitches, deleteBookingPitch, type BookingPitch } from '../services/pitchsService';
+import { getBookingPitches, deleteBookingPitch, type BookingPitch } from '../services/pitchesService';
 
 function fmt(ts: number): string {
   try {
