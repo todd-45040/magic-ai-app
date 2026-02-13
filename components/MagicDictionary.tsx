@@ -1102,7 +1102,7 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
 
   return (
     <div className="flex-1 flex flex-col overflow-y-auto p-4 md:p-6 animate-fade-in">
-      <header className="mb-6">
+      <header className={layer === 'core' ? "mb-6" : "mb-3"}>
         <div className="flex items-center gap-3">
           <TutorIcon className="w-8 h-8 text-purple-400" />
           <div>
@@ -1118,7 +1118,7 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
       </header>
 
       {/* Filters Bar */}
-      <div className="sticky top-0 bg-slate-900/80 backdrop-blur-sm py-3 z-10">
+      <div className="sticky top-0 bg-slate-900/80 backdrop-blur-sm py-2 z-10">
         {/*
           Core view needs a denser control matrix (chips + difficulty + tools).
           Technique view should stay lean to avoid wasted horizontal space.
@@ -1127,7 +1127,7 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
           className={
             layer === 'core'
               ? 'grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3'
-              : 'flex flex-col lg:flex-row lg:items-center gap-3'
+              : 'flex flex-col md:flex-row md:items-center gap-3'
           }
         >
           {/* Layer Toggle */}
@@ -1175,7 +1175,7 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
               className={
                 layer === 'core'
                   ? 'ml-auto text-xs text-slate-400'
-                  : 'w-full mt-2 lg:mt-0 lg:w-auto lg:ml-auto text-xs text-slate-400'
+                  : 'w-full md:w-auto md:ml-auto text-xs text-slate-400'
               }
             >
               {layer === 'core' ? 'Deep concepts + coaching tools' : 'High-level taxonomy (non-exposure)'}
@@ -1197,7 +1197,7 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder={layer === 'core' ? 'Search terms, definitions, mistakes…' : 'Search technique terms…'}
-              className="flex-1 w-full bg-transparent pr-4 py-3 text-white placeholder-slate-400 focus:outline-none"
+              className="flex-1 w-full bg-transparent pr-4 py-2 text-white placeholder-slate-400 focus:outline-none"
               aria-label="Search magic dictionary"
             />
             {isFiltered ? (
