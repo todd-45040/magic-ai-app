@@ -94,6 +94,20 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
     const [tagFilter, setTagFilter] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [sortBy, setSortBy] = useState<'recent' | 'title' | 'mostUsed' | 'lastOpened' | 'aiScore'>('recent');
+
+    const [smartTab, setSmartTab] = useState<'all' | 'recent' | 'starred' | 'used' | 'unused' | 'ai'>('all');
+    const [pinnedIds, setPinnedIds] = useState<string[]>(() => {
+        try { return JSON.parse(localStorage.getItem('savedIdeas:pins') || '[]'); } catch { return []; }
+    });
+    const [starredIds, setStarredIds] = useState<string[]>(() => {
+        try { return JSON.parse(localStorage.getItem('savedIdeas:stars') || '[]'); } catch { return []; }
+    });
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const [lastOpenedMap, setLastOpenedMap] = useState<Record<string, number>>(() => {
+        try { return JSON.parse(localStorage.getItem('savedIdeas:lastOpened') || '{}'); } catch { return {}; }
+    });
+    const [openIdea, setOpenIdea] = useState<SavedIdea | null>(null);
+
     const [sectionOpen, setSectionOpen] = useState<Record<string, boolean>>({
         saved_notes: true,
         blueprints: true,
@@ -112,6 +126,18 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
         // FIX: getSavedIdeas() is async, resolve with .then()
         getSavedIdeas().then(setIdeas);
     }, []);
+    useEffect(() => {
+        try { localStorage.setItem('savedIdeas:pins', JSON.stringify(pinnedIds)); } catch {}
+    }, [pinnedIds]);
+
+    useEffect(() => {
+        try { localStorage.setItem('savedIdeas:stars', JSON.stringify(starredIds)); } catch {}
+    }, [starredIds]);
+
+    useEffect(() => {
+        try { localStorage.setItem('savedIdeas:lastOpened', JSON.stringify(lastOpenedMap)); } catch {}
+    }, [lastOpenedMap]);
+
 
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
@@ -145,6 +171,120 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
             // fail silently; console will show if needed
             console.error('Failed to delete idea', e);
         }
+    };
+
+    const isPinned = (id: string) => pinnedIds.includes(id);
+    const isStarred = (id: string) => starredIds.includes(id);
+
+    const togglePin = (id: string) => {
+        setPinnedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [id, ...prev]));
+    };
+
+    const toggleStar = (id: string) => {
+        setStarredIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [id, ...prev]));
+    };
+
+    const toggleSelected = (id: string) => {
+        setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+    };
+
+    const clearSelection = () => setSelectedIds([]);
+
+    const markOpenedNow = (id: string) => {
+        setLastOpenedMap((prev) => ({ ...prev, [id]: Date.now() }));
+    };
+
+    const getUsedInShowsCount = (idea: SavedIdea): number => {
+        const anyIdea: any = idea as any;
+        const arr = anyIdea.showIds || anyIdea.show_ids || anyIdea.shows || anyIdea.used_in_shows;
+        if (Array.isArray(arr)) return arr.length;
+        if (typeof arr === 'number') return arr;
+        return 0;
+    };
+
+    const isAiGenerated = (idea: SavedIdea): boolean => {
+        const anyIdea: any = idea as any;
+        if (anyIdea.ai_generated || anyIdea.is_ai_generated || anyIdea.source === 'ai') return true;
+        const tags = (idea.tags || []).map((t) => (t || '').toLowerCase());
+        return tags.includes('ai') || tags.includes('ai-generated') || tags.includes('ai_generated');
+    };
+
+    const formatRelative = (ms: number) => {
+        const diff = Date.now() - ms;
+        const minutes = Math.floor(diff / 60000);
+        if (minutes < 60) return `${minutes}m ago`;
+        const hours = Math.floor(minutes / 60);
+        if (hours < 48) return `${hours}h ago`;
+        const days = Math.floor(hours / 24);
+        if (days < 60) return `${days}d ago`;
+        const months = Math.floor(days / 30);
+        return `${months}mo ago`;
+    };
+
+    const addTagToIdea = async (idea: SavedIdea, tag: string) => {
+        const nextTags = Array.from(new Set([...(idea.tags || []), tag]));
+        try {
+            await updateIdea(idea.id, { tags: nextTags } as any);
+            setIdeas((prev) => prev.map((i) => (i.id === idea.id ? { ...i, tags: nextTags } : i)));
+        } catch (e) {
+            console.error('Failed to update tags', e);
+        }
+    };
+
+    const archiveIdea = async (idea: SavedIdea) => {
+        await addTagToIdea(idea, 'archived');
+    };
+
+    const bulkArchive = async () => {
+        const targets = ideas.filter((i) => selectedIds.includes(i.id));
+        for (const idea of targets) {
+            // eslint-disable-next-line no-await-in-loop
+            await archiveIdea(idea);
+        }
+        clearSelection();
+    };
+
+    const bulkAddTag = async () => {
+        const tag = window.prompt('Add tag to selected ideas:', '');
+        if (!tag) return;
+        const targets = ideas.filter((i) => selectedIds.includes(i.id));
+        for (const idea of targets) {
+            // eslint-disable-next-line no-await-in-loop
+            await addTagToIdea(idea, tag);
+        }
+        clearSelection();
+    };
+
+        const copyIdeaToClipboard = async (idea: SavedIdea) => {
+        const text = `# ${idea.title || 'Untitled'}\n${idea.content || ''}`;
+        try { await navigator.clipboard.writeText(text); } catch {}
+    };
+
+const bulkDuplicateToClipboard = async () => {
+        const targets = ideas.filter((i) => selectedIds.includes(i.id));
+        const text = targets.map((i) => `# ${i.title || 'Untitled'}\n${i.content || ''}`).join('\n\n---\n\n');
+        try { await navigator.clipboard.writeText(text); } catch {}
+        clearSelection();
+    };
+
+        const openIdeaView = (idea: SavedIdea) => {
+        markOpenedNow(idea.id);
+        if (idea.type === 'image' && idea.content) {
+            setLightboxImg(idea.content);
+            return;
+        }
+        setOpenIdea(idea);
+    };
+
+const sendToPlanner = (idea: SavedIdea) => {
+        // Best-effort integration (kept safe/typed as any)
+        onAiSpark?.({ type: 'send_to_show_planner', ideaId: idea.id, idea } as any);
+    };
+
+    const bulkSendToPlanner = () => {
+        const targets = ideas.filter((i) => selectedIds.includes(i.id));
+        targets.forEach((idea) => sendToPlanner(idea));
+        clearSelection();
     };
 
     const handlePrint = (idea: SavedIdea) => {
@@ -252,13 +392,25 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
 
         const base = ideas.filter((idea) => {
             const typeMatch = typeFilter === 'all' || idea.type === typeFilter;
+
+            const usedCount = getUsedInShowsCount(idea);
+            const isRecent = (idea.timestamp || 0) >= (Date.now() - 14 * 24 * 60 * 60 * 1000);
+            const tabMatch =
+                smartTab === 'all' ? true :
+                smartTab === 'recent' ? isRecent :
+                smartTab === 'starred' ? isStarred(idea.id) :
+                smartTab === 'used' ? usedCount > 0 :
+                smartTab === 'unused' ? usedCount === 0 :
+                smartTab === 'ai' ? isAiGenerated(idea) :
+                true;
+
             const tagMatch = !tagFilter || (idea.tags || []).includes(tagFilter);
             const searchMatch =
                 !q ||
                 (idea.title || '').toLowerCase().includes(q) ||
                 (idea.content || '').toLowerCase().includes(q) ||
                 (idea.tags || []).some((t) => t.toLowerCase().includes(q));
-            return typeMatch && tagMatch && searchMatch;
+            return typeMatch && tabMatch && tagMatch && searchMatch;
         });
 
         const sorted = [...base].sort((a, b) => {
@@ -267,13 +419,20 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
                 const bt = (b.title || '').toLowerCase();
                 return at.localeCompare(bt);
             }
-            // Placeholder sorting modes (future data): mostUsed, lastOpened, aiScore
-            // For now, fall back to "recent".
+            if (sortBy === 'lastOpened') {
+                const ao = lastOpenedMap[a.id] || 0;
+                const bo = lastOpenedMap[b.id] || 0;
+                return bo - ao;
+            }
+            if (sortBy === 'mostUsed') {
+                return getUsedInShowsCount(b) - getUsedInShowsCount(a);
+            }
+            // aiScore is future data; fall back to "recent"
             return (b.timestamp || 0) - (a.timestamp || 0);
         });
 
         return sorted;
-    }, [ideas, typeFilter, tagFilter, searchQuery, sortBy]);
+    }, [ideas, typeFilter, tagFilter, searchQuery, sortBy, smartTab, starredIds, lastOpenedMap]);
 
 
     const sections = useMemo(() => {
@@ -319,6 +478,19 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
             rehearsal_sessions: SavedIdea[];
         };
     }, [filteredIdeas]);
+
+
+    const pinnedIdeas = useMemo(() => {
+        if (!pinnedIds.length) return [];
+        const set = new Set(pinnedIds);
+        // Keep order: pins first, then remaining
+        const pinned = pinnedIds
+            .map((id) => filteredIdeas.find((i) => i.id === id))
+            .filter(Boolean) as SavedIdea[];
+        // If a pinned id is no longer in filteredIdeas, ignore it.
+        return pinned;
+    }, [pinnedIds, filteredIdeas]);
+
 
     const formatRehearsalForSharing = (idea: SavedIdea, transcript: Transcription[], notes: string | null): string => {
         let shareText = `Rehearsal: ${idea.title || 'Untitled Session'}\n\n`;
@@ -430,6 +602,9 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
                                                 <div className="flex items-center gap-2 mt-1">
                                                     <div className="flex items-center gap-2 mt-1">
                                                     <p className="text-xs text-slate-400">Saved on {formatSavedOn(idea)}</p>
+                                                                        <div className="text-[11px] text-slate-500 mt-1">
+                                                                            Used in {getUsedInShowsCount(idea)} shows • Last opened {lastOpenedMap[idea.id] ? formatRelative(lastOpenedMap[idea.id]) : '—'} • Created {formatSavedOn(idea)}
+                                                                        </div>
                                                     <span className="text-[10px] px-2 py-0.5 rounded-full border border-slate-600 bg-slate-900/40 text-slate-300 uppercase tracking-wide">
                                                         {idea.type}
                                                     </span>
@@ -503,19 +678,7 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
                             <option value="aiScore">AI Score (future)</option>
                         </select>
 
-                        <label className="text-xs font-semibold text-slate-400">Type:</label>
-                        <select
-                            value={typeFilter}
-                            onChange={(e) => { setTypeFilter(e.target.value as any); setTagFilter(null); }}
-                            className="px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-md text-sm text-slate-200 focus:outline-none focus:border-purple-500"
-                            aria-label="Filter by type"
-                        >
-                            <option value="all">All</option>
-                            <option value="text">Text</option>
-                            <option value="image">Image</option>
-                            <option value="rehearsal">Rehearsal</option>
-                        </select>
-
+                        
                         <label className="text-xs font-semibold text-slate-400">Tag:</label>
                         <select
                             value={tagFilter ?? ''}
@@ -530,6 +693,30 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
                         </select>
                     </div>
                 </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {([
+                        { key: 'all', label: 'All' },
+                        { key: 'recent', label: 'Recent' },
+                        { key: 'starred', label: 'Starred' },
+                        { key: 'used', label: 'Used in Shows' },
+                        { key: 'unused', label: 'Unused' },
+                        { key: 'ai', label: 'AI Generated' },
+                    ] as const).map((t) => (
+                        <button
+                            key={t.key}
+                            type="button"
+                            onClick={() => setSmartTab(t.key)}
+                            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                                smartTab === t.key
+                                    ? 'bg-purple-600/30 border-purple-400/40 text-purple-200'
+                                    : 'bg-slate-900/40 border-slate-700 text-slate-300 hover:border-purple-400/30 hover:text-purple-200'
+                            }`}
+                        >
+                            {t.label}
+                        </button>
+                    ))}
+                </div>
+
             </div>
 
             {/* Empty / No Results */}
@@ -545,7 +732,94 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
                     <div className="text-sm text-slate-400 mt-1">Try a different search, tag, or type filter.</div>
                 </div>
             ) : (
+                
                 <div className="space-y-4">
+                    {pinnedIdeas.length ? (
+                        (() => {
+                            const secKey = 'pinned';
+                            const isOpen = sectionOpen[secKey] ?? true;
+                            return (
+                                <div key={secKey} className="bg-slate-900/20 border border-slate-800 rounded-xl overflow-hidden mb-10 bg-white/3 backdrop-blur-sm hover:border-indigo-400/20">
+                                    <button
+                                        type="button"
+                                        onClick={() => setSectionOpen((prev) => ({ ...prev, [secKey]: !isOpen }))}
+                                        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-slate-800/30 transition-colors"
+                                        aria-expanded={isOpen}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <span className={`text-slate-300 transition-transform duration-300 ${isOpen ? 'rotate-90' : 'rotate-0'}`}>▼</span>
+                                            <div className="font-semibold tracking-tight text-slate-100">Pinned</div>
+                                            <div className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">{pinnedIdeas.length}</div>
+                                        </div>
+                                        <span className="text-xs text-slate-400">Collapse</span>
+                                    </button>
+
+                                    {isOpen ? (
+                                        <div className="p-4">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                                                {pinnedIdeas.map((idea) => (
+                                                    <div key={idea.id}>
+                                                        {/* Reuse normal rendering by filtering to this single idea via map below */}
+                                                        {(() => {
+                                                            // Inline reuse: match existing rendering paths
+                                                            if (idea.type === 'image') {
+                                                                return (
+                                                                    <div
+                                                                        key={idea.id}
+                                                                        ref={el => { ideaRefs.current.set(idea.id, el); }}
+                                                                        onClick={() => openIdeaView(idea)}
+                                                                        className="group relative bg-slate-900 border border-slate-700 rounded-lg flex flex-col justify-between overflow-hidden aspect-square transition-all hover:border-purple-500"
+                                                                    >
+                                                                        <img src={idea.content} alt={idea.title || 'Saved visual idea'} className="w-full h-full object-cover absolute inset-0 transition-transform duration-300 group-hover:scale-105"/>
+                                                                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent"></div>
+                                                                        <div className="relative z-10 p-3 flex flex-col justify-end h-full">
+                                                                            <div className="flex items-center gap-2">
+                                                                                <div className="w-8 h-8 bg-slate-900/70 rounded-lg flex items-center justify-center flex-shrink-0 backdrop-blur-sm"><ImageIcon className="w-5 h-5 text-purple-400" /></div>
+                                                                                <div className="min-w-0">
+                                                                                    <h3 className="font-bold text-yellow-300 text-sm overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:1]">{idea.title || 'Image Idea'}</h3>
+                                                                                    <p className="text-xs text-slate-400 mt-1">{formatSavedOn(idea)}</p>
+                                                                                </div>
+                                                                            </div>
+                                                                            {editingIdeaId === idea.id ? <TagEditor idea={idea} /> : <TagDisplay idea={idea} />}
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            }
+                                                            if (idea.type === 'rehearsal') {
+                                                                return <RehearsalIdeaCard key={idea.id} idea={idea} />;
+                                                            }
+                                                            return (
+                                                                <div
+                                                                    key={idea.id}
+                                                                    ref={el => { ideaRefs.current.set(idea.id, el); }}
+                                                                    onClick={() => openIdeaView(idea)}
+                                                                    className="group relative bg-slate-800 border border-slate-700 rounded-lg p-4 flex flex-col justify-between transition-all hover:border-purple-500 min-h-[180px] max-h-[180px] overflow-hidden"
+                                                                >
+                                                                    <div className="min-w-0">
+                                                                        <div className="flex items-start justify-between gap-3 mb-2">
+                                                                            <div className="flex items-center gap-3 min-w-0">
+                                                                                <div className="w-10 h-10 bg-slate-900 rounded-lg flex items-center justify-center flex-shrink-0"><FileTextIcon className="w-6 h-6 text-purple-400" /></div>
+                                                                                <div className="min-w-0">
+                                                                                    <h3 className="font-bold text-yellow-300 pr-20 overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">{idea.title || splitLeadingHeading(idea.content).heading || 'Saved Note'}</h3>
+                                                                                    <p className="text-xs text-slate-400">Saved on {formatSavedOn(idea)}</p>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="text-sm text-slate-300 overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:4]">{(idea.content || '').trim()}</div>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })()}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ) : null}
+                                </div>
+                            );
+                        })()
+                    ) : null}
+
                     {([
                         { key: 'saved_notes', label: 'Saved Notes', items: sections.saved_notes },
                         { key: 'blueprints', label: 'Blueprints', items: sections.blueprints },
@@ -581,7 +855,17 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
                                             {sec.items.map((idea) => {
                                                 if (idea.type === 'image') {
                                                     return (
-                                                        <div key={idea.id} ref={el => { ideaRefs.current.set(idea.id, el); }} className="group relative bg-slate-900 border border-slate-700 rounded-lg flex flex-col justify-between overflow-hidden aspect-square transition-all hover:border-purple-500">
+                                                        <div key={idea.id} ref={el => { ideaRefs.current.set(idea.id, el); }} onClick={() => openIdeaView(idea)} className="group relative bg-slate-900 border border-slate-700 rounded-lg flex flex-col justify-between overflow-hidden aspect-square transition-all hover:border-purple-500">
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => { e.stopPropagation(); toggleSelected(idea.id); }}
+                                                                className="absolute top-3 left-3 z-20 w-6 h-6 rounded-md border border-slate-600 bg-black/40 backdrop-blur flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                aria-label={selectedIds.includes(idea.id) ? 'Deselect idea' : 'Select idea'}
+                                                                title={selectedIds.includes(idea.id) ? 'Deselect' : 'Select'}
+                                                            >
+                                                                <span className={`text-xs ${selectedIds.includes(idea.id) ? 'text-purple-200' : 'text-slate-400'}`}>{selectedIds.includes(idea.id) ? '✓' : ''}</span>
+                                                            </button>
+
                                                             <img src={idea.content} alt={idea.title || 'Saved visual idea'} className="w-full h-full object-cover absolute inset-0 transition-transform duration-300 group-hover:scale-105"/>
                                                             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent"></div>
                                                             <div className="relative z-10 p-3 flex flex-col justify-end h-full">
@@ -598,8 +882,17 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
                                                                 {editingIdeaId === idea.id ? <TagEditor idea={idea} /> : <TagDisplay idea={idea} />}
                                                             </div>
                                                             <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                <button onClick={(e) => { e.stopPropagation(); openIdeaView(idea); }} className="px-2.5 py-1 text-xs bg-black/40 hover:bg-black/60 rounded-full text-slate-200 transition-colors backdrop-blur-sm" aria-label="Open">Open</button>
+                                                                <button onClick={(e) => { e.stopPropagation(); sendToPlanner(idea); }} className="px-2.5 py-1 text-xs bg-purple-900/30 hover:bg-purple-900/50 rounded-full text-purple-100 transition-colors backdrop-blur-sm" aria-label="Send to Show Planner">Send</button>
+                                                                <button onClick={(e) => { e.stopPropagation(); copyIdeaToClipboard(idea); }} className="px-2.5 py-1 text-xs bg-black/40 hover:bg-black/60 rounded-full text-slate-200 transition-colors backdrop-blur-sm" aria-label="Copy">Copy</button>
+                                                                <button onClick={(e) => { e.stopPropagation(); toggleStar(idea.id); }} className="px-2.5 py-1 text-xs bg-black/40 hover:bg-black/60 rounded-full text-slate-200 transition-colors backdrop-blur-sm" aria-label="Star">
+                                                                    {isStarred(idea.id) ? 'Starred' : 'Star'}
+                                                                </button>
+                                                                <button onClick={(e) => { e.stopPropagation(); togglePin(idea.id); }} className="p-1.5 bg-black/40 text-slate-200 hover:text-purple-200 hover:bg-black/60 rounded-full transition-colors backdrop-blur-sm" aria-label="Pin" title={isPinned(idea.id) ? 'Unpin' : 'Pin'}>
+                                                                    <BookmarkIcon className="w-4 h-4" />
+                                                                </button>
                                                                 <IdeaShareWrapper idea={idea} />
-                                                                <button onClick={() => handleDelete(idea.id)} className="p-1.5 bg-black/50 text-slate-300 hover:text-red-400 hover:bg-red-900/50 rounded-full transition-colors backdrop-blur-sm" aria-label="Delete idea"><TrashIcon className="w-4 h-4" /></button>
+                                                                <button onClick={(e) => { e.stopPropagation(); handleDelete(idea.id); }} className="p-1.5 bg-black/50 text-slate-300 hover:text-red-400 hover:bg-red-900/50 rounded-full transition-colors backdrop-blur-sm" aria-label="Delete idea"><TrashIcon className="w-4 h-4" /></button>
                                                             </div>
                                                         </div>
                                                     );
@@ -612,8 +905,29 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
                                                     <div
                                                         key={idea.id}
                                                         ref={el => { ideaRefs.current.set(idea.id, el); }}
+                                                        onClick={() => openIdeaView(idea)}
                                                         className="group relative bg-slate-800 border border-slate-700 rounded-lg p-4 flex flex-col justify-between transition-all hover:border-purple-500 min-h-[180px] max-h-[180px] overflow-hidden"
                                                     >
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => { e.stopPropagation(); toggleSelected(idea.id); }}
+                                                            className="absolute top-3 left-3 z-20 w-6 h-6 rounded-md border border-slate-600 bg-slate-950/40 backdrop-blur flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                                            aria-label={selectedIds.includes(idea.id) ? 'Deselect idea' : 'Select idea'}
+                                                            title={selectedIds.includes(idea.id) ? 'Deselect' : 'Select'}
+                                                        >
+                                                            <span className={`text-xs ${selectedIds.includes(idea.id) ? 'text-purple-300' : 'text-slate-500'}`}>{selectedIds.includes(idea.id) ? '✓' : ''}</span>
+                                                        </button>
+
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => { e.stopPropagation(); togglePin(idea.id); }}
+                                                            className="absolute top-3 left-10 z-20 p-1.5 rounded-full bg-slate-950/40 border border-slate-700 text-slate-300 hover:text-purple-200 hover:border-purple-400/30 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                            aria-label={isPinned(idea.id) ? 'Unpin idea' : 'Pin idea'}
+                                                            title={isPinned(idea.id) ? 'Unpin' : 'Pin'}
+                                                        >
+                                                            <BookmarkIcon className="w-4 h-4" />
+                                                        </button>
+
                                                         <div className="min-w-0">
                                                             <div className="flex items-start justify-between gap-3 mb-2">
                                                                 <div className="flex items-center gap-3 min-w-0">
@@ -621,6 +935,9 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
                                                                     <div className="min-w-0">
                                                                         <h3 className="font-bold text-yellow-300 pr-20 overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">{idea.title || splitLeadingHeading(idea.content).heading || 'Saved Note'}</h3>
                                                                         <p className="text-xs text-slate-400">Saved on {formatSavedOn(idea)}</p>
+                                                                        <div className="text-[11px] text-slate-500 mt-1">
+                                                                            Used in {getUsedInShowsCount(idea)} shows • Last opened {lastOpenedMap[idea.id] ? formatRelative(lastOpenedMap[idea.id]) : '—'} • Created {formatSavedOn(idea)}
+                                                                        </div>
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -665,9 +982,16 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
                                                         {editingIdeaId === idea.id ? <TagEditor idea={idea} /> : <TagDisplay idea={idea} />}
 
                                                         <div className="absolute top-3 right-3 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <button onClick={(e) => { e.stopPropagation(); openIdeaView(idea); }} className="px-2.5 py-1 text-xs bg-slate-700/50 hover:bg-slate-700/70 rounded-full text-slate-200 transition-colors" aria-label="Open">Open</button>
+                                                            <button onClick={(e) => { e.stopPropagation(); sendToPlanner(idea); }} className="px-2.5 py-1 text-xs bg-purple-900/30 hover:bg-purple-900/50 rounded-full text-purple-100 transition-colors" aria-label="Send to Show Planner">Send</button>
+                                                            <button onClick={(e) => { e.stopPropagation(); copyIdeaToClipboard(idea); }} className="px-2.5 py-1 text-xs bg-slate-700/50 hover:bg-slate-700/70 rounded-full text-slate-200 transition-colors" aria-label="Copy">Copy</button>
+                                                            <button onClick={(e) => { e.stopPropagation(); toggleStar(idea.id); }} className="px-2.5 py-1 text-xs bg-slate-700/50 hover:bg-slate-700/70 rounded-full text-slate-200 transition-colors" aria-label="Star">
+                                                                {isStarred(idea.id) ? 'Starred' : 'Star'}
+                                                            </button>
+                                                            <button onClick={(e) => { e.stopPropagation(); archiveIdea(idea); }} className="px-2.5 py-1 text-xs bg-slate-700/50 hover:bg-slate-700/70 rounded-full text-slate-200 transition-colors" aria-label="Archive">Archive</button>
                                                             <IdeaShareWrapper idea={idea} />
-                                                            <button onClick={() => handlePrint(idea)} className="flex items-center gap-1.5 px-2.5 py-1 text-xs bg-slate-700/50 hover:bg-purple-900/50 rounded-full text-slate-300 hover:text-purple-300 transition-colors" aria-label="Print"><PrintIcon className="w-3 h-3" /></button>
-                                                            <button onClick={() => handleDelete(idea.id)} className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-900/50 rounded-full transition-colors" aria-label="Delete idea"><TrashIcon className="w-4 h-4" /></button>
+                                                            <button onClick={(e) => { e.stopPropagation(); handlePrint(idea); }} className="flex items-center gap-1.5 px-2.5 py-1 text-xs bg-slate-700/50 hover:bg-purple-900/50 rounded-full text-slate-300 hover:text-purple-300 transition-colors" aria-label="Print"><PrintIcon className="w-3 h-3" /></button>
+                                                            <button onClick={(e) => { e.stopPropagation(); handleDelete(idea.id); }} className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-900/50 rounded-full transition-colors" aria-label="Delete idea"><TrashIcon className="w-4 h-4" /></button>
                                                         </div>
                                                     </div>
                                                 );
@@ -695,6 +1019,74 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
                     <img src={lightboxImg} alt="Concept art" className="max-w-full max-h-full rounded-xl border border-slate-700" />
                 </div>
             ) : null}
+
+            {/* Open Idea Modal */}
+            {openIdea ? (
+                <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+                    <div className="w-full max-w-3xl bg-slate-950/90 border border-slate-800 rounded-2xl overflow-hidden shadow-xl backdrop-blur">
+                        <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-slate-800">
+                            <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                    <h3 className="text-lg font-bold text-yellow-300 truncate">{openIdea.title || 'Saved Idea'}</h3>
+                                    {isPinned(openIdea.id) ? (
+                                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-600/20 border border-purple-500/30 text-purple-200">Pinned</span>
+                                    ) : null}
+                                    {isStarred(openIdea.id) ? (
+                                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-600/20 border border-yellow-500/30 text-yellow-200">Starred</span>
+                                    ) : null}
+                                    {isAiGenerated(openIdea) ? (
+                                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-200">AI</span>
+                                    ) : null}
+                                </div>
+                                <div className="text-xs text-slate-400 mt-1">
+                                    Used in {getUsedInShowsCount(openIdea)} shows • Last opened {lastOpenedMap[openIdea.id] ? formatRelative(lastOpenedMap[openIdea.id]) : '—'} • Created {formatSavedOn(openIdea)}
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                <button onClick={() => togglePin(openIdea.id)} className="px-3 py-1.5 text-xs rounded-full bg-slate-800/60 border border-slate-700 text-slate-200 hover:border-purple-400/30 hover:text-purple-200 transition">
+                                    {isPinned(openIdea.id) ? 'Unpin' : 'Pin'}
+                                </button>
+                                <button onClick={() => toggleStar(openIdea.id)} className="px-3 py-1.5 text-xs rounded-full bg-slate-800/60 border border-slate-700 text-slate-200 hover:border-yellow-400/30 hover:text-yellow-200 transition">
+                                    {isStarred(openIdea.id) ? 'Unstar' : 'Star'}
+                                </button>
+                                <button onClick={() => sendToPlanner(openIdea)} className="px-3 py-1.5 text-xs rounded-full bg-purple-900/30 border border-purple-500/30 text-purple-100 hover:bg-purple-900/50 transition">
+                                    Send → Planner
+                                </button>
+                                <button onClick={() => copyIdeaToClipboard(openIdea)} className="px-3 py-1.5 text-xs rounded-full bg-slate-800/60 border border-slate-700 text-slate-200 hover:border-slate-500 transition" title="Copies selected ideas. Use bulk select for multiple.">
+                                    Copy
+                                </button>
+                                <button onClick={() => setOpenIdea(null)} className="p-2 rounded-full bg-slate-900/60 text-slate-200 hover:text-white hover:bg-slate-900/80 transition" aria-label="Close">
+                                    <CrossIcon className="w-5 h-5" />
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="p-5 max-h-[70vh] overflow-y-auto">
+                            {openIdea.type === 'image' ? (
+                                <img src={openIdea.content} alt={openIdea.title || 'Saved image'} className="w-full rounded-xl border border-slate-800" />
+                            ) : openIdea.type === 'rehearsal' ? (
+                                <div className="text-sm text-slate-200 whitespace-pre-wrap">{openIdea.content}</div>
+                            ) : (
+                                <div className="text-sm text-slate-200 whitespace-pre-wrap break-words">{openIdea.content}</div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            ) : null}
+
+            {/* Bulk Actions Bar */}
+            {selectedIds.length ? (
+                <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 px-4 py-3 rounded-2xl bg-slate-950/90 border border-slate-800 shadow-xl backdrop-blur flex flex-wrap items-center gap-2">
+                    <div className="text-sm text-slate-200 font-semibold mr-2">{selectedIds.length} selected</div>
+                    <button onClick={bulkSendToPlanner} className="px-3 py-1.5 text-xs rounded-full bg-purple-900/30 border border-purple-500/30 text-purple-100 hover:bg-purple-900/50 transition">Send → Planner</button>
+                    <button onClick={bulkDuplicateToClipboard} className="px-3 py-1.5 text-xs rounded-full bg-slate-800/60 border border-slate-700 text-slate-200 hover:border-slate-500 transition">Copy</button>
+                    <button onClick={bulkAddTag} className="px-3 py-1.5 text-xs rounded-full bg-slate-800/60 border border-slate-700 text-slate-200 hover:border-slate-500 transition">Tag</button>
+                    <button onClick={bulkArchive} className="px-3 py-1.5 text-xs rounded-full bg-slate-800/60 border border-slate-700 text-slate-200 hover:border-slate-500 transition">Archive</button>
+                    <button onClick={clearSelection} className="px-3 py-1.5 text-xs rounded-full bg-slate-900/60 border border-slate-700 text-slate-300 hover:border-slate-500 transition">Clear</button>
+                </div>
+            ) : null}
+
         </div>
     );
 };
