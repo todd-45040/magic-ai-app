@@ -697,7 +697,6 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
             ) : null}
         </div>
     );
-    );
 };
 
 export default SavedIdeas;
