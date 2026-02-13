@@ -70,6 +70,147 @@ function formatSavedOn(idea: SavedIdea): string {
     return d.toLocaleDateString();
 }
 
+function safeLower(s: any): string {
+    return (s ?? '').toString().toLowerCase();
+}
+
+function tokenize(s: string): string[] {
+    return safeLower(s)
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .split(/\s+/)
+        .filter(Boolean)
+        .filter((t) => t.length > 2)
+        .slice(0, 200);
+}
+
+function jaccard(a: string[], b: string[]): number {
+    if (!a.length || !b.length) return 0;
+    const sa = new Set(a);
+    const sb = new Set(b);
+    let inter = 0;
+    sa.forEach((t) => { if (sb.has(t)) inter += 1; });
+    const union = sa.size + sb.size - inter;
+    return union ? inter / union : 0;
+}
+
+function computePriorityScore(idea: SavedIdea, opts: { usedInShows: number; lastOpened?: number; isStarred: boolean; isPinned: boolean }): number {
+    // Heuristic score (0..100-ish). Later this can be replaced with true AI scoring.
+    const title = idea.title || '';
+    const content = idea.content || '';
+    const tokens = tokenize(title + ' ' + content);
+    const novelty = Math.min(25, new Set(tokens).size / 2); // more unique terms = higher novelty
+    const lengthSignal = Math.min(20, Math.sqrt((content || '').length) / 2);
+    const usage = Math.min(25, opts.usedInShows * 8);
+    const recency = opts.lastOpened ? Math.min(15, 15 / (1 + (Date.now() - opts.lastOpened) / (1000 * 60 * 60 * 24))) : 0;
+    const starred = opts.isStarred ? 10 : 0;
+    const pinned = opts.isPinned ? 6 : 0;
+
+    // Type-based bias (small)
+    const typeBoost = (idea.type === 'blueprint') ? 6 : (idea.type === 'rehearsal' ? 4 : 0);
+
+    return Math.round(novelty + lengthSignal + usage + recency + starred + pinned + typeBoost);
+}
+
+type OrgCluster = { key: string; label: string; ideaIds: string[] };
+type OrgDuplicate = { a: string; b: string; score: number };
+type OrgTagSuggestion = { ideaId: string; suggested: string[] };
+type OrgResults = {
+    clusters: OrgCluster[];
+    duplicates: OrgDuplicate[];
+    tagSuggestions: OrgTagSuggestion[];
+};
+
+function organizeIdeasLocally(ideas: SavedIdea[], allTags: string[], getUsed: (i: SavedIdea)=>number, lastOpenedMap: Record<string, number>, isStarredFn: (id:string)=>boolean, isPinnedFn:(id:string)=>boolean): OrgResults {
+    // Clusters: by strongest tag, else by type, else by top keyword
+    const clustersMap = new Map<string, string[]>();
+
+    const keywordOf = (idea: SavedIdea) => {
+        const tokens = tokenize((idea.title || '') + ' ' + (idea.content || ''));
+        const freq: Record<string, number> = {};
+        tokens.forEach((t) => { freq[t] = (freq[t] || 0) + 1; });
+        const top = Object.entries(freq).sort((a,b)=>b[1]-a[1])[0]?.[0];
+        return top || 'misc';
+    };
+
+    ideas.forEach((idea) => {
+        const tags = (idea.tags || []) as any[];
+        const bestTag = tags?.[0] ? tags[0].toString() : null;
+        const key = bestTag ? `tag:${bestTag}` : (idea.type ? `type:${idea.type}` : `kw:${keywordOf(idea)}`);
+        const arr = clustersMap.get(key) || [];
+        arr.push(idea.id);
+        clustersMap.set(key, arr);
+    });
+
+    const clusters: OrgCluster[] = Array.from(clustersMap.entries())
+        .map(([key, ideaIds]) => {
+            const label = key.startsWith('tag:') ? `Theme: ${key.slice(4)}` : key.startsWith('type:') ? `Type: ${key.slice(5)}` : `Theme: ${key.slice(3)}`;
+            return { key, label, ideaIds };
+        })
+        .sort((a,b)=>b.ideaIds.length-a.ideaIds.length);
+
+    // Duplicates: quick scan on title equality + high Jaccard similarity.
+    const duplicates: OrgDuplicate[] = [];
+    const tokenCache = new Map<string, string[]>();
+    const getTokens = (id: string) => {
+        if (tokenCache.has(id)) return tokenCache.get(id)!;
+        const idea = ideas.find(i=>i.id===id)!;
+        const toks = tokenize((idea.title||'') + ' ' + (idea.content||''));
+        tokenCache.set(id, toks);
+        return toks;
+    };
+
+    for (let i=0;i<ideas.length;i++) {
+        for (let j=i+1;j<ideas.length;j++) {
+            const a = ideas[i], b = ideas[j];
+            const at = safeLower(a.title);
+            const bt = safeLower(b.title);
+            if (at && bt && at === bt) {
+                duplicates.push({ a: a.id, b: b.id, score: 1 });
+                continue;
+            }
+            // avoid expensive compare for very different lengths
+            const al = (a.content||'').length, bl=(b.content||'').length;
+            if (!al || !bl) continue;
+            const ratio = al > bl ? bl/al : al/bl;
+            if (ratio < 0.5) continue;
+
+            const score = jaccard(getTokens(a.id), getTokens(b.id));
+            if (score >= 0.82) duplicates.push({ a: a.id, b: b.id, score: Math.round(score*100)/100 });
+            if (duplicates.length >= 12) break;
+        }
+        if (duplicates.length >= 12) break;
+    }
+
+    // Tag suggestions: suggest from top keywords that match known tags OR propose new keyword tags
+    const tagSet = new Set(allTags.map(t=>t.toLowerCase()));
+    const tagSuggestions: OrgTagSuggestion[] = ideas.slice(0, 40).map((idea) => {
+        const toks = tokenize((idea.title||'') + ' ' + (idea.content||''));
+        const freq: Record<string, number> = {};
+        toks.forEach(t => { freq[t] = (freq[t]||0)+1; });
+        const top = Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0,6).map(e=>e[0]);
+        const suggested = top
+            .filter(t => !['with','from','this','that','your'].includes(t))
+            .filter(t => !((idea.tags||[]) as any[]).map(x=>x.toString().toLowerCase()).includes(t))
+            .slice(0,3)
+            .map(t => {
+                const match = Array.from(tagSet).find(x=>x===t);
+                return match ? match : t;
+            });
+
+        // Add priority-score driven suggestions: if high usage, suggest "repertoire"
+        const used = getUsed(idea);
+        const score = computePriorityScore(idea, { usedInShows: used, lastOpened: lastOpenedMap[idea.id], isStarred: isStarredFn(idea.id), isPinned: isPinnedFn(idea.id) });
+        const extra: string[] = [];
+        if (score >= 70) extra.push('high-value');
+        if (used >= 2) extra.push('repertoire');
+        return { ideaId: idea.id, suggested: Array.from(new Set([...extra, ...suggested])).slice(0, 4) };
+    }).filter(s => s.suggested.length > 0);
+
+    return { clusters, duplicates, tagSuggestions };
+}
+
+
+
 
 
 function isErrorIdea(content: string): boolean {
@@ -120,10 +261,34 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
         });
     };
 
+    const runOrganization = async () => {
+        // Always provide instant local organization. If a parent AI handler exists, it can run in parallel.
+        setOrgBusy(true);
+        setOrgOpen(true);
+        try {
+            // Notify parent (optional)
+            onAiSpark?.({ type: 'organize_saved_ideas', ideas } as any);
+
+            const tags = allTags;
+            const results = organizeIdeasLocally(ideas, tags, getUsedInShowsCount, lastOpenedMap, isStarred, isPinned);
+            setOrgResults(results);
+        } finally {
+            setOrgBusy(false);
+        }
+    };
+
+
+
 const [lastOpenedMap, setLastOpenedMap] = useState<Record<string, number>>(() => {
         try { return JSON.parse(localStorage.getItem('savedIdeas:lastOpened') || '{}'); } catch { return {}; }
     });
     const [openIdea, setOpenIdea] = useState<SavedIdea | null>(null);
+
+    const [orgOpen, setOrgOpen] = useState(false);
+    const [orgBusy, setOrgBusy] = useState(false);
+    const [orgResults, setOrgResults] = useState<OrgResults | null>(null);
+
+
 
     useEffect(() => {
         if (!openIdea) return;
@@ -454,7 +619,11 @@ const sendToPlanner = (idea: SavedIdea) => {
             if (sortBy === 'mostUsed') {
                 return getUsedInShowsCount(b) - getUsedInShowsCount(a);
             }
-            // aiScore is future data; fall back to "recent"
+            if (sortBy === 'aiScore') {
+                const as = computePriorityScore(a, { usedInShows: getUsedInShowsCount(a), lastOpened: lastOpenedMap[a.id], isStarred: isStarred(a.id), isPinned: isPinned(a.id) });
+                const bs = computePriorityScore(b, { usedInShows: getUsedInShowsCount(b), lastOpened: lastOpenedMap[b.id], isStarred: isStarred(b.id), isPinned: isPinned(b.id) });
+                return bs - as;
+            }
             return (b.timestamp || 0) - (a.timestamp || 0);
         });
 
@@ -628,7 +797,7 @@ const sendToPlanner = (idea: SavedIdea) => {
                                 <h3 className="font-bold text-yellow-300 pr-20 overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">{idea.title || 'Untitled Rehearsal'}</h3>
                                                 <div className="flex items-center gap-2 mt-1">
                                                     <div className="flex items-center gap-2 mt-1">
-                                                    <p className="text-xs text-slate-400">Saved on {formatSavedOn(idea)}</p>
+                                                    <p className="text-xs text-slate-400">Used in {getUsedInShowsCount(idea)} shows • Last opened {lastOpenedMap[idea.id] ? formatRelative(lastOpenedMap[idea.id]) : "—"} • Created {formatSavedOn(idea)}</p>
                                                                         <div className="text-[11px] text-slate-500 mt-1">
                                                                             Used in {getUsedInShowsCount(idea)} shows • Last opened {lastOpenedMap[idea.id] ? formatRelative(lastOpenedMap[idea.id]) : '—'} • Created {formatSavedOn(idea)}
                                                                         </div>
@@ -868,7 +1037,7 @@ const sendToPlanner = (idea: SavedIdea) => {
                                                                                 <div className="w-10 h-10 bg-slate-900 rounded-lg flex items-center justify-center flex-shrink-0"><FileTextIcon className="w-6 h-6 text-purple-400" /></div>
                                                                                 <div className="min-w-0">
                                                                                     <h3 className="font-bold text-yellow-300 pr-20 overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">{idea.title || splitLeadingHeading(idea.content).heading || 'Saved Note'}</h3>
-                                                                                    <p className="text-xs text-slate-400">Saved on {formatSavedOn(idea)}</p>
+                                                                                    <p className="text-xs text-slate-400">Used in {getUsedInShowsCount(idea)} shows • Last opened {lastOpenedMap[idea.id] ? formatRelative(lastOpenedMap[idea.id]) : "—"} • Created {formatSavedOn(idea)}</p>
                                                                                 </div>
                                                                             </div>
                                                                         </div>
@@ -1001,7 +1170,7 @@ const sendToPlanner = (idea: SavedIdea) => {
                                                                     <div className="w-10 h-10 bg-slate-900 rounded-lg flex items-center justify-center flex-shrink-0"><FileTextIcon className="w-6 h-6 text-purple-400" /></div>
                                                                     <div className="min-w-0">
                                                                         <h3 className="font-bold text-yellow-300 pr-20 overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">{idea.title || splitLeadingHeading(idea.content).heading || 'Saved Note'}</h3>
-                                                                        <p className="text-xs text-slate-400">Saved on {formatSavedOn(idea)}</p>
+                                                                        <p className="text-xs text-slate-400">Used in {getUsedInShowsCount(idea)} shows • Last opened {lastOpenedMap[idea.id] ? formatRelative(lastOpenedMap[idea.id]) : "—"} • Created {formatSavedOn(idea)}</p>
                                                                         <div className="text-[11px] text-slate-500 mt-1">
                                                                             Used in {getUsedInShowsCount(idea)} shows • Last opened {lastOpenedMap[idea.id] ? formatRelative(lastOpenedMap[idea.id]) : '—'} • Created {formatSavedOn(idea)}
                                                                         </div>
@@ -1142,6 +1311,119 @@ const sendToPlanner = (idea: SavedIdea) => {
                 </div>
             ) : null}
 
+
+
+            {/* AI Organization Assistant */}
+            {orgOpen ? (
+                <div className="fixed inset-0 z-50 bg-black/70 flex items-start justify-center p-4 pt-6 overflow-y-auto" role="dialog" aria-modal="true"
+                    onClick={(e) => { if (e.target === e.currentTarget) setOrgOpen(false); }}
+                >
+                    <div className="w-full max-w-4xl mt-2 bg-slate-950/90 border border-slate-800 rounded-2xl overflow-hidden shadow-xl backdrop-blur">
+                        <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-slate-800">
+                            <div className="min-w-0">
+                                <h3 className="text-lg font-bold text-yellow-300 truncate">AI Organization Assistant</h3>
+                                <div className="text-xs text-slate-400 mt-1">
+                                    Clusters • Tag suggestions • Duplicate detection • Priority scoring (heuristic now; AI-ready next)
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => { setOrgResults(null); runOrganization(); }}
+                                    className="px-3 py-1.5 text-xs rounded-full bg-purple-900/30 border border-purple-500/30 text-purple-100 hover:bg-purple-900/50 transition"
+                                >
+                                    Re-run
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setOrgOpen(false)}
+                                    className="p-2 rounded-full bg-slate-900/60 text-slate-200 hover:text-white hover:bg-slate-900/80 transition"
+                                    aria-label="Close"
+                                >
+                                    <CrossIcon className="w-5 h-5" />
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="p-5 space-y-5">
+                            {orgBusy ? (
+                                <div className="text-sm text-slate-200 flex items-center gap-3">
+                                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-slate-600 border-t-slate-200" />
+                                    Organizing your ideas…
+                                </div>
+                            ) : null}
+
+                            {!orgBusy && !orgResults ? (
+                                <div className="text-sm text-slate-300">
+                                    Click <span className="text-purple-200 font-semibold">Re-run</span> to generate organization suggestions.
+                                </div>
+                            ) : null}
+
+                            {orgResults ? (
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                    <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-4">
+                                        <div className="text-sm font-bold text-slate-100 mb-2">Clusters (themes)</div>
+                                        <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
+                                            {orgResults.clusters.slice(0, 10).map((c) => (
+                                                <div key={c.key} className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-slate-950/40 border border-slate-800">
+                                                    <div className="text-sm text-slate-200">{c.label}</div>
+                                                    <div className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">{c.ideaIds.length}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-4">
+                                        <div className="text-sm font-bold text-slate-100 mb-2">Potential duplicates</div>
+                                        {orgResults.duplicates.length ? (
+                                            <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
+                                                {orgResults.duplicates.map((d, i) => {
+                                                    const a = ideas.find(x=>x.id===d.a);
+                                                    const b = ideas.find(x=>x.id===d.b);
+                                                    return (
+                                                        <div key={i} className="px-3 py-2 rounded-lg bg-slate-950/40 border border-slate-800">
+                                                            <div className="text-sm text-slate-200 truncate">{a?.title || 'Idea A'} <span className="text-slate-500">↔</span> {b?.title || 'Idea B'}</div>
+                                                            <div className="text-xs text-slate-400 mt-0.5">Similarity: {d.score}</div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        ) : (
+                                            <div className="text-sm text-slate-400">No strong duplicates detected.</div>
+                                        )}
+                                    </div>
+
+                                    <div className="lg:col-span-2 bg-slate-900/40 border border-slate-800 rounded-xl p-4">
+                                        <div className="text-sm font-bold text-slate-100 mb-2">Tag suggestions</div>
+                                        <div className="text-xs text-slate-400 mb-3">
+                                            (Preview only) Next step: one-click “Apply tags” per idea once we confirm your tag-save API behavior.
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[420px] overflow-y-auto pr-1">
+                                            {orgResults.tagSuggestions.slice(0, 20).map((s) => {
+                                                const idea = ideas.find(i=>i.id===s.ideaId);
+                                                if (!idea) return null;
+                                                return (
+                                                    <div key={s.ideaId} className="px-3 py-2 rounded-lg bg-slate-950/40 border border-slate-800">
+                                                        <div className="text-sm text-slate-200 truncate">{idea.title || 'Saved Idea'}</div>
+                                                        <div className="mt-1 flex flex-wrap gap-1">
+                                                            {s.suggested.map((t) => (
+                                                                <span key={t} className="text-[10px] px-2 py-[2px] rounded-full bg-purple-900/20 border border-purple-500/20 text-purple-200">
+                                                                    {t}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : null}
+                        </div>
+                    </div>
+                </div>
+            ) : null}
+
             {/* Bulk Actions Bar */}
             {selectedIds.length ? (
                 <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 px-4 py-3 rounded-2xl bg-slate-950/90 border border-slate-800 shadow-xl backdrop-blur flex flex-wrap items-center gap-2">
@@ -1150,7 +1432,17 @@ const sendToPlanner = (idea: SavedIdea) => {
                     <button onClick={bulkDuplicateToClipboard} className="px-3 py-1.5 text-xs rounded-full bg-slate-800/60 border border-slate-700 text-slate-200 hover:border-slate-500 transition">Copy</button>
                     <button onClick={bulkAddTag} className="px-3 py-1.5 text-xs rounded-full bg-slate-800/60 border border-slate-700 text-slate-200 hover:border-slate-500 transition">Tag</button>
                     <button onClick={bulkArchive} className="px-3 py-1.5 text-xs rounded-full bg-slate-800/60 border border-slate-700 text-slate-200 hover:border-slate-500 transition">Archive</button>
-                    <button onClick={clearSelection} className="px-3 py-1.5 text-xs rounded-full bg-slate-900/60 border border-slate-700 text-slate-300 hover:border-slate-500 transition">Clear</button>
+                    
+                    <button
+                        onClick={runOrganization}
+                        className="px-3 py-2 text-xs font-semibold bg-purple-900/30 hover:bg-purple-900/50 border border-purple-500/30 rounded-md text-purple-100 transition flex items-center gap-2"
+                        title="Organize and prioritize your ideas"
+                    >
+                        <WandIcon className="w-4 h-4" />
+                        Organize My Ideas
+                    </button>
+
+<button onClick={clearSelection} className="px-3 py-1.5 text-xs rounded-full bg-slate-900/60 border border-slate-700 text-slate-300 hover:border-slate-500 transition">Clear</button>
                 </div>
             ) : null}
 
