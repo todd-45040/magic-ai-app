@@ -520,9 +520,23 @@ const MagicTheoryTutor: React.FC<MagicTheoryTutorProps> = ({ user }) => {
                         </div>
                         <footer className="p-4 border-t border-slate-800">
                             {lessonPhase === 'intro' ? (
-                                <div className="flex items-center bg-slate-800 rounded-lg">
-                                    <input type="text" value={userInput} onChange={(e) => setUserInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !isLoading && handleSend()} placeholder="Type your answer here..." className="flex-1 w-full bg-transparent px-4 py-3 text-white placeholder-slate-400 focus:outline-none" disabled={isLoading}/>
-                                    <button onClick={handleSend} disabled={isLoading || !userInput.trim()} className="p-3 text-purple-400 hover:text-purple-300 disabled:text-slate-600"><SendIcon className="w-6 h-6" /></button>
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm text-amber-200">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-amber-300">🎓</span>
+                                            <span>Your move — respond below to continue the lesson.</span>
+                                        </div>
+                                        {!isLoading && (
+                                            <div className="flex items-center gap-2 text-xs text-slate-300/80 animate-pulse">
+                                                <span className="h-2 w-2 rounded-full bg-amber-400" />
+                                                Awaiting your response...
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center bg-slate-800 rounded-lg">
+                                        <input type="text" value={userInput} onChange={(e) => setUserInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !isLoading && handleSend()} placeholder="Type your answer to continue the lesson..." className="flex-1 w-full bg-transparent px-4 py-3 text-white placeholder-slate-400 focus:outline-none" disabled={isLoading}/>
+                                        <button onClick={handleSend} disabled={isLoading || !userInput.trim()} className="p-3 text-purple-400 hover:text-purple-300 disabled:text-slate-600"><SendIcon className="w-6 h-6" /></button>
+                                    </div>
                                 </div>
                             ) : lessonPhase === 'feedback' ? (
                                 <button onClick={handleNextConcept} className="w-full py-3 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold">Continue</button>
