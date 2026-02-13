@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { MAGIC_DICTIONARY_TERMS } from '../constants';
 import type { AiSparkAction } from '../types';
+import { useAppState } from '../store';
 import { TutorIcon, SearchIcon, BookIcon, ChevronDownIcon, WandIcon } from './icons';
 
 type DifficultyLevel = 'Beginner' | 'Intermediate' | 'Advanced' | 'Mastery';
@@ -172,11 +173,68 @@ const inferScenario = (t: DictionaryTerm): string => {
   return 'Use this concept in a real routine: identify the “moment of magic,” then decide what the audience should be thinking and feeling right before and right after it.';
 };
 
+type StudyList = {
+  id: string;
+  name: string;
+  termSlugs: string[];
+  createdAt: number;
+};
+
+type StudyState = {
+  version: 1;
+  bookmarked: Record<string, { notes?: string; lists?: string[] }>; // key = termSlug
+  lists: Record<string, StudyList>;
+};
+
+const STUDY_STORAGE_KEY = 'maw_dictionary_study_v1';
+
+const loadStudyState = (): StudyState => {
+  if (typeof window === 'undefined') return { version: 1, bookmarked: {}, lists: {} };
+  try {
+    const raw = window.localStorage.getItem(STUDY_STORAGE_KEY);
+    if (!raw) return { version: 1, bookmarked: {}, lists: {} };
+    const parsed = JSON.parse(raw);
+    if (!parsed || parsed.version !== 1) return { version: 1, bookmarked: {}, lists: {} };
+    return {
+      version: 1,
+      bookmarked: typeof parsed.bookmarked === 'object' && parsed.bookmarked ? parsed.bookmarked : {},
+      lists: typeof parsed.lists === 'object' && parsed.lists ? parsed.lists : {},
+    };
+  } catch {
+    return { version: 1, bookmarked: {}, lists: {} };
+  }
+};
+
+const saveStudyState = (state: StudyState) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(STUDY_STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // ignore
+  }
+};
+
 const MagicDictionary: React.FC<Props> = ({ onAiSpark }) => {
+  const { shows } = useAppState();
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedTerm, setExpandedTerm] = useState<string | null>(null);
   const [conceptFilter, setConceptFilter] = useState<'All' | ConceptCategory>('All');
   const [difficultyFilter, setDifficultyFilter] = useState<'All' | DifficultyLevel>('All');
+
+  // Tier-2: Saved Study Concepts
+  const [study, setStudy] = useState<StudyState>(() => loadStudyState());
+  const [studyOpen, setStudyOpen] = useState(false);
+  const [newListName, setNewListName] = useState('');
+
+  // Tier-2: Apply concept to a show
+  const [applyOpen, setApplyOpen] = useState(false);
+  const [applyTerm, setApplyTerm] = useState<DictionaryTerm | null>(null);
+  const [applyShowId, setApplyShowId] = useState<string>('');
+  const [applyTaskId, setApplyTaskId] = useState<string>('');
+
+  // Tier-2: Concept map
+  const [mapOpen, setMapOpen] = useState(false);
+  const [mapTerm, setMapTerm] = useState<DictionaryTerm | null>(null);
 
   // Used to scroll after state updates (expand + filter + search)
   const pendingScrollTermRef = useRef<string | null>(null);
@@ -217,6 +275,10 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark }) => {
   };
 
   const isFiltered = searchTerm.trim() !== '' || conceptFilter !== 'All' || difficultyFilter !== 'All';
+
+  useEffect(() => {
+    saveStudyState(study);
+  }, [study]);
 
   const setHashToTerm = (term: string | null) => {
     if (typeof window === 'undefined') return;
@@ -449,6 +511,98 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark }) => {
     );
   };
 
+  const termSlug = (t: DictionaryTerm | string) => slugify(typeof t === 'string' ? t : t.term);
+
+  const isBookmarked = (item: DictionaryTerm) => Boolean(study.bookmarked[termSlug(item)]);
+
+  const toggleBookmark = (item: DictionaryTerm) => {
+    const key = termSlug(item);
+    setStudy((prev) => {
+      const next: StudyState = { ...prev, bookmarked: { ...prev.bookmarked }, lists: { ...prev.lists } };
+      if (next.bookmarked[key]) {
+        // Remove from lists as well
+        delete next.bookmarked[key];
+        Object.values(next.lists).forEach((l) => {
+          l.termSlugs = l.termSlugs.filter((x) => x !== key);
+        });
+      } else {
+        next.bookmarked[key] = { notes: '', lists: [] };
+      }
+      return next;
+    });
+  };
+
+  const createStudyList = () => {
+    const name = newListName.trim();
+    if (!name) return;
+    const id = `list_${Date.now()}`;
+    setStudy((prev) => {
+      const next: StudyState = { ...prev, bookmarked: { ...prev.bookmarked }, lists: { ...prev.lists } };
+      next.lists[id] = { id, name, termSlugs: [], createdAt: Date.now() };
+      return next;
+    });
+    setNewListName('');
+  };
+
+  const setBookmarkNotes = (item: DictionaryTerm, notes: string) => {
+    const key = termSlug(item);
+    setStudy((prev) => {
+      if (!prev.bookmarked[key]) return prev;
+      return {
+        ...prev,
+        bookmarked: {
+          ...prev.bookmarked,
+          [key]: { ...prev.bookmarked[key], notes },
+        },
+      };
+    });
+  };
+
+  const toggleTermInList = (item: DictionaryTerm, listId: string) => {
+    const key = termSlug(item);
+    setStudy((prev) => {
+      const list = prev.lists[listId];
+      if (!list) return prev;
+      const exists = list.termSlugs.includes(key);
+
+      const nextList: StudyList = {
+        ...list,
+        termSlugs: exists ? list.termSlugs.filter((x) => x !== key) : [...list.termSlugs, key],
+      };
+
+      const nextBookmarked = { ...prev.bookmarked };
+      if (!nextBookmarked[key]) nextBookmarked[key] = { notes: '', lists: [] };
+
+      const currentLists = new Set(nextBookmarked[key].lists || []);
+      if (exists) currentLists.delete(listId);
+      else currentLists.add(listId);
+      nextBookmarked[key] = { ...nextBookmarked[key], lists: Array.from(currentLists) };
+
+      return {
+        ...prev,
+        bookmarked: nextBookmarked,
+        lists: { ...prev.lists, [listId]: nextList },
+      };
+    });
+  };
+
+  const getTermBySlug = (slug: string): DictionaryTerm | undefined =>
+    sortedTerms.find((t) => t && termSlug(t) === slug);
+
+  const connectionsFor = (item: DictionaryTerm): string[] => {
+    const base = new Set<string>();
+    (item.relatedTerms || []).forEach((t) => base.add(t));
+    // Reverse links: any term that lists this term as related
+    sortedTerms.forEach((t) => {
+      if (!t?.relatedTerms?.length) return;
+      const isRelated = t.relatedTerms.some((rt) => termSlug(rt) === termSlug(item) || rt.toLowerCase() === item.term.toLowerCase());
+      if (isRelated) base.add(t.term);
+    });
+    return Array.from(base)
+      .filter((x) => x && x.toLowerCase() !== item.term.toLowerCase())
+      .sort((a, b) => a.localeCompare(b));
+  };
+
   const askAiForTerm = (item: DictionaryTerm) => {
     if (!onAiSpark) return;
 
@@ -477,6 +631,58 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark }) => {
       .join('\n');
 
     onAiSpark({ type: 'custom-prompt', payload: { prompt } });
+  };
+
+  const openApply = (item: DictionaryTerm) => {
+    setApplyTerm(item);
+    setApplyOpen(true);
+    setApplyShowId(shows?.[0]?.id || '');
+    setApplyTaskId('');
+  };
+
+  const runApplyToShow = () => {
+    if (!onAiSpark || !applyTerm) return;
+    const show = (shows || []).find((s) => s.id === applyShowId);
+    const task = show?.tasks?.find((t) => t.id === applyTaskId);
+
+    const concept = inferConceptCategory(applyTerm);
+    const difficulty = inferDifficulty(applyTerm);
+
+    const prompt = [
+      `You are my magic director + theory coach. Apply the concept below to my real show/routine. Do NOT expose secrets or methods; focus on performance, framing, scripting, and audience management.`,
+      '',
+      `CONCEPT: ${applyTerm.term}`,
+      `CATEGORY: ${concept}`,
+      `DIFFICULTY: ${difficulty}`,
+      '',
+      `Definition: ${applyTerm.definition}`,
+      applyTerm.whyItMatters ? `Why it matters: ${applyTerm.whyItMatters}` : '',
+      applyTerm.beginnerMistakes?.length
+        ? `Common mistakes:\n${applyTerm.beginnerMistakes.map((m) => `- ${m}`).join('\n')}`
+        : '',
+      '',
+      show ? `SHOW: ${show.title}` : 'SHOW: (not selected)',
+      show?.description ? `Show notes: ${show.description}` : '',
+      task ? `ROUTINE/TASK: ${task.title}` : '',
+      task?.notes ? `Task notes: ${task.notes}` : '',
+      '',
+      `Give me actionable output in this format:`,
+      `1) What to change (3–6 bullets)`,
+      `2) A short script/patter tweak example (safe, non-exposure)`,
+      `3) Blocking / audience focus notes (angles, staging, attention cues)`,
+      `4) 3 rehearsal drills specific to this show` ,
+      `5) One advanced “upgrade” idea if appropriate`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    setApplyOpen(false);
+    onAiSpark({ type: 'custom-prompt', payload: { prompt } });
+  };
+
+  const openConceptMap = (item: DictionaryTerm) => {
+    setMapTerm(item);
+    setMapOpen(true);
   };
 
   return (
@@ -518,6 +724,16 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark }) => {
                 Reset
               </button>
             ) : null}
+
+            <button
+              type="button"
+              onClick={() => setStudyOpen(true)}
+              className="mr-3 px-3 py-2 text-sm rounded-lg border border-slate-700 bg-slate-900/40 text-slate-200 hover:text-white hover:border-slate-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60"
+              aria-label="Open Study Concepts"
+              title="Bookmarked concepts, study lists, and notes"
+            >
+              Study
+            </button>
           </div>
 
           {/* Concept Category Chips */}
@@ -617,13 +833,35 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark }) => {
                         </div>
                       </div>
 
-                      <ChevronDownIcon
-                        className={[
-                          'w-6 h-6 flex-shrink-0 mt-1 text-purple-200/80',
-                          'transition-transform duration-300',
-                          isExpanded ? 'rotate-180' : '',
-                        ].join(' ')}
-                      />
+                      <div className="flex items-center gap-2 flex-shrink-0 mt-1">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            toggleBookmark(item);
+                          }}
+                          className={[
+                            'inline-flex items-center justify-center w-9 h-9 rounded-lg border transition-colors',
+                            isBookmarked(item)
+                              ? 'border-amber-400/40 bg-amber-400/10 text-amber-200 hover:bg-amber-400/15'
+                              : 'border-slate-700 bg-slate-900/30 text-slate-400 hover:text-white hover:border-slate-600',
+                            'focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60',
+                          ].join(' ')}
+                          aria-label={isBookmarked(item) ? 'Remove bookmark' : 'Bookmark this concept'}
+                          title={isBookmarked(item) ? 'Bookmarked (click to remove)' : 'Bookmark this concept'}
+                        >
+                          <BookIcon className="w-4 h-4" />
+                        </button>
+
+                        <ChevronDownIcon
+                          className={[
+                            'w-6 h-6 text-purple-200/80',
+                            'transition-transform duration-300',
+                            isExpanded ? 'rotate-180' : '',
+                          ].join(' ')}
+                        />
+                      </div>
                     </div>
 
                     <div className="mt-3">
@@ -675,6 +913,91 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark }) => {
                         {/* References */}
                         {renderReferences(item)}
 
+                        {/* Saved Study Concepts */}
+                        <div className="rounded-xl border border-slate-700 bg-slate-900/30 p-4">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <h4 className={`text-sm font-semibold ${GOLD_MUTED}`}>Saved Study Concept</h4>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                toggleBookmark(item);
+                              }}
+                              className={[
+                                'inline-flex items-center gap-2 px-3 py-2 text-sm rounded-lg border transition-colors',
+                                isBookmarked(item)
+                                  ? 'border-amber-400/40 bg-amber-400/10 text-amber-200 hover:bg-amber-400/15'
+                                  : 'border-slate-700 bg-slate-900/40 text-slate-300 hover:text-white hover:border-slate-600',
+                                'focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60',
+                              ].join(' ')}
+                            >
+                              <BookIcon className="w-4 h-4" />
+                              {isBookmarked(item) ? 'Bookmarked' : 'Bookmark'}
+                            </button>
+                          </div>
+
+                          {isBookmarked(item) ? (
+                            <div className="mt-4 space-y-3">
+                              {/* Notes */}
+                              <div>
+                                <label className="block text-xs font-semibold text-slate-400 mb-1">Notes</label>
+                                <textarea
+                                  value={study.bookmarked[termSlug(item)]?.notes || ''}
+                                  onChange={(e) => setBookmarkNotes(item, e.target.value)}
+                                  placeholder="What do you want to remember / practice?"
+                                  className="w-full min-h-[84px] rounded-lg bg-slate-950/40 border border-slate-700 px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60"
+                                />
+                              </div>
+
+                              {/* Lists */}
+                              <div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-semibold text-slate-400">Study Lists</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setStudyOpen(true)}
+                                    className="text-xs text-purple-300 hover:text-white transition-colors"
+                                  >
+                                    Manage
+                                  </button>
+                                </div>
+                                {Object.keys(study.lists).length ? (
+                                  <div className="mt-2 flex flex-wrap gap-2">
+                                    {Object.values(study.lists)
+                                      .sort((a, b) => a.name.localeCompare(b.name))
+                                      .map((l) => {
+                                        const on = l.termSlugs.includes(termSlug(item));
+                                        return (
+                                          <button
+                                            key={l.id}
+                                            type="button"
+                                            onClick={() => toggleTermInList(item, l.id)}
+                                            className={[
+                                              'text-xs px-2 py-1 rounded-full border transition-colors',
+                                              on
+                                                ? 'bg-purple-600/20 border-purple-500/40 text-purple-100'
+                                                : 'bg-slate-800/50 border-slate-700 text-slate-300 hover:text-white hover:border-slate-600',
+                                              'focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60',
+                                            ].join(' ')}
+                                          >
+                                            {l.name}
+                                          </button>
+                                        );
+                                      })}
+                                  </div>
+                                ) : (
+                                  <p className="mt-2 text-sm text-slate-500">No study lists yet. Create one in Study →</p>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="mt-3 text-sm text-slate-500">
+                              Bookmark this term to create notes and add it to study lists.
+                            </p>
+                          )}
+                        </div>
+
                         {/* Action row */}
                         <div className="pt-2 flex flex-wrap items-center gap-2">
                           <button
@@ -693,6 +1016,33 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark }) => {
                           >
                             <WandIcon className="w-4 h-4" />
                             Ask AI About This Concept
+                          </button>
+
+                          <button
+                            type="button"
+                            className={[
+                              'inline-flex items-center gap-2 px-3 py-2 text-sm rounded-lg border',
+                              onAiSpark
+                                ? 'border-amber-400/30 bg-amber-400/10 text-amber-200 hover:bg-amber-400/15 hover:border-amber-300/40'
+                                : 'border-slate-700 bg-slate-900/40 text-slate-500 cursor-not-allowed',
+                              'transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60',
+                            ].join(' ')}
+                            onClick={() => openApply(item)}
+                            disabled={!onAiSpark}
+                            aria-label="Apply this concept to my show"
+                            title={!onAiSpark ? 'AI actions unavailable in this view' : 'Apply this concept to a show or routine'}
+                          >
+                            Apply This to My Show
+                          </button>
+
+                          <button
+                            type="button"
+                            className="px-3 py-2 text-sm rounded-lg border border-slate-700 bg-slate-900/40 text-slate-300 hover:text-white hover:border-slate-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60"
+                            onClick={() => openConceptMap(item)}
+                            aria-label="View concept map"
+                            title="View concept connections"
+                          >
+                            View Concept Map
                           </button>
 
                           <button
@@ -725,6 +1075,293 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark }) => {
           </div>
         )}
       </div>
+
+      {/* Tier-2 Modals */}
+
+      {studyOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"
+            onClick={() => setStudyOpen(false)}
+          />
+          <div className="relative w-full max-w-3xl rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-slate-700">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-100">Study Concepts</h3>
+                <p className="text-sm text-slate-400">Bookmarks, study lists, and personal notes.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStudyOpen(false)}
+                className="px-3 py-2 text-sm rounded-lg border border-slate-700 bg-slate-950/40 text-slate-200 hover:text-white hover:border-slate-600 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-5">
+              {/* Bookmarks */}
+              <div className="rounded-xl border border-slate-700 bg-slate-950/30 p-4">
+                <h4 className="text-sm font-semibold text-amber-200">Bookmarked</h4>
+                <p className="text-xs text-slate-500 mt-1">Click a term to open it in the dictionary.</p>
+
+                <div className="mt-3 space-y-2 max-h-[340px] overflow-auto pr-1">
+                  {Object.keys(study.bookmarked).length ? (
+                    Object.keys(study.bookmarked)
+                      .map((slug) => ({ slug, term: getTermBySlug(slug)?.term || slug }))
+                      .sort((a, b) => a.term.localeCompare(b.term))
+                      .map(({ slug, term }) => (
+                        <button
+                          key={slug}
+                          type="button"
+                          onClick={() => {
+                            const t = getTermBySlug(slug)?.term || term;
+                            setStudyOpen(false);
+                            handleRelatedClick(t);
+                          }}
+                          className="w-full text-left px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/40 text-slate-200 hover:border-slate-600 hover:bg-slate-900/55 transition-colors"
+                        >
+                          {term}
+                        </button>
+                      ))
+                  ) : (
+                    <p className="text-sm text-slate-500">No bookmarks yet. Tap the bookmark icon on a term.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Lists */}
+              <div className="rounded-xl border border-slate-700 bg-slate-950/30 p-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-semibold text-slate-200">Study Lists</h4>
+                </div>
+
+                <div className="mt-3 flex items-center gap-2">
+                  <input
+                    value={newListName}
+                    onChange={(e) => setNewListName(e.target.value)}
+                    placeholder="New list name…"
+                    className="flex-1 rounded-lg bg-slate-950/40 border border-slate-700 px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60"
+                  />
+                  <button
+                    type="button"
+                    onClick={createStudyList}
+                    className="px-3 py-2 text-sm rounded-lg border border-purple-500/40 bg-purple-600/15 text-purple-100 hover:bg-purple-600/25 hover:border-purple-400/60 transition-colors"
+                  >
+                    Create
+                  </button>
+                </div>
+
+                <div className="mt-4 space-y-3 max-h-[300px] overflow-auto pr-1">
+                  {Object.keys(study.lists).length ? (
+                    Object.values(study.lists)
+                      .sort((a, b) => a.name.localeCompare(b.name))
+                      .map((l) => (
+                        <div key={l.id} className="rounded-lg border border-slate-700 bg-slate-900/30 p-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <div>
+                              <div className="text-sm font-semibold text-slate-100">{l.name}</div>
+                              <div className="text-xs text-slate-500">{l.termSlugs.length} terms</div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setStudy((prev) => {
+                                  const next: StudyState = { ...prev, bookmarked: { ...prev.bookmarked }, lists: { ...prev.lists } };
+                                  delete next.lists[l.id];
+                                  // remove list ref from bookmarks
+                                  Object.keys(next.bookmarked).forEach((k) => {
+                                    const lists = new Set(next.bookmarked[k].lists || []);
+                                    lists.delete(l.id);
+                                    next.bookmarked[k] = { ...next.bookmarked[k], lists: Array.from(lists) };
+                                  });
+                                  return next;
+                                });
+                              }}
+                              className="text-xs px-2 py-1 rounded-lg border border-slate-700 bg-slate-950/40 text-slate-300 hover:text-white hover:border-slate-600 transition-colors"
+                            >
+                              Delete
+                            </button>
+                          </div>
+
+                          {l.termSlugs.length ? (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {l.termSlugs
+                                .map((slug) => getTermBySlug(slug)?.term || slug)
+                                .sort((a, b) => a.localeCompare(b))
+                                .map((t) => (
+                                  <button
+                                    key={`${l.id}-${t}`}
+                                    type="button"
+                                    onClick={() => {
+                                      setStudyOpen(false);
+                                      handleRelatedClick(t);
+                                    }}
+                                    className="text-xs px-2 py-1 rounded-full border border-slate-700 bg-slate-950/30 text-slate-200 hover:text-white hover:border-slate-600 transition-colors"
+                                  >
+                                    {t}
+                                  </button>
+                                ))}
+                            </div>
+                          ) : (
+                            <p className="mt-2 text-xs text-slate-500">Add terms to this list from any entry’s Study box.</p>
+                          )}
+                        </div>
+                      ))
+                  ) : (
+                    <p className="text-sm text-slate-500">No lists yet. Create one above.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {applyOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" onClick={() => setApplyOpen(false)} />
+          <div className="relative w-full max-w-2xl rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-700">
+              <h3 className="text-lg font-semibold text-slate-100">Apply to My Show</h3>
+              <p className="text-sm text-slate-400">
+                Choose a show (and optional routine/task) so the AI can generate actionable suggestions.
+              </p>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {shows && shows.length ? (
+                <>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-400 mb-1">Show</label>
+                    <select
+                      value={applyShowId}
+                      onChange={(e) => {
+                        setApplyShowId(e.target.value);
+                        setApplyTaskId('');
+                      }}
+                      className="w-full rounded-lg bg-slate-950/40 border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60"
+                    >
+                      {shows
+                        .slice()
+                        .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+                        .map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.title}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-400 mb-1">Routine / Task (optional)</label>
+                    <select
+                      value={applyTaskId}
+                      onChange={(e) => setApplyTaskId(e.target.value)}
+                      className="w-full rounded-lg bg-slate-950/40 border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60"
+                    >
+                      <option value="">(No specific task)</option>
+                      {(shows.find((s) => s.id === applyShowId)?.tasks || []).map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.title}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-slate-500 mt-1">Tip: pick a specific routine for more targeted advice.</p>
+                  </div>
+                </>
+              ) : (
+                <div className="rounded-xl border border-slate-700 bg-slate-950/30 p-4">
+                  <p className="text-sm text-slate-300">You don’t have any shows yet.</p>
+                  <p className="text-sm text-slate-500 mt-1">Create a show in Show Planner, then come back and apply concepts directly to it.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="px-5 py-4 border-t border-slate-700 flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => setApplyOpen(false)}
+                className="px-3 py-2 text-sm rounded-lg border border-slate-700 bg-slate-950/40 text-slate-200 hover:text-white hover:border-slate-600 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={runApplyToShow}
+                disabled={!onAiSpark || !(shows && shows.length) || !applyTerm}
+                className={[
+                  'px-4 py-2 text-sm rounded-lg border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60',
+                  !onAiSpark || !(shows && shows.length) || !applyTerm
+                    ? 'border-slate-700 bg-slate-900/40 text-slate-500 cursor-not-allowed'
+                    : 'border-amber-400/30 bg-amber-400/10 text-amber-200 hover:bg-amber-400/15 hover:border-amber-300/40',
+                ].join(' ')}
+              >
+                Generate Suggestions
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {mapOpen && mapTerm ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" onClick={() => setMapOpen(false)} />
+          <div className="relative w-full max-w-2xl rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-700 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-100">Concept Map</h3>
+                <p className="text-sm text-slate-400">Connections that frequently relate to this idea.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMapOpen(false)}
+                className="px-3 py-2 text-sm rounded-lg border border-slate-700 bg-slate-950/40 text-slate-200 hover:text-white hover:border-slate-600 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="p-5">
+              <div className="rounded-xl border border-purple-500/30 bg-purple-600/10 p-4">
+                <div className="text-xs text-purple-200/80">Center</div>
+                <div className="text-xl font-bold text-amber-200 mt-1">{mapTerm.term}</div>
+                <div className="text-sm text-slate-300 mt-2">{clipOneLine(mapTerm.definition)}</div>
+              </div>
+
+              <div className="mt-4">
+                <div className="text-xs font-semibold text-slate-400">Connected concepts</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {connectionsFor(mapTerm).length ? (
+                    connectionsFor(mapTerm).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => {
+                          setMapOpen(false);
+                          handleRelatedClick(t);
+                        }}
+                        className="text-xs px-2 py-1 rounded-full bg-slate-800/60 border border-slate-700 text-purple-200 hover:text-white hover:border-purple-500/40 transition-colors"
+                      >
+                        {t}
+                      </button>
+                    ))
+                  ) : (
+                    <p className="text-sm text-slate-500">No connections set yet for this term.</p>
+                  )}
+                </div>
+
+                <div className="mt-4 rounded-xl border border-slate-700 bg-slate-950/30 p-4">
+                  <div className="text-sm text-slate-200 font-semibold">Tip</div>
+                  <p className="text-sm text-slate-500 mt-1">
+                    This concept map is based on related-term links. Over time, you can expand the dictionary to create a proprietary theory network.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };
