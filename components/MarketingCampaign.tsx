@@ -89,6 +89,15 @@ const MarketingCampaign: React.FC<MarketingCampaignProps> = ({ user, onIdeaSaved
     const [loadingStepIndex, setLoadingStepIndex] = useState(0);
 
     const [isLoading, setIsLoading] = useState(false);
+    const [celebrate, setCelebrate] = useState(false);
+    const celebrateTimerRef = useRef<number | null>(null);
+
+    useEffect(() => {
+        return () => {
+            if (celebrateTimerRef.current) window.clearTimeout(celebrateTimerRef.current);
+        };
+    }, []);
+
     const [error, setError] = useState<string | null>(null);
     const [result, setResult] = useState<string | null>(null);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
@@ -319,6 +328,20 @@ const activeResult = useMemo(() => {
 }, [personaResults, personaView, result]);
 
 
+const displayResult = useMemo(() => {
+    if (!activeResult) return activeResult;
+    // Add extra breathing room between major sections for easier scanning.
+    // This mimics a ~1.1rem "section margin" in preformatted output.
+    return activeResult
+        // Ensure a blank line before markdown-like headings
+        .replace(/([^\n])\n(#{1,6}\s)/g, '$1\n\n$2')
+        // Ensure a blank line before horizontal rule separators (***)
+        .replace(/([^\n])\n(\*{3,}\s*$)/gm, '$1\n\n$2')
+        // Ensure a blank line before numbered section headers like "## 1."
+        .replace(/([^\n])\n((?:\*\*)?#{1,6}\s*\d+\.)/g, '$1\n\n$2');
+}, [activeResult]);
+
+
 const generateButtonLabel = useMemo(() => {
         if (isLoading) return 'Generating Campaign…';
         if (error) return 'Try Again';
@@ -365,6 +388,10 @@ const generateButtonLabel = useMemo(() => {
           // FIX: Pass the user object to generateResponse as the 3rd argument.
           const response = await generateResponse(prompt, MARKETING_ASSISTANT_SYSTEM_INSTRUCTION, user);
           setResult(response);
+          // Micro-delight: brief success pulse + check flash
+          setCelebrate(true);
+          if (celebrateTimerRef.current) window.clearTimeout(celebrateTimerRef.current);
+          celebrateTimerRef.current = window.setTimeout(() => setCelebrate(false), 1200);
         } catch (err) {
           setError(err instanceof Error ? err.message : "An unknown error occurred.");
         } finally {
@@ -715,6 +742,13 @@ const handleCreateBookingPitch = async () => {
 };
 
     return (
+        <style>{`
+            .mcg-celebrate { box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.35), 0 0 40px rgba(52, 211, 153, 0.12); }
+            .mcg-generated-badge { animation: mcg-pop 520ms ease-out 1; }
+            .mcg-sparkle { display: inline-block; animation: mcg-sparkle 900ms ease-out 1; }
+            @keyframes mcg-pop { 0% { transform: translateY(-6px) scale(0.96); opacity: 0; } 100% { transform: translateY(0) scale(1); opacity: 1; } }
+            @keyframes mcg-sparkle { 0% { transform: scale(0.8) rotate(-8deg); opacity: 0.2; } 60% { transform: scale(1.1) rotate(6deg); opacity: 1; } 100% { transform: scale(1) rotate(0deg); opacity: 0.9; } }
+        `}</style>
         <main className="flex-1 overflow-y-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
             {/* Control Panel */}
             <div className="flex flex-col">
@@ -890,8 +924,16 @@ const handleCreateBookingPitch = async () => {
                         <LoadingIndicator stepText={LOADING_STEPS[loadingStepIndex]} />
                     </div>
                 ) : result ? (
-                     <div className="relative group flex-1 flex flex-col">
+                     <div className={`relative group flex-1 flex flex-col ${celebrate ? 'mcg-celebrate' : ''}`}>
                         <div className="p-4 overflow-y-auto space-y-4 pb-32">
+                            {celebrate && (
+                                <div className="mcg-generated-badge pointer-events-none absolute top-3 right-3 flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-emerald-400/30 bg-emerald-500/10 text-emerald-100 text-xs shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
+                                    <CheckIcon className="w-4 h-4" />
+                                    <span>Campaign generated</span>
+                                    <span className="mcg-sparkle">✨</span>
+                                </div>
+                            )}
+
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
                                     <p className="text-sm font-semibold text-slate-200">AI Strategy Notes</p>
@@ -940,6 +982,7 @@ const handleCreateBookingPitch = async () => {
                                             <button
                                                 key={p.key}
                                                 type="button"
+                                                title={`Rewrites campaign for ${p.label}`}
                                                 onClick={() => {
                                                     setPersonaView(p.key);
                                                     if (p.key !== 'Base' && !personaResults[p.key]) {
@@ -979,7 +1022,7 @@ const handleCreateBookingPitch = async () => {
                                 </div>
                             </div>
 
-                            <pre className="whitespace-pre-wrap break-words text-slate-200 font-sans text-sm">{activeResult}</pre>
+                            <pre className="mcg-output whitespace-pre-wrap break-words text-slate-200 font-sans text-sm leading-relaxed">{displayResult}</pre>
                         </div>
                         <div className="sticky bottom-0 z-30 p-2.5 bg-slate-950/90 backdrop-blur-md flex flex-col gap-2 border-t border-slate-800 shadow-[0_-8px_24px_rgba(0,0,0,0.35)]">
                             {actionNotice && (
