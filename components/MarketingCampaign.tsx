@@ -372,50 +372,172 @@ const generateButtonLabel = useMemo(() => {
     };
   
     
-    const handleGeneratePersona = async (personaKey: (typeof PERSONA_VERSIONS)[number]['key']) => {
+    
+    const localPersonaTransform = (base: string, personaKey: (typeof PERSONA_VERSIONS)[number]['key']) => {
+        // Lightweight, deterministic “delta edits” (no extra AI calls).
+        // Goal: keep the structure identical, but tweak tone/benefits/hooks for the selected persona.
+
+        const profiles: Record<string, { tone: string; angle: string; hook: string; addOns: string[]; taglineSeeds: string[]; }> = {
+            'Corporate Buyers': {
+                tone: 'premium, confident, business-forward',
+                angle: 'employee engagement + client wow-factor',
+                hook: 'a polished, interactive experience that feels “high value” and easy to book',
+                addOns: [
+                    'Emphasize reliability, professionalism, and clear run-of-show.',
+                    'Mention options for branded moments, awards, or client appreciation.',
+                    'Highlight minimal setup, flexible time blocks, and “works in any room”.',
+                ],
+                taglineSeeds: [
+                    'Turn your event into a standout experience.',
+                    'Premium magic. Real engagement.',
+                    'Make the room talk about your brand.',
+                ],
+            },
+            'Parents': {
+                tone: 'warm, reassuring, family-friendly',
+                angle: 'age-appropriate wonder + laughter',
+                hook: 'a safe, inclusive show that keeps kids engaged and parents impressed',
+                addOns: [
+                    'Stress “family-friendly”, age-appropriate humor, and positive participation.',
+                    'Mention birthday parties, school events, and family gatherings.',
+                    'Highlight clear boundaries: no scary moments, no embarrassing volunteers.',
+                ],
+                taglineSeeds: [
+                    'Big laughs. Bigger wonder.',
+                    'Family-friendly magic they’ll remember.',
+                    'Where kids sparkle and parents relax.',
+                ],
+            },
+            'Event Planners': {
+                tone: 'practical, organized, planner-friendly',
+                angle: 'stress-free booking + smooth logistics',
+                hook: 'a plug-and-play entertainment solution with clear requirements and fast comms',
+                addOns: [
+                    'Call out fast setup, simple tech needs, and flexible staging.',
+                    'Emphasize communication, professionalism, and timeline coordination.',
+                    'Include a short “what we need” bullet: space, sound, and timing.',
+                ],
+                taglineSeeds: [
+                    'Easy to book. Easy to love.',
+                    'Entertainment that runs on time.',
+                    'A planner’s favorite surprise.',
+                ],
+            },
+            'Festival Coordinators': {
+                tone: 'high-energy, crowd-friendly, adaptable',
+                angle: 'big reactions + fast reset + repeatable sets',
+                hook: 'a flexible show that can scale to crowds and keep energy high all day',
+                addOns: [
+                    'Highlight quick reset, repeatable sets, and strong crowd draw.',
+                    'Mention walkaround/roving options and “instant attention” openers.',
+                    'Emphasize outdoor/variable conditions readiness (within reason).',
+                ],
+                taglineSeeds: [
+                    'Stop the crowd. Start the applause.',
+                    'Big energy. Big reactions.',
+                    'The show people follow.',
+                ],
+            },
+        };
+
+        const profile = profiles[personaKey] || {
+            tone: 'tailored, audience-aligned',
+            angle: 'strong audience fit',
+            hook: 'a message tuned to this buyer',
+            addOns: [],
+            taglineSeeds: [],
+        };
+
+        // Helper: insert persona notes near the top without breaking the user-facing sections.
+        const header = `### Persona Focus — ${personaKey}
+` +
+            `**Tone:** ${profile.tone}
+` +
+            `**Primary Angle:** ${profile.angle}
+` +
+            `**Target Hook:** ${profile.hook}
+` +
+            (profile.addOns.length ? `**Emphasis:**
+- ${profile.addOns.join('\n- ')}
+` : '') +
+            `
+---
+
+`;
+
+        let out = base;
+
+        // Light replacements to nudge language.
+        const replacements: Array<[RegExp, string]> = [
+            [/booking/gi, 'booking'],
+            [/venue/gi, 'venue'],
+        ];
+
+        // Persona-specific replacements
+        if (personaKey === 'Corporate Buyers') {
+            replacements.push([/(birthday|kids?|children)/gi, 'guests']);
+            replacements.push([/(family[- ]friendly)/gi, 'premium']);
+        } else if (personaKey === 'Parents') {
+            replacements.push([/(corporate|executive|client)/gi, 'family']);
+            replacements.push([/(ROI|brand)/gi, 'memories']);
+        } else if (personaKey === 'Event Planners') {
+            replacements.push([/(amazing|incredible)/gi, 'reliable']);
+            replacements.push([/(viral)/gi, 'high-response']);
+        } else if (personaKey === 'Festival Coordinators') {
+            replacements.push([/(elegant)/gi, 'high-energy']);
+            replacements.push([/(intimate)/gi, 'crowd-ready']);
+        }
+
+        for (const [rx, rep] of replacements) {
+            out = out.replace(rx, rep);
+        }
+
+        // Add persona-tailored taglines (append near Taglines section if present).
+        if (profile.taglineSeeds.length) {
+            const taglineBlock = `\n\n**Persona Taglines (${personaKey})**\n- ${profile.taglineSeeds.join('\n- ')}\n`;
+            if (/\bTaglines\b/i.test(out)) {
+                out = out.replace(/(\bTaglines\b[\s\S]*?)(\n\n|$)/i, (match) => match + taglineBlock + '\n');
+            } else {
+                out += taglineBlock;
+            }
+        }
+
+        // Add a small “Planner Notes” block for Event Planners if not already present.
+        if (personaKey === 'Event Planners' && !/Planner Notes/i.test(out)) {
+            out += `\n\n**Planner Notes**\n- Typical setup: 5–10 minutes\n- Audio: can plug into house sound or provide compact speaker\n- Space: works on a small stage or floor area\n- Timing: flexible sets (10 / 20 / 30 / 45 minutes)\n`;
+        }
+
+        // Add a small “Corporate Proof” nudge.
+        if (personaKey === 'Corporate Buyers' && !/credibility|testimonials|past clients/i.test(out)) {
+            out += `\n\n**Credibility Proof (Add if available)**\n- Mention 1–2 recognizable past clients, testimonials, or event types (e.g., conferences, awards dinners).\n`;
+        }
+
+        // Prepend header (keeps original sections intact below).
+        return header + out;
+    };
+
+    const handleGeneratePersona = (personaKey: (typeof PERSONA_VERSIONS)[number]['key']) => {
         if (!result) return;
         if (personaKey === 'Base') {
             setPersonaView('Base');
             return;
         }
 
+        // Instant local generation — no AI call, but keep a tiny “working” state for UI continuity.
         setIsGeneratingPersona(true);
         setError(null);
         setActionNotice(null);
 
-        const allAudiences = [...selectedAudiences];
-        if (customAudience.trim()) allAudiences.push(customAudience.trim());
-
-        const personaInstruction = `Create a tailored version of the campaign specifically for: ${personaKey}. Keep the same show identity, but adjust tone, benefits, and hooks for that buyer/audience.`;
-
-        const prompt = `
-            You previously generated a marketing campaign toolkit for this show.
-            Now generate a persona-specific version.
-
-            - **Show Title:** ${showTitle}
-            - **Target Audience:** ${allAudiences.join(', ')}
-            - **Performance Style/Persona:** ${selectedStyles.join(', ') || 'Not specified'}
-            - **Campaign Style Template:** ${campaignStyle || 'Not specified'}
-            - **Key Effects or Themes:** ${keyThemes || 'Not specified'}
-
-            Persona request:
-            - ${personaInstruction}
-
-            Output:
-            - Keep the same section structure (Press Release, Social Posts, Email Campaign, Taglines, Poster Copy, Booking Pitch)
-            - Replace placeholders where possible with high-quality examples (keep venue/date placeholders if unknown)
-        `;
-
         try {
-            const response = await generateResponse(prompt, MARKETING_ASSISTANT_SYSTEM_INSTRUCTION, user);
-            setPersonaResults(prev => ({ ...prev, [personaKey]: response }));
+            const transformed = localPersonaTransform(result, personaKey);
+            setPersonaResults(prev => ({ ...prev, [personaKey]: transformed }));
             setPersonaView(personaKey);
-            setActionNotice(`Persona version generated for “${personaKey}”.`);
+            setActionNotice(`Persona version generated locally for “${personaKey}”.`);
             window.setTimeout(() => setActionNotice(null), 4500);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'An unknown error occurred.');
         } finally {
-            setIsGeneratingPersona(false);
+            window.setTimeout(() => setIsGeneratingPersona(false), 250);
         }
     };
 
