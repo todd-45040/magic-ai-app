@@ -32,6 +32,8 @@ import HelpModal from './HelpModal';
 import PatterEngine from './PatterEngine';
 import MagicWire from './MagicWire';
 import MarketingCampaign from './MarketingCampaign';
+import ClientProposals from './ClientProposals';
+import BookingPitches from './BookingPitches';
 import ContractGenerator from './ContractGenerator';
 import AssistantStudio from './AssistantStudio';
 import DirectorMode from './DirectorMode';
@@ -1311,6 +1313,8 @@ useEffect(() => {
 
   const [initialShowId, setInitialShowId] = useState<string | null>(null);
   const [initialTaskId, setInitialTaskId] = useState<string | null>(null);
+  const [initialProposalId, setInitialProposalId] = useState<string | null>(null);
+  const [initialPitchId, setInitialPitchId] = useState<string | null>(null);
 
   const handleOpenShowPlannerFromClient = (showId: string | null, taskId?: string | null) => {
     setInitialShowId(showId ?? null);
@@ -2113,6 +2117,32 @@ useEffect(() => {
                 setInitialShowId(showId);
                 setActiveView('show-planner');
               }}
+              onNavigate={(view, id) => {
+                if (view === 'client-proposals') {
+                  setInitialProposalId(id);
+                  setActiveView('client-proposals');
+                  return;
+                }
+                if (view === 'booking-pitches') {
+                  setInitialPitchId(id);
+                  setActiveView('booking-pitches');
+                  return;
+                }
+              }}
+            />
+          );
+        case 'client-proposals':
+          return (
+            <ClientProposals
+              initialId={initialProposalId}
+              onBack={() => setActiveView('marketing-campaign')}
+            />
+          );
+        case 'booking-pitches':
+          return (
+            <BookingPitches
+              initialId={initialPitchId}
+              onBack={() => setActiveView('marketing-campaign')}
             />
           );
         case 'contract-generator':

@@ -34,6 +34,33 @@ export interface SavedIdea {
   tags?: string[];
 }
 
+export interface ClientProposal {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: number;
+  source?: {
+    showTitle?: string;
+    targetAudience?: string;
+    performanceStyle?: string;
+    campaignStyle?: string;
+  };
+}
+
+export interface BookingPitch {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: number;
+  source?: {
+    showTitle?: string;
+    targetAudience?: string;
+    performanceStyle?: string;
+    campaignStyle?: string;
+  };
+}
+
+
 export interface TrickIdentificationResult {
   trickName: string;
   videoExamples: {
@@ -334,6 +361,8 @@ export type MagicianView =
   | 'patter-engine'
   | 'mentalism-assistant'
   | 'marketing-campaign'
+  | 'client-proposals'
+  | 'booking-pitches'
   | 'contract-generator'
   | 'assistant-studio'
   | 'director-mode'

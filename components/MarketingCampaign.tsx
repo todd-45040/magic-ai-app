@@ -2,6 +2,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { generateResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
+import { createClientProposal } from '../services/proposalsService';
+import { createBookingPitch } from '../services/pitchesService';
 import { createShow, addTasksToShow } from '../services/showsService';
 import { MARKETING_ASSISTANT_SYSTEM_INSTRUCTION } from '../constants';
 import { MegaphoneIcon, WandIcon, SaveIcon, CheckIcon, ShareIcon, UsersIcon, StageCurtainsIcon, CalendarIcon, FileTextIcon, MailIcon, BlueprintIcon, ChevronDownIcon, SendIcon } from './icons';
@@ -12,6 +14,7 @@ interface MarketingCampaignProps {
     user: User;
     onIdeaSaved: () => void;
     onNavigateToShowPlanner?: (showId: string) => void;
+    onNavigate?: (view: 'client-proposals' | 'booking-pitches', id: string) => void;
 }
 
 const LoadingIndicator: React.FC<{ stepText: string }> = ({ stepText }) => (
@@ -65,7 +68,7 @@ const LOADING_STEPS = [
 ];
 
 
-const MarketingCampaign: React.FC<MarketingCampaignProps> = ({ user, onIdeaSaved, onNavigateToShowPlanner }) => {
+const MarketingCampaign: React.FC<MarketingCampaignProps> = ({ user, onIdeaSaved, onNavigateToShowPlanner, onNavigate }) => {
     const [showTitle, setShowTitle] = useState('');
     const [selectedAudiences, setSelectedAudiences] = useState<string[]>([]);
     const [customAudience, setCustomAudience] = useState('');
@@ -403,6 +406,70 @@ const generateButtonLabel = useMemo(() => {
         window.setTimeout(() => setActionNotice(null), 2200);
     };
 
+
+const handleCreateClientProposal = async () => {
+    if (!result) return;
+    setIsSendingToPlanner(false);
+    setActionNotice(null);
+    try {
+        const title = `${showTitle || 'Marketing Campaign'} — Client Proposal`;
+        const { proposal, savedToIdeasFallback } = await createClientProposal({
+            title,
+            content: result,
+            source: {
+                showTitle,
+                targetAudience: targetAudience === 'Other' ? otherAudience : targetAudience,
+                performanceStyle,
+                campaignStyle,
+            }
+        });
+
+        if (savedToIdeasFallback) {
+            setActionNotice('Client Proposal created (saved to Saved Ideas because proposals table is not configured yet).');
+        } else {
+            setActionNotice('Client Proposal created ✓');
+        }
+        window.setTimeout(() => setActionNotice(null), 2600);
+
+        // Navigate to the proposals hub if available
+        onNavigate?.('client-proposals', proposal.id);
+    } catch (err: any) {
+        const msg = String(err?.message ?? 'Failed to create proposal');
+        setActionNotice(`Client Proposal: ${msg}`);
+    }
+};
+
+const handleCreateBookingPitch = async () => {
+    if (!result) return;
+    setIsSendingToPlanner(false);
+    setActionNotice(null);
+    try {
+        const title = `${showTitle || 'Marketing Campaign'} — Booking Pitch`;
+        const { pitch, savedToIdeasFallback } = await createBookingPitch({
+            title,
+            content: result,
+            source: {
+                showTitle,
+                targetAudience: targetAudience === 'Other' ? otherAudience : targetAudience,
+                performanceStyle,
+                campaignStyle,
+            }
+        });
+
+        if (savedToIdeasFallback) {
+            setActionNotice('Booking Pitch created (saved to Saved Ideas because pitches table is not configured yet).');
+        } else {
+            setActionNotice('Booking Pitch created ✓');
+        }
+        window.setTimeout(() => setActionNotice(null), 2600);
+
+        onNavigate?.('booking-pitches', pitch.id);
+    } catch (err: any) {
+        const msg = String(err?.message ?? 'Failed to create pitch');
+        setActionNotice(`Booking Pitch: ${msg}`);
+    }
+};
+
     return (
         <main className="flex-1 overflow-y-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
             {/* Control Panel */}
@@ -629,7 +696,7 @@ const generateButtonLabel = useMemo(() => {
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => handleQuickExportIdea('Client Proposal')}
+                                    onClick={handleCreateClientProposal}
                                     disabled={!result}
                                     className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
@@ -647,7 +714,7 @@ const generateButtonLabel = useMemo(() => {
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => handleQuickExportIdea('Booking Pitch Builder')}
+                                    onClick={handleCreateBookingPitch}
                                     disabled={!result}
                                     className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
