@@ -17,41 +17,48 @@ const GUEST_USER: User = {
   lastResetDate: '',
 };
 
-const PRESETS: Array<{ label: string; template: (input: string) => string }> = [
+const PRESETS: Array<{ label: string; template: (input: string) => string; tag?: string }> = [
   {
     label: 'Tighten Script',
+    tag: 'tighten',
     template: (input) =>
       `Tighten this script. Keep my voice, remove fluff, sharpen phrasing, and improve clarity.\n\nSCRIPT/NOTES:\n${input}`,
   },
   {
     label: 'Add Callbacks',
+    tag: 'callbacks',
     template: (input) =>
       `Add 2–4 strong callbacks and running gags that pay off later. Show exactly where they land.\n\nSCRIPT/NOTES:\n${input}`,
   },
   {
     label: 'Improve Transitions',
+    tag: 'transitions',
     template: (input) =>
       `Improve transitions between beats/props. Give clean, motivated bridges and one-liners that justify the next effect.\n\nSCRIPT/NOTES:\n${input}`,
   },
   {
     label: 'Comedy Pass',
+    tag: 'comedy',
     template: (input) =>
       `Do a comedy pass: add laughs without undercutting the magic. Provide options: dry, playful, and cheeky (family-safe).\n\nSCRIPT/NOTES:\n${input}`,
   },
   {
     label: 'Walkaround Version',
+    tag: 'walkaround',
     template: (input) =>
       `Rewrite/adjust this for walkaround/close-up: quick reset, angle safety, audience management, pocket management, and louder lines.\n\nSCRIPT/NOTES:\n${input}`,
   },
   {
     label: 'Family-Friendly Pass',
+    tag: 'family',
     template: (input) =>
       `Make this 100% family-friendly while staying funny and strong. Remove anything edgy and replace with clean alternatives.\n\nSCRIPT/NOTES:\n${input}`,
   },
 ];
 
-const DRAFT_KEY = 'maw_assistant_studio_draft_v2';
+const DRAFT_KEY = 'maw_assistant_studio_draft_v3';
 const WALKAROUND_KEY = 'maw_assistant_studio_walkaround_v1';
+const CONTEXT_KEY = 'maw_assistant_studio_context_v1';
 const REQUEST_TIMEOUT_MS = 45_000;
 
 type ErrorKind = 'timeout' | 'quota' | 'other' | null;
@@ -70,7 +77,7 @@ type StructuredOutput = Partial<Record<SectionKey, string>>;
 const TABS: Array<{ key: SectionKey; label: string }> = [
   { key: 'quickWins', label: 'Quick Wins' },
   { key: 'lineEdits', label: 'Line Edits' },
-  { key: 'structureNotes', label: 'Structure' },
+  { key: 'structureNotes', label: 'Director Notes' },
   { key: 'audienceFit', label: 'Audience Fit' },
   { key: 'rehearsalTasks', label: 'Rehearsal Tasks' },
   { key: 'walkaroundRewrite', label: 'Walkaround Rewrite' },
@@ -83,6 +90,18 @@ const REFINE_ACTIONS: Array<{ label: string; instruction: string }> = [
   { label: 'More comedy', instruction: 'Increase comedy: add laughs without undercutting the magic.' },
   { label: 'Shorter', instruction: 'Make it shorter: remove repetition, cut fluff, keep strongest lines.' },
   { label: 'Cleaner', instruction: 'Make it cleaner: simplify wording, clarify actions, remove ambiguity.' },
+];
+
+const VENUE_TYPES = [
+  'Corporate',
+  'Birthday / Family',
+  'School',
+  'Wedding',
+  'Restaurant',
+  'Festival / Street',
+  'Theater / Stage',
+  'Close-up / Walkaround',
+  'Other',
 ];
 
 function Skeleton() {
@@ -149,7 +168,6 @@ function parseStructured(raw: string): StructuredOutput {
 
   const out: StructuredOutput = { fullText: raw?.trim() || '' };
 
-  // If headings aren't present, return only fullText.
   if (!raw.includes(headers.quickWins)) return out;
 
   const all = Object.values(headers);
@@ -168,13 +186,36 @@ function parseStructured(raw: string): StructuredOutput {
   return out;
 }
 
+function formatNotesBlock(output: StructuredOutput, fallback: string) {
+  const director = output.structureNotes?.trim();
+  const lines = output.lineEdits?.trim();
+  const audience = output.audienceFit?.trim();
+  const tasks = output.rehearsalTasks?.trim();
+
+  const parts: string[] = [];
+  if (director) parts.push(`DIRECTOR NOTES\n${director}`);
+  if (lines) parts.push(`LINE EDITS\n${lines}`);
+  if (audience) parts.push(`AUDIENCE FIT\n${audience}`);
+  if (tasks) parts.push(`REHEARSAL TASKS\n${tasks}`);
+
+  return parts.length ? parts.join('\n\n') : fallback;
+}
+
 function buildStructuredPrompt(opts: {
   userInput: string;
   walkaroundOn: boolean;
   refineInstruction?: string | null;
   previousOutput?: string | null;
+  context?: { clientName?: string; venueType?: string; audienceSize?: string };
 }) {
-  const { userInput, walkaroundOn, refineInstruction, previousOutput } = opts;
+  const { userInput, walkaroundOn, refineInstruction, previousOutput, context } = opts;
+
+  const contextLines: string[] = [];
+  if (context?.clientName) contextLines.push(`Client: ${context.clientName}`);
+  if (context?.venueType) contextLines.push(`Venue type: ${context.venueType}`);
+  if (context?.audienceSize) contextLines.push(`Audience size: ${context.audienceSize}`);
+
+  const contextBlock = contextLines.length ? `\n\nCONTEXT:\n${contextLines.join('\n')}` : '';
 
   const walkaroundGuidance = walkaroundOn
     ? `\n\nWALKAROUND OPTIMIZER (ON): Rewrite/adjust for walkaround/close-up with: quick reset speed, angle safety, audience management, pocket management, louder lines, and smooth transitions between groups. Include a WALKAROUND_REWRITE section.`
@@ -193,12 +234,13 @@ function buildStructuredPrompt(opts: {
     `\n### LINE_EDITS` +
     `\nProvide direct line edits + replacement lines. Use short bullet points.` +
     `\n### STRUCTURE_NOTES` +
-    `\nBeats, pacing, callbacks, escalation, clarity.` +
+    `\nBeats, pacing, callbacks, escalation, clarity. Think like a director.` +
     `\n### AUDIENCE_FIT` +
     `\nAdjustments for family, corporate, close-up. Be specific.` +
     `\n### REHEARSAL_TASKS` +
     `\n- [ ] Actionable checklist items (6–10).` +
     (walkaroundOn ? `\n### WALKAROUND_REWRITE\nGive a cleaned-up walkaround-ready rewrite.` : '') +
+    contextBlock +
     `\n\nUSER INPUT:\n${userInput}` +
     walkaroundGuidance +
     refineBlock
@@ -224,6 +266,12 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
 
   const [toast, setToast] = useState<string | null>(null);
 
+  // Tier-4: Context + Blueprint metadata
+  const [clientName, setClientName] = useState('');
+  const [venueType, setVenueType] = useState('');
+  const [audienceSize, setAudienceSize] = useState('');
+  const [lastPreset, setLastPreset] = useState<string>('');
+
   // Walkaround optimizer toggle
   const [walkaroundOn, setWalkaroundOn] = useState(false);
 
@@ -239,14 +287,27 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
   const [shows, setShows] = useState<Show[]>([]);
   const [showPickerOpen, setShowPickerOpen] = useState(false);
   const [selectedShowId, setSelectedShowId] = useState<string>('');
+  const [sendMode, setSendMode] = useState<'run' | 'sections'>('run');
 
-  // Autosave draft prompt + walkaround toggle
+  // Blueprint modal
+  const [blueprintOpen, setBlueprintOpen] = useState(false);
+  const [blueprintName, setBlueprintName] = useState('');
+  const [savingBlueprint, setSavingBlueprint] = useState(false);
+
+  // Autosave draft prompt + context + walkaround toggle
   useEffect(() => {
     try {
       const saved = localStorage.getItem(DRAFT_KEY);
       if (saved) setInput(saved);
       const w = localStorage.getItem(WALKAROUND_KEY);
       if (w === '1') setWalkaroundOn(true);
+      const ctx = localStorage.getItem(CONTEXT_KEY);
+      if (ctx) {
+        const parsed = JSON.parse(ctx);
+        setClientName(parsed?.clientName || '');
+        setVenueType(parsed?.venueType || '');
+        setAudienceSize(parsed?.audienceSize || '');
+      }
     } catch {
       // ignore
     }
@@ -267,6 +328,14 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
       // ignore
     }
   }, [walkaroundOn]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(CONTEXT_KEY, JSON.stringify({ clientName, venueType, audienceSize }));
+    } catch {
+      // ignore
+    }
+  }, [clientName, venueType, audienceSize]);
 
   useEffect(() => {
     let mounted = true;
@@ -330,9 +399,13 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
         walkaroundOn,
         refineInstruction: opts?.refineInstruction || null,
         previousOutput: opts?.usePrevious ? outputRaw : null,
+        context: { clientName, venueType, audienceSize },
       });
 
-      const text = await withTimeout(generateResponse(prompt, ASSISTANT_STUDIO_SYSTEM_INSTRUCTION, currentUser), REQUEST_TIMEOUT_MS);
+      const text = await withTimeout(
+        generateResponse(prompt, ASSISTANT_STUDIO_SYSTEM_INSTRUCTION, currentUser),
+        REQUEST_TIMEOUT_MS
+      );
 
       if (cancelledUpToRef.current >= myId) return;
 
@@ -340,7 +413,6 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
       const parsed = parseStructured(text);
       setOutput(parsed);
 
-      // tab behavior: keep user tab if it exists, else default to quick wins, else full text
       if (parsed.quickWins) setActiveTab('quickWins');
       else setActiveTab('fullText');
     } catch (e: any) {
@@ -385,6 +457,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
     setActiveTab('quickWins');
     setInput('');
     setCopied(false);
+    setLastPreset('');
     try {
       localStorage.removeItem(DRAFT_KEY);
     } catch {
@@ -415,14 +488,23 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
     }
   };
 
-  const handleSave = async () => {
+  const handleSaveIdea = async () => {
     if (!outputRaw) return;
     try {
-      const title = 'Assistant Studio Output';
-      const content = outputRaw;
-      const tags = ['assistant-studio', ...(walkaroundOn ? ['walkaround'] : [])];
+      const tags = [
+        'assistant-studio',
+        ...(walkaroundOn ? ['walkaround'] : []),
+        ...(lastPreset ? [lastPreset] : []),
+        ...(venueType ? [venueType.toLowerCase().replace(/\s+/g, '-')] : []),
+      ];
 
-      await saveIdea({ type: 'text', title, content, tags });
+      await saveIdea({
+        type: 'text',
+        title: 'Assistant Studio Output',
+        content: outputRaw,
+        tags,
+      });
+
       onIdeaSaved?.();
       setToast('Saved to Ideas ✓');
       window.setTimeout(() => setToast(null), 1400);
@@ -434,26 +516,116 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
     }
   };
 
+  // Tier-4: Save as Blueprint (stored in Ideas with blueprint tag + metadata header)
+  const openBlueprint = () => {
+    setBlueprintName(
+      blueprintName ||
+        (lastPreset ? `Blueprint – ${lastPreset.replace(/-/g, ' ')}` : 'Blueprint – Assistant Studio')
+    );
+    setBlueprintOpen(true);
+  };
+
+  const saveBlueprint = async () => {
+    if (!outputRaw) return;
+
+    setSavingBlueprint(true);
+    clearErrors();
+    setToast(null);
+
+    const meta = {
+      preset: lastPreset || null,
+      walkaround: walkaroundOn,
+      context: { clientName: clientName || null, venueType: venueType || null, audienceSize: audienceSize || null },
+      createdAt: new Date().toISOString(),
+    };
+
+    const header = [
+      `BLUEPRINT: ${blueprintName || 'Assistant Studio Blueprint'}`,
+      `Preset: ${meta.preset || '—'}`,
+      `Walkaround Optimizer: ${meta.walkaround ? 'ON' : 'OFF'}`,
+      meta.context.clientName ? `Client: ${meta.context.clientName}` : '',
+      meta.context.venueType ? `Venue: ${meta.context.venueType}` : '',
+      meta.context.audienceSize ? `Audience: ${meta.context.audienceSize}` : '',
+      '',
+      '---',
+      '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    const content = header + outputRaw;
+
+    const tags = [
+      'assistant-studio',
+      'blueprint',
+      ...(walkaroundOn ? ['walkaround'] : []),
+      ...(lastPreset ? [lastPreset] : []),
+      ...(venueType ? [venueType.toLowerCase().replace(/\s+/g, '-')] : []),
+    ];
+
+    try {
+      await saveIdea({
+        type: 'text',
+        title: blueprintName || 'Assistant Studio Blueprint',
+        content,
+        tags,
+      });
+
+      setBlueprintOpen(false);
+      setToast('Blueprint saved ✓');
+      window.setTimeout(() => setToast(null), 1500);
+    } catch (e: any) {
+      console.error(e);
+      setErrorKind('other');
+      setErrorMsg(e?.message || 'Could not save blueprint.');
+      setErrorDebug('saveBlueprint_failed');
+    } finally {
+      setSavingBlueprint(false);
+    }
+  };
+
   const openSend = () => setShowPickerOpen(true);
 
+  // Tier-4: Send to Show Planner as 4-part run OR sections
   const sendToShowPlanner = async () => {
     if (!selectedShowId || !outputRaw) return;
     setSending(true);
     setToast(null);
     clearErrors();
 
-    const notes = outputRaw;
+    const directorAndLines = formatNotesBlock(output, outputRaw);
+    const quick = output.quickWins?.trim();
+    const walk = output.walkaroundRewrite?.trim();
 
-    const tasks: Partial<Task>[] = [
-      { title: 'Assistant Studio – Quick Wins', notes: output.quickWins || notes, priority: 'medium' as any },
-      { title: 'Assistant Studio – Line Edits', notes: output.lineEdits || notes, priority: 'medium' as any },
-      { title: 'Assistant Studio – Structure Notes', notes: output.structureNotes || notes, priority: 'medium' as any },
-      { title: 'Assistant Studio – Audience Fit', notes: output.audienceFit || notes, priority: 'medium' as any },
-      { title: 'Assistant Studio – Rehearsal Tasks', notes: output.rehearsalTasks || notes, priority: 'medium' as any },
-    ];
+    const makeRunNotes = (part: string) => {
+      const parts: string[] = [];
+      parts.push(`PART: ${part}`);
+      if (quick) parts.push(`\nQUICK WINS\n${quick}`);
+      parts.push(`\n${directorAndLines}`);
+      if (walkaroundOn && walk) parts.push(`\nWALKAROUND NOTES\n${walk}`);
+      return parts.join('\n');
+    };
 
-    if (walkaroundOn && output.walkaroundRewrite) {
-      tasks.push({ title: 'Assistant Studio – Walkaround Rewrite', notes: output.walkaroundRewrite, priority: 'medium' as any });
+    let tasks: Partial<Task>[] = [];
+
+    if (sendMode === 'run') {
+      tasks = [
+        { title: 'Opener', notes: makeRunNotes('Opener'), priority: 'high' as any },
+        { title: 'Middle 1', notes: makeRunNotes('Middle 1'), priority: 'medium' as any },
+        { title: 'Middle 2', notes: makeRunNotes('Middle 2'), priority: 'medium' as any },
+        { title: 'Closer', notes: makeRunNotes('Closer'), priority: 'high' as any },
+      ];
+    } else {
+      tasks = [
+        { title: 'Assistant Studio – Quick Wins', notes: output.quickWins || outputRaw, priority: 'medium' as any },
+        { title: 'Assistant Studio – Line Edits', notes: output.lineEdits || outputRaw, priority: 'medium' as any },
+        { title: 'Assistant Studio – Director Notes', notes: output.structureNotes || outputRaw, priority: 'medium' as any },
+        { title: 'Assistant Studio – Audience Fit', notes: output.audienceFit || outputRaw, priority: 'medium' as any },
+        { title: 'Assistant Studio – Rehearsal Tasks', notes: output.rehearsalTasks || outputRaw, priority: 'medium' as any },
+      ];
+      if (walkaroundOn && output.walkaroundRewrite) {
+        tasks.push({ title: 'Assistant Studio – Walkaround Rewrite', notes: output.walkaroundRewrite, priority: 'medium' as any });
+      }
     }
 
     try {
@@ -491,6 +663,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
     const preset = PRESETS[presetIndex];
     const base = input.trim();
     setInput(preset.template(base || '[Paste your script/notes here]'));
+    setLastPreset(preset.tag || preset.label.toLowerCase().replace(/\s+/g, '-'));
   };
 
   const reportIssue = async () => {
@@ -532,12 +705,10 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
       if (t.key === 'fullText') return true;
       return !!output?.[t.key];
     });
-    // If we couldn't parse anything, still show Full Text.
     if (!outputRaw) return base;
     if (!output.quickWins && !output.lineEdits && !output.structureNotes && !output.audienceFit && !output.rehearsalTasks) {
       return [{ key: 'fullText', label: 'Full Text' }];
     }
-    // Always include Full Text at end
     if (!base.find((t) => t.key === 'fullText')) base.push({ key: 'fullText', label: 'Full Text' });
     return base;
   }, [output, outputRaw, walkaroundOn]);
@@ -549,7 +720,6 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
         <div className="text-sm text-slate-400 min-h-[1.25rem]">{toast ? <span className="text-emerald-400">{toast}</span> : null}</div>
       </div>
 
-      {/* Two-column tool layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* LEFT: Input */}
         <div className="space-y-3">
@@ -564,6 +734,34 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
                 {p.label}
               </button>
             ))}
+          </div>
+
+          {/* Tier-4: Context selectors */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <input
+              value={clientName}
+              onChange={(e) => setClientName(e.target.value)}
+              placeholder="Client (optional)"
+              className="p-2 rounded bg-slate-950/60 border border-slate-700 text-white"
+            />
+            <select
+              value={venueType}
+              onChange={(e) => setVenueType(e.target.value)}
+              className="p-2 rounded bg-slate-950/60 border border-slate-700 text-white"
+            >
+              <option value="">Venue type (optional)</option>
+              {VENUE_TYPES.map((v) => (
+                <option key={v} value={v}>
+                  {v}
+                </option>
+              ))}
+            </select>
+            <input
+              value={audienceSize}
+              onChange={(e) => setAudienceSize(e.target.value)}
+              placeholder="Audience size (optional)"
+              className="p-2 rounded bg-slate-950/60 border border-slate-700 text-white"
+            />
           </div>
 
           {/* Walkaround toggle */}
@@ -593,7 +791,10 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
 
           {/* Refine controls */}
           <div className="pt-2 border-t border-slate-800/60">
-            <div className="text-xs text-slate-400 mb-2">Refine:</div>
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <div className="text-xs text-slate-400">Refine:</div>
+              {lastPreset ? <div className="text-xs text-slate-500">Preset: <span className="text-slate-300">{lastPreset}</span></div> : null}
+            </div>
             <div className="flex flex-wrap gap-2">
               {REFINE_ACTIONS.map((r) => (
                 <button
@@ -672,7 +873,6 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
               </div>
             ) : outputRaw ? (
               <>
-                {/* Output tabs */}
                 <div className="flex flex-wrap gap-2 mb-3">
                   {availableTabs.map((t) => (
                     <button
@@ -711,7 +911,19 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
               </button>
             </div>
 
-            <div className="mt-4 space-y-3">
+            <div className="mt-4 space-y-4">
+              {/* Mode switch */}
+              <div className="flex flex-col gap-2 text-sm text-slate-200">
+                <label className="flex items-center gap-2">
+                  <input type="radio" name="sendMode" checked={sendMode === 'run'} onChange={() => setSendMode('run')} />
+                  Create 4-part run (Opener / Middle 1 / Middle 2 / Closer)
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="radio" name="sendMode" checked={sendMode === 'sections'} onChange={() => setSendMode('sections')} />
+                  Create section tasks (Quick Wins / Line Edits / Director Notes / etc.)
+                </label>
+              </div>
+
               {shows.length === 0 ? (
                 <div className="text-slate-300 text-sm">
                   No shows found. Create a show in <span className="text-slate-100">Show Planner</span> first.
@@ -732,7 +944,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
                     disabled={!selectedShowId || sending}
                     onClick={sendToShowPlanner}
                   >
-                    {sending ? 'Sending…' : 'Send Sections as Tasks'}
+                    {sending ? 'Sending…' : sendMode === 'run' ? 'Create Opener/Middles/Closer' : 'Create Section Tasks'}
                   </button>
                 </>
               )}
@@ -741,28 +953,57 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
         </div>
       )}
 
+      {/* Blueprint modal */}
+      {blueprintOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-950 p-5 shadow-xl">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-lg font-semibold">Save as Blueprint</div>
+              <button className="px-2 py-1 rounded border border-slate-700 hover:border-slate-500" onClick={() => setBlueprintOpen(false)}>
+                Close
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              <label className="text-sm text-slate-300">Blueprint name</label>
+              <input
+                value={blueprintName}
+                onChange={(e) => setBlueprintName(e.target.value)}
+                placeholder="e.g., Corporate Opener Blueprint"
+                className="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white"
+              />
+
+              <div className="text-xs text-slate-400">
+                Includes: output + preset + walkaround toggle + context (client/venue/audience) + tags.
+              </div>
+
+              <button
+                className="w-full mt-2 px-4 py-2 rounded bg-emerald-700 hover:bg-emerald-600 text-white disabled:opacity-40"
+                disabled={!outputRaw || savingBlueprint}
+                onClick={saveBlueprint}
+              >
+                {savingBlueprint ? 'Saving…' : 'Save Blueprint'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Sticky footer controls */}
       <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-800 bg-slate-950/80 backdrop-blur">
         <div className="mx-auto max-w-7xl px-6 py-3 flex items-center justify-between gap-3">
-          {/* Left: Reset */}
           <div className="flex items-center gap-2">
             <button onClick={handleReset} className="px-3 py-2 rounded bg-transparent border border-slate-600 hover:border-slate-400 text-slate-200">
               Reset / Clear
             </button>
           </div>
 
-          {/* Center: Generate */}
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleGenerate}
-              disabled={!canGenerate}
-              className="px-5 py-2 rounded bg-purple-600 hover:bg-purple-500 text-white disabled:opacity-40"
-            >
+            <button onClick={handleGenerate} disabled={!canGenerate} className="px-5 py-2 rounded bg-purple-600 hover:bg-purple-500 text-white disabled:opacity-40">
               {loading ? 'Generating…' : 'Generate'}
             </button>
           </div>
 
-          {/* Right: Copy / Save / Send / Cancel */}
           <div className="flex items-center gap-2">
             {loading ? (
               <button onClick={handleCancel} className="px-3 py-2 rounded border border-slate-600 hover:border-slate-400 text-slate-200">
@@ -770,25 +1011,16 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
               </button>
             ) : null}
 
-            <button
-              onClick={handleCopy}
-              disabled={!canCopySave}
-              className="px-3 py-2 rounded border border-slate-600 hover:border-slate-400 text-slate-200 disabled:opacity-40"
-            >
+            <button onClick={handleCopy} disabled={!canCopySave} className="px-3 py-2 rounded border border-slate-600 hover:border-slate-400 text-slate-200 disabled:opacity-40">
               {copied ? 'Copied ✓' : 'Copy'}
             </button>
-            <button
-              onClick={handleSave}
-              disabled={!canCopySave}
-              className="px-3 py-2 rounded bg-emerald-700 hover:bg-emerald-600 text-white disabled:opacity-40"
-            >
+            <button onClick={handleSaveIdea} disabled={!canCopySave} className="px-3 py-2 rounded bg-emerald-700 hover:bg-emerald-600 text-white disabled:opacity-40">
               Save
             </button>
-            <button
-              onClick={() => (!canCopySave ? null : openSend())}
-              disabled={!canCopySave}
-              className="px-3 py-2 rounded border border-slate-600 hover:border-slate-400 text-slate-200 disabled:opacity-40"
-            >
+            <button onClick={openBlueprint} disabled={!canCopySave} className="px-3 py-2 rounded border border-slate-600 hover:border-slate-400 text-slate-200 disabled:opacity-40">
+              Save Blueprint
+            </button>
+            <button onClick={() => (!canCopySave ? null : openSend())} disabled={!canCopySave} className="px-3 py-2 rounded border border-slate-600 hover:border-slate-400 text-slate-200 disabled:opacity-40">
               Send to Show Planner
             </button>
           </div>
