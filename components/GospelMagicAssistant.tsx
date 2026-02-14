@@ -69,7 +69,7 @@ interface LayeredDiagramProps {
 const PsychologicalLayerVisualizer: React.FC<LayeredDiagramProps> = ({ compact }) => (
   <div className={`rounded-xl border border-slate-800 bg-slate-950/30 ${compact ? 'p-3' : 'p-4'}`}>
     <div className="flex items-center justify-between">
-      <p className="text-xs font-semibold text-slate-300">Layered Construction</p>
+      <p className="text-xs font-semibold text-amber-200">Layered Construction</p>
       <p className="text-[10px] text-slate-500">visualizer</p>
     </div>
     <p className="mt-1 text-[11px] text-slate-500">
@@ -946,7 +946,7 @@ Populate arrays for categories the user selected; for unselected categories, ret
     <div className="flex-1 lg:grid lg:grid-cols-2 gap-6 overflow-y-auto p-4 md:p-6">
       {/* Control Panel */}
       <div className="flex flex-col">
-        <h2 className="text-xl font-bold text-slate-300 mb-2">Ministry Architecture Lab</h2>
+        <h2 className="text-xl font-bold text-amber-200 mb-2">Ministry Architecture Lab</h2>
         <p className="text-slate-400 mb-4">
           Build a structured, message-first Gospel magic blueprint. Add a theme/effect, a Scripture reference, and choose the ministry setting.
         </p>
@@ -1004,12 +1004,12 @@ Populate arrays for categories the user selected; for unselected categories, ret
             </select>
           </div>
 
-          <label className="flex items-start gap-3 rounded-lg border border-slate-700 bg-slate-900/40 p-3">
+          <label className={`flex items-start gap-3 rounded-lg border bg-slate-900/40 p-3 transition-shadow ${doctrinalMode ? "border-amber-500/50 shadow-[0_0_0_1px_rgba(245,158,11,0.25),0_0_20px_rgba(245,158,11,0.12)]" : "border-slate-700"}`}>
             <input
               type="checkbox"
               checked={doctrinalMode}
               onChange={(e) => setDoctrinalMode(e.target.checked)}
-              className="mt-1 accent-purple-500"
+              className="mt-1 accent-amber-400"
             />
             <div>
               <p className="text-sm font-semibold text-slate-200">Respect Doctrinal Integrity</p>
@@ -1019,7 +1019,7 @@ Populate arrays for categories the user selected; for unselected categories, ret
             </div>
           </label>
 
-          <div className="rounded-xl border border-slate-800 bg-slate-950/20 p-3">
+          <div className="rounded-xl border border-slate-700/60 bg-slate-900/20 p-3">
             <div className="flex items-center justify-between">
               <p className="text-sm font-semibold text-slate-200">Ministry Phrase Builder</p>
               <p className="text-[10px] text-slate-500">mini-tool</p>
@@ -1139,7 +1139,7 @@ Populate arrays for categories the user selected; for unselected categories, ret
           <button
             onClick={() => handleGenerate()}
             disabled={isLoading || !isFormValid}
-            className="w-full py-3 mt-2 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
+            className="w-full py-3 mt-2 flex items-center justify-center gap-2 rounded-md font-bold transition-colors bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 shadow-[0_0_0_1px_rgba(245,158,11,0.35),0_8px_30px_rgba(245,158,11,0.10)] hover:from-amber-400 hover:to-yellow-400 disabled:bg-slate-600 disabled:text-slate-300 disabled:shadow-none disabled:cursor-not-allowed"
           >
             <WandIcon className="w-5 h-5" />
             <span>Build Ministry Blueprint</span>
@@ -1277,8 +1277,8 @@ Populate arrays for categories the user selected; for unselected categories, ret
                 Start with a Scripture reference or a message theme, choose the ministry tone, and generate a structured routine you can trust.
               </p>
               <div className="mt-4 text-xs text-slate-500">
-                <p className="italic opacity-70 tracking-wide">“Let all things be done decently and in order.”</p>
-                <p className="mt-1">(1 Corinthians 14:40)</p>
+                <p className="italic opacity-60 tracking-wider text-amber-200/70">“Let all things be done decently and in order.”</p>
+                <p className="mt-1 text-amber-200/40">(1 Corinthians 14:40)</p>
               </div>
             </div>
           </div>
