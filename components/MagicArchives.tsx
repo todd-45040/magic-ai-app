@@ -797,23 +797,22 @@ if (edges.length) addConnections(edges);
             {(Array.isArray(d.influenced) || Array.isArray(d.influenced_by)) && (
               <div className="mt-4 pt-4 border-t border-slate-700/50">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {Array.isArray(d.influenced) && d.influenced.length > 0 && (
-                  <div className="rounded-md border border-slate-700/60 bg-slate-950/20 p-3">
-                    <div className="text-xs font-semibold text-slate-200">Influenced</div>
-                    <div className="mt-1 text-sm text-slate-300">
-                      {d.influenced.slice(0, 6).join(' • ')}
+                  {Array.isArray(d.influenced) && d.influenced.length > 0 && (
+                    <div className="rounded-md border border-slate-700/60 bg-slate-950/20 p-3">
+                      <div className="text-xs font-semibold text-slate-200">Influenced</div>
+                      <div className="mt-1 text-sm text-slate-300">
+                        {d.influenced.slice(0, 6).join(' • ')}
+                      </div>
                     </div>
-                  </div>
-                )}
-                {Array.isArray(d.influenced_by) && d.influenced_by.length > 0 && (
-                  <div className="rounded-md border border-slate-700/60 bg-slate-950/20 p-3">
-                    <div className="text-xs font-semibold text-slate-200">Influenced By</div>
-                    <div className="mt-1 text-sm text-slate-300">
-                      {d.influenced_by.slice(0, 6).join(' • ')}
+                  )}
+                  {Array.isArray(d.influenced_by) && d.influenced_by.length > 0 && (
+                    <div className="rounded-md border border-slate-700/60 bg-slate-950/20 p-3">
+                      <div className="text-xs font-semibold text-slate-200">Influenced By</div>
+                      <div className="mt-1 text-sm text-slate-300">
+                        {d.influenced_by.slice(0, 6).join(' • ')}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
                 </div>
               </div>
             )}
