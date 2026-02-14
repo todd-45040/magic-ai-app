@@ -409,15 +409,6 @@ const generateSuggestionsForTopInterest = async () => {
 
     setPracticalTips([]);
     setSuggestedTags([]);
-    setInterestProfile(bumpInterestFromQuery(timelineQuery, 'Magic Timeline'));
-    setTimelineOpen(false);
-
-    setPracticalTips([]);
-    setSuggestedTags([]);
-    setInterestProfile(bumpInterestFromQuery(compositeQuery, 'Compare Mode'));
-
-    setPracticalTips([]);
-    setSuggestedTags([]);
     setInterestProfile(bumpInterestFromQuery(currentQuery, selectedCategory));
 
     try {
