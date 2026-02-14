@@ -1,5 +1,8 @@
 // api/ai/identify.ts
 // Vision analysis endpoint ("identify trick"/prop recognition)
+//
+// Request: { imageBase64: string, prompt?: string, mimeType?: string, model?: string }
+// Response: { ok:true, data:{ result: any } } (default: { text: string })
 
 import { GoogleGenAI } from "@google/genai";
 
@@ -24,22 +27,14 @@ function ok(res: any, data: any) {
   return res.status(200).json({ ok: true, data });
 }
 
-function err(
-  res: any,
-  status: number,
-  error_code: string,
-  message: string,
-  retryable = false
-) {
+function err(res: any, status: number, error_code: string, message: string, retryable = false) {
   return res.status(status).json({ ok: false, error_code, message, retryable });
 }
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   return Promise.race([
     p,
-    new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error("TIMEOUT")), ms)
-    ),
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error("TIMEOUT")), ms)),
   ]);
 }
 
@@ -50,27 +45,14 @@ function parseDataUrl(input: string): { mimeType: string; data: string } | null 
 }
 
 export default async function handler(req: any, res: any) {
-  if (req.method !== "POST")
-    return err(res, 405, "METHOD_NOT_ALLOWED", "Only POST allowed");
+  if (req.method !== "POST") return err(res, 405, "METHOD_NOT_ALLOWED", "Only POST allowed");
 
   const apiKey = getApiKey();
-  if (!apiKey)
-    return err(res, 500, "SERVER_MISCONFIG", "Missing Gemini API key on server");
+  if (!apiKey) return err(res, 500, "SERVER_MISCONFIG", "Missing Gemini API key on server");
 
   const body: Body = req.body || {};
   const raw = String(body.imageBase64 || "").trim();
-
   if (!raw) return err(res, 400, "BAD_REQUEST", "Missing imageBase64");
-
-  // Quick validation for obvious placeholder or invalid input
-  if (raw.includes("....") || raw.length < 200) {
-    return err(
-      res,
-      400,
-      "BAD_REQUEST",
-      "imageBase64 does not appear to be valid base64 image data."
-    );
-  }
 
   const fromDataUrl = parseDataUrl(raw);
   const mimeType = fromDataUrl?.mimeType || String(body.mimeType || "image/jpeg");
@@ -80,8 +62,7 @@ export default async function handler(req: any, res: any) {
     String(body.prompt || "").trim() ||
     "You are a helpful magic assistant. Identify the likely prop/effect in the image and suggest 3 possible routines or uses. Keep it practical and non-exposure.";
 
-  const model =
-    String(body.model || process.env.GEMINI_VISION_MODEL || "gemini-2.5-flash");
+  const model = String(body.model || process.env.GEMINI_VISION_MODEL || "gemini-2.5-flash");
 
   try {
     const ai = new GoogleGenAI({ apiKey });
@@ -103,42 +84,13 @@ export default async function handler(req: any, res: any) {
     );
 
     const text = String(result?.text || "").trim();
-    if (!text)
-      return err(res, 502, "AI_ERROR", "Empty response from vision model.", true);
+    if (!text) return err(res, 502, "AI_ERROR", "Empty response from vision model.", true);
 
     return ok(res, { result: { text } });
-
   } catch (e: any) {
     const msg = String(e?.message || e || "");
-    const name = String(e?.name || "");
-    const stack = String(e?.stack || "");
-
-    // Only expose detailed error info in Preview/Dev
-    const isPreviewOrDev =
-      process.env.VERCEL_ENV === "preview" ||
-      process.env.VERCEL_ENV === "development" ||
-      process.env.NODE_ENV !== "production";
-
-    const details = isPreviewOrDev
-      ? {
-          name,
-          message: msg.slice(0, 800),
-          stack: stack.slice(0, 1200),
-        }
-      : undefined;
-
-    if (msg === "TIMEOUT")
-      return err(res, 504, "TIMEOUT", "Vision request timed out. Please retry.", true);
-
-    if (/quota|resource|429/i.test(msg))
-      return err(res, 429, "QUOTA_EXCEEDED", "AI quota reached.", false);
-
-    return res.status(500).json({
-      ok: false,
-      error_code: "AI_ERROR",
-      message: "Vision request failed. Please retry.",
-      retryable: true,
-      ...(details ? { details } : {}),
-    });
+    if (msg === "TIMEOUT") return err(res, 504, "TIMEOUT", "Vision request timed out. Please retry.", true);
+    if (/quota|resource|429/i.test(msg)) return err(res, 429, "QUOTA_EXCEEDED", "AI quota reached.", false);
+    return err(res, 500, "AI_ERROR", "Vision request failed. Please retry.", true);
   }
 }
