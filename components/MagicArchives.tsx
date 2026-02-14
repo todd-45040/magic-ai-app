@@ -28,6 +28,33 @@ interface SavedLibraryEntry {
   full_response: string;
   tags: string[];
   created_at: number;
+  entities?: string[];
+  relationships?: ConnectionEdge[];
+}
+
+
+interface ConnectionEdge {
+  from: string;
+  to: string;
+  relation: 'influenced_by' | 'based_on' | 'opposes' | 'evolves_from' | 'compared_with' | 'featured_in_era';
+  created_at: number;
+}
+
+interface InterestProfile {
+  mentalism: number;
+  performance: number;
+  history: number;
+  sleight: number;
+  illusions: number;
+  closeup: number;
+  other: number;
+}
+
+interface ArchivedResearchJson {
+  answer: string;
+  practical_application: string[];
+  suggested_tags: string[];
+  detected_topics?: string[];
 }
 
 type ArchiveView =
@@ -42,6 +69,7 @@ interface MagicTimeline {
   landmark_effects: string[];
   major_innovations: string[];
   cultural_shifts: string[];
+  practical_application?: string[];
 }
 
 interface CreatorDeepDive {
@@ -51,6 +79,7 @@ interface CreatorDeepDive {
   signature_effects: string[];
   recommended_reading: string[];
   performance_philosophy: string[];
+  practical_application?: string[];
 }
 
 interface CompareResult {
@@ -60,10 +89,14 @@ interface CompareResult {
   differences: string[];
   philosophy: string[];
   practical_takeaways: string[];
+  practical_application?: string[];
 }
 
 const RECENT_TOPICS_KEY = 'magic_archives_recent_topics_v1';
 const LIBRARY_KEY = 'magic_archives_library_v1';
+const INTEREST_KEY = 'magic_archives_interest_profile_v1';
+const SUGGESTIONS_KEY = 'magic_archives_interest_suggestions_v1';
+const CONNECTIONS_KEY = 'magic_archives_connections_v1';
 
 function safeJsonParse<T>(raw: string | null, fallback: T): T {
   if (!raw) return fallback;
@@ -95,6 +128,65 @@ function getLibraryEntries(): SavedLibraryEntry[] {
 function saveLibraryEntry(entry: SavedLibraryEntry): void {
   const existing = getLibraryEntries();
   localStorage.setItem(LIBRARY_KEY, JSON.stringify([entry, ...existing]));
+
+function getInterestProfile(): InterestProfile {
+  const base: InterestProfile = { mentalism: 0, performance: 0, history: 0, sleight: 0, illusions: 0, closeup: 0, other: 0 };
+  const p = safeJsonParse<Partial<InterestProfile>>(localStorage.getItem(INTEREST_KEY), {});
+  return { ...base, ...p };
+}
+
+function saveInterestProfile(p: InterestProfile) {
+  localStorage.setItem(INTEREST_KEY, JSON.stringify(p));
+}
+
+function bumpInterestFromQuery(q: string, categoryHint?: string): InterestProfile {
+  const profile = getInterestProfile();
+  const s = q.toLowerCase();
+
+  const bump = (k: keyof InterestProfile) => { profile[k] = (profile[k] || 0) + 1; };
+
+  const hint = (categoryHint || '').toLowerCase();
+  if (hint.includes('mentalism')) bump('mentalism');
+  else if (hint.includes('performance')) bump('performance');
+  else if (hint.includes('history')) bump('history');
+  else if (hint.includes('sleight')) bump('sleight');
+  else if (hint.includes('illusion')) bump('illusions');
+  else if (hint.includes('close')) bump('closeup');
+
+  // Keyword-based bumps (secondary)
+  if (/(mentalism|cold reading|force|prediction|billet|stooge|dual reality|psych)/i.test(s)) bump('mentalism');
+  if (/(misdirection|timing|patter|script|showmanship|audience|stagecraft)/i.test(s)) bump('performance');
+  if (/(history|origin|invented|creator|era|golden age|thurston|houdin|houdini)/i.test(s)) bump('history');
+  if (/(sleight|palming|shift|pass|double lift|false shuffle|controls)/i.test(s)) bump('sleight');
+  if (/(illusion|stage|levitation|metamorphosis|zorigami|box)/i.test(s)) bump('illusions');
+  if (/(close-up|closeup|table|walkaround|strolling)/i.test(s)) bump('closeup');
+
+  // If nothing matched, count as other
+  const total = Object.values(profile).reduce((a, b) => a + b, 0);
+  if (total === 0) bump('other');
+
+  saveInterestProfile(profile);
+  return profile;
+}
+
+function getInterestSuggestions(): Record<string, string[]> {
+  return safeJsonParse<Record<string, string[]>>(localStorage.getItem(SUGGESTIONS_KEY), {});
+}
+
+function saveInterestSuggestions(data: Record<string, string[]>) {
+  localStorage.setItem(SUGGESTIONS_KEY, JSON.stringify(data));
+}
+
+function getConnections(): ConnectionEdge[] {
+  const edges = safeJsonParse<ConnectionEdge[]>(localStorage.getItem(CONNECTIONS_KEY), []);
+  return Array.isArray(edges) ? edges : [];
+}
+
+function addConnections(newEdges: ConnectionEdge[]) {
+  const existing = getConnections();
+  localStorage.setItem(CONNECTIONS_KEY, JSON.stringify([...newEdges, ...existing].slice(0, 200)));
+}
+
 }
 
 function tryParseJson<T>(raw: string): T | null {
@@ -214,6 +306,11 @@ const MagicArchives: React.FC<MagicArchivesProps> = ({ onIdeaSaved }) => {
   const [copyStatus, setCopyStatus] = useState<CopyStatus>('idle');
   const [recentTopics, setRecentTopics] = useState<RecentTopic[]>([]);
   const [timelineOpen, setTimelineOpen] = useState(false);
+  const [practicalTips, setPracticalTips] = useState<string[]>([]);
+  const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
+  const [interestProfile, setInterestProfile] = useState<InterestProfile>(() => getInterestProfile());
+  const [interestSuggestions, setInterestSuggestions] = useState<Record<string, string[]>>(() => getInterestSuggestions());
+  const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(false);
 
   useEffect(() => {
     setRecentTopics(getRecentTopics());
@@ -228,6 +325,63 @@ const MagicArchives: React.FC<MagicArchivesProps> = ({ onIdeaSaved }) => {
     setSaveStatus('idle');
     setCopyStatus('idle');
   };
+
+const topInterest = useMemo(() => {
+  const entries: Array<[keyof InterestProfile, number]> = Object.entries(interestProfile) as any;
+  entries.sort((a, b) => (b[1] || 0) - (a[1] || 0));
+  return entries[0]?.[0] || 'other';
+}, [interestProfile]);
+
+const showInterestBanner = useMemo(() => {
+  // Keep it simple: only show when we have a meaningful signal.
+  if (topInterest === 'mentalism' && interestProfile.mentalism >= 3) return true;
+  if (topInterest === 'performance' && interestProfile.performance >= 3) return true;
+  return false;
+}, [topInterest, interestProfile]);
+
+const bannerTitle =
+  topInterest === 'mentalism'
+    ? "You seem interested in Mentalism."
+    : topInterest === 'performance'
+    ? "You seem interested in Performance Theory."
+    : "You're building a specialty.";
+
+const cachedSuggestions = interestSuggestions[topInterest] || [];
+
+const generateSuggestionsForTopInterest = async () => {
+  if (isGeneratingSuggestions) return;
+  setIsGeneratingSuggestions(true);
+  setError(null);
+  try {
+    const prompt = [
+      "Return ONLY valid JSON (no markdown, no commentary).",
+      "You are an expert magic coach recommending advanced study topics based on a user's research patterns.",
+      `Primary interest: ${topInterest}`,
+      "",
+      "JSON schema:",
+      "{",
+      '  "suggestions": string[]',
+      "}",
+      "",
+      "Guidelines:",
+      "- Suggestions should be advanced but ethical (no exposure).",
+      "- Make them specific and useful (6–10 items).",
+    ].join('\n');
+
+    const response = await runGenerate(prompt);
+    const parsed = tryParseJson<{ suggestions: string[] }>(response);
+
+    const next = Array.isArray(parsed?.suggestions) ? parsed!.suggestions : [];
+    const updated = { ...interestSuggestions, [topInterest]: next };
+    saveInterestSuggestions(updated);
+    setInterestSuggestions(updated);
+  } catch (err) {
+    setError(err instanceof Error ? err.message : "Couldn't generate suggestions right now.");
+  } finally {
+    setIsGeneratingSuggestions(false);
+  }
+};
+
 
   const runGenerate = async (prompt: string) => {
     // FIX: pass currentUser as the 3rd argument to generateResponse
@@ -252,7 +406,19 @@ const MagicArchives: React.FC<MagicArchivesProps> = ({ onIdeaSaved }) => {
     setError(null);
     setView(null);
     resetStatuses();
+
+    setPracticalTips([]);
+    setSuggestedTags([]);
+    setInterestProfile(bumpInterestFromQuery(timelineQuery, 'Magic Timeline'));
     setTimelineOpen(false);
+
+    setPracticalTips([]);
+    setSuggestedTags([]);
+    setInterestProfile(bumpInterestFromQuery(compositeQuery, 'Compare Mode'));
+
+    setPracticalTips([]);
+    setSuggestedTags([]);
+    setInterestProfile(bumpInterestFromQuery(currentQuery, selectedCategory));
 
     try {
       // Tier 2: auto-upgrade short "name-like" queries to a Creator Deep Dive card response.
@@ -270,6 +436,7 @@ const MagicArchives: React.FC<MagicArchivesProps> = ({ onIdeaSaved }) => {
           '  "signature_effects": string[],',
           '  "recommended_reading": string[],',
           '  "performance_philosophy": string[]',
+          '  "practical_application": string[]'
           "}",
           "",
           "Guidelines:",
@@ -282,13 +449,41 @@ const MagicArchives: React.FC<MagicArchivesProps> = ({ onIdeaSaved }) => {
         const parsed = tryParseJson<CreatorDeepDive>(response);
         if (parsed?.name) {
           setView({ kind: 'creator', data: parsed });
+          setPracticalTips(Array.isArray(parsed.practical_application) ? parsed.practical_application : []);
+          setSuggestedTags(['creator', parsed.name].filter(Boolean) as string[]);
         } else {
           // fallback to text
           setView({ kind: 'text', text: response });
         }
       } else {
-        const response = await runGenerate(currentQuery);
-        setView({ kind: 'text', text: response });
+        const researchPrompt = [
+  "Return ONLY valid JSON (no markdown, no commentary).",
+  "You are a magic historian assistant. Answer the user query clearly, ethically, and without exposing methods.",
+  `Query: ${currentQuery}`,
+  "",
+  "JSON schema:",
+  "{",
+  '  "answer": string,',
+  '  "practical_application": string[],',
+  '  "suggested_tags": string[]',
+  "}",
+  "",
+  "Guidelines:",
+  "- Keep the answer well-structured (short paragraphs or bullets).",
+  "- Practical application should be actionable show advice (3–6 bullets).",
+  "- suggested_tags should be short (3–8 tags).",
+].join('
+');
+
+const response = await runGenerate(researchPrompt);
+const parsed = tryParseJson<ArchivedResearchJson>(response);
+if (parsed?.answer) {
+  setView({ kind: 'text', text: parsed.answer });
+  setPracticalTips(Array.isArray(parsed.practical_application) ? parsed.practical_application : []);
+  setSuggestedTags(Array.isArray(parsed.suggested_tags) ? parsed.suggested_tags : []);
+} else {
+  setView({ kind: 'text', text: response });
+}
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "An unknown error occurred.");
@@ -331,6 +526,7 @@ const MagicArchives: React.FC<MagicArchivesProps> = ({ onIdeaSaved }) => {
         '  "differences": string[],',
         '  "philosophy": string[],',
         '  "practical_takeaways": string[]',
+        '  "practical_application": string[]',
         "}",
         "",
         "Guidelines:",
@@ -342,6 +538,8 @@ const MagicArchives: React.FC<MagicArchivesProps> = ({ onIdeaSaved }) => {
       const parsed = tryParseJson<CompareResult>(response);
       if (parsed?.topicA && parsed?.topicB) {
         setView({ kind: 'compare', data: parsed });
+        setPracticalTips(Array.isArray(parsed.practical_application) ? parsed.practical_application : parsed.practical_takeaways || []);
+        setSuggestedTags(['compare', parsed.topicA, parsed.topicB].filter(Boolean) as string[]);
       } else {
         setView({ kind: 'text', text: response });
       }
@@ -375,6 +573,7 @@ const MagicArchives: React.FC<MagicArchivesProps> = ({ onIdeaSaved }) => {
         '  "landmark_effects": string[],',
         '  "major_innovations": string[],',
         '  "cultural_shifts": string[]',
+        '  "practical_application": string[]',
         "}",
         "",
         "Guidelines:",
@@ -386,6 +585,8 @@ const MagicArchives: React.FC<MagicArchivesProps> = ({ onIdeaSaved }) => {
       const parsed = tryParseJson<MagicTimeline>(response);
       if (parsed?.eraLabel) {
         setView({ kind: 'timeline', data: parsed });
+        setPracticalTips(Array.isArray(parsed.practical_application) ? parsed.practical_application : []);
+        setSuggestedTags(['timeline', parsed.eraLabel].filter(Boolean) as string[]);
       } else {
         setView({ kind: 'text', text: response });
       }
@@ -423,17 +624,50 @@ const MagicArchives: React.FC<MagicArchivesProps> = ({ onIdeaSaved }) => {
         ? view.text
         : JSON.stringify(view.data, null, 2);
 
-    const summary = fullText.replace(/\s+/g, ' ').trim().slice(0, 180);
+    const practicalBlock = practicalTips.length
+      ? `\n\n🎩 How This Applies To Your Show\n- ${practicalTips.join('\n- ')}`
+      : '';
+
+    const tagsBlock = suggestedTags.length ? `\n\nTags: ${suggestedTags.map(t => '#' + t.replace(/^#/, '')).join(' ')}` : '';
+
+    const combinedText = `${fullText}${practicalBlock}${tagsBlock}`;
+
+    const summary = combinedText.replace(/\s+/g, ' ').trim().slice(0, 180);
 
     const entry: SavedLibraryEntry = {
       id: (crypto as any)?.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
       title: titleBase,
       category,
       summary,
-      full_response: fullText,
+      full_response: combinedText,
       tags: [],
       created_at: Date.now(),
     };
+
+
+// Tier 3 foundation: build lightweight connection edges for future graph visualization.
+const edges: ConnectionEdge[] = [];
+const entities: string[] = [];
+
+if (view.kind === 'creator') {
+  entities.push(`creator:${view.data.name}`);
+}
+if (view.kind === 'compare') {
+  entities.push(`compare:${view.data.topicA}`, `compare:${view.data.topicB}`);
+  edges.push({ from: view.data.topicA, to: view.data.topicB, relation: 'compared_with', created_at: Date.now() });
+  edges.push({ from: view.data.topicB, to: view.data.topicA, relation: 'compared_with', created_at: Date.now() });
+}
+if (view.kind === 'timeline') {
+  entities.push(`era:${view.data.eraLabel}`);
+  (view.data.key_creators || []).slice(0, 10).forEach((c) => {
+    edges.push({ from: view.data.eraLabel, to: c, relation: 'featured_in_era', created_at: Date.now() });
+  });
+}
+
+entry.entities = entities.length ? entities : undefined;
+entry.relationships = edges.length ? edges : undefined;
+
+if (edges.length) addConnections(edges);
 
     saveLibraryEntry(entry);
 
@@ -444,7 +678,7 @@ const MagicArchives: React.FC<MagicArchivesProps> = ({ onIdeaSaved }) => {
       view.kind === 'compare' ? `Compare: ${view.data.topicA} vs ${view.data.topicB}` :
       `Magic Archives Research: ${titleBase}`;
 
-    const fullContent = `## ${ideaTitle}\n\n${fullText}`;
+    const fullContent = `## ${ideaTitle}\n\n${combinedText}`;
     saveIdea('text', fullContent);
     onIdeaSaved();
 
@@ -474,8 +708,31 @@ const MagicArchives: React.FC<MagicArchivesProps> = ({ onIdeaSaved }) => {
 
     if (view.kind === 'text') {
       return (
-        <div className="text-slate-200">
-          <FormattedText text={view.text} />
+        <div className="space-y-4">
+          <div className="text-slate-200">
+            <FormattedText text={view.text} />
+          </div>
+
+          {practicalTips.length > 0 && (
+            <div className="p-4 rounded-lg border border-amber-600/40 bg-amber-950/15">
+              <div className="text-slate-100 font-semibold flex items-center gap-2">🎩 How This Applies To Your Show</div>
+              <ul className="mt-2 list-disc list-inside text-sm text-slate-200/90 space-y-1">
+                {practicalTips.slice(0, 8).map((tip, i) => (
+                  <li key={i}>{tip}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {suggestedTags.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {suggestedTags.slice(0, 10).map((tag, i) => (
+                <span key={i} className="px-2 py-1 text-[11px] rounded-full border border-slate-700 bg-slate-900/30 text-slate-300">
+                  #{tag.replace(/^#/, '')}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       );
     }
@@ -698,6 +955,27 @@ const MagicArchives: React.FC<MagicArchivesProps> = ({ onIdeaSaved }) => {
         ) : view ? (
           <div className="relative group">
             {renderCards()}
+
+            {view.kind !== 'text' && practicalTips.length > 0 && (
+              <div className="mt-4 p-4 rounded-lg border border-amber-600/40 bg-amber-950/15">
+                <div className="text-slate-100 font-semibold flex items-center gap-2">🎩 How This Applies To Your Show</div>
+                <ul className="mt-2 list-disc list-inside text-sm text-slate-200/90 space-y-1">
+                  {practicalTips.slice(0, 8).map((tip, i) => (
+                    <li key={i}>{tip}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {view.kind !== 'text' && suggestedTags.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {suggestedTags.slice(0, 10).map((tag, i) => (
+                  <span key={i} className="px-2 py-1 text-[11px] rounded-full border border-slate-700 bg-slate-900/30 text-slate-300">
+                    #{tag.replace(/^#/, '')}
+                  </span>
+                ))}
+              </div>
+            )}
 
             <div className="sticky bottom-0 right-0 mt-4 py-2 flex justify-end gap-2 bg-slate-900/50">
               <ShareButton
