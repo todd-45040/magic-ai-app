@@ -211,6 +211,43 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // Optional: preload a rehearsal title/notes from another tool (e.g., Mentalism Mind Lab)
+    useEffect(() => {
+        try {
+            const PREFILL_KEY = 'maw_live_rehearsal_prefill_v1';
+            const raw = localStorage.getItem(PREFILL_KEY);
+            if (!raw) return;
+
+            // If an active draft exists (takes recorded), don't override it.
+            const draftRaw = localStorage.getItem(DRAFT_STORAGE_KEY);
+            if (draftRaw) {
+                try {
+                    const parsedDraft = JSON.parse(draftRaw);
+                    if (parsedDraft?.version === 2 && Array.isArray(parsedDraft?.takes) && parsedDraft.takes.length > 0) {
+                        localStorage.removeItem(PREFILL_KEY);
+                        return;
+                    }
+                } catch {
+                    // ignore
+                }
+            }
+
+            const parsed = JSON.parse(raw);
+            if (!parsed || parsed.version !== 1) {
+                localStorage.removeItem(PREFILL_KEY);
+                return;
+            }
+
+            if (typeof parsed.title === 'string' && parsed.title.trim()) setSessionTitle(parsed.title.trim());
+            if (typeof parsed.notes === 'string') setSessionNotes(parsed.notes);
+
+            localStorage.removeItem(PREFILL_KEY);
+        } catch {
+            // ignore
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     // Usage tracking (client-side, per-day)
     const sessionStartRef = useRef<number | null>(null);
     const usageIntervalRef = useRef<number | null>(null);

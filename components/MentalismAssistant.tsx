@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Type } from '@google/genai';
 import { generateStructuredResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
+import { createShow, addTasksToShow } from '../services/showsService';
 import { MENTALISM_ASSISTANT_SYSTEM_INSTRUCTION } from '../constants';
 import { WandIcon, SaveIcon, CheckIcon, CopyIcon, ShareIcon, SearchIcon, LightbulbIcon } from './icons';
 import ShareButton from './ShareButton';
@@ -9,6 +10,8 @@ import { useAppState } from '../store';
 
 interface MentalismAssistantProps {
     onIdeaSaved: () => void;
+    onOpenShowPlanner?: (showId?: string | null, taskId?: string | null) => void;
+    onOpenLiveRehearsal?: () => void;
 }
 
 const LoadingIndicator: React.FC = () => (
@@ -83,6 +86,14 @@ const CATEGORY_QUERIES = [
     },
 ];
 
+type AudienceReactionModel = {
+    gasps_likelihood_1_to_10: number;
+    skeptic_resistance_probability_0_to_1: number;
+    confusion_risk_0_to_1: number;
+    memory_distortion_strength_1_to_10: number;
+    notes: string;
+};
+
 type MentalismBlueprint = {
     premise: string;
     psychological_frame: string;
@@ -92,7 +103,9 @@ type MentalismBlueprint = {
     outs: string[];
     ethical_flags: string[];
     escalation_options: string[];
+    audience_reaction_model: AudienceReactionModel;
 };
+
 
 type StressPersona = 'Intelligent Skeptic' | 'Aggressive Debunker' | 'Corporate HR Mindset' | 'Teen Audience';
 
@@ -138,6 +151,26 @@ function safeList(v: any): string[] {
     return v
         .map((x) => String(x ?? '').trim())
         .filter(Boolean);
+
+function safeNumber(v: any, fallback = 0): number {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : fallback;
+}
+
+function clamp01(v: any, fallback = 0): number {
+    const n = safeNumber(v, fallback);
+    if (n < 0) return 0;
+    if (n > 1) return 1;
+    return n;
+}
+
+function clamp1to10(v: any, fallback = 5): number {
+    const n = Math.round(safeNumber(v, fallback));
+    if (n < 1) return 1;
+    if (n > 10) return 10;
+    return n;
+}
+
 }
 
 function toBlueprint(v: any): MentalismBlueprint {
@@ -150,6 +183,13 @@ function toBlueprint(v: any): MentalismBlueprint {
         outs: safeList(v?.outs),
         ethical_flags: safeList(v?.ethical_flags),
         escalation_options: safeList(v?.escalation_options),
+        audience_reaction_model: {
+            gasps_likelihood_1_to_10: clamp1to10(v?.audience_reaction_model?.gasps_likelihood_1_to_10 ?? v?.gasps_likelihood_1_to_10, 6),
+            skeptic_resistance_probability_0_to_1: clamp01(v?.audience_reaction_model?.skeptic_resistance_probability_0_to_1 ?? v?.skeptic_resistance_probability_0_to_1, 0.35),
+            confusion_risk_0_to_1: clamp01(v?.audience_reaction_model?.confusion_risk_0_to_1 ?? v?.confusion_risk_0_to_1, 0.25),
+            memory_distortion_strength_1_to_10: clamp1to10(v?.audience_reaction_model?.memory_distortion_strength_1_to_10 ?? v?.memory_distortion_strength_1_to_10, 6),
+            notes: String(v?.audience_reaction_model?.notes ?? v?.audience_reaction_notes ?? '').trim(),
+        },
     };
 }
 
@@ -182,6 +222,16 @@ function blueprintToText(topic: string, b: MentalismBlueprint): string {
     addList('Outs', b.outs);
     addList('Ethical Flags', b.ethical_flags);
     addList('Escalation Options', b.escalation_options);
+
+    if (b.audience_reaction_model) {
+        lines.push('## Audience Reaction Model');
+        lines.push(`- Gasps likelihood (1–10): ${b.audience_reaction_model.gasps_likelihood_1_to_10}`);
+        lines.push(`- Skeptic resistance probability (0–1): ${b.audience_reaction_model.skeptic_resistance_probability_0_to_1}`);
+        lines.push(`- Confusion risk (0–1): ${b.audience_reaction_model.confusion_risk_0_to_1}`);
+        lines.push(`- Memory distortion strength (1–10): ${b.audience_reaction_model.memory_distortion_strength_1_to_10}`);
+        if (b.audience_reaction_model.notes) lines.push(`- Notes: ${b.audience_reaction_model.notes}`);
+        lines.push('');
+    }
 
     lines.push('---');
     lines.push('## JSON');
@@ -241,7 +291,7 @@ function toColdReading(v: any): ColdReadingPhrases {
     };
 }
 
-const MentalismAssistant: React.FC<MentalismAssistantProps> = ({ onIdeaSaved }) => {
+const MentalismAssistant: React.FC<MentalismAssistantProps> = ({ onIdeaSaved, onOpenShowPlanner, onOpenLiveRehearsal }) => {
     const { currentUser } = useAppState() as any;
 
     const [query, setQuery] = useState('');
@@ -259,6 +309,14 @@ const MentalismAssistant: React.FC<MentalismAssistantProps> = ({ onIdeaSaved }) 
     const [isStressTesting, setIsStressTesting] = useState(false);
     const [stressError, setStressError] = useState<string | null>(null);
     const [stressReport, setStressReport] = useState<StressTestReport | null>(null);
+
+    // Tier-3: System integration
+    const [isSendingToPlanner, setIsSendingToPlanner] = useState(false);
+    const [sendPlannerError, setSendPlannerError] = useState<string | null>(null);
+    const [sendPlannerSuccess, setSendPlannerSuccess] = useState(false);
+
+    const [isPreparingRehearsal, setIsPreparingRehearsal] = useState(false);
+    const [rehearsalPrepError, setRehearsalPrepError] = useState<string | null>(null);
 
     // Tier-2: Cold reading phrase builder
     const [isPhraseLoading, setIsPhraseLoading] = useState(false);
@@ -290,6 +348,23 @@ const MentalismAssistant: React.FC<MentalismAssistantProps> = ({ onIdeaSaved }) 
                 outs: { type: Type.ARRAY, items: { type: Type.STRING } },
                 ethical_flags: { type: Type.ARRAY, items: { type: Type.STRING } },
                 escalation_options: { type: Type.ARRAY, items: { type: Type.STRING } },
+                audience_reaction_model: {
+                    type: Type.OBJECT,
+                    properties: {
+                        gasps_likelihood_1_to_10: { type: Type.NUMBER },
+                        skeptic_resistance_probability_0_to_1: { type: Type.NUMBER },
+                        confusion_risk_0_to_1: { type: Type.NUMBER },
+                        memory_distortion_strength_1_to_10: { type: Type.NUMBER },
+                        notes: { type: Type.STRING },
+                    },
+                    required: [
+                        'gasps_likelihood_1_to_10',
+                        'skeptic_resistance_probability_0_to_1',
+                        'confusion_risk_0_to_1',
+                        'memory_distortion_strength_1_to_10',
+                        'notes',
+                    ],
+                },
             },
             required: [
                 'premise',
@@ -300,6 +375,7 @@ const MentalismAssistant: React.FC<MentalismAssistantProps> = ({ onIdeaSaved }) 
                 'outs',
                 'ethical_flags',
                 'escalation_options',
+                'audience_reaction_model',
             ],
         }),
         []
@@ -404,6 +480,7 @@ Output guidelines:
 - outs should be safe, non-exposure failure paths.
 - ethical_flags should list any potential ethical pitfalls (and how to avoid them).
 - escalation_options should give upgrades (bigger climax, stronger impossibility) without exposure.
+- audience_reaction_model should provide semi-theoretical predictions: gasps_likelihood_1_to_10, skeptic_resistance_probability_0_to_1, confusion_risk_0_to_1, memory_distortion_strength_1_to_10, plus a short notes field explaining why.
 `;
 
             const raw = await generateStructuredResponse(
@@ -504,6 +581,189 @@ Output requirements:
             setIsStressTesting(false);
         }
     };
+
+    const handleSendToShowPlanner = async () => {
+        if (!blueprint) return;
+        setIsSendingToPlanner(true);
+        setSendPlannerError(null);
+        setSendPlannerSuccess(false);
+
+        try {
+            const topic = String(query || '').trim() || 'Mentalism Routine';
+            const showTitle = `Mentalism Routine — ${topic}`;
+            const descParts: string[] = [];
+            if (blueprint.premise) descParts.push(`Premise: ${blueprint.premise}`);
+            if (blueprint.psychological_frame) descParts.push(`Frame: ${blueprint.psychological_frame}`);
+            const show = await createShow(showTitle, descParts.join('\n').slice(0, 800) || null);
+
+            const phase0 = blueprint.phase_structure?.[0] ?? '';
+            const phase1 = blueprint.phase_structure?.[1] ?? '';
+            const phase2 = blueprint.phase_structure?.[2] ?? '';
+            const lastPhase = blueprint.phase_structure?.[blueprint.phase_structure.length - 1] ?? '';
+
+            const audienceModel = blueprint.audience_reaction_model;
+            const audienceModelText = audienceModel
+                ? `Audience Reaction Model\n- Gasps (1–10): ${audienceModel.gasps_likelihood_1_to_10}\n- Skeptic resistance (0–1): ${audienceModel.skeptic_resistance_probability_0_to_1}\n- Confusion risk (0–1): ${audienceModel.confusion_risk_0_to_1}\n- Memory distortion (1–10): ${audienceModel.memory_distortion_strength_1_to_10}\n${audienceModel.notes ? `- Notes: ${audienceModel.notes}\n` : ''}`
+                : '';
+
+            const pick = (arr: string[], n: number) => (Array.isArray(arr) ? arr.slice(0, n) : []);
+            const listBlock = (label: string, arr: string[]) => (arr?.length ? `${label}\n- ${arr.join('\n- ')}\n` : '');
+
+            const openerNotes = [
+                'OPENER FRAMING',
+                blueprint.premise ? `Premise\n${blueprint.premise}\n` : '',
+                blueprint.psychological_frame ? `Psychological Frame\n${blueprint.psychological_frame}\n` : '',
+                phase0 ? `Opening Beat\n- ${phase0}\n` : '',
+                listBlock('Audience Control (early)', pick(blueprint.audience_control_points, 3)),
+                listBlock('Ethical Notes', pick(blueprint.ethical_flags, 3)),
+                audienceModelText,
+            ]
+                .filter(Boolean)
+                .join('\n');
+
+            const phase1Notes = [
+                'PHASE 1',
+                phase1 ? `Beat\n- ${phase1}\n` : phase0 ? `Beat\n- ${phase0}\n` : '',
+                listBlock('Conviction Builders', pick(blueprint.conviction_builders, 4)),
+                listBlock('Control Points', pick(blueprint.audience_control_points, 4)),
+                listBlock('Safe Outs', pick(blueprint.outs, 2)),
+            ]
+                .filter(Boolean)
+                .join('\n');
+
+            const phase2Notes = [
+                'PHASE 2',
+                phase2 ? `Beat\n- ${phase2}\n` : lastPhase ? `Beat\n- ${lastPhase}\n` : '',
+                listBlock('Conviction Builders (continue)', blueprint.conviction_builders?.slice(2, 7) ?? []),
+                listBlock('Control Points (continue)', blueprint.audience_control_points?.slice(2, 7) ?? []),
+                listBlock('Safe Outs', pick(blueprint.outs, 2)),
+            ]
+                .filter(Boolean)
+                .join('\n');
+
+            const revealNotes = [
+                'REVEAL',
+                lastPhase ? `Reveal Beat\n- ${lastPhase}\n` : '',
+                listBlock('Escalation Options', pick(blueprint.escalation_options, 4)),
+                listBlock('Control Points (reveal)', blueprint.audience_control_points?.slice(-3) ?? []),
+                listBlock('Ethical Notes', pick(blueprint.ethical_flags, 3)),
+            ]
+                .filter(Boolean)
+                .join('\n');
+
+            const closerNotes = [
+                'CLOSER TAG',
+                listBlock('Tag / Callback Ideas', pick(blueprint.escalation_options, 6)),
+                listBlock('Outs / Backup Lines', pick(blueprint.outs, 4)),
+                audienceModelText,
+                '',
+                'Full Blueprint (for reference)',
+                blueprintToText(topic, blueprint),
+            ]
+                .filter(Boolean)
+                .join('\n');
+
+            const tasks = [
+                { title: 'Opener framing', notes: openerNotes, priority: 'Medium', status: 'To-Do' },
+                { title: 'Phase 1', notes: phase1Notes, priority: 'Medium', status: 'To-Do' },
+                { title: 'Phase 2', notes: phase2Notes, priority: 'Medium', status: 'To-Do' },
+                { title: 'Reveal', notes: revealNotes, priority: 'Medium', status: 'To-Do' },
+                { title: 'Closer tag', notes: closerNotes, priority: 'Medium', status: 'To-Do' },
+            ];
+
+            await addTasksToShow(show.id as any, tasks as any);
+
+            setSendPlannerSuccess(true);
+            // Navigate to Show Planner and open the newly-created show
+            onOpenShowPlanner?.(show.id as any, null);
+            setTimeout(() => setSendPlannerSuccess(false), 3500);
+        } catch (e: any) {
+            setSendPlannerError(String(e?.message ?? e ?? 'Failed to send to Show Planner.'));
+        } finally {
+            setIsSendingToPlanner(false);
+        }
+    };
+
+    const handleRehearseInLiveStudio = async () => {
+        if (!blueprint) return;
+        setIsPreparingRehearsal(true);
+        setRehearsalPrepError(null);
+
+        try {
+            const topic = String(query || '').trim() || 'Mentalism Blueprint';
+            const lines: string[] = [];
+            lines.push(`MENTALISM REHEARSAL PRELOAD`);
+            lines.push(`Topic: ${topic}`);
+            lines.push('');
+            if (blueprint.premise) {
+                lines.push('Premise:');
+                lines.push(blueprint.premise);
+                lines.push('');
+            }
+            if (blueprint.psychological_frame) {
+                lines.push('Psychological Frame:');
+                lines.push(blueprint.psychological_frame);
+                lines.push('');
+            }
+
+            if (blueprint.phase_structure?.length) {
+                lines.push('Beats (speakable checkpoints):');
+                blueprint.phase_structure.forEach((b, i) => {
+                    lines.push(`${i + 1}. ${b}`);
+                });
+                lines.push('');
+            }
+
+            if (blueprint.audience_control_points?.length) {
+                lines.push('Psychological pacing cues (where to slow down / anchor):');
+                blueprint.audience_control_points.slice(0, 6).forEach((x) => lines.push(`- ${x}`));
+                lines.push('');
+            }
+
+            if (blueprint.conviction_builders?.length) {
+                lines.push('Conviction lines (sprinkle these):');
+                blueprint.conviction_builders.slice(0, 6).forEach((x) => lines.push(`- ${x}`));
+                lines.push('');
+            }
+
+            const a = blueprint.audience_reaction_model;
+            if (a) {
+                lines.push('Audience reaction targets (semi-theoretical):');
+                lines.push(`- Gasps likelihood (1–10): ${a.gasps_likelihood_1_to_10}`);
+                lines.push(`- Skeptic resistance probability (0–1): ${a.skeptic_resistance_probability_0_to_1}`);
+                lines.push(`- Confusion risk (0–1): ${a.confusion_risk_0_to_1}`);
+                lines.push(`- Memory distortion strength (1–10): ${a.memory_distortion_strength_1_to_10}`);
+                if (a.notes) lines.push(`- Notes: ${a.notes}`);
+                lines.push('');
+            }
+
+            if (blueprint.ethical_flags?.length) {
+                lines.push('Ethical reminders:');
+                blueprint.ethical_flags.slice(0, 5).forEach((x) => lines.push(`- ${x}`));
+                lines.push('');
+            }
+
+            // Hand off to Live Rehearsal via localStorage prefill (LiveRehearsal reads this on mount)
+            const PREFILL_KEY = 'maw_live_rehearsal_prefill_v1';
+            localStorage.setItem(
+                PREFILL_KEY,
+                JSON.stringify({
+                    version: 1,
+                    title: `Mentalism Rehearsal — ${topic}`,
+                    notes: lines.join('\n'),
+                    createdAt: Date.now(),
+                    source: 'mentalism',
+                })
+            );
+
+            onOpenLiveRehearsal?.();
+        } catch (e: any) {
+            setRehearsalPrepError(String(e?.message ?? e ?? 'Failed to prepare rehearsal preload.'));
+        } finally {
+            setIsPreparingRehearsal(false);
+        }
+    };
+
 
     const handleGeneratePhrases = async () => {
         const currentQuery = String(query || '').trim();
@@ -1033,10 +1293,97 @@ Output guidelines:
                                         )}
                                     </div>
                                 </details>
+                                <details className="bg-slate-950/30 border border-slate-700 rounded-lg p-3">
+                                    <summary className="cursor-pointer text-slate-200 font-semibold">Audience Reaction Model</summary>
+                                    <div className="mt-2 text-sm text-slate-300">
+                                        {blueprint.audience_reaction_model ? (
+                                            <div className="space-y-2">
+                                                <div className="flex items-center justify-between text-xs">
+                                                    <span className="text-slate-400">Gasps likelihood</span>
+                                                    <span className="text-slate-200 font-semibold">{blueprint.audience_reaction_model.gasps_likelihood_1_to_10}/10</span>
+                                                </div>
+                                                <div className="flex items-center justify-between text-xs">
+                                                    <span className="text-slate-400">Skeptic resistance probability</span>
+                                                    <span className="text-slate-200 font-semibold">{blueprint.audience_reaction_model.skeptic_resistance_probability_0_to_1}</span>
+                                                </div>
+                                                <div className="flex items-center justify-between text-xs">
+                                                    <span className="text-slate-400">Confusion risk</span>
+                                                    <span className="text-slate-200 font-semibold">{blueprint.audience_reaction_model.confusion_risk_0_to_1}</span>
+                                                </div>
+                                                <div className="flex items-center justify-between text-xs">
+                                                    <span className="text-slate-400">Memory distortion strength</span>
+                                                    <span className="text-slate-200 font-semibold">{blueprint.audience_reaction_model.memory_distortion_strength_1_to_10}/10</span>
+                                                </div>
+                                                {blueprint.audience_reaction_model.notes ? (
+                                                    <div className="text-xs text-slate-300 whitespace-pre-wrap border-t border-slate-800 pt-2">
+                                                        {blueprint.audience_reaction_model.notes}
+                                                    </div>
+                                                ) : null}
+                                            </div>
+                                        ) : (
+                                            <div className="text-slate-500">—</div>
+                                        )}
+                                    </div>
+                                </details>
+
                             </div>
                         </div>
 
+                        {sendPlannerError ? (
+                            <div className="mt-3 mb-1 text-sm text-red-300 bg-red-950/30 border border-red-900/40 rounded-md p-2">
+                                {sendPlannerError}
+                            </div>
+                        ) : null}
+                        {rehearsalPrepError ? (
+                            <div className="mt-3 mb-1 text-sm text-red-300 bg-red-950/30 border border-red-900/40 rounded-md p-2">
+                                {rehearsalPrepError}
+                            </div>
+                        ) : null}
+                        {sendPlannerSuccess ? (
+                            <div className="mt-3 mb-1 text-sm text-green-300 bg-green-950/20 border border-green-900/40 rounded-md p-2">
+                                Sent to Show Planner ✓
+                            </div>
+                        ) : null}
+
                         <div className="sticky bottom-0 right-0 mt-auto p-2 bg-slate-900/50 flex flex-wrap justify-end gap-2 border-t border-slate-800">
+                            <button
+                                onClick={handleSendToShowPlanner}
+                                disabled={isSendingToPlanner || !blueprint}
+                                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-purple-700/70 hover:bg-purple-600/80 border border-purple-500/40 rounded-md text-white transition-colors disabled:bg-purple-900/30 disabled:text-slate-400 disabled:cursor-not-allowed"
+                                title="Create a Show + tasks in Show Planner from this blueprint"
+                            >
+                                {isSendingToPlanner ? (
+                                    <>
+                                        <div className="w-4 h-4 border-t-2 border-white/80 rounded-full animate-spin" />
+                                        <span>Sending…</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <LightbulbIcon className="w-4 h-4" />
+                                        <span>Send to Show Planner</span>
+                                    </>
+                                )}
+                            </button>
+
+                            <button
+                                onClick={handleRehearseInLiveStudio}
+                                disabled={isPreparingRehearsal || !blueprint}
+                                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md text-slate-200 transition-colors disabled:bg-slate-700/50 disabled:cursor-not-allowed"
+                                title="Jump into Live Rehearsal with this blueprint preloaded"
+                            >
+                                {isPreparingRehearsal ? (
+                                    <>
+                                        <div className="w-4 h-4 border-t-2 border-slate-300 rounded-full animate-spin" />
+                                        <span>Preparing…</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <WandIcon className="w-4 h-4" />
+                                        <span>Rehearse in Live Studio</span>
+                                    </>
+                                )}
+                            </button>
+
                             <button
                                 onClick={handleStressTest}
                                 disabled={isStressTesting}

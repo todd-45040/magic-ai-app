@@ -2221,7 +2221,14 @@ ${action.payload.content}`;
           );
         case 'persona-simulator': return <PersonaSimulator onIdeaSaved={() => handleIdeaSaved('Persona simulation saved!')} user={user} />;
         case 'gospel-magic-assistant': return <GospelMagicAssistant onIdeaSaved={() => handleIdeaSaved('Gospel routine idea saved!')} />;
-        case 'mentalism-assistant': return <MentalismAssistant onIdeaSaved={() => handleIdeaSaved('Mentalism idea saved!')} user={user} />;
+        case 'mentalism-assistant':
+          return (
+            <MentalismAssistant
+              onIdeaSaved={() => handleIdeaSaved('Mentalism idea saved!')}
+              onOpenShowPlanner={(showId, taskId) => handleOpenShowPlannerFromClient(showId ?? null, taskId ?? null)}
+              onOpenLiveRehearsal={() => setActiveView('live-rehearsal')}
+            />
+          );
         case 'client-management': return <ClientManagement onClientsUpdate={handleClientsUpdate} onAiSpark={handleAiSpark} onOpenShowPlanner={handleOpenShowPlannerFromClient} />;
         case 'member-management': return <MemberManagement />;
         case 'effect-generator': return <EffectGenerator onIdeaSaved={() => handleIdeaSaved('Effect ideas saved!')} />;
