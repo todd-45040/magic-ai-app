@@ -1139,7 +1139,7 @@ Populate arrays for categories the user selected; for unselected categories, ret
           <button
             onClick={() => handleGenerate()}
             disabled={isLoading || !isFormValid}
-            className="w-full py-3 mt-2 flex items-center justify-center gap-2 rounded-md font-bold transition-colors bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 shadow-[0_0_0_1px_rgba(245,158,11,0.35),0_8px_30px_rgba(245,158,11,0.10)] hover:from-amber-400 hover:to-yellow-400 disabled:bg-slate-600 disabled:text-slate-300 disabled:shadow-none disabled:cursor-not-allowed"
+            className="w-full py-3 mt-2 flex items-center justify-center gap-2 rounded-md font-bold transition-colors bg-gradient-to-r from-amber-700 to-amber-600 text-slate-950 shadow-[0_0_0_1px_rgba(245,158,11,0.28),0_10px_30px_rgba(245,158,11,0.10)] hover:from-amber-600 hover:to-amber-500 disabled:from-slate-600 disabled:to-slate-600 disabled:text-slate-300 disabled:shadow-none disabled:cursor-not-allowed"
           >
             <WandIcon className="w-5 h-5" />
             <span>Build Ministry Blueprint</span>
