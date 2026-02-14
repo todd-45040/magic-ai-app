@@ -1173,81 +1173,90 @@ Populate arrays for categories the user selected; for unselected categories, ret
         ) : blueprint ? (
           <div className="relative group flex-1 flex flex-col">
             {renderBlueprint()}
-            <div className="sticky bottom-0 right-0 mt-auto p-2 bg-slate-900/50 flex justify-end gap-2 border-t border-slate-800">
+            <div className="sticky bottom-0 right-0 mt-auto p-2 bg-slate-900/60 flex items-center justify-between gap-2 border-t border-slate-800">
+              <p className="hidden md:block text-xs text-slate-400 pl-1">
+                Next step: Move this into your working show.
+              </p>
 
-              <button
-                onClick={handleSendToShowPlanner}
-                disabled={isSendingToPlanner || !blueprint}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-transparent border border-slate-600 hover:border-slate-400 rounded-md text-slate-200 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                title="Create a Show + tasks in Show Planner from this ministry blueprint"
-              >
-                {isSendingToPlanner ? (
-                  <>
-                    <div className="w-4 h-4 border-t-2 border-white/80 rounded-full animate-spin" />
-                    <span>Sending…</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="text-base leading-none">📋</span>
-                    <span>Send to Show Planner</span>
-                  </>
-                )}
-              </button>
+              <div className="flex items-center justify-end gap-2 flex-wrap">
+                <button
+                  onClick={handleSendToShowPlanner}
+                  disabled={isSendingToPlanner || !blueprint}
+                  className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-md font-semibold bg-gradient-to-r from-amber-700 to-amber-600 text-slate-950 shadow-[0_0_0_1px_rgba(245,158,11,0.28),0_10px_30px_rgba(245,158,11,0.10)] hover:from-amber-600 hover:to-amber-500 transition-all hover:shadow-[0_0_0_1px_rgba(245,158,11,0.35),0_14px_40px_rgba(245,158,11,0.16)] hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
+                  title="Create a Show + tasks in Show Planner from this ministry blueprint"
+                >
+                  {isSendingToPlanner ? (
+                    <>
+                      <div className="w-4 h-4 border-t-2 border-slate-950/80 rounded-full animate-spin" />
+                      <span>Sending…</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-base leading-none">📋</span>
+                      <span>Send to Show Planner</span>
+                    </>
+                  )}
+                </button>
 
-              <button
-                onClick={handleRehearseInLiveStudio}
-                disabled={isPreparingRehearsal || !blueprint}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-transparent border border-slate-600 hover:border-slate-400 rounded-md text-slate-200 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                title="Jump into Live Rehearsal with this blueprint preloaded"
-              >
-                {isPreparingRehearsal ? (
-                  <>
-                    <div className="w-4 h-4 border-t-2 border-slate-300 rounded-full animate-spin" />
-                    <span>Preparing…</span>
-                  </>
-                ) : (
-                  <>
-                    <WandIcon className="w-4 h-4" />
-                    <span>Rehearse in Live Studio</span>
-                  </>
-                )}
-              </button>
+                <button
+                  onClick={handleRehearseInLiveStudio}
+                  disabled={isPreparingRehearsal || !blueprint}
+                  className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-md bg-purple-600 hover:bg-purple-500 text-white shadow-sm transition-all hover:shadow-md hover:scale-[1.01] active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
+                  title="Jump into Live Rehearsal with this blueprint preloaded"
+                >
+                  {isPreparingRehearsal ? (
+                    <>
+                      <div className="w-4 h-4 border-t-2 border-white/80 rounded-full animate-spin" />
+                      <span>Preparing…</span>
+                    </>
+                  ) : (
+                    <>
+                      <WandIcon className="w-4 h-4" />
+                      <span>Rehearse in Live Studio</span>
+                    </>
+                  )}
+                </button>
 
-              <button
-                onClick={handleStressTest}
-                disabled={isStressLoading}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-transparent border border-slate-600 hover:border-slate-400 rounded-md text-slate-200 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-                title="Review for clarity, sensitivity, and where confusion or skepticism may arise"
-              >
-                <span className="text-base leading-none">🔍</span>
-                <span>{isStressLoading ? 'Reviewing…' : 'Review Clarity'}</span>
-              </button>
+                <button
+                  onClick={handleStressTest}
+                  disabled={isStressLoading}
+                  className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-md bg-slate-700 hover:bg-slate-600 text-slate-100 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                  title="Review for clarity, sensitivity, and where confusion or skepticism may arise"
+                >
+                  <span className="text-base leading-none">🔍</span>
+                  <span>{isStressLoading ? 'Reviewing…' : 'Review Clarity'}</span>
+                </button>
 
-              <ShareButton
-                title={`Ministry Blueprint: ${lastQuery}`}
-                text={toMarkdownBlueprint(lastQuery, ministryTone, doctrinalMode, blueprint)}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 transition-colors"
-              >
-                <ShareIcon className="w-4 h-4" />
-                <span>Share</span>
-              </ShareButton>
-              <button
-                onClick={handleSave}
-                disabled={saveStatus === 'saved'}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 disabled:cursor-default transition-colors"
-              >
-                {saveStatus === 'saved' ? (
-                  <>
-                    <CheckIcon className="w-4 h-4 text-green-400" />
-                    <span>Saved!</span>
-                  </>
-                ) : (
-                  <>
-                    <SaveIcon className="w-4 h-4" />
-                    <span>Save Idea</span>
-                  </>
-                )}
-              </button>
+                <div className="hidden sm:block w-px self-stretch bg-slate-800 mx-1" />
+
+                <ShareButton
+                  title={`Ministry Blueprint: ${lastQuery}`}
+                  text={toMarkdownBlueprint(lastQuery, ministryTone, doctrinalMode, blueprint)}
+                  className="flex items-center gap-2 px-3 py-1.5 text-sm bg-transparent border border-slate-600 text-slate-300 hover:border-slate-400 hover:text-white rounded-md transition-colors"
+                >
+                  <ShareIcon className="w-4 h-4" />
+                  <span>Share</span>
+                </ShareButton>
+
+                <button
+                  onClick={handleSave}
+                  disabled={saveStatus === 'saved'}
+                  className="flex items-center gap-2 px-3 py-1.5 text-sm bg-transparent border border-slate-600 text-slate-300 hover:border-slate-400 hover:text-white rounded-md transition-colors disabled:cursor-default disabled:opacity-80"
+                  title="Save this blueprint to your idea library"
+                >
+                  {saveStatus === 'saved' ? (
+                    <>
+                      <CheckIcon className="w-4 h-4 text-green-400" />
+                      <span>Saved!</span>
+                    </>
+                  ) : (
+                    <>
+                      <SaveIcon className="w-4 h-4" />
+                      <span>Save Idea</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         ) : (
