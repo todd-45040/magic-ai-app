@@ -128,6 +128,7 @@ function getLibraryEntries(): SavedLibraryEntry[] {
 function saveLibraryEntry(entry: SavedLibraryEntry): void {
   const existing = getLibraryEntries();
   localStorage.setItem(LIBRARY_KEY, JSON.stringify([entry, ...existing]));
+}
 
 function getInterestProfile(): InterestProfile {
   const base: InterestProfile = { mentalism: 0, performance: 0, history: 0, sleight: 0, illusions: 0, closeup: 0, other: 0 };
@@ -187,7 +188,6 @@ function addConnections(newEdges: ConnectionEdge[]) {
   localStorage.setItem(CONNECTIONS_KEY, JSON.stringify([...newEdges, ...existing].slice(0, 200)));
 }
 
-}
 
 function tryParseJson<T>(raw: string): T | null {
   // Many models sometimes wrap JSON in markdown fences; this safely extracts the first JSON object/array.
