@@ -2220,7 +2220,14 @@ ${action.payload.content}`;
             />
           );
         case 'persona-simulator': return <PersonaSimulator onIdeaSaved={() => handleIdeaSaved('Persona simulation saved!')} user={user} />;
-        case 'gospel-magic-assistant': return <GospelMagicAssistant onIdeaSaved={() => handleIdeaSaved('Gospel routine idea saved!')} />;
+        case 'gospel-magic-assistant':
+          return (
+            <GospelMagicAssistant
+              onIdeaSaved={() => handleIdeaSaved('Gospel routine idea saved!')}
+              onOpenShowPlanner={(showId, taskId) => handleOpenShowPlannerFromClient(showId ?? null, taskId ?? null)}
+              onOpenLiveRehearsal={() => setActiveView('live-rehearsal')}
+            />
+          );
         case 'mentalism-assistant':
           return (
             <MentalismAssistant

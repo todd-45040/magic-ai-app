@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Type } from '@google/genai';
 import { generateStructuredResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
+import { createShow, addTasksToShow } from '../services/showsService';
 import { GOSPEL_MAGIC_SYSTEM_INSTRUCTION } from '../constants';
 import { WandIcon, SaveIcon, CheckIcon, ShareIcon } from './icons';
 import ShareButton from './ShareButton';
@@ -9,6 +10,8 @@ import { useAppState } from '../store';
 
 interface GospelMagicAssistantProps {
   onIdeaSaved: () => void;
+  onOpenShowPlanner?: (showId?: string | null, taskId?: string | null) => void;
+  onOpenLiveRehearsal?: () => void;
 }
 
 type MinistryTone =
@@ -45,6 +48,14 @@ interface MinistryBlueprint {
   }>;
   potential_misinterpretations: string[];
   closing_prayer_option: string;
+
+  audience_reaction_model?: {
+    gasps_likelihood_1_to_10: number;
+    skeptic_resistance_probability_0_to_1: number;
+    confusion_risk_0_to_1: number;
+    memory_distortion_strength_1_to_10: number;
+    notes?: string;
+  };
 }
 
 interface LayeredDiagramProps {
@@ -346,6 +357,13 @@ const GospelMagicAssistant: React.FC<GospelMagicAssistantProps> = ({ onIdeaSaved
   // Tier-2: Intelligence Layer
   const [stressReport, setStressReport] = useState<StressTestReport | null>(null);
   const [isStressLoading, setIsStressLoading] = useState(false);
+
+  const [isSendingToPlanner, setIsSendingToPlanner] = useState(false);
+  const [sendPlannerError, setSendPlannerError] = useState<string | null>(null);
+  const [sendPlannerSuccess, setSendPlannerSuccess] = useState(false);
+
+  const [isPreparingRehearsal, setIsPreparingRehearsal] = useState(false);
+  const [rehearsalError, setRehearsalError] = useState<string | null>(null);
   const [stressError, setStressError] = useState<string | null>(null);
 
   const [phraseSelection, setPhraseSelection] = useState<PhraseCategorySelection>({
@@ -506,6 +524,143 @@ ${doctrinalGuardrails}
       setIsStressLoading(false);
     }
   };
+
+
+  const handleSendToShowPlanner = async () => {
+    if (!blueprint) return;
+    setIsSendingToPlanner(true);
+    setSendPlannerError(null);
+    setSendPlannerSuccess(false);
+
+    try {
+      const topic = String(lastQuery || '').trim() || 'Ministry Routine';
+      const showTitle = `Ministry Routine — ${topic}`;
+      const descParts: string[] = [];
+      if (blueprint.scripture_focus) descParts.push(`Scripture: ${blueprint.scripture_focus}`);
+      if (blueprint.central_truth) descParts.push(`Central Truth: ${blueprint.central_truth}`);
+      if (blueprint.theological_theme) descParts.push(`Theme: ${blueprint.theological_theme}`);
+      const show = await createShow(showTitle, descParts.join('\n').slice(0, 800) || null);
+
+      // Derive rough phases from the routine structure.
+      const steps = Array.isArray(blueprint.routine_structure) ? blueprint.routine_structure : [];
+      const step0 = steps[0]?.title ? `${steps[0].title}` : '';
+      const step1 = steps[1]?.title ? `${steps[1].title}` : '';
+      const step2 = steps[2]?.title ? `${steps[2].title}` : '';
+      const lastStep = steps.length ? (steps[steps.length - 1]?.title ?? '') : '';
+
+      const list = (label: string, items?: string[]) =>
+        items && items.length ? `${label}\n- ${items.join('\n- ')}\n` : '';
+
+      const reaction = blueprint.audience_reaction_model;
+      const reactionText = reaction
+        ? `Audience Reaction Model\n- Gasps (1–10): ${reaction.gasps_likelihood_1_to_10}\n- Skeptic resistance (0–1): ${reaction.skeptic_resistance_probability_0_to_1}\n- Confusion risk (0–1): ${reaction.confusion_risk_0_to_1}\n- Memory distortion (1–10): ${reaction.memory_distortion_strength_1_to_10}\n${reaction.notes ? `- Notes: ${reaction.notes}\n` : ''}`
+        : '';
+
+      const doctrinalNote = doctrinalMode
+        ? `Doctrinal Integrity\n- Avoid overreach and performer-authority framing.\n- Avoid emotionally manipulative language.\n`
+        : '';
+
+      const openerNotes = [
+        'OPENER FRAMING',
+        blueprint.scripture_focus ? `Scripture Focus\n${blueprint.scripture_focus}\n` : '',
+        blueprint.central_truth ? `Central Truth\n${blueprint.central_truth}\n` : '',
+        blueprint.illustration_bridge ? `Illustration Bridge\n${blueprint.illustration_bridge}\n` : '',
+        step0 ? `Suggested Opener Beat\n- ${step0}\n` : '',
+        list('Potential Misinterpretations', blueprint.potential_misinterpretations),
+        reactionText ? `${reactionText}\n` : '',
+        doctrinalNote
+      ].filter(Boolean).join('\n');
+
+      const phase1Notes = [
+        'PHASE 1',
+        step1 ? `Beat\n- ${step1}\n` : '',
+        steps[1]?.stage_action ? `Stage Action\n${steps[1].stage_action}\n` : '',
+        steps[1]?.teaching_point ? `Teaching Point\n${steps[1].teaching_point}\n` : '',
+        list('Suggested Lines', steps[1]?.suggested_lines),
+        blueprint.pastoral_tone_guidance ? `Pastoral Tone\n${blueprint.pastoral_tone_guidance}\n` : ''
+      ].filter(Boolean).join('\n');
+
+      const phase2Notes = [
+        'PHASE 2',
+        step2 ? `Beat\n- ${step2}\n` : '',
+        steps[2]?.stage_action ? `Stage Action\n${steps[2].stage_action}\n` : '',
+        steps[2]?.teaching_point ? `Teaching Point\n${steps[2].teaching_point}\n` : '',
+        list('Suggested Lines', steps[2]?.suggested_lines)
+      ].filter(Boolean).join('\n');
+
+      const revealNotes = [
+        'REVEAL',
+        lastStep ? `Climax Beat\n- ${lastStep}\n` : '',
+        blueprint.emotional_arc?.length ? `Emotional Arc\n- ${blueprint.emotional_arc.join('\n- ')}\n` : '',
+        blueprint.altar_call_sensitivity?.guidance ? `Altar Call Sensitivity\n${blueprint.altar_call_sensitivity.guidance}\n` : '',
+        list('Do', blueprint.altar_call_sensitivity?.do),
+        list("Don't", blueprint.altar_call_sensitivity?.dont)
+      ].filter(Boolean).join('\n');
+
+      const closerNotes = [
+        'CLOSER TAG',
+        blueprint.closing_prayer_option ? `Closing Prayer Option\n${blueprint.closing_prayer_option}\n` : '',
+        doctrinalNote
+      ].filter(Boolean).join('\n');
+
+      const tasks = [
+        { title: 'Opener framing', notes: openerNotes, tags: ['ministry', 'blueprint'] },
+        { title: 'Phase 1', notes: phase1Notes, tags: ['ministry', 'blueprint'] },
+        { title: 'Phase 2', notes: phase2Notes, tags: ['ministry', 'blueprint'] },
+        { title: 'Reveal', notes: revealNotes, tags: ['ministry', 'blueprint'] },
+        { title: 'Closer tag', notes: closerNotes, tags: ['ministry', 'blueprint'] }
+      ];
+
+      await addTasksToShow(show.id, tasks);
+      setSendPlannerSuccess(true);
+
+      // Navigate to Show Planner with the created show.
+      onOpenShowPlanner?.(show.id, null);
+    } catch (err: any) {
+      setSendPlannerError(err?.message ? String(err.message) : 'Failed to send to Show Planner.');
+    } finally {
+      setIsSendingToPlanner(false);
+    }
+  };
+
+  const handleRehearseInLiveStudio = async () => {
+    if (!blueprint) return;
+    setIsPreparingRehearsal(true);
+    setRehearsalError(null);
+
+    try {
+      const title = `Ministry Rehearsal — ${String(lastQuery || '').trim() || 'Blueprint'}`;
+      const blocks: string[] = [];
+      if (blueprint.scripture_focus) blocks.push(`Scripture Focus\n${blueprint.scripture_focus}`);
+      if (blueprint.central_truth) blocks.push(`Central Truth\n${blueprint.central_truth}`);
+      if (blueprint.theological_theme) blocks.push(`Theme\n${blueprint.theological_theme}`);
+      if (blueprint.illustration_bridge) blocks.push(`Illustration Bridge\n${blueprint.illustration_bridge}`);
+      if (Array.isArray(blueprint.routine_structure) && blueprint.routine_structure.length) {
+        const beats = blueprint.routine_structure
+          .map((s, i) => `${i + 1}. ${s.title}${s.teaching_point ? ` — ${s.teaching_point}` : ''}`)
+          .join('\n');
+        blocks.push(`Routine Beats\n${beats}`);
+      }
+      if (Array.isArray(blueprint.emotional_arc) && blueprint.emotional_arc.length) {
+        blocks.push(`Emotional Arc\n- ${blueprint.emotional_arc.join('\n- ')}`);
+      }
+      if (blueprint.pastoral_tone_guidance) blocks.push(`Pastoral Tone Guidance\n${blueprint.pastoral_tone_guidance}`);
+      if (doctrinalMode) blocks.push(`Doctrinal Integrity\nKeep language careful, avoid performer-authority framing, and avoid emotional manipulation.`);
+      if (blueprint.altar_call_sensitivity?.guidance) blocks.push(`Altar Call Sensitivity\n${blueprint.altar_call_sensitivity.guidance}`);
+
+      const notes = blocks.join('\n\n').trim();
+
+      const PREFILL_KEY = 'maw_live_rehearsal_prefill_v1';
+      localStorage.setItem(PREFILL_KEY, JSON.stringify({ version: 1, title, notes }));
+
+      onOpenLiveRehearsal?.();
+    } catch (err: any) {
+      setRehearsalError(err?.message ? String(err.message) : 'Failed to prepare rehearsal.');
+    } finally {
+      setIsPreparingRehearsal(false);
+    }
+  };
+
 
   const handleGeneratePhrases = async () => {
     const selected = Object.entries(phraseSelection)
@@ -1019,6 +1174,45 @@ Populate arrays for categories the user selected; for unselected categories, ret
           <div className="relative group flex-1 flex flex-col">
             {renderBlueprint()}
             <div className="sticky bottom-0 right-0 mt-auto p-2 bg-slate-900/50 flex justify-end gap-2 border-t border-slate-800">
+
+              <button
+                onClick={handleSendToShowPlanner}
+                disabled={isSendingToPlanner || !blueprint}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-purple-700/60 hover:bg-purple-600/70 border border-purple-500/40 rounded-md text-white transition-colors disabled:bg-purple-900/30 disabled:text-slate-400 disabled:cursor-not-allowed"
+                title="Create a Show + tasks in Show Planner from this ministry blueprint"
+              >
+                {isSendingToPlanner ? (
+                  <>
+                    <div className="w-4 h-4 border-t-2 border-white/80 rounded-full animate-spin" />
+                    <span>Sending…</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-base leading-none">📋</span>
+                    <span>Send to Show Planner</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={handleRehearseInLiveStudio}
+                disabled={isPreparingRehearsal || !blueprint}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md text-slate-200 transition-colors disabled:bg-slate-700/50 disabled:cursor-not-allowed"
+                title="Jump into Live Rehearsal with this blueprint preloaded"
+              >
+                {isPreparingRehearsal ? (
+                  <>
+                    <div className="w-4 h-4 border-t-2 border-slate-300 rounded-full animate-spin" />
+                    <span>Preparing…</span>
+                  </>
+                ) : (
+                  <>
+                    <WandIcon className="w-4 h-4" />
+                    <span>Rehearse in Live Studio</span>
+                  </>
+                )}
+              </button>
+
               <button
                 onClick={handleStressTest}
                 disabled={isStressLoading}
