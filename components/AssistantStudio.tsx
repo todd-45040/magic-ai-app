@@ -50,6 +50,9 @@ const PRESETS: Array<{ label: string; template: (input: string) => string }> = [
   },
 ];
 
+const DRAFT_KEY = 'maw_assistant_studio_draft_v1';
+const REQUEST_TIMEOUT_MS = 45_000;
+
 function Skeleton() {
   return (
     <div className="space-y-3">
@@ -63,18 +66,48 @@ function Skeleton() {
   );
 }
 
+type ErrorKind = 'timeout' | 'quota' | 'other' | null;
+
+function detectQuotaError(message: string) {
+  const m = (message || '').toLowerCase();
+  return (
+    m.includes('quota') ||
+    m.includes('resource_exhausted') ||
+    m.includes('rate limit') ||
+    m.includes('too many') ||
+    m.includes('429') ||
+    m.includes('limit reached') ||
+    m.includes('daily') ||
+    m.includes('exceeded')
+  );
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number) {
+  let t: number | undefined;
+  const timeout = new Promise<T>((_, reject) => {
+    t = window.setTimeout(() => reject(new Error('TIMEOUT')), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    if (t) window.clearTimeout(t);
+  });
+}
+
 export default function AssistantStudio({ user, onIdeaSaved }: Props) {
   const currentUser = useMemo(() => user || GUEST_USER, [user]);
 
   const [input, setInput] = useState('');
   const [output, setOutput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const [copied, setCopied] = useState(false);
 
-  // “Esc to stop” support (best-effort): we can’t abort the network call,
-  // but we can ignore its result if the user cancels.
+  // Tier-2: internal, tool-level error handling
+  const [errorKind, setErrorKind] = useState<ErrorKind>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [errorDebug, setErrorDebug] = useState<string>('');
+
+  // “Esc/Cancel” support (best-effort): we can’t abort the network call here,
+  // but we can ignore its result and immediately unlock the UI.
   const requestIdRef = useRef(0);
   const cancelledUpToRef = useRef(0);
 
@@ -86,7 +119,26 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
   const [showPickerOpen, setShowPickerOpen] = useState(false);
   const [selectedShowId, setSelectedShowId] = useState<string>('');
   const [sending, setSending] = useState(false);
-  const [sendMsg, setSendMsg] = useState<string | null>(null);
+
+  const [toast, setToast] = useState<string | null>(null);
+
+  // Autosave draft prompt to localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(DRAFT_KEY);
+      if (saved) setInput(saved);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(DRAFT_KEY, input);
+    } catch {
+      // ignore
+    }
+  }, [input]);
 
   useEffect(() => {
     let mounted = true;
@@ -107,7 +159,6 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
 
   useEffect(() => {
     if (!output) return;
-    // slight delay so DOM paints before scroll
     window.setTimeout(() => {
       outputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 50);
@@ -116,6 +167,20 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
   const canCopySave = !!output && !loading;
   const canGenerate = !!input.trim() && !loading;
 
+  const clearErrors = () => {
+    setErrorKind(null);
+    setErrorMsg(null);
+    setErrorDebug('');
+  };
+
+  const hardUnlock = (message?: string) => {
+    setLoading(false);
+    if (message) {
+      setToast(message);
+      window.setTimeout(() => setToast(null), 1200);
+    }
+  };
+
   const handleGenerate = async () => {
     if (!input.trim()) return;
 
@@ -123,32 +188,54 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
 
     try {
       setLoading(true);
-      setError(null);
-      setSendMsg(null);
+      clearErrors();
+      setToast(null);
 
-      const text = await generateResponse(input.trim(), ASSISTANT_STUDIO_SYSTEM_INSTRUCTION, currentUser);
+      const text = await withTimeout(
+        generateResponse(input.trim(), ASSISTANT_STUDIO_SYSTEM_INSTRUCTION, currentUser),
+        REQUEST_TIMEOUT_MS
+      );
 
-      // If user hit Esc while this was running, ignore the result.
+      // If user cancelled while this was running, ignore the result.
       if (cancelledUpToRef.current >= myId) return;
 
       setOutput(text);
     } catch (e: any) {
       console.error(e);
-      setError(e?.message || 'Failed to generate response.');
+
+      if (e?.message === 'TIMEOUT') {
+        setErrorKind('timeout');
+        setErrorMsg('This took too long and was stopped to keep the app responsive.');
+        setErrorDebug(`timeout_ms=${REQUEST_TIMEOUT_MS}; reqId=${myId}`);
+      } else {
+        const msg = e?.message || 'Something went wrong.';
+        const isQuota = detectQuotaError(msg);
+        setErrorKind(isQuota ? 'quota' : 'other');
+        setErrorMsg(msg);
+        setErrorDebug(`reqId=${myId}; membership=${currentUser?.membership || 'unknown'}`);
+      }
     } finally {
-      // Only end loading if this is the latest request
       if (requestIdRef.current === myId) setLoading(false);
     }
   };
 
+  const handleCancel = () => {
+    cancelledUpToRef.current = requestIdRef.current; // ignore any in-flight response
+    hardUnlock('Cancelled');
+  };
+
   const handleReset = () => {
     cancelledUpToRef.current = requestIdRef.current; // ignore any in-flight response
-    setLoading(false);
-    setError(null);
-    setSendMsg(null);
+    hardUnlock();
+    clearErrors();
     setOutput('');
     setInput('');
     setCopied(false);
+    try {
+      localStorage.removeItem(DRAFT_KEY);
+    } catch {
+      // ignore
+    }
   };
 
   const handleCopy = async () => {
@@ -157,6 +244,17 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
       await navigator.clipboard.writeText(output);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1200);
+    } catch {
+      // ignore
+    }
+  };
+
+  const copyPrompt = async () => {
+    if (!input) return;
+    try {
+      await navigator.clipboard.writeText(input);
+      setToast('Prompt copied ✓');
+      window.setTimeout(() => setToast(null), 1200);
     } catch {
       // ignore
     }
@@ -174,28 +272,26 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
       });
 
       onIdeaSaved?.();
-      setSendMsg('Saved to Ideas ✓');
-      window.setTimeout(() => setSendMsg(null), 1400);
+      setToast('Saved to Ideas ✓');
+      window.setTimeout(() => setToast(null), 1400);
     } catch (e) {
       console.error(e);
-      setError('Could not save this idea. (Check Supabase auth / RLS)');
+      setErrorKind('other');
+      setErrorMsg('Could not save this idea. (Check Supabase auth / RLS)');
+      setErrorDebug('saveIdea_failed');
     }
   };
 
-  const openSend = () => {
-    setSendMsg(null);
-    setShowPickerOpen(true);
-  };
+  const openSend = () => setShowPickerOpen(true);
 
   const sendToShowPlanner = async () => {
     if (!selectedShowId || !output) return;
 
     setSending(true);
-    setSendMsg(null);
-    setError(null);
+    setToast(null);
+    clearErrors();
 
-    // Tier-1 implementation: send output as a single task.
-    // (Tier-4 upgrade can split into Opener/Segments/Closer later.)
+    // Tier-1/2 implementation: send output as a single task.
     const tasks: Partial<Task>[] = [
       {
         title: 'Assistant Studio Notes',
@@ -207,11 +303,13 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
     try {
       await addTasksToShow(selectedShowId, tasks);
       setShowPickerOpen(false);
-      setSendMsg('Sent to Show Planner ✓');
-      window.setTimeout(() => setSendMsg(null), 1600);
+      setToast('Sent to Show Planner ✓');
+      window.setTimeout(() => setToast(null), 1600);
     } catch (e: any) {
       console.error(e);
-      setError(e?.message || 'Could not send to Show Planner.');
+      setErrorKind('other');
+      setErrorMsg(e?.message || 'Could not send to Show Planner.');
+      setErrorDebug('sendToShowPlanner_failed');
     } finally {
       setSending(false);
     }
@@ -229,10 +327,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
 
     if (e.key === 'Escape') {
       e.preventDefault();
-      cancelledUpToRef.current = requestIdRef.current; // ignore in-flight response
-      setLoading(false);
-      setSendMsg('Stopped');
-      window.setTimeout(() => setSendMsg(null), 900);
+      handleCancel();
     }
   };
 
@@ -242,13 +337,45 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
     setInput(preset.template(base || '[Paste your script/notes here]'));
   };
 
+  const reportIssue = async () => {
+    // Safer than hard-coding an email address: copy details for support.
+    const payload = [
+      '[Magic AI Wizard] Assistant Studio Issue',
+      `time=${new Date().toISOString()}`,
+      `membership=${currentUser?.membership || 'unknown'}`,
+      errorKind ? `kind=${errorKind}` : '',
+      errorMsg ? `message=${errorMsg}` : '',
+      errorDebug ? `debug=${errorDebug}` : '',
+      `prompt_len=${input?.length || 0}`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+    try {
+      await navigator.clipboard.writeText(payload);
+      setToast('Issue details copied ✓');
+      window.setTimeout(() => setToast(null), 1400);
+    } catch {
+      // ignore
+    }
+  };
+
+  const quotaMessage = () => {
+    const tier = (currentUser?.membership || 'free').toLowerCase();
+    if (tier.includes('trial')) {
+      return 'You may have hit a trial usage limit. Upgrade to continue without interruptions.';
+    }
+    if (tier.includes('free')) {
+      return 'Free tier limit reached. Upgrade to keep generating without daily caps.';
+    }
+    return 'Usage limit reached. If this seems wrong, try again in a bit or contact support.';
+  };
+
   return (
     <div className="relative p-6 pb-24 space-y-6">
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-2xl font-bold">Assistant&apos;s Studio</h1>
-        {/* Inline feedback */}
         <div className="text-sm text-slate-400 min-h-[1.25rem]">
-          {sendMsg ? <span className="text-emerald-400">{sendMsg}</span> : error ? <span className="text-red-400">{error}</span> : null}
+          {toast ? <span className="text-emerald-400">{toast}</span> : null}
         </div>
       </div>
 
@@ -279,12 +406,79 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
           />
 
           <div className="text-xs text-slate-500">
-            Shortcut: <span className="text-slate-300">Ctrl/Cmd + Enter</span> to generate • <span className="text-slate-300">Esc</span> to stop
+            Shortcut: <span className="text-slate-300">Ctrl/Cmd + Enter</span> to generate •{' '}
+            <span className="text-slate-300">Esc</span> to cancel
           </div>
         </div>
 
         {/* RIGHT: Output / spinner panel */}
         <div ref={outputRef} className="space-y-3">
+          {/* Inline tool-level error boundary */}
+          {errorKind && (
+            <div className="rounded-2xl border border-slate-700 bg-slate-950/70 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-lg font-semibold text-slate-100">
+                    {errorKind === 'timeout'
+                      ? 'Timed out'
+                      : errorKind === 'quota'
+                      ? 'Usage limit reached'
+                      : 'Something went wrong'}
+                  </div>
+
+                  <div className="mt-1 text-sm text-slate-300">
+                    {errorKind === 'timeout'
+                      ? 'The request was stopped after 45 seconds so the app never gets stuck.'
+                      : errorKind === 'quota'
+                      ? quotaMessage()
+                      : 'Please try again. If it keeps happening, report it so we can fix it fast.'}
+                  </div>
+
+                  {errorKind !== 'quota' && errorMsg && errorKind !== 'timeout' && (
+                    <div className="mt-2 text-xs text-slate-500 break-words">{errorMsg}</div>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-2 min-w-[140px]">
+                  <button
+                    className="px-3 py-2 rounded bg-purple-600 hover:bg-purple-500 text-white"
+                    onClick={handleGenerate}
+                    disabled={!input.trim() || loading}
+                  >
+                    Retry
+                  </button>
+                  <button
+                    className="px-3 py-2 rounded border border-slate-600 hover:border-slate-400 text-slate-200"
+                    onClick={handleReset}
+                  >
+                    Reset
+                  </button>
+                  <button
+                    className="px-3 py-2 rounded border border-slate-600 hover:border-slate-400 text-slate-200"
+                    onClick={reportIssue}
+                  >
+                    Report issue
+                  </button>
+
+                  {(errorKind === 'timeout' || errorKind === 'quota') && (
+                    <button
+                      className="px-3 py-2 rounded border border-slate-600 hover:border-slate-400 text-slate-200"
+                      onClick={copyPrompt}
+                    >
+                      Copy prompt
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {errorKind === 'quota' && (
+                <div className="mt-3 text-sm text-slate-300">
+                  Tip: click <span className="text-slate-100">Membership Types</span> in the footer to upgrade.
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4 min-h-[260px]">
             {loading ? (
               <div className="space-y-4">
@@ -377,8 +571,17 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
             </button>
           </div>
 
-          {/* Right: Copy / Save / Send */}
+          {/* Right: Copy / Save / Send / Cancel */}
           <div className="flex items-center gap-2">
+            {loading ? (
+              <button
+                onClick={handleCancel}
+                className="px-3 py-2 rounded border border-slate-600 hover:border-slate-400 text-slate-200"
+              >
+                Cancel
+              </button>
+            ) : null}
+
             <button
               onClick={handleCopy}
               disabled={!canCopySave}
@@ -394,7 +597,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
               Save
             </button>
             <button
-              onClick={openSend}
+              onClick={() => (!canCopySave ? null : openSend())}
               disabled={!canCopySave}
               className="px-3 py-2 rounded border border-slate-600 hover:border-slate-400 text-slate-200 disabled:opacity-40"
             >
