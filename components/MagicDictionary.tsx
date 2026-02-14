@@ -1313,7 +1313,8 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
       </div>
 
       {/* Cards */}
-      <div className={layer === 'core' ? 'mt-4' : 'mt-2'}>
+      {/* Keyed by layer so switching tabs fully remounts the cards area (prevents any stray reconciled nodes). */}
+      <div key={layer} className={layer === 'core' ? 'mt-4' : 'mt-2'}>
         {layer === 'core' ? (
           filteredTerms.length > 0 ? (
           <div className="grid grid-cols-1 gap-3">
