@@ -259,14 +259,13 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
   const [sending, setSending] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Tier-2: internal, tool-level error handling
   const [errorKind, setErrorKind] = useState<ErrorKind>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [errorDebug, setErrorDebug] = useState<string>('');
 
   const [toast, setToast] = useState<string | null>(null);
 
-  // Tier-4: Context + Blueprint metadata
+  // Context + Blueprint metadata
   const [clientName, setClientName] = useState('');
   const [venueType, setVenueType] = useState('');
   const [audienceSize, setAudienceSize] = useState('');
@@ -448,6 +447,14 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
     hardUnlock('Cancelled');
   };
 
+  const clearContext = () => {
+    setClientName('');
+    setVenueType('');
+    setAudienceSize('');
+    setToast('Context cleared');
+    window.setTimeout(() => setToast(null), 900);
+  };
+
   const handleReset = () => {
     cancelledUpToRef.current = requestIdRef.current;
     hardUnlock();
@@ -516,7 +523,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
     }
   };
 
-  // Tier-4: Save as Blueprint (stored in Ideas with blueprint tag + metadata header)
+  // Save as Blueprint (stored in Ideas with blueprint tag + metadata header)
   const openBlueprint = () => {
     setBlueprintName(
       blueprintName ||
@@ -532,20 +539,13 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
     clearErrors();
     setToast(null);
 
-    const meta = {
-      preset: lastPreset || null,
-      walkaround: walkaroundOn,
-      context: { clientName: clientName || null, venueType: venueType || null, audienceSize: audienceSize || null },
-      createdAt: new Date().toISOString(),
-    };
-
     const header = [
       `BLUEPRINT: ${blueprintName || 'Assistant Studio Blueprint'}`,
-      `Preset: ${meta.preset || '—'}`,
-      `Walkaround Optimizer: ${meta.walkaround ? 'ON' : 'OFF'}`,
-      meta.context.clientName ? `Client: ${meta.context.clientName}` : '',
-      meta.context.venueType ? `Venue: ${meta.context.venueType}` : '',
-      meta.context.audienceSize ? `Audience: ${meta.context.audienceSize}` : '',
+      `Preset: ${lastPreset || '—'}`,
+      `Walkaround Optimizer: ${walkaroundOn ? 'ON' : 'OFF'}`,
+      clientName ? `Client: ${clientName}` : '',
+      venueType ? `Venue: ${venueType}` : '',
+      audienceSize ? `Audience: ${audienceSize}` : '',
       '',
       '---',
       '',
@@ -586,7 +586,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
 
   const openSend = () => setShowPickerOpen(true);
 
-  // Tier-4: Send to Show Planner as 4-part run OR sections
+  // Send to Show Planner as 4-part run OR sections
   const sendToShowPlanner = async () => {
     if (!selectedShowId || !outputRaw) return;
     setSending(true);
@@ -624,7 +624,11 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
         { title: 'Assistant Studio – Rehearsal Tasks', notes: output.rehearsalTasks || outputRaw, priority: 'medium' as any },
       ];
       if (walkaroundOn && output.walkaroundRewrite) {
-        tasks.push({ title: 'Assistant Studio – Walkaround Rewrite', notes: output.walkaroundRewrite, priority: 'medium' as any });
+        tasks.push({
+          title: 'Assistant Studio – Walkaround Rewrite',
+          notes: output.walkaroundRewrite,
+          priority: 'medium' as any,
+        });
       }
     }
 
@@ -664,6 +668,8 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
     const base = input.trim();
     setInput(preset.template(base || '[Paste your script/notes here]'));
     setLastPreset(preset.tag || preset.label.toLowerCase().replace(/\s+/g, '-'));
+    setToast(`Preset: ${preset.label}`);
+    window.setTimeout(() => setToast(null), 900);
   };
 
   const reportIssue = async () => {
@@ -696,7 +702,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
         </div>
       );
     }
-    return <div className="whitespace-pre-wrap text-slate-100">{value || outputRaw}</div>;
+    return <div className="whitespace-pre-wrap text-slate-100 leading-relaxed">{value || outputRaw}</div>;
   };
 
   const availableTabs = useMemo(() => {
@@ -713,10 +719,28 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
     return base;
   }, [output, outputRaw, walkaroundOn]);
 
+  const contextSummary = useMemo(() => {
+    const parts: string[] = [];
+    if (clientName) parts.push(clientName);
+    if (venueType) parts.push(venueType);
+    if (audienceSize) parts.push(`${audienceSize} ppl`);
+    return parts.join(' • ');
+  }, [clientName, venueType, audienceSize]);
+
   return (
     <div className="relative p-6 pb-24 space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold">Assistant&apos;s Studio</h1>
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-bold">Assistant&apos;s Studio</h1>
+          {contextSummary ? (
+            <div className="text-xs text-slate-400">
+              Context: <span className="text-slate-200">{contextSummary}</span>
+            </div>
+          ) : (
+            <div className="text-xs text-slate-500">Optional context makes results feel more “made for this gig.”</div>
+          )}
+        </div>
+
         <div className="text-sm text-slate-400 min-h-[1.25rem]">{toast ? <span className="text-emerald-400">{toast}</span> : null}</div>
       </div>
 
@@ -729,27 +753,39 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
                 key={p.label}
                 type="button"
                 onClick={() => applyPreset(idx)}
-                className="px-3 py-1.5 rounded-full border border-slate-700 bg-slate-950/60 hover:border-slate-500 text-sm"
+                className="px-3 py-1.5 rounded-full border border-slate-700 bg-slate-950/50 hover:bg-slate-950/70 hover:border-slate-500 text-sm"
               >
                 {p.label}
               </button>
             ))}
           </div>
 
-          {/* Tier-4: Context selectors */}
+          {/* Context selectors */}
+          <div className="flex items-center justify-between">
+            <div className="text-xs text-slate-400">This is for (optional):</div>
+            <button
+              type="button"
+              onClick={clearContext}
+              className="text-xs px-2 py-1 rounded border border-slate-700 hover:border-slate-500 text-slate-200"
+              disabled={!clientName && !venueType && !audienceSize}
+            >
+              Clear context
+            </button>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
             <input
               value={clientName}
               onChange={(e) => setClientName(e.target.value)}
-              placeholder="Client (optional)"
-              className="p-2 rounded bg-slate-950/60 border border-slate-700 text-white"
+              placeholder="Client"
+              className="p-2 rounded bg-slate-950/50 border border-slate-700 text-white placeholder:text-slate-500"
             />
             <select
               value={venueType}
               onChange={(e) => setVenueType(e.target.value)}
-              className="p-2 rounded bg-slate-950/60 border border-slate-700 text-white"
+              className="p-2 rounded bg-slate-950/50 border border-slate-700 text-white"
             >
-              <option value="">Venue type (optional)</option>
+              <option value="">Venue type</option>
               {VENUE_TYPES.map((v) => (
                 <option key={v} value={v}>
                   {v}
@@ -759,8 +795,8 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
             <input
               value={audienceSize}
               onChange={(e) => setAudienceSize(e.target.value)}
-              placeholder="Audience size (optional)"
-              className="p-2 rounded bg-slate-950/60 border border-slate-700 text-white"
+              placeholder="Audience size"
+              className="p-2 rounded bg-slate-950/50 border border-slate-700 text-white placeholder:text-slate-500"
             />
           </div>
 
@@ -772,13 +808,13 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
               onChange={(e) => setWalkaroundOn(e.target.checked)}
               className="h-4 w-4 accent-purple-500"
             />
-            Optimize for walkaround (reset, angles, crowd management, louder lines)
+            Optimize for walkaround <span className="text-slate-400">(reset, angles, crowd mgmt, louder lines)</span>
           </label>
 
           <textarea
-            className="w-full p-3 border border-slate-700 rounded bg-slate-950/60 text-white min-h-[260px]"
+            className="w-full p-3 border border-slate-700 rounded bg-slate-950/50 text-white min-h-[260px] placeholder:text-slate-500"
             rows={10}
-            placeholder="Describe what you want help with (script notes, structure, punchlines, transitions, callbacks, etc.)"
+            placeholder="Paste your script, notes, or outline here…"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={onTextKeyDown}
@@ -790,10 +826,14 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
           </div>
 
           {/* Refine controls */}
-          <div className="pt-2 border-t border-slate-800/60">
+          <div className="pt-3 border-t border-slate-800/60">
             <div className="flex items-center justify-between gap-2 mb-2">
-              <div className="text-xs text-slate-400">Refine:</div>
-              {lastPreset ? <div className="text-xs text-slate-500">Preset: <span className="text-slate-300">{lastPreset}</span></div> : null}
+              <div className="text-xs text-slate-400">Refine output:</div>
+              {lastPreset ? (
+                <div className="text-xs text-slate-500">
+                  Preset: <span className="text-slate-300">{lastPreset}</span>
+                </div>
+              ) : null}
             </div>
             <div className="flex flex-wrap gap-2">
               {REFINE_ACTIONS.map((r) => (
@@ -802,7 +842,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
                   type="button"
                   onClick={() => handleRefine(r.instruction)}
                   disabled={!outputRaw || loading}
-                  className="px-3 py-1.5 rounded-full border border-slate-700 bg-slate-950/60 hover:border-slate-500 text-sm disabled:opacity-40"
+                  className="px-3 py-1.5 rounded-full border border-slate-700 bg-slate-950/50 hover:bg-slate-950/70 hover:border-slate-500 text-sm disabled:opacity-40"
                 >
                   {r.label}
                 </button>
@@ -819,7 +859,11 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="text-lg font-semibold text-slate-100">
-                    {errorKind === 'timeout' ? 'Timed out' : errorKind === 'quota' ? 'Usage limit reached' : 'Something went wrong'}
+                    {errorKind === 'timeout'
+                      ? 'Timed out'
+                      : errorKind === 'quota'
+                      ? 'Usage limit reached'
+                      : 'Something went wrong'}
                   </div>
 
                   <div className="mt-1 text-sm text-slate-300">
@@ -836,18 +880,31 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
                 </div>
 
                 <div className="flex flex-col gap-2 min-w-[140px]">
-                  <button className="px-3 py-2 rounded bg-purple-600 hover:bg-purple-500 text-white" onClick={handleGenerate} disabled={!input.trim() || loading}>
+                  <button
+                    className="px-3 py-2 rounded bg-purple-600 hover:bg-purple-500 text-white"
+                    onClick={handleGenerate}
+                    disabled={!input.trim() || loading}
+                  >
                     Retry
                   </button>
-                  <button className="px-3 py-2 rounded border border-slate-600 hover:border-slate-400 text-slate-200" onClick={handleReset}>
+                  <button
+                    className="px-3 py-2 rounded border border-slate-600 hover:border-slate-400 text-slate-200"
+                    onClick={handleReset}
+                  >
                     Reset
                   </button>
-                  <button className="px-3 py-2 rounded border border-slate-600 hover:border-slate-400 text-slate-200" onClick={reportIssue}>
+                  <button
+                    className="px-3 py-2 rounded border border-slate-600 hover:border-slate-400 text-slate-200"
+                    onClick={reportIssue}
+                  >
                     Report issue
                   </button>
 
                   {(errorKind === 'timeout' || errorKind === 'quota') && (
-                    <button className="px-3 py-2 rounded border border-slate-600 hover:border-slate-400 text-slate-200" onClick={copyPrompt}>
+                    <button
+                      className="px-3 py-2 rounded border border-slate-600 hover:border-slate-400 text-slate-200"
+                      onClick={copyPrompt}
+                    >
                       Copy prompt
                     </button>
                   )}
@@ -894,7 +951,13 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
                 {renderTabContent()}
               </>
             ) : (
-              <div className="text-slate-400 text-sm">Your results will appear here. Use a preset chip above to get started quickly.</div>
+              <div className="text-slate-400 text-sm space-y-2">
+                <div>Your results will appear here.</div>
+                <div className="text-slate-500">
+                  Try: <span className="text-slate-300">“Tighten Script”</span> or{' '}
+                  <span className="text-slate-300">“Improve Transitions”</span>, then hit Generate.
+                </div>
+              </div>
             )}
           </div>
         </div>
@@ -906,20 +969,27 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
           <div className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-950 p-5 shadow-xl">
             <div className="flex items-center justify-between gap-3">
               <div className="text-lg font-semibold">Send to Show Planner</div>
-              <button className="px-2 py-1 rounded border border-slate-700 hover:border-slate-500" onClick={() => setShowPickerOpen(false)}>
+              <button
+                className="px-2 py-1 rounded border border-slate-700 hover:border-slate-500"
+                onClick={() => setShowPickerOpen(false)}
+              >
                 Close
               </button>
             </div>
 
             <div className="mt-4 space-y-4">
-              {/* Mode switch */}
               <div className="flex flex-col gap-2 text-sm text-slate-200">
                 <label className="flex items-center gap-2">
                   <input type="radio" name="sendMode" checked={sendMode === 'run'} onChange={() => setSendMode('run')} />
                   Create 4-part run (Opener / Middle 1 / Middle 2 / Closer)
                 </label>
                 <label className="flex items-center gap-2">
-                  <input type="radio" name="sendMode" checked={sendMode === 'sections'} onChange={() => setSendMode('sections')} />
+                  <input
+                    type="radio"
+                    name="sendMode"
+                    checked={sendMode === 'sections'}
+                    onChange={() => setSendMode('sections')}
+                  />
                   Create section tasks (Quick Wins / Line Edits / Director Notes / etc.)
                 </label>
               </div>
@@ -931,7 +1001,11 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
               ) : (
                 <>
                   <label className="text-sm text-slate-300">Choose a show</label>
-                  <select className="w-full p-2 rounded bg-slate-900 border border-slate-700" value={selectedShowId} onChange={(e) => setSelectedShowId(e.target.value)}>
+                  <select
+                    className="w-full p-2 rounded bg-slate-900 border border-slate-700"
+                    value={selectedShowId}
+                    onChange={(e) => setSelectedShowId(e.target.value)}
+                  >
                     {shows.map((s) => (
                       <option key={s.id} value={s.id}>
                         {s.title}
@@ -959,7 +1033,10 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
           <div className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-950 p-5 shadow-xl">
             <div className="flex items-center justify-between gap-3">
               <div className="text-lg font-semibold">Save as Blueprint</div>
-              <button className="px-2 py-1 rounded border border-slate-700 hover:border-slate-500" onClick={() => setBlueprintOpen(false)}>
+              <button
+                className="px-2 py-1 rounded border border-slate-700 hover:border-slate-500"
+                onClick={() => setBlueprintOpen(false)}
+              >
                 Close
               </button>
             </div>
@@ -970,11 +1047,11 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
                 value={blueprintName}
                 onChange={(e) => setBlueprintName(e.target.value)}
                 placeholder="e.g., Corporate Opener Blueprint"
-                className="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                className="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white placeholder:text-slate-500"
               />
 
               <div className="text-xs text-slate-400">
-                Includes: output + preset + walkaround toggle + context (client/venue/audience) + tags.
+                Includes output + preset + walkaround toggle + context (client/venue/audience) + tags.
               </div>
 
               <button
@@ -993,34 +1070,60 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
       <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-800 bg-slate-950/80 backdrop-blur">
         <div className="mx-auto max-w-7xl px-6 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <button onClick={handleReset} className="px-3 py-2 rounded bg-transparent border border-slate-600 hover:border-slate-400 text-slate-200">
+            <button
+              onClick={handleReset}
+              className="px-3 py-2 rounded bg-transparent border border-slate-600 hover:border-slate-400 text-slate-200"
+            >
               Reset / Clear
             </button>
           </div>
 
           <div className="flex items-center gap-2">
-            <button onClick={handleGenerate} disabled={!canGenerate} className="px-5 py-2 rounded bg-purple-600 hover:bg-purple-500 text-white disabled:opacity-40">
+            <button
+              onClick={handleGenerate}
+              disabled={!canGenerate}
+              className="px-5 py-2 rounded bg-purple-600 hover:bg-purple-500 text-white disabled:opacity-40"
+            >
               {loading ? 'Generating…' : 'Generate'}
             </button>
           </div>
 
           <div className="flex items-center gap-2">
             {loading ? (
-              <button onClick={handleCancel} className="px-3 py-2 rounded border border-slate-600 hover:border-slate-400 text-slate-200">
+              <button
+                onClick={handleCancel}
+                className="px-3 py-2 rounded border border-slate-600 hover:border-slate-400 text-slate-200"
+              >
                 Cancel
               </button>
             ) : null}
 
-            <button onClick={handleCopy} disabled={!canCopySave} className="px-3 py-2 rounded border border-slate-600 hover:border-slate-400 text-slate-200 disabled:opacity-40">
+            <button
+              onClick={handleCopy}
+              disabled={!canCopySave}
+              className="px-3 py-2 rounded border border-slate-600 hover:border-slate-400 text-slate-200 disabled:opacity-40"
+            >
               {copied ? 'Copied ✓' : 'Copy'}
             </button>
-            <button onClick={handleSaveIdea} disabled={!canCopySave} className="px-3 py-2 rounded bg-emerald-700 hover:bg-emerald-600 text-white disabled:opacity-40">
+            <button
+              onClick={handleSaveIdea}
+              disabled={!canCopySave}
+              className="px-3 py-2 rounded bg-emerald-700 hover:bg-emerald-600 text-white disabled:opacity-40"
+            >
               Save
             </button>
-            <button onClick={openBlueprint} disabled={!canCopySave} className="px-3 py-2 rounded border border-slate-600 hover:border-slate-400 text-slate-200 disabled:opacity-40">
+            <button
+              onClick={openBlueprint}
+              disabled={!canCopySave}
+              className="px-3 py-2 rounded border border-slate-600 hover:border-slate-400 text-slate-200 disabled:opacity-40"
+            >
               Save Blueprint
             </button>
-            <button onClick={() => (!canCopySave ? null : openSend())} disabled={!canCopySave} className="px-3 py-2 rounded border border-slate-600 hover:border-slate-400 text-slate-200 disabled:opacity-40">
+            <button
+              onClick={() => (!canCopySave ? null : openSend())}
+              disabled={!canCopySave}
+              className="px-3 py-2 rounded border border-slate-600 hover:border-slate-400 text-slate-200 disabled:opacity-40"
+            >
               Send to Show Planner
             </button>
           </div>
