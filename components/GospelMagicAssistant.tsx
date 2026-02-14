@@ -78,11 +78,11 @@ const PsychologicalLayerVisualizer: React.FC<LayeredDiagramProps> = ({ compact }
 
     <div className="mt-3 space-y-2">
       {[
-        'Effect Surface',
-        'Psychological Justification',
-        'Conviction Layer',
-        'Memory Distortion Layer',
-        'Impossible Climax',
+        'Illustration Surface',
+        'Scriptural Foundation',
+        'Conviction Movement',
+        'Reflection Moment',
+        'Gospel Resolution',
       ].map((label, idx, arr) => (
         <div key={label} className="flex flex-col items-center">
           <div className="w-full max-w-[420px] rounded-md border border-slate-700 bg-slate-900/40 px-3 py-2">
@@ -1017,8 +1017,9 @@ Populate arrays for categories the user selected; for unselected categories, ret
                 Avoid theological overreach, prosperity-style promises, implying performer authority, or emotionally manipulative language.
               </p>
             </div>
-          
-          <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-3">
+          </label>
+
+          <div className="rounded-xl border border-slate-800 bg-slate-950/20 p-3">
             <div className="flex items-center justify-between">
               <p className="text-sm font-semibold text-slate-200">Ministry Phrase Builder</p>
               <p className="text-[10px] text-slate-500">mini-tool</p>
@@ -1178,7 +1179,7 @@ Populate arrays for categories the user selected; for unselected categories, ret
               <button
                 onClick={handleSendToShowPlanner}
                 disabled={isSendingToPlanner || !blueprint}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-purple-700/60 hover:bg-purple-600/70 border border-purple-500/40 rounded-md text-white transition-colors disabled:bg-purple-900/30 disabled:text-slate-400 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-transparent border border-slate-600 hover:border-slate-400 rounded-md text-slate-200 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                 title="Create a Show + tasks in Show Planner from this ministry blueprint"
               >
                 {isSendingToPlanner ? (
@@ -1197,7 +1198,7 @@ Populate arrays for categories the user selected; for unselected categories, ret
               <button
                 onClick={handleRehearseInLiveStudio}
                 disabled={isPreparingRehearsal || !blueprint}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md text-slate-200 transition-colors disabled:bg-slate-700/50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-transparent border border-slate-600 hover:border-slate-400 rounded-md text-slate-200 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                 title="Jump into Live Rehearsal with this blueprint preloaded"
               >
                 {isPreparingRehearsal ? (
@@ -1216,11 +1217,11 @@ Populate arrays for categories the user selected; for unselected categories, ret
               <button
                 onClick={handleStressTest}
                 disabled={isStressLoading}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 disabled:cursor-not-allowed transition-colors"
-                title="Simulate skeptical perspectives and get a vulnerability report"
+                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-transparent border border-slate-600 hover:border-slate-400 rounded-md text-slate-200 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                title="Review for clarity, sensitivity, and where confusion or skepticism may arise"
               >
                 <span className="text-base leading-none">🔍</span>
-                <span>{isStressLoading ? 'Stress Testing…' : 'Stress Test'}</span>
+                <span>{isStressLoading ? 'Reviewing…' : 'Review Clarity'}</span>
               </button>
 
               <ShareButton
@@ -1277,7 +1278,7 @@ Populate arrays for categories the user selected; for unselected categories, ret
                 Start with a Scripture reference or a message theme, choose the ministry tone, and generate a structured routine you can trust.
               </p>
               <div className="mt-4 text-xs text-slate-500">
-                <p className="italic">“Let all things be done decently and in order.”</p>
+                <p className="italic opacity-70 tracking-wide">“Let all things be done decently and in order.”</p>
                 <p className="mt-1">(1 Corinthians 14:40)</p>
               </div>
             </div>
