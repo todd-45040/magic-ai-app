@@ -26,6 +26,87 @@ const LoadingIndicator: React.FC = () => (
         <p className="text-slate-400 text-sm">Crafting seemingly impossible feats.</p>
     </div>
 );
+
+const NeuralBackdrop: React.FC<{ className?: string }> = ({ className }) => {
+    return (
+        <div className={`absolute inset-0 pointer-events-none ${className ?? ''}`}>
+            {/* Blueprint grid */}
+            <div
+                className="absolute inset-0 opacity-[0.35]"
+                style={{
+                    backgroundImage:
+                        'linear-gradient(rgba(148,163,184,0.12) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.12) 1px, transparent 1px)',
+                    backgroundSize: '26px 26px',
+                    backgroundPosition: 'center',
+                }}
+            />
+
+            {/* Soft neural glow */}
+            <div className="absolute -top-24 -right-24 w-[520px] h-[520px] bg-purple-600/10 blur-3xl rounded-full" />
+            <div className="absolute -bottom-28 -left-28 w-[520px] h-[520px] bg-indigo-600/10 blur-3xl rounded-full" />
+
+            {/* Brain line diagram */}
+            <div className="absolute inset-0 flex items-center justify-center opacity-[0.85]">
+                <svg width="260" height="180" viewBox="0 0 260 180" fill="none" aria-hidden="true">
+                    <defs>
+                        <linearGradient id="brainStroke" x1="0" y1="0" x2="260" y2="180" gradientUnits="userSpaceOnUse">
+                            <stop stopColor="rgba(168,85,247,0.85)" />
+                            <stop offset="1" stopColor="rgba(99,102,241,0.85)" />
+                        </linearGradient>
+                        <filter id="brainGlow" x="-50%" y="-50%" width="200%" height="200%">
+                            <feGaussianBlur stdDeviation="3" result="blur" />
+                            <feMerge>
+                                <feMergeNode in="blur" />
+                                <feMergeNode in="SourceGraphic" />
+                            </feMerge>
+                        </filter>
+                    </defs>
+
+                    {/* Outline */}
+                    <path
+                        d="M78 62c-9-18 4-36 26-36 17 0 28 7 36 16 8-9 19-16 36-16 22 0 35 18 26 36 13 6 20 18 16 34-3 14-14 22-28 22-6 14-19 22-36 22-6 0-11-1-16-3-5 2-10 3-16 3-17 0-30-8-36-22-14 0-25-8-28-22-4-16 3-28 16-34z"
+                        stroke="url(#brainStroke)"
+                        strokeWidth="2"
+                        strokeOpacity="0.65"
+                        filter="url(#brainGlow)"
+                    />
+
+                    {/* Animated neural path */}
+                    <path
+                        d="M96 62c10-10 22-12 34-4 12 8 20 8 30 0 10-8 22-6 34 4M106 92c12-10 36-10 48 0 12-10 36-10 48 0M118 122c10-10 24-10 34 0 10-10 24-10 34 0"
+                        stroke="url(#brainStroke)"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeDasharray="8 8"
+                        className="maiWiz-brain-dash"
+                        filter="url(#brainGlow)"
+                    />
+
+                    {/* Nodes */}
+                    {[
+                        [106, 92],
+                        [154, 92],
+                        [202, 92],
+                        [130, 122],
+                        [178, 122],
+                    ].map(([x, y], idx) => (
+                        <circle key={idx} cx={x} cy={y} r={3.5} fill="rgba(226,232,240,0.85)" />
+                    ))}
+                </svg>
+            </div>
+
+            <style>{`
+                @keyframes maiWizDash {
+                    0% { stroke-dashoffset: 0; opacity: 0.85; }
+                    50% { opacity: 1; }
+                    100% { stroke-dashoffset: -80; opacity: 0.85; }
+                }
+                .maiWiz-brain-dash { animation: maiWizDash 3.2s linear infinite; }
+            `}</style>
+        </div>
+    );
+};
 const PsychologicalLayerVisualizer: React.FC<{ compact?: boolean }> = ({ compact }) => {
     const layers = [
         'Effect Surface',
@@ -36,7 +117,7 @@ const PsychologicalLayerVisualizer: React.FC<{ compact?: boolean }> = ({ compact
     ];
 
     return (
-        <div className={`relative ${compact ? 'p-3' : 'p-6'} rounded-lg border border-slate-800 bg-slate-950/30 overflow-hidden`}>
+        <div className={`relative ${compact ? 'p-3' : 'p-6'} rounded-lg border border-slate-800 bg-slate-950/30 overflow-hidden shadow-[0_0_40px_rgba(168,85,247,0.12)]`}>
             <div className="absolute -top-24 -right-24 w-64 h-64 bg-purple-600/10 blur-3xl rounded-full" />
             <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-indigo-600/10 blur-3xl rounded-full" />
             <div className="relative">
@@ -121,6 +202,40 @@ type StressPatch = {
     patch: string;
     rationale: string;
 };
+
+function formatDate(ts: number) {
+    try {
+        return new Date(ts).toLocaleString();
+    } catch {
+        return '';
+    }
+}
+
+function tryExtractBlueprintJSON(content: string): Partial<MentalismBlueprint> | null {
+    if (!content) return null;
+    // Preferred: marker-based JSON block
+    const marker = '---MENTALISM_BLUEPRINT_JSON---';
+    const idx = content.indexOf(marker);
+    if (idx >= 0) {
+        const jsonText = content.slice(idx + marker.length).trim();
+        try {
+            return JSON.parse(jsonText);
+        } catch {
+            // fall through
+        }
+    }
+    // Best-effort: find last JSON object in text
+    const lastBrace = content.lastIndexOf('{');
+    if (lastBrace >= 0) {
+        const maybe = content.slice(lastBrace).trim();
+        try {
+            return JSON.parse(maybe);
+        } catch {
+            return null;
+        }
+    }
+    return null;
+}
 
 type StressTestReport = {
     overall_risk: 'low' | 'medium' | 'high';
@@ -238,6 +353,10 @@ function blueprintToText(topic: string, b: MentalismBlueprint): string {
     lines.push('```json');
     lines.push(JSON.stringify(b, null, 2));
     lines.push('```');
+    // Machine-readable marker for in-app reloads
+    lines.push('');
+    lines.push('---MENTALISM_BLUEPRINT_JSON---');
+    lines.push(JSON.stringify(b));
     return lines.join('\n');
 }
 
@@ -292,7 +411,8 @@ function toColdReading(v: any): ColdReadingPhrases {
 }
 
 const MentalismAssistant: React.FC<MentalismAssistantProps> = ({ onIdeaSaved, onOpenShowPlanner, onOpenLiveRehearsal }) => {
-    const { currentUser } = useAppState() as any;
+    const appState = useAppState() as any;
+    const { currentUser, ideas } = appState;
 
     const [query, setQuery] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -335,6 +455,13 @@ const MentalismAssistant: React.FC<MentalismAssistantProps> = ({ onIdeaSaved, on
         const idx = Math.min(Math.max(Number(intensityIdx) || 0, 0), INTENSITY_LABELS.length - 1);
         return INTENSITY_LABELS[idx];
     }, [intensityIdx]);
+
+    const savedMentalismBlueprints = useMemo(() => {
+        const all = Array.isArray(ideas) ? ideas : [];
+        return all
+            .filter((i: any) => i?.type === 'text' && Array.isArray(i?.tags) && i.tags.includes('mentalism-blueprint'))
+            .slice(0, 8);
+    }, [ideas]);
 
     const blueprintSchema = useMemo(
         () => ({
@@ -510,7 +637,7 @@ Output guidelines:
     const handleSave = () => {
         if (!blueprint) return;
         const fullContent = blueprintToText(query, blueprint);
-        saveIdea('text', fullContent, `Mentalism Blueprint — ${query}`);
+        saveIdea('text', fullContent, `Mentalism Blueprint — ${query}`, ['mentalism', 'blueprint', 'mentalism-blueprint']);
         onIdeaSaved();
         setSaveStatus('saved');
         setTimeout(() => setSaveStatus('idle'), 2000);
@@ -522,6 +649,23 @@ Output guidelines:
         navigator.clipboard.writeText(fullContent);
         setCopyStatus('copied');
         setTimeout(() => setCopyStatus('idle'), 2000);
+    };
+
+    const handleLoadSavedBlueprint = (idea: any) => {
+        const content = String(idea?.content ?? '');
+        const parsed = tryExtractBlueprintJSON(content);
+        if (!parsed) {
+            setError('This saved blueprint could not be loaded (missing JSON block).');
+            return;
+        }
+        const next = toBlueprint(parsed);
+        setBlueprint(next);
+        setStressReport(null);
+        setStressError(null);
+        // Best-effort topic restore from title
+        const t = String(idea?.title ?? '').replace(/^Mentalism Blueprint\s*—\s*/i, '').trim();
+        if (t) setQuery(t);
+        setError(null);
     };
 
 
@@ -845,8 +989,8 @@ Output guidelines:
     return (
         <div className="flex-1 lg:grid lg:grid-cols-2 gap-6 overflow-y-auto p-4 md:p-6 animate-fade-in">
             {/* Control Panel */}
-            <div className="flex flex-col">
-                <h2 className="text-xl font-bold text-slate-300 mb-2">Mentalism Mind Lab</h2>
+            <div className="flex flex-col bg-slate-950/20 border border-slate-800 rounded-xl p-4 md:p-5 shadow-[0_0_70px_rgba(168,85,247,0.12)]">
+                <h2 className="text-xl font-bold text-slate-300 mb-2">Mentalism Architecture Lab</h2>
                 <p className="text-slate-400 mb-4">
                     Explore the psychology, showmanship, and secrets of mind-reading. Develop routines that create the illusion of extraordinary mental abilities.
                 </p>
@@ -1078,6 +1222,53 @@ Output guidelines:
                         )}
                     </div>
 
+                    {/* Saved Mentalism Blueprints (Tier: polish) */}
+                    <div className="bg-slate-900/40 border border-slate-700 rounded-lg p-3 shadow-[0_0_35px_rgba(168,85,247,0.10)]">
+                        <div className="flex items-start justify-between gap-3">
+                            <div>
+                                <div className="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                                    <SaveIcon className="w-4 h-4 text-purple-300" />
+                                    <span>Saved Mentalism Blueprints</span>
+                                </div>
+                                <div className="text-xs text-slate-400">Quick access to your saved mentalism architecture snapshots.</div>
+                            </div>
+                            <div className="text-[11px] text-slate-500">saved</div>
+                        </div>
+
+                        {savedMentalismBlueprints.length ? (
+                            <div className="mt-3 space-y-2">
+                                {savedMentalismBlueprints.map((idea: any) => (
+                                    <div key={idea.id} className="flex items-start justify-between gap-3 bg-slate-950/30 border border-slate-700 rounded-md p-2">
+                                        <div className="min-w-0">
+                                            <div className="text-sm text-slate-200 font-semibold truncate">{idea.title || 'Mentalism Blueprint'}</div>
+                                            <div className="text-[11px] text-slate-500">{formatDate(Number(idea.timestamp) || Date.now())}</div>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            <button
+                                                onClick={() => handleLoadSavedBlueprint(idea)}
+                                                className="px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md text-slate-200"
+                                                title="Load this blueprint into the workspace"
+                                            >
+                                                Load
+                                            </button>
+                                            <button
+                                                onClick={() => navigator.clipboard.writeText(String(idea.content ?? ''))}
+                                                className="px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md text-slate-200"
+                                                title="Copy saved blueprint"
+                                            >
+                                                Copy
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="mt-3 text-xs text-slate-500">
+                                No saved mentalism blueprints yet. Generate a blueprint, then click <span className="text-slate-300 font-semibold">Save Blueprint</span>.
+                            </div>
+                        )}
+                    </div>
+
                     <div className="pt-4">
                         <h3 className="text-sm font-semibold text-slate-400 mb-2 text-center uppercase tracking-wider">Explore Key Concepts</h3>
                         <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1096,7 +1287,8 @@ Output guidelines:
             </div>
 
             {/* Result Area */}
-            <div className="flex flex-col bg-slate-900/50 rounded-lg border border-slate-800 min-h-[300px]">
+            <div className="relative flex flex-col bg-slate-900/50 rounded-xl border border-slate-800 min-h-[300px] overflow-hidden shadow-[0_0_70px_rgba(168,85,247,0.12)]">
+                {!blueprint && !isLoading ? <NeuralBackdrop className="opacity-[0.55]" /> : null}
                 {isLoading ? (
                     <div className="flex-1 flex items-center justify-center">
                         <LoadingIndicator />
@@ -1440,7 +1632,7 @@ Output guidelines:
                                 ) : (
                                     <>
                                         <SaveIcon className="w-4 h-4" />
-                                        <span>Save Idea</span>
+                                        <span>Save Blueprint</span>
                                     </>
                                 )}
                             </button>
