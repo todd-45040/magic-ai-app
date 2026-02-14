@@ -75,11 +75,14 @@ interface MagicTimeline {
 interface CreatorDeepDive {
   name: string;
   bio: string;
+  influenced?: string[];
+  influenced_by?: string[];
   key_contributions: string[];
   signature_effects: string[];
   recommended_reading: string[];
   performance_philosophy: string[];
   practical_application?: string[];
+  explore_related?: string[];
 }
 
 interface CompareResult {
@@ -308,6 +311,7 @@ const MagicArchives: React.FC<MagicArchivesProps> = ({ onIdeaSaved }) => {
   const [timelineOpen, setTimelineOpen] = useState(false);
   const [practicalTips, setPracticalTips] = useState<string[]>([]);
   const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
+  const [exploreRelated, setExploreRelated] = useState<string[]>([]);
   const [interestProfile, setInterestProfile] = useState<InterestProfile>(() => getInterestProfile());
   const [interestSuggestions, setInterestSuggestions] = useState<Record<string, string[]>>(() => getInterestSuggestions());
   const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(false);
@@ -423,15 +427,20 @@ const generateSuggestionsForTopInterest = async () => {
           "{",
           '  "name": string,',
           '  "bio": string,',
+          '  "influenced": string[],',
+          '  "influenced_by": string[],',
           '  "key_contributions": string[],',
           '  "signature_effects": string[],',
           '  "recommended_reading": string[],',
           '  "performance_philosophy": string[],',
-          '  "practical_application": string[]',
+          '  "practical_application": string[],',
+          '  "explore_related": string[]',
           "}",
           "",
           "Guidelines:",
-          "- Keep bio concise (3–6 sentences).",
+          "- Keep bio concise (3–6 sentences).
+        - influenced / influenced_by should be 0–6 short names (no deep explanations).
+        - explore_related should be 3–5 clickable research prompts (short phrases).",
           "- Avoid exposure of methods; discuss principles and history.",
           "- If the subject is not a person, treat it as a concept and still fill fields appropriately.",
         ].join('\n');
@@ -530,6 +539,7 @@ if (parsed?.answer) {
         setView({ kind: 'compare', data: parsed });
         setPracticalTips(Array.isArray(parsed.practical_application) ? parsed.practical_application : parsed.practical_takeaways || []);
         setSuggestedTags(['compare', parsed.topicA, parsed.topicB].filter(Boolean) as string[]);
+        setExploreRelated([]);
       } else {
         setView({ kind: 'text', text: response });
       }
@@ -705,7 +715,10 @@ if (edges.length) addConnections(edges);
 
           {practicalTips.length > 0 && (
             <div className="p-4 rounded-lg border border-amber-600/40 bg-amber-950/15">
-              <div className="text-slate-100 font-semibold flex items-center gap-2">🎩 How This Applies To Your Show</div>
+              <div>
+                  <div className="text-slate-100 font-semibold flex items-center gap-2">🎩 How This Applies To Your Show</div>
+                  <div className="mt-0.5 text-[12px] text-slate-300/80">Actionable performance insights derived from this research.</div>
+                </div>
               <ul className="mt-2 list-disc list-inside text-sm text-slate-200/90 space-y-1">
                 {practicalTips.slice(0, 8).map((tip, i) => (
                   <li key={i}>{tip}</li>
@@ -723,6 +736,23 @@ if (edges.length) addConnections(edges);
               ))}
             </div>
           )}
+
+          {exploreRelated.length > 0 && (
+            <div>
+              <div className="text-xs font-semibold text-slate-300">Explore Related</div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {exploreRelated.slice(0, 6).map((q, i) => (
+                  <button
+                    key={i}
+                    onClick={() => handleSearch(q)}
+                    className="px-3 py-1.5 rounded-full border border-slate-700 bg-slate-900/40 text-slate-200 text-xs hover:bg-slate-800 transition-colors"
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       );
     }
@@ -734,6 +764,27 @@ if (edges.length) addConnections(edges);
           <div className="p-4 rounded-lg border border-slate-700 bg-slate-900/40">
             <div className="text-slate-100 text-xl font-semibold">{d.name}</div>
             <div className="mt-2 text-slate-200 text-sm leading-relaxed whitespace-pre-wrap">{d.bio}</div>
+
+            {(Array.isArray(d.influenced) || Array.isArray(d.influenced_by)) && (
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                {Array.isArray(d.influenced) && d.influenced.length > 0 && (
+                  <div className="rounded-md border border-slate-700/60 bg-slate-950/20 p-3">
+                    <div className="text-xs font-semibold text-slate-200">Influenced</div>
+                    <div className="mt-1 text-sm text-slate-300">
+                      {d.influenced.slice(0, 6).join(' • ')}
+                    </div>
+                  </div>
+                )}
+                {Array.isArray(d.influenced_by) && d.influenced_by.length > 0 && (
+                  <div className="rounded-md border border-slate-700/60 bg-slate-950/20 p-3">
+                    <div className="text-xs font-semibold text-slate-200">Influenced By</div>
+                    <div className="mt-1 text-sm text-slate-300">
+                      {d.influenced_by.slice(0, 6).join(' • ')}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -765,6 +816,8 @@ if (edges.length) addConnections(edges);
               </ul>
             </div>
           </div>
+
+          <div className="text-xs text-slate-400/80">Archive generated using structured historical synthesis model.</div>
         </div>
       );
     }
@@ -948,7 +1001,10 @@ if (edges.length) addConnections(edges);
 
             {view.kind !== 'text' && practicalTips.length > 0 && (
               <div className="mt-4 p-4 rounded-lg border border-amber-600/40 bg-amber-950/15">
-                <div className="text-slate-100 font-semibold flex items-center gap-2">🎩 How This Applies To Your Show</div>
+                <div>
+                  <div className="text-slate-100 font-semibold flex items-center gap-2">🎩 How This Applies To Your Show</div>
+                  <div className="mt-0.5 text-[12px] text-slate-300/80">Actionable performance insights derived from this research.</div>
+                </div>
                 <ul className="mt-2 list-disc list-inside text-sm text-slate-200/90 space-y-1">
                   {practicalTips.slice(0, 8).map((tip, i) => (
                     <li key={i}>{tip}</li>
