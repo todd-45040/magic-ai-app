@@ -299,6 +299,8 @@ const MagicArchives: React.FC<MagicArchivesProps> = ({ onIdeaSaved }) => {
   const [compareA, setCompareA] = useState('');
   const [compareB, setCompareB] = useState('');
 
+  const synthesizedLabel = useMemo(() => new Date().toLocaleString('en-US', { month: 'short', year: 'numeric' }), []);
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -762,11 +764,13 @@ if (edges.length) addConnections(edges);
       return (
         <div className="space-y-4">
           <div className="p-4 rounded-lg border border-slate-700 bg-slate-900/40">
-            <div className="text-slate-100 text-xl font-semibold">{d.name}</div>
+            <div className="text-[10px] tracking-widest uppercase text-slate-400/80">Creator Profile</div>
+            <div className="mt-1 text-slate-100 text-xl font-semibold">{d.name}</div>
             <div className="mt-2 text-slate-200 text-sm leading-relaxed whitespace-pre-wrap">{d.bio}</div>
 
             {(Array.isArray(d.influenced) || Array.isArray(d.influenced_by)) && (
-              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="mt-4 pt-4 border-t border-slate-700/50">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {Array.isArray(d.influenced) && d.influenced.length > 0 && (
                   <div className="rounded-md border border-slate-700/60 bg-slate-950/20 p-3">
                     <div className="text-xs font-semibold text-slate-200">Influenced</div>
@@ -783,6 +787,8 @@ if (edges.length) addConnections(edges);
                     </div>
                   </div>
                 )}
+              </div>
+                </div>
               </div>
             )}
           </div>
@@ -817,13 +823,12 @@ if (edges.length) addConnections(edges);
             </div>
           </div>
 
-          <div className="text-xs text-slate-400/80">Archive generated using structured historical synthesis model.</div>
-          <div className="text-xs text-slate-400/80">
-            Inspired by: <span className="text-slate-300">Strong Magic</span> • <span className="text-slate-300">Our Magic</span> • <span className="text-slate-300">Fitzkee principles</span>
-          </div>
-
-          <div className="text-xs text-slate-400/80">
-            Inspired by: <span className="text-slate-300">Strong Magic</span> • <span className="text-slate-300">Our Magic</span> • <span className="text-slate-300">Fitzkee principles</span>
+          <div className="mt-4 pt-3 border-t border-slate-700/50 text-[11px] text-slate-400/80 space-y-1">
+            <div>Archive generated using structured historical synthesis model.</div>
+            <div>Archive synthesized • {synthesizedLabel}</div>
+            <div>
+              Inspired by: <span className="text-slate-300">Strong Magic</span> • <span className="text-slate-300">Our Magic</span> • <span className="text-slate-300">Fitzkee principles</span>
+            </div>
           </div>
         </div>
       );
@@ -957,7 +962,7 @@ if (edges.length) addConnections(edges);
               disabled={isLoading}
             />
             <div
-              className="hidden sm:flex items-center gap-2 px-3 text-xs text-slate-300 border-l border-slate-700"
+              className="hidden sm:flex items-center gap-1.5 px-2 py-1 text-[11px] text-amber-200/80 bg-amber-500/10 border border-amber-400/20 rounded-md"
               title="This archive never reveals secrets to public-facing modes."
               aria-label="Exposure Protected"
             >
