@@ -472,8 +472,7 @@ const generateSuggestionsForTopInterest = async () => {
   "- Keep the answer well-structured (short paragraphs or bullets).",
   "- Practical application should be actionable show advice (3–6 bullets).",
   "- suggested_tags should be short (3–8 tags).",
-].join('
-');
+].join('\n');
 
 const response = await runGenerate(researchPrompt);
 const parsed = tryParseJson<ArchivedResearchJson>(response);
