@@ -435,8 +435,8 @@ const generateSuggestionsForTopInterest = async () => {
           '  "key_contributions": string[],',
           '  "signature_effects": string[],',
           '  "recommended_reading": string[],',
-          '  "performance_philosophy": string[]',
-          '  "practical_application": string[]'
+          '  "performance_philosophy": string[],',
+          '  "practical_application": string[]',
           "}",
           "",
           "Guidelines:",
