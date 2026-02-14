@@ -1135,7 +1135,6 @@ Populate arrays for categories the user selected; for unselected categories, ret
             )}
           </div>
 
-</label>
 
           <button
             onClick={() => handleGenerate()}
