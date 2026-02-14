@@ -566,8 +566,6 @@ Populate arrays for categories the user selected; for unselected categories, ret
 
 
 
-  const renderBlueprint
-
   const renderBlueprint = () => {
     if (!blueprint) return null;
 
@@ -583,9 +581,6 @@ Populate arrays for categories the user selected; for unselected categories, ret
           <PsychologicalLayerVisualizer />
         </div>
 
-
-
-        <Card title="Scripture Focus"
 
         <Card title="Scripture Focus" defaultOpen>
           <p className="whitespace-pre-wrap">{blueprint.scripture_focus}</p>
