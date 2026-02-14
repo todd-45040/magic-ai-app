@@ -737,7 +737,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
               Context: <span className="text-slate-200">{contextSummary}</span>
             </div>
           ) : (
-            <div className="text-xs text-slate-500">Optional context makes results feel more “made for this gig.”</div>
+            <div className="text-[11px] italic text-slate-500/80">Optional context makes results feel more “made for this gig.”</div>
           )}
         </div>
 
@@ -828,7 +828,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
           {/* Refine controls */}
           <div className="pt-3 border-t border-slate-800/60">
             <div className="flex items-center justify-between gap-2 mb-2">
-              <div className="text-xs text-slate-400">Refine output:</div>
+              <div className="text-xs text-slate-400">Refine this draft:</div>
               {lastPreset ? (
                 <div className="text-xs text-slate-500">
                   Preset: <span className="text-slate-300">{lastPreset}</span>
@@ -1082,7 +1082,12 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
             <button
               onClick={handleGenerate}
               disabled={!canGenerate}
-              className="px-5 py-2 rounded bg-purple-600 hover:bg-purple-500 text-white disabled:opacity-40"
+              className={
+                'px-5 py-2 rounded bg-purple-600 hover:bg-purple-500 text-white transition-transform duration-150 ' +
+                (!canGenerate
+                  ? 'opacity-30'
+                  : 'hover:scale-[1.02] shadow-[0_0_18px_0_rgba(168,85,247,0.25)]')
+              }
             >
               {loading ? 'Generating…' : 'Generate'}
             </button>
