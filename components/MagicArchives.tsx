@@ -5,10 +5,13 @@ import { MAGIC_RESEARCH_SYSTEM_INSTRUCTION } from '../constants';
 import { SearchIcon, WandIcon, SaveIcon, CheckIcon, CopyIcon, BookIcon, ShareIcon } from './icons';
 import ShareButton from './ShareButton';
 import FormattedText from './FormattedText';
-import { useAppState } from '../store';
+import { useAppState, useAppDispatch, refreshShows } from '../store';
+import * as showsService from '../services/showsService';
 
 interface MagicArchivesProps {
   onIdeaSaved: () => void;
+  /** Optional: jump straight into Show Planner after applying. */
+  onOpenShowPlanner?: () => void;
 }
 
 type SaveStatus = 'idle' | 'saved';
@@ -291,8 +294,9 @@ const TIMELINE_ERAS: { label: string; value: '1800-1900' | '1900-1950' | '1950-2
   { label: 'Modern Era', value: 'modern' },
 ];
 
-const MagicArchives: React.FC<MagicArchivesProps> = ({ onIdeaSaved }) => {
-  const { currentUser } = useAppState() as any;
+const MagicArchives: React.FC<MagicArchivesProps> = ({ onIdeaSaved, onOpenShowPlanner }) => {
+  const { shows, currentUser } = useAppState() as any;
+  const dispatch = useAppDispatch();
 
   const [mode, setMode] = useState<Mode>('research');
   const [query, setQuery] = useState('');
@@ -317,6 +321,14 @@ const MagicArchives: React.FC<MagicArchivesProps> = ({ onIdeaSaved }) => {
   const [interestProfile, setInterestProfile] = useState<InterestProfile>(() => getInterestProfile());
   const [interestSuggestions, setInterestSuggestions] = useState<Record<string, string[]>>(() => getInterestSuggestions());
   const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(false);
+
+  // Phase 1: Apply Archive Insight to Show Planner
+  const [applyOpen, setApplyOpen] = useState(false);
+  const [applyShowId, setApplyShowId] = useState<string>('');
+  const [applyOpenPlanner, setApplyOpenPlanner] = useState(true);
+  const [isApplying, setIsApplying] = useState(false);
+  const [applyError, setApplyError] = useState<string | null>(null);
+  const [applySuccess, setApplySuccess] = useState(false);
 
   useEffect(() => {
     setRecentTopics(getRecentTopics());
@@ -726,6 +738,20 @@ if (edges.length) addConnections(edges);
                   <li key={i}>{tip}</li>
                 ))}
               </ul>
+              {canApplyToShow && (
+                <div className="mt-3 flex items-center justify-between gap-3">
+                  <div className="text-xs text-slate-400">
+                    Apply these insights directly to your Show Planner.
+                  </div>
+                  <button
+                    onClick={openApplyModal}
+                    className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 hover:border-slate-500 text-slate-100 text-sm"
+                  >
+                    🎬 Apply to My Current Show <span className="text-slate-300">(Beta)</span>
+                  </button>
+                </div>
+              )}
+
             </div>
           )}
 
@@ -897,7 +923,92 @@ if (edges.length) addConnections(edges);
     return null;
   };
 
-  return (
+  
+  const canApplyToShow = useMemo(() => {
+    const hasTips = Array.isArray(practicalTips) && practicalTips.length > 0;
+    const hasShows = Array.isArray(shows) && shows.length > 0;
+    return Boolean(view && hasTips && hasShows);
+  }, [view, practicalTips, shows]);
+
+  const openApplyModal = () => {
+    if (!canApplyToShow) return;
+    setApplyError(null);
+    setApplySuccess(false);
+    const firstId = (shows?.[0]?.id ?? '') as string;
+    setApplyShowId((prev) => prev || firstId);
+    setApplyOpenPlanner(true);
+    setApplyOpen(true);
+  };
+
+  const buildArchiveInsightNotes = () => {
+    const topic =
+      view?.kind === 'creator' ? `Creator Deep Dive: ${view.data?.name ?? query}` :
+      view?.kind === 'timeline' ? `Magic Timeline: ${view.data?.eraLabel ?? query}` :
+      view?.kind === 'compare' ? `Compare: ${view.data?.a ?? compareA} vs ${view.data?.b ?? compareB}` :
+      query;
+
+    const lines: string[] = [];
+    lines.push('ARCHIVE INSIGHT (Beta)');
+    lines.push(`Topic: ${String(topic || 'Magic Archives').trim()}`);
+    lines.push(`Synthesized: ${new Date().toISOString().slice(0, 10)}`);
+    lines.push('');
+    lines.push('How this applies to your show:');
+    for (const t of (practicalTips || [])) {
+      const s = String(t || '').trim();
+      if (s) lines.push(`• ${s.replace(/^[-•\s]+/, '')}`);
+    }
+    if (suggestedTags?.length) {
+      lines.push('');
+      lines.push(`Tags: ${suggestedTags.map(t => `#${String(t).replace(/^#/, '').trim()}`).join(' ')}`);
+    }
+    lines.push('');
+    lines.push('Inspired by: Strong Magic • Our Magic • Fitzkee principles');
+    return lines.join('\n');
+  };
+
+  const handleApplyToShow = async () => {
+    if (!applyShowId) {
+      setApplyError('Please select a show.');
+      return;
+    }
+    setIsApplying(true);
+    setApplyError(null);
+    setApplySuccess(false);
+
+    try {
+      const baseTitle =
+        view?.kind === 'creator' ? (view.data?.name ?? query) :
+        view?.kind === 'timeline' ? (view.data?.eraLabel ?? query) :
+        view?.kind === 'compare' ? `${view.data?.a ?? compareA} vs ${view.data?.b ?? compareB}` :
+        query;
+
+      const taskTitle = `Archive Insight: ${String(baseTitle || 'Magic Archives').trim()}`.slice(0, 120);
+      const notes = buildArchiveInsightNotes();
+
+      await showsService.addTaskToShow(applyShowId, {
+        title: taskTitle,
+        notes,
+        priority: 'Medium',
+        status: 'To-Do',
+        createdAt: Date.now(),
+      } as any);
+
+      await refreshShows(dispatch);
+
+      setApplySuccess(true);
+
+      setTimeout(() => {
+        setApplyOpen(false);
+        if (applyOpenPlanner && onOpenShowPlanner) onOpenShowPlanner();
+      }, 450);
+    } catch (e: any) {
+      const msg = String(e?.message ?? e ?? 'Failed to apply insight.');
+      setApplyError(msg);
+    } finally {
+      setIsApplying(false);
+    }
+  };
+return (
     <div className="flex-1 flex flex-col">
       {/* Search Bar */}
       <div className="p-4 md:p-6 border-b border-slate-800">
@@ -1203,6 +1314,73 @@ if (edges.length) addConnections(edges);
           </div>
         )}
       </div>
+      {/* Apply to Show Modal (Phase 1) */}
+      {applyOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
+            <div className="p-4 border-b border-slate-800">
+              <div className="text-slate-100 font-semibold">Apply this insight to a show</div>
+              <div className="text-xs text-slate-400 mt-1">
+                Creates a new Show Planner task (no existing tasks are modified).
+              </div>
+            </div>
+
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="text-xs text-slate-400">Select show</label>
+                <select
+                  value={applyShowId}
+                  onChange={(e) => setApplyShowId(e.target.value)}
+                  className="mt-1 w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-slate-100"
+                >
+                  {(shows || []).map((s: any) => (
+                    <option key={s.id} value={s.id}>{s.title}</option>
+                  ))}
+                </select>
+              </div>
+
+              <label className="flex items-center gap-2 text-sm text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={applyOpenPlanner}
+                  onChange={(e) => setApplyOpenPlanner(e.target.checked)}
+                />
+                Open Show Planner after applying
+              </label>
+
+              {applyError && (
+                <div className="rounded-lg border border-red-700/40 bg-red-950/30 px-3 py-2 text-sm text-red-200">
+                  {applyError}
+                </div>
+              )}
+
+              {applySuccess && (
+                <div className="rounded-lg border border-emerald-700/40 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-200">
+                  Added to Show Planner ✓
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-slate-800 flex items-center justify-end gap-2">
+              <button
+                onClick={() => setApplyOpen(false)}
+                className="px-3 py-2 rounded-lg bg-transparent border border-slate-700 hover:border-slate-500 text-slate-200 text-sm"
+                disabled={isApplying}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleApplyToShow}
+                className="px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-black text-sm font-medium disabled:opacity-60"
+                disabled={isApplying || !applyShowId}
+              >
+                {isApplying ? 'Applying…' : 'Apply to Show'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
