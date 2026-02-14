@@ -1702,7 +1702,12 @@ const MagicDictionary: React.FC<Props> = ({ onAiSpark, membership = 'trial', onR
             {/* Term cards */}
             <section className="md:col-span-8 xl:col-span-9 md:col-start-5 md:row-start-1 self-start min-w-0">
               {filteredTechniqueTerms.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                /*
+                  Use auto-fit columns so the last row doesn't look "broken" (e.g., 1 card on the far-left
+                  with two empty columns). This also better utilizes wide screens without creating awkward
+                  dead zones near the footer.
+                */
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-3 items-start">
                   {filteredTechniqueTerms.map((t) => {
                     const open = expandedTechTerm === t.term;
                     return (
