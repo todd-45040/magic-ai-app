@@ -818,6 +818,13 @@ if (edges.length) addConnections(edges);
           </div>
 
           <div className="text-xs text-slate-400/80">Archive generated using structured historical synthesis model.</div>
+          <div className="text-xs text-slate-400/80">
+            Inspired by: <span className="text-slate-300">Strong Magic</span> • <span className="text-slate-300">Our Magic</span> • <span className="text-slate-300">Fitzkee principles</span>
+          </div>
+
+          <div className="text-xs text-slate-400/80">
+            Inspired by: <span className="text-slate-300">Strong Magic</span> • <span className="text-slate-300">Our Magic</span> • <span className="text-slate-300">Fitzkee principles</span>
+          </div>
         </div>
       );
     }
@@ -845,6 +852,10 @@ if (edges.length) addConnections(edges);
             <Section title="Landmark Effects" items={t.landmark_effects} />
             <Section title="Major Innovations" items={t.major_innovations} />
             <Section title="Cultural Shifts" items={t.cultural_shifts} />
+          </div>
+
+          <div className="text-xs text-slate-400/80">
+            Inspired by: <span className="text-slate-300">Strong Magic</span> • <span className="text-slate-300">Our Magic</span> • <span className="text-slate-300">Fitzkee principles</span>
           </div>
         </div>
       );
@@ -945,6 +956,14 @@ if (edges.length) addConnections(edges);
               className="flex-1 w-full bg-transparent px-4 py-3 text-white placeholder-slate-400 focus:outline-none"
               disabled={isLoading}
             />
+            <div
+              className="hidden sm:flex items-center gap-2 px-3 text-xs text-slate-300 border-l border-slate-700"
+              title="This archive never reveals secrets to public-facing modes."
+              aria-label="Exposure Protected"
+            >
+              <span aria-hidden>🔒</span>
+              <span className="whitespace-nowrap">Exposure Protected</span>
+            </div>
             <button
               onClick={() => handleSearch()}
               disabled={isLoading || !query.trim()}
