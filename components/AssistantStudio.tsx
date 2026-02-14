@@ -1,57 +1,80 @@
-import React from "react";
+import React, { useState } from 'react';
+import { generateResponse } from '../services/aiService';
+import { ASSISTANT_STUDIO_SYSTEM_INSTRUCTION } from '../constants';
+import { saveIdea } from '../services/ideasService';
 
-interface Tool {
-  id: string;
-  title: string;
-  description: string;
-  badge?: string;
-  onClick: () => void;
-}
+const AssistantStudio = ({ onIdeaSaved }) => {
+  const [input, setInput] = useState('');
+  const [output, setOutput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-interface Section {
-  title: string;
-  tools: Tool[];
-}
+  const handleGenerate = async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-interface Props {
-  sections: Section[];
-}
+      const response = await generateResponse({
+        systemInstruction: ASSISTANT_STUDIO_SYSTEM_INSTRUCTION,
+        userPrompt: input
+      });
 
-const AssistantStudio: React.FC<Props> = ({ sections }) => {
+      setOutput(response);
+    } catch (err) {
+      console.error(err);
+      setError('Failed to generate response.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!output) return;
+    await saveIdea({
+      title: 'Assistant Studio Output',
+      content: output,
+      tags: ['assistant-studio']
+    });
+    if (onIdeaSaved) onIdeaSaved();
+  };
+
   return (
-    <div className="space-y-10">
-      {sections.map((section) => (
-        <div key={section.title}>
-          <h2 className="mb-4 text-xl font-semibold text-white">
-            {section.title}
-          </h2>
+    <div className="p-6 space-y-6">
+      <h1 className="text-2xl font-bold">Assistant's Studio</h1>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {section.tools.map((tool) => (
-              <div
-                key={tool.id}
-                onClick={tool.onClick}
-                className="cursor-pointer rounded-xl border border-white/10 bg-white/5 p-5 transition hover:border-yellow-400/40 hover:bg-white/10"
-              >
-                {tool.badge && (
-                  <span className="mb-2 inline-block rounded bg-purple-600 px-2 py-0.5 text-xs font-semibold text-white">
-                    {tool.badge}
-                  </span>
-                )}
+      <textarea
+        className="w-full p-3 border rounded bg-slate-800 text-white"
+        rows={6}
+        placeholder="Describe what you're working on..."
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+      />
 
-                {/* TITLE — CHANGED TO GOLD */}
-                <h3 className="mb-2 text-yellow-400 font-semibold">
-                  {tool.title}
-                </h3>
+      <div className="flex gap-3">
+        <button
+          onClick={handleGenerate}
+          className="px-4 py-2 bg-purple-600 rounded text-white"
+        >
+          Generate
+        </button>
 
-                <p className="text-sm text-white/70">
-                  {tool.description}
-                </p>
-              </div>
-            ))}
-          </div>
+        <button
+          onClick={handleSave}
+          className="px-4 py-2 bg-green-600 rounded text-white"
+        >
+          Save
+        </button>
+      </div>
+
+      {loading && <div className="animate-pulse text-purple-400">Thinking...</div>}
+
+      {error && <div className="text-red-400">{error}</div>}
+
+      {output && (
+        <div className="p-4 bg-slate-900 rounded border border-slate-700 whitespace-pre-wrap">
+          {output}
         </div>
-      ))}
+      )}
     </div>
   );
 };
