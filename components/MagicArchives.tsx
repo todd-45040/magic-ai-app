@@ -438,9 +438,9 @@ const generateSuggestionsForTopInterest = async () => {
           "}",
           "",
           "Guidelines:",
-          "- Keep bio concise (3–6 sentences).
-        - influenced / influenced_by should be 0–6 short names (no deep explanations).
-        - explore_related should be 3–5 clickable research prompts (short phrases).",
+          "- Keep bio concise (3–6 sentences).",
+          "- influenced / influenced_by should be 0–6 short names (no deep explanations).",
+          "- explore_related should be 3–5 clickable research prompts (short phrases).",
           "- Avoid exposure of methods; discuss principles and history.",
           "- If the subject is not a person, treat it as a concept and still fill fields appropriately.",
         ].join('\n');
