@@ -6,7 +6,7 @@
 // - Increment usage AFTER successful upstream response (best-effort; never fail the request)
 // - Return the standard hardened error contract
 
-import { getAiUsageStatus, enforceAiUsage } from '../../../lib/server/usage/index.js';
+import { getAiUsageStatus, incrementAiUsage } from '../../../lib/server/usage/index.js';
 import { isPreviewEnv, mapProviderError, withTimeout } from './hardening.js';
 
 export type UsageStatus = {
@@ -151,6 +151,13 @@ export function applyUsageHeaders(res: any, usage: any) {
 // Best-effort increment after success. Never throws.
 export async function bestEffortIncrementAiUsage(req: any, units = 1) {
   try {
+    // Prefer explicit increment function (does not re-check quota).
+    if (typeof incrementAiUsage === 'function') {
+      await withTimeout(Promise.resolve(incrementAiUsage(req, units)), 2_000, 'TIMEOUT');
+      return;
+    }
+
+    // Fallback: attempt dynamic import for older builds.
     const mod: any = await import('../../../lib/server/usage/index.js');
     const inc =
       mod?.incrementAiUsage ||
@@ -161,12 +168,6 @@ export async function bestEffortIncrementAiUsage(req: any, units = 1) {
 
     if (typeof inc === 'function') {
       await withTimeout(Promise.resolve(inc(req, units)), 2_000, 'TIMEOUT');
-      return;
-    }
-
-    // Fallback: call enforceAiUsage AFTER success (ignored outcome).
-    if (typeof enforceAiUsage === 'function') {
-      await withTimeout(Promise.resolve(enforceAiUsage(req, units)), 2_000, 'TIMEOUT');
     }
   } catch {
     // ignore

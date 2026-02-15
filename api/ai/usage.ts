@@ -1,123 +1,87 @@
-// Phase 1.5+ Unified Usage Endpoint
-// GET /api/ai/usage
-// - rate limiting (best-effort in-memory)
-// - consistent error contract { ok:false, error_code, message, retryable, details? }
-// - preview-only debug details
-// - Supabase-backed usage truth via existing usageGuard
+// /api/ai/usage.ts
+// Unified Usage Endpoint (Phase 2 / Option A)
+//
+// Single source of truth for UI:
+// - plan/membership
+// - remaining quota
+// - daily limit
+// - burst remaining (best-effort, per-instance)
+//
+// NOTE: This endpoint NEVER consumes usage.
+// It only reports status from the same backing source used by the guards.
 
-import { rateLimit } from './_lib/rateLimit.js';
-import {
-  getRateLimitKey,
-  isPreviewEnv,
-  jsonError,
-  mapProviderError,
-} from './_lib/hardening.js';
-import { applyUsageHeaders, guardAiUsage } from './_lib/usageGuard.js';
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { getAiUsageStatus } from './_lib/usage/index.js'; // adjust if your path differs
+import { isPreviewEnv } from './_lib/hardening.js';
 
-function getClientIp(req: any): string | null {
-  const xf = req?.headers?.['x-forwarded-for'] || req?.headers?.['X-Forwarded-For'];
-  if (typeof xf === 'string' && xf.trim()) return xf.split(',')[0].trim();
-  const realIp = req?.headers?.['x-real-ip'] || req?.headers?.['X-Real-IP'];
-  if (typeof realIp === 'string' && realIp.trim()) return realIp.trim();
-  const sock = req?.socket || req?.connection;
-  const addr = sock?.remoteAddress;
-  return typeof addr === 'string' && addr.trim() ? addr.trim() : null;
+function json(res: VercelResponse, status: number, body: any) {
+  res.status(status).setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.end(JSON.stringify(body));
 }
 
-function firstDefined<T = any>(obj: any, keys: string[]): T | undefined {
-  for (const k of keys) {
-    const v = obj?.[k];
-    if (v !== undefined && v !== null) return v as T;
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Method guard
+  if (req.method !== 'GET') {
+    res.setHeader('Allow', 'GET');
+    return json(res, 405, { ok: false, error_code: 'METHOD_NOT_ALLOWED', retryable: false });
   }
-  return undefined;
-}
 
-export default async function handler(req: any, res: any) {
   try {
-    if (req.method !== 'GET') {
-      return jsonError(res, 405, {
+    const status = await getAiUsageStatus(req);
+
+    if (!status?.ok) {
+      const httpStatus = Number((status as any)?.status) || 503;
+      const message = String((status as any)?.error || 'Usage status unavailable.');
+      const retryable = httpStatus >= 500 || httpStatus === 429;
+
+      return json(res, httpStatus, {
         ok: false,
-        error_code: 'METHOD_NOT_ALLOWED',
-        message: 'Method not allowed',
-        retryable: false,
+        error_code:
+          httpStatus === 401
+            ? 'UNAUTHORIZED'
+            : httpStatus === 429
+              ? 'RATE_LIMITED'
+              : httpStatus === 503
+                ? 'SERVICE_UNAVAILABLE'
+                : 'USAGE_UNAVAILABLE',
+        message,
+        retryable,
+        ...(isPreviewEnv()
+          ? { details: { status: (status as any)?.status, error: (status as any)?.error } }
+          : null),
       });
     }
 
-    // Rate limiting (per-user if authenticated, otherwise per-IP guest)
-    let rlKey = await getRateLimitKey(req);
-    if (!rlKey) {
-      const ip = getClientIp(req) || 'unknown';
-      rlKey = { key: 'ai:usage:guest:' + ip, kind: 'guest', ip } as any;
-    }
+    // Normalized success shape for the UI.
+    // We expose both the normalized fields and the raw status (under usage).
+    const membership = (status as any).membership ?? 'free';
+    const limit = (status as any).limit ?? 0;
+    const used = (status as any).used ?? 0;
+    const remaining = (status as any).remaining ?? 0;
 
-    const rl = rateLimit(rlKey.key, { windowMs: 60_000, max: 60 });
-    if (!rl.ok) {
-      try {
-        res.setHeader('Retry-After', String(rl.retryAfterSeconds));
-      } catch {}
-      return jsonError(res, 429, {
-        ok: false,
-        error_code: 'RATE_LIMITED',
-        message: 'Too many requests. Please wait and try again.',
-        retryable: true,
-        ...(isPreviewEnv() ? { details: { key: rlKey.key, resetAt: rl.resetAt } } : {}),
-      });
-    }
+    res.setHeader('X-AI-Remaining', String(remaining));
+    res.setHeader('X-AI-Limit', String(limit));
+    res.setHeader('X-AI-Membership', String(membership));
+    res.setHeader('X-AI-Burst-Remaining', String((status as any).burstRemaining ?? ''));
+    res.setHeader('X-AI-Burst-Limit', String((status as any).burstLimit ?? ''));
 
-    // IMPORTANT:
-    // We pass cost=0 so this endpoint NEVER consumes usage.
-    // It is the single source of truth for remaining quota / plan enforcement.
-    const guard = await guardAiUsage(req, 0);
-
-    // If quota is exceeded, guardAiUsage may return a structured QUOTA_EXCEEDED.
-    // We forward that as-is so the UI can show "Upgrade" CTAs consistently.
-    if (!guard.ok) {
-      return jsonError(res, guard.status, guard.error);
-    }
-
-    const usage = guard.usage || {};
-
-    // Provide a normalized, UI-friendly shape (without assuming a specific schema)
-    const plan = firstDefined<string>(usage, ['plan', 'membership', 'tier']) || 'unknown';
-    const limit = firstDefined<number>(usage, ['limit', 'quota', 'monthly_limit', 'generation_limit']);
-    const used = firstDefined<number>(usage, ['used', 'generation_count', 'count', 'used_this_period']);
-    const remaining = firstDefined<number>(usage, ['remaining', 'remaining_quota', 'remaining_generations']);
-
-    const resetDate = firstDefined<any>(usage, ['reset_date', 'last_reset_date', 'period_start', 'period_reset_at']);
-    const trialEnd = firstDefined<any>(usage, ['trial_end_date', 'trialEnd', 'trial_end']);
-
-    // Best-effort usage headers (so pages can still read headers if they want)
-    applyUsageHeaders(res, usage);
-
-    return res.status(200).json({
+    return json(res, 200, {
       ok: true,
-      plan,
-      limit: limit ?? null,
-      used: used ?? null,
-      remaining: remaining ?? null,
-      reset_date: resetDate ?? null,
-      trial_end_date: trialEnd ?? null,
-      usage,
+      plan: membership,
+      limit,
+      used,
+      remaining,
+      burstLimit: (status as any).burstLimit,
+      burstRemaining: (status as any).burstRemaining,
+      usage: status,
     });
   } catch (err: any) {
-    console.error('AI Usage Error:', err);
-
-    const mapped = mapProviderError(err);
-    const details = isPreviewEnv()
-      ? {
-          name: String(err?.name || 'Error'),
-          message: String(err?.message || err),
-          code: err?.code,
-          stack: String(err?.stack || ''),
-        }
-      : undefined;
-
-    return jsonError(res, mapped.status, {
+    return json(res, 500, {
       ok: false,
-      error_code: mapped.error_code,
-      message: mapped.message,
-      retryable: mapped.retryable,
-      ...(details ? { details } : {}),
+      error_code: 'INTERNAL_ERROR',
+      message: 'Usage endpoint failed unexpectedly.',
+      retryable: true,
+      ...(isPreviewEnv() ? { details: { name: err?.name, message: err?.message, stack: err?.stack } } : null),
     });
   }
 }
