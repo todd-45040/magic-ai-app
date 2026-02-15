@@ -7,7 +7,7 @@
 // - Supabase-backed usage enforcement + best-effort incrementing
 
 import { resolveProvider, callOpenAI, callAnthropic } from '../../lib/server/providers/index.js';
-import { rateLimit } from './_lib/rateLimit';
+import { rateLimit } from './_lib/rateLimit.js';
 import {
   getApproxBodySizeBytes,
   getRateLimitKey,
@@ -15,8 +15,8 @@ import {
   jsonError,
   mapProviderError,
   withTimeout,
-} from './_lib/hardening';
-import { applyUsageHeaders, bestEffortIncrementAiUsage, guardAiUsage } from './_lib/usageGuard';
+} from './_lib/hardening.js';
+import { applyUsageHeaders, bestEffortIncrementAiUsage, guardAiUsage } from './_lib/usageGuard.js';
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024; // ~2MB
 const TIMEOUT_MS = 25_000;
