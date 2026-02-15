@@ -3,6 +3,8 @@ import { supabase } from '../supabase';
 import type { ChatMessage, TrickIdentificationResult, User } from '../types';
 import { getAiProvider } from './aiProviderService';
 
+import { aiIdentify } from './aiProxy';
+
 // DEBUG (temporary): expose which Vite env vars were baked into the client bundle.
 // Safe: does NOT reveal the API key value.
 // After deploying, open DevTools console and run:
@@ -206,81 +208,55 @@ export const identifyTrickFromImage = async (
   // Do NOT ask the model for direct YouTube URLs.
   // Models frequently hallucinate links. Instead, request 3 *search queries*.
   // We then look up real, current videos via the YouTube Data API.
+
+  const dataUrl = base64ImageData.startsWith('data:')
+    ? base64ImageData
+    : `data:${mimeType || 'image/jpeg'};base64,${base64ImageData}`;
+
   const prompt =
     "Identify this magic trick based on the image provided. " +
-    "Return JSON with: (1) trickName and (2) videoQueries: 3 concise YouTube search queries " +
-    "that will likely find real performance examples (no URLs).";
+    "Return ONLY valid JSON (no markdown, no backticks) with exactly these keys: " +
+    "trickName (string) and videoQueries (array of 3 concise YouTube search queries, no URLs). " +
+    "If unsure, set trickName to the most likely category/name guess and still provide 3 useful queries.";
 
-  const responseSchema = {
-    type: Type.OBJECT,
-    properties: {
-      trickName: { type: Type.STRING },
-      videoQueries: {
-        type: Type.ARRAY,
-        items: { type: Type.STRING },
-      },
-    },
-    required: ['trickName', 'videoQueries']
-  };
+  // Call server-side vision endpoint (Gemini key is kept server-side)
+  const result = await aiIdentify<{ text: string }>(dataUrl, prompt);
 
-  const body: GeminiGenerateBody = {
-    model: 'gemini-3-flash-preview',
-    contents: {
-      parts: [
-        { text: prompt },
-        { inlineData: { mimeType, data: base64ImageData } }
-      ]
-    },
-    config: {
-      responseMimeType: "application/json",
-      responseSchema,
-    },
-  };
-
-  const result = await postJson<any>('/api/generate', body, currentUser);
-  const text = extractText(result);
-  const parsed = JSON.parse(text || '{}') as any;
-
-  const trickName: string = String(parsed?.trickName || '').trim() || 'Unknown Trick';
-  const videoQueriesRaw: any[] = Array.isArray(parsed?.videoQueries) ? parsed.videoQueries : [];
-  const videoQueries: string[] = videoQueriesRaw
-    .map((q) => String(q || '').trim())
-    .filter(Boolean)
-    .slice(0, 3);
-
-  // Fallback queries if the model returns nothing useful.
-  const fallbackQueries = [
-    `${trickName} magic trick performance`,
-    `${trickName} illusion on stage performance`,
-    `${trickName} magic trick live show`,
-  ];
-
-  const queriesToUse = videoQueries.length ? videoQueries : fallbackQueries;
-
-  // Look up real YouTube videos. This does NOT consume AI quota.
-  let videos: Array<{ title: string; url: string }> = [];
-  try {
-    const yt = await postJson<any>(
-      '/api/videoSearch',
-      { queries: queriesToUse, maxResultsPerQuery: 3, safeSearch: 'strict' },
-      currentUser
-    );
-    const ytVideos = Array.isArray(yt?.videos) ? yt.videos : [];
-    videos = ytVideos
-      .map((v: any) => ({ title: String(v?.title || '').trim(), url: String(v?.url || '').trim() }))
-      .filter((v: any) => v.title && v.url)
-      .slice(0, 3);
-  } catch {
-    // If YouTube API fails (quota/network), keep a safe fallback:
-    // provide YouTube search links that will always work.
-    videos = queriesToUse.slice(0, 3).map((q) => ({
-      title: `Search YouTube: ${q}`,
-      url: `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
-    }));
+  const rawText = String((result as any)?.text ?? '').trim();
+  if (!rawText) {
+    throw new Error('Empty response from identify endpoint.');
   }
 
-  return { trickName, videoExamples: videos } as TrickIdentificationResult;
+  // Parse JSON with a small salvage attempt (strip any leading/trailing text)
+  let parsed: any = null;
+  try {
+    parsed = JSON.parse(rawText);
+  } catch {
+    const start = rawText.indexOf('{');
+    const end = rawText.lastIndexOf('}');
+    if (start >= 0 && end > start) {
+      const slice = rawText.slice(start, end + 1);
+      try {
+        parsed = JSON.parse(slice);
+      } catch {
+        parsed = null;
+      }
+    }
+  }
+
+  if (!parsed || typeof parsed !== 'object') {
+    throw new Error('Identify endpoint did not return valid JSON.');
+  }
+
+  const trickName = typeof parsed.trickName === 'string' ? parsed.trickName : 'Unknown';
+  const videoQueries = Array.isArray(parsed.videoQueries) ? parsed.videoQueries : [];
+
+  return {
+    trickName,
+    videoQueries: videoQueries.slice(0, 3).map((q: any) => String(q)),
+  };
 };
+
 
 type LiveCallbacks = {
   onopen?: () => void;
