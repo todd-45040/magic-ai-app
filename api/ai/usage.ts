@@ -1,15 +1,15 @@
 // Unified usage endpoint (Phase 1): single source of truth for usage meters.
 // Returns Supabase-backed usage status (or best-effort guest/IP caps if not authed).
 
-import { getAiUsageStatus } from '../../lib/server/usage.js';
-import { rateLimit } from './_lib/rateLimit.js';
+import { getAiUsageStatus } from '../../lib/server/usage';
+import { rateLimit } from './_lib/rateLimit';
 import {
   getRateLimitKey,
   isPreviewEnv,
   jsonError,
   mapProviderError,
   withTimeout,
-} from './_lib/hardening.js';
+} from './_lib/hardening';
 
 export default async function handler(req: any, res: any) {
   // Prevent any accidental caching of usage numbers.
