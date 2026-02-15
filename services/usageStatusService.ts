@@ -25,7 +25,7 @@ export async function getBearerToken(): Promise<string> {
 }
 
 export async function fetchUsageStatus(): Promise<UsageStatus> {
-  const res = await fetch('/api/ai/usage', {
+  const res = await fetch('/api/usageStatus', {
     method: 'GET',
     headers: {
       'Authorization': await getBearerToken(),
@@ -40,7 +40,9 @@ export async function fetchUsageStatus(): Promise<UsageStatus> {
     json = { error: text };
   }
 
-  // Standardized contract: server returns either { ok:true, ... } or { ok:false, error_code, ... }
-  if (!res.ok) return { ok: false };
-  return (json as UsageStatus) || { ok: false };
+  if (!res.ok) {
+    return { ok: false };
+  }
+
+  return json as UsageStatus;
 }

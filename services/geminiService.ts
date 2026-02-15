@@ -3,8 +3,6 @@ import { supabase } from '../supabase';
 import type { ChatMessage, TrickIdentificationResult, User } from '../types';
 import { getAiProvider } from './aiProviderService';
 
-import { aiIdentify } from './aiProxy';
-
 // DEBUG (temporary): expose which Vite env vars were baked into the client bundle.
 // Safe: does NOT reveal the API key value.
 // After deploying, open DevTools console and run:
@@ -207,35 +205,41 @@ export const identifyTrickFromImage = async (
   // IMPORTANT:
   // Do NOT ask the model for direct YouTube URLs.
   // Models frequently hallucinate links. Instead, request 3 *search queries*.
-  // We then look up real, current videos via the YouTube Data API (/api/videoSearch).
-
-  const dataUrl = base64ImageData.startsWith('data:')
-    ? base64ImageData
-    : `data:${mimeType || 'image/jpeg'};base64,${base64ImageData}`;
-
+  // We then look up real, current videos via the YouTube Data API.
   const prompt =
     "Identify this magic trick based on the image provided. " +
-    "Return ONLY valid JSON (no markdown, no backticks) with keys: " +
-    "trickName (string) and videoQueries (array of 3 concise YouTube search queries, NO URLs).";
+    "Return JSON with: (1) trickName and (2) videoQueries: 3 concise YouTube search queries " +
+    "that will likely find real performance examples (no URLs).";
 
-  // Call server-side vision endpoint (Gemini key stays server-side)
-  const result = await aiIdentify<{ text: string }>(dataUrl, prompt);
-  const rawText = String((result as any)?.text ?? '').trim();
-  if (!rawText) {
-    throw new Error('Empty response from identify endpoint.');
-  }
+  const responseSchema = {
+    type: Type.OBJECT,
+    properties: {
+      trickName: { type: Type.STRING },
+      videoQueries: {
+        type: Type.ARRAY,
+        items: { type: Type.STRING },
+      },
+    },
+    required: ['trickName', 'videoQueries']
+  };
 
-  // Parse JSON with a small salvage attempt (strip any leading/trailing text)
-  let parsed: any = null;
-  try {
-    parsed = JSON.parse(rawText);
-  } catch {
-    const s = rawText.indexOf('{');
-    const e = rawText.lastIndexOf('}');
-    if (s >= 0 && e > s) {
-      try { parsed = JSON.parse(rawText.slice(s, e + 1)); } catch { parsed = null; }
-    }
-  }
+  const body: GeminiGenerateBody = {
+    model: 'gemini-3-flash-preview',
+    contents: {
+      parts: [
+        { text: prompt },
+        { inlineData: { mimeType, data: base64ImageData } }
+      ]
+    },
+    config: {
+      responseMimeType: "application/json",
+      responseSchema,
+    },
+  };
+
+  const result = await postJson<any>('/api/generate', body, currentUser);
+  const text = extractText(result);
+  const parsed = JSON.parse(text || '{}') as any;
 
   const trickName: string = String(parsed?.trickName || '').trim() || 'Unknown Trick';
   const videoQueriesRaw: any[] = Array.isArray(parsed?.videoQueries) ? parsed.videoQueries : [];
@@ -277,10 +281,6 @@ export const identifyTrickFromImage = async (
 
   return { trickName, videoExamples: videos } as TrickIdentificationResult;
 };
-
-
-
-
 
 type LiveCallbacks = {
   onopen?: () => void;

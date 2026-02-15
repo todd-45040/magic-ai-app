@@ -1,5 +1,5 @@
 // ESM on Vercel: include extension for relative imports.
-import { enforceLiveMinutes, getAiUsageStatus } from '../lib/server/usage';
+import { enforceLiveMinutes, getAiUsageStatus } from '../lib/server/usage/index.js';
 
 export default async function handler(request: any, response: any) {
   try {
