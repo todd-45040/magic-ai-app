@@ -78,7 +78,6 @@ export default async function handler(req: any, res: any) {
     }
 
     // Ensure live fields always exist for stable UI rendering.
-    // (If server doesn't return them for guests, keep them undefined rather than guessing.)
     return res.status(200).json(status);
   } catch (err: any) {
     const mapped = mapProviderError(err);

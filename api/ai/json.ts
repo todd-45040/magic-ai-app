@@ -1,11 +1,11 @@
-// Phase 1 hardened AI JSON endpoint
+// Phase 1.5 hardened AI JSON endpoint
 // - size guard
 // - rate limiting (best-effort in-memory)
 // - timeout protection
 // - consistent error contract { ok:false, error_code, message, retryable, details? }
 // - preview-only debug details
+// - Supabase-backed usage enforcement + best-effort incrementing
 
-import { enforceAiUsage } from '../../lib/server/usage.js';
 import { resolveProvider, callOpenAI, callAnthropic } from '../../lib/server/providers.js';
 import { rateLimit } from './_lib/rateLimit.js';
 import {
@@ -16,6 +16,7 @@ import {
   mapProviderError,
   withTimeout,
 } from './_lib/hardening.js';
+import { applyUsageHeaders, bestEffortIncrementAiUsage, guardAiUsage } from './_lib/usageGuard.js';
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024; // ~2MB
 const TIMEOUT_MS = 25_000;
@@ -89,24 +90,10 @@ export default async function handler(req: any, res: any) {
       );
     }
 
-    const usage = await enforceAiUsage(req, 1);
-    if (!usage.ok) {
-      return jsonError(res, usage.status || 429, {
-        ok: false,
-        error_code: 'USAGE_LIMIT',
-        message: usage.error || 'AI usage limit reached.',
-        retryable: true,
-        ...(isPreviewEnv()
-          ? {
-              details: {
-                remaining: usage.remaining,
-                limit: usage.limit,
-                burstRemaining: usage.burstRemaining,
-                burstLimit: usage.burstLimit,
-              },
-            }
-          : {}),
-      });
+    // Supabase usage guard (single source of truth)
+    const guard = await guardAiUsage(req, 1);
+    if (!guard.ok) {
+      return jsonError(res, guard.status, guard.error);
     }
 
     const provider = resolveProvider(req);
@@ -156,11 +143,10 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    res.setHeader('X-AI-Remaining', String(usage.remaining ?? ''));
-    res.setHeader('X-AI-Limit', String(usage.limit ?? ''));
-    res.setHeader('X-AI-Membership', String(usage.membership ?? ''));
-    res.setHeader('X-AI-Burst-Remaining', String(usage.burstRemaining ?? ''));
-    res.setHeader('X-AI-Burst-Limit', String(usage.burstLimit ?? ''));
+    // Best-effort increment AFTER success
+    bestEffortIncrementAiUsage(req, 1);
+
+    applyUsageHeaders(res, guard.usage);
     res.setHeader('X-AI-Provider-Used', provider);
 
     return res.status(200).json({ ok: true, json: parsed });
