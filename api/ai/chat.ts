@@ -23,6 +23,34 @@ const TIMEOUT_MS = 25_000;
 
 
 
+function messagesToGeminiContents(messages: any[]): any[] {
+  const out: any[] = [];
+  if (!Array.isArray(messages)) return out;
+
+  // Collect system prompts and prepend to first user message (Gemini uses role user/model)
+  const systemTexts: string[] = [];
+  for (const m of messages) {
+    if (m && m.role === 'system' && typeof m.content === 'string' && m.content.trim()) {
+      systemTexts.push(m.content.trim());
+    }
+  }
+  const systemPrefix = systemTexts.length ? systemTexts.join('\n\n') + '\n\n' : '';
+
+  for (const m of messages) {
+    if (!m || typeof m.content !== 'string') continue;
+    const text = m.content.trim();
+    if (!text) continue;
+
+    if (m.role === 'system') continue; // handled via prefix
+    const role = m.role === 'assistant' ? 'model' : 'user';
+    const finalText = role === 'user' && systemPrefix ? systemPrefix + text : text;
+
+    out.push({ role, parts: [{ text: finalText }] });
+  }
+  return out;
+}
+
+
 function getClientIp(req: any): string | null {
   const xf = req?.headers?.['x-forwarded-for'] || req?.headers?.['X-Forwarded-For'];
   if (typeof xf === 'string' && xf.trim()) {
@@ -90,14 +118,37 @@ export default async function handler(req: any, res: any) {
 
     const provider = resolveProvider(req);
     const body = req.body || {};
-    const { model, contents, config } = body;
+    const { model, config } = body;
+
+    // Accept OpenAI-style { messages: [...] } as the canonical input,
+    // and adapt to provider-specific payloads.
+    const messages = Array.isArray(body.messages) ? body.messages : null;
+    const bodyContents = body.contents;
+
+    const openaiContents = bodyContents ?? messages;
+    const anthropicContents = bodyContents ?? messages;
+
+    // Gemini requires `contents`. If caller sent `messages`, adapt them.
+    const geminiContents = bodyContents ?? (messages ? messagesToGeminiContents(messages) : undefined);
+
+    if (provider !== 'openai' && provider !== 'anthropic') {
+      if (!geminiContents || (Array.isArray(geminiContents) && geminiContents.length === 0)) {
+        return jsonError(res, 400, {
+          ok: false,
+          error_code: 'BAD_REQUEST',
+          message: 'Request must include `contents` or `messages`.',
+          retryable: false,
+          ...(isPreviewEnv() ? { details: { hasContents: !!bodyContents, hasMessages: !!messages } } : {}),
+        });
+      }
+    }
 
     const run = async () => {
       if (provider === 'openai') {
-        return callOpenAI({ model, contents, config });
+        return callOpenAI({ model, contents: openaiContents, config });
       }
       if (provider === 'anthropic') {
-        return callAnthropic({ model, contents, config });
+        return callAnthropic({ model, contents: anthropicContents, config });
       }
 
       const apiKey = process.env.GOOGLE_API_KEY || process.env.API_KEY;
@@ -111,7 +162,7 @@ export default async function handler(req: any, res: any) {
       const ai = new GoogleGenAI({ apiKey });
       return ai.models.generateContent({
         model: model || 'gemini-3-pro-preview',
-        contents,
+        contents: geminiContents,
         config: {
           ...config,
         },
