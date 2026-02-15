@@ -1,4 +1,4 @@
-import { getBearerToken, requireSupabaseAuth } from '../../lib/server/auth.js';
+import { getBearerToken, requireSupabaseAuth } from '../../lib/server/auth';
 
 export type ApiErrorPayload = {
   ok: false;
@@ -97,7 +97,6 @@ export function mapProviderError(err: any): {
   details?: any;
 } {
   const msg = String(err?.message || err || 'Request failed');
-  const name = String(err?.name || 'Error');
   const code = String(err?.code || err?.status || err?.statusCode || '');
 
   // Timeout
