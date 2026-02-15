@@ -21,6 +21,8 @@ import { applyUsageHeaders, bestEffortIncrementAiUsage, guardAiUsage } from './_
 const MAX_BODY_BYTES = 2 * 1024 * 1024; // ~2MB
 const TIMEOUT_MS = 25_000;
 
+
+
 function getClientIp(req: any): string | null {
   const xf = req?.headers?.['x-forwarded-for'] || req?.headers?.['X-Forwarded-For'];
   if (typeof xf === 'string' && xf.trim()) {
@@ -33,7 +35,6 @@ function getClientIp(req: any): string | null {
   const addr = sock?.remoteAddress;
   return typeof addr === 'string' && addr.trim() ? addr.trim() : null;
 }
-
 function extractText(result: any): string {
   // Gemini SDK
   const t1 = result?.response?.text?.();
@@ -53,24 +54,6 @@ function extractText(result: any): string {
   } catch {
     return String(result ?? '');
   }
-}
-
-// Accept OpenAI-style messages as canonical input and adapt for Gemini when needed.
-function messagesToGeminiContents(messages: any[]): any[] {
-  if (!Array.isArray(messages)) return [];
-  return messages
-    .filter((m) => m && typeof m.content === 'string' && m.content.trim())
-    .map((m) => {
-      const role =
-        m.role === 'assistant'
-          ? 'model'
-          : m.role === 'user'
-            ? 'user'
-            : m.role === 'system'
-              ? 'user' // Gemini doesn't truly support system; treat as user guidance
-              : 'user';
-      return { role, parts: [{ text: String(m.content) }] };
-    });
 }
 
 export default async function handler(req: any, res: any) {
@@ -104,18 +87,14 @@ export default async function handler(req: any, res: any) {
 
     const rl = rateLimit(rlKey.key, { windowMs: 60_000, max: 20 });
     if (!rl.ok) {
-      return jsonError(
-        res,
-        429,
-        {
+      try { res.setHeader('Retry-After', String(rl.retryAfterSeconds)); } catch {}
+      return jsonError(res, 429, {
           ok: false,
           error_code: 'RATE_LIMITED',
           message: 'Too many requests. Please wait and try again.',
           retryable: true,
           ...(isPreviewEnv() ? { details: { key: rlKey.key, resetAt: rl.resetAt } } : {}),
-        },
-        { 'Retry-After': String(rl.retryAfterSeconds) },
-      );
+        });
     }
 
     // Supabase usage guard (single source of truth)
@@ -126,24 +105,7 @@ export default async function handler(req: any, res: any) {
 
     const provider = resolveProvider(req);
     const body = req.body || {};
-    const { model, config } = body;
-
-    // Canonical input: messages[]
-    let contents = body.contents;
-    if (!contents && Array.isArray(body.messages)) {
-      contents = provider === 'gemini' ? messagesToGeminiContents(body.messages) : body.messages;
-    }
-
-    // For Gemini, ensure contents exist to avoid INVALID_ARGUMENT crashes.
-    if (provider === 'gemini' && (!Array.isArray(contents) || contents.length === 0)) {
-      return jsonError(res, 400, {
-        ok: false,
-        error_code: 'BAD_REQUEST',
-        message: 'Missing required input: provide `messages` (recommended) or `contents` for Gemini.',
-        retryable: false,
-        ...(isPreviewEnv() ? { details: { hint: "Send { messages:[{role:'user',content:'...'}] }" } } : {}),
-      });
-    }
+    const { model, contents, config } = body;
 
     const run = async () => {
       if (provider === 'openai') {
