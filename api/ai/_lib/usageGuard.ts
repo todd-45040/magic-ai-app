@@ -6,7 +6,7 @@
 // - Increment usage AFTER successful upstream response (best-effort; never fail the request)
 // - Return the standard hardened error contract
 
-import { getAiUsageStatus, enforceAiUsage } from '../../../lib/server/usage.js';
+import { getAiUsageStatus, enforceAiUsage } from '../../../lib/server/usage/index.js';
 import { isPreviewEnv, mapProviderError, withTimeout } from './hardening.js';
 
 export type UsageStatus = {
@@ -151,7 +151,7 @@ export function applyUsageHeaders(res: any, usage: any) {
 // Best-effort increment after success. Never throws.
 export async function bestEffortIncrementAiUsage(req: any, units = 1) {
   try {
-    const mod: any = await import('../../../lib/server/usage.js');
+    const mod: any = await import('../../../lib/server/usage/index.js');
     const inc =
       mod?.incrementAiUsage ||
       mod?.recordAiUsage ||

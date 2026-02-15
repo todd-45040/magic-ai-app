@@ -6,7 +6,7 @@
 // - preview-only debug details
 // - Supabase-backed usage enforcement + best-effort incrementing
 
-import { resolveProvider, callOpenAI, callAnthropic } from '../../lib/server/providers';
+import { resolveProvider, callOpenAI, callAnthropic } from '../../lib/server/providers/index.js';
 import { rateLimit } from './_lib/rateLimit';
 import {
   getApproxBodySizeBytes,
