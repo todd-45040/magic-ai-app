@@ -733,16 +733,104 @@ const ChatView: React.FC<{
   );
 };
 
+type IdentifyUiError = {
+  message: string;
+  code?: string;
+  retryable?: boolean;
+  details?: any;
+};
+
+const MAX_IDENTIFY_IMAGE_BYTES = 2 * 1024 * 1024;
+
+const isPreviewBuild = (): boolean => {
+  try {
+    const env: any = (import.meta as any)?.env;
+    const mode = env?.MODE;
+    // Show details in Vercel Preview + local dev, but never in production.
+    return mode !== 'production';
+  } catch {
+    return false;
+  }
+};
+
+const safeStringify = (v: any): string => {
+  try {
+    return JSON.stringify(v, null, 2);
+  } catch {
+    try { return String(v); } catch { return '[unserializable]'; }
+  }
+};
+
+const formatBytes = (bytes: number): string => {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let idx = 0;
+  let val = bytes;
+  while (val >= 1024 && idx < units.length - 1) {
+    val /= 1024;
+    idx++;
+  }
+  const dp = idx === 0 ? 0 : (idx === 1 ? 0 : 1);
+  return `${val.toFixed(dp)}${units[idx]}`;
+};
+
+const normalizeIdentifyError = (err: any): IdentifyUiError => {
+  if (!err) return { message: 'Something went wrong. Please try again.' };
+  if (typeof err === 'string') return { message: err };
+  if (err?.message && typeof err.message === 'string') {
+    // If the message itself contains a JSON error payload, try to parse it.
+    const msg = err.message.trim();
+    if (msg.startsWith('{') && msg.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(msg);
+        if (parsed && parsed.ok === false) {
+          return {
+            message: parsed.message || 'Request failed. Please try again.',
+            code: parsed.error_code,
+            retryable: parsed.retryable,
+            details: parsed.details,
+          };
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    const anyErr = err as any;
+    if (anyErr?.error_code || anyErr?.details) {
+      return {
+        message: anyErr.message || 'Request failed. Please try again.',
+        code: anyErr.error_code,
+        retryable: anyErr.retryable,
+        details: anyErr.details,
+      };
+    }
+    return { message: err.message };
+  }
+  if (typeof err === 'object') {
+    const anyErr = err as any;
+    if (anyErr?.ok === false) {
+      return {
+        message: anyErr.message || 'Request failed. Please try again.',
+        code: anyErr.error_code,
+        retryable: anyErr.retryable,
+        details: anyErr.details,
+      };
+    }
+  }
+  return { message: 'Something went wrong. Please try again.' };
+};
+
 const IdentifyTab: React.FC<{
     imageFile: File | null;
     imagePreview: string | null;
     identificationResult: TrickIdentificationResult | null;
     isIdentifying: boolean;
-    identificationError: string | null;
+    identificationError: IdentifyUiError | null;
     fileInputRef: React.RefObject<HTMLInputElement>;
     handleImageUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
     handleIdentifyClick: () => void;
-}> = ({ imagePreview, identificationResult, isIdentifying, identificationError, fileInputRef, handleImageUpload, handleIdentifyClick }) => (
+}> = ({ imageFile, imagePreview, identificationResult, isIdentifying, identificationError, fileInputRef, handleImageUpload, handleIdentifyClick }) => (
     <div className="flex-1 overflow-y-auto p-4 md:p-6">
         <div className="animate-fade-in space-y-4 max-w-2xl mx-auto">
             <h2 className="text-2xl font-bold text-slate-200 font-cinzel">Identify a Trick</h2>
@@ -753,6 +841,7 @@ const IdentifyTab: React.FC<{
                     <ImageIcon className="w-12 h-12 text-slate-500 mb-2"/>
                     <span className="font-semibold text-slate-300">Click to upload an image</span>
                     <span className="text-sm text-slate-400">PNG, JPG, or WEBP</span>
+                    <span className="text-xs text-slate-500 mt-2">Tip: images under 2MB work best.</span>
                 </button>
             ) : (
                 <div className="space-y-4">
@@ -761,12 +850,17 @@ const IdentifyTab: React.FC<{
                     </div>
                     <div className="flex gap-4">
                         <button onClick={() => fileInputRef.current?.click()} className="flex-1 w-full py-2 px-4 bg-slate-600/50 hover:bg-slate-700 rounded-md text-slate-300 font-bold transition-colors">
-                            Change Image
+                            Upload Different Image
                         </button>
                         <button onClick={handleIdentifyClick} disabled={isIdentifying} className="flex-1 w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed">
                             {isIdentifying ? 'Analyzing...' : 'Identify Trick'}
                         </button>
                     </div>
+                    {imageFile?.size ? (
+                      <div className="text-center text-xs text-slate-500">
+                        Current image: {formatBytes(imageFile.size)} (recommended under 2MB)
+                      </div>
+                    ) : null}
                 </div>
             )}
             {isIdentifying && (
@@ -777,7 +871,38 @@ const IdentifyTab: React.FC<{
                     </div>
                 </div>
             )}
-            {identificationError && <p className="text-red-400 text-center bg-red-900/20 p-3 rounded-lg">{identificationError}</p>}
+            {identificationError && (
+              <div className="bg-red-900/20 border border-red-800/40 rounded-lg p-4 space-y-3">
+                <p className="text-red-300 text-center font-semibold">{identificationError.message}</p>
+                <p className="text-slate-300/80 text-center text-sm">
+                  Try again, or upload a different image. A well-lit photo with the props centered usually works best.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <button
+                    onClick={handleIdentifyClick}
+                    disabled={isIdentifying || !imagePreview}
+                    className="flex-1 py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
+                  >
+                    Try Again
+                  </button>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex-1 py-2 px-4 bg-slate-600/50 hover:bg-slate-700 rounded-md text-slate-200 font-bold transition-colors"
+                  >
+                    Upload Different Image
+                  </button>
+                </div>
+
+                {isPreviewBuild() && identificationError.details ? (
+                  <details className="mt-2">
+                    <summary className="cursor-pointer text-xs text-slate-300/80 hover:text-slate-200">Details (Preview only)</summary>
+                    <pre className="mt-2 text-[11px] whitespace-pre-wrap break-words bg-slate-950/40 border border-slate-700 rounded-md p-3 text-slate-200">
+                      {safeStringify(identificationError.details)}
+                    </pre>
+                  </details>
+                ) : null}
+              </div>
+            )}
             {identificationResult && (
                 <div className="animate-fade-in bg-slate-800/50 border border-slate-700 rounded-lg p-4 space-y-3">
                     <div>
@@ -1305,7 +1430,7 @@ useEffect(() => {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [identificationResult, setIdentificationResult] = useState<TrickIdentificationResult | null>(null);
   const [isIdentifying, setIsIdentifying] = useState(false);
-  const [identificationError, setIdentificationError] = useState<string | null>(null);
+  const [identificationError, setIdentificationError] = useState<IdentifyUiError | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -1867,6 +1992,21 @@ useEffect(() => {
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+        if (file.size > MAX_IDENTIFY_IMAGE_BYTES) {
+            setImageFile(null);
+            setImagePreview(null);
+            setIdentificationResult(null);
+            setIdentificationError({
+              message: `That image is ${formatBytes(file.size)}. Please upload an image under 2MB for best results.`,
+              code: 'PAYLOAD_TOO_LARGE',
+              retryable: true,
+              details: { maxBytes: MAX_IDENTIFY_IMAGE_BYTES, receivedBytes: file.size }
+            });
+            // Allow selecting the same file again after resizing.
+            try { e.target.value = ''; } catch {}
+            return;
+        }
+
         setImageFile(file);
         const reader = new FileReader();
         reader.onloadend = () => { setImagePreview(reader.result as string); };
@@ -1890,7 +2030,7 @@ useEffect(() => {
         const result = await identifyTrickFromImage(base64Data, mimeType, user);
         setIdentificationResult(result);
     } catch (err) {
-        setIdentificationError(err instanceof Error ? err.message : "An unknown error occurred.");
+        setIdentificationError(normalizeIdentifyError(err));
     } finally {
         setIsIdentifying(false);
     }
