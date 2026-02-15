@@ -1,78 +1,156 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+// Phase 1 hardened AI chat endpoint
+// - size guard
+// - rate limiting (best-effort in-memory)
+// - timeout protection
+// - consistent error contract { ok:false, error_code, message, retryable, details? }
+// - preview-only debug details
 
-type ChatReq = {
-  prompt: string;
-  system?: string;
-  model?: string; // optional override
-};
+import { enforceAiUsage } from '../../lib/server/usage.js';
+import { resolveProvider, callOpenAI, callAnthropic } from '../../lib/server/providers.js';
+import { rateLimit } from './_lib/rateLimit.js';
+import {
+  getApproxBodySizeBytes,
+  getRateLimitKey,
+  isPreviewEnv,
+  jsonError,
+  mapProviderError,
+  withTimeout,
+} from './_lib/hardening.js';
 
-function jsonError(res: VercelResponse, status: number, code: string, message: string, retryable = false) {
-  return res.status(status).json({ ok: false, error_code: code, message, retryable });
-}
+const MAX_BODY_BYTES = 2 * 1024 * 1024; // ~2MB
+const TIMEOUT_MS = 25_000;
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== "POST") {
-    return jsonError(res, 405, "METHOD_NOT_ALLOWED", "Only POST allowed");
-  }
-
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return jsonError(res, 500, "SERVER_MISCONFIG", "Missing GEMINI_API_KEY on server", false);
-  }
-
-  let body: ChatReq;
+export default async function handler(req: any, res: any) {
   try {
-    body = (typeof req.body === "string" ? JSON.parse(req.body) : req.body) as ChatReq;
-  } catch {
-    return jsonError(res, 400, "BAD_JSON", "Invalid JSON body");
-  }
+    if (req.method !== 'POST') {
+      return jsonError(res, 405, {
+        ok: false,
+        error_code: 'METHOD_NOT_ALLOWED',
+        message: 'Method not allowed',
+        retryable: false,
+      });
+    }
 
-  const prompt = (body?.prompt ?? "").trim();
-  if (!prompt) {
-    return jsonError(res, 400, "MISSING_PROMPT", "Prompt is required");
-  }
+    // Size guard (prevents accidental megabyte prompts / base64 dumps)
+    const bodySize = getApproxBodySizeBytes(req);
+    if (bodySize > MAX_BODY_BYTES) {
+      return jsonError(res, 413, {
+        ok: false,
+        error_code: 'PAYLOAD_TOO_LARGE',
+        message: 'Request payload too large. Please keep requests under ~2MB.',
+        retryable: false,
+        ...(isPreviewEnv() ? { details: { bodySize, limit: MAX_BODY_BYTES } } : {}),
+      });
+    }
 
-  // Timeout guard (20s)
-  const timeoutMs = 20000;
-  const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), timeoutMs);
+    // Rate limiting (per-user if authenticated, otherwise per-IP guest)
+    const rlKey = await getRateLimitKey(req);
+    if (!rlKey) {
+      return jsonError(res, 401, {
+        ok: false,
+        error_code: 'UNAUTHORIZED',
+        message: 'Unauthorized.',
+        retryable: false,
+      });
+    }
 
-  try {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const modelName = body.model || "gemini-2.5-flash"; // pick your default
-    const model = genAI.getGenerativeModel({ model: modelName });
+    const rl = rateLimit(rlKey.key, { windowMs: 60_000, max: 30 });
+    if (!rl.ok) {
+      return jsonError(
+        res,
+        429,
+        {
+          ok: false,
+          error_code: 'RATE_LIMITED',
+          message: 'Too many requests. Please wait and try again.',
+          retryable: true,
+          ...(isPreviewEnv() ? { details: { key: rlKey.key, resetAt: rl.resetAt } } : {}),
+        },
+        { 'Retry-After': String(rl.retryAfterSeconds) },
+      );
+    }
 
-    // Optional system instruction: prepend to prompt (simple approach)
-    const system = (body.system ?? "").trim();
-    const finalPrompt = system ? `${system}\n\nUSER:\n${prompt}` : prompt;
+    // AI cost protection (daily caps + per-minute burst limits)
+    const usage = await enforceAiUsage(req, 1);
+    if (!usage.ok) {
+      return jsonError(res, usage.status || 429, {
+        ok: false,
+        error_code: 'USAGE_LIMIT',
+        message: usage.error || 'AI usage limit reached.',
+        retryable: true,
+        ...(isPreviewEnv()
+          ? {
+              details: {
+                remaining: usage.remaining,
+                limit: usage.limit,
+                burstRemaining: usage.burstRemaining,
+                burstLimit: usage.burstLimit,
+              },
+            }
+          : {}),
+      });
+    }
 
-    const result = await model.generateContent({
-      contents: [{ role: "user", parts: [{ text: finalPrompt }] }],
-      // signal: controller.signal, // if SDK supports it in your version; if not, abort won't cancel but timeout still returns error below
-    } as any);
+    const provider = resolveProvider(req);
+    const body = req.body || {};
+    const { model, contents, config } = body;
 
-    const text = result?.response?.text?.() ?? "";
-    clearTimeout(t);
+    const run = async () => {
+      if (provider === 'openai') {
+        return callOpenAI({ model, contents, config });
+      }
+      if (provider === 'anthropic') {
+        return callAnthropic({ model, contents, config });
+      }
 
-    return res.status(200).json({
-      ok: true,
-      data: { text }
-    });
+      const apiKey = process.env.GOOGLE_API_KEY || process.env.API_KEY;
+      if (!apiKey) {
+        throw new Error(
+          'Google API key is not configured. Set GOOGLE_API_KEY (preferred) or API_KEY in Vercel environment variables.',
+        );
+      }
+
+      const { GoogleGenAI } = await import('@google/genai');
+      const ai = new GoogleGenAI({ apiKey });
+      return ai.models.generateContent({
+        model: model || 'gemini-3-pro-preview',
+        contents,
+        config: {
+          ...config,
+        },
+      });
+    };
+
+    const result = await withTimeout(run(), TIMEOUT_MS, 'TIMEOUT');
+
+    // Usage headers for the Usage Meter UI (best-effort)
+    res.setHeader('X-AI-Remaining', String(usage.remaining ?? ''));
+    res.setHeader('X-AI-Limit', String(usage.limit ?? ''));
+    res.setHeader('X-AI-Membership', String(usage.membership ?? ''));
+    res.setHeader('X-AI-Burst-Remaining', String(usage.burstRemaining ?? ''));
+    res.setHeader('X-AI-Burst-Limit', String(usage.burstLimit ?? ''));
+    res.setHeader('X-AI-Provider-Used', provider);
+
+    return res.status(200).json({ ok: true, data: result });
   } catch (err: any) {
-    clearTimeout(t);
+    console.error('AI Chat Error:', err);
 
-    // Abort / timeout
-    const msg = String(err?.message || err);
-    if (msg.toLowerCase().includes("aborted") || msg.toLowerCase().includes("abort")) {
-      return jsonError(res, 504, "TIMEOUT", "AI timed out. Please retry.", true);
-    }
+    const mapped = mapProviderError(err);
+    const details = isPreviewEnv()
+      ? {
+          name: String(err?.name || 'Error'),
+          message: String(err?.message || err),
+          code: err?.code,
+          stack: String(err?.stack || ''),
+        }
+      : undefined;
 
-    // Basic quota/rate hints (we’ll improve later)
-    if (msg.toLowerCase().includes("quota") || msg.toLowerCase().includes("resource")) {
-      return jsonError(res, 429, "QUOTA_EXCEEDED", "AI quota reached. Try again later.", false);
-    }
-
-    return jsonError(res, 500, "AI_ERROR", "AI request failed. Please retry.", true);
+    return jsonError(res, mapped.status, {
+      ok: false,
+      error_code: mapped.error_code,
+      message: mapped.message,
+      retryable: mapped.retryable,
+      ...(details ? { details } : {}),
+    });
   }
 }

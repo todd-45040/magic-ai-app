@@ -1,100 +1,180 @@
-// api/ai/image.ts
-// Image generation endpoint (Imagen)
-//
-// Request:  { prompt: string, style?: string, size?: "512x512"|"1024x1024"|"1536x1536" }
-// Response: { ok:true, data:{ images: string[] } } where images are data URLs
+// Phase 1 hardened AI image endpoint
+// - size guard
+// - rate limiting (best-effort in-memory)
+// - timeout protection
+// - consistent error contract { ok:false, error_code, message, retryable, details? }
+// - preview-only debug details
 
-import { GoogleGenAI } from "@google/genai";
+import { enforceAiUsage } from '../../lib/server/usage.js';
+import { resolveProvider } from '../../lib/server/providers.js';
+import { rateLimit } from './_lib/rateLimit.js';
+import {
+  getApproxBodySizeBytes,
+  getRateLimitKey,
+  isPreviewEnv,
+  jsonError,
+  mapProviderError,
+  withTimeout,
+} from './_lib/hardening.js';
 
-type Body = {
-  prompt?: string;
-  style?: string;
-  size?: "512x512" | "1024x1024" | "1536x1536";
-  aspectRatio?: "1:1" | "3:4" | "4:3" | "9:16" | "16:9";
-};
-
-function getApiKey(): string | null {
-  return (
-    process.env.GEMINI_API_KEY ||
-    process.env.API_KEY ||
-    process.env.VITE_GEMINI_API_KEY ||
-    process.env.VITE_API_KEY ||
-    null
-  );
-}
-
-function ok(res: any, data: any) {
-  return res.status(200).json({ ok: true, data });
-}
-
-function err(res: any, status: number, error_code: string, message: string, retryable = false) {
-  return res.status(status).json({ ok: false, error_code, message, retryable });
-}
-
-function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
-  return Promise.race([
-    p,
-    new Promise<T>((_, reject) => setTimeout(() => reject(new Error("TIMEOUT")), ms)),
-  ]);
-}
-
-// Basic mapping: if caller provides size, infer aspect ratio as 1:1.
-// If caller provides aspectRatio explicitly, use it.
-function inferAspectRatio(body: Body): Body["aspectRatio"] {
-  return body.aspectRatio || "1:1";
-}
+const MAX_BODY_BYTES = 2 * 1024 * 1024; // prompts should be tiny; this is a safety cap
+const TIMEOUT_MS = 45_000;
 
 export default async function handler(req: any, res: any) {
-  if (req.method !== "POST") return err(res, 405, "METHOD_NOT_ALLOWED", "Only POST allowed");
-
-  const apiKey = getApiKey();
-  if (!apiKey) return err(res, 500, "SERVER_MISCONFIG", "Missing Gemini API key on server");
-
-  const body: Body = req.body || {};
-  const prompt = String(body.prompt || "").trim();
-  if (!prompt) return err(res, 400, "BAD_REQUEST", "Missing prompt");
-
-  const style = String(body.style || "").trim();
-  const fullPrompt = style ? `${prompt}\n\nStyle notes: ${style}` : prompt;
-
-  const aspectRatio = inferAspectRatio(body);
-
   try {
-    const ai = new GoogleGenAI({ apiKey });
-
-    const result: any = await withTimeout(
-      ai.models.generateImages({
-        model: process.env.IMAGEN_MODEL || "imagen-4.0-generate-preview-06-06",
-        prompt: fullPrompt,
-        config: {
-          numberOfImages: 1,
-          outputMimeType: "image/jpeg",
-          aspectRatio,
-        },
-      }),
-      25000
-    );
-
-    // Try common response shapes
-    const img = result?.generatedImages?.[0] || result?.images?.[0] || result?.data?.[0];
-    const base64 =
-      img?.image?.imageBytes ||
-      img?.imageBytes ||
-      img?.b64_json ||
-      img?.base64;
-
-    const mime = img?.mimeType || img?.mime || "image/jpeg";
-
-    if (typeof base64 !== "string" || !base64) {
-      return err(res, 502, "AI_ERROR", "No image data returned from Imagen.", true);
+    if (req.method !== 'POST') {
+      return jsonError(res, 405, {
+        ok: false,
+        error_code: 'METHOD_NOT_ALLOWED',
+        message: 'Method not allowed',
+        retryable: false,
+      });
     }
 
-    const dataUrl = `data:${mime};base64,${base64}`;
-    return ok(res, { images: [dataUrl] });
-  } catch (e: any) {
-    const msg = String(e?.message || e || "");
-    if (msg === "TIMEOUT") return err(res, 504, "TIMEOUT", "Image generation timed out. Please retry.", true);
-    if (/quota|resource|429/i.test(msg)) return err(res, 429, "QUOTA_EXCEEDED", "AI quota reached.", false);
-    return err(res, 500, "AI_ERROR", "Image generation failed. Please retry.", true);
+    const bodySize = getApproxBodySizeBytes(req);
+    if (bodySize > MAX_BODY_BYTES) {
+      return jsonError(res, 413, {
+        ok: false,
+        error_code: 'PAYLOAD_TOO_LARGE',
+        message: 'Request payload too large. Please keep requests under ~2MB.',
+        retryable: false,
+        ...(isPreviewEnv() ? { details: { bodySize, limit: MAX_BODY_BYTES } } : {}),
+      });
+    }
+
+    const rlKey = await getRateLimitKey(req);
+    if (!rlKey) {
+      return jsonError(res, 401, {
+        ok: false,
+        error_code: 'UNAUTHORIZED',
+        message: 'Unauthorized.',
+        retryable: false,
+      });
+    }
+
+    const rl = rateLimit(rlKey.key, { windowMs: 60_000, max: 10 });
+    if (!rl.ok) {
+      return jsonError(
+        res,
+        429,
+        {
+          ok: false,
+          error_code: 'RATE_LIMITED',
+          message: 'Too many image requests. Please wait and try again.',
+          retryable: true,
+          ...(isPreviewEnv() ? { details: { key: rlKey.key, resetAt: rl.resetAt } } : {}),
+        },
+        { 'Retry-After': String(rl.retryAfterSeconds) },
+      );
+    }
+
+    const usage = await enforceAiUsage(req, 1);
+    if (!usage.ok) {
+      return jsonError(res, usage.status || 429, {
+        ok: false,
+        error_code: 'USAGE_LIMIT',
+        message: usage.error || 'AI usage limit reached.',
+        retryable: true,
+        ...(isPreviewEnv()
+          ? {
+              details: {
+                remaining: usage.remaining,
+                limit: usage.limit,
+                burstRemaining: usage.burstRemaining,
+                burstLimit: usage.burstLimit,
+              },
+            }
+          : {}),
+      });
+    }
+
+    const provider = resolveProvider(req);
+    const { prompt, aspectRatio = '1:1' } = req.body || {};
+
+    const run = async () => {
+      if (provider === 'openai') {
+        const apiKey = process.env.OPENAI_API_KEY;
+        if (!apiKey) throw new Error('OPENAI_API_KEY is not configured.');
+
+        const model = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1';
+
+        const resp = await fetch('https://api.openai.com/v1/images/generations', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model,
+            prompt: String(prompt || ''),
+            size: '1024x1024',
+            response_format: 'b64_json',
+          }),
+        });
+
+        const json = await resp.json().catch(() => ({}));
+        if (!resp.ok) {
+          const msg = json?.error?.message || json?.message || `OpenAI image request failed (${resp.status})`;
+          const e: any = new Error(msg);
+          e.status = resp.status;
+          throw e;
+        }
+
+        return json;
+      }
+
+      if (provider === 'anthropic') {
+        const e: any = new Error('Image generation is not supported for Anthropic provider.');
+        e.status = 400;
+        throw e;
+      }
+
+      const apiKey = process.env.GOOGLE_API_KEY || process.env.API_KEY;
+      if (!apiKey) throw new Error('Google API key is not configured.');
+
+      const { GoogleGenAI } = await import('@google/genai');
+      const ai = new GoogleGenAI({ apiKey });
+      return ai.models.generateImages({
+        model: 'imagen-4.0-generate-preview-06-06',
+        prompt,
+        config: {
+          numberOfImages: 1,
+          outputMimeType: 'image/jpeg',
+          aspectRatio,
+        },
+      });
+    };
+
+    const result = await withTimeout(run(), TIMEOUT_MS, 'TIMEOUT');
+
+    res.setHeader('X-AI-Remaining', String(usage.remaining ?? ''));
+    res.setHeader('X-AI-Limit', String(usage.limit ?? ''));
+    res.setHeader('X-AI-Membership', String(usage.membership ?? ''));
+    res.setHeader('X-AI-Burst-Remaining', String(usage.burstRemaining ?? ''));
+    res.setHeader('X-AI-Burst-Limit', String(usage.burstLimit ?? ''));
+    res.setHeader('X-AI-Provider-Used', provider);
+
+    return res.status(200).json({ ok: true, data: result });
+  } catch (err: any) {
+    console.error('AI Image Error:', err);
+
+    const mapped = mapProviderError(err);
+    const details = isPreviewEnv()
+      ? {
+          name: String(err?.name || 'Error'),
+          message: String(err?.message || err),
+          code: err?.code,
+          status: err?.status,
+          stack: String(err?.stack || ''),
+        }
+      : undefined;
+
+    return jsonError(res, mapped.status, {
+      ok: false,
+      error_code: mapped.error_code,
+      message: mapped.message,
+      retryable: mapped.retryable,
+      ...(details ? { details } : {}),
+    });
   }
 }
