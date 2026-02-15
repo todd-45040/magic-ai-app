@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { fetchUsageStatus, type UsageStatus } from '../services/usageStatusService';
-import { getUsage } from '../services/usageTracker';
 import type { User } from '../types';
 
 type UsageDetail = UsageStatus & { ts?: number };
@@ -57,20 +56,12 @@ export default function UsageMeter({ user }: { user?: User | null }) {
     };
 
     const loadLive = (s?: UsageStatus) => {
-      // Prefer server-backed live usage. Fall back to local only if server doesn't provide live fields.
+      // Server is the single source of truth for meters.
       if (s?.liveLimit != null && s.liveRemaining != null && s.liveUsed != null) {
         setLive({ used: Number(s.liveUsed || 0), limit: Number(s.liveLimit || 0), remaining: Number(s.liveRemaining || 0) });
         return;
       }
-      if (!user) {
-        setLive(null);
-        return;
-      }
-      try {
-        setLive(getUsage(user, 'live_minutes'));
-      } catch {
-        setLive(null);
-      }
+      setLive(null);
     };
 
     (async () => {
@@ -103,18 +94,6 @@ export default function UsageMeter({ user }: { user?: User | null }) {
       }));
     };
 
-    const onLocalUsageUpdate = (e: Event) => {
-      const ce = e as CustomEvent;
-      const detail = (ce.detail || {}) as any;
-      if (detail.metric !== 'live_minutes') return;
-      if (!mounted) return;
-      setLive({
-        used: Number(detail.used ?? 0),
-        limit: Number(detail.limit ?? 0),
-        remaining: Number(detail.remaining ?? 0),
-      });
-    };
-
     const onLiveUsageUpdate = (e: Event) => {
       const ce = e as CustomEvent;
       const detail = (ce.detail || {}) as any;
@@ -128,14 +107,12 @@ export default function UsageMeter({ user }: { user?: User | null }) {
     };
 
     window.addEventListener('ai-usage-update', onServerUsageUpdate);
-    window.addEventListener('maw-usage-local-update', onLocalUsageUpdate);
     window.addEventListener('live-usage-update', onLiveUsageUpdate);
 
     return () => {
       mounted = false;
       window.clearInterval(interval);
       window.removeEventListener('ai-usage-update', onServerUsageUpdate);
-      window.removeEventListener('maw-usage-local-update', onLocalUsageUpdate);
       window.removeEventListener('live-usage-update', onLiveUsageUpdate);
     };
   }, [user]);
