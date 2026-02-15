@@ -21,6 +21,20 @@ import { applyUsageHeaders, bestEffortIncrementAiUsage, guardAiUsage } from './_
 const MAX_BODY_BYTES = 2 * 1024 * 1024; // ~2MB
 const TIMEOUT_MS = 25_000;
 
+
+
+function getClientIp(req: any): string | null {
+  const xf = req?.headers?.['x-forwarded-for'] || req?.headers?.['X-Forwarded-For'];
+  if (typeof xf === 'string' && xf.trim()) {
+    // may be a comma-separated list; take first
+    return xf.split(',')[0].trim();
+  }
+  const realIp = req?.headers?.['x-real-ip'] || req?.headers?.['X-Real-IP'];
+  if (typeof realIp === 'string' && realIp.trim()) return realIp.trim();
+  const sock = req?.socket || req?.connection;
+  const addr = sock?.remoteAddress;
+  return typeof addr === 'string' && addr.trim() ? addr.trim() : null;
+}
 export default async function handler(req: any, res: any) {
   try {
     if (req.method !== 'POST') {
@@ -45,14 +59,11 @@ export default async function handler(req: any, res: any) {
     }
 
     // Rate limiting (per-user if authenticated, otherwise per-IP guest)
-    const rlKey = await getRateLimitKey(req);
+    let rlKey = await getRateLimitKey(req);
+    // Guests may not have auth context; fall back to IP-based rate limit key.
     if (!rlKey) {
-      return jsonError(res, 401, {
-        ok: false,
-        error_code: 'UNAUTHORIZED',
-        message: 'Unauthorized.',
-        retryable: false,
-      });
+      const ip = getClientIp(req) || 'unknown';
+      rlKey = { key: 'ai:chat:guest:' + ip, kind: 'guest', ip } as any;
     }
 
     const rl = rateLimit(rlKey.key, { windowMs: 60_000, max: 30 });
