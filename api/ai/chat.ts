@@ -35,6 +35,25 @@ function getClientIp(req: any): string | null {
   const addr = sock?.remoteAddress;
   return typeof addr === 'string' && addr.trim() ? addr.trim() : null;
 }
+
+// Accept OpenAI-style messages as canonical input and adapt for Gemini when needed.
+function messagesToGeminiContents(messages: any[]): any[] {
+  if (!Array.isArray(messages)) return [];
+  return messages
+    .filter((m) => m && typeof m.content === 'string' && m.content.trim())
+    .map((m) => {
+      const role =
+        m.role === 'assistant'
+          ? 'model'
+          : m.role === 'user'
+            ? 'user'
+            : m.role === 'system'
+              ? 'user' // Gemini doesn't truly support system; treat as user guidance
+              : 'user';
+      return { role, parts: [{ text: String(m.content) }] };
+    });
+}
+
 export default async function handler(req: any, res: any) {
   try {
     if (req.method !== 'POST') {
@@ -86,7 +105,26 @@ export default async function handler(req: any, res: any) {
 
     const provider = resolveProvider(req);
     const body = req.body || {};
-    const { model, contents, config } = body;
+    const { model, config } = body;
+
+    // Canonical input: messages[]; for Gemini we must provide `contents`.
+    const messages = body.messages;
+    let contents = body.contents;
+
+    if (provider === 'gemini' && !contents && Array.isArray(messages)) {
+      contents = messagesToGeminiContents(messages);
+    }
+
+    // Fail fast: prevent Gemini INVALID_ARGUMENT crashes when contents is missing/empty.
+    if (provider === 'gemini' && (!Array.isArray(contents) || contents.length === 0)) {
+      return jsonError(res, 400, {
+        ok: false,
+        error_code: 'BAD_REQUEST',
+        message: 'Missing required input: provide `messages` (recommended) or `contents` for Gemini.',
+        retryable: false,
+        ...(isPreviewEnv() ? { details: { hint: "Send { messages:[{role:'user',content:'...'}] }" } } : {}),
+      });
+    }
 
     const run = async () => {
       if (provider === 'openai') {
