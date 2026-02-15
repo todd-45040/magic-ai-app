@@ -1,4 +1,7 @@
-import { getBearerToken, requireSupabaseAuth } from '../../lib/server/auth';
+// NOTE: This file lives at api/ai/_lib/* so we need to traverse back to repo root
+// before importing shared server helpers.
+import { getBearerToken, requireSupabaseAuth } from '../../../lib/server/auth';
+
 
 export type ApiErrorPayload = {
   ok: false;
