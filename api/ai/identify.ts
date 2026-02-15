@@ -7,7 +7,7 @@
 import { GoogleGenAI } from "@google/genai";
 // NOTE: This file lives in api/ai/, so _lib is a sibling folder.
 // Vercel/TS expects the correct relative path (and extensionless imports).
-import { rateLimit, getClientIp } from "./_lib/rateLimit";
+import { rateLimit } from "./_lib/rateLimit";
 
 type Body = {
   imageBase64?: string; // base64 only OR full data URL
@@ -16,6 +16,14 @@ type Body = {
   model?: string;
   userId?: string;      // optional: pass from client if available
 };
+
+function getClientIpFromRequest(req: Request): string {
+  const xf = req.headers.get("x-forwarded-for");
+  if (xf) return xf.split(",")[0].trim();
+  const xr = req.headers.get("x-real-ip");
+  if (xr) return xr.trim();
+  return "0.0.0.0";
+}
 
 function getApiKey(): string | null {
   return (
@@ -104,23 +112,23 @@ export default async function handler(req: any, res: any) {
   }
 
   // Rate limiting (Phase 1 best-effort)
-  const ip = getClientIp(req);
+  const ip = getClientIpFromRequest(req as any);
   const userKey = String(body.userId || "").trim();
   const key = userKey ? `identify:user:${userKey}` : `identify:ip:${ip}`;
 
   const limit = Number(process.env.IDENTIFY_RATE_LIMIT || 8); // 8 requests / minute default
   const windowMs = Number(process.env.IDENTIFY_RATE_WINDOW_MS || 60_000);
 
-  const rl = rateLimit(key, limit, windowMs);
+  const rl = rateLimit(key, { max: limit, windowMs });
   if (!rl.ok) {
-    res.setHeader("Retry-After", String(rl.retryAfterSec));
+    res.setHeader("Retry-After", String(rl.retryAfterSeconds));
     return err(
       res,
       429,
       "RATE_LIMITED",
-      `Too many requests. Please wait ${rl.retryAfterSec}s and try again.`,
+      `Too many requests. Please wait ${rl.retryAfterSeconds}s and try again.`,
       true,
-      { requestId, retryAfterSec: rl.retryAfterSec }
+      { requestId, retryAfterSeconds: rl.retryAfterSeconds }
     );
   }
 
