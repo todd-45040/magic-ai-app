@@ -13,6 +13,19 @@ type Bucket = {
 
 const buckets = new Map<string, Bucket>();
 
+let lastCleanupAt = 0;
+const CLEANUP_EVERY_MS = 60_000; // 1 minute
+
+function cleanup(now: number) {
+  if (now - lastCleanupAt < CLEANUP_EVERY_MS) return;
+  lastCleanupAt = now;
+
+  // Remove expired buckets
+  for (const [k, b] of buckets.entries()) {
+    if (b.resetAt <= now) buckets.delete(k);
+  }
+}
+
 export type RateLimitResult =
   | { ok: true; remaining: number; resetAt: number }
   | { ok: false; remaining: 0; resetAt: number; retryAfterSeconds: number };
@@ -26,6 +39,8 @@ export function rateLimit(
   },
 ): RateLimitResult {
   const now = typeof opts.now === 'number' ? opts.now : Date.now();
+  cleanup(now);
+
   const windowMs = Math.max(250, opts.windowMs);
   const max = Math.max(1, Math.floor(opts.max));
 
@@ -45,4 +60,14 @@ export function rateLimit(
   existing.remaining -= 1;
   buckets.set(key, existing);
   return { ok: true, remaining: existing.remaining, resetAt: existing.resetAt };
+}
+
+// Optional helper: consistent headers for 429 UX + observability
+export function rateLimitHeaders(result: RateLimitResult): Record<string, string> {
+  const headers: Record<string, string> = {
+    'X-RateLimit-Remaining': String(result.ok ? result.remaining : 0),
+    'X-RateLimit-Reset': String(Math.floor(result.resetAt / 1000)),
+  };
+  if (!result.ok) headers['Retry-After'] = String(result.retryAfterSeconds);
+  return headers;
 }

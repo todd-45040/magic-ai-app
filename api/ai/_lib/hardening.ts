@@ -56,19 +56,26 @@ export function getApproxBodySizeBytes(req: any): number {
   }
 }
 
-export async function getRateLimitKey(req: any): Promise<{ key: string; userId?: string } | null> {
+// Deterministic rate limit key:
+// - Guests => IP-based
+// - Authed => userId-based (best effort)
+// - If auth fails => fallback to IP-based (never return null)
+export async function getRateLimitKey(req: any): Promise<{ key: string; userId?: string }> {
+  const ip = getClientIp(req);
   const token = getBearerToken(req);
-  if (!token) return null;
 
-  // Guest mode (allowed) – rate limit by IP
-  if (token === 'guest') {
-    const ip = getClientIp(req);
+  // No token OR explicit guest token => treat as guest, rate limit by IP
+  if (!token || token === 'guest') {
     return { key: `ip:${ip}` };
   }
 
-  // Authenticated – best-effort: validate Supabase token to obtain stable userId
+  // Token present => attempt Supabase auth for stable userId
   const auth = await requireSupabaseAuth(req);
-  if (!auth.ok) return null;
+  if (!auth.ok) {
+    // If auth fails, still rate limit by IP (do not return null)
+    return { key: `ip:${ip}` };
+  }
+
   return { key: `user:${auth.userId}`, userId: auth.userId };
 }
 
@@ -90,6 +97,17 @@ export function withTimeout<T>(promise: Promise<T>, ms: number, label = 'TIMEOUT
         reject(e);
       });
   });
+}
+
+// Preview-only debug details helper (never leaks in prod)
+export function previewDetails(err: any) {
+  if (!isPreviewEnv()) return undefined;
+  return {
+    message: String(err?.message || err || ''),
+    code: err?.code,
+    status: err?.status || err?.statusCode,
+    stack: String(err?.stack || '').split('\n').slice(0, 6).join('\n'),
+  };
 }
 
 export function mapProviderError(err: any): {
