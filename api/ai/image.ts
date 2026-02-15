@@ -5,6 +5,10 @@
 // - consistent error contract { ok:false, error_code, message, retryable, details? }
 // - preview-only debug details
 // - Supabase-backed usage enforcement + best-effort incrementing
+//
+// Input normalization:
+// - Accept OpenAI-style `messages` as canonical input
+// - Derive `prompt` from messages when prompt is not provided
 
 import { resolveProvider } from '../../lib/server/providers/index.js';
 import { rateLimit } from './_lib/rateLimit.js';
@@ -21,8 +25,6 @@ import { applyUsageHeaders, bestEffortIncrementAiUsage, guardAiUsage } from './_
 const MAX_BODY_BYTES = 2 * 1024 * 1024; // prompts should be tiny; this is a safety cap
 const TIMEOUT_MS = 45_000;
 
-
-
 function getClientIp(req: any): string | null {
   const xf = req?.headers?.['x-forwarded-for'] || req?.headers?.['X-Forwarded-For'];
   if (typeof xf === 'string' && xf.trim()) {
@@ -35,6 +37,32 @@ function getClientIp(req: any): string | null {
   const addr = sock?.remoteAddress;
   return typeof addr === 'string' && addr.trim() ? addr.trim() : null;
 }
+
+// Accept OpenAI-style messages as canonical input and derive a prompt string.
+// This makes /api/ai/image consistent with /api/ai/chat and /api/ai/json.
+function promptFromMessages(messages: any[]): string {
+  if (!Array.isArray(messages)) return '';
+  const parts: string[] = [];
+  for (const m of messages) {
+    if (!m) continue;
+    const role = String(m.role || '').toLowerCase();
+    const content = typeof m.content === 'string' ? m.content.trim() : '';
+    if (!content) continue;
+
+    // Include system guidance as part of the prompt. Prefer user content.
+    if (role === 'system') parts.push(`Instruction: ${content}`);
+    else if (role === 'user') parts.push(content);
+  }
+  // If no user/system, fall back to any string content
+  if (parts.length === 0) {
+    for (const m of messages) {
+      const content = typeof m?.content === 'string' ? m.content.trim() : '';
+      if (content) parts.push(content);
+    }
+  }
+  return parts.join('\n\n').slice(0, 8000);
+}
+
 export default async function handler(req: any, res: any) {
   try {
     if (req.method !== 'POST') {
@@ -66,14 +94,19 @@ export default async function handler(req: any, res: any) {
 
     const rl = rateLimit(rlKey.key, { windowMs: 60_000, max: 10 });
     if (!rl.ok) {
-      try { res.setHeader('Retry-After', String(rl.retryAfterSeconds)); } catch {}
+      // IMPORTANT: set Retry-After directly (Vercel can drop headers passed via helper)
+      try {
+        res.setHeader('Retry-After', String(rl.retryAfterSeconds));
+      } catch {
+        // ignore
+      }
       return jsonError(res, 429, {
-          ok: false,
-          error_code: 'RATE_LIMITED',
-          message: 'Too many image requests. Please wait and try again.',
-          retryable: true,
-          ...(isPreviewEnv() ? { details: { key: rlKey.key, resetAt: rl.resetAt } } : {}),
-        });
+        ok: false,
+        error_code: 'RATE_LIMITED',
+        message: 'Too many image requests. Please wait and try again.',
+        retryable: true,
+        ...(isPreviewEnv() ? { details: { key: rlKey.key, resetAt: rl.resetAt } } : {}),
+      });
     }
 
     // Supabase usage guard (single source of truth)
@@ -83,7 +116,28 @@ export default async function handler(req: any, res: any) {
     }
 
     const provider = resolveProvider(req);
-    const { prompt, aspectRatio = '1:1' } = req.body || {};
+    const body = req.body || {};
+    const { aspectRatio = '1:1' } = body;
+
+    // Canonical input: messages[]; derive prompt if prompt is missing.
+    const prompt =
+      typeof body.prompt === 'string' && body.prompt.trim()
+        ? body.prompt
+        : Array.isArray(body.messages)
+          ? promptFromMessages(body.messages)
+          : '';
+
+    if (!prompt.trim()) {
+      return jsonError(res, 400, {
+        ok: false,
+        error_code: 'BAD_REQUEST',
+        message: 'Missing required input: provide `prompt` or `messages`.',
+        retryable: false,
+        ...(isPreviewEnv()
+          ? { details: { hint: "Send { prompt: '...', ... } or { messages:[{role:'user',content:'...'}] }" } }
+          : {}),
+      });
+    }
 
     const run = async () => {
       if (provider === 'openai') {
@@ -128,6 +182,8 @@ export default async function handler(req: any, res: any) {
 
       const { GoogleGenAI } = await import('@google/genai');
       const ai = new GoogleGenAI({ apiKey });
+
+      // NOTE: For @google/genai generateImages, empty prompt can cause INVALID_ARGUMENT "Empty instances."
       return ai.models.generateImages({
         model: 'imagen-4.0-generate-preview-06-06',
         prompt,
