@@ -74,7 +74,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     );
 
     const result = await generateWithFallback(ai, modelFallbacks, {
-      model: preferred,
       contents: [
         {
           role: 'user',

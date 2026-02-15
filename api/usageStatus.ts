@@ -1,5 +1,5 @@
 // ESM on Vercel: include extension for relative imports.
-import { getAiUsageStatus } from '../lib/server/usage.js';
+import { getAiUsageStatus } from '../lib/server/usage';
 
 export default async function handler(request: any, response: any) {
   try {
