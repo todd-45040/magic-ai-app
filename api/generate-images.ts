@@ -1,5 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
-import { enforceAiUsage } from '../lib/server/usage/index';
+import { enforceAiUsage } from '../server/usage.ts';
 import { resolveProvider } from '../lib/server/providers/index.js';
 
 export default async function handler(request: any, response: any) {

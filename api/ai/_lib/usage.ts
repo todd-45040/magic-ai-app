@@ -1,11 +1,6 @@
-// Canonical usage shim for hardened AI endpoints.
+// Phase 1.5: single canonical usage implementation
 //
-// IMPORTANT:
-// - There should be exactly ONE implementation of usage logic.
-// - The implementation lives in: /server/usage.ts
-// - The canonical export surface lives in: /lib/server/usage/index.ts
-//
-// Many API routes historically import from "./_lib/usage.js".
-// Keep this file as a thin re-export so those imports remain stable.
+// Canonical implementation lives at: /server/usage.ts
+// This file exists only as a stable import surface for AI endpoints.
 
-export { getAiUsageStatus, enforceAiUsage, incrementAiUsage } from '../../../lib/server/usage/index';
+export { getAiUsageStatus, incrementAiUsage, enforceAiUsage } from '../../../server/usage.ts';
