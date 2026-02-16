@@ -1,7 +1,9 @@
 // NOTE: This file lives at api/ai/_lib/* so we need to traverse back to repo root
 // before importing shared server helpers.
-// Extensionless import so TS/ESM works in Vercel runtime.
-import { getBearerToken, requireSupabaseAuth } from '../../../lib/server/auth';
+// IMPORTANT (Vercel / Node ESM): directory imports are NOT supported at runtime.
+// Always import the concrete file entrypoint.
+// TS (moduleResolution=bundler) will still typecheck against index.ts.
+import { getBearerToken, requireSupabaseAuth } from '../../../lib/server/auth/index.js';
 
 
 export type ApiErrorPayload = {
