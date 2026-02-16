@@ -10,16 +10,15 @@
 // NOTE: This endpoint NEVER consumes usage.
 // It only reports status from the same backing source used by the guards.
 
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getAiUsageStatus } from './_lib/usage.js'; // adjust if your path differs
+import { getAiUsageStatus } from './_lib/usage.js';
 import { isPreviewEnv } from './_lib/hardening.js';
 
-function json(res: VercelResponse, status: number, body: any) {
+function json(res: any, status: number, body: any) {
   res.status(status).setHeader('Content-Type', 'application/json; charset=utf-8');
   res.end(JSON.stringify(body));
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: any, res: any) {
   // Method guard
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');

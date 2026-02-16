@@ -365,3 +365,7 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
     burstLimit,
   };
 }
+
+// Back-compat alias used by some hardened endpoints.
+// enforceAiUsage already performs: quota check + atomic usage increment.
+export const incrementAiUsage = enforceAiUsage;
