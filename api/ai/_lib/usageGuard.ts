@@ -6,7 +6,7 @@
 // - Increment usage AFTER successful upstream response (best-effort; never fail the request)
 // - Return the standard hardened error contract
 
-import { getAiUsageStatus, incrementAiUsage } from "../../../server/usage.ts";
+import { getAiUsageStatus, incrementAiUsage } from "../../../server/usage.js";
 import { isPreviewEnv, mapProviderError, withTimeout } from './hardening.js';
 
 export type UsageStatus = {
@@ -158,7 +158,7 @@ export async function bestEffortIncrementAiUsage(req: any, units = 1) {
     }
 
     // Fallback: attempt dynamic import for older builds.
-    const mod: any = await import('../../../server/usage.ts');
+    const mod: any = await import('../../../server/usage.js');
     const inc =
       mod?.incrementAiUsage ||
       mod?.recordAiUsage ||
