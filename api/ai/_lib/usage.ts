@@ -8,4 +8,4 @@
 // Many API routes historically import from "./_lib/usage.js".
 // Keep this file as a thin re-export so those imports remain stable.
 
-export { getAiUsageStatus, enforceAiUsage, incrementAiUsage } from '../../../lib/server/usage/index.js';
+export { getAiUsageStatus, enforceAiUsage, incrementAiUsage } from '../../../lib/server/usage/index';
