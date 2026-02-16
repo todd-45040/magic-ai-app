@@ -10,7 +10,7 @@
 // - Accept OpenAI-style `messages` as canonical input
 // - Derive `prompt` from messages when prompt is not provided
 
-import { resolveProvider } from '../../lib/server/providers';
+import { resolveProvider } from '../../lib/server/providers/index.js';
 import { rateLimit } from './_lib/rateLimit';
 import {
   getApproxBodySizeBytes,

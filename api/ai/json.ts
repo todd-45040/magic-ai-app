@@ -10,7 +10,7 @@
 // - Accept OpenAI-style `messages` as canonical input
 // - For Gemini, adapt messages -> `contents` (required by @google/genai)
 
-import { resolveProvider, callOpenAI, callAnthropic } from '../../lib/server/providers';
+import { resolveProvider, callOpenAI, callAnthropic } from '../../lib/server/providers/index.js';
 import { rateLimit } from './_lib/rateLimit';
 import {
   getApproxBodySizeBytes,
