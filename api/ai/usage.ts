@@ -11,9 +11,8 @@
 // It only reports status from the same backing source used by the guards.
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-// Keep imports extensionless so TS/ESM works in both local + Vercel.
-import { getAiUsageStatus } from './_lib/usage';
-import { isPreviewEnv } from './_lib/hardening';
+import { getAiUsageStatus } from './_lib/usage.js'; // adjust if your path differs
+import { isPreviewEnv } from './_lib/hardening.js';
 
 function json(res: VercelResponse, status: number, body: any) {
   res.status(status).setHeader('Content-Type', 'application/json; charset=utf-8');
