@@ -108,6 +108,10 @@ export async function getAiUsageStatus(req: any): Promise<{
   used?: number;
   limit?: number;
   remaining?: number;
+  // Back-compat aliases for older endpoints/UI
+  liveUsed?: number;
+  liveLimit?: number;
+  liveRemaining?: number;
   burstLimit?: number;
   burstRemaining?: number;
 }> {
@@ -144,7 +148,7 @@ export async function getAiUsageStatus(req: any): Promise<{
     const map = getRateMap();
     const usedBurst = map.get(key) || 0;
     const burstRemaining = Math.max(0, burstLimit - usedBurst);
-    return { ok: true, membership, used, limit, remaining, burstLimit, burstRemaining };
+    return { ok: true, membership, used, limit, remaining, liveUsed: used, liveLimit: limit, liveRemaining: remaining, burstLimit, burstRemaining };
   }
 
   const { data: profile, error: profileErr } = await admin
@@ -188,7 +192,7 @@ export async function getAiUsageStatus(req: any): Promise<{
   const usedBurst = map.get(key) || 0;
   const burstRemaining = Math.max(0, burstLimit - usedBurst);
 
-  return { ok: true, membership: tier as any, used: generationCount, limit, remaining, burstLimit, burstRemaining };
+  return { ok: true, membership: tier as any, used: generationCount, limit, remaining, liveUsed: generationCount, liveLimit: limit, liveRemaining: remaining, burstLimit, burstRemaining };
 }
 
 export async function enforceAiUsage(req: any, costUnits: number): Promise<{
@@ -369,3 +373,47 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
 // Back-compat alias used by some hardened endpoints.
 // enforceAiUsage already performs: quota check + atomic usage increment.
 export const incrementAiUsage = enforceAiUsage;
+
+// Back-compat: "live minutes" enforcement used by /api/liveMinutes.
+// Currently treated as additional usage units in the same usage bucket.
+export async function enforceLiveMinutes(
+  req: any,
+  minutes: number
+): Promise<{
+  ok: boolean;
+  status?: number;
+  error?: string;
+  membership?: Membership;
+  liveUsed?: number;
+  liveLimit?: number;
+  liveRemaining?: number;
+}> {
+  const units = Number.isFinite(minutes) ? Math.max(0, Math.ceil(minutes)) : 0;
+
+  // Enforce + increment in one step (enforceAiUsage already increments on success)
+  const enforced = await enforceAiUsage(req, units);
+
+  // Best-effort: report current status (aliases used->liveUsed, etc.)
+  const status = await getAiUsageStatus(req).catch(() => null);
+
+  if (!enforced.ok) {
+    return {
+      ok: false,
+      status: enforced.status,
+      error: enforced.error,
+      membership: enforced.membership,
+      liveUsed: status?.used ?? status?.liveUsed,
+      liveLimit: status?.limit ?? status?.liveLimit,
+      liveRemaining: status?.remaining ?? status?.liveRemaining,
+    };
+  }
+
+  return {
+    ok: true,
+    membership: status?.membership ?? enforced.membership,
+    liveUsed: status?.used ?? status?.liveUsed,
+    liveLimit: status?.limit ?? status?.liveLimit,
+    liveRemaining: status?.remaining ?? status?.liveRemaining,
+  };
+}
+
