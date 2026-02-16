@@ -6,8 +6,9 @@
 // - Increment usage AFTER successful upstream response (best-effort; never fail the request)
 // - Return the standard hardened error contract
 
-import { getAiUsageStatus, incrementAiUsage } from '../../../lib/server/usage/index.js';
-import { isPreviewEnv, mapProviderError, withTimeout } from './hardening.js';
+// NOTE: keep imports extensionless so TS/ESM works in both local + Vercel.
+import { enforceAiUsage, getAiUsageStatus } from '../../../server/usage';
+import { isPreviewEnv, mapProviderError, withTimeout } from './hardening';
 
 export type UsageStatus = {
   ok: true;
@@ -47,20 +48,26 @@ function asNumber(v: any): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
-// Reads the same Supabase-backed source used by api/ai/usage.ts and enforces limits.
+// Enforces + decrements usage (server is source of truth) BEFORE the upstream AI call.
 export async function guardAiUsage(req: any, units = 1): Promise<UsageGuardOk | UsageGuardFail> {
   try {
     // Keep this snappy so we don't add noticeable latency.
-    const status: any = await withTimeout(getAiUsageStatus(req), 8_000, 'TIMEOUT');
+    const enforced: any = await withTimeout(enforceAiUsage(req, { cost: units }), 8_000, 'TIMEOUT');
 
-    if (!status?.ok) {
-      const httpStatus = Number(status?.status) || 503;
-      const error_code =
+    if (!enforced?.ok) {
+      const httpStatus = Number(enforced?.status) || 503;
+      const msg = String(enforced?.error || 'Usage enforcement failed.');
+
+      const error_code: UsageGuardFail['error']['error_code'] =
         httpStatus === 401
           ? 'UNAUTHORIZED'
-          : httpStatus === 503
-            ? 'SERVICE_UNAVAILABLE'
-            : 'USAGE_UNAVAILABLE';
+          : httpStatus === 429
+            ? /burst|too many|rate/i.test(msg)
+              ? 'RATE_LIMITED'
+              : 'QUOTA_EXCEEDED'
+            : httpStatus === 503
+              ? 'SERVICE_UNAVAILABLE'
+              : 'USAGE_UNAVAILABLE';
 
       return {
         ok: false,
@@ -68,54 +75,19 @@ export async function guardAiUsage(req: any, units = 1): Promise<UsageGuardOk | 
         error: {
           ok: false,
           error_code,
-          message: String(status?.error || 'Usage status unavailable.'),
+          message:
+            error_code === 'RATE_LIMITED'
+              ? 'Too many requests. Please wait a moment and try again.'
+              : error_code === 'QUOTA_EXCEEDED'
+                ? 'Daily AI usage limit reached. Upgrade or wait for your quota to reset.'
+                : msg,
           retryable: httpStatus >= 500 || httpStatus === 429,
-          details: isPreviewEnv() ? { status: status?.status, error: status?.error } : undefined,
+          details: isPreviewEnv() ? { status: enforced?.status, error: enforced?.error } : undefined,
         },
       };
     }
 
-    const usage: UsageStatus = status as UsageStatus;
-    const remaining = asNumber((usage as any).remaining);
-    const limit = asNumber((usage as any).limit);
-    const burstRemaining = asNumber((usage as any).burstRemaining);
-    const burstLimit = asNumber((usage as any).burstLimit);
-
-    // Burst limiter (short-window). Treat this as RATE_LIMITED.
-    if (typeof burstRemaining === 'number' && burstRemaining < units) {
-      return {
-        ok: false,
-        status: 429,
-        error: {
-          ok: false,
-          error_code: 'RATE_LIMITED',
-          message: 'Too many requests. Please wait a moment and try again.',
-          retryable: true,
-          details: isPreviewEnv()
-            ? { burstRemaining, burstLimit, units, membership: (usage as any).membership }
-            : undefined,
-        },
-      };
-    }
-
-    // Daily quota.
-    if (typeof remaining === 'number' && remaining < units) {
-      return {
-        ok: false,
-        status: 429,
-        error: {
-          ok: false,
-          error_code: 'QUOTA_EXCEEDED',
-          message: 'Daily AI usage limit reached. Upgrade or wait for your quota to reset.',
-          retryable: true,
-          details: isPreviewEnv()
-            ? { remaining, limit, units, membership: (usage as any).membership }
-            : undefined,
-        },
-      };
-    }
-
-    return { ok: true, usage };
+    return { ok: true, usage: (enforced.usage ?? enforced) as UsageStatus };
   } catch (err: any) {
     const mapped = mapProviderError(err);
     const error_code = mapped.error_code === 'TIMEOUT' ? 'TIMEOUT' : 'USAGE_UNAVAILABLE';
@@ -150,26 +122,8 @@ export function applyUsageHeaders(res: any, usage: any) {
 
 // Best-effort increment after success. Never throws.
 export async function bestEffortIncrementAiUsage(req: any, units = 1) {
-  try {
-    // Prefer explicit increment function (does not re-check quota).
-    if (typeof incrementAiUsage === 'function') {
-      await withTimeout(Promise.resolve(incrementAiUsage(req, units)), 2_000, 'TIMEOUT');
-      return;
-    }
-
-    // Fallback: attempt dynamic import for older builds.
-    const mod: any = await import('../../../lib/server/usage/index.js');
-    const inc =
-      mod?.incrementAiUsage ||
-      mod?.recordAiUsage ||
-      mod?.consumeAiUsage ||
-      mod?.incrementUsage ||
-      null;
-
-    if (typeof inc === 'function') {
-      await withTimeout(Promise.resolve(inc(req, units)), 2_000, 'TIMEOUT');
-    }
-  } catch {
-    // ignore
-  }
+  // No-op: usage is decremented up-front by guardAiUsage() via enforceAiUsage().
+  // Keeping this exported avoids touching all call sites.
+  void req;
+  void units;
 }
