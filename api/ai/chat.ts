@@ -155,7 +155,8 @@ export default async function handler(req: any, res: any) {
     const result = await withTimeout(run(), TIMEOUT_MS, 'TIMEOUT');
 
     // Best-effort increment AFTER success (do not fail the request if this fails)
-    bestEffortIncrementAiUsage(req, 1);
+    // IMPORTANT: await so metering reliably persists in serverless runtimes
+    await bestEffortIncrementAiUsage(req, 1);
 
     // Usage headers for the Usage Meter UI (best-effort)
     applyUsageHeaders(res, guard.usage);
