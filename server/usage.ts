@@ -53,6 +53,97 @@ function getTodayKeyUTC(d = new Date()): string {
   return `${y}-${m}-${day}`;
 }
 
+// Optional: move the daily reset boundary away from UTC midnight.
+// Defaults preserve the current behavior.
+//
+// Example for "Resets at 3:00 AM" in America/New_York:
+//   USAGE_RESET_TZ=America/New_York
+//   USAGE_RESET_HOUR_LOCAL=3
+const RESET_TZ = process.env.USAGE_RESET_TZ || 'UTC';
+const RESET_HOUR_LOCAL = Number.isFinite(Number(process.env.USAGE_RESET_HOUR_LOCAL))
+  ? Math.min(23, Math.max(0, Number(process.env.USAGE_RESET_HOUR_LOCAL)))
+  : 0;
+
+function tzParts(d: Date, timeZone: string): Record<string, string> {
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+    timeZoneName: 'shortOffset',
+  });
+  const parts: Record<string, string> = {};
+  for (const p of dtf.formatToParts(d)) {
+    if (p.type !== 'literal') parts[p.type] = p.value;
+  }
+  return parts;
+}
+
+function tzOffsetMinutes(d: Date, timeZone: string): number {
+  const parts = tzParts(d, timeZone);
+  const tzName = parts.timeZoneName || 'GMT+00:00';
+  // Examples: "GMT-05:00", "GMT+01:00"
+  const m = tzName.match(/^GMT([+-])(\d{2}):(\d{2})$/);
+  if (!m) return 0;
+  const sign = m[1] === '-' ? -1 : 1;
+  const hh = Number(m[2] || 0);
+  const mm = Number(m[3] || 0);
+  return sign * (hh * 60 + mm);
+}
+
+function usageDayKey(d = new Date()): string {
+  // If configured for UTC midnight, keep existing behavior.
+  if (RESET_TZ === 'UTC' && RESET_HOUR_LOCAL === 0) return getTodayKeyUTC(d);
+
+  const p = tzParts(d, RESET_TZ);
+  const y = p.year;
+  const m = p.month;
+  const day = p.day;
+  const hour = Number(p.hour || 0);
+
+  // If local time is before the reset boundary, treat as "yesterday" for the usage key.
+  const baseUtc = Date.UTC(Number(y), Number(m) - 1, Number(day), 12, 0, 0); // noon UTC (safe from DST edge)
+  const baseDate = new Date(baseUtc);
+  if (hour < RESET_HOUR_LOCAL) {
+    baseDate.setUTCDate(baseDate.getUTCDate() - 1);
+    const p2 = tzParts(baseDate, RESET_TZ);
+    return `${p2.year}-${p2.month}-${p2.day}`;
+  }
+  return `${y}-${m}-${day}`;
+}
+
+function nextResetAtISO(now = new Date()): string {
+  // UTC midnight default
+  if (RESET_TZ === 'UTC' && RESET_HOUR_LOCAL === 0) {
+    const t = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0));
+    return t.toISOString();
+  }
+
+  const p = tzParts(now, RESET_TZ);
+  const y = Number(p.year);
+  const m = Number(p.month);
+  const d = Number(p.day);
+  const hourNow = Number(p.hour || 0);
+
+  // Determine target local date
+  const targetDay = hourNow >= RESET_HOUR_LOCAL ? d + 1 : d;
+
+  // Convert local target (y-m-targetDay RESET_HOUR_LOCAL:00) -> UTC.
+  // We do a small two-step refinement to account for DST shifts.
+  const localAsUTC = Date.UTC(y, m - 1, targetDay, RESET_HOUR_LOCAL, 0, 0);
+  let guess = new Date(localAsUTC);
+  let off = tzOffsetMinutes(guess, RESET_TZ);
+  let utcMillis = localAsUTC - off * 60_000;
+  guess = new Date(utcMillis);
+  off = tzOffsetMinutes(guess, RESET_TZ);
+  utcMillis = localAsUTC - off * 60_000;
+  return new Date(utcMillis).toISOString();
+}
+
 function getMinuteKeyUTC(d = new Date()): string {
   // YYYY-MM-DDTHH:MM in UTC
   const y = d.getUTCFullYear();
@@ -108,6 +199,9 @@ export async function getAiUsageStatus(req: any): Promise<{
   used?: number;
   limit?: number;
   remaining?: number;
+  resetAt?: string;
+  resetTz?: string;
+  resetHourLocal?: number;
   // Back-compat aliases for older endpoints/UI
   liveUsed?: number;
   liveLimit?: number;
@@ -148,7 +242,21 @@ export async function getAiUsageStatus(req: any): Promise<{
     const map = getRateMap();
     const usedBurst = map.get(key) || 0;
     const burstRemaining = Math.max(0, burstLimit - usedBurst);
-    return { ok: true, membership, used, limit, remaining, liveUsed: used, liveLimit: limit, liveRemaining: remaining, burstLimit, burstRemaining };
+    return {
+      ok: true,
+      membership,
+      used,
+      limit,
+      remaining,
+      resetAt: nextResetAtISO(),
+      resetTz: RESET_TZ,
+      resetHourLocal: RESET_HOUR_LOCAL,
+      liveUsed: used,
+      liveLimit: limit,
+      liveRemaining: remaining,
+      burstLimit,
+      burstRemaining,
+    };
   }
 
   const { data: profile, error: profileErr } = await admin
@@ -174,9 +282,9 @@ export async function getAiUsageStatus(req: any): Promise<{
     lastResetDateISO = new Date().toISOString();
   }
 
-  // Daily reset (UTC)
-  const today = getTodayKeyUTC();
-  const lastKey = getTodayKeyUTC(new Date(lastResetDateISO));
+  // Daily reset (UTC midnight by default; configurable via USAGE_RESET_TZ + USAGE_RESET_HOUR_LOCAL)
+  const today = usageDayKey();
+  const lastKey = usageDayKey(new Date(lastResetDateISO));
   if (lastKey !== today) {
     generationCount = 0;
   }
@@ -192,7 +300,21 @@ export async function getAiUsageStatus(req: any): Promise<{
   const usedBurst = map.get(key) || 0;
   const burstRemaining = Math.max(0, burstLimit - usedBurst);
 
-  return { ok: true, membership: tier as any, used: generationCount, limit, remaining, liveUsed: generationCount, liveLimit: limit, liveRemaining: remaining, burstLimit, burstRemaining };
+  return {
+    ok: true,
+    membership: tier as any,
+    used: generationCount,
+    limit,
+    remaining,
+    resetAt: nextResetAtISO(),
+    resetTz: RESET_TZ,
+    resetHourLocal: RESET_HOUR_LOCAL,
+    liveUsed: generationCount,
+    liveLimit: limit,
+    liveRemaining: remaining,
+    burstLimit,
+    burstRemaining,
+  };
 }
 
 export async function enforceAiUsage(req: any, costUnits: number): Promise<{
@@ -204,6 +326,9 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
   membership?: Membership;
   burstRemaining?: number;
   burstLimit?: number;
+  resetAt?: string;
+  resetTz?: string;
+  resetHourLocal?: number;
 }> {
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -251,7 +376,7 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
   }
 
   const identity = userId || ipKey(req);
-  const today = getTodayKeyUTC();
+  const today = usageDayKey();
 
   // Anonymous / IP-based enforcement: strict caps + burst
   if (!userId) {
@@ -271,7 +396,16 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
       return { ok: false, status: 429, error: 'AI usage limit reached for today.', remaining, limit, burstRemaining: burst.remaining, burstLimit: burst.limit };
     }
     map.set(key, used + costUnits);
-    return { ok: true, remaining: limit - (used + costUnits), limit, burstRemaining: burst.remaining, burstLimit: burst.limit };
+    return {
+      ok: true,
+      remaining: limit - (used + costUnits),
+      limit,
+      burstRemaining: burst.remaining,
+      burstLimit: burst.limit,
+      resetAt: nextResetAtISO(),
+      resetTz: RESET_TZ,
+      resetHourLocal: RESET_HOUR_LOCAL,
+    };
   }
 
   // Authed user: enforce against public.users table
@@ -304,8 +438,8 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
     if (upsertErr) console.error('Usage profile upsert error:', upsertErr);
   }
 
-  // Daily reset (UTC)
-  const lastKey = getTodayKeyUTC(new Date(lastResetDateISO));
+  // Daily reset (UTC midnight by default; configurable)
+  const lastKey = usageDayKey(new Date(lastResetDateISO));
   if (lastKey !== today) {
     generationCount = 0;
     lastResetDateISO = new Date().toISOString();
@@ -328,6 +462,9 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
       membership,
       burstRemaining: 0,
       burstLimit,
+      resetAt: nextResetAtISO(),
+      resetTz: RESET_TZ,
+      resetHourLocal: RESET_HOUR_LOCAL,
     };
   }
 
@@ -344,6 +481,9 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
       membership: tier as any,
       burstRemaining: burst.remaining,
       burstLimit,
+      resetAt: nextResetAtISO(),
+      resetTz: RESET_TZ,
+      resetHourLocal: RESET_HOUR_LOCAL,
     };
   }
 
@@ -367,6 +507,9 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
     membership: tier as any,
     burstRemaining: burst.remaining,
     burstLimit,
+    resetAt: nextResetAtISO(),
+    resetTz: RESET_TZ,
+    resetHourLocal: RESET_HOUR_LOCAL,
   };
 }
 

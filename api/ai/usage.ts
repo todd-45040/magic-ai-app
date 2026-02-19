@@ -40,12 +40,14 @@ export default async function handler(req: any, res: any) {
     const limit = status.limit ?? 0;
     const used = status.used ?? 0;
     const remaining = status.remaining ?? 0;
+    const resetAt = (status as any).resetAt;
 
     res.setHeader('X-AI-Remaining', String(remaining));
     res.setHeader('X-AI-Limit', String(limit));
     res.setHeader('X-AI-Membership', String(membership));
     res.setHeader('X-AI-Burst-Remaining', String(status.burstRemaining ?? ''));
     res.setHeader('X-AI-Burst-Limit', String(status.burstLimit ?? ''));
+    if (resetAt) res.setHeader('X-AI-Reset-At', String(resetAt));
 
     return json(res, 200, {
       ok: true,
@@ -53,6 +55,9 @@ export default async function handler(req: any, res: any) {
       limit,
       used,
       remaining,
+      resetAt: resetAt ?? null,
+      resetTz: (status as any).resetTz ?? null,
+      resetHourLocal: (status as any).resetHourLocal ?? null,
       burstLimit: status.burstLimit,
       burstRemaining: status.burstRemaining,
       usage: status,
