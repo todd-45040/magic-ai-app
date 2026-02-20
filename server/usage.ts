@@ -329,6 +329,8 @@ export async function getAiUsageStatus(req: any): Promise<{
   ok: boolean;
   status?: number;
   error?: string;
+  error_code?: UsageErrorCode;
+  retryable?: boolean;
   membership?: Membership;
   used?: number;
   limit?: number;
@@ -352,7 +354,7 @@ export async function getAiUsageStatus(req: any): Promise<{
   const token = parseBearer(req);
 
   if (!supabaseUrl || !serviceKey) {
-    return { ok: false, status: 503, error: 'Server usage tracking is not configured.', error_code: 'NOT_CONFIGURED', retryable: true } as any;
+    return { ok: false, status: 503, error: 'Server usage tracking is not configured.', error_code: 'NOT_CONFIGURED', retryable: true };
   }
 
   const admin = createClient(supabaseUrl, serviceKey, {
@@ -452,7 +454,7 @@ export async function getAiUsageStatus(req: any): Promise<{
     limit,
     remaining,
     resetAt: nextResetAtISO(),
-    resetTz: RESET_TZ,
+      resetTz: RESET_TZ,
     resetHourLocal: RESET_HOUR_LOCAL,
     sessionsToday: engagement.sessionsToday,
     toolsUsedToday: engagement.toolsUsedToday,
@@ -496,7 +498,7 @@ export async function enforceAiUsage(
     if (!burst.ok) {
       return { ok: false, status: 429, error: 'Rate limit: too many requests per minute.',
       error_code: 'RATE_LIMITED',
-      retryable: true, burstRemaining: 0, burstLimit: burst.limit } as any;
+      retryable: true, burstRemaining: 0, burstLimit: burst.limit };
     }
 
     const today = getTodayKeyUTC();
@@ -511,7 +513,7 @@ export async function enforceAiUsage(
     const remaining = Math.max(0, limit - used);
 
     if (remaining < costUnits) {
-      return { ok: false, status: 429, error: 'AI usage limit reached for today (server not configured).', error_code: 'USAGE_LIMIT_REACHED', retryable: true, resetAt: nextResetAtISO(), remaining, limit, burstRemaining: burst.remaining, burstLimit: burst.limit } as any;
+      return { ok: false, status: 429, error: 'AI usage limit reached for today (server not configured).', error_code: 'USAGE_LIMIT_REACHED', retryable: true, resetAt: nextResetAtISO(), remaining, limit, burstRemaining: burst.remaining, burstLimit: burst.limit };
     }
 
     map.set(memKey, used + costUnits);
@@ -540,7 +542,7 @@ export async function enforceAiUsage(
     if (!burst.ok) {
       return { ok: false, status: 429, error: 'Rate limit: too many requests per minute.',
       error_code: 'RATE_LIMITED',
-      retryable: true, burstRemaining: 0, burstLimit: burst.limit } as any;
+      retryable: true, burstRemaining: 0, burstLimit: burst.limit };
     }
 
     const key = `anon:${today}:${identity}`;
@@ -551,7 +553,7 @@ export async function enforceAiUsage(
     const remaining = Math.max(0, limit - used);
 
     if (remaining < costUnits) {
-      return { ok: false, status: 429, error: 'AI usage limit reached for today.', error_code: 'USAGE_LIMIT_REACHED', retryable: true, resetAt: nextResetAtISO(), remaining, limit, burstRemaining: burst.remaining, burstLimit: burst.limit } as any;
+      return { ok: false, status: 429, error: 'AI usage limit reached for today.', error_code: 'USAGE_LIMIT_REACHED', retryable: true, resetAt: nextResetAtISO(), remaining, limit, burstRemaining: burst.remaining, burstLimit: burst.limit };
     }
     map.set(key, used + costUnits);
     return {
@@ -622,7 +624,6 @@ export async function enforceAiUsage(
       membership,
       burstRemaining: 0,
       burstLimit,
-      resetAt: nextResetAtISO(),
       resetTz: RESET_TZ,
       resetHourLocal: RESET_HOUR_LOCAL,
     };
@@ -644,7 +645,6 @@ export async function enforceAiUsage(
       membership: tier as any,
       burstRemaining: burst.remaining,
       burstLimit,
-      resetAt: nextResetAtISO(),
       resetTz: RESET_TZ,
       resetHourLocal: RESET_HOUR_LOCAL,
     };
@@ -660,7 +660,8 @@ export async function enforceAiUsage(
   if (incErr) {
     console.error('Usage increment error:', incErr);
     // Fail safe: if we can't record usage, block to protect costs.
-    return { ok: false, status: 503, error: 'Usage tracking unavailable. Try again shortly.' };
+    return { ok: false, status: 503, error: 'Usage tracking unavailable. Try again shortly.', error_code: 'SERVER_ERROR', retryable: true };
+
   }
 
   // Phase 2A: best-effort tool telemetry (never blocks success)
@@ -685,8 +686,7 @@ export async function enforceAiUsage(
     membership: tier as any,
     burstRemaining: burst.remaining,
     burstLimit,
-    resetAt: nextResetAtISO(),
-    resetTz: RESET_TZ,
+      resetTz: RESET_TZ,
     resetHourLocal: RESET_HOUR_LOCAL,
   };
 }
@@ -737,4 +737,3 @@ export async function enforceLiveMinutes(
     liveRemaining: status?.remaining ?? status?.liveRemaining,
   };
 }
-
