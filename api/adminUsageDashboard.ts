@@ -31,6 +31,41 @@ export default async function handler(req: any, res: any) {
       .order('created_at', { ascending: false })
       .limit(200);
 
+
+    const { data: rollups, error: rErr } = await admin
+      .from('ai_usage_rollups_daily')
+      .select('day,tool,membership,total_events,total_success,total_429,total_charged_units,total_estimated_cost_usd')
+      .gte('day', since.slice(0,10))
+      .order('day', { ascending: false })
+      .limit(2000);
+
+    // Prefer rollups for totals if available
+    if (!rErr && rollups && rollups.length > 0) {
+      const totals2 = {
+        totalEvents: rollups.reduce((a: number, r: any) => a + (Number(r.total_events) || 0), 0),
+        totalChargedUnits: rollups.reduce((a: number, r: any) => a + (Number(r.total_charged_units) || 0), 0),
+        totalEstimatedCostUSD: rollups.reduce((a: number, r: any) => a + (Number(r.total_estimated_cost_usd) || 0), 0),
+        byStatus: {} as Record<string, number>,
+        byTool: {} as Record<string, number>,
+        byMembership: {} as Record<string, number>,
+      };
+
+      // rollups don't have full status histogram; approximate key ones
+      const success = rollups.reduce((a: number, r: any) => a + (Number(r.total_success) || 0), 0);
+      const s429 = rollups.reduce((a: number, r: any) => a + (Number(r.total_429) || 0), 0);
+      totals2.byStatus['200'] = success;
+      totals2.byStatus['429'] = s429;
+
+      for (const r of rollups) {
+        const t = String(r.tool || 'unknown');
+        totals2.byTool[t] = (totals2.byTool[t] || 0) + (Number(r.total_events) || 0);
+        const m = String(r.membership || 'unknown');
+        totals2.byMembership[m] = (totals2.byMembership[m] || 0) + (Number(r.total_events) || 0);
+      }
+
+      return res.status(200).json({ ok: true, since, days, totals: totals2, rollups, events, flags });
+    }
+
     // Compute simple aggregates server-side
     const totals = {
       totalEvents: events?.length || 0,

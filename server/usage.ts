@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import type { GoTrueClient } from '@supabase/auth-js';
-import { getIpFromReq, hashIp, logUsageEvent, maybeFlagAnomaly } from './telemetry.js';
+import { getIpFromReq, hashIp, logUsageEvent, maybeFlagAnomaly, estimateCostUSD } from './telemetry.js';
 
 // Canonical membership tiers used for usage enforcement.
 // Legacy tiers are accepted and normalized server-side.
@@ -290,6 +290,7 @@ export async function recordUserActivity(
         charged_units: 0,
         membership: 'free',
         user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
+        estimated_cost_usd: 0,
       });
       return { ok: false, status: 401, error: 'Unauthorized.' };
   }
@@ -320,6 +321,7 @@ export async function recordUserActivity(
         charged_units: 0,
         membership: 'free',
         user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
+        estimated_cost_usd: 0,
       });
       return { ok: false, status: 401, error: 'Unauthorized.' };
   }
@@ -353,6 +355,7 @@ export async function recordUserActivity(
       charged_units: costUnits,
       membership: membership,
       user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
+      estimated_cost_usd: estimateCostUSD({ provider: opts?.provider ?? null, model: opts?.model ?? null, charged_units: costUnits, tool: opts?.tool ?? null }),
     });
 
 return { ok: true };
@@ -625,6 +628,7 @@ export async function enforceAiUsage(
         charged_units: 0,
         membership: 'free',
         user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
+        estimated_cost_usd: 0,
       });
       return { ok: false, status: 429, error: 'Rate limit: too many requests per minute.',
       error_code: 'RATE_LIMITED',
@@ -687,6 +691,7 @@ export async function enforceAiUsage(
         charged_units: 0,
         membership: 'free',
         user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
+        estimated_cost_usd: 0,
       });
       return { ok: false, status: 429, error: 'Rate limit: too many requests per minute.',
       error_code: 'RATE_LIMITED',

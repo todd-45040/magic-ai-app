@@ -30,6 +30,7 @@ export type UsageEvent = {
   membership?: string | null;
   latency_ms?: number | null;
   user_agent?: string | null;
+  estimated_cost_usd?: number | null;
 };
 
 export type AuditEvent = {
@@ -130,4 +131,63 @@ export async function maybeFlagAnomaly(input: {
   } catch (e) {
     console.error('anomaly insert failed', e);
   }
+}
+
+
+/**
+ * Cost estimation (best-effort).
+ * Set COST_TABLE_JSON env var to override defaults.
+ * Example:
+ * {"gemini":{"gemini-2.5-flash":0.00035,"gemini-2.5-pro":0.002},"imagen":{"imagen-4.0-generate-001":0.01}}
+ *
+ * Interpretation: cost per "unit" as your internal metering unit.
+ * This is NOT provider billing-accurate; it is for margin guardrails and anomaly detection.
+ */
+export function estimateCostUSD(input: {
+  provider?: string | null;
+  model?: string | null;
+  charged_units?: number | null;
+  tool?: string | null;
+}): number | null {
+  const units = Number(input.charged_units ?? 0);
+  if (!Number.isFinite(units) || units <= 0) return 0;
+
+  // Defaults tuned conservatively; adjust later.
+  const defaults: any = {
+    gemini: {
+      'gemini-2.5-flash': 0.00025,
+      'gemini-2.5-flash-lite': 0.00015,
+      'gemini-2.5-pro': 0.00150,
+      'gemini-2.5-flash-native-audio-preview': 0.00100,
+    },
+    imagen: {
+      'imagen-4.0-generate-001': 0.01000,
+      'imagen-3': 0.00800,
+    },
+    anthropic: {
+      'claude-3-5-sonnet': 0.00180,
+    },
+    openai: {
+      'gpt-4o-mini': 0.00020,
+      'gpt-4o': 0.00100,
+    },
+  };
+
+  let table = defaults;
+  try {
+    const raw = process.env.COST_TABLE_JSON;
+    if (raw && raw.trim()) table = JSON.parse(raw);
+  } catch {
+    // ignore
+  }
+
+  const provider = String(input.provider || 'gemini').toLowerCase();
+  const model = String(input.model || 'unknown');
+  const perUnit = Number(table?.[provider]?.[model] ?? table?.[provider]?.['default'] ?? 0);
+  if (!Number.isFinite(perUnit) || perUnit < 0) return null;
+
+  const est = perUnit * units;
+  // clamp to sane range
+  if (!Number.isFinite(est)) return null;
+  return Math.round(est * 1000000) / 1000000;
 }

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { fetchAdminUsageDashboard } from '../services/adminUsageDashboardService';
+import { fetchAdminUsageDashboard, resolveAnomalyFlag } from '../services/adminUsageDashboardService';
 
 export default function AdminUsageDashboard() {
   const [days, setDays] = useState(7);
@@ -48,7 +48,7 @@ export default function AdminUsageDashboard() {
 
       {err && <div className="p-3 rounded bg-red-500/10 border border-red-500/20 text-red-200">{err}</div>}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
         <div className="p-3 rounded-xl bg-white/5 border border-white/10">
           <div className="text-sm opacity-80">Events</div>
           <div className="text-2xl font-bold">{totals?.totalEvents ?? '—'}</div>
@@ -58,6 +58,11 @@ export default function AdminUsageDashboard() {
           <div className="text-sm opacity-80">Charged Units</div>
           <div className="text-2xl font-bold">{totals?.totalChargedUnits ?? '—'}</div>
           <div className="text-xs opacity-70 mt-1">Best-effort telemetry</div>
+        </div>
+        <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+          <div className="text-sm opacity-80">Estimated Cost</div>
+          <div className="text-2xl font-bold">{totals?.totalEstimatedCostUSD != null ? `$${Number(totals.totalEstimatedCostUSD).toFixed(4)}` : '—'}</div>
+          <div className="text-xs opacity-70 mt-1">Approx. (guardrail)</div>
         </div>
         <div className="p-3 rounded-xl bg-white/5 border border-white/10">
           <div className="text-sm opacity-80">Anomaly Flags</div>
@@ -115,6 +120,47 @@ export default function AdminUsageDashboard() {
               ))}
               {(!data?.flags || data.flags.length === 0) && (
                 <tr><td className="py-3 opacity-70" colSpan={5}>No flags in this window.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      
+      <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+        <div className="flex items-center justify-between mb-2">
+          <div className="font-semibold">Daily Rollups</div>
+          <div className="text-xs opacity-70">Fast aggregates (up to 2000 rows)</div>
+        </div>
+        <div className="overflow-auto">
+          <table className="min-w-full text-sm">
+            <thead className="text-left opacity-80">
+              <tr>
+                <th className="py-2 pr-4">Day</th>
+                <th className="py-2 pr-4">Tool</th>
+                <th className="py-2 pr-4">Plan</th>
+                <th className="py-2 pr-4">Events</th>
+                <th className="py-2 pr-4">200</th>
+                <th className="py-2 pr-4">429</th>
+                <th className="py-2 pr-4">Charged</th>
+                <th className="py-2 pr-4">Est. Cost</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(data?.rollups || []).slice(0, 60).map((r: any, idx: number) => (
+                <tr key={idx} className="border-t border-white/10">
+                  <td className="py-2 pr-4 font-mono text-xs">{String(r.day)}</td>
+                  <td className="py-2 pr-4">{r.tool}</td>
+                  <td className="py-2 pr-4">{r.membership}</td>
+                  <td className="py-2 pr-4">{r.total_events}</td>
+                  <td className="py-2 pr-4">{r.total_success}</td>
+                  <td className="py-2 pr-4">{r.total_429}</td>
+                  <td className="py-2 pr-4">{r.total_charged_units}</td>
+                  <td className="py-2 pr-4">{r.total_estimated_cost_usd != null ? `$${Number(r.total_estimated_cost_usd).toFixed(4)}` : '—'}</td>
+                </tr>
+              ))}
+              {(!data?.rollups || data.rollups.length === 0) && (
+                <tr><td className="py-3 opacity-70" colSpan={8}>No rollups yet. Run recompute_ai_usage_rollups(7) or enable trigger.</td></tr>
               )}
             </tbody>
           </table>
