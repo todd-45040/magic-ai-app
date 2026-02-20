@@ -12,7 +12,9 @@ export default async function handler(request: any, response: any) {
     return response.status(401).json({ error: 'Unauthorized.' });
   }
 
-  const usage = await enforceAiUsage(request, 1, { tool: 'identify_trick' });
+  const body = request.body || {};
+  const tool = typeof body.tool === 'string' && body.tool.trim() ? body.tool.trim() : 'identify_trick';
+  const usage = await enforceAiUsage(request, 1, { tool });
   if (!usage.ok) {
     return response
       .status(usage.status || 429)
@@ -27,7 +29,7 @@ export default async function handler(request: any, response: any) {
 
   try {
     const provider = resolveProvider(request);
-    const body = request.body || {};
+
     let result: any;
 
     if (provider === 'openai') {

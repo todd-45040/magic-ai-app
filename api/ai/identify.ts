@@ -5,6 +5,7 @@
 // Response: { ok:true, data:{ result:{ text:string } } } or { ok:false, error_code, message, retryable, details? }
 
 import { GoogleGenAI } from "@google/genai";
+import { enforceAiUsage } from "../../server/usage.js";
 // NOTE: This file lives in api/ai/, so _lib is a sibling folder.
 // Vercel/TS expects the correct relative path (and extensionless imports).
 import { rateLimit } from "./_lib/rateLimit";
@@ -130,6 +131,19 @@ export default async function handler(req: any, res: any) {
       true,
       { requestId, retryAfterSeconds: rl.retryAfterSeconds }
     );
+  }
+
+  // Phase 2C-B: tool quota enforcement (monthly)
+  const usage = await enforceAiUsage(req, 1, { tool: 'identify_trick' });
+  if (!usage.ok) {
+    return err(res, usage.status || 402, usage.error_code || 'USAGE_LIMIT_REACHED', usage.error || 'Quota exceeded.', Boolean(usage.retryable), {
+      requestId,
+      remaining: usage.remaining,
+      limit: usage.limit,
+      membership: usage.membership,
+      burstRemaining: usage.burstRemaining,
+      burstLimit: usage.burstLimit,
+    });
   }
 
   const prompt =

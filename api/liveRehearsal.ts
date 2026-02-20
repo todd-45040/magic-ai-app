@@ -12,7 +12,10 @@ export default async function handler(request: any, response: any) {
     return response.status(401).json({ error: 'Unauthorized.' });
   }
 
-  const usage = await enforceAiUsage(request, 1, { tool: 'live_rehearsal_audio' });
+  const body = request.body || {};
+  const requestedMinutes = Number.isFinite(Number(body.minutes)) ? Number(body.minutes) : 1;
+  const minutes = Math.max(1, Math.min(10, Math.ceil(requestedMinutes)));
+  const usage = await enforceAiUsage(request, minutes, { tool: 'live_rehearsal_audio' });
   if (!usage.ok) {
     return response
       .status(usage.status || 429)
@@ -27,7 +30,6 @@ export default async function handler(request: any, response: any) {
 
   try {
     const provider = resolveProvider(request);
-    const body = request.body || {};
     let result: any;
 
     if (provider === 'openai') {

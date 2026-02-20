@@ -5,7 +5,7 @@ import { getIpFromReq, hashIp, logUsageEvent, maybeFlagAnomaly, estimateCostUSD 
 
 // Canonical membership tiers used for usage enforcement.
 // Legacy tiers are accepted and normalized server-side.
-type Membership = 'trial' | 'trial' | 'performer' | 'professional' | 'expired' | 'amateur' | 'semi-pro';
+type Membership = 'free' | 'trial' | 'amateur' | 'professional' | 'admin' | 'expired' | 'performer' | 'semi-pro';
 
 
 export type UsageErrorCode =
@@ -22,7 +22,10 @@ export type UsageErrorShape = {
   error: string;
   error_code: UsageErrorCode;
   retryable: boolean;
-  // Optional: for clients that want to show “resets 
+  // Optional: for clients that want to show “resets at …”
+  resetAt?: string;
+};
+
 function makeRequestId(): string {
   try {
     // Node 18+
@@ -32,9 +35,7 @@ function makeRequestId(): string {
     return `${Date.now()}-${Math.random()}`;
   }
 }
-at …”
-  resetAt?: string;
-};
+
 function normalizeTier(m?: string | null): 'free' | 'trial' | 'performer' | 'professional' | 'expired' {
   switch (m) {
     case 'professional':
@@ -75,6 +76,99 @@ const BURST_LIMITS: Record<string, number> = {
   amateur: 30,
   'semi-pro': 30,
 };
+
+
+// Phase 2C-B: Tool tier + quota enforcement (monthly buckets).
+// Quota columns in public.users are treated as "remaining" balances for the current month.
+type ToolKey = 'live_rehearsal_audio' | 'image_generation' | 'identify_trick' | 'video_rehearsal';
+
+type ToolPolicy = {
+  key: ToolKey;
+  // Minimum membership required to access the tool at all.
+  minTier: 'trial' | 'amateur' | 'professional' | 'admin';
+  // Which users column stores the remaining quota balance for this tool.
+  quotaColumn: 'quota_live_audio_minutes' | 'quota_image_gen' | 'quota_identify' | 'quota_video_uploads';
+};
+
+const TOOL_POLICIES: Record<ToolKey, ToolPolicy> = {
+  live_rehearsal_audio: { key: 'live_rehearsal_audio', minTier: 'trial', quotaColumn: 'quota_live_audio_minutes' },
+  image_generation: { key: 'image_generation', minTier: 'trial', quotaColumn: 'quota_image_gen' },
+  identify_trick: { key: 'identify_trick', minTier: 'trial', quotaColumn: 'quota_identify' },
+  video_rehearsal: { key: 'video_rehearsal', minTier: 'professional', quotaColumn: 'quota_video_uploads' },
+};
+
+function tierRank(tier: string): number {
+  switch (tier) {
+    case 'admin':
+      return 4;
+    case 'professional':
+      return 3;
+    case 'amateur':
+    case 'performer':
+    case 'semi-pro':
+      return 2;
+    case 'trial':
+      return 1;
+    default:
+      return 0;
+  }
+}
+
+function defaultMonthlyQuotas(tier: string): {
+  quota_live_audio_minutes: number;
+  quota_image_gen: number;
+  quota_identify: number;
+  quota_video_uploads: number;
+} {
+  const t = normalizeTier(tier as any);
+  switch (t) {
+    case 'professional':
+      return { quota_live_audio_minutes: 120, quota_image_gen: 25, quota_identify: 25, quota_video_uploads: 10 };
+    case 'performer':
+      // "amateur" normalizes to performer
+      return { quota_live_audio_minutes: 30, quota_image_gen: 10, quota_identify: 10, quota_video_uploads: 0 };
+    case 'trial':
+      return { quota_live_audio_minutes: 5, quota_image_gen: 3, quota_identify: 3, quota_video_uploads: 0 };
+    case 'free':
+    case 'expired':
+    default:
+      return { quota_live_audio_minutes: 0, quota_image_gen: 0, quota_identify: 0, quota_video_uploads: 0 };
+  }
+}
+
+function needsMonthlyReset(resetDateISO?: string | null, now = new Date()): boolean {
+  if (!resetDateISO) return true;
+  const d = new Date(resetDateISO);
+  return d.getUTCFullYear() !== now.getUTCFullYear() || d.getUTCMonth() !== now.getUTCMonth();
+}
+
+async function ensureMonthlyQuotas(admin: any, userId: string, membership: string, profile: any): Promise<any> {
+  const now = new Date();
+  const resetDateISO = profile?.quota_reset_date ? new Date(profile.quota_reset_date).toISOString() : null;
+  if (!needsMonthlyReset(resetDateISO, now)) return profile;
+
+  const defaults = defaultMonthlyQuotas(membership);
+  const next = {
+    quota_live_audio_minutes: defaults.quota_live_audio_minutes,
+    quota_image_gen: defaults.quota_image_gen,
+    quota_identify: defaults.quota_identify,
+    quota_video_uploads: defaults.quota_video_uploads,
+    quota_reset_date: now.toISOString(),
+  };
+
+  const { data, error } = await admin
+    .from('users')
+    .update(next)
+    .eq('id', userId)
+    .select('id, membership, generation_count, last_reset_date, trial_end_date, quota_live_audio_minutes, quota_image_gen, quota_identify, quota_video_uploads, quota_reset_date')
+    .maybeSingle();
+
+  if (error) {
+    console.error('Monthly quota reset error:', error);
+    return profile;
+  }
+  return data || profile;
+}
 
 function getTodayKeyUTC(d = new Date()): string {
   // YYYY-MM-DD in UTC
@@ -252,23 +346,24 @@ export async function recordUserActivity(
   toolUsed: string | null
 ): Promise<{ ok: boolean; status?: number; error?: string }> {
   const supabaseUrl = process.env.SUPABASE_URL;
-  // Inline anomaly signal: unusually large usage units in a single call
-  if (Number.isFinite(costUnits) && costUnits >= 50) {
-    await maybeFlagAnomaly({
-      request_id: requestId,
-      user_id: null,
-      identity_key: token ? 'user:unknown' : ipKey(req),
-      ip_hash,
-      reason: 'VERY_LARGE_UNITS',
-      severity: 'high',
-      metadata: { costUnits, tool: opts?.tool ?? null },
-    });
-  }
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const token = parseBearer(req);
   const requestId = makeRequestId();
   const ip = getIpFromReq(req);
   const ip_hash = hashIp(ip);
+// Inline anomaly signal: unusually large usage units in a single call
+if (Number.isFinite(costUnits) && costUnits >= 50) {
+  await maybeFlagAnomaly({
+    request_id: requestId,
+    user_id: null,
+    identity_key: token ? 'user:unknown' : ipKey(req),
+    ip_hash,
+    reason: 'VERY_LARGE_UNITS',
+    severity: 'high',
+    metadata: { costUnits, tool: opts?.tool ?? null },
+  });
+}
+
 
   if (!supabaseUrl || !serviceKey) {
     return { ok: false, status: 503, error: 'Server activity tracking is not configured.' };
@@ -288,7 +383,7 @@ export async function recordUserActivity(
         retryable: false,
         units: costUnits,
         charged_units: 0,
-        membership: 'trial',
+        membership: 'free',
         user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
         estimated_cost_usd: 0,
       });
@@ -319,7 +414,7 @@ export async function recordUserActivity(
         retryable: false,
         units: costUnits,
         charged_units: 0,
-        membership: 'trial',
+        membership: 'free',
         user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
         estimated_cost_usd: 0,
       });
@@ -431,15 +526,20 @@ export async function getAiUsageStatus(req: any): Promise<{
   liveRemaining?: number;
   burstLimit?: number;
   burstRemaining?: number;
-  quotas?: {
-    liveAudioMinutes: number;
-    imageGen: number;
-    identify: number;
-    videoUploads: number;
-    resetDate: string | null;
-  } | null;
 }> {
   const supabaseUrl = process.env.SUPABASE_URL;
+  // Inline anomaly signal: unusually large usage units in a single call
+  if (Number.isFinite(costUnits) && costUnits >= 50) {
+    await maybeFlagAnomaly({
+      request_id: requestId,
+      user_id: null,
+      identity_key: token ? 'user:unknown' : ipKey(req),
+      ip_hash,
+      reason: 'VERY_LARGE_UNITS',
+      severity: 'high',
+      metadata: { costUnits, tool: opts?.tool ?? null },
+    });
+  }
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const token = parseBearer(req);
   const requestId = makeRequestId();
@@ -466,7 +566,7 @@ export async function getAiUsageStatus(req: any): Promise<{
 
   // For anonymous users, show strict caps (best-effort)
   if (!userId) {
-    const membership: Membership = 'trial';
+    const membership: Membership = 'free';
     const limit = 15;
     const used = 0;
     const remaining = limit;
@@ -497,7 +597,7 @@ export async function getAiUsageStatus(req: any): Promise<{
     };
   }
 
-  const { data: profile, error: profileErr } = await admin
+  let { data: profile, error: profileErr } = await admin
     .from('users')
     .select('id, membership, generation_count, last_reset_date, trial_end_date, quota_live_audio_minutes, quota_image_gen, quota_identify, quota_video_uploads, quota_reset_date')
     .eq('id', userId)
@@ -519,6 +619,24 @@ export async function getAiUsageStatus(req: any): Promise<{
     generationCount = 0;
     lastResetDateISO = new Date().toISOString();
   }
+// Phase 2C-B: ensure monthly tool quotas are initialized/reset (best-effort)
+if (profile) {
+  const refreshed = await ensureMonthlyQuotas(admin, userId, membership, profile);
+  if (refreshed) {
+    // @ts-ignore
+    profile.trial_end_date = refreshed.trial_end_date;
+    // @ts-ignore
+    profile.quota_live_audio_minutes = refreshed.quota_live_audio_minutes;
+    // @ts-ignore
+    profile.quota_image_gen = refreshed.quota_image_gen;
+    // @ts-ignore
+    profile.quota_identify = refreshed.quota_identify;
+    // @ts-ignore
+    profile.quota_video_uploads = refreshed.quota_video_uploads;
+    // @ts-ignore
+    profile.quota_reset_date = refreshed.quota_reset_date;
+  }
+}
 
   // Daily reset (UTC midnight by default; configurable via USAGE_RESET_TZ + USAGE_RESET_HOUR_LOCAL)
   const today = usageDayKey();
@@ -552,16 +670,24 @@ export async function getAiUsageStatus(req: any): Promise<{
     sessionsToday: engagement.sessionsToday,
     toolsUsedToday: engagement.toolsUsedToday,
     distinctToolsToday: engagement.distinctToolsToday,
-    quotas: userId ? {
-      liveAudioMinutes: Number(profile?.quota_live_audio_minutes ?? 0),
-      imageGen: Number(profile?.quota_image_gen ?? 0),
-      identify: Number(profile?.quota_identify ?? 0),
-      videoUploads: Number(profile?.quota_video_uploads ?? 0),
-      resetDate: profile?.quota_reset_date ?? null,
-    } : null,
     liveUsed: generationCount,
     liveLimit: limit,
     liveRemaining: remaining,
+quota: {
+  live_audio_minutes: {
+    remaining: profile?.quota_live_audio_minutes ?? null,
+  },
+  image_gen: {
+    remaining: profile?.quota_image_gen ?? null,
+  },
+  identify: {
+    remaining: profile?.quota_identify ?? null,
+  },
+  video_uploads: {
+    remaining: profile?.quota_video_uploads ?? null,
+  },
+  resetAt: profile?.quota_reset_date ? new Date(profile.quota_reset_date).toISOString() : null,
+},
     burstLimit,
     burstRemaining,
   };
@@ -628,7 +754,7 @@ export async function enforceAiUsage(
         retryable: true,
         units: costUnits,
         charged_units: 0,
-        membership: 'trial',
+        membership: 'free',
         user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
         estimated_cost_usd: 0,
       });
@@ -691,7 +817,7 @@ export async function enforceAiUsage(
         retryable: true,
         units: costUnits,
         charged_units: 0,
-        membership: 'trial',
+        membership: 'free',
         user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
         estimated_cost_usd: 0,
       });
@@ -764,6 +890,63 @@ export async function enforceAiUsage(
       .eq('id', userId);
     if (resetErr) console.error('Usage reset error:', resetErr);
   }
+// Phase 2C-B: tool-level tier + monthly quota enforcement (for high-cost tools)
+const toolKey = (typeof opts?.tool === 'string' ? opts.tool.trim() : '') as ToolKey | '';
+if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
+  const policy = (TOOL_POLICIES as any)[toolKey] as ToolPolicy;
+
+  // Normalize membership tier for comparisons
+  const norm = normalizeTier(membership as any);
+
+  // Hard gate by tier (ex: video_rehearsal is pro-only)
+  if (tierRank(norm) < tierRank(policy.minTier)) {
+    return {
+      ok: false,
+      status: 402,
+      error: 'Upgrade required to use this tool.',
+      error_code: 'USAGE_LIMIT_REACHED',
+      retryable: false,
+      membership: norm as any,
+    };
+  }
+
+  // Ensure monthly quotas are initialized/reset (best-effort)
+  if (profile) {
+    profile = await ensureMonthlyQuotas(admin, userId, membership, profile);
+  }
+
+  const col = policy.quotaColumn;
+  const currentRemaining = Number((profile as any)?.[col] ?? 0);
+  const units = Number.isFinite(costUnits) ? Math.max(0, Math.ceil(costUnits)) : 0;
+
+  if (currentRemaining < units) {
+    return {
+      ok: false,
+      status: 402,
+      error: 'Monthly quota exceeded for your plan.',
+      error_code: 'USAGE_LIMIT_REACHED',
+      retryable: false,
+      membership: norm as any,
+    };
+  }
+
+  // Best-effort decrement (Supabase-js does not support atomic arithmetic without RPC).
+  // This is sufficient for convention-scale traffic; we can harden with RPC later.
+  const nextRemaining = currentRemaining - units;
+  const { error: qErr } = await admin
+    .from('users')
+    .update({ [col]: nextRemaining })
+    .eq('id', userId);
+
+  if (qErr) {
+    console.error('Quota decrement error:', qErr);
+    return { ok: false, status: 503, error: 'Usage tracking unavailable. Try again shortly.', error_code: 'SERVER_ERROR', retryable: true };
+  }
+
+  // Reflect new remaining quota in the response (for headers/UI)
+  // @ts-ignore
+  profile[col] = nextRemaining;
+}
 
   // Burst limit (per minute) — enforce BEFORE reserving daily units
   const tier = normalizeTier(membership as any);
