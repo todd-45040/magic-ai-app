@@ -42,6 +42,10 @@ export default async function handler(req: any, res: any) {
     const remaining = status.remaining ?? 0;
     const resetAt = (status as any).resetAt;
 
+    // Phase 2A: intelligence signals
+    const nearLimit = limit > 0 ? remaining <= Math.ceil(limit * 0.15) : false;
+    const upgradeRecommended = membership === 'trial' && nearLimit;
+
     res.setHeader('X-AI-Remaining', String(remaining));
     res.setHeader('X-AI-Limit', String(limit));
     res.setHeader('X-AI-Membership', String(membership));
@@ -55,6 +59,11 @@ export default async function handler(req: any, res: any) {
       limit,
       used,
       remaining,
+      nearLimit,
+      upgradeRecommended,
+      sessionsToday: (status as any).sessionsToday ?? 0,
+      toolsUsedToday: (status as any).toolsUsedToday ?? [],
+      distinctToolsToday: (status as any).distinctToolsToday ?? 0,
       resetAt: resetAt ?? null,
       resetTz: (status as any).resetTz ?? null,
       resetHourLocal: (status as any).resetHourLocal ?? null,

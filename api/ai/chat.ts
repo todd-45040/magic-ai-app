@@ -156,7 +156,7 @@ export default async function handler(req: any, res: any) {
 
     // Best-effort increment AFTER success (do not fail the request if this fails)
     // IMPORTANT: await so metering reliably persists in serverless runtimes
-    await bestEffortIncrementAiUsage(req, 1);
+    await bestEffortIncrementAiUsage(req, 1, 'chat');
 
     // Usage headers for the Usage Meter UI (best-effort)
     applyUsageHeaders(res, guard.usage);

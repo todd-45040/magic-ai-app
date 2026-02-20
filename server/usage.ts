@@ -144,6 +144,117 @@ function nextResetAtISO(now = new Date()): string {
   return new Date(utcMillis).toISOString();
 }
 
+function usageWindowStartISO(now = new Date()): string {
+  // UTC midnight default
+  if (RESET_TZ === 'UTC' && RESET_HOUR_LOCAL === 0) {
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0)).toISOString();
+  }
+
+  const p = tzParts(now, RESET_TZ);
+  const y = Number(p.year);
+  const m = Number(p.month);
+  const d = Number(p.day);
+  const hourNow = Number(p.hour || 0);
+
+  // If before reset boundary, window started yesterday at reset hour (local)
+  const startDay = hourNow < RESET_HOUR_LOCAL ? d - 1 : d;
+
+  // Convert local target (y-m-startDay RESET_HOUR_LOCAL:00) -> UTC.
+  // Two-step refinement to account for DST shifts.
+  const localAsUTC = Date.UTC(y, m - 1, startDay, RESET_HOUR_LOCAL, 0, 0);
+  let guess = new Date(localAsUTC);
+  let off = tzOffsetMinutes(guess, RESET_TZ);
+  let utcMillis = localAsUTC - off * 60_000;
+  guess = new Date(utcMillis);
+  off = tzOffsetMinutes(guess, RESET_TZ);
+  utcMillis = localAsUTC - off * 60_000;
+  return new Date(utcMillis).toISOString();
+}
+
+async function getEngagementSignals(admin: any, userId: string): Promise<{
+  sessionsToday: number;
+  toolsUsedToday: string[];
+  distinctToolsToday: number;
+}> {
+  try {
+    const startISO = usageWindowStartISO();
+
+    // Sessions = rows recorded at login (tool_used is null)
+    const { count: sessionsCount } = await admin
+      .from('user_activity')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .is('tool_used', null)
+      .gte('session_start_at', startISO);
+
+    // Tool uses = distinct tools used today
+    const { data: toolRows } = await admin
+      .from('user_activity')
+      .select('tool_used')
+      .eq('user_id', userId)
+      .not('tool_used', 'is', null)
+      .gte('session_start_at', startISO)
+      .limit(5000);
+
+    const tools = Array.isArray(toolRows)
+      ? Array.from(
+          new Set(
+            toolRows
+              .map((r: any) => (typeof r?.tool_used === 'string' ? r.tool_used.trim() : ''))
+              .filter(Boolean)
+          )
+        ).sort()
+      : [];
+
+    return {
+      sessionsToday: Number.isFinite(Number(sessionsCount)) ? Number(sessionsCount) : 0,
+      toolsUsedToday: tools,
+      distinctToolsToday: tools.length,
+    };
+  } catch {
+    return { sessionsToday: 0, toolsUsedToday: [], distinctToolsToday: 0 };
+  }
+}
+
+export async function recordUserActivity(
+  req: any,
+  toolUsed: string | null
+): Promise<{ ok: boolean; status?: number; error?: string }> {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const token = parseBearer(req);
+
+  if (!supabaseUrl || !serviceKey) {
+    return { ok: false, status: 503, error: 'Server activity tracking is not configured.' };
+  }
+  if (!token || token === 'guest') {
+    return { ok: false, status: 401, error: 'Unauthorized.' };
+  }
+
+  const admin = createClient(supabaseUrl, serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+
+  const { data, error } = await admin.auth.getUser(token);
+  if (error || !data?.user?.id) {
+    return { ok: false, status: 401, error: 'Unauthorized.' };
+  }
+
+  const userId = data.user.id;
+  const { error: insErr } = await admin.from('user_activity').insert({
+    user_id: userId,
+    session_start_at: new Date().toISOString(),
+    tool_used: toolUsed,
+  });
+
+  if (insErr) {
+    console.error('user_activity insert error:', insErr);
+    return { ok: false, status: 503, error: 'Activity tracking unavailable.' };
+  }
+
+  return { ok: true };
+}
+
 function getMinuteKeyUTC(d = new Date()): string {
   // YYYY-MM-DDTHH:MM in UTC
   const y = d.getUTCFullYear();
@@ -251,6 +362,9 @@ export async function getAiUsageStatus(req: any): Promise<{
       resetAt: nextResetAtISO(),
       resetTz: RESET_TZ,
       resetHourLocal: RESET_HOUR_LOCAL,
+      sessionsToday: 0,
+      toolsUsedToday: [],
+      distinctToolsToday: 0,
       liveUsed: used,
       liveLimit: limit,
       liveRemaining: remaining,
@@ -300,6 +414,8 @@ export async function getAiUsageStatus(req: any): Promise<{
   const usedBurst = map.get(key) || 0;
   const burstRemaining = Math.max(0, burstLimit - usedBurst);
 
+  const engagement = await getEngagementSignals(admin, userId);
+
   return {
     ok: true,
     membership: tier as any,
@@ -309,6 +425,9 @@ export async function getAiUsageStatus(req: any): Promise<{
     resetAt: nextResetAtISO(),
     resetTz: RESET_TZ,
     resetHourLocal: RESET_HOUR_LOCAL,
+    sessionsToday: engagement.sessionsToday,
+    toolsUsedToday: engagement.toolsUsedToday,
+    distinctToolsToday: engagement.distinctToolsToday,
     liveUsed: generationCount,
     liveLimit: limit,
     liveRemaining: remaining,
@@ -317,7 +436,11 @@ export async function getAiUsageStatus(req: any): Promise<{
   };
 }
 
-export async function enforceAiUsage(req: any, costUnits: number): Promise<{
+export async function enforceAiUsage(
+  req: any,
+  costUnits: number,
+  opts?: { tool?: string }
+): Promise<{
   ok: boolean;
   status?: number;
   error?: string;
@@ -498,6 +621,21 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
     console.error('Usage increment error:', incErr);
     // Fail safe: if we can't record usage, block to protect costs.
     return { ok: false, status: 503, error: 'Usage tracking unavailable. Try again shortly.' };
+  }
+
+  // Phase 2A: best-effort tool telemetry (never blocks success)
+  try {
+    const tool = typeof opts?.tool === 'string' ? opts.tool.trim() : '';
+    if (tool) {
+      const { error: actErr } = await admin.from('user_activity').insert({
+        user_id: userId,
+        session_start_at: new Date().toISOString(),
+        tool_used: tool,
+      });
+      if (actErr) console.error('user_activity tool insert error:', actErr);
+    }
+  } catch {
+    // ignore
   }
 
   return {
