@@ -12,7 +12,7 @@ export default async function handler(request: any, response: any) {
     return response.status(401).json({ error: 'Unauthorized.' });
   }
 
-  const usage = await enforceAiUsage(request, 1);
+  const usage = await enforceAiUsage(request, 1, { tool: 'live_rehearsal_audio' });
   if (!usage.ok) {
     return response
       .status(usage.status || 429)

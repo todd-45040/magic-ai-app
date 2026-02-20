@@ -5,7 +5,7 @@ import { getIpFromReq, hashIp, logUsageEvent, maybeFlagAnomaly, estimateCostUSD 
 
 // Canonical membership tiers used for usage enforcement.
 // Legacy tiers are accepted and normalized server-side.
-type Membership = 'free' | 'trial' | 'performer' | 'professional' | 'expired' | 'amateur' | 'semi-pro';
+type Membership = 'trial' | 'trial' | 'performer' | 'professional' | 'expired' | 'amateur' | 'semi-pro';
 
 
 export type UsageErrorCode =
@@ -288,7 +288,7 @@ export async function recordUserActivity(
         retryable: false,
         units: costUnits,
         charged_units: 0,
-        membership: 'free',
+        membership: 'trial',
         user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
         estimated_cost_usd: 0,
       });
@@ -319,7 +319,7 @@ export async function recordUserActivity(
         retryable: false,
         units: costUnits,
         charged_units: 0,
-        membership: 'free',
+        membership: 'trial',
         user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
         estimated_cost_usd: 0,
       });
@@ -431,20 +431,15 @@ export async function getAiUsageStatus(req: any): Promise<{
   liveRemaining?: number;
   burstLimit?: number;
   burstRemaining?: number;
+  quotas?: {
+    liveAudioMinutes: number;
+    imageGen: number;
+    identify: number;
+    videoUploads: number;
+    resetDate: string | null;
+  } | null;
 }> {
   const supabaseUrl = process.env.SUPABASE_URL;
-  // Inline anomaly signal: unusually large usage units in a single call
-  if (Number.isFinite(costUnits) && costUnits >= 50) {
-    await maybeFlagAnomaly({
-      request_id: requestId,
-      user_id: null,
-      identity_key: token ? 'user:unknown' : ipKey(req),
-      ip_hash,
-      reason: 'VERY_LARGE_UNITS',
-      severity: 'high',
-      metadata: { costUnits, tool: opts?.tool ?? null },
-    });
-  }
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const token = parseBearer(req);
   const requestId = makeRequestId();
@@ -471,7 +466,7 @@ export async function getAiUsageStatus(req: any): Promise<{
 
   // For anonymous users, show strict caps (best-effort)
   if (!userId) {
-    const membership: Membership = 'free';
+    const membership: Membership = 'trial';
     const limit = 15;
     const used = 0;
     const remaining = limit;
@@ -504,7 +499,7 @@ export async function getAiUsageStatus(req: any): Promise<{
 
   const { data: profile, error: profileErr } = await admin
     .from('users')
-    .select('id, membership, generation_count, last_reset_date')
+    .select('id, membership, generation_count, last_reset_date, trial_end_date, quota_live_audio_minutes, quota_image_gen, quota_identify, quota_video_uploads, quota_reset_date')
     .eq('id', userId)
     .maybeSingle();
 
@@ -557,6 +552,13 @@ export async function getAiUsageStatus(req: any): Promise<{
     sessionsToday: engagement.sessionsToday,
     toolsUsedToday: engagement.toolsUsedToday,
     distinctToolsToday: engagement.distinctToolsToday,
+    quotas: userId ? {
+      liveAudioMinutes: Number(profile?.quota_live_audio_minutes ?? 0),
+      imageGen: Number(profile?.quota_image_gen ?? 0),
+      identify: Number(profile?.quota_identify ?? 0),
+      videoUploads: Number(profile?.quota_video_uploads ?? 0),
+      resetDate: profile?.quota_reset_date ?? null,
+    } : null,
     liveUsed: generationCount,
     liveLimit: limit,
     liveRemaining: remaining,
@@ -626,7 +628,7 @@ export async function enforceAiUsage(
         retryable: true,
         units: costUnits,
         charged_units: 0,
-        membership: 'free',
+        membership: 'trial',
         user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
         estimated_cost_usd: 0,
       });
@@ -689,7 +691,7 @@ export async function enforceAiUsage(
         retryable: true,
         units: costUnits,
         charged_units: 0,
-        membership: 'free',
+        membership: 'trial',
         user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
         estimated_cost_usd: 0,
       });
@@ -724,7 +726,7 @@ export async function enforceAiUsage(
   // Authed user: enforce against public.users table
   const { data: profile, error: profileErr } = await admin
     .from('users')
-    .select('id, membership, generation_count, last_reset_date')
+    .select('id, membership, generation_count, last_reset_date, trial_end_date, quota_live_audio_minutes, quota_image_gen, quota_identify, quota_video_uploads, quota_reset_date')
     .eq('id', userId)
     .maybeSingle();
 

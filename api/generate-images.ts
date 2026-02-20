@@ -13,7 +13,7 @@ export default async function handler(request: any, response: any) {
   }
 
   // AI cost protection (daily caps + per-minute burst limits)
-  const usage = await enforceAiUsage(request, 1);
+  const usage = await enforceAiUsage(request, 1, { tool: 'image_generation' });
   if (!usage.ok) {
     return response
       .status(usage.status || 429)
