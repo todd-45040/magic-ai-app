@@ -346,79 +346,24 @@ export async function recordUserActivity(
   toolUsed: string | null
 ): Promise<{ ok: boolean; status?: number; error?: string }> {
   const supabaseUrl = process.env.SUPABASE_URL;
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const token = parseBearer(req);
-  const requestId = makeRequestId();
-  const ip = getIpFromReq(req);
-  const ip_hash = hashIp(ip);
-// Inline anomaly signal: unusually large usage units in a single call
-if (Number.isFinite(costUnits) && costUnits >= 50) {
-  await maybeFlagAnomaly({
-    request_id: requestId,
-    user_id: null,
-    identity_key: token ? 'user:unknown' : ipKey(req),
-    ip_hash,
-    reason: 'VERY_LARGE_UNITS',
-    severity: 'high',
-    metadata: { costUnits, tool: opts?.tool ?? null },
-  });
-}
-
 
   if (!supabaseUrl || !serviceKey) {
     return { ok: false, status: 503, error: 'Server activity tracking is not configured.' };
   }
   if (!token || token === 'guest') {
-    await logUsageEvent({
-        request_id: requestId,
-        actor_type: token ? 'user' : 'guest',
-        user_id: null,
-        identity_key: token ? 'user:unknown' : ipKey(req),
-        ip_hash,
-        tool: opts?.tool ?? null,
-        endpoint: req?.url ?? null,
-        outcome: 'UNAUTHORIZED',
-        http_status: 401,
-        error_code: 'UNAUTHORIZED',
-        retryable: false,
-        units: costUnits,
-        charged_units: 0,
-        membership: 'free',
-        user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
-        estimated_cost_usd: 0,
-      });
-      return { ok: false, status: 401, error: 'Unauthorized.' };
+    return { ok: false, status: 401, error: 'Unauthorized.' };
   }
 
   const admin = createClient(supabaseUrl, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  // Supabase client auth typing can differ across versions; cast to GoTrueClient
-  // to access getUser() without TS conflicts.
   const auth = admin.auth as unknown as GoTrueClient;
-
   const { data, error } = await auth.getUser(token);
   if (error || !data?.user?.id) {
-    await logUsageEvent({
-        request_id: requestId,
-        actor_type: token ? 'user' : 'guest',
-        user_id: null,
-        identity_key: token ? 'user:unknown' : ipKey(req),
-        ip_hash,
-        tool: opts?.tool ?? null,
-        endpoint: req?.url ?? null,
-        outcome: 'UNAUTHORIZED',
-        http_status: 401,
-        error_code: 'UNAUTHORIZED',
-        retryable: false,
-        units: costUnits,
-        charged_units: 0,
-        membership: 'free',
-        user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
-        estimated_cost_usd: 0,
-      });
-      return { ok: false, status: 401, error: 'Unauthorized.' };
+    return { ok: false, status: 401, error: 'Unauthorized.' };
   }
 
   const userId = data.user.id;
@@ -433,27 +378,7 @@ if (Number.isFinite(costUnits) && costUnits >= 50) {
     return { ok: false, status: 503, error: 'Activity tracking unavailable.' };
   }
 
-  // Telemetry: successful charge (best-effort)
-    await logUsageEvent({
-      request_id: requestId,
-      actor_type: token ? 'user' : 'guest',
-      user_id: typeof userId === 'string' ? userId : null,
-      identity_key: token ? `user:${userId}` : ipKey(req),
-      ip_hash,
-      tool: opts?.tool ?? null,
-      endpoint: req?.url ?? null,
-      outcome: 'SUCCESS_CHARGED',
-      http_status: 200,
-      error_code: null,
-      retryable: null,
-      units: costUnits,
-      charged_units: costUnits,
-      membership: membership,
-      user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
-      estimated_cost_usd: estimateCostUSD({ provider: opts?.provider ?? null, model: opts?.model ?? null, charged_units: costUnits, tool: opts?.tool ?? null }),
-    });
-
-return { ok: true };
+  return { ok: true };
 }
 
 function getMinuteKeyUTC(d = new Date()): string {
@@ -528,18 +453,6 @@ export async function getAiUsageStatus(req: any): Promise<{
   burstRemaining?: number;
 }> {
   const supabaseUrl = process.env.SUPABASE_URL;
-  // Inline anomaly signal: unusually large usage units in a single call
-  if (Number.isFinite(costUnits) && costUnits >= 50) {
-    await maybeFlagAnomaly({
-      request_id: requestId,
-      user_id: null,
-      identity_key: token ? 'user:unknown' : ipKey(req),
-      ip_hash,
-      reason: 'VERY_LARGE_UNITS',
-      severity: 'high',
-      metadata: { costUnits, tool: opts?.tool ?? null },
-    });
-  }
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const token = parseBearer(req);
   const requestId = makeRequestId();
@@ -713,18 +626,6 @@ export async function enforceAiUsage(
   resetHourLocal?: number;
 }> {
   const supabaseUrl = process.env.SUPABASE_URL;
-  // Inline anomaly signal: unusually large usage units in a single call
-  if (Number.isFinite(costUnits) && costUnits >= 50) {
-    await maybeFlagAnomaly({
-      request_id: requestId,
-      user_id: null,
-      identity_key: token ? 'user:unknown' : ipKey(req),
-      ip_hash,
-      reason: 'VERY_LARGE_UNITS',
-      severity: 'high',
-      metadata: { costUnits, tool: opts?.tool ?? null },
-    });
-  }
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   const token = parseBearer(req);
