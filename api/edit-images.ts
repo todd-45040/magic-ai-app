@@ -144,7 +144,7 @@ export default async function handler(request: any, response: any) {
       ].join('\n');
 
       result = await ai.models.generateImages({
-        model: 'imagen-4.0-generate-preview-06-06',
+        model: 'imagen-4.0-generate-001',
         prompt: combinedPrompt,
         config: {
           numberOfImages: 1,

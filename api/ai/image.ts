@@ -185,7 +185,7 @@ export default async function handler(req: any, res: any) {
 
       // NOTE: For @google/genai generateImages, empty prompt can cause INVALID_ARGUMENT "Empty instances."
       return ai.models.generateImages({
-        model: 'imagen-4.0-generate-preview-06-06',
+        model: 'imagen-4.0-generate-001',
         prompt,
         config: {
           numberOfImages: 1,

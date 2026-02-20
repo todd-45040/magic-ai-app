@@ -70,7 +70,7 @@ export default async function handler(request: any, response: any) {
 
       const ai = new GoogleGenAI({ apiKey });
       result = await ai.models.generateImages({
-        model: 'imagen-4.0-generate-preview-06-06',
+        model: 'imagen-4.0-generate-001',
         prompt,
         config: {
           numberOfImages: 1,
