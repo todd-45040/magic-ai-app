@@ -197,7 +197,7 @@ export default async function handler(req: any, res: any) {
 
     // Best-effort increment AFTER success
     // IMPORTANT: await so metering reliably persists in serverless runtimes
-    await bestEffortIncrementAiUsage(req, 1, 'json');
+    await bestEffortIncrementAiUsage(req, 1);
 
     applyUsageHeaders(res, guard.usage);
     res.setHeader('X-AI-Provider-Used', provider);

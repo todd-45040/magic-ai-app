@@ -62,20 +62,6 @@ export default function Auth({ onLoginSuccess, onBack }: AuthProps) {
     if (error) throw error;
   }
 
-  async function trackSessionBestEffort() {
-    try {
-      const { data } = await supabase.auth.getSession();
-      const token = data?.session?.access_token;
-      if (!token) return;
-      await fetch('/api/ai/session', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      }).catch(() => null);
-    } catch {
-      // ignore (metrics-only)
-    }
-  }
-
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit || isLoading) return;
@@ -87,12 +73,10 @@ export default function Auth({ onLoginSuccess, onBack }: AuthProps) {
     try {
       if (mode === 'login') {
         await doLogin();
-        await trackSessionBestEffort();
         setMessage('Welcome back — loading your Studio…');
         onLoginSuccess();
       } else if (mode === 'signup') {
         await doSignup();
-        await trackSessionBestEffort();
         setMessage('Account created! Check your email if confirmation is required.');
         onLoginSuccess();
       } else {

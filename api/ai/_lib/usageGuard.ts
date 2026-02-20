@@ -149,11 +149,11 @@ export function applyUsageHeaders(res: any, usage: any) {
 }
 
 // Best-effort increment after success. Never throws.
-export async function bestEffortIncrementAiUsage(req: any, units = 1, tool?: string) {
+export async function bestEffortIncrementAiUsage(req: any, units = 1) {
   try {
     // Prefer explicit increment function (does not re-check quota).
     if (typeof incrementAiUsage === 'function') {
-      await withTimeout(Promise.resolve(incrementAiUsage(req, units, tool ? { tool } : undefined)), 2_000, 'TIMEOUT');
+      await withTimeout(Promise.resolve(incrementAiUsage(req, units)), 2_000, 'TIMEOUT');
       return;
     }
 
@@ -167,7 +167,7 @@ export async function bestEffortIncrementAiUsage(req: any, units = 1, tool?: str
       null;
 
     if (typeof inc === 'function') {
-      await withTimeout(Promise.resolve(inc(req, units, tool ? { tool } : undefined)), 2_000, 'TIMEOUT');
+      await withTimeout(Promise.resolve(inc(req, units)), 2_000, 'TIMEOUT');
     }
   } catch {
     // ignore

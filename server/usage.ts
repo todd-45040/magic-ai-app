@@ -313,6 +313,10 @@ export async function getAiUsageStatus(req: any): Promise<{
   resetAt?: string;
   resetTz?: string;
   resetHourLocal?: number;
+  // Phase 2A: engagement telemetry (best-effort)
+  sessionsToday?: number;
+  toolsUsedToday?: string[];
+  distinctToolsToday?: number;
   // Back-compat aliases for older endpoints/UI
   liveUsed?: number;
   liveLimit?: number;
