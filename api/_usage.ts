@@ -1,4 +1,4 @@
-import { requireSupabaseAuth } from './_auth';
+import { requireSupabaseAuth } from './_auth.js';
 // Canonical membership tiers used for usage enforcement.
 // Legacy tiers are accepted and normalized server-side.
 type Membership = 'free' | 'trial' | 'performer' | 'professional' | 'expired' | 'amateur' | 'semi-pro';

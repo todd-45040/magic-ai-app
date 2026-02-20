@@ -8,8 +8,8 @@
 //   1) Caption the input image with Gemini (vision)
 //   2) Generate a new image with Imagen using (caption + user instructions)
 
-import { enforceAiUsage } from './lib/usage.js';
-import { resolveProvider } from './lib/providers.js';
+import { enforceAiUsage } from '../server/usage.js';
+import { resolveProvider } from '../lib/server/providers/index.js';
 
 function extractGeminiText(result: any): string {
   if (typeof result?.text === 'string' && result.text.trim()) return result.text.trim();

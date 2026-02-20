@@ -1,4 +1,3 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenAI } from '@google/genai';
 
 type Body = {
@@ -8,11 +7,12 @@ type Body = {
 };
 
 function getApiKey(): string | undefined {
-  // Prefer a server-only env var if you add one later.
+  // Prefer server-side env vars (Vercel).
+  // If multiple are set, GOOGLE_API_KEY is used by convention across the app.
   return (
+    process.env.GOOGLE_API_KEY ||
     process.env.GEMINI_API_KEY ||
-    process.env.VITE_GEMINI_API_KEY ||
-    process.env.VITE_GEMINI_LIVE_API_KEY
+    process.env.API_KEY
   );
 }
 
@@ -25,7 +25,7 @@ function getModel(): string {
 async function generateWithFallback(
   ai: GoogleGenAI,
   models: string[],
-  args: Parameters<GoogleGenAI['models']['generateContent']>[0]
+  args: any,
 ) {
   let lastErr: any = null;
   for (const model of models) {
@@ -41,7 +41,7 @@ async function generateWithFallback(
   throw lastErr;
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
     return;
