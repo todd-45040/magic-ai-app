@@ -5,6 +5,24 @@ import type { GoTrueClient } from '@supabase/auth-js';
 // Legacy tiers are accepted and normalized server-side.
 type Membership = 'free' | 'trial' | 'performer' | 'professional' | 'expired' | 'amateur' | 'semi-pro';
 
+
+export type UsageErrorCode =
+  | 'RATE_LIMITED'
+  | 'USAGE_LIMIT_REACHED'
+  | 'NOT_CONFIGURED'
+  | 'UNAUTHORIZED'
+  | 'INVALID_REQUEST'
+  | 'SERVER_ERROR';
+
+export type UsageErrorShape = {
+  ok: false;
+  status: number;
+  error: string;
+  error_code: UsageErrorCode;
+  retryable: boolean;
+  // Optional: for clients that want to show “resets at …”
+  resetAt?: string;
+};
 function normalizeTier(m?: string | null): 'free' | 'trial' | 'performer' | 'professional' | 'expired' {
   switch (m) {
     case 'professional':
@@ -334,7 +352,7 @@ export async function getAiUsageStatus(req: any): Promise<{
   const token = parseBearer(req);
 
   if (!supabaseUrl || !serviceKey) {
-    return { ok: false, status: 503, error: 'Server usage tracking is not configured.' };
+    return { ok: false, status: 503, error: 'Server usage tracking is not configured.', error_code: 'NOT_CONFIGURED', retryable: true } as any;
   }
 
   const admin = createClient(supabaseUrl, serviceKey, {
@@ -476,7 +494,9 @@ export async function enforceAiUsage(
     // Burst (per-minute) safety cap even when misconfigured
     const burst = enforceBurst(identity, 10);
     if (!burst.ok) {
-      return { ok: false, status: 429, error: 'Rate limit: too many requests per minute.', burstRemaining: 0, burstLimit: burst.limit };
+      return { ok: false, status: 429, error: 'Rate limit: too many requests per minute.',
+      error_code: 'RATE_LIMITED',
+      retryable: true, burstRemaining: 0, burstLimit: burst.limit } as any;
     }
 
     const today = getTodayKeyUTC();
@@ -491,7 +511,7 @@ export async function enforceAiUsage(
     const remaining = Math.max(0, limit - used);
 
     if (remaining < costUnits) {
-      return { ok: false, status: 429, error: 'AI usage limit reached for today (server not configured).', remaining, limit, burstRemaining: burst.remaining, burstLimit: burst.limit };
+      return { ok: false, status: 429, error: 'AI usage limit reached for today (server not configured).', error_code: 'USAGE_LIMIT_REACHED', retryable: true, resetAt: nextResetAtISO(), remaining, limit, burstRemaining: burst.remaining, burstLimit: burst.limit } as any;
     }
 
     map.set(memKey, used + costUnits);
@@ -518,7 +538,9 @@ export async function enforceAiUsage(
   if (!userId) {
     const burst = enforceBurst(identity, 8);
     if (!burst.ok) {
-      return { ok: false, status: 429, error: 'Rate limit: too many requests per minute.', burstRemaining: 0, burstLimit: burst.limit };
+      return { ok: false, status: 429, error: 'Rate limit: too many requests per minute.',
+      error_code: 'RATE_LIMITED',
+      retryable: true, burstRemaining: 0, burstLimit: burst.limit } as any;
     }
 
     const key = `anon:${today}:${identity}`;
@@ -529,7 +551,7 @@ export async function enforceAiUsage(
     const remaining = Math.max(0, limit - used);
 
     if (remaining < costUnits) {
-      return { ok: false, status: 429, error: 'AI usage limit reached for today.', remaining, limit, burstRemaining: burst.remaining, burstLimit: burst.limit };
+      return { ok: false, status: 429, error: 'AI usage limit reached for today.', error_code: 'USAGE_LIMIT_REACHED', retryable: true, resetAt: nextResetAtISO(), remaining, limit, burstRemaining: burst.remaining, burstLimit: burst.limit } as any;
     }
     map.set(key, used + costUnits);
     return {
@@ -595,6 +617,8 @@ export async function enforceAiUsage(
       ok: false,
       status: 429,
       error: 'Rate limit: too many requests per minute.',
+      error_code: 'RATE_LIMITED',
+      retryable: true,
       membership,
       burstRemaining: 0,
       burstLimit,
@@ -612,6 +636,9 @@ export async function enforceAiUsage(
       ok: false,
       status: 429,
       error: `Daily AI limit reached for your plan (${tier}).`,
+      error_code: 'USAGE_LIMIT_REACHED',
+      retryable: true,
+      resetAt: nextResetAtISO(),
       remaining,
       limit,
       membership: tier as any,
