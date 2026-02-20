@@ -9,6 +9,8 @@
 //   POST /api/ai/image     { prompt, style?, size? }            -> { ok:true, data:{ images } }
 //   POST /api/ai/identify  { imageBase64, prompt? }             -> { ok:true, data:{ result } }
 
+import { supabase } from '../supabase';
+
 export type AiErrorCode =
   | "BAD_REQUEST"
   | "BAD_JSON"
@@ -41,13 +43,35 @@ type ErrResponse = {
   retryable?: boolean;
 };
 
+
+async function getBearerToken(): Promise<string> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    const token = data?.session?.access_token;
+    return token ? `Bearer ${token}` : 'Bearer guest';
+  } catch {
+    return 'Bearer guest';
+  }
+}
+
+async function withAuthHeaders(headers: Record<string, string> = {}): Promise<Record<string, string>> {
+  return {
+    ...headers,
+    Authorization: await getBearerToken(),
+  };
+}
+
 // Reads response as text first, then parses JSON.
 // This makes debugging far easier when the server returns HTML (404/500) or empty responses.
 async function safeFetchJson<T>(
   url: string,
   init: RequestInit
 ): Promise<OkResponse<T>> {
-  const r = await fetch(url, init);
+  const initWithAuth: RequestInit = {
+    ...init,
+    headers: await withAuthHeaders((init.headers as Record<string, string>) || {}),
+  };
+  const r = await fetch(url, initWithAuth);
   const text = await r.text();
 
   let parsed: any = null;
