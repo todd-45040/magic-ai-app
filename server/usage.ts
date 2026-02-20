@@ -475,6 +475,8 @@ export async function enforceAiUsage(
   ok: boolean;
   status?: number;
   error?: string;
+  error_code?: UsageErrorCode;
+  retryable?: boolean;
   remaining?: number;
   limit?: number;
   membership?: Membership;
