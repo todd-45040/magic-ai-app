@@ -5,7 +5,7 @@ import { getIpFromReq, hashIp, logUsageEvent, maybeFlagAnomaly, estimateCostUSD 
 
 // Canonical membership tiers used for usage enforcement.
 // Legacy tiers are accepted and normalized server-side.
-type Membership = 'free' | 'trial' | 'amateur' | 'professional' | 'admin' | 'expired' | 'performer' | 'semi-pro';
+type Membership = 'trial' | 'amateur' | 'professional' | 'admin' | 'expired';
 
 
 export type UsageErrorCode =
@@ -36,45 +36,44 @@ function makeRequestId(): string {
   }
 }
 
-function normalizeTier(m?: string | null): 'free' | 'trial' | 'performer' | 'professional' | 'expired' {
-  switch (m) {
+
+function normalizeMembership(m?: string | null): Membership {
+  switch ((m || '').toLowerCase()) {
+    case 'admin':
+      return 'admin';
     case 'professional':
+    case 'pro':
       return 'professional';
-    case 'performer':
-      return 'performer';
     case 'amateur':
+    case 'performer':
     case 'semi-pro':
-      return 'performer';
+    case 'semipro':
+      return 'amateur';
     case 'expired':
       return 'expired';
     case 'trial':
-      return 'trial';
+    case 'free':
     default:
-      return 'free';
+      return 'trial';
   }
 }
 
-const TIER_LIMITS: Record<string, number> = {
-  free: 10,
-  trial: 20,
-  performer: 100,
-  professional: 10000,
-  expired: 0,
-  // legacy
+const TIER_LIMITS: Record<Membership, number> = {
+  trial: 15,
   amateur: 100,
-  'semi-pro': 100,
+  professional: 10000,
+  admin: 1000000,
+  expired: 0,
 };
 
 // Per-minute burst limits (requests per minute), even if daily remaining is high.
-const BURST_LIMITS: Record<string, number> = {
-  free: 10,
+ (requests per minute), even if daily remaining is high.
+const BURST_LIMITS: Record<Membership, number> = {
   trial: 20,
-  performer: 30,
-  professional: 120,
-  expired: 0,
-  // legacy
   amateur: 30,
-  'semi-pro': 30,
+  professional: 120,
+  admin: 600,
+  expired: 0,
 };
 
 
@@ -97,22 +96,23 @@ const TOOL_POLICIES: Record<ToolKey, ToolPolicy> = {
   video_rehearsal: { key: 'video_rehearsal', minTier: 'professional', quotaColumn: 'quota_video_uploads' },
 };
 
-function tierRank(tier: string): number {
+
+function tierRank(tier: Membership): number {
   switch (tier) {
     case 'admin':
       return 4;
     case 'professional':
       return 3;
     case 'amateur':
-    case 'performer':
-    case 'semi-pro':
       return 2;
     case 'trial':
       return 1;
+    case 'expired':
     default:
       return 0;
   }
 }
+
 
 function defaultMonthlyQuotas(tier: string): {
   quota_live_audio_minutes: number;
@@ -120,16 +120,16 @@ function defaultMonthlyQuotas(tier: string): {
   quota_identify: number;
   quota_video_uploads: number;
 } {
-  const t = normalizeTier(tier as any);
+  const t = normalizeMembership(tier as any);
   switch (t) {
+    case 'admin':
+      return { quota_live_audio_minutes: 999999, quota_image_gen: 999999, quota_identify: 999999, quota_video_uploads: 999999 };
     case 'professional':
       return { quota_live_audio_minutes: 120, quota_image_gen: 25, quota_identify: 25, quota_video_uploads: 10 };
-    case 'performer':
-      // "amateur" normalizes to performer
+    case 'amateur':
       return { quota_live_audio_minutes: 30, quota_image_gen: 10, quota_identify: 10, quota_video_uploads: 0 };
     case 'trial':
       return { quota_live_audio_minutes: 5, quota_image_gen: 3, quota_identify: 3, quota_video_uploads: 0 };
-    case 'free':
     case 'expired':
     default:
       return { quota_live_audio_minutes: 0, quota_image_gen: 0, quota_identify: 0, quota_video_uploads: 0 };
@@ -449,6 +449,14 @@ export async function getAiUsageStatus(req: any): Promise<{
   liveUsed?: number;
   liveLimit?: number;
   liveRemaining?: number;
+// Phase 2C-B: tool quota buckets (monthly)
+quota?: {
+  live_audio_minutes: { limit: number; used: number; remaining: number };
+  image_gen: { limit: number; used: number; remaining: number };
+  identify: { limit: number; used: number; remaining: number };
+  video_uploads: { limit: number; used: number; remaining: number };
+  resetAt: string | null;
+};
   burstLimit?: number;
   burstRemaining?: number;
 }> {
@@ -479,7 +487,7 @@ export async function getAiUsageStatus(req: any): Promise<{
 
   // For anonymous users, show strict caps (best-effort)
   if (!userId) {
-    const membership: Membership = 'free';
+    const membership: Membership = 'trial';
     const limit = 15;
     const used = 0;
     const remaining = limit;
@@ -523,7 +531,7 @@ export async function getAiUsageStatus(req: any): Promise<{
   let lastResetDateISO = new Date().toISOString();
 
   if (profile) {
-    membership = (profile.membership as Membership) || 'trial';
+    membership = normalizeMembership(profile.membership as any);
     generationCount = profile.generation_count ?? 0;
     lastResetDateISO = profile.last_reset_date ? new Date(profile.last_reset_date).toISOString() : lastResetDateISO;
   } else {
@@ -558,7 +566,7 @@ if (profile) {
     generationCount = 0;
   }
 
-  const tier = normalizeTier(membership as any);
+  const tier = membership;
   const limit = TIER_LIMITS[tier] ?? TIER_LIMITS.trial;
   const remaining = Math.max(0, limit - generationCount);
 
@@ -573,7 +581,7 @@ if (profile) {
 
   return {
     ok: true,
-    membership: tier as any,
+    membership: membership,
     used: generationCount,
     limit,
     remaining,
@@ -586,22 +594,42 @@ if (profile) {
     liveUsed: generationCount,
     liveLimit: limit,
     liveRemaining: remaining,
-quota: {
-  live_audio_minutes: {
-    remaining: profile?.quota_live_audio_minutes ?? null,
-  },
-  image_gen: {
-    remaining: profile?.quota_image_gen ?? null,
-  },
-  identify: {
-    remaining: profile?.quota_identify ?? null,
-  },
-  video_uploads: {
-    remaining: profile?.quota_video_uploads ?? null,
-  },
-  resetAt: profile?.quota_reset_date ? new Date(profile.quota_reset_date).toISOString() : null,
-},
-    burstLimit,
+
+quota: (() => {
+      const defaults = defaultMonthlyQuotas(membership);
+      const remLive = Number(profile?.quota_live_audio_minutes ?? defaults.quota_live_audio_minutes);
+      const remImg = Number(profile?.quota_image_gen ?? defaults.quota_image_gen);
+      const remId = Number(profile?.quota_identify ?? defaults.quota_identify);
+      const remVid = Number(profile?.quota_video_uploads ?? defaults.quota_video_uploads);
+
+      const safe = (n: number) => (Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0);
+
+      return {
+        live_audio_minutes: {
+          limit: safe(defaults.quota_live_audio_minutes),
+          used: safe(defaults.quota_live_audio_minutes) - safe(remLive),
+          remaining: safe(remLive),
+        },
+        image_gen: {
+          limit: safe(defaults.quota_image_gen),
+          used: safe(defaults.quota_image_gen) - safe(remImg),
+          remaining: safe(remImg),
+        },
+        identify: {
+          limit: safe(defaults.quota_identify),
+          used: safe(defaults.quota_identify) - safe(remId),
+          remaining: safe(remId),
+        },
+        video_uploads: {
+          limit: safe(defaults.quota_video_uploads),
+          used: safe(defaults.quota_video_uploads) - safe(remVid),
+          remaining: safe(remVid),
+        },
+        resetAt: profile?.quota_reset_date ? new Date(profile.quota_reset_date).toISOString() : null,
+      };
+    })(),
+    burstLimit
+,
     burstRemaining,
   };
 }
@@ -655,7 +683,7 @@ export async function enforceAiUsage(
         retryable: true,
         units: costUnits,
         charged_units: 0,
-        membership: 'free',
+        membership: 'trial',
         user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
         estimated_cost_usd: 0,
       });
@@ -718,7 +746,7 @@ export async function enforceAiUsage(
         retryable: true,
         units: costUnits,
         charged_units: 0,
-        membership: 'free',
+        membership: 'trial',
         user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
         estimated_cost_usd: 0,
       });
@@ -767,7 +795,7 @@ export async function enforceAiUsage(
   }
 
   if (profile) {
-    membership = (profile.membership as Membership) || 'trial';
+    membership = normalizeMembership(profile.membership as any);
     generationCount = profile.generation_count ?? 0;
     lastResetDateISO = profile.last_reset_date ? new Date(profile.last_reset_date).toISOString() : lastResetDateISO;
   } else {
@@ -797,7 +825,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
   const policy = (TOOL_POLICIES as any)[toolKey] as ToolPolicy;
 
   // Normalize membership tier for comparisons
-  const norm = normalizeTier(membership as any);
+  const norm = normalizeMembership(membership as any);
 
   // Hard gate by tier (ex: video_rehearsal is pro-only)
   if (tierRank(norm) < tierRank(policy.minTier)) {
@@ -850,7 +878,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
 }
 
   // Burst limit (per minute) — enforce BEFORE reserving daily units
-  const tier = normalizeTier(membership as any);
+  const tier = normalizeMembership(membership as any);
   const burstLimit = BURST_LIMITS[tier] ?? BURST_LIMITS.trial;
   const burst = enforceBurst(userId, burstLimit);
   if (!burst.ok) {
@@ -881,7 +909,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
       resetAt: nextResetAtISO(),
       remaining,
       limit,
-      membership: tier as any,
+      membership: membership,
       burstRemaining: burst.remaining,
       burstLimit,
       resetTz: RESET_TZ,
@@ -922,7 +950,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
     ok: true,
     remaining: Math.max(0, limit - newCount),
     limit,
-    membership: tier as any,
+    membership: membership,
     burstRemaining: burst.remaining,
     burstLimit,
       resetTz: RESET_TZ,
