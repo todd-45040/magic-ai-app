@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import type { GoTrueClient } from '@supabase/auth-js';
 
 // Canonical membership tiers used for usage enforcement.
 // Legacy tiers are accepted and normalized server-side.
@@ -235,7 +236,11 @@ export async function recordUserActivity(
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const { data, error } = await admin.auth.getUser(token);
+  // Supabase client auth typing can differ across versions; cast to GoTrueClient
+  // to access getUser() without TS conflicts.
+  const auth = admin.auth as unknown as GoTrueClient;
+
+  const { data, error } = await auth.getUser(token);
   if (error || !data?.user?.id) {
     return { ok: false, status: 401, error: 'Unauthorized.' };
   }
@@ -336,9 +341,11 @@ export async function getAiUsageStatus(req: any): Promise<{
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
+  const auth = admin.auth as unknown as GoTrueClient;
+
   let userId: string | null = null;
   if (token && token !== 'guest') {
-    const { data, error } = await admin.auth.getUser(token);
+    const { data, error } = await auth.getUser(token);
     if (!error && data?.user?.id) userId = data.user.id;
   }
 
@@ -495,10 +502,12 @@ export async function enforceAiUsage(
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
+  const auth = admin.auth as unknown as GoTrueClient;
+
   // Determine user id (preferred) or fall back to IP-based identity
   let userId: string | null = null;
   if (token && token !== 'guest') {
-    const { data, error } = await admin.auth.getUser(token);
+    const { data, error } = await auth.getUser(token);
     if (!error && data?.user?.id) userId = data.user.id;
   }
 
