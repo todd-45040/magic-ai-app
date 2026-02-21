@@ -64,7 +64,7 @@ const TIER_LIMITS: Record<string, number> = {
   trial: 20,
   performer: 100,
   professional: 10000,
-  admin: 100000,
+  admin: 10000,
   expired: 0,
   // legacy
   amateur: 100,
@@ -77,7 +77,7 @@ const BURST_LIMITS: Record<string, number> = {
   trial: 20,
   performer: 30,
   professional: 120,
-  admin: 240,
+  admin: 120,
   expired: 0,
   // legacy
   amateur: 30,
@@ -127,6 +127,9 @@ function defaultMonthlyQuotas(tier: string): {
   quota_identify: number;
   quota_video_uploads: number;
 } {
+  if (tierRank(tier) >= tierRank('admin')) {
+    return { quota_live_audio_minutes: 9999, quota_image_gen: 9999, quota_identify: 9999, quota_video_uploads: 9999 };
+  }
   const t = normalizeTier(tier as any);
   switch (t) {
     case 'professional':
@@ -166,7 +169,7 @@ async function ensureMonthlyQuotas(admin: any, userId: string, membership: strin
     .from('users')
     .update(next)
     .eq('id', userId)
-    .select('id, membership, generation_count, last_reset_date, trial_end_date, quota_live_audio_minutes, quota_image_gen, quota_identify, quota_video_uploads, quota_reset_date')
+    .select('id, email, membership, is_admin, generation_count, last_reset_date, trial_end_date, quota_live_audio_minutes, quota_image_gen, quota_identify, quota_video_uploads, quota_reset_date')
     .maybeSingle();
 
 
@@ -530,7 +533,7 @@ export async function getAiUsageStatus(req: any): Promise<{
   }
   const { data: profileData, error: profileErr } = await admin
     .from('users')
-    .select('id, membership, generation_count, last_reset_date, trial_end_date, quota_live_audio_minutes, quota_image_gen, quota_identify, quota_video_uploads, quota_reset_date')
+    .select('id, email, membership, is_admin, generation_count, last_reset_date, trial_end_date, quota_live_audio_minutes, quota_image_gen, quota_identify, quota_video_uploads, quota_reset_date')
     .eq('id', userId)
     .maybeSingle();
 
@@ -545,7 +548,7 @@ export async function getAiUsageStatus(req: any): Promise<{
   let lastResetDateISO = new Date().toISOString();
 
   if (profile) {
-    membership = (profile.membership as Membership) || 'trial';
+    membership = (profile.is_admin ? 'admin' : (profile.membership as Membership)) || 'trial';
     generationCount = profile.generation_count ?? 0;
     lastResetDateISO = profile.last_reset_date ? new Date(profile.last_reset_date).toISOString() : lastResetDateISO;
   } else {
@@ -770,7 +773,7 @@ export async function enforceAiUsage(
   // Authed user: enforce against public.users table
   const { data: profileData, error: profileErr } = await admin
     .from('users')
-    .select('id, membership, generation_count, last_reset_date, trial_end_date, quota_live_audio_minutes, quota_image_gen, quota_identify, quota_video_uploads, quota_reset_date')
+    .select('id, email, membership, is_admin, generation_count, last_reset_date, trial_end_date, quota_live_audio_minutes, quota_image_gen, quota_identify, quota_video_uploads, quota_reset_date')
     .eq('id', userId)
     .maybeSingle();
 
@@ -787,7 +790,7 @@ export async function enforceAiUsage(
   }
 
   if (profile) {
-    membership = (profile.membership as Membership) || 'trial';
+    membership = (profile.is_admin ? 'admin' : (profile.membership as Membership)) || 'trial';
     generationCount = profile.generation_count ?? 0;
     lastResetDateISO = profile.last_reset_date ? new Date(profile.last_reset_date).toISOString() : lastResetDateISO;
   } else {
