@@ -471,17 +471,17 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
     
     const generateScriptGuide = () => {
         if (!selectedShow) return;
-        const activePerformance Beats = selectedShow.tasks
+        const activePerformanceTasks = selectedShow.tasks
             .filter(t => t.status === 'To-Do')
             .sort((a, b) => a.createdAt - b.createdAt);
 
-        if (activePerformance Beats.length === 0) {
+        if (activePerformanceTasks.length === 0) {
             setGeneratedScript("No active tasks to generate a script from. Add some tasks first!");
             setIsScriptModalOpen(true);
             return;
         }
 
-        const script = activePerformance Beats.map((task, index) => {
+        const script = activePerformanceTasks.map((task, index) => {
             let segment = `CUE #${index + 1}: ${task.title} {task.status === 'Completed' && <span className="ml-2 text-xs text-[#C6A84A]">Locked In</span>}\n`;
             if (task.musicCue) segment += `MUSIC: ${task.musicCue}\n`;
             if (task.notes) segment += `\n--- NOTES / SCRIPT ---\n${task.notes}\n`;
@@ -633,7 +633,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
 
         const tasks = selectedShow.tasks;
         const processedPerformance Beats = {
-            activePerformance Beats: tasks.filter(t => t.status === 'To-Do'),
+            activePerformanceTasks: tasks.filter(t => t.status === 'To-Do'),
             completedPerformance Beats: tasks.filter(t => t.status === 'Completed').sort((a,b) => b.createdAt - a.createdAt)
         };
         
@@ -658,7 +658,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                 
                 if (result.tasks && Array.isArray(result.tasks)) {
                     const tasksData = result.tasks.map((title: string) => ({ title, priority: 'Medium' as const }));
-                    const newShows = await addPerformance BeatsToShow(selectedShow.id, tasksData);
+                    const newShows = await addTasksToShow(selectedShow.id, tasksData);
                     setShows(newShows);
                     setSelectedShow(newShows.find(s => s.id === selectedShow.id) || null);
                 } else {
@@ -672,7 +672,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
         };
 
         const ListView = () => {
-            const sortedActivePerformance Beats = [...processedPerformance Beats.activePerformance Beats].sort((a, b) => {
+            const sortedActivePerformance Beats = [...processedPerformance Beats.activePerformanceTasks].sort((a, b) => {
                 if (sortBy === 'priority') return PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
                 if (sortBy === 'createdAt') return b.createdAt - a.createdAt;
                 if (a.dueDate && b.dueDate) return a.dueDate - b.dueDate;
@@ -683,9 +683,9 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
 
         const BoardView = () => {
             const columns: Record<string, Task[]> = {
-                'High Priority': processedPerformance Beats.activePerformance Beats.filter(t => t.priority === 'High'),
-                'Medium Priority': processedPerformance Beats.activePerformance Beats.filter(t => t.priority === 'Medium'),
-                'Low Priority': processedPerformance Beats.activePerformance Beats.filter(t => t.priority === 'Low'),
+                'High Priority': processedPerformance Beats.activePerformanceTasks.filter(t => t.priority === 'High'),
+                'Medium Priority': processedPerformance Beats.activePerformanceTasks.filter(t => t.priority === 'Medium'),
+                'Low Priority': processedPerformance Beats.activePerformanceTasks.filter(t => t.priority === 'Low'),
             };
             const columnStyles: Record<string, string> = { 'High Priority': 'border-t-red-500', 'Medium Priority': 'border-t-amber-400', 'Low Priority': 'border-t-green-500' };
             return (
