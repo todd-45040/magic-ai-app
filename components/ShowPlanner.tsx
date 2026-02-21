@@ -632,12 +632,12 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
         }, [activeTab, selectedShow.id]);
 
         const tasks = selectedShow.tasks;
-        const processedPerformance Beats = {
+        const processedPerformanceBeats = {
             activePerformanceTasks: tasks.filter(t => t.status === 'To-Do'),
-            completedPerformance Beats: tasks.filter(t => t.status === 'Completed').sort((a,b) => b.createdAt - a.createdAt)
+            completedPerformanceBeats: tasks.filter(t => t.status === 'Completed').sort((a,b) => b.createdAt - a.createdAt)
         };
         
-        const handleAiSuggestPerformance Beats = async () => {
+        const handleAiSuggestPerformanceBeats = async () => {
             if (!selectedShow) return;
             setIsSuggesting(true);
             setSuggestionError(null);
@@ -672,20 +672,20 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
         };
 
         const ListView = () => {
-            const sortedActivePerformance Beats = [...processedPerformance Beats.activePerformanceTasks].sort((a, b) => {
+            const sortedActivePerformanceBeats = [...processedPerformanceBeats.activePerformanceTasks].sort((a, b) => {
                 if (sortBy === 'priority') return PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
                 if (sortBy === 'createdAt') return b.createdAt - a.createdAt;
                 if (a.dueDate && b.dueDate) return a.dueDate - b.dueDate;
                 if (a.dueDate) return -1; if (b.dueDate) return 1; return 0;
             });
-            return <div className="space-y-2">{sortedActivePerformance Beats.map(task => <TaskItem key={task.id} task={task} />)}</div>;
+            return <div className="space-y-2">{sortedActivePerformanceBeats.map(task => <TaskItem key={task.id} task={task} />)}</div>;
         };
 
         const BoardView = () => {
             const columns: Record<string, Task[]> = {
-                'High Priority': processedPerformance Beats.activePerformanceTasks.filter(t => t.priority === 'High'),
-                'Medium Priority': processedPerformance Beats.activePerformanceTasks.filter(t => t.priority === 'Medium'),
-                'Low Priority': processedPerformance Beats.activePerformanceTasks.filter(t => t.priority === 'Low'),
+                'High Priority': processedPerformanceBeats.activePerformanceTasks.filter(t => t.priority === 'High'),
+                'Medium Priority': processedPerformanceBeats.activePerformanceTasks.filter(t => t.priority === 'Medium'),
+                'Low Priority': processedPerformanceBeats.activePerformanceTasks.filter(t => t.priority === 'Low'),
             };
             const columnStyles: Record<string, string> = { 'High Priority': 'border-t-red-500', 'Medium Priority': 'border-t-amber-400', 'Low Priority': 'border-t-green-500' };
             return (
@@ -719,7 +719,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                         <div className="flex items-center gap-2">
                             <button onClick={() => setIsAudienceQrModalOpen(true)} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-md text-white font-semibold transition-colors flex items-center gap-2 text-sm" title="Generate a post-show feedback QR code"><QrCodeIcon className="w-4 h-4" /><span>Audience QR</span></button>
                             <button onClick={() => setIsLiveModalOpen(true)} className="px-3 py-2 bg-green-600 hover:bg-green-700 rounded-md text-white font-semibold transition-colors flex items-center gap-2 text-sm"><QrCodeIcon className="w-4 h-4" /><span>Start Live Performance</span></button>
-                            <button onClick={handleAiSuggestPerformance Beats} disabled={isSuggesting} className="px-3 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold flex items-center gap-2 transition-colors"><WandIcon className="w-4 h-4" /><span>{isSuggesting ? 'Thinking...' : 'AI-Suggest Performance Beats'}</span></button>
+                            <button onClick={handleAiSuggestPerformanceBeats} disabled={isSuggesting} className="px-3 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold flex items-center gap-2 transition-colors"><WandIcon className="w-4 h-4" /><span>{isSuggesting ? 'Thinking...' : 'AI-Suggest Performance Beats'}</span></button>
                             <button onClick={generateScriptGuide} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 font-semibold transition-colors flex items-center gap-2 text-sm"><FileTextIcon className="w-4 h-4" /><span>Performance Narrative</span></button>
                             <button onClick={() => { setTaskToEdit(null); setIsTaskModalOpen(true); }} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors flex items-center gap-2 text-sm"><ChecklistIcon className="w-4 h-4" /><span>Add Beat</span></button>
                         </div>
@@ -738,7 +738,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                 </header>
                 <div className="flex-1 overflow-y-auto px-4 md:px-6 pb-4 pt-4">
                     {activeTab === 'tasks' ? (
-                        tasks.length === 0 ? <div className="text-center py-10 text-slate-400"><p className="mb-3">Add your first beat to start building your performance flow.. Click <span className="text-slate-200 font-semibold">Add Beat</span> to get started.</p><button onClick={handleAiSuggestPerformance Beats} disabled={isSuggesting} className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold transition-colors"><WandIcon className="w-4 h-4" /><span>{isSuggesting ? 'Thinking...' : 'AI-Suggest Performance Beats'}</span></button></div> : viewMode === 'list' ? <ListView /> : <BoardView />
+                        tasks.length === 0 ? <div className="text-center py-10 text-slate-400"><p className="mb-3">Add your first beat to start building your performance flow.. Click <span className="text-slate-200 font-semibold">Add Beat</span> to get started.</p><button onClick={handleAiSuggestPerformanceBeats} disabled={isSuggesting} className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold transition-colors"><WandIcon className="w-4 h-4" /><span>{isSuggesting ? 'Thinking...' : 'AI-Suggest Performance Beats'}</span></button></div> : viewMode === 'list' ? <ListView /> : <BoardView />
 
                     
                     ) : activeTab === 'finances' ? (
@@ -1241,9 +1241,9 @@ return (
 };
 
 const ShowListItem: React.FC<{show: Show, clients: Client[], contractMeta?: ContractMeta, onSelect: () => void, onDelete: () => void}> = ({ show, clients, contractMeta, onSelect, onDelete }) => {
-    const completedPerformance Beats = show.tasks.filter(t => t.status === 'Completed').length;
-    const totalPerformance Beats = show.tasks.length;
-    const progress = totalPerformance Beats > 0 ? (completedPerformance Beats / totalPerformance Beats) * 100 : 0;
+    const completedPerformanceBeats = show.tasks.filter(t => t.status === 'Completed').length;
+    const totalPerformanceBeats = show.tasks.length;
+    const progress = totalPerformanceBeats > 0 ? (completedPerformanceBeats / totalPerformanceBeats) * 100 : 0;
     const client = clients.find(c => c.id === show.clientId);
 
     return (
@@ -1277,7 +1277,7 @@ const ShowListItem: React.FC<{show: Show, clients: Client[], contractMeta?: Cont
             <div className="mt-4">
                 <div className="flex justify-between items-center text-xs text-slate-400 mb-1">
                     <span>Progress</span>
-                    <span>{completedPerformance Beats} / {totalPerformance Beats} Performance Beats</span>
+                    <span>{completedPerformanceBeats} / {totalPerformanceBeats} Performance Beats</span>
                 </div>
                 <div className="w-full bg-slate-700 rounded-full h-2"><div className="bg-purple-500 h-2 rounded-full" style={{ width: `${progress}%` }}></div></div>
                 <button onClick={onSelect} className="w-full text-center mt-4 py-2 px-4 bg-slate-700/50 hover:bg-purple-800 rounded-md text-white font-bold transition-colors">Open Planner</button>
