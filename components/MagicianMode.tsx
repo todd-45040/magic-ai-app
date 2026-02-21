@@ -1368,7 +1368,9 @@ useEffect(() => {
         setUsageSnapshotError(null);
         const { data } = await supabase.auth.getSession();
         const token = data?.session?.access_token;
-        const headers: Record<string, string> = { Authorization: token ? `Bearer ${token}` : 'Bearer guest' };
+        const headers: Record<string, string> = {
+          Authorization: `Bearer ${token || 'guest'}`,
+        };
 
         const r = await fetch('/api/ai/usage', { method: 'GET', headers });
         const txt = await r.text();
@@ -2419,15 +2421,6 @@ ${action.payload.content}`;
         </div>
       )}
 
-      {/* Option 1 (Phase 2C): polished, collapsible "Usage & Limits" card */}
-      {!isDemoMode && (
-        <UsageLimitsCard
-          usage={usageSnapshot}
-          error={usageSnapshotError}
-          onUpgrade={() => setIsUpgradeModalOpen(true)}
-        />
-      )}
-
 {!isDemoMode && showBackupReminder && (
   <div className="flex items-center justify-between gap-3 px-4 py-2 border-b border-sky-400/20 bg-sky-500/10">
     <div className="text-sm text-sky-200 flex items-center gap-2">
@@ -2450,6 +2443,16 @@ ${action.payload.content}`;
     </div>
   </div>
 )}
+
+      {!isDemoMode && (
+        <div className="px-3 sm:px-4 pt-3 pb-3 border-b border-slate-800/60">
+          <UsageLimitsCard
+            usageSnapshot={usageSnapshot}
+            error={usageSnapshotError}
+            onRequestUpgrade={() => setIsUpgradeModalOpen(true)}
+          />
+        </div>
+      )}
 
 
       <nav className="flex items-center gap-1 border-b border-slate-800 px-2 md:px-4 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
