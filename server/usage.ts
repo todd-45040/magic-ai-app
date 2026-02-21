@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import type { GoTrueClient } from '@supabase/auth-js';
-import { getIpFromReq, hashIp, logUsageEvent, maybeFlagAnomaly, estimateCostUSD } from './telemetry.js';
+import { getIpFromReq, hashIp, logUsageEvent, } from './telemetry.js';
 
 // Canonical membership tiers used for usage enforcement.
 // Legacy tiers are accepted and normalized server-side.
@@ -132,7 +132,6 @@ function defaultMonthlyQuotas(tier: string): {
       return { quota_live_audio_minutes: 30, quota_image_gen: 10, quota_identify: 10, quota_video_uploads: 0 };
     case 'trial':
       return { quota_live_audio_minutes: 5, quota_image_gen: 3, quota_identify: 3, quota_video_uploads: 0 };
-    case 'free':
     case 'expired':
     default:
       return { quota_live_audio_minutes: 0, quota_image_gen: 0, quota_identify: 0, quota_video_uploads: 0 };
@@ -165,6 +164,8 @@ async function ensureMonthlyQuotas(admin: any, userId: string, membership: strin
     .eq('id', userId)
     .select('id, membership, generation_count, last_reset_date, trial_end_date, quota_live_audio_minutes, quota_image_gen, quota_identify, quota_video_uploads, quota_reset_date')
     .maybeSingle();
+
+  let profile = profileData;
 
   if (error) {
     console.error('Monthly quota reset error:', error);
@@ -449,6 +450,13 @@ export async function getAiUsageStatus(req: any): Promise<{
   sessionsToday?: number;
   toolsUsedToday?: string[];
   distinctToolsToday?: number;
+  quota?: {
+    live_audio_minutes: { remaining: number | null };
+    image_gen: { remaining: number | null };
+    identify: { remaining: number | null };
+    video_uploads: { remaining: number | null };
+    resetAt: string | null;
+  };
   // Back-compat aliases for older endpoints/UI
   liveUsed?: number;
   liveLimit?: number;
@@ -462,6 +470,9 @@ export async function getAiUsageStatus(req: any): Promise<{
   const requestId = makeRequestId();
   const ip = getIpFromReq(req);
   const ip_hash = hashIp(ip);
+
+  void requestId;
+  void ip_hash;
 
   if (!supabaseUrl || !serviceKey) {
     return { ok: false, status: 503, error: 'Server usage tracking is not configured.', error_code: 'NOT_CONFIGURED', retryable: true };
@@ -520,6 +531,8 @@ export async function getAiUsageStatus(req: any): Promise<{
     .select('id, membership, generation_count, last_reset_date, trial_end_date, quota_live_audio_minutes, quota_image_gen, quota_identify, quota_video_uploads, quota_reset_date')
     .eq('id', userId)
     .maybeSingle();
+
+  let profile = profileData;
 
   if (profileErr) console.error('Usage lookup error:', profileErr);
 
@@ -591,22 +604,14 @@ if (profile) {
     liveUsed: generationCount,
     liveLimit: limit,
     liveRemaining: remaining,
-quota: {
-  live_audio_minutes: {
-    remaining: profile?.quota_live_audio_minutes ?? null,
-  },
-  image_gen: {
-    remaining: profile?.quota_image_gen ?? null,
-  },
-  identify: {
-    remaining: profile?.quota_identify ?? null,
-  },
-  video_uploads: {
-    remaining: profile?.quota_video_uploads ?? null,
-  },
-  resetAt: profile?.quota_reset_date ? new Date(profile.quota_reset_date).toISOString() : null,
-},
-    burstLimit,
+    quota: {
+      live_audio_minutes: { remaining: profile?.quota_live_audio_minutes ?? null },
+      image_gen: { remaining: profile?.quota_image_gen ?? null },
+      identify: { remaining: profile?.quota_identify ?? null },
+      video_uploads: { remaining: profile?.quota_video_uploads ?? null },
+      resetAt: profile?.quota_reset_date ? new Date(profile.quota_reset_date).toISOString() : null,
+    },
+burstLimit,
     burstRemaining,
   };
 }
@@ -637,6 +642,9 @@ export async function enforceAiUsage(
   const requestId = makeRequestId();
   const ip = getIpFromReq(req);
   const ip_hash = hashIp(ip);
+
+  void requestId;
+  void ip_hash;
 
   // If server isn't configured for Supabase admin, fall back to a very small per-IP cap (fails safe).
   if (!supabaseUrl || !serviceKey) {
@@ -756,11 +764,13 @@ export async function enforceAiUsage(
   }
 
   // Authed user: enforce against public.users table
-  const { data: profile, error: profileErr } = await admin
+  const { data: profileData, error: profileErr } = await admin
     .from('users')
     .select('id, membership, generation_count, last_reset_date, trial_end_date, quota_live_audio_minutes, quota_image_gen, quota_identify, quota_video_uploads, quota_reset_date')
     .eq('id', userId)
     .maybeSingle();
+
+  let profile = profileData;
 
   // If no profile exists yet, create one (trial by default)
   let membership: Membership = 'trial';
