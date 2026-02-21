@@ -1,6 +1,8 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { generateResponseWithParts } from '../services/geminiService';
+import BlockedPanel from './BlockedPanel';
+import { normalizeBlockedUx } from '../services/blockedUx';
 import { saveIdea } from '../services/ideasService';
 import { createShow, addTaskToShow } from '../services/showsService';
 import { VIDEO_REHEARSAL_SYSTEM_INSTRUCTION } from '../constants';
@@ -97,6 +99,7 @@ const VideoRehearsal: React.FC<VideoRehearsalProps> = ({
 
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+  const [blockedUi, setBlockedUi] = useState<ReturnType<typeof normalizeBlockedUx> | null>(null);
     const [analysisResult, setAnalysisResult] = useState<string | null>(null);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
     const [plannerSaveStatus, setPlannerSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -299,6 +302,7 @@ useEffect(() => {
         
         setIsLoading(true);
         setError(null);
+        setBlockedUi(null);
         setAnalysisResult(null);
         setSaveStatus('idle');
         // Frame-based analysis:

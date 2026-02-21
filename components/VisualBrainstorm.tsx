@@ -1,6 +1,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { generateImage, editImageWithPrompt } from '../services/geminiService';
+import BlockedPanel from './BlockedPanel';
+import { normalizeBlockedUx } from '../services/blockedUx';
 import { saveIdea } from '../services/ideasService';
 import { BackIcon, ImageIcon, WandIcon, SaveIcon, CheckIcon, ShareIcon, TrashIcon, CameraIcon } from './icons';
 import ShareButton from './ShareButton';
@@ -10,6 +12,7 @@ import { canConsume, consume } from '../services/usageTracker';
 interface VisualBrainstormProps {
     onIdeaSaved: () => void;
     user: User;
+    onRequestUpgrade?: () => void;
 }
 
 const ImageLoadingIndicator: React.FC = () => (
@@ -26,11 +29,12 @@ const ImageLoadingIndicator: React.FC = () => (
 );
 
 
-const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user }) => {
+const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, onRequestUpgrade }) => {
   const [prompt, setPrompt] = useState('');
   const [aspectRatio, setAspectRatio] = useState<'1:1' | '16:9' | '9:16'>('1:1');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [blockedUi, setBlockedUi] = useState<ReturnType<typeof normalizeBlockedUx> | null>(null);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [saveImageStatus, setSaveImageStatus] = useState<'idle' | 'saved'>('idle');
   const [shareFile, setShareFile] = useState<File | null>(null);

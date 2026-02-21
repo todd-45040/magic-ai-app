@@ -1367,8 +1367,7 @@ useEffect(() => {
         setUsageSnapshotError(null);
         const { data } = await supabase.auth.getSession();
         const token = data?.session?.access_token;
-        const headers: Record<string, string> = {};
-        if (token) headers.Authorization = `Bearer ${token}`;
+        const headers: Record<string, string> = { Authorization: token ? `Bearer ${token}` : 'Bearer guest' };
 
         const r = await fetch('/api/ai/usage', { method: 'GET', headers });
         const txt = await r.text();
