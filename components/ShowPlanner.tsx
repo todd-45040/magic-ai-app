@@ -248,7 +248,7 @@ const ScriptGuideModal: React.FC<{ script: string; onClose: () => void }> = ({ s
                     <h2 className="text-xl font-bold text-white">Show Script & Cue Sheet</h2>
                     <div className="flex items-center gap-2">
                          <button onClick={handleCopy} className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 transition-colors">
-                            {copyStatus === 'copied' ? <CheckIcon className="w-4 h-4 text-green-400" /> : <CopyIcon className="w-4 h-4" />}
+                            {copyStatus === 'copied' ? <CheckIcon className="w-4 h-4 text-[#C6A84A]" /> : <CopyIcon className="w-4 h-4" />}
                             <span>{copyStatus === 'copied' ? 'Copied!' : copyStatus === 'failed' ? 'Copy failed' : 'Copy'}</span>
                         </button>
                         <button onClick={onClose} className="py-1.5 px-3 bg-slate-600/50 hover:bg-slate-700 rounded-md text-slate-300 font-bold transition-colors">Close</button>
@@ -733,7 +733,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                 </header>
                 <div className="flex-1 overflow-y-auto px-4 md:px-6 pb-4 pt-4">
                     {activeTab === 'tasks' ? (
-                        tasks.length === 0 ? <div className="text-center py-10 text-slate-400"><p className="mb-3">Add your first beat to start building your performance flow.. Click <span className="text-slate-200 font-semibold">Add Task</span> to get started.</p><button onClick={handleAiSuggestTasks} disabled={isSuggesting} className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold transition-colors"><WandIcon className="w-4 h-4" /><span>{isSuggesting ? 'Thinking...' : 'AI-Suggest Tasks'}</span></button></div> : viewMode === 'list' ? <ListView /> : <BoardView />
+                        tasks.length === 0 ? <div className="text-center py-10 text-slate-400"><p className="mb-3">No tasks yet. Click <span className="text-slate-200 font-semibold">Add Task</span> to get started.</p><button onClick={handleAiSuggestTasks} disabled={isSuggesting} className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold transition-colors"><WandIcon className="w-4 h-4" /><span>{isSuggesting ? 'Thinking...' : 'AI-Suggest Tasks'}</span></button></div> : viewMode === 'list' ? <ListView /> : <BoardView />
 
                     
                     ) : activeTab === 'finances' ? (
@@ -1252,7 +1252,7 @@ const ShowListItem: React.FC<{show: Show, clients: Client[], contractMeta?: Cont
                                 <span
                                     className={`text-[10px] px-2 py-0.5 rounded-full border ${
                                         contractMeta.latestStatus === 'signed'
-                                            ? 'bg-emerald-500/15 text-emerald-200 border-emerald-400/30'
+                                            ? 'bg-emerald-500/15 text-emerald-200 border-[#C6A84A]/30'
                                             : contractMeta.latestStatus === 'sent'
                                             ? 'bg-blue-500/15 text-blue-200 border-blue-400/30'
                                             : 'bg-amber-500/15 text-amber-200 border-amber-400/30'
