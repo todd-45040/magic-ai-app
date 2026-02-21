@@ -245,7 +245,7 @@ const ScriptGuideModal: React.FC<{ script: string; onClose: () => void }> = ({ s
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 motion-reduce:animate-none animate-fade-in" onClick={onClose}>
             <div className="w-full max-w-2xl h-[90vh] max-h-[700px] bg-slate-800 border border-purple-500 rounded-lg shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
                 <header className="p-4 border-b border-slate-700 flex items-center justify-between flex-shrink-0">
-                    <h2 className="text-xl font-bold text-white">Show Script & Cue Sheet</h2>
+                    <h2 className="text-xl font-bold text-white">Performance Script & Cue Sheet</h2>
                     <div className="flex items-center gap-2">
                          <button onClick={handleCopy} className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 transition-colors">
                             {copyStatus === 'copied' ? <CheckIcon className="w-4 h-4 text-green-400" /> : <CopyIcon className="w-4 h-4" />}
@@ -365,7 +365,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
             } as any);
             setShows(newShows);
             setIsShowModalOpen(false);
-            setToastMsg('Show created.');
+            setToastMsg('Performance created.');
         } catch (err: any) {
             console.error('Failed to create show:', err);
             setToastMsg(err?.message ? String(err.message) : "Couldn't create show.");
@@ -378,7 +378,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
         try {
             const newShows = await deleteShow(id);
             setShows(newShows);
-            setToastMsg('Show deleted.');
+            setToastMsg('Performance deleted.');
         } catch (err: any) {
             console.error('Failed to delete show:', err);
             setToastMsg(err?.message ? String(err.message) : "Couldn't delete show.");
@@ -546,17 +546,11 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
         <div className="flex flex-col h-full">
             <header className="p-4 md:px-6 md:pt-6">
                 <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div className="flex items-start gap-3">
+                    <div className="flex items-center gap-3">
                         <ChecklistIcon className="w-8 h-8 text-purple-400" />
-                        <div>
-                            <h2 className="text-3xl font-semibold tracking-tight text-slate-100 font-cinzel">Performance Blueprint</h2>
-                            <div className="mt-2 h-[2px] w-16 bg-[#C6A84A] rounded-full" />
-                            <p className="mt-3 text-sm text-slate-400 max-w-2xl">
-                                Design your act with intentional structure and clear performance beats.
-                            </p>
-                        </div>
+                        <h2 className="text-2xl font-bold text-slate-200 font-cinzel">All Performances</h2>
                     </div>
-                    <button onClick={() => setIsShowModalOpen(true)} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors flex items-center gap-2 text-sm"><WandIcon className="w-4 h-4" /><span>Create New Show</span></button>
+                    <button onClick={() => setIsShowModalOpen(true)} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors flex items-center gap-2 text-sm"><WandIcon className="w-4 h-4" /><span>Create New Performance</span></button>
                 </div>
             </header>
             <main className="flex-1 overflow-y-auto p-4 md:p-6">
@@ -572,7 +566,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                         {shows.map(show => <ShowListItem key={show.id} show={show} clients={clients} contractMeta={contractsMetaByShowId[show.id]} onSelect={() => setSelectedShow(show)} onDelete={() => handleDeleteShow(show.id)} />)}
                     </div>
                 ) : (
-                    <div className="text-center py-12"><StageCurtainsIcon className="w-16 h-16 mx-auto text-slate-600 mb-4" /><h3 className="text-lg font-bold text-slate-400">Your Stage is Bare</h3><p className="text-slate-500">Click "Create New Show" to start planning your next masterpiece.</p></div>
+                    <div className="text-center py-12"><StageCurtainsIcon className="w-16 h-16 mx-auto text-slate-600 mb-4" /><h3 className="text-lg font-bold text-slate-400">Your Stage is Bare</h3><p className="text-slate-500">Click "Create New Performance" to start planning your next masterpiece.</p></div>
                 )}
             </main>
         </div>
@@ -643,7 +637,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
             setIsSuggesting(true);
             setSuggestionError(null);
             try {
-                const prompt = `Show Title: ${selectedShow.title}\nShow Description: ${selectedShow.description || 'N/A'}`;
+                const prompt = `Performance Title: ${selectedShow.title}\nPerformance Description: ${selectedShow.description || 'N/A'}`;
                 const schema = {
                     type: SchemaType.OBJECT,
                     properties: {
@@ -711,7 +705,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
         return (
              <div className="flex flex-col h-full">
                 <header className="p-4 md:px-6 md:pt-6">
-                    <button onClick={() => setSelectedShow(null)} className="flex items-center gap-2 mb-4 text-slate-300 hover:text-white transition-colors"><BackIcon className="w-5 h-5" /><span>Back to All Shows</span></button>
+                    <button onClick={() => setSelectedShow(null)} className="flex items-center gap-2 mb-4 text-slate-300 hover:text-white transition-colors"><BackIcon className="w-5 h-5" /><span>Back to All Performances</span></button>
                     <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
                         <div>
                             <h2 className="text-2xl font-bold text-slate-200 font-cinzel truncate">{selectedShow.title}</h2>
@@ -719,7 +713,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                         </div>
                         <div className="flex items-center gap-2">
                             <button onClick={() => setIsAudienceQrModalOpen(true)} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-md text-white font-semibold transition-colors flex items-center gap-2 text-sm" title="Generate a post-show feedback QR code"><QrCodeIcon className="w-4 h-4" /><span>Audience QR</span></button>
-                            <button onClick={() => setIsLiveModalOpen(true)} className="px-3 py-2 bg-green-600 hover:bg-green-700 rounded-md text-white font-semibold transition-colors flex items-center gap-2 text-sm"><QrCodeIcon className="w-4 h-4" /><span>Start Live Show</span></button>
+                            <button onClick={() => setIsLiveModalOpen(true)} className="px-3 py-2 bg-green-600 hover:bg-green-700 rounded-md text-white font-semibold transition-colors flex items-center gap-2 text-sm"><QrCodeIcon className="w-4 h-4" /><span>Start Live Performance</span></button>
                             <button onClick={handleAiSuggestTasks} disabled={isSuggesting} className="px-3 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold flex items-center gap-2 transition-colors"><WandIcon className="w-4 h-4" /><span>{isSuggesting ? 'Thinking...' : 'AI-Suggest Tasks'}</span></button>
                             <button onClick={generateScriptGuide} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 font-semibold transition-colors flex items-center gap-2 text-sm"><FileTextIcon className="w-4 h-4" /><span>Script Guide</span></button>
                             <button onClick={() => { setTaskToEdit(null); setIsTaskModalOpen(true); }} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors flex items-center gap-2 text-sm"><ChecklistIcon className="w-4 h-4" /><span>Add Task</span></button>
@@ -1083,7 +1077,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                     <div className="text-slate-400">Loading contracts…</div>
                                 ) : !activeContractContent ? (
                                     <div className="text-slate-400">
-                                        No saved contract for this show yet. Generate one in the Contract Generator and click <span className="text-slate-200 font-semibold">Save to Show</span>.
+                                        No saved contract for this performance yet. Generate one in the Contract Generator and click <span className="text-slate-200 font-semibold">Save to Performance</span>.
                                     </div>
                                 ) : (
                                     <pre className="whitespace-pre-wrap text-slate-200 text-sm leading-relaxed">
@@ -1117,7 +1111,7 @@ const ShowModal: React.FC<{
         e?.stopPropagation();
         setError(null);
         if (!title.trim()) {
-            setError('Show title is required.');
+            setError('Performance title is required.');
             return;
         }
         try {
@@ -1144,7 +1138,7 @@ const ShowModal: React.FC<{
                 onClick={(e) => e.stopPropagation()}
             >
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                    <h2 className="text-xl font-bold text-white">Create New Show</h2>
+                    <h2 className="text-xl font-bold text-white">Create New Performance</h2>
 
                     {error && (
                         <div className="p-3 rounded-md bg-red-900/30 border border-red-500/40 text-red-200 text-sm">
@@ -1154,14 +1148,14 @@ const ShowModal: React.FC<{
 
                     <div>
                         <label htmlFor="show-title" className="block text-sm font-medium text-slate-300 mb-1">
-                            Show Title
+                            Performance Title
                         </label>
                         <input
                             id="show-title"
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
                             className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white"
-                            placeholder="e.g., Birthday Party Show"
+                            placeholder="e.g., Birthday Party Performance"
                             autoFocus
                         />
                     </div>
@@ -1212,7 +1206,7 @@ const ShowModal: React.FC<{
                             className={`flex-1 px-4 py-2 rounded-md text-white font-bold ${
                                 (isSaving || !title.trim()) ? 'bg-slate-700 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'
                             }`}
-                            title={!title.trim() ? 'Show title required' : undefined}
+                            title={!title.trim() ? 'Performance title required' : undefined}
                         >
                             Create Show
                         </button>
@@ -1703,7 +1697,7 @@ const LivePerformanceModal: React.FC<{ show: Show; onClose: () => void; onEnd: (
                 <div className="bg-slate-900 p-4 rounded-lg inline-block border border-slate-700">
                     {performance ? <canvas ref={canvasRef} /> : <p>Generating QR Code...</p>}
                 </div>
-                <button onClick={handleEnd} className="w-full mt-6 py-3 bg-red-600 hover:bg-red-700 rounded-md text-white font-bold transition-colors">End Show & View Analytics</button>
+                <button onClick={handleEnd} className="w-full mt-6 py-3 bg-red-600 hover:bg-red-700 rounded-md text-white font-bold transition-colors">End Performance & View Analytics</button>
             </div>
         </div>,
         document.body
@@ -1757,7 +1751,7 @@ const AudienceFeedbackQrModal: React.FC<{ show: Show; onClose: () => void }> = (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={onClose}>
             <div className="w-full max-w-md bg-slate-800 border border-purple-500 rounded-lg shadow-2xl text-center p-8" onClick={(e) => e.stopPropagation()}>
                 <QrCodeIcon className="w-12 h-12 mx-auto mb-2 text-purple-400" />
-                <h2 className="text-2xl font-bold text-white font-cinzel">Post‑Show Feedback</h2>
+                <h2 className="text-2xl font-bold text-white font-cinzel">Post‑Performance Feedback</h2>
                 <p className="text-slate-400 mt-2 mb-4">
                     Display this QR code after the show. Audience members can scan it to leave a quick rating and comments.
                 </p>
