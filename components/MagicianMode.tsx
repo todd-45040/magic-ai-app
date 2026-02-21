@@ -10,7 +10,7 @@ import { findShowByTitle, addTaskToShow, addTasksToShow } from '../services/show
 import { clearDemoData, seedDemoData } from '../services/demoSeedService';
 import { MAGICIAN_SYSTEM_INSTRUCTION, MAGICIAN_PROMPTS, publications, clubs, conventions, AMATEUR_FEATURES, SEMI_PRO_FEATURES, PROFESSIONAL_FEATURES, MAGICIAN_CHAT_TOOLS } from '../constants';
 // FIX: Added missing ShareIcon to the icon imports list.
-import { BackIcon, SendIcon, MagicHatIcon, RabbitIcon, WandIcon, SaveIcon, ClockIcon, AIMagicianIcon, BookIcon, MicrophoneIcon, LightbulbIcon, ShieldIcon, ImageIcon, SearchIcon, CheckIcon, BookmarkIcon, NewspaperIcon, UsersIcon, CameraIcon, VideoIcon, ChecklistIcon, LockIcon, UsersCogIcon, ThumbUpIcon, ThumbDownIcon, StarIcon, QuestionMarkIcon, StageCurtainsIcon, TutorIcon, ShareIcon, DownloadIcon } from './icons';
+import { BackIcon, SendIcon, MagicHatIcon, RabbitIcon, WandIcon, SaveIcon, ClockIcon, AIMagicianIcon, BookIcon, MicrophoneIcon, LightbulbIcon, ShieldIcon, ImageIcon, SearchIcon, CheckIcon, BookmarkIcon, NewspaperIcon, UsersIcon, CameraIcon, VideoIcon, ChecklistIcon, LockIcon, UsersCogIcon, ThumbUpIcon, ThumbDownIcon, StarIcon, ChatBubbleIcon, QuestionMarkIcon, StageCurtainsIcon, TutorIcon, ShareIcon, DownloadIcon } from './icons';
 import { useAppState, useAppDispatch, refreshShows, refreshIdeas, refreshClients, refreshFeedback } from '../store';
 import { useToast } from './ToastProvider';
 import LiveRehearsal from './LiveRehearsal';
@@ -53,6 +53,7 @@ import IllusionBlueprint from './IllusionBlueprint';
 import MagicTheoryTutor from './MagicTheoryTutor';
 import MagicDictionary from './MagicDictionary';
 import AdminPanel from './AdminPanel';
+import AppSuggestionModal from './AppSuggestionModal';
 
 interface AngleRiskFormProps {
     trickName: string;
@@ -1318,6 +1319,7 @@ useEffect(() => {
 
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
+  const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -2400,6 +2402,9 @@ ${action.payload.content}`;
             }}
             contextView={activeView}
           />}
+        {isFeedbackModalOpen && (
+          <AppSuggestionModal onClose={() => setIsFeedbackModalOpen(false)} />
+        )}
       <header className="flex items-center px-3 sm:px-4 py-2 border-b border-slate-800 brand-motif">
         <button onClick={handleReturnToStudioHome} className="p-1.5 mr-2 rounded-full hover:bg-slate-700 transition-colors" aria-label="Back">
           <BackIcon className="w-5 h-5 text-slate-300" />
@@ -2542,6 +2547,14 @@ ${action.payload.content}`;
             onClick={() => handleTabClick('admin')}
           />
         ) : null}
+
+        {/* Rightmost utility: keep feedback visible without cluttering primary tools */}
+        <TabButton
+          label="Feedback"
+          icon={ChatBubbleIcon}
+          isActive={isFeedbackModalOpen}
+          onClick={() => setIsFeedbackModalOpen(true)}
+        />
       </nav>
 
       <main className="flex-1 flex flex-col overflow-y-auto">
