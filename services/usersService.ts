@@ -56,29 +56,51 @@ export const getUserProfile = async (uid: string): Promise<User | null> => {
 export const registerOrUpdateUser = async (user: User, uid: string): Promise<void> => {
   try {
     const email = user.email.toLowerCase();
-    // Preserve existing admin status/membership so we never accidentally downgrade a real admin.
-    let existing: any = null;
+
+    // Read existing row (if any) so we never downgrade a paid/admin account during auth hydration.
+    let existing: { membership?: string | null; is_admin?: boolean | null; trial_end_date?: any } | null = null;
     try {
-      const { data: existingRow } = await supabase.from(USERS_TABLE).select('membership,is_admin,trial_end_date').eq('id', uid).maybeSingle();
-      existing = existingRow || null;
+      const { data: existingRow } = await supabase
+        .from(USERS_TABLE)
+        .select('membership,is_admin,trial_end_date')
+        .eq('id', uid)
+        .maybeSingle();
+      existing = (existingRow as any) || null;
     } catch {
       existing = null;
     }
 
+    const existingMembership = String(existing?.membership ?? '').toLowerCase();
+    const requestedMembership = String((user as any).membership ?? 'trial').toLowerCase() as Membership;
 
-    // If membership isn't one of the paid tiers, enforce trial logic.
-    let membership: Membership = user.membership;
     const requestedIsAdmin = Boolean((user as any).isAdmin) || email === ADMIN_EMAIL;
-    const existingIsAdmin = Boolean(existing?.is_admin) || String(existing?.membership || '').toLowerCase() === 'admin';
+    const existingIsAdmin = Boolean(existing?.is_admin) || existingMembership === 'admin';
+    const isAdmin = requestedIsAdmin || existingIsAdmin;
 
-    if (requestedIsAdmin || membership === 'admin' || existingIsAdmin) {
+    // Start with the best-known membership:
+    // - If the UI thinks "trial" but DB already has a paid tier, keep DB tier.
+    // - If UI requests a paid tier, honor it.
+    let membership: Membership = requestedMembership;
+    if (
+      membership === 'trial' &&
+      existingMembership &&
+      existingMembership !== 'trial' &&
+      (['performer', 'professional', 'amateur', 'semi-pro', 'admin'] as string[]).includes(existingMembership)
+    ) {
+      membership = existingMembership as Membership;
+    }
+
+    // Admin overrides everything.
+    let trialEndDate: number | null =
+      (user as any).trialEndDate ?? (typeof existing?.trial_end_date === 'number' ? existing?.trial_end_date : null);
+
+    if (isAdmin || membership === 'admin') {
       membership = 'admin';
       trialEndDate = null;
     }
 
-    let trialEndDate: number | null = (user as any).trialEndDate ?? null;
-
-    if (!['performer', 'professional', 'amateur', 'semi-pro', 'admin'].includes(membership)) {
+    // Enforce trial logic ONLY if not a recognized tier.
+    if (!(['performer', 'professional', 'amateur', 'semi-pro', 'admin'] as Membership[]).includes(membership)) {
       membership = 'trial';
       if (!trialEndDate) {
         trialEndDate = Date.now() + 14 * 24 * 60 * 60 * 1000;
@@ -89,7 +111,7 @@ export const registerOrUpdateUser = async (user: User, uid: string): Promise<voi
       id: uid,
       email,
       membership,
-      is_admin: Boolean((user as any).isAdmin) || email === ADMIN_EMAIL,
+      is_admin: isAdmin, // critical: preserve admin flag from DB
       generation_count: typeof user.generationCount === 'number' ? user.generationCount : 0,
       last_reset_date: user.lastResetDate ?? new Date().toISOString(),
       trial_end_date: membership === 'trial' ? trialEndDate : null
@@ -101,6 +123,7 @@ export const registerOrUpdateUser = async (user: User, uid: string): Promise<voi
     console.error('Failed to register/update user in Supabase', error);
   }
 };
+
 
 export const updateUserMembership = async (email: string, membership: Membership): Promise<User[]> => {
   try {

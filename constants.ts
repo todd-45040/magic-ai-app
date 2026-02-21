@@ -29,7 +29,7 @@ import {
     TutorIcon
 } from './components/icons';
 
-export const ADMIN_EMAIL = 'admin@magician.com';
+export const ADMIN_EMAIL = 'admin@magicaiwizard.com';
 export const APP_VERSION = 'v0.8 Beta';
 
 // Add GUEST_USER for Audience Mode services
