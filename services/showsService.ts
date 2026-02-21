@@ -191,10 +191,10 @@ export const getShowById = async (id: string): Promise<Show | undefined> => {
 };
 
 
-export const createShow = async (title: string, description?: string | null): Promise<Show> => {
+export const createShow = async (title: string, description?: string | null, clientId?: string | null): Promise<Show> => {
   const userId = await getUserIdOrThrow();
 
-  const payload: any = {
+  const payloadBase: any = {
     user_id: userId,
     title: String(title ?? '').trim(),
     description: description ?? null,
@@ -207,14 +207,23 @@ export const createShow = async (title: string, description?: string | null): Pr
     updated_at: new Date().toISOString()
   };
 
-  if (!payload.title) throw new Error('Show title required');
+  if (!payloadBase.title) throw new Error('Show title required');
+
+  // Some environments may not have client_id yet.
+  // Try with client_id first (when provided), and retry without it if the column is missing.
+  const payload: any = {
+    ...payloadBase,
+    ...(clientId ? { client_id: clientId } : {})
+  };
 
   // Insert and return the created row (most reliable for downstream task inserts)
-  const { data, error } = await supabase
-    .from('shows')
-    .insert(payload)
-    .select('*')
-    .single();
+  let { data, error } = await supabase.from('shows').insert(payload).select('*').single();
+  if (error) {
+    const msg = String((error as any)?.message ?? error ?? '');
+    if (clientId && /Could not find the 'client_id' column of 'shows' in the schema cache/i.test(msg)) {
+      ({ data, error } = await supabase.from('shows').insert(payloadBase).select('*').single());
+    }
+  }
 
   if (error) throw error;
   return data as unknown as Show;
@@ -223,8 +232,9 @@ export const createShow = async (title: string, description?: string | null): Pr
 export const addShow = async (show: Partial<Show>): Promise<Show[]> => {
   const title = (show as any).title ?? (show as any).showTitle ?? '';
   const description = (show as any).description ?? (show as any).show_description ?? null;
+  const clientId = (show as any).clientId ?? (show as any).client_id ?? null;
 
-  await createShow(String(title ?? ''), description);
+  await createShow(String(title ?? ''), description, clientId);
 
   return getShows();
 };

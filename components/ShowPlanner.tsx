@@ -1,7 +1,6 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Type } from '@google/genai';
 import QRCode from 'qrcode';
 import type { Show, Task, Subtask, TaskPriority, Client, Finances, Expense, Performance, User } from '../types';
 import { getShows, addShow, updateShow, deleteShow, addTaskToShow, addTasksToShow, updateTaskInShow, deleteTaskFromShow, toggleSubtask } from '../services/showsService';
@@ -15,6 +14,14 @@ import { useAppState } from '../store';
 
 type ViewMode = 'list' | 'board';
 type SortBy = 'dueDate' | 'priority' | 'createdAt';
+
+// Avoid importing @google/genai in UI components.
+// Our serverless /api/generate endpoint accepts schema objects with string-based types.
+const SchemaType = {
+    OBJECT: 'OBJECT',
+    ARRAY: 'ARRAY',
+    STRING: 'STRING',
+} as const;
 
 const PRIORITY_STYLES: Record<TaskPriority, string> = {
     'High': 'bg-red-500/20 text-red-300 border-red-500/30',
@@ -122,7 +129,6 @@ const TaskModal: React.FC<{
         try {
             setIsSaving(true);
             const payload = taskToEdit ? { ...taskData, id: taskToEdit.id } : taskData;
-            console.log('Saving task priority:', payload.priority);
             await Promise.resolve(onSave(payload));
             onToast?.(taskToEdit ? 'Task updated.' : 'Task saved.');
         } catch (err) {
@@ -221,12 +227,18 @@ const TaskModal: React.FC<{
 };
 
 const ScriptGuideModal: React.FC<{ script: string; onClose: () => void }> = ({ script, onClose }) => {
-    const [copyStatus, setCopyStatus] = useState<'idle' | 'copied'>('idle');
+    const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
 
     const handleCopy = () => {
-        navigator.clipboard.writeText(script);
-        setCopyStatus('copied');
-        setTimeout(() => setCopyStatus('idle'), 2000);
+        try {
+            // Clipboard can fail in some browser/privacy contexts.
+            navigator.clipboard.writeText(script);
+            setCopyStatus('copied');
+            setTimeout(() => setCopyStatus('idle'), 2000);
+        } catch {
+            setCopyStatus('failed');
+            setTimeout(() => setCopyStatus('idle'), 2500);
+        }
     };
 
     return (
@@ -237,7 +249,7 @@ const ScriptGuideModal: React.FC<{ script: string; onClose: () => void }> = ({ s
                     <div className="flex items-center gap-2">
                          <button onClick={handleCopy} className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 transition-colors">
                             {copyStatus === 'copied' ? <CheckIcon className="w-4 h-4 text-green-400" /> : <CopyIcon className="w-4 h-4" />}
-                            <span>{copyStatus === 'copied' ? 'Copied!' : 'Copy'}</span>
+                            <span>{copyStatus === 'copied' ? 'Copied!' : copyStatus === 'failed' ? 'Copy failed' : 'Copy'}</span>
                         </button>
                         <button onClick={onClose} className="py-1.5 px-3 bg-slate-600/50 hover:bg-slate-700 rounded-md text-slate-300 font-bold transition-colors">Close</button>
                     </div>
@@ -342,67 +354,109 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
 
     // Show handlers
     const handleAddShow = async (title: string, description?: string, clientId?: string) => {
-        // NOTE: showsService.addShow expects a Partial<Show> object.
-        // We intentionally do NOT persist clientId unless your DB schema supports it.
-        const newShows = await addShow({
-            title,
-            description: description || null,
-            finances: { performanceFee: 0, expenses: [], income: [] }
-        } as any);
-        setShows(newShows);
-        setIsShowModalOpen(false);
+        try {
+            // NOTE: showsService.addShow expects a Partial<Show> object.
+            // If your DB has client_id, it will be stored; otherwise showsService will safely retry without it.
+            const newShows = await addShow({
+                title,
+                description: description || null,
+                clientId: clientId || null,
+                finances: { performanceFee: 0, expenses: [], income: [] }
+            } as any);
+            setShows(newShows);
+            setIsShowModalOpen(false);
+            setToastMsg('Show created.');
+        } catch (err: any) {
+            console.error('Failed to create show:', err);
+            setToastMsg(err?.message ? String(err.message) : "Couldn't create show.");
+        }
     };
     const handleDeleteShow = async (id: string) => {
         const contractCount = contractsMetaByShowId[id]?.contractCount ?? 0;
         const contractNote = contractCount > 0 ? `\n\nNote: Deleting this show will also delete ${contractCount} contract version${contractCount === 1 ? '' : 's'}.` : '';
-        if (window.confirm('Are you sure you want to delete this entire show? This cannot be undone.' + contractNote)) {
+        if (!window.confirm('Are you sure you want to delete this entire show? This cannot be undone.' + contractNote)) return;
+        try {
             const newShows = await deleteShow(id);
             setShows(newShows);
+            setToastMsg('Show deleted.');
+        } catch (err: any) {
+            console.error('Failed to delete show:', err);
+            setToastMsg(err?.message ? String(err.message) : "Couldn't delete show.");
         }
     };
     const handleUpdateShow = async (showId: string, updates: Partial<Show>) => {
-        const newShows = await updateShow(showId, updates);
-        setShows(newShows);
-        setSelectedShow(newShows.find(s => s.id === showId) || null);
+        try {
+            const newShows = await updateShow(showId, updates);
+            setShows(newShows);
+            setSelectedShow(newShows.find(s => s.id === showId) || null);
+            setToastMsg('Saved.');
+        } catch (err: any) {
+            console.error('Failed to update show:', err);
+            setToastMsg(err?.message ? String(err.message) : "Couldn't save changes.");
+        }
     };
     
     // Task handlers
     const handleAddTask = async (data: any) => {
         if (!selectedShow) return;
-        const newShows = await addTaskToShow(selectedShow.id, data);
-        setShows(newShows);
-        setSelectedShow(newShows.find(s => s.id === selectedShow.id) || null);
-        setIsTaskModalOpen(false);
+        try {
+            const newShows = await addTaskToShow(selectedShow.id, data);
+            setShows(newShows);
+            setSelectedShow(newShows.find(s => s.id === selectedShow.id) || null);
+            setIsTaskModalOpen(false);
+        } catch (err: any) {
+            console.error('Failed to add task:', err);
+            setToastMsg(err?.message ? String(err.message) : "Couldn't add task.");
+        }
     };
     const handleUpdateTask = async (data: Omit<Task, 'createdAt'>) => {
         if (!selectedShow) return;
-        const newShows = await updateTaskInShow(selectedShow.id, data.id, data);
-        setShows(newShows);
-        setSelectedShow(newShows.find(s => s.id === selectedShow.id) || null);
-        setIsTaskModalOpen(false);
-        setTaskToEdit(null);
+        try {
+            const newShows = await updateTaskInShow(selectedShow.id, data.id, data);
+            setShows(newShows);
+            setSelectedShow(newShows.find(s => s.id === selectedShow.id) || null);
+            setIsTaskModalOpen(false);
+            setTaskToEdit(null);
+        } catch (err: any) {
+            console.error('Failed to update task:', err);
+            setToastMsg(err?.message ? String(err.message) : "Couldn't update task.");
+        }
     };
     const handleToggleStatus = async (task: Task) => {
         if (!selectedShow) return;
         const newStatus = task.status === 'To-Do' ? 'Completed' : 'To-Do';
-        const newShows = await updateTaskInShow(selectedShow.id, task.id, { status: newStatus });
-        setShows(newShows);
-        setSelectedShow(newShows.find(s => s.id === selectedShow.id) || null);
+        try {
+            const newShows = await updateTaskInShow(selectedShow.id, task.id, { status: newStatus });
+            setShows(newShows);
+            setSelectedShow(newShows.find(s => s.id === selectedShow.id) || null);
+        } catch (err: any) {
+            console.error('Failed to toggle task status:', err);
+            setToastMsg(err?.message ? String(err.message) : "Couldn't update task status.");
+        }
     };
     const handleDeleteTask = async (id: string) => {
         if (!selectedShow) return;
-        if (window.confirm('Are you sure you want to delete this task?')) {
+        if (!window.confirm('Are you sure you want to delete this task?')) return;
+        try {
             const newShows = await deleteTaskFromShow(selectedShow.id, id);
             setShows(newShows);
             setSelectedShow(newShows.find(s => s.id === selectedShow.id) || null);
+        } catch (err: any) {
+            console.error('Failed to delete task:', err);
+            setToastMsg(err?.message ? String(err.message) : "Couldn't delete task.");
         }
     };
     
     const handleToggleSubtask = async (taskId: string, subtaskId: string) => {
         if (!selectedShow) return;
-        const newShows = await toggleSubtask(selectedShow.id, taskId, subtaskId);
-        setShows(newShows);
-        setSelectedShow(newShows.find(s => s.id === selectedShow.id) || null);
+        try {
+            const newShows = await toggleSubtask(selectedShow.id, taskId, subtaskId);
+            setShows(newShows);
+            setSelectedShow(newShows.find(s => s.id === selectedShow.id) || null);
+        } catch (err: any) {
+            console.error('Failed to toggle subtask:', err);
+            setToastMsg(err?.message ? String(err.message) : "Couldn't update subtask.");
+        }
     };
     
     const openEditModal = (task: Task) => {
@@ -585,11 +639,11 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
             try {
                 const prompt = `Show Title: ${selectedShow.title}\nShow Description: ${selectedShow.description || 'N/A'}`;
                 const schema = {
-                    type: Type.OBJECT,
+                    type: SchemaType.OBJECT,
                     properties: {
                         tasks: {
-                            type: Type.ARRAY,
-                            items: { type: Type.STRING },
+                            type: SchemaType.ARRAY,
+                            items: { type: SchemaType.STRING },
                         },
                     },
                     required: ['tasks']
