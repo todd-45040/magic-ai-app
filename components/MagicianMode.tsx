@@ -1,7 +1,9 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import type { ChatMessage, PredefinedPrompt, TrickIdentificationResult, User, Transcription, MagicianView, MagicianTab, Client, Show, Feedback, SavedIdea, TaskPriority, AiSparkAction } from '../types';
-import { generateResponse, identifyTrickFromImage } from '../services/geminiService';
+import { generateResponse } from '../services/geminiService';
+import { identifyTrickFromImageServer } from '../services/identifyService';
+import { supabase } from '../supabase';
 import { saveIdea } from '../services/ideasService';
 import { exportData } from '../services/dataService';
 import { findShowByTitle, addTaskToShow, addTasksToShow } from '../services/showsService';
@@ -181,8 +183,9 @@ const PromptGrid: React.FC<{
   hasAmateurAccess: boolean;
   hasSemiProAccess: boolean;
   hasProfessionalAccess: boolean;
+  usageQuota?: any;
   onPromptClick: (prompt: PredefinedPrompt) => void;
-}> = ({ prompts, user, hasAmateurAccess, hasSemiProAccess, hasProfessionalAccess, onPromptClick }) => {
+}> = ({ prompts, user, hasAmateurAccess, hasSemiProAccess, hasProfessionalAccess, usageQuota, onPromptClick }) => {
   // --- Organization: Sections (no features added, just layout/UX) ---
   const PRIMARY_TITLES = new Set<string>([
     'Effect Generator',
@@ -463,6 +466,15 @@ const PromptGrid: React.FC<{
     const tip = copy?.tip ?? desc;
     const action = getActionLabel(p.title);
 
+    const remainingForTitle = (() => {
+      if (!usageQuota) return null as null | number;
+      if (p.title === 'Live Patter Rehearsal') return usageQuota?.live_audio_minutes?.remaining ?? null;
+      if (p.title === 'Visual Brainstorm Studio') return usageQuota?.image_gen?.remaining ?? null;
+      if (p.title === 'Identify a Trick') return usageQuota?.identify?.remaining ?? null;
+      if (p.title === 'Video Rehearsal Studio') return usageQuota?.video_uploads?.remaining ?? null;
+      return null;
+    })();
+
     return (
       <button
         key={p.title}
@@ -504,7 +516,12 @@ const PromptGrid: React.FC<{
 
         {/* Action label (aligns with button language: Generate / Start / Open / View) */}
         <div className="mt-3 flex items-center justify-between">
-          <span className="text-[11px] text-slate-500">{isLocked ? 'Professional' : 'Available'}</span>
+          <span className="text-[11px] text-slate-500">
+            {isLocked ? '🔒 Pro Only' : 'Available'}
+            {typeof remainingForTitle === 'number' ? (
+              <span className="ml-2 text-slate-400">Remaining: {remainingForTitle}</span>
+            ) : null}
+          </span>
           <span
             className={[
               'inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold border transition-colors',
@@ -693,6 +710,7 @@ const ChatView: React.FC<{
   hasAmateurAccess: boolean;
   hasSemiProAccess: boolean;
   hasProfessionalAccess: boolean;
+  usageQuota?: any;
   onPromptClick: (prompt: PredefinedPrompt) => void;
 }> = (props) => {
   let content;
@@ -723,6 +741,7 @@ const ChatView: React.FC<{
       hasAmateurAccess={props.hasAmateurAccess}
       hasSemiProAccess={props.hasSemiProAccess}
       hasProfessionalAccess={props.hasProfessionalAccess}
+      usageQuota={props.usageQuota}
       onPromptClick={props.onPromptClick}
     />;
   }
@@ -1332,9 +1351,52 @@ useEffect(() => {
   const tierLabel = formatTierLabel(tier);
 
   // Access mapping
-  const hasAmateurAccess = (['performer', 'professional'].includes(tier) || isTrialActive) as boolean;
-  const hasSemiProAccess = hasAmateurAccess; // kept for existing prop wiring
-  const hasProfessionalAccess = (tier === 'professional' || isTrialActive) as boolean;
+  const hasAmateurAccess = (['trial', 'performer', 'professional'].includes(tier) && !isExpired) as boolean;
+  const hasSemiProAccess = (['performer', 'professional'].includes(tier) && !isExpired) as boolean; // marketing/CRM tier
+  const hasProfessionalAccess = ((tier === 'professional' || user.isAdmin) && !isExpired) as boolean;
+
+  // Option 1: surface monthly tool quotas in the UI
+  const [usageSnapshot, setUsageSnapshot] = useState<any>(null);
+  const [usageSnapshotError, setUsageSnapshotError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchUsage = async () => {
+      try {
+        setUsageSnapshotError(null);
+        const { data } = await supabase.auth.getSession();
+        const token = data?.session?.access_token;
+        const headers: Record<string, string> = {};
+        if (token) headers.Authorization = `Bearer ${token}`;
+
+        const r = await fetch('/api/ai/usage', { method: 'GET', headers });
+        const txt = await r.text();
+        const parsed = txt ? JSON.parse(txt) : null;
+
+        if (!cancelled) {
+          if (!r.ok || !parsed?.ok) {
+            setUsageSnapshot(null);
+            setUsageSnapshotError(parsed?.message || `Usage unavailable (${r.status})`);
+          } else {
+            setUsageSnapshot(parsed);
+          }
+        }
+      } catch (e: any) {
+        if (!cancelled) {
+          setUsageSnapshot(null);
+          setUsageSnapshotError(e?.message || 'Usage unavailable');
+        }
+      }
+    };
+
+    void fetchUsage();
+    const t = window.setInterval(fetchUsage, 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(t);
+    };
+  }, [user?.email]);
 
 
   // Dashboard: Primary Action ("Today's Focus")
@@ -1887,10 +1949,15 @@ useEffect(() => {
     setIdentificationResult(null);
 
     try {
-        const result = await identifyTrickFromImage(base64Data, mimeType, user);
+        const result = await identifyTrickFromImageServer(base64Data, mimeType, user);
         setIdentificationResult(result);
     } catch (err) {
-        setIdentificationError(err instanceof Error ? err.message : "An unknown error occurred.");
+        const msg = err instanceof Error ? err.message : 'An unknown error occurred.';
+        setIdentificationError(msg);
+        // If quota/tier blocked, nudge upgrade UI.
+        if (/quota|upgrade|professional|pro only|locked/i.test(msg)) {
+          setIsUpgradeModalOpen(true);
+        }
     } finally {
         setIsIdentifying(false);
     }
@@ -2244,7 +2311,7 @@ ${action.payload.content}`;
         case 'identify': return <IdentifyTab imageFile={imageFile} imagePreview={imagePreview} identificationResult={identificationResult} isIdentifying={isIdentifying} identificationError={identificationError} fileInputRef={fileInputRef} handleImageUpload={handleImageUpload} handleIdentifyClick={handleIdentifyClick} />;
         case 'publications': return <PublicationsTab />;
         case 'community': return <CommunityTab />;
-        case 'chat': default: return <ChatView messages={messages} isLoading={isLoading} recentlySaved={recentlySaved} handleSaveIdea={handleSaveIdea} handleFeedback={handleFeedback} messagesEndRef={messagesEndRef} showAngleRiskForm={showAngleRiskForm} trickName={trickName} setTrickName={setTrickName} audienceType={audienceType} setAudienceType={setAudienceType} handleAngleRiskSubmit={handleAngleRiskSubmit} onCancelAngleRisk={() => { setShowAngleRiskForm(false); setTrickName(''); setAudienceType(null); }} showRehearsalForm={showRehearsalForm} routineDescription={routineDescription} setRoutineDescription={setRoutineDescription} targetDuration={targetDuration} setTargetDuration={setTargetDuration} handleRehearsalSubmit={handleRehearsalSubmit} onCancelRehearsal={() => { setShowRehearsalForm(false); setRoutineDescription(''); setTargetDuration(''); }} onFileChange={handleRoutineScriptUpload} showInnovationEngineForm={showInnovationEngineForm} effectToInnovate={effectToInnovate} setEffectToInnovate={setEffectToInnovate} handleInnovationEngineSubmit={handleInnovationEngineSubmit} onCancelInnovationEngine={() => { setShowInnovationEngineForm(false); setEffectToInnovate(''); }} prompts={MAGICIAN_PROMPTS} user={user} hasAmateurAccess={hasAmateurAccess} hasSemiProAccess={hasSemiProAccess} hasProfessionalAccess={hasProfessionalAccess} onPromptClick={handlePromptClick} />;
+        case 'chat': default: return <ChatView messages={messages} isLoading={isLoading} recentlySaved={recentlySaved} handleSaveIdea={handleSaveIdea} handleFeedback={handleFeedback} messagesEndRef={messagesEndRef} showAngleRiskForm={showAngleRiskForm} trickName={trickName} setTrickName={setTrickName} audienceType={audienceType} setAudienceType={setAudienceType} handleAngleRiskSubmit={handleAngleRiskSubmit} onCancelAngleRisk={() => { setShowAngleRiskForm(false); setTrickName(''); setAudienceType(null); }} showRehearsalForm={showRehearsalForm} routineDescription={routineDescription} setRoutineDescription={setRoutineDescription} targetDuration={targetDuration} setTargetDuration={setTargetDuration} handleRehearsalSubmit={handleRehearsalSubmit} onCancelRehearsal={() => { setShowRehearsalForm(false); setRoutineDescription(''); setTargetDuration(''); }} onFileChange={handleRoutineScriptUpload} showInnovationEngineForm={showInnovationEngineForm} effectToInnovate={effectToInnovate} setEffectToInnovate={setEffectToInnovate} handleInnovationEngineSubmit={handleInnovationEngineSubmit} onCancelInnovationEngine={() => { setShowInnovationEngineForm(false); setEffectToInnovate(''); }} prompts={MAGICIAN_PROMPTS} user={user} hasAmateurAccess={hasAmateurAccess} hasSemiProAccess={hasSemiProAccess} hasProfessionalAccess={hasProfessionalAccess} usageQuota={usageSnapshot?.quota} onPromptClick={handlePromptClick} />;
     }
   }
 

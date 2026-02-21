@@ -42,6 +42,13 @@ export default async function handler(req: any, res: any) {
     const used = status.used ?? 0;
     const remaining = status.remaining ?? 0;
     const resetAt = (status as any).resetAt;
+    const quota = (status as any).quota ?? {
+      live_audio_minutes: { remaining: null },
+      image_gen: { remaining: null },
+      identify: { remaining: null },
+      video_uploads: { remaining: null },
+      resetAt: null,
+    };
 
     // Phase 2A: intelligence signals
     const nearLimit = limit > 0 ? remaining <= Math.ceil(limit * 0.15) : false;
@@ -60,6 +67,7 @@ export default async function handler(req: any, res: any) {
       limit,
       used,
       remaining,
+      quota,
       nearLimit,
       upgradeRecommended,
       sessionsToday: (status as any).sessionsToday ?? 0,

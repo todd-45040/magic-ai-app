@@ -1,7 +1,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import type { ChatMessage, PredefinedPrompt, TrickIdentificationResult, AudienceTab, Question } from '../types';
-import { identifyTrickFromImage, generateResponse } from '../services/geminiService';
+import { generateResponse } from '../services/geminiService';
+import { identifyTrickFromImageServer } from '../services/identifyService';
 import { saveIdea } from '../services/ideasService';
 import { addFeedback } from '../services/feedbackService';
 import { addQuestion } from '../services/questionsService';
@@ -244,7 +245,7 @@ const AudienceMode: React.FC<AudienceModeProps> = ({ onBack }) => {
 
     try {
         // FIX: Pass GUEST_USER as the 3rd argument to identifyTrickFromImage
-        const result = await identifyTrickFromImage(base64Data, mimeType, GUEST_USER);
+        const result = await identifyTrickFromImageServer(base64Data, mimeType, GUEST_USER);
         setIdentificationResult(result);
     } catch (err) {
         setIdentificationError(err instanceof Error ? err.message : "An unknown error occurred.");

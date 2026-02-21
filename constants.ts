@@ -312,8 +312,6 @@ export const SEMI_PRO_FEATURES = [
 ];
 
 export const PROFESSIONAL_FEATURES = [
-    'Live Patter Rehearsal',
-    'Visual Brainstorm Studio',
     'Director Mode',
     'Persona Simulator',
     'Video Rehearsal Studio',
