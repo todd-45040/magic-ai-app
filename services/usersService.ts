@@ -56,12 +56,29 @@ export const getUserProfile = async (uid: string): Promise<User | null> => {
 export const registerOrUpdateUser = async (user: User, uid: string): Promise<void> => {
   try {
     const email = user.email.toLowerCase();
+    // Preserve existing admin status/membership so we never accidentally downgrade a real admin.
+    let existing: any = null;
+    try {
+      const { data: existingRow } = await supabase.from(USERS_TABLE).select('membership,is_admin,trial_end_date').eq('id', uid).maybeSingle();
+      existing = existingRow || null;
+    } catch {
+      existing = null;
+    }
+
 
     // If membership isn't one of the paid tiers, enforce trial logic.
     let membership: Membership = user.membership;
+    const requestedIsAdmin = Boolean((user as any).isAdmin) || email === ADMIN_EMAIL;
+    const existingIsAdmin = Boolean(existing?.is_admin) || String(existing?.membership || '').toLowerCase() === 'admin';
+
+    if (requestedIsAdmin || membership === 'admin' || existingIsAdmin) {
+      membership = 'admin';
+      trialEndDate = null;
+    }
+
     let trialEndDate: number | null = (user as any).trialEndDate ?? null;
 
-    if (!['performer', 'professional', 'amateur', 'semi-pro'].includes(membership)) {
+    if (!['performer', 'professional', 'amateur', 'semi-pro', 'admin'].includes(membership)) {
       membership = 'trial';
       if (!trialEndDate) {
         trialEndDate = Date.now() + 14 * 24 * 60 * 60 * 1000;
@@ -72,7 +89,7 @@ export const registerOrUpdateUser = async (user: User, uid: string): Promise<voi
       id: uid,
       email,
       membership,
-      is_admin: email === ADMIN_EMAIL,
+      is_admin: Boolean((user as any).isAdmin) || email === ADMIN_EMAIL,
       generation_count: typeof user.generationCount === 'number' ? user.generationCount : 0,
       last_reset_date: user.lastResetDate ?? new Date().toISOString(),
       trial_end_date: membership === 'trial' ? trialEndDate : null
