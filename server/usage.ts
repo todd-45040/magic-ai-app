@@ -451,6 +451,8 @@ export async function getAiUsageStatus(req: any): Promise<{
   liveRemaining?: number;
   burstLimit?: number;
   burstRemaining?: number;
+  // Phase 2C-B: monthly tool quotas (best-effort). Shape is intentionally loose for UI.
+  quota?: any;
 }> {
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -507,6 +509,13 @@ export async function getAiUsageStatus(req: any): Promise<{
       liveRemaining: remaining,
       burstLimit,
       burstRemaining,
+      quota: {
+        live_audio_minutes: { remaining: 0 },
+        image_gen: { remaining: 0 },
+        identify: { remaining: 0 },
+        video_uploads: { remaining: 0 },
+        resetAt: null,
+      },
     };
   }
 
@@ -751,14 +760,11 @@ export async function enforceAiUsage(
   }
 
   // Authed user: enforce against public.users table
-  const { data: profileData, error: profileErr } = await admin
+  const { data: profile, error: profileErr } = await admin
     .from('users')
     .select('id, membership, generation_count, last_reset_date, trial_end_date, quota_live_audio_minutes, quota_image_gen, quota_identify, quota_video_uploads, quota_reset_date')
     .eq('id', userId)
     .maybeSingle();
-
-  // IMPORTANT: this must be mutable because we may refresh quota balances.
-  let profile: any = profileData || null;
 
   // If no profile exists yet, create one (trial by default)
   let membership: Membership = 'trial';
