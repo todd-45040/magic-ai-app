@@ -26,6 +26,8 @@ import FormattedText from './FormattedText';
 import AccountMenu from './AccountMenu';
 import UsageMeter from './UsageMeter';
 import UsageLimitsCard from './UsageLimitsCard';
+import BlockedPanel from './BlockedPanel';
+import { normalizeBlockedUx, type BlockedUx } from '../services/blockedUx';
 import { normalizeTier, getMembershipDaysRemaining, formatTierLabel } from '../services/membershipService';
 import UpgradeModal from './UpgradeModal';
 import MemberManagement from './MemberManagement';
@@ -759,10 +761,12 @@ const IdentifyTab: React.FC<{
     identificationResult: TrickIdentificationResult | null;
     isIdentifying: boolean;
     identificationError: string | null;
+    identificationBlocked: BlockedUx | null;
     fileInputRef: React.RefObject<HTMLInputElement>;
     handleImageUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
     handleIdentifyClick: () => void;
-}> = ({ imagePreview, identificationResult, isIdentifying, identificationError, fileInputRef, handleImageUpload, handleIdentifyClick }) => (
+    onRequestUpgrade: () => void;
+}> = ({ imagePreview, identificationResult, isIdentifying, identificationError, identificationBlocked, fileInputRef, handleImageUpload, handleIdentifyClick, onRequestUpgrade }) => (
     <div className="flex-1 overflow-y-auto p-4 md:p-6">
         <div className="animate-fade-in space-y-4 max-w-2xl mx-auto">
             <h2 className="text-2xl font-bold text-slate-200 font-cinzel">Identify a Trick</h2>
@@ -796,6 +800,13 @@ const IdentifyTab: React.FC<{
                         <span>Consulting magical archives...</span>
                     </div>
                 </div>
+            )}
+            {identificationBlocked && (
+                <BlockedPanel
+                    blocked={identificationBlocked}
+                    onUpgrade={identificationBlocked.showUpgrade ? onRequestUpgrade : undefined}
+                    onRetry={identificationBlocked.retryable ? handleIdentifyClick : undefined}
+                />
             )}
             {identificationError && <p className="text-red-400 text-center bg-red-900/20 p-3 rounded-lg">{identificationError}</p>}
             {identificationResult && (
@@ -1326,6 +1337,7 @@ useEffect(() => {
   const [identificationResult, setIdentificationResult] = useState<TrickIdentificationResult | null>(null);
   const [isIdentifying, setIsIdentifying] = useState(false);
   const [identificationError, setIdentificationError] = useState<string | null>(null);
+  const [identificationBlocked, setIdentificationBlocked] = useState<BlockedUx | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -1937,6 +1949,7 @@ useEffect(() => {
         reader.readAsDataURL(file);
         setIdentificationResult(null);
         setIdentificationError(null);
+        setIdentificationBlocked(null);
     }
   };
 
@@ -1949,16 +1962,18 @@ useEffect(() => {
     setIsIdentifying(true);
     setIdentificationError(null);
     setIdentificationResult(null);
+    setIdentificationBlocked(null);
 
     try {
         const result = await identifyTrickFromImageServer(base64Data, mimeType, user);
         setIdentificationResult(result);
     } catch (err) {
-        const msg = err instanceof Error ? err.message : 'An unknown error occurred.';
-        setIdentificationError(msg);
-        // If quota/tier blocked, nudge upgrade UI.
-        if (/quota|upgrade|professional|pro only|locked/i.test(msg)) {
-          setIsUpgradeModalOpen(true);
+        const blocked = normalizeBlockedUx(err, { toolName: 'Identify a Trick' });
+        if (blocked.showUpgrade || blocked.retryable) {
+          setIdentificationBlocked(blocked);
+        } else {
+          const msg = err instanceof Error ? err.message : 'An unknown error occurred.';
+          setIdentificationError(msg);
         }
     } finally {
         setIsIdentifying(false);
@@ -2214,7 +2229,15 @@ ${action.payload.content}`;
             />
           </>
         );
-        case 'live-rehearsal': return <LiveRehearsal user={user} onReturnToStudio={handleReturnFromRehearsal} onIdeaSaved={() => handleIdeaSaved('Rehearsal saved!')} />;
+        case 'live-rehearsal':
+          return (
+            <LiveRehearsal
+              user={user}
+              onReturnToStudio={handleReturnFromRehearsal}
+              onIdeaSaved={() => handleIdeaSaved('Rehearsal saved!')}
+              onRequestUpgrade={() => setIsUpgradeModalOpen(true)}
+            />
+          );
         case 'video-rehearsal': return <VideoRehearsal onIdeaSaved={() => handleIdeaSaved('Video analysis saved!')} user={user} />;
         case 'angle-risk': return <AngleRiskAnalysis user={user} onIdeaSaved={() => handleIdeaSaved('Angle/Risk analysis saved!')} />;
         case 'visual-brainstorm': return <VisualBrainstorm onIdeaSaved={() => handleIdeaSaved('Image idea saved!')} user={user} />;
@@ -2310,7 +2333,21 @@ ${action.payload.content}`;
         case 'effect-generator': return <EffectGenerator onIdeaSaved={() => handleIdeaSaved('Effect ideas saved!')} />;
         case 'magic-wire': return <MagicWire currentUser={user} onIdeaSaved={() => handleIdeaSaved('News article saved!')} />;
         case 'global-search': return <GlobalSearch shows={shows} ideas={ideas} onNavigate={handleDeepLink} />;
-        case 'identify': return <IdentifyTab imageFile={imageFile} imagePreview={imagePreview} identificationResult={identificationResult} isIdentifying={isIdentifying} identificationError={identificationError} fileInputRef={fileInputRef} handleImageUpload={handleImageUpload} handleIdentifyClick={handleIdentifyClick} />;
+        case 'identify':
+          return (
+            <IdentifyTab
+              imageFile={imageFile}
+              imagePreview={imagePreview}
+              identificationResult={identificationResult}
+              isIdentifying={isIdentifying}
+              identificationError={identificationError}
+              identificationBlocked={identificationBlocked}
+              fileInputRef={fileInputRef}
+              handleImageUpload={handleImageUpload}
+              handleIdentifyClick={handleIdentifyClick}
+              onRequestUpgrade={() => setIsUpgradeModalOpen(true)}
+            />
+          );
         case 'publications': return <PublicationsTab />;
         case 'community': return <CommunityTab />;
         case 'chat': default: return <ChatView messages={messages} isLoading={isLoading} recentlySaved={recentlySaved} handleSaveIdea={handleSaveIdea} handleFeedback={handleFeedback} messagesEndRef={messagesEndRef} showAngleRiskForm={showAngleRiskForm} trickName={trickName} setTrickName={setTrickName} audienceType={audienceType} setAudienceType={setAudienceType} handleAngleRiskSubmit={handleAngleRiskSubmit} onCancelAngleRisk={() => { setShowAngleRiskForm(false); setTrickName(''); setAudienceType(null); }} showRehearsalForm={showRehearsalForm} routineDescription={routineDescription} setRoutineDescription={setRoutineDescription} targetDuration={targetDuration} setTargetDuration={setTargetDuration} handleRehearsalSubmit={handleRehearsalSubmit} onCancelRehearsal={() => { setShowRehearsalForm(false); setRoutineDescription(''); setTargetDuration(''); }} onFileChange={handleRoutineScriptUpload} showInnovationEngineForm={showInnovationEngineForm} effectToInnovate={effectToInnovate} setEffectToInnovate={setEffectToInnovate} handleInnovationEngineSubmit={handleInnovationEngineSubmit} onCancelInnovationEngine={() => { setShowInnovationEngineForm(false); setEffectToInnovate(''); }} prompts={MAGICIAN_PROMPTS} user={user} hasAmateurAccess={hasAmateurAccess} hasSemiProAccess={hasSemiProAccess} hasProfessionalAccess={hasProfessionalAccess} usageQuota={usageSnapshot?.quota} onPromptClick={handlePromptClick} />;

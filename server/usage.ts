@@ -214,8 +214,9 @@ function tzParts(d: Date, timeZone: string): Record<string, string> {
 function tzOffsetMinutes(d: Date, timeZone: string): number {
   const parts = tzParts(d, timeZone);
   const tzName = parts.timeZoneName || 'GMT+00:00';
-  // Examples: "GMT-05:00", "GMT+01:00"
-  const m = tzName.match(/^GMT([+-])(\d{2}):(\d{2})$/);
+  // Node/Intl may emit offsets in several shapes depending on runtime:
+  //   "GMT-05:00", "GMT+01:00", "GMT-5", "UTC-05:00", "UTC+1"
+  const m = tzName.match(/^(?:GMT|UTC)([+-])(\d{1,2})(?::(\d{2}))?$/);
   if (!m) return 0;
   const sign = m[1] === '-' ? -1 : 1;
   const hh = Number(m[2] || 0);

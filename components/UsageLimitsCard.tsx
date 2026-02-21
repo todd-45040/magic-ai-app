@@ -87,10 +87,10 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
   };
 
   return (
-    <section className="rounded-2xl border border-white/10 bg-white/5 shadow-sm">
+    <section className={`rounded-2xl border border-white/10 bg-white/5 shadow-sm transition-all duration-300 ${open ? 'ring-1 ring-white/10' : 'hover:bg-white/[0.06]'}`}>
       <button
         type="button"
-        className="w-full flex items-center justify-between gap-3 px-4 py-3 hover:bg-white/5 transition-colors rounded-2xl"
+        className="w-full flex items-center justify-between gap-3 px-4 py-3 transition-colors rounded-2xl"
         onClick={() => setOpen(v => !v)}
         aria-expanded={open}
       >
@@ -111,11 +111,20 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
             <span className="hidden sm:inline text-xs text-slate-200/80">More capacity →</span>
           )}
           <span className="text-xs text-slate-300/80">{open ? 'Hide' : 'Show'}</span>
+          <svg
+            className={`w-4 h-4 text-slate-300/70 transition-transform duration-300 ${open ? 'rotate-180' : 'rotate-0'}`}
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 10.94l3.71-3.71a.75.75 0 1 1 1.06 1.06l-4.24 4.24a.75.75 0 0 1-1.06 0L5.21 8.29a.75.75 0 0 1 .02-1.08z" clipRule="evenodd" />
+          </svg>
         </div>
       </button>
 
-      {open && (
-        <div className="px-4 pb-4 pt-1 border-t border-white/10">
+      <div
+        className={`px-4 border-t border-white/10 overflow-hidden transition-[max-height,opacity] duration-300 ease-out ${open ? 'max-h-[680px] opacity-100 pb-4 pt-1' : 'max-h-0 opacity-0 pb-0 pt-0'}`}
+      >
           {error ? (
             <div className="mt-3 rounded-xl border border-rose-400/15 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">
               Usage unavailable: <span className="text-rose-100/80">{error}</span>
@@ -172,8 +181,7 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
               </div>
             </>
           )}
-        </div>
-      )}
+      </div>
     </section>
   );
 }

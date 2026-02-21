@@ -10,6 +10,8 @@ import { consumeLiveMinutesServer, emitLiveUsageUpdate } from '../services/liveM
 import { fetchUsageStatus } from '../services/usageStatusService';
 import { MAGICIAN_LIVE_REHEARSAL_SYSTEM_INSTRUCTION, LIVE_REHEARSAL_TOOLS } from '../constants';
 import { BackIcon, MicrophoneIcon, StopIcon, SaveIcon, WandIcon, TrashIcon, TimerIcon } from './icons';
+import BlockedPanel from './BlockedPanel';
+import { normalizeBlockedUx, type BlockedUx } from '../services/blockedUx';
 
 // ---- Debug instrumentation (enabled via ?debugRehearsal=1 or localStorage MAW_DEBUG_REHEARSAL=1) ----
 type DebugEvent = { ts: number; event: string; data?: any };
@@ -82,10 +84,11 @@ function createBlob(data: Float32Array): GeminiBlob {
 }
 
 
-const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, onIdeaSaved }) => {
+const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => void }> = ({ user, onReturnToStudio, onIdeaSaved, onRequestUpgrade }) => {
     const [view, setView] = useState<'idle' | 'rehearsing' | 'reviewing'>('idle');
     const [status, setStatus] = useState<'idle' | 'connecting' | 'listening' | 'error'>('idle');
     const [errorMessage, setErrorMessage] = useState('');
+    const [blockedUx, setBlockedUx] = useState<BlockedUx | null>(null);
     const [transcriptionHistory, setTranscriptionHistory] = useState<Transcription[]>([]);
     
     const sessionRef = useRef<LiveSession | null>(null);
@@ -332,10 +335,17 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
 
 
     const handleStartSession = async () => {
+        setBlockedUx(null);
         // Server-backed cap for live rehearsal minutes (daily), consistent across devices.
         try {
             const s = await fetchUsageStatus();
             if (s?.ok && s.liveLimit != null && s.liveRemaining != null && s.liveLimit > 0 && s.liveRemaining <= 0) {
+                setBlockedUx(
+                    normalizeBlockedUx(
+                        { error_code: 'QUOTA_EXCEEDED', message: 'Live rehearsal minutes limit reached.', status: 429, retryable: false },
+                        { toolName: 'Live Rehearsal (Audio)' }
+                    )
+                );
                 setStatus('error');
                 setErrorMessage(
                     `Daily live rehearsal minutes limit reached (${Number(s.liveUsed ?? 0)}/${Number(s.liveLimit ?? 0)} min). This is separate from the AI message limit. Upgrade to continue.`
@@ -347,6 +357,12 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
             try {
                 const cur = getUsage(user, 'live_minutes');
                 if (cur.limit > 0 && cur.remaining <= 0) {
+                    setBlockedUx(
+                        normalizeBlockedUx(
+                            { error_code: 'QUOTA_EXCEEDED', message: 'Live rehearsal minutes limit reached.', status: 429, retryable: false },
+                            { toolName: 'Live Rehearsal (Audio)' }
+                        )
+                    );
                     setStatus('error');
                     setErrorMessage(
                         `Daily live rehearsal minutes limit reached (${cur.used}/${cur.limit} min). This is separate from the AI message limit. Upgrade to continue.`
@@ -526,6 +542,12 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
         } catch (error: any) {
             console.error('Failed to start session or get microphone:', error);
             errorOccurred.current = true;
+            try {
+                const blocked = normalizeBlockedUx(error, { toolName: 'Live Rehearsal (Audio)' });
+                if (blocked.showUpgrade || blocked.retryable) setBlockedUx(blocked);
+            } catch {
+                // ignore
+            }
             if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
                 setErrorMessage('Microphone permission denied. Please allow microphone access in your browser settings.');
             } else {
@@ -755,7 +777,13 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
                 const res = await consumeLiveMinutesServer(minutes);
                 emitLiveUsageUpdate(res);
                 if (!res.ok) {
-                    // If we hit the cap, show it immediately.
+                    // If we hit the cap, show it immediately (unified blocked UX).
+                    setBlockedUx(
+                        normalizeBlockedUx(
+                            { error_code: 'QUOTA_EXCEEDED', message: res.error || 'Live rehearsal limit reached.', status: 429, retryable: false },
+                            { toolName: 'Live Rehearsal (Audio)' }
+                        )
+                    );
                     setStatus('error');
                     setErrorMessage(res.error || 'Daily live rehearsal minutes limit reached. Upgrade to continue.');
                 }
@@ -870,7 +898,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
                             </div>
                         ) : (
                             <div className="flex-1 flex flex-col items-center justify-center gap-6">
-                                <StatusIndicator status={status} errorMessage={errorMessage} onStart={handleStartSession} />
+                                <StatusIndicator status={status} errorMessage={errorMessage} blockedUx={blockedUx} onUpgrade={onRequestUpgrade} onStart={handleStartSession} />
                                 {view === 'idle' && status !== 'connecting' && (
                                     <div className="w-full max-w-3xl">
                                         <RehearsalHistory onDiscuss={(t) => safeReturnToStudio(t)} />
@@ -915,7 +943,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps> = ({ user, onReturnToStudio, o
 };
 
 
-const StatusIndicator: React.FC<{status: string, errorMessage: string, onStart: () => void}> = ({status, errorMessage, onStart}) => {
+const StatusIndicator: React.FC<{status: string, errorMessage: string, blockedUx: BlockedUx | null, onUpgrade?: () => void, onStart: () => void}> = ({status, errorMessage, blockedUx, onUpgrade, onStart}) => {
     switch (status) {
         case 'connecting':
             return <p className="text-slate-300 text-lg">Connecting and requesting microphone...</p>;
@@ -934,10 +962,22 @@ const StatusIndicator: React.FC<{status: string, errorMessage: string, onStart: 
         case 'error':
             return (
                 <div className="text-center">
-                    <p className="text-red-400 text-lg mb-4">{errorMessage}</p>
-                     <button onClick={onStart} className="px-6 py-3 bg-slate-600 hover:bg-slate-700 rounded-full text-white font-bold transition-colors">
-                        Try Again
-                    </button>
+                    {blockedUx ? (
+                        <div className="max-w-xl mx-auto">
+                            <BlockedPanel
+                                blocked={blockedUx}
+                                onUpgrade={blockedUx.showUpgrade ? onUpgrade : undefined}
+                                onRetry={blockedUx.retryable ? onStart : undefined}
+                            />
+                        </div>
+                    ) : (
+                        <>
+                            <p className="text-red-400 text-lg mb-4">{errorMessage}</p>
+                            <button onClick={onStart} className="px-6 py-3 bg-slate-600 hover:bg-slate-700 rounded-full text-white font-bold transition-colors">
+                                Try Again
+                            </button>
+                        </>
+                    )}
                 </div>
             );
         case 'idle':
