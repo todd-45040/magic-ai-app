@@ -25,6 +25,7 @@ import ShareButton from './ShareButton';
 import FormattedText from './FormattedText';
 import AccountMenu from './AccountMenu';
 import UsageMeter from './UsageMeter';
+import UsageLimitsCard from './UsageLimitsCard';
 import { normalizeTier, getMembershipDaysRemaining, formatTierLabel } from '../services/membershipService';
 import UpgradeModal from './UpgradeModal';
 import MemberManagement from './MemberManagement';
@@ -2416,6 +2417,15 @@ ${action.payload.content}`;
             </button>
           </div>
         </div>
+      )}
+
+      {/* Option 1 (Phase 2C): polished, collapsible "Usage & Limits" card */}
+      {!isDemoMode && (
+        <UsageLimitsCard
+          usage={usageSnapshot}
+          error={usageSnapshotError}
+          onUpgrade={() => setIsUpgradeModalOpen(true)}
+        />
       )}
 
 {!isDemoMode && showBackupReminder && (
