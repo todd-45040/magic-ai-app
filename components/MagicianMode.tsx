@@ -2434,7 +2434,7 @@ ${action.payload.content}`;
                 >
                   {daysRemaining != null
                     ? `${tierLabel}: ${daysRemaining} day${daysRemaining === 1 ? '' : 's'} left`
-                    : `${tierLabel} Member`}
+                    : (tier === 'admin' ? `${tierLabel}` : `${tierLabel} Member`)}
                 </span>
               </div>
             )}
