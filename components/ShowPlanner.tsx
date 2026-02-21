@@ -513,11 +513,14 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
              <div ref={el => { taskRefs.current.set(task.id, el); }} className={`p-3 rounded-lg border flex flex-col gap-3 transition-all ${isOverdue ? 'bg-red-900/20 border-red-500/50' : `bg-slate-800 border-slate-700 border-l-4 ${priorityBorders[task.priority]}`}`}>
                 <div className="flex items-start gap-3">
                     <input type="checkbox" checked={task.status === 'Completed'} onChange={() =>
-                    {task.status === 'Completed' && (
-                        <span className="ml-2 text-xs text-[#C6A84A]">Locked In</span>
-                    )} handleToggleStatus(task)} className="mt-1 w-5 h-5 accent-purple-500 bg-slate-900 flex-shrink-0" />
+                    <input
+                        type="checkbox"
+                        checked={task.status === 'Completed'}
+                        onChange={() => handleToggleStatus(task)}
+                        className="mt-1 w-5 h-5 accent-purple-500 bg-slate-900 flex-shrink-0"
+                      />
                     <div className="flex-1">
-                        <p className={`font-semibold text-slate-200 ${isOverdue ? '!text-red-300' : ''}`}>{task.title}</p>
+                        <p className={`font-semibold text-slate-200 ${isOverdue ? '!text-red-300' : ''}`}><span className="ml-2 text-xs text-[#C6A84A]">Locked In</span>{task.title}</p>
                         {task.notes && <p className="text-sm text-slate-400 mt-1 whitespace-pre-wrap break-words">{task.notes}</p>}
                     </div>
                     <div className="flex items-center gap-1">
