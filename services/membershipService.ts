@@ -61,6 +61,8 @@ export function getMembershipDaysRemaining(user?: User | null): number | null {
 
 export function formatTierLabel(tier: CanonicalTier): string {
   switch (tier) {
+    case 'admin':
+      return 'Admin';
     case 'trial':
       return 'Trial';
     case 'performer':
