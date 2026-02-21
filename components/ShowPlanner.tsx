@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import QRCode from 'qrcode';
 import type { Show, Task, Subtask, TaskPriority, Client, Finances, Expense, Performance, User } from '../types';
-import { getShows, addShow, updateShow, deleteShow, addTaskToShow, addPerformance BeatsToShow, updateTaskInShow, deleteTaskFromShow, toggleSubtask } from '../services/showsService';
+import { getShows, addShow, updateShow, deleteShow, addTaskToShow, addTasksToShow, updateTaskInShow, deleteTaskFromShow, toggleSubtask } from '../services/showsService';
 import { startPerformance, endPerformance, getPerformancesByShowId } from '../services/performanceService';
 import { listContractsForShow, updateContractStatus, updateContractPayments, getContractsMetaForShows, type ContractRow, type ContractStatus, type ContractMeta } from '../services/contractsService';
 import { generateResponse, generateStructuredResponse } from '../services/geminiService';
