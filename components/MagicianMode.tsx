@@ -1405,10 +1405,19 @@ useEffect(() => {
     };
 
     void fetchUsage();
+
+    // Re-fetch usage as soon as auth state is available/updated.
+    const { data: authSub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+        void fetchUsage();
+      }
+    });
+
     const t = window.setInterval(fetchUsage, 60_000);
     return () => {
       cancelled = true;
       window.clearInterval(t);
+      authSub?.subscription?.unsubscribe();
     };
   }, [user?.email]);
 
