@@ -27,15 +27,13 @@ export default function Auth({ onLoginSuccess, onBack }: AuthProps) {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  const normalizedEmail = useMemo(() => email.trim().toLowerCase(), [email]);
-
   const canSubmit = useMemo(() => {
-    if (!normalizedEmail) return false;
+    if (!email.trim()) return false;
     if (mode === 'reset') return true;
     if (!password) return false;
     if (mode === 'signup' && password !== confirm) return false;
     return true;
-  }, [normalizedEmail, password, confirm, mode]);
+  }, [email, password, confirm, mode]);
 
   const title =
     mode === 'login' ? 'Magician Login' : mode === 'signup' ? 'Start Your Free Trial' : 'Password Recovery';
@@ -47,20 +45,39 @@ export default function Auth({ onLoginSuccess, onBack }: AuthProps) {
       ? 'Create an account and unlock your AI rehearsal & creative suite.'
       : 'We’ll email you a secure reset link.';
 
+  function formatAuthError(err: any, context: 'login' | 'signup' | 'reset'): string {
+    const msg = String(err?.message || '').trim();
+    const lower = msg.toLowerCase();
+
+    // Supabase Auth: shared email provider can rate-limit signup/reset emails during testing.
+    if (lower.includes('email rate limit exceeded') || (lower.includes('rate limit') && lower.includes('email'))) {
+      return context === 'reset'
+        ? 'Too many reset emails were requested recently. Please wait a bit and try again (or sign in if you already have an account).'
+        : 'Too many confirmation emails were requested recently. Please wait a bit and try again, or sign in if you already created an account.';
+    }
+
+    // Friendly common cases
+    if (lower.includes('invalid login credentials')) return 'That email/password combination didn\'t work. Please try again.';
+    if (lower.includes('user already registered')) return 'That email is already registered. Try logging in instead.';
+    if (lower.includes('email address') && lower.includes('is invalid')) return 'That email looks invalid. Please remove any spaces and try again.';
+
+    return msg || 'Something went wrong. Please try again.';
+  }
+
   async function doLogin() {
-    const { error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
   }
 
   async function doSignup() {
-    const { error } = await supabase.auth.signUp({ email: normalizedEmail, password });
+    const { error } = await supabase.auth.signUp({ email, password });
     if (error) throw error;
   }
 
   async function doReset() {
     const base = getAppBasePath();
     const redirectTo = `${window.location.origin}${base}/reset`;
-    const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, { redirectTo });
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
     if (error) throw error;
   }
 
@@ -86,7 +103,7 @@ export default function Auth({ onLoginSuccess, onBack }: AuthProps) {
         setMessage('If an account exists for that email, a reset link has been sent.');
       }
     } catch (err: any) {
-      setError(err?.message || 'Something went wrong. Please try again.');
+      setError(formatAuthError(err, mode));
     } finally {
       setIsLoading(false);
     }
