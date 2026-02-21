@@ -27,13 +27,15 @@ export default function Auth({ onLoginSuccess, onBack }: AuthProps) {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
+  const normalizedEmail = useMemo(() => email.trim().toLowerCase(), [email]);
+
   const canSubmit = useMemo(() => {
-    if (!email.trim()) return false;
+    if (!normalizedEmail) return false;
     if (mode === 'reset') return true;
     if (!password) return false;
     if (mode === 'signup' && password !== confirm) return false;
     return true;
-  }, [email, password, confirm, mode]);
+  }, [normalizedEmail, password, confirm, mode]);
 
   const title =
     mode === 'login' ? 'Magician Login' : mode === 'signup' ? 'Start Your Free Trial' : 'Password Recovery';
@@ -46,19 +48,19 @@ export default function Auth({ onLoginSuccess, onBack }: AuthProps) {
       : 'We’ll email you a secure reset link.';
 
   async function doLogin() {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
     if (error) throw error;
   }
 
   async function doSignup() {
-    const { error } = await supabase.auth.signUp({ email, password });
+    const { error } = await supabase.auth.signUp({ email: normalizedEmail, password });
     if (error) throw error;
   }
 
   async function doReset() {
     const base = getAppBasePath();
     const redirectTo = `${window.location.origin}${base}/reset`;
-    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+    const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, { redirectTo });
     if (error) throw error;
   }
 
