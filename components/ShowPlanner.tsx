@@ -140,7 +140,7 @@ const TaskModal: React.FC<{
     };
 
     const modalTitle = taskToEdit ? 'Edit Task' : 'Add New Task';
-    const buttonText = taskToEdit ? 'Save Changes' : 'Add Task';
+    const buttonText = taskToEdit ? 'Lock Changes' : 'Add Task';
     
     const modalContent = (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 motion-reduce:animate-none animate-fade-in" onClick={onClose}>
@@ -248,7 +248,7 @@ const ScriptGuideModal: React.FC<{ script: string; onClose: () => void }> = ({ s
                     <h2 className="text-xl font-bold text-white">Show Script & Cue Sheet</h2>
                     <div className="flex items-center gap-2">
                          <button onClick={handleCopy} className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 transition-colors">
-                            {copyStatus === 'copied' ? <CheckIcon className="w-4 h-4 text-[#C6A84A]" /> : <CopyIcon className="w-4 h-4" />}
+                            {copyStatus === 'copied' ? <CheckIcon className="w-4 h-4 text-green-400" /> : <CopyIcon className="w-4 h-4" />}
                             <span>{copyStatus === 'copied' ? 'Copied!' : copyStatus === 'failed' ? 'Copy failed' : 'Copy'}</span>
                         </button>
                         <button onClick={onClose} className="py-1.5 px-3 bg-slate-600/50 hover:bg-slate-700 rounded-md text-slate-300 font-bold transition-colors">Close</button>
@@ -436,13 +436,13 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
     };
     const handleDeleteTask = async (id: string) => {
         if (!selectedShow) return;
-        if (!window.confirm('Are you sure you want to delete this task?')) return;
+        if (!window.confirm('Are you sure you want to remove this beat?')) return;
         try {
             const newShows = await deleteTaskFromShow(selectedShow.id, id);
             setShows(newShows);
             setSelectedShow(newShows.find(s => s.id === selectedShow.id) || null);
         } catch (err: any) {
-            console.error('Failed to delete task:', err);
+            console.error('Failed to remove beat:', err);
             setToastMsg(err?.message ? String(err.message) : "Couldn't delete task.");
         }
     };
@@ -512,7 +512,10 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
         return (
              <div ref={el => { taskRefs.current.set(task.id, el); }} className={`p-3 rounded-lg border flex flex-col gap-3 transition-all ${isOverdue ? 'bg-red-900/20 border-red-500/50' : `bg-slate-800 border-slate-700 border-l-4 ${priorityBorders[task.priority]}`}`}>
                 <div className="flex items-start gap-3">
-                    <input type="checkbox" checked={task.status === 'Completed'} onChange={() => handleToggleStatus(task)} className="mt-1 w-5 h-5 accent-purple-500 bg-slate-900 flex-shrink-0" />
+                    <input type="checkbox" checked={task.status === 'Completed'} onChange={() =>
+                    {task.status === 'Completed' && (
+                        <span className="ml-2 text-xs text-[#C6A84A]">Locked In</span>
+                    )} handleToggleStatus(task)} className="mt-1 w-5 h-5 accent-purple-500 bg-slate-900 flex-shrink-0" />
                     <div className="flex-1">
                         <p className={`font-semibold text-slate-200 ${isOverdue ? '!text-red-300' : ''}`}>{task.title}</p>
                         {task.notes && <p className="text-sm text-slate-400 mt-1 whitespace-pre-wrap break-words">{task.notes}</p>}
@@ -788,7 +791,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                             <div className="text-xs text-slate-400 leading-5">
                                                 <div><span className="text-slate-500">Status:</span> {label}</div>
                                                 <div><span className="text-slate-500">Created:</span> {created}</div>
-                                                <div><span className="text-slate-500">Updated:</span> {updated}</div>
+                                                <div><span className="text-slate-500">Refined:</span> {updated}</div>
                                             </div>
                                         );
                                     })()}
@@ -1090,6 +1093,10 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                         <PerformanceHistory performances={pastPerformances} onNavigateToAnalytics={onNavigateToAnalytics} />
                     )}
                         
+                
+                <p className="mt-8 text-xs text-white/50 italic text-center">
+                    Strong performances are built intentionally. Refine your structure before you rehearse.
+                </p>
                 </div>
             </div>
         );
@@ -1252,7 +1259,7 @@ const ShowListItem: React.FC<{show: Show, clients: Client[], contractMeta?: Cont
                                 <span
                                     className={`text-[10px] px-2 py-0.5 rounded-full border ${
                                         contractMeta.latestStatus === 'signed'
-                                            ? 'bg-emerald-500/15 text-emerald-200 border-[#C6A84A]/30'
+                                            ? 'bg-emerald-500/15 text-emerald-200 border-emerald-400/30'
                                             : contractMeta.latestStatus === 'sent'
                                             ? 'bg-blue-500/15 text-blue-200 border-blue-400/30'
                                             : 'bg-amber-500/15 text-amber-200 border-amber-400/30'
