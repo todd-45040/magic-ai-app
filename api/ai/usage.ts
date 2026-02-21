@@ -36,7 +36,7 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    const membership = status.membership ?? 'trial';
+    const membership = status.membership ?? 'free';
     const limit = status.limit ?? 0;
     const used = status.used ?? 0;
     const remaining = status.remaining ?? 0;
