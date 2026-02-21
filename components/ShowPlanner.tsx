@@ -546,9 +546,15 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
         <div className="flex flex-col h-full">
             <header className="p-4 md:px-6 md:pt-6">
                 <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-start gap-3">
                         <ChecklistIcon className="w-8 h-8 text-purple-400" />
-                        <h2 className="text-2xl font-bold text-slate-200 font-cinzel">All Shows</h2>
+                        <div>
+                            <h2 className="text-3xl font-semibold tracking-tight text-slate-100 font-cinzel">Performance Blueprint</h2>
+                            <div className="mt-2 h-[2px] w-16 bg-[#C6A84A] rounded-full" />
+                            <p className="mt-3 text-sm text-slate-400 max-w-2xl">
+                                Design your act with intentional structure and clear performance beats.
+                            </p>
+                        </div>
                     </div>
                     <button onClick={() => setIsShowModalOpen(true)} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors flex items-center gap-2 text-sm"><WandIcon className="w-4 h-4" /><span>Create New Show</span></button>
                 </div>
