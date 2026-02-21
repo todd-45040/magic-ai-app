@@ -23,10 +23,17 @@ const SchemaType = {
     STRING: 'STRING',
 } as const;
 
+// Priority is stored as Low/Medium/High in the DB, but we present it with performance-oriented language in the UI.
+const PRIORITY_LABELS: Record<TaskPriority, string> = {
+    Low: 'Support',
+    Medium: 'Important',
+    High: 'Spotlight',
+};
+
 const PRIORITY_STYLES: Record<TaskPriority, string> = {
-    'High': 'bg-red-500/20 text-red-300 border-red-500/30',
-    'Medium': 'bg-amber-500/20 text-amber-300 border-amber-500/30',
-    'Low': 'bg-green-500/20 text-green-300 border-green-500/30',
+    High: 'bg-white/5 text-white/60 border border-white/10',
+    Medium: 'bg-white/5 text-white/60 border border-white/10',
+    Low: 'bg-white/5 text-white/60 border border-white/10',
 };
 
 const PRIORITY_ORDER: Record<TaskPriority, number> = {
@@ -38,8 +45,8 @@ const PRIORITY_ORDER: Record<TaskPriority, number> = {
 // --- Helper Components ---
 
 const PriorityBadge: React.FC<{ priority: TaskPriority }> = ({ priority }) => (
-    <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${PRIORITY_STYLES[priority]}`}>
-        {priority}
+    <span className={`px-2 py-0.5 text-[11px] font-medium rounded-full ${PRIORITY_STYLES[priority]}`}>
+        {PRIORITY_LABELS[priority] || priority}
     </span>
 );
 
@@ -130,7 +137,7 @@ const TaskModal: React.FC<{
             setIsSaving(true);
             const payload = taskToEdit ? { ...taskData, id: taskToEdit.id } : taskData;
             await Promise.resolve(onSave(payload));
-            onToast?.(taskToEdit ? 'Beat updated.' : 'Beat saved.');
+            onToast?.(taskToEdit ? 'Task updated.' : 'Task saved.');
         } catch (err) {
             console.error(err);
             onToast?.("Couldn't save task.");
@@ -139,8 +146,8 @@ const TaskModal: React.FC<{
         }
     };
 
-    const modalTitle = taskToEdit ? 'Edit Beat' : 'Add New Beat';
-    const buttonText = taskToEdit ? 'Save Changes' : 'Add Beat';
+    const modalTitle = taskToEdit ? 'Edit Task' : 'Add New Task';
+    const buttonText = taskToEdit ? 'Save Changes' : 'Add Task';
     
     const modalContent = (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 motion-reduce:animate-none animate-fade-in" onClick={onClose}>
@@ -148,7 +155,7 @@ const TaskModal: React.FC<{
                 <h2 className="text-xl font-bold text-white p-6 border-b border-slate-700 flex-shrink-0">{modalTitle}</h2>
                 <form id="task-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
                     <div>
-                        <label htmlFor="title" className="block text-sm font-medium text-slate-300 mb-1">Beat Title</label>
+                        <label htmlFor="title" className="block text-sm font-medium text-slate-300 mb-1">Task Title</label>
                         <input id="title" type="text" value={title} onChange={e => setTitle(e.target.value)} required autoFocus className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500" />
                     </div>
                     <div>
@@ -175,9 +182,9 @@ const TaskModal: React.FC<{
                                 onChange={(e) => setPriority(e.target.value as TaskPriority)}
                                 className="w-full bg-slate-900 px-3 py-2 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500"
                             >
-                                <option value="High">High</option>
-                                <option value="Medium">Medium</option>
-                                <option value="Low">Low</option>
+                                <option value="High">Spotlight</option>
+                                <option value="Medium">Important</option>
+                                <option value="Low">Support</option>
                             </select>
                         </div>
                         <div>
@@ -245,7 +252,7 @@ const ScriptGuideModal: React.FC<{ script: string; onClose: () => void }> = ({ s
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 motion-reduce:animate-none animate-fade-in" onClick={onClose}>
             <div className="w-full max-w-2xl h-[90vh] max-h-[700px] bg-slate-800 border border-purple-500 rounded-lg shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
                 <header className="p-4 border-b border-slate-700 flex items-center justify-between flex-shrink-0">
-                    <h2 className="text-xl font-bold text-white">Performance Script & Cue Sheet</h2>
+                    <h2 className="text-xl font-bold text-white">Show Script & Cue Sheet</h2>
                     <div className="flex items-center gap-2">
                          <button onClick={handleCopy} className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 transition-colors">
                             {copyStatus === 'copied' ? <CheckIcon className="w-4 h-4 text-green-400" /> : <CopyIcon className="w-4 h-4" />}
@@ -365,7 +372,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
             } as any);
             setShows(newShows);
             setIsShowModalOpen(false);
-            setToastMsg('Performance created.');
+            setToastMsg('Show created.');
         } catch (err: any) {
             console.error('Failed to create show:', err);
             setToastMsg(err?.message ? String(err.message) : "Couldn't create show.");
@@ -378,7 +385,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
         try {
             const newShows = await deleteShow(id);
             setShows(newShows);
-            setToastMsg('Performance deleted.');
+            setToastMsg('Show deleted.');
         } catch (err: any) {
             console.error('Failed to delete show:', err);
             setToastMsg(err?.message ? String(err.message) : "Couldn't delete show.");
@@ -406,7 +413,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
             setIsTaskModalOpen(false);
         } catch (err: any) {
             console.error('Failed to add task:', err);
-            setToastMsg(err?.message ? String(err.message) : "Couldn't add beat.");
+            setToastMsg(err?.message ? String(err.message) : "Couldn't add task.");
         }
     };
     const handleUpdateTask = async (data: Omit<Task, 'createdAt'>) => {
@@ -419,7 +426,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
             setTaskToEdit(null);
         } catch (err: any) {
             console.error('Failed to update task:', err);
-            setToastMsg(err?.message ? String(err.message) : "Couldn't update beat.");
+            setToastMsg(err?.message ? String(err.message) : "Couldn't update task.");
         }
     };
     const handleToggleStatus = async (task: Task) => {
@@ -431,19 +438,19 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
             setSelectedShow(newShows.find(s => s.id === selectedShow.id) || null);
         } catch (err: any) {
             console.error('Failed to toggle task status:', err);
-            setToastMsg(err?.message ? String(err.message) : "Couldn't lock beat.");
+            setToastMsg(err?.message ? String(err.message) : "Couldn't update task status.");
         }
     };
     const handleDeleteTask = async (id: string) => {
         if (!selectedShow) return;
-        if (!window.confirm('Are you sure you want to delete this beat?')) return;
+        if (!window.confirm('Are you sure you want to delete this task?')) return;
         try {
             const newShows = await deleteTaskFromShow(selectedShow.id, id);
             setShows(newShows);
             setSelectedShow(newShows.find(s => s.id === selectedShow.id) || null);
         } catch (err: any) {
             console.error('Failed to delete task:', err);
-            setToastMsg(err?.message ? String(err.message) : "Couldn't delete beat.");
+            setToastMsg(err?.message ? String(err.message) : "Couldn't delete task.");
         }
     };
     
@@ -471,7 +478,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
             .sort((a, b) => a.createdAt - b.createdAt);
 
         if (activeTasks.length === 0) {
-            setGeneratedScript("No active beats to generate a script from. Add some beats first!");
+            setGeneratedScript("No active tasks to generate a script from. Add some tasks first!");
             setIsScriptModalOpen(true);
             return;
         }
@@ -503,7 +510,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
 
     const TaskItem: React.FC<{task: Task}> = ({ task }) => {
         const isOverdue = task.status === 'To-Do' && task.dueDate && task.dueDate < new Date(new Date().toDateString()).getTime();
-        const priorityBorders: Record<TaskPriority, string> = { 'High': 'border-l-red-500', 'Medium': 'border-l-amber-400', 'Low': 'border-l-green-500' };
+        const priorityBorders: Record<TaskPriority, string> = { High: 'border-l-[#C6A84A]', Medium: 'border-l-white/20', Low: 'border-l-white/15' };
         
         const completedSubtasks = task.subtasks?.filter(st => st.completed).length || 0;
         const totalSubtasks = task.subtasks?.length || 0;
@@ -512,7 +519,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
         return (
              <div ref={el => { taskRefs.current.set(task.id, el); }} className={`p-3 rounded-lg border flex flex-col gap-3 transition-all ${isOverdue ? 'bg-red-900/20 border-red-500/50' : `bg-slate-800 border-slate-700 border-l-4 ${priorityBorders[task.priority]}`}`}>
                 <div className="flex items-start gap-3">
-                    <input type="checkbox" checked={task.status === 'Completed'} onChange={() => handleToggleStatus(task)} aria-label={task.status === 'Completed' ? 'Beat locked in' : 'Lock Beat'} title={task.status === 'Completed' ? 'Beat locked in' : 'Lock Beat'} className="mt-1 w-5 h-5 accent-purple-500 bg-slate-900 flex-shrink-0" />
+                    <input type="checkbox" checked={task.status === 'Completed'} onChange={() => handleToggleStatus(task)} className="mt-1 w-5 h-5 accent-purple-500 bg-slate-900 flex-shrink-0" />
                     <div className="flex-1">
                         <p className={`font-semibold text-slate-200 ${isOverdue ? '!text-red-300' : ''}`}>{task.title}</p>
                         {task.notes && <p className="text-sm text-slate-400 mt-1 whitespace-pre-wrap break-words">{task.notes}</p>}
@@ -548,9 +555,9 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                 <div className="flex flex-wrap items-center justify-between gap-4">
                     <div className="flex items-center gap-3">
                         <ChecklistIcon className="w-8 h-8 text-purple-400" />
-                        <h2 className="text-2xl font-bold text-slate-200 font-cinzel">All Performances</h2>
+                        <h2 className="text-2xl font-bold text-slate-200 font-cinzel">All Shows</h2>
                     </div>
-                    <button onClick={() => setIsShowModalOpen(true)} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors flex items-center gap-2 text-sm"><WandIcon className="w-4 h-4" /><span>Create New Performance</span></button>
+                    <button onClick={() => setIsShowModalOpen(true)} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors flex items-center gap-2 text-sm"><WandIcon className="w-4 h-4" /><span>Create New Show</span></button>
                 </div>
             </header>
             <main className="flex-1 overflow-y-auto p-4 md:p-6">
@@ -566,7 +573,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                         {shows.map(show => <ShowListItem key={show.id} show={show} clients={clients} contractMeta={contractsMetaByShowId[show.id]} onSelect={() => setSelectedShow(show)} onDelete={() => handleDeleteShow(show.id)} />)}
                     </div>
                 ) : (
-                    <div className="text-center py-12"><StageCurtainsIcon className="w-16 h-16 mx-auto text-slate-600 mb-4" /><h3 className="text-lg font-bold text-slate-400">Your Stage is Bare</h3><p className="text-slate-500">Click "Create New Performance" to start planning your next masterpiece.</p></div>
+                    <div className="text-center py-12"><StageCurtainsIcon className="w-16 h-16 mx-auto text-slate-600 mb-4" /><h3 className="text-lg font-bold text-slate-400">Your Stage is Bare</h3><p className="text-slate-500">Click "Create New Show" to start planning your next masterpiece.</p></div>
                 )}
             </main>
         </div>
@@ -637,7 +644,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
             setIsSuggesting(true);
             setSuggestionError(null);
             try {
-                const prompt = `Performance Title: ${selectedShow.title}\nPerformance Description: ${selectedShow.description || 'N/A'}`;
+                const prompt = `Show Title: ${selectedShow.title}\nShow Description: ${selectedShow.description || 'N/A'}`;
                 const schema = {
                     type: SchemaType.OBJECT,
                     properties: {
@@ -688,7 +695,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                     {Object.entries(columns).map(([title, tasksInColumn]) => (
                         <div key={title} className={`bg-slate-900/50 rounded-lg border-t-4 ${columnStyles[title]}`}>
                             <h3 className="font-cinzel font-bold text-slate-300 p-3 text-base border-b-2 border-slate-700/50">{title} <span className="text-sm font-normal text-slate-500">({tasksInColumn.length})</span></h3>
-                            <div className="p-3 space-y-3">{tasksInColumn.length > 0 ? tasksInColumn.map(task => <TaskItem key={task.id} task={task} />) : <div className="text-center py-6 text-sm text-slate-500">No beats here.</div>}</div>
+                            <div className="p-3 space-y-3">{tasksInColumn.length > 0 ? tasksInColumn.map(task => <TaskItem key={task.id} task={task} />) : <div className="text-center py-6 text-sm text-slate-500">No tasks here.</div>}</div>
                         </div>
                     ))}
                 </div>
@@ -705,7 +712,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
         return (
              <div className="flex flex-col h-full">
                 <header className="p-4 md:px-6 md:pt-6">
-                    <button onClick={() => setSelectedShow(null)} className="flex items-center gap-2 mb-4 text-slate-300 hover:text-white transition-colors"><BackIcon className="w-5 h-5" /><span>Back to All Performances</span></button>
+                    <button onClick={() => setSelectedShow(null)} className="flex items-center gap-2 mb-4 text-slate-300 hover:text-white transition-colors"><BackIcon className="w-5 h-5" /><span>Back to All Shows</span></button>
                     <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
                         <div>
                             <h2 className="text-2xl font-bold text-slate-200 font-cinzel truncate">{selectedShow.title}</h2>
@@ -713,16 +720,16 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                         </div>
                         <div className="flex items-center gap-2">
                             <button onClick={() => setIsAudienceQrModalOpen(true)} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-md text-white font-semibold transition-colors flex items-center gap-2 text-sm" title="Generate a post-show feedback QR code"><QrCodeIcon className="w-4 h-4" /><span>Audience QR</span></button>
-                            <button onClick={() => setIsLiveModalOpen(true)} className="px-3 py-2 bg-green-600 hover:bg-green-700 rounded-md text-white font-semibold transition-colors flex items-center gap-2 text-sm"><QrCodeIcon className="w-4 h-4" /><span>Start Live Performance</span></button>
-                            <button onClick={handleAiSuggestTasks} disabled={isSuggesting} className="px-3 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold flex items-center gap-2 transition-colors"><WandIcon className="w-4 h-4" /><span>{isSuggesting ? 'Thinking...' : 'AI-Suggest Beats'}</span></button>
+                            <button onClick={() => setIsLiveModalOpen(true)} className="px-3 py-2 bg-green-600 hover:bg-green-700 rounded-md text-white font-semibold transition-colors flex items-center gap-2 text-sm"><QrCodeIcon className="w-4 h-4" /><span>Start Live Show</span></button>
+                            <button onClick={handleAiSuggestTasks} disabled={isSuggesting} className="px-3 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold flex items-center gap-2 transition-colors"><WandIcon className="w-4 h-4" /><span>{isSuggesting ? 'Thinking...' : 'AI-Suggest Tasks'}</span></button>
                             <button onClick={generateScriptGuide} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 font-semibold transition-colors flex items-center gap-2 text-sm"><FileTextIcon className="w-4 h-4" /><span>Script Guide</span></button>
-                            <button onClick={() => { setTaskToEdit(null); setIsTaskModalOpen(true); }} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors flex items-center gap-2 text-sm"><ChecklistIcon className="w-4 h-4" /><span>Add Beat</span></button>
+                            <button onClick={() => { setTaskToEdit(null); setIsTaskModalOpen(true); }} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors flex items-center gap-2 text-sm"><ChecklistIcon className="w-4 h-4" /><span>Add Task</span></button>
                         </div>
                     </div>
                     {suggestionError && <p className="text-red-400 text-center text-sm mb-2">{suggestionError}</p>}
                     <div className="bg-slate-800/50 border-y border-slate-700 -mx-4 md:-mx-6 px-4 md:px-6 flex items-center justify-between">
                          <div className="flex items-center">
-                            <TabButton icon={ChecklistIcon} label="Performance Beats" isActive={activeTab === 'tasks'} onClick={() => setActiveTab('tasks')} />
+                            <TabButton icon={ChecklistIcon} label="Tasks" isActive={activeTab === 'tasks'} onClick={() => setActiveTab('tasks')} />
                             <TabButton icon={DollarSignIcon} label="Finances" isActive={activeTab === 'finances'} onClick={() => setActiveTab('finances')} />
                             <TabButton icon={FileTextIcon} label="Contract" isActive={activeTab === 'contract'} onClick={() => setActiveTab('contract')} />
                             <TabButton icon={AnalyticsIcon} label="Performance History" isActive={activeTab === 'history'} onClick={() => setActiveTab('history')} />
@@ -733,7 +740,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                 </header>
                 <div className="flex-1 overflow-y-auto px-4 md:px-6 pb-4 pt-4">
                     {activeTab === 'tasks' ? (
-                        tasks.length === 0 ? <div className="text-center py-10 text-slate-400"><p className="mb-3">No beats added yet. Click <span className="text-slate-200 font-semibold">Add Beat</span> to get started.</p><button onClick={handleAiSuggestTasks} disabled={isSuggesting} className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold transition-colors"><WandIcon className="w-4 h-4" /><span>{isSuggesting ? 'Thinking...' : 'AI-Suggest Beats'}</span></button></div> : viewMode === 'list' ? <ListView /> : <BoardView />
+                        tasks.length === 0 ? <div className="text-center py-10 text-slate-400"><p className="mb-3">No tasks yet. Click <span className="text-slate-200 font-semibold">Add Task</span> to get started.</p><button onClick={handleAiSuggestTasks} disabled={isSuggesting} className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold transition-colors"><WandIcon className="w-4 h-4" /><span>{isSuggesting ? 'Thinking...' : 'AI-Suggest Tasks'}</span></button></div> : viewMode === 'list' ? <ListView /> : <BoardView />
 
                     
                     ) : activeTab === 'finances' ? (
@@ -1077,7 +1084,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                     <div className="text-slate-400">Loading contracts…</div>
                                 ) : !activeContractContent ? (
                                     <div className="text-slate-400">
-                                        No saved contract for this performance yet. Generate one in the Contract Generator and click <span className="text-slate-200 font-semibold">Save to Performance</span>.
+                                        No saved contract for this show yet. Generate one in the Contract Generator and click <span className="text-slate-200 font-semibold">Save to Show</span>.
                                     </div>
                                 ) : (
                                     <pre className="whitespace-pre-wrap text-slate-200 text-sm leading-relaxed">
@@ -1111,7 +1118,7 @@ const ShowModal: React.FC<{
         e?.stopPropagation();
         setError(null);
         if (!title.trim()) {
-            setError('Performance title is required.');
+            setError('Show title is required.');
             return;
         }
         try {
@@ -1138,7 +1145,7 @@ const ShowModal: React.FC<{
                 onClick={(e) => e.stopPropagation()}
             >
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                    <h2 className="text-xl font-bold text-white">Create New Performance</h2>
+                    <h2 className="text-xl font-bold text-white">Create New Show</h2>
 
                     {error && (
                         <div className="p-3 rounded-md bg-red-900/30 border border-red-500/40 text-red-200 text-sm">
@@ -1148,14 +1155,14 @@ const ShowModal: React.FC<{
 
                     <div>
                         <label htmlFor="show-title" className="block text-sm font-medium text-slate-300 mb-1">
-                            Performance Title
+                            Show Title
                         </label>
                         <input
                             id="show-title"
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
                             className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white"
-                            placeholder="e.g., Birthday Party Performance"
+                            placeholder="e.g., Birthday Party Show"
                             autoFocus
                         />
                     </div>
@@ -1206,7 +1213,7 @@ const ShowModal: React.FC<{
                             className={`flex-1 px-4 py-2 rounded-md text-white font-bold ${
                                 (isSaving || !title.trim()) ? 'bg-slate-700 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'
                             }`}
-                            title={!title.trim() ? 'Performance title required' : undefined}
+                            title={!title.trim() ? 'Show title required' : undefined}
                         >
                             Create Show
                         </button>
@@ -1272,7 +1279,7 @@ const ShowListItem: React.FC<{show: Show, clients: Client[], contractMeta?: Cont
             <div className="mt-4">
                 <div className="flex justify-between items-center text-xs text-slate-400 mb-1">
                     <span>Progress</span>
-                    <span>{completedTasks} / {totalTasks} Beats</span>
+                    <span>{completedTasks} / {totalTasks} Tasks</span>
                 </div>
                 <div className="w-full bg-slate-700 rounded-full h-2"><div className="bg-purple-500 h-2 rounded-full" style={{ width: `${progress}%` }}></div></div>
                 <button onClick={onSelect} className="w-full text-center mt-4 py-2 px-4 bg-slate-700/50 hover:bg-purple-800 rounded-md text-white font-bold transition-colors">Open Planner</button>
@@ -1697,7 +1704,7 @@ const LivePerformanceModal: React.FC<{ show: Show; onClose: () => void; onEnd: (
                 <div className="bg-slate-900 p-4 rounded-lg inline-block border border-slate-700">
                     {performance ? <canvas ref={canvasRef} /> : <p>Generating QR Code...</p>}
                 </div>
-                <button onClick={handleEnd} className="w-full mt-6 py-3 bg-red-600 hover:bg-red-700 rounded-md text-white font-bold transition-colors">End Performance & View Analytics</button>
+                <button onClick={handleEnd} className="w-full mt-6 py-3 bg-red-600 hover:bg-red-700 rounded-md text-white font-bold transition-colors">End Show & View Analytics</button>
             </div>
         </div>,
         document.body
@@ -1751,7 +1758,7 @@ const AudienceFeedbackQrModal: React.FC<{ show: Show; onClose: () => void }> = (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={onClose}>
             <div className="w-full max-w-md bg-slate-800 border border-purple-500 rounded-lg shadow-2xl text-center p-8" onClick={(e) => e.stopPropagation()}>
                 <QrCodeIcon className="w-12 h-12 mx-auto mb-2 text-purple-400" />
-                <h2 className="text-2xl font-bold text-white font-cinzel">Post‑Performance Feedback</h2>
+                <h2 className="text-2xl font-bold text-white font-cinzel">Post‑Show Feedback</h2>
                 <p className="text-slate-400 mt-2 mb-4">
                     Display this QR code after the show. Audience members can scan it to leave a quick rating and comments.
                 </p>
