@@ -23,17 +23,10 @@ const SchemaType = {
     STRING: 'STRING',
 } as const;
 
-// Priority is stored as Low/Medium/High in the DB, but we present it with performance-oriented language in the UI.
-const PRIORITY_LABELS: Record<TaskPriority, string> = {
-    Low: 'Support',
-    Medium: 'Important',
-    High: 'Spotlight',
-};
-
 const PRIORITY_STYLES: Record<TaskPriority, string> = {
-    High: 'bg-white/5 text-white/60 border border-white/10',
-    Medium: 'bg-white/5 text-white/60 border border-white/10',
-    Low: 'bg-white/5 text-white/60 border border-white/10',
+    'High': 'bg-red-500/20 text-red-300 border-red-500/30',
+    'Medium': 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+    'Low': 'bg-green-500/20 text-green-300 border-green-500/30',
 };
 
 const PRIORITY_ORDER: Record<TaskPriority, number> = {
@@ -45,8 +38,8 @@ const PRIORITY_ORDER: Record<TaskPriority, number> = {
 // --- Helper Components ---
 
 const PriorityBadge: React.FC<{ priority: TaskPriority }> = ({ priority }) => (
-    <span className={`px-2 py-0.5 text-[11px] font-medium rounded-full ${PRIORITY_STYLES[priority]}`}>
-        {PRIORITY_LABELS[priority] || priority}
+    <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${PRIORITY_STYLES[priority]}`}>
+        {priority}
     </span>
 );
 
@@ -182,9 +175,9 @@ const TaskModal: React.FC<{
                                 onChange={(e) => setPriority(e.target.value as TaskPriority)}
                                 className="w-full bg-slate-900 px-3 py-2 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500"
                             >
-                                <option value="High">Spotlight</option>
-                                <option value="Medium">Important</option>
-                                <option value="Low">Support</option>
+                                <option value="High">High</option>
+                                <option value="Medium">Medium</option>
+                                <option value="Low">Low</option>
                             </select>
                         </div>
                         <div>
@@ -510,7 +503,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
 
     const TaskItem: React.FC<{task: Task}> = ({ task }) => {
         const isOverdue = task.status === 'To-Do' && task.dueDate && task.dueDate < new Date(new Date().toDateString()).getTime();
-        const priorityBorders: Record<TaskPriority, string> = { High: 'border-l-[#C6A84A]', Medium: 'border-l-white/20', Low: 'border-l-white/15' };
+        const priorityBorders: Record<TaskPriority, string> = { 'High': 'border-l-red-500', 'Medium': 'border-l-amber-400', 'Low': 'border-l-green-500' };
         
         const completedSubtasks = task.subtasks?.filter(st => st.completed).length || 0;
         const totalSubtasks = task.subtasks?.length || 0;
@@ -722,7 +715,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                             <button onClick={() => setIsAudienceQrModalOpen(true)} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-md text-white font-semibold transition-colors flex items-center gap-2 text-sm" title="Generate a post-show feedback QR code"><QrCodeIcon className="w-4 h-4" /><span>Audience QR</span></button>
                             <button onClick={() => setIsLiveModalOpen(true)} className="px-3 py-2 bg-green-600 hover:bg-green-700 rounded-md text-white font-semibold transition-colors flex items-center gap-2 text-sm"><QrCodeIcon className="w-4 h-4" /><span>Start Live Show</span></button>
                             <button onClick={handleAiSuggestTasks} disabled={isSuggesting} className="px-3 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold flex items-center gap-2 transition-colors"><WandIcon className="w-4 h-4" /><span>{isSuggesting ? 'Thinking...' : 'AI-Suggest Tasks'}</span></button>
-                            <button onClick={generateScriptGuide} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 font-semibold transition-colors flex items-center gap-2 text-sm"><FileTextIcon className="w-4 h-4" /><span>Script Guide</span></button>
+                            <button onClick={generateScriptGuide} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 font-semibold transition-colors flex items-center gap-2 text-sm"><FileTextIcon className="w-4 h-4" /><span>Performance Narrative</span></button>
                             <button onClick={() => { setTaskToEdit(null); setIsTaskModalOpen(true); }} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors flex items-center gap-2 text-sm"><ChecklistIcon className="w-4 h-4" /><span>Add Task</span></button>
                         </div>
                     </div>
