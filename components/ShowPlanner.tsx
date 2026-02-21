@@ -130,7 +130,7 @@ const TaskModal: React.FC<{
             setIsSaving(true);
             const payload = taskToEdit ? { ...taskData, id: taskToEdit.id } : taskData;
             await Promise.resolve(onSave(payload));
-            onToast?.(taskToEdit ? 'Task updated.' : 'Task saved.');
+            onToast?.(taskToEdit ? 'Beat updated.' : 'Beat saved.');
         } catch (err) {
             console.error(err);
             onToast?.("Couldn't save task.");
@@ -139,8 +139,8 @@ const TaskModal: React.FC<{
         }
     };
 
-    const modalTitle = taskToEdit ? 'Edit Task' : 'Add New Task';
-    const buttonText = taskToEdit ? 'Save Changes' : 'Add Task';
+    const modalTitle = taskToEdit ? 'Edit Beat' : 'Add New Beat';
+    const buttonText = taskToEdit ? 'Save Changes' : 'Add Beat';
     
     const modalContent = (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 motion-reduce:animate-none animate-fade-in" onClick={onClose}>
@@ -148,7 +148,7 @@ const TaskModal: React.FC<{
                 <h2 className="text-xl font-bold text-white p-6 border-b border-slate-700 flex-shrink-0">{modalTitle}</h2>
                 <form id="task-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
                     <div>
-                        <label htmlFor="title" className="block text-sm font-medium text-slate-300 mb-1">Task Title</label>
+                        <label htmlFor="title" className="block text-sm font-medium text-slate-300 mb-1">Beat Title</label>
                         <input id="title" type="text" value={title} onChange={e => setTitle(e.target.value)} required autoFocus className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500" />
                     </div>
                     <div>
@@ -406,7 +406,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
             setIsTaskModalOpen(false);
         } catch (err: any) {
             console.error('Failed to add task:', err);
-            setToastMsg(err?.message ? String(err.message) : "Couldn't add task.");
+            setToastMsg(err?.message ? String(err.message) : "Couldn't add beat.");
         }
     };
     const handleUpdateTask = async (data: Omit<Task, 'createdAt'>) => {
@@ -419,7 +419,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
             setTaskToEdit(null);
         } catch (err: any) {
             console.error('Failed to update task:', err);
-            setToastMsg(err?.message ? String(err.message) : "Couldn't update task.");
+            setToastMsg(err?.message ? String(err.message) : "Couldn't update beat.");
         }
     };
     const handleToggleStatus = async (task: Task) => {
@@ -431,19 +431,19 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
             setSelectedShow(newShows.find(s => s.id === selectedShow.id) || null);
         } catch (err: any) {
             console.error('Failed to toggle task status:', err);
-            setToastMsg(err?.message ? String(err.message) : "Couldn't update task status.");
+            setToastMsg(err?.message ? String(err.message) : "Couldn't lock beat.");
         }
     };
     const handleDeleteTask = async (id: string) => {
         if (!selectedShow) return;
-        if (!window.confirm('Are you sure you want to delete this task?')) return;
+        if (!window.confirm('Are you sure you want to delete this beat?')) return;
         try {
             const newShows = await deleteTaskFromShow(selectedShow.id, id);
             setShows(newShows);
             setSelectedShow(newShows.find(s => s.id === selectedShow.id) || null);
         } catch (err: any) {
             console.error('Failed to delete task:', err);
-            setToastMsg(err?.message ? String(err.message) : "Couldn't delete task.");
+            setToastMsg(err?.message ? String(err.message) : "Couldn't delete beat.");
         }
     };
     
@@ -471,7 +471,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
             .sort((a, b) => a.createdAt - b.createdAt);
 
         if (activeTasks.length === 0) {
-            setGeneratedScript("No active tasks to generate a script from. Add some tasks first!");
+            setGeneratedScript("No active beats to generate a script from. Add some beats first!");
             setIsScriptModalOpen(true);
             return;
         }
@@ -512,7 +512,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
         return (
              <div ref={el => { taskRefs.current.set(task.id, el); }} className={`p-3 rounded-lg border flex flex-col gap-3 transition-all ${isOverdue ? 'bg-red-900/20 border-red-500/50' : `bg-slate-800 border-slate-700 border-l-4 ${priorityBorders[task.priority]}`}`}>
                 <div className="flex items-start gap-3">
-                    <input type="checkbox" checked={task.status === 'Completed'} onChange={() => handleToggleStatus(task)} className="mt-1 w-5 h-5 accent-purple-500 bg-slate-900 flex-shrink-0" />
+                    <input type="checkbox" checked={task.status === 'Completed'} onChange={() => handleToggleStatus(task)} aria-label={task.status === 'Completed' ? 'Beat locked in' : 'Lock Beat'} title={task.status === 'Completed' ? 'Beat locked in' : 'Lock Beat'} className="mt-1 w-5 h-5 accent-purple-500 bg-slate-900 flex-shrink-0" />
                     <div className="flex-1">
                         <p className={`font-semibold text-slate-200 ${isOverdue ? '!text-red-300' : ''}`}>{task.title}</p>
                         {task.notes && <p className="text-sm text-slate-400 mt-1 whitespace-pre-wrap break-words">{task.notes}</p>}
@@ -688,7 +688,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                     {Object.entries(columns).map(([title, tasksInColumn]) => (
                         <div key={title} className={`bg-slate-900/50 rounded-lg border-t-4 ${columnStyles[title]}`}>
                             <h3 className="font-cinzel font-bold text-slate-300 p-3 text-base border-b-2 border-slate-700/50">{title} <span className="text-sm font-normal text-slate-500">({tasksInColumn.length})</span></h3>
-                            <div className="p-3 space-y-3">{tasksInColumn.length > 0 ? tasksInColumn.map(task => <TaskItem key={task.id} task={task} />) : <div className="text-center py-6 text-sm text-slate-500">No tasks here.</div>}</div>
+                            <div className="p-3 space-y-3">{tasksInColumn.length > 0 ? tasksInColumn.map(task => <TaskItem key={task.id} task={task} />) : <div className="text-center py-6 text-sm text-slate-500">No beats here.</div>}</div>
                         </div>
                     ))}
                 </div>
@@ -714,15 +714,15 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                         <div className="flex items-center gap-2">
                             <button onClick={() => setIsAudienceQrModalOpen(true)} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-md text-white font-semibold transition-colors flex items-center gap-2 text-sm" title="Generate a post-show feedback QR code"><QrCodeIcon className="w-4 h-4" /><span>Audience QR</span></button>
                             <button onClick={() => setIsLiveModalOpen(true)} className="px-3 py-2 bg-green-600 hover:bg-green-700 rounded-md text-white font-semibold transition-colors flex items-center gap-2 text-sm"><QrCodeIcon className="w-4 h-4" /><span>Start Live Performance</span></button>
-                            <button onClick={handleAiSuggestTasks} disabled={isSuggesting} className="px-3 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold flex items-center gap-2 transition-colors"><WandIcon className="w-4 h-4" /><span>{isSuggesting ? 'Thinking...' : 'AI-Suggest Tasks'}</span></button>
+                            <button onClick={handleAiSuggestTasks} disabled={isSuggesting} className="px-3 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold flex items-center gap-2 transition-colors"><WandIcon className="w-4 h-4" /><span>{isSuggesting ? 'Thinking...' : 'AI-Suggest Beats'}</span></button>
                             <button onClick={generateScriptGuide} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 font-semibold transition-colors flex items-center gap-2 text-sm"><FileTextIcon className="w-4 h-4" /><span>Script Guide</span></button>
-                            <button onClick={() => { setTaskToEdit(null); setIsTaskModalOpen(true); }} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors flex items-center gap-2 text-sm"><ChecklistIcon className="w-4 h-4" /><span>Add Task</span></button>
+                            <button onClick={() => { setTaskToEdit(null); setIsTaskModalOpen(true); }} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors flex items-center gap-2 text-sm"><ChecklistIcon className="w-4 h-4" /><span>Add Beat</span></button>
                         </div>
                     </div>
                     {suggestionError && <p className="text-red-400 text-center text-sm mb-2">{suggestionError}</p>}
                     <div className="bg-slate-800/50 border-y border-slate-700 -mx-4 md:-mx-6 px-4 md:px-6 flex items-center justify-between">
                          <div className="flex items-center">
-                            <TabButton icon={ChecklistIcon} label="Tasks" isActive={activeTab === 'tasks'} onClick={() => setActiveTab('tasks')} />
+                            <TabButton icon={ChecklistIcon} label="Performance Beats" isActive={activeTab === 'tasks'} onClick={() => setActiveTab('tasks')} />
                             <TabButton icon={DollarSignIcon} label="Finances" isActive={activeTab === 'finances'} onClick={() => setActiveTab('finances')} />
                             <TabButton icon={FileTextIcon} label="Contract" isActive={activeTab === 'contract'} onClick={() => setActiveTab('contract')} />
                             <TabButton icon={AnalyticsIcon} label="Performance History" isActive={activeTab === 'history'} onClick={() => setActiveTab('history')} />
@@ -733,7 +733,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                 </header>
                 <div className="flex-1 overflow-y-auto px-4 md:px-6 pb-4 pt-4">
                     {activeTab === 'tasks' ? (
-                        tasks.length === 0 ? <div className="text-center py-10 text-slate-400"><p className="mb-3">No tasks yet. Click <span className="text-slate-200 font-semibold">Add Task</span> to get started.</p><button onClick={handleAiSuggestTasks} disabled={isSuggesting} className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold transition-colors"><WandIcon className="w-4 h-4" /><span>{isSuggesting ? 'Thinking...' : 'AI-Suggest Tasks'}</span></button></div> : viewMode === 'list' ? <ListView /> : <BoardView />
+                        tasks.length === 0 ? <div className="text-center py-10 text-slate-400"><p className="mb-3">No beats added yet. Click <span className="text-slate-200 font-semibold">Add Beat</span> to get started.</p><button onClick={handleAiSuggestTasks} disabled={isSuggesting} className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold transition-colors"><WandIcon className="w-4 h-4" /><span>{isSuggesting ? 'Thinking...' : 'AI-Suggest Beats'}</span></button></div> : viewMode === 'list' ? <ListView /> : <BoardView />
 
                     
                     ) : activeTab === 'finances' ? (
@@ -1272,7 +1272,7 @@ const ShowListItem: React.FC<{show: Show, clients: Client[], contractMeta?: Cont
             <div className="mt-4">
                 <div className="flex justify-between items-center text-xs text-slate-400 mb-1">
                     <span>Progress</span>
-                    <span>{completedTasks} / {totalTasks} Tasks</span>
+                    <span>{completedTasks} / {totalTasks} Beats</span>
                 </div>
                 <div className="w-full bg-slate-700 rounded-full h-2"><div className="bg-purple-500 h-2 rounded-full" style={{ width: `${progress}%` }}></div></div>
                 <button onClick={onSelect} className="w-full text-center mt-4 py-2 px-4 bg-slate-700/50 hover:bg-purple-800 rounded-md text-white font-bold transition-colors">Open Planner</button>
