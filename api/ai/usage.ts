@@ -36,7 +36,8 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    const membership = status.membership ?? 'free';
+    // "free" behaves like "trial" for ADMC soft launch.
+    const membership = status.membership ?? 'trial';
     const limit = status.limit ?? 0;
     const used = status.used ?? 0;
     const remaining = status.remaining ?? 0;
