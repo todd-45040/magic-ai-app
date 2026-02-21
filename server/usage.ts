@@ -165,7 +165,6 @@ async function ensureMonthlyQuotas(admin: any, userId: string, membership: strin
     .select('id, membership, generation_count, last_reset_date, trial_end_date, quota_live_audio_minutes, quota_image_gen, quota_identify, quota_video_uploads, quota_reset_date')
     .maybeSingle();
 
-  let profile = profileData;
 
   if (error) {
     console.error('Monthly quota reset error:', error);
@@ -525,14 +524,15 @@ export async function getAiUsageStatus(req: any): Promise<{
       burstRemaining,
     };
   }
-
-  let { data: profile, error: profileErr } = await admin
+  const { data: profileData, error: profileErr } = await admin
     .from('users')
     .select('id, membership, generation_count, last_reset_date, trial_end_date, quota_live_audio_minutes, quota_image_gen, quota_identify, quota_video_uploads, quota_reset_date')
     .eq('id', userId)
     .maybeSingle();
 
   let profile = profileData;
+
+
 
   if (profileErr) console.error('Usage lookup error:', profileErr);
 
@@ -771,6 +771,7 @@ export async function enforceAiUsage(
     .maybeSingle();
 
   let profile = profileData;
+
 
   // If no profile exists yet, create one (trial by default)
   let membership: Membership = 'trial';
