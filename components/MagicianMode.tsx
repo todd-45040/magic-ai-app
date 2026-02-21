@@ -52,6 +52,7 @@ import PerformanceAnalytics from './PerformanceAnalytics';
 import IllusionBlueprint from './IllusionBlueprint';
 import MagicTheoryTutor from './MagicTheoryTutor';
 import MagicDictionary from './MagicDictionary';
+import AdminPanel from './AdminPanel';
 
 interface AngleRiskFormProps {
     trickName: string;
@@ -1133,6 +1134,7 @@ const VIEW_TO_TAB_MAP: Record<MagicianView, MagicianTab> = {
     'global-search': 'search',
     'search': 'search',
     'magic-dictionary': 'magic-dictionary',
+    'admin': 'admin',
 };
 
 const MAGICIAN_STORAGE_key = 'magician_chat_history';
@@ -2002,6 +2004,12 @@ useEffect(() => {
         setActiveView('global-search');
         return;
     }
+    if (tab === 'admin') {
+        if (!user?.isAdmin) return;
+        resetInlineForms();
+        setActiveView('admin');
+        return;
+    }
     resetInlineForms();
     setActiveView(tab);
   };
@@ -2342,6 +2350,8 @@ ${action.payload.content}`;
         case 'effect-generator': return <EffectGenerator onIdeaSaved={() => handleIdeaSaved('Effect ideas saved!')} />;
         case 'magic-wire': return <MagicWire currentUser={user} onIdeaSaved={() => handleIdeaSaved('News article saved!')} />;
         case 'global-search': return <GlobalSearch shows={shows} ideas={ideas} onNavigate={handleDeepLink} />;
+        case 'admin':
+          return user?.isAdmin ? <AdminPanel user={user} /> : <Dashboard user={user} onNavigate={handleNavigate} />;
         case 'identify':
           return (
             <IdentifyTab
@@ -2526,6 +2536,14 @@ ${action.payload.content}`;
         <TabButton label="Magic Wire" icon={NewspaperIcon} isActive={activeTab === 'magic-wire'} onClick={() => handleTabClick('magic-wire')} />
         <TabButton label="Publications" icon={NewspaperIcon} isActive={activeTab === 'publications'} onClick={() => handleTabClick('publications')} />
         <TabButton label="Community" icon={UsersIcon} isActive={activeTab === 'community'} onClick={() => handleTabClick('community')} />
+        {user?.isAdmin ? (
+          <TabButton
+            label="Admin"
+            icon={UsersCogIcon}
+            isActive={activeTab === 'admin'}
+            onClick={() => handleTabClick('admin')}
+          />
+        ) : null}
       </nav>
 
       <main className="flex-1 flex flex-col overflow-y-auto">
