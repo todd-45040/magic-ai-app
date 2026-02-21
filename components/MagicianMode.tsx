@@ -2530,8 +2530,6 @@ ${action.payload.content}`;
         />
         <TabButton label="Show Planner" icon={ChecklistIcon} isActive={activeTab === 'show-planner'} onClick={() => handleTabClick('show-planner')} isLocked={!hasAmateurAccess} />
         <TabButton label="Effect Generator" icon={LightbulbIcon} isActive={activeTab === 'effect-generator'} onClick={() => handleTabClick('effect-generator')} />
-        <TabButton label="Dictionary" icon={TutorIcon} isActive={activeTab === 'magic-dictionary'} onClick={() => handleTabClick('magic-dictionary')} isLocked={!hasProfessionalAccess} />
-        <TabButton label="Search" icon={SearchIcon} isActive={activeTab === 'search'} onClick={() => handleTabClick('search')} />
         <TabButton label="Identify Trick" icon={CameraIcon} isActive={activeTab === 'identify'} onClick={() => handleTabClick('identify')} />
         <TabButton label="Magic Wire" icon={NewspaperIcon} isActive={activeTab === 'magic-wire'} onClick={() => handleTabClick('magic-wire')} />
         <TabButton label="Publications" icon={NewspaperIcon} isActive={activeTab === 'publications'} onClick={() => handleTabClick('publications')} />
