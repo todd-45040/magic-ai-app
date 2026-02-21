@@ -4,6 +4,7 @@ import type { GoTrueClient } from '@supabase/auth-js';
 import { getIpFromReq, hashIp, logUsageEvent, maybeFlagAnomaly, estimateCostUSD } from './telemetry.js';
 
 // Canonical membership tiers used for usage enforcement.
+// NOTE: "free" is treated as "trial" for behavior/enforcement.
 // Legacy tiers are accepted and normalized server-side.
 type Membership = 'free' | 'trial' | 'amateur' | 'professional' | 'admin' | 'expired' | 'performer' | 'semi-pro';
 
@@ -36,7 +37,9 @@ function makeRequestId(): string {
   }
 }
 
-function normalizeTier(m?: string | null): 'free' | 'trial' | 'performer' | 'professional' | 'expired' {
+// IMPORTANT:
+// "free" behaves like "trial". We normalize "free" -> "trial" everywhere.
+function normalizeTier(m?: string | null): 'trial' | 'performer' | 'professional' | 'expired' {
   switch (m) {
     case 'professional':
       return 'professional';
@@ -49,13 +52,16 @@ function normalizeTier(m?: string | null): 'free' | 'trial' | 'performer' | 'pro
       return 'expired';
     case 'trial':
       return 'trial';
+    case 'free':
+      return 'trial';
     default:
-      return 'free';
+      return 'trial';
   }
 }
 
 const TIER_LIMITS: Record<string, number> = {
-  free: 10,
+  // free behaves like trial
+  free: 20,
   trial: 20,
   performer: 100,
   professional: 10000,
@@ -67,7 +73,8 @@ const TIER_LIMITS: Record<string, number> = {
 
 // Per-minute burst limits (requests per minute), even if daily remaining is high.
 const BURST_LIMITS: Record<string, number> = {
-  free: 10,
+  // free behaves like trial
+  free: 20,
   trial: 20,
   performer: 30,
   professional: 120,
@@ -129,7 +136,6 @@ function defaultMonthlyQuotas(tier: string): {
       return { quota_live_audio_minutes: 30, quota_image_gen: 10, quota_identify: 10, quota_video_uploads: 0 };
     case 'trial':
       return { quota_live_audio_minutes: 5, quota_image_gen: 3, quota_identify: 3, quota_video_uploads: 0 };
-    case 'free':
     case 'expired':
     default:
       return { quota_live_audio_minutes: 0, quota_image_gen: 0, quota_identify: 0, quota_video_uploads: 0 };
@@ -346,24 +352,79 @@ export async function recordUserActivity(
   toolUsed: string | null
 ): Promise<{ ok: boolean; status?: number; error?: string }> {
   const supabaseUrl = process.env.SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const token = parseBearer(req);
+  const requestId = makeRequestId();
+  const ip = getIpFromReq(req);
+  const ip_hash = hashIp(ip);
+// Inline anomaly signal: unusually large usage units in a single call
+if (Number.isFinite(costUnits) && costUnits >= 50) {
+  await maybeFlagAnomaly({
+    request_id: requestId,
+    user_id: null,
+    identity_key: token ? 'user:unknown' : ipKey(req),
+    ip_hash,
+    reason: 'VERY_LARGE_UNITS',
+    severity: 'high',
+    metadata: { costUnits, tool: opts?.tool ?? null },
+  });
+}
+
 
   if (!supabaseUrl || !serviceKey) {
     return { ok: false, status: 503, error: 'Server activity tracking is not configured.' };
   }
   if (!token || token === 'guest') {
-    return { ok: false, status: 401, error: 'Unauthorized.' };
+    await logUsageEvent({
+        request_id: requestId,
+        actor_type: token ? 'user' : 'guest',
+        user_id: null,
+        identity_key: token ? 'user:unknown' : ipKey(req),
+        ip_hash,
+        tool: opts?.tool ?? null,
+        endpoint: req?.url ?? null,
+        outcome: 'UNAUTHORIZED',
+        http_status: 401,
+        error_code: 'UNAUTHORIZED',
+        retryable: false,
+        units: costUnits,
+        charged_units: 0,
+        membership: 'free',
+        user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
+        estimated_cost_usd: 0,
+      });
+      return { ok: false, status: 401, error: 'Unauthorized.' };
   }
 
   const admin = createClient(supabaseUrl, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
+  // Supabase client auth typing can differ across versions; cast to GoTrueClient
+  // to access getUser() without TS conflicts.
   const auth = admin.auth as unknown as GoTrueClient;
+
   const { data, error } = await auth.getUser(token);
   if (error || !data?.user?.id) {
-    return { ok: false, status: 401, error: 'Unauthorized.' };
+    await logUsageEvent({
+        request_id: requestId,
+        actor_type: token ? 'user' : 'guest',
+        user_id: null,
+        identity_key: token ? 'user:unknown' : ipKey(req),
+        ip_hash,
+        tool: opts?.tool ?? null,
+        endpoint: req?.url ?? null,
+        outcome: 'UNAUTHORIZED',
+        http_status: 401,
+        error_code: 'UNAUTHORIZED',
+        retryable: false,
+        units: costUnits,
+        charged_units: 0,
+        membership: 'free',
+        user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
+        estimated_cost_usd: 0,
+      });
+      return { ok: false, status: 401, error: 'Unauthorized.' };
   }
 
   const userId = data.user.id;
@@ -378,7 +439,27 @@ export async function recordUserActivity(
     return { ok: false, status: 503, error: 'Activity tracking unavailable.' };
   }
 
-  return { ok: true };
+  // Telemetry: successful charge (best-effort)
+    await logUsageEvent({
+      request_id: requestId,
+      actor_type: token ? 'user' : 'guest',
+      user_id: typeof userId === 'string' ? userId : null,
+      identity_key: token ? `user:${userId}` : ipKey(req),
+      ip_hash,
+      tool: opts?.tool ?? null,
+      endpoint: req?.url ?? null,
+      outcome: 'SUCCESS_CHARGED',
+      http_status: 200,
+      error_code: null,
+      retryable: null,
+      units: costUnits,
+      charged_units: costUnits,
+      membership: membership,
+      user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
+      estimated_cost_usd: estimateCostUSD({ provider: opts?.provider ?? null, model: opts?.model ?? null, charged_units: costUnits, tool: opts?.tool ?? null }),
+    });
+
+return { ok: true };
 }
 
 function getMinuteKeyUTC(d = new Date()): string {
@@ -451,10 +532,28 @@ export async function getAiUsageStatus(req: any): Promise<{
   liveRemaining?: number;
   burstLimit?: number;
   burstRemaining?: number;
-  // Phase 2C-B: monthly tool quotas (best-effort). Shape is intentionally loose for UI.
-  quota?: any;
+  // Phase 2C-B: tool quotas (monthly buckets)
+  quota?: {
+    live_audio_minutes?: { remaining: number | null };
+    image_gen?: { remaining: number | null };
+    identify?: { remaining: number | null };
+    video_uploads?: { remaining: number | null };
+    resetAt?: string | null;
+  };
 }> {
   const supabaseUrl = process.env.SUPABASE_URL;
+  // Inline anomaly signal: unusually large usage units in a single call
+  if (Number.isFinite(costUnits) && costUnits >= 50) {
+    await maybeFlagAnomaly({
+      request_id: requestId,
+      user_id: null,
+      identity_key: token ? 'user:unknown' : ipKey(req),
+      ip_hash,
+      reason: 'VERY_LARGE_UNITS',
+      severity: 'high',
+      metadata: { costUnits, tool: opts?.tool ?? null },
+    });
+  }
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const token = parseBearer(req);
   const requestId = makeRequestId();
@@ -479,13 +578,13 @@ export async function getAiUsageStatus(req: any): Promise<{
 
   const identity = userId || ipKey(req);
 
-  // For anonymous users, show strict caps (best-effort)
+  // For anonymous users, apply the same behavior as trial.
   if (!userId) {
-    const membership: Membership = 'free';
-    const limit = 15;
+    const membership: Membership = 'trial';
+    const limit = 20;
     const used = 0;
     const remaining = limit;
-    const burstLimit = 8;
+    const burstLimit = 20;
     // Compute burst remaining from current in-memory counter (best-effort)
     const minuteKey = getMinuteKeyUTC();
     const key = `AI_BURST:${minuteKey}:${identity}`;
@@ -509,10 +608,13 @@ export async function getAiUsageStatus(req: any): Promise<{
       liveRemaining: remaining,
       burstLimit,
       burstRemaining,
+      // Phase 2C-B: expose quota buckets even for anon so UI can render consistently.
+      // (Anon calls cannot decrement DB quotas.)
+      // @ts-ignore
       quota: {
-        live_audio_minutes: { remaining: 0 },
-        image_gen: { remaining: 0 },
-        identify: { remaining: 0 },
+        live_audio_minutes: { remaining: 5 },
+        image_gen: { remaining: 3 },
+        identify: { remaining: 3 },
         video_uploads: { remaining: 0 },
         resetAt: null,
       },
@@ -635,6 +737,18 @@ export async function enforceAiUsage(
   resetHourLocal?: number;
 }> {
   const supabaseUrl = process.env.SUPABASE_URL;
+  // Inline anomaly signal: unusually large usage units in a single call
+  if (Number.isFinite(costUnits) && costUnits >= 50) {
+    await maybeFlagAnomaly({
+      request_id: requestId,
+      user_id: null,
+      identity_key: token ? 'user:unknown' : ipKey(req),
+      ip_hash,
+      reason: 'VERY_LARGE_UNITS',
+      severity: 'high',
+      metadata: { costUnits, tool: opts?.tool ?? null },
+    });
+  }
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   const token = parseBearer(req);

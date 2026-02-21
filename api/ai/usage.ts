@@ -69,7 +69,6 @@ export default async function handler(req: any, res: any) {
       resetHourLocal: (status as any).resetHourLocal ?? null,
       burstLimit: status.burstLimit,
       burstRemaining: status.burstRemaining,
-      quota: (status as any).quota ?? null,
       usage: status,
     });
   } catch (err: any) {
