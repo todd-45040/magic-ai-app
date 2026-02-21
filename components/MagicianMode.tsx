@@ -1380,9 +1380,10 @@ useEffect(() => {
         setUsageSnapshotError(null);
         const { data } = await supabase.auth.getSession();
         const token = data?.session?.access_token;
-        const headers: Record<string, string> = {
-          Authorization: `Bearer ${token || 'guest'}`,
-        };
+        const headers: Record<string, string> = {};
+        // If the session hasn't hydrated yet, do NOT force a "guest" token.
+        // We'll re-fetch immediately when auth state changes.
+        if (token) headers.Authorization = `Bearer ${token}`;
 
         const r = await fetch('/api/ai/usage', { method: 'GET', headers });
         const txt = await r.text();
@@ -1405,19 +1406,18 @@ useEffect(() => {
     };
 
     void fetchUsage();
-
-    // Re-fetch usage as soon as auth state is available/updated.
-    const { data: authSub } = supabase.auth.onAuthStateChange((event) => {
+    // IMPORTANT: Supabase session hydration can lag behind the first render.
+    // Re-fetch usage immediately when we receive a real session.
+    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
         void fetchUsage();
       }
     });
-
     const t = window.setInterval(fetchUsage, 60_000);
     return () => {
       cancelled = true;
       window.clearInterval(t);
-      authSub?.subscription?.unsubscribe();
+      authListener?.subscription?.unsubscribe();
     };
   }, [user?.email]);
 
