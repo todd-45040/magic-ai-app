@@ -38,8 +38,10 @@ function makeRequestId(): string {
 
 // NOTE: For ADMC soft launch, "free" behaves like "trial".
 // We keep the legacy string accepted, but normalize it to "trial".
-function normalizeTier(m?: string | null): 'trial' | 'performer' | 'professional' | 'expired' {
+function normalizeTier(m?: string | null): 'trial' | 'performer' | 'professional' | 'admin' | 'expired' {
   switch (m) {
+    case 'admin':
+      return 'admin';
     case 'professional':
       return 'professional';
     case 'performer':
@@ -62,6 +64,7 @@ const TIER_LIMITS: Record<string, number> = {
   trial: 20,
   performer: 100,
   professional: 10000,
+  admin: 100000,
   expired: 0,
   // legacy
   amateur: 100,
@@ -74,6 +77,7 @@ const BURST_LIMITS: Record<string, number> = {
   trial: 20,
   performer: 30,
   professional: 120,
+  admin: 240,
   expired: 0,
   // legacy
   amateur: 30,

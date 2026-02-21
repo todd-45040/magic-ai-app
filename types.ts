@@ -79,7 +79,8 @@ export type Membership =
   | 'professional'
   | 'expired'
   | 'amateur'
-  | 'semi-pro';
+  | 'semi-pro'
+  | 'admin';
 
 export interface User {
   id?: string;

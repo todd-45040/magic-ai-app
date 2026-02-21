@@ -30,6 +30,7 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
   const resetTz = usageSnapshot?.resetTz;
 
   const planLabel = useMemo(() => {
+    if (plan === 'admin') return 'Admin';
     if (plan === 'professional') return 'Pro';
     if (plan === 'performer') return 'Performer';
     if (plan === 'trial') return 'Trial';
@@ -37,6 +38,7 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
   }, [plan]);
 
   const planBadgeClasses = useMemo(() => {
+    if (plan === 'admin') return 'bg-amber-500/15 border-amber-500/25 text-amber-200';
     if (plan === 'professional') return 'bg-purple-500/15 border-purple-500/25 text-purple-200';
     if (plan === 'performer') return 'bg-indigo-500/15 border-indigo-500/25 text-indigo-200';
     if (plan === 'trial') return 'bg-yellow-500/15 border-yellow-500/25 text-[#E6C77A]';

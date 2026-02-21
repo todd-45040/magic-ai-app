@@ -1,6 +1,6 @@
 import type { Membership, User } from '../types';
 
-export type CanonicalTier = 'trial' | 'performer' | 'professional' | 'expired' | 'free';
+export type CanonicalTier = 'trial' | 'performer' | 'professional' | 'admin' | 'expired' | 'free';
 
 /**
  * Normalize legacy membership labels into the canonical tiers used by the app.
@@ -8,6 +8,8 @@ export type CanonicalTier = 'trial' | 'performer' | 'professional' | 'expired' |
 export function normalizeTier(m?: Membership | string | null): CanonicalTier {
   const raw = (m || '').toString();
   switch (raw) {
+    case 'admin':
+      return 'admin';
     case 'professional':
       return 'professional';
     case 'performer':
@@ -27,7 +29,7 @@ export function normalizeTier(m?: Membership | string | null): CanonicalTier {
 }
 
 export function isPaidTier(tier: CanonicalTier): boolean {
-  return tier === 'performer' || tier === 'professional';
+  return tier === 'performer' || tier === 'professional' || tier === 'admin';
 }
 
 export function isTrialTier(tier: CanonicalTier): boolean {
