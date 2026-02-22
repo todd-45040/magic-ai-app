@@ -642,6 +642,7 @@ export async function enforceAiUsage(
   resetTz?: string;
   resetHourLocal?: number;
 }> {
+  try {
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -951,6 +952,17 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
       resetTz: RESET_TZ,
     resetHourLocal: RESET_HOUR_LOCAL,
   };
+  } catch (e: any) {
+    // Never allow unexpected errors to crash a serverless function.
+    console.error('enforceAiUsage fatal:', e);
+    return {
+      ok: false,
+      status: 500,
+      error: 'A server error has occurred',
+      error_code: 'SERVER_ERROR',
+      retryable: false,
+    };
+  }
 }
 
 // Back-compat alias used by some hardened endpoints.

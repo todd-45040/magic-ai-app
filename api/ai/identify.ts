@@ -67,6 +67,10 @@ function estimateBytesFromBase64(base64: string): number {
 export default async function handler(req: any, res: any) {
   const requestId = (typeof crypto !== "undefined" && "randomUUID" in crypto) ? (crypto as any).randomUUID() : `${Date.now()}-${Math.random()}`;
 
+  // Vercel will return a generic non-JSON 500 if this function throws before
+  // writing a response. Wrap the entire handler to guarantee structured JSON.
+  try {
+
   if (req.method !== "POST") {
     return err(res, 405, "METHOD_NOT_ALLOWED", "Only POST allowed", false, { requestId });
   }
@@ -199,5 +203,16 @@ export default async function handler(req: any, res: any) {
     }
 
     return err(res, 500, "AI_ERROR", "Vision request failed. Please retry.", true, { requestId, ...(details ? { details } : {}) });
+  }
+
+  } catch (e: any) {
+    console.error('identify fatal (outer):', e);
+    return err(res, 500, 'SERVER_ERROR', 'A server error has occurred', false, {
+      requestId,
+      details:
+        process.env.VERCEL_ENV !== 'production'
+          ? { message: String(e?.message || e || '').slice(0, 800) }
+          : undefined,
+    });
   }
 }
