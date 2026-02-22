@@ -18,11 +18,33 @@ type Body = {
   userId?: string;      // optional: pass from client if available
 };
 
-function getClientIpFromRequest(req: Request): string {
-  const xf = req.headers.get("x-forwarded-for");
+function getHeader(req: any, name: string): string | undefined {
+  const key = name.toLowerCase();
+
+  // Fetch Request-style headers
+  if (req?.headers?.get && typeof req.headers.get === "function") {
+    const v = req.headers.get(name);
+    return v ?? undefined;
+  }
+
+  // Node/Vercel API req (IncomingMessage): headers is a plain object
+  const h = req?.headers;
+  if (!h) return undefined;
+
+  const v = h[key] ?? h[name];
+  if (Array.isArray(v)) return v[0];
+  return typeof v === "string" ? v : undefined;
+}
+
+function getClientIpFromRequest(req: any): string {
+  const xf = getHeader(req, "x-forwarded-for");
   if (xf) return xf.split(",")[0].trim();
-  const xr = req.headers.get("x-real-ip");
+
+  const xr = getHeader(req, "x-real-ip");
   if (xr) return xr.trim();
+
+  if (typeof req?.ip === "string" && req.ip) return req.ip;
+
   return "0.0.0.0";
 }
 
