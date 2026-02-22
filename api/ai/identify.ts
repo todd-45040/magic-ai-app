@@ -5,10 +5,10 @@
 // Response: { ok:true, data:{ result:{ text:string } } } or { ok:false, error_code, message, retryable, details? }
 
 import { GoogleGenAI } from "@google/genai";
-import { enforceAiUsage } from "../../server/usage.js";
+import { enforceAiUsage } from "../../server/usage";
 // NOTE: This file lives in api/ai/, so _lib is a sibling folder.
 // Vercel/TS expects the correct relative path (and extensionless imports).
-import { rateLimit } from "./_lib/rateLimit.js";
+import { rateLimit } from "./_lib/rateLimit";
 
 type Body = {
   imageBase64?: string; // base64 only OR full data URL

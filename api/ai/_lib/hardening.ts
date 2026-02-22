@@ -3,7 +3,7 @@
 // IMPORTANT (Vercel / Node ESM): directory imports are NOT supported at runtime.
 // Always import the concrete file entrypoint.
 // TS (moduleResolution=bundler) will still typecheck against index.ts.
-import { getBearerToken, requireSupabaseAuth } from '../../../lib/server/auth/index.js';
+import { getBearerToken, requireSupabaseAuth } from '../../../lib/server/auth/index';
 
 
 export type ApiErrorPayload = {

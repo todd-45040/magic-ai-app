@@ -10,8 +10,8 @@
 // - Accept OpenAI-style `messages` as canonical input
 // - Derive `prompt` from messages when prompt is not provided
 
-import { resolveProvider } from '../../lib/server/providers/index.js';
-import { rateLimit } from './_lib/rateLimit.js';
+import { resolveProvider } from '../../lib/server/providers/index';
+import { rateLimit } from './_lib/rateLimit';
 import {
   getApproxBodySizeBytes,
   getRateLimitKey,
@@ -19,8 +19,8 @@ import {
   jsonError,
   mapProviderError,
   withTimeout,
-} from './_lib/hardening.js';
-import { applyUsageHeaders, bestEffortIncrementAiUsage, guardAiUsage } from './_lib/usageGuard.js';
+} from './_lib/hardening';
+import { applyUsageHeaders, bestEffortIncrementAiUsage, guardAiUsage } from './_lib/usageGuard';
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024; // prompts should be tiny; this is a safety cap
 const TIMEOUT_MS = 45_000;

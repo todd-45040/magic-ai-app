@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import type { GoTrueClient } from '@supabase/auth-js';
-import { getIpFromReq, hashIp, logUsageEvent, } from './telemetry.js';
+import { getIpFromReq, hashIp, logUsageEvent, } from './telemetry';
 
 // Canonical membership tiers used for usage enforcement.
 // Legacy tiers are accepted and normalized server-side.

@@ -1,4 +1,4 @@
-import { requireSupabaseAuth } from './_auth.js';
+import { requireSupabaseAuth } from './_auth';
 
 // Admin-only access to App Feedback (public.app_suggestions)
 // Supports:

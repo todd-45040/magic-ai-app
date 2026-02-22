@@ -1,4 +1,4 @@
-import { requireSupabaseAuth } from './_auth.js';
+import { requireSupabaseAuth } from './_auth';
 
 export default async function handler(req: any, res: any) {
   try {
