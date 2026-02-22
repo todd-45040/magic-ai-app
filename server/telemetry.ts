@@ -78,7 +78,8 @@ export async function logUsageEvent(event: UsageEvent): Promise<void> {
     if (payload.user_agent && payload.user_agent.length > 500) {
       payload.user_agent = payload.user_agent.slice(0, 500);
     }
-    await admin.from('ai_usage_events').insert(payload);
+    const { error } = await admin.from('ai_usage_events').insert(payload);
+    if (error) console.error('telemetry insert error:', error);
   } catch (e) {
     // Never break production calls for telemetry
     console.error('telemetry insert failed', e);
