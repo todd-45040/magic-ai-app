@@ -481,45 +481,6 @@ export async function getAiUsageStatus(req: any): Promise<{
   void ip_hash;
 
 
-async function telemetry(params: {
-  actor_type: 'user' | 'guest';
-  user_id: string | null;
-  identity_key: string;
-  membership: string;
-  tool: string | null;
-  outcome: 'ALLOWED' | 'BLOCKED_QUOTA' | 'BLOCKED_RATE_LIMIT' | 'ERROR_UPSTREAM';
-  http_status: number;
-  error_code: UsageErrorCode | null;
-  retryable: boolean;
-  units: number;
-  charged_units: number;
-}): Promise<void> {
-  try {
-    await logUsageEvent({
-      request_id: requestId,
-      actor_type: params.actor_type,
-      user_id: params.user_id,
-      identity_key: params.identity_key,
-      ip_hash,
-      tool: params.tool,
-      endpoint: req?.url ?? null,
-      outcome: params.outcome,
-      http_status: params.http_status,
-      error_code: params.error_code,
-      retryable: params.retryable,
-      units: params.units,
-      charged_units: params.charged_units,
-      membership: params.membership,
-      user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
-      estimated_cost_usd: 0,
-    });
-  } catch (e) {
-    console.error('telemetry: logUsageEvent failed', e);
-  }
-}
-
-
-
   if (!supabaseUrl || !serviceKey) {
     return { ok: false, status: 503, error: 'Server usage tracking is not configured.', error_code: 'NOT_CONFIGURED', retryable: true };
   }
@@ -637,22 +598,8 @@ if (profile) {
   const engagement = await getEngagementSignals(admin, userId);
 
   await telemetryBestEffort({ actor_type: 'user', user_id: userId, identity_key: identity, membership: tier as any, tool: opts?.tool ?? null, outcome: 'ALLOWED', http_status: 200, error_code: null, retryable: false, units: costUnits, charged_units: costUnits });
-await telemetry({
-  actor_type: 'user',
-  user_id: userId,
-  identity_key: identity,
-  membership: tier,
-  tool: opts?.tool ?? null,
-  outcome: 'ALLOWED',
-  http_status: 200,
-  error_code: null,
-  retryable: false,
-  units: costUnits,
-  charged_units: costUnits,
-});
-
-return {
-  ok: true,
+  return {
+    ok: true,
     membership: tier as any,
     used: generationCount,
     limit,
@@ -707,45 +654,6 @@ export async function enforceAiUsage(
 
   void requestId;
   void ip_hash;
-
-
-async function telemetry(params: {
-  actor_type: 'user' | 'guest';
-  user_id: string | null;
-  identity_key: string;
-  membership: string;
-  tool: string | null;
-  outcome: 'ALLOWED' | 'BLOCKED_QUOTA' | 'BLOCKED_RATE_LIMIT' | 'ERROR_UPSTREAM';
-  http_status: number;
-  error_code: UsageErrorCode | null;
-  retryable: boolean;
-  units: number;
-  charged_units: number;
-}): Promise<void> {
-  try {
-    await logUsageEvent({
-      request_id: requestId,
-      actor_type: params.actor_type,
-      user_id: params.user_id,
-      identity_key: params.identity_key,
-      ip_hash,
-      tool: params.tool,
-      endpoint: req?.url ?? null,
-      outcome: params.outcome,
-      http_status: params.http_status,
-      error_code: params.error_code,
-      retryable: params.retryable,
-      units: params.units,
-      charged_units: params.charged_units,
-      membership: params.membership,
-      user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
-      estimated_cost_usd: 0,
-    });
-  } catch (e) {
-    console.error('telemetry: logUsageEvent failed', e);
-  }
-}
-
 
   async function telemetryBestEffort(params: {
     actor_type: 'user' | 'guest';
