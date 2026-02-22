@@ -22,10 +22,11 @@ const DEFAULT_TIMEOUT_MS = (() => {
 
 const DEFAULT_MAX_TOKENS = (() => {
   const raw = Number(process.env.EFFECT_ENGINE_MAX_TOKENS);
-  // sensible bounds: 600–4096
-  if (Number.isFinite(raw) && raw >= 600 && raw <= 4096) return Math.floor(raw);
+  // sensible bounds: 600–8192 (Effect Engine can be very verbose)
+  if (Number.isFinite(raw) && raw >= 600 && raw <= 8192) return Math.floor(raw);
   // Effect Engine often needs a larger budget than other tools.
-  return 2800;
+  // 4 detailed effects (with Experience + Secret Hint) can easily exceed 3k.
+  return 3600;
 })();
 
 function clampMaxTokens(v: any): number {
@@ -34,7 +35,7 @@ function clampMaxTokens(v: any): number {
   if (n < 200) return 200;
   // Gemini (and other providers) support higher output caps than 3k.
   // We clamp to a safe upper bound to avoid runaway costs.
-  if (n > 4096) return 4096;
+  if (n > 8192) return 8192;
   return Math.floor(n);
 }
 
@@ -251,9 +252,10 @@ export default async function handler(request: any, response: any) {
         let accumulated = firstText || '';
         let n = accumulated ? countHeadings(accumulated) : 0;
 
-        // Continuations: try up to 2 times to reach all 4 effects.
+        // Continuations: try up to 3 times to reach all 4 effects.
+        // (Common failure mode is truncation mid-effect #2 or #3.)
         if (accumulated && n > 0 && n < 4 && Array.isArray(contents)) {
-          for (let attempt = 0; attempt < 2 && n > 0 && n < 4; attempt++) {
+          for (let attempt = 0; attempt < 3 && n > 0 && n < 4; attempt++) {
             // Provide only a tail of the prior output so the model can pick up mid-sentence
             // without re-sending a huge context blob.
             const tail = accumulated.slice(-2000);
@@ -265,9 +267,10 @@ export default async function handler(request: any, response: any) {
                 parts: [
                   {
                     text:
-                      `Continue EXACTLY from where you left off. Provide ONLY the remaining effect concepts (#${n + 1} through #4). ` +
+                      `Continue EXACTLY from the last character of the previous output. ` +
+                      `Provide ONLY the remaining effect concepts (#${n + 1} through #4). ` +
                       `Do NOT repeat any earlier effects. Keep the same Markdown format and include full details for each remaining effect. ` +
-                      `Do not add a preamble.`,
+                      `No preamble.`,
                   },
                 ],
               },
