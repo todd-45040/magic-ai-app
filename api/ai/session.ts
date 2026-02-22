@@ -1,4 +1,4 @@
-import { recordUserActivity } from '../../server/usage';
+import { recordUserActivity } from '../../server/usage.js';
 import { isPreviewEnv } from './_lib/hardening.js';
 
 function json(res: any, status: number, body: any) {
