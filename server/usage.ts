@@ -480,6 +480,7 @@ export async function getAiUsageStatus(req: any): Promise<{
   void requestId;
   void ip_hash;
 
+
   if (!supabaseUrl || !serviceKey) {
     return { ok: false, status: 503, error: 'Server usage tracking is not configured.', error_code: 'NOT_CONFIGURED', retryable: true };
   }
@@ -596,6 +597,7 @@ if (profile) {
 
   const engagement = await getEngagementSignals(admin, userId);
 
+  await telemetryBestEffort({ actor_type: 'user', user_id: userId, identity_key: identity, membership: tier as any, tool: opts?.tool ?? null, outcome: 'ALLOWED', http_status: 200, error_code: null, retryable: false, units: costUnits, charged_units: costUnits });
   return {
     ok: true,
     membership: tier as any,
@@ -653,6 +655,44 @@ export async function enforceAiUsage(
   void requestId;
   void ip_hash;
 
+  async function telemetryBestEffort(params: {
+    actor_type: 'user' | 'guest';
+    user_id: string | null;
+    identity_key: string;
+    membership: Membership;
+    tool: string | null;
+    outcome: 'ALLOWED' | 'BLOCKED_QUOTA' | 'BLOCKED_RATE_LIMIT' | 'ERROR_SERVER';
+    http_status: number;
+    error_code: UsageErrorCode | null;
+    retryable: boolean;
+    units: number;
+    charged_units: number;
+  }): Promise<void> {
+    try {
+      await logUsageEvent({
+        request_id: requestId,
+        actor_type: params.actor_type,
+        user_id: params.user_id,
+        identity_key: params.identity_key,
+        ip_hash,
+        tool: params.tool,
+        endpoint: req?.url ?? null,
+        outcome: params.outcome,
+        http_status: params.http_status,
+        error_code: params.error_code,
+        retryable: params.retryable,
+        units: params.units,
+        charged_units: params.charged_units,
+        membership: params.membership,
+        user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
+        estimated_cost_usd: 0,
+      });
+    } catch {
+      // best-effort only
+    }
+  }
+
+
   // If server isn't configured for Supabase admin, fall back to a very small per-IP cap (fails safe).
   if (!supabaseUrl || !serviceKey) {
     const identity = ipKey(req);
@@ -696,10 +736,13 @@ export async function enforceAiUsage(
     const remaining = Math.max(0, limit - used);
 
     if (remaining < costUnits) {
+    if (remaining < costUnits) {
+      await telemetryBestEffort({ actor_type: 'guest', user_id: null, identity_key: identity, membership: 'free', tool: opts?.tool ?? null, outcome: 'BLOCKED_QUOTA', http_status: 429, error_code: 'USAGE_LIMIT_REACHED', retryable: true, units: costUnits, charged_units: 0 });
       return { ok: false, status: 429, error: 'AI usage limit reached for today (server not configured).', error_code: 'USAGE_LIMIT_REACHED', retryable: true, resetAt: nextResetAtISO(), remaining, limit, burstRemaining: burst.remaining, burstLimit: burst.limit };
     }
 
     map.set(memKey, used + costUnits);
+    await telemetryBestEffort({ actor_type: 'guest', user_id: null, identity_key: identity, membership: 'free', tool: opts?.tool ?? null, outcome: 'ALLOWED', http_status: 200, error_code: null, retryable: false, units: costUnits, charged_units: costUnits });
     return { ok: true, remaining: limit - (used + costUnits), limit, burstRemaining: burst.remaining, burstLimit: burst.limit };
   }
 
@@ -755,9 +798,11 @@ export async function enforceAiUsage(
     const remaining = Math.max(0, limit - used);
 
     if (remaining < costUnits) {
+      await telemetryBestEffort({ actor_type: 'guest', user_id: null, identity_key: identity, membership: 'free', tool: opts?.tool ?? null, outcome: 'BLOCKED_QUOTA', http_status: 429, error_code: 'USAGE_LIMIT_REACHED', retryable: true, units: costUnits, charged_units: 0 });
       return { ok: false, status: 429, error: 'AI usage limit reached for today.', error_code: 'USAGE_LIMIT_REACHED', retryable: true, resetAt: nextResetAtISO(), remaining, limit, burstRemaining: burst.remaining, burstLimit: burst.limit };
     }
     map.set(key, used + costUnits);
+    await telemetryBestEffort({ actor_type: 'guest', user_id: null, identity_key: identity, membership: 'free', tool: opts?.tool ?? null, outcome: 'ALLOWED', http_status: 200, error_code: null, retryable: false, units: costUnits, charged_units: costUnits });
     return {
       ok: true,
       remaining: limit - (used + costUnits),
@@ -824,6 +869,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
 
   // Hard gate by tier (ex: video_rehearsal is pro-only)
   if (tierRank(norm) < tierRank(policy.minTier)) {
+    await telemetryBestEffort({ actor_type: 'user', user_id: userId, identity_key: identity, membership: norm as any, tool: toolKey || null, outcome: 'BLOCKED_QUOTA', http_status: 402, error_code: 'USAGE_LIMIT_REACHED', retryable: false, units: costUnits, charged_units: 0 });
     return {
       ok: false,
       status: 402,
@@ -844,6 +890,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
   const units = Number.isFinite(costUnits) ? Math.max(0, Math.ceil(costUnits)) : 0;
 
   if (currentRemaining < units) {
+    await telemetryBestEffort({ actor_type: 'user', user_id: userId, identity_key: identity, membership: norm as any, tool: toolKey || null, outcome: 'BLOCKED_QUOTA', http_status: 402, error_code: 'USAGE_LIMIT_REACHED', retryable: false, units: costUnits, charged_units: 0 });
     return {
       ok: false,
       status: 402,
@@ -864,6 +911,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
 
   if (qErr) {
     console.error('Quota decrement error:', qErr);
+    await telemetryBestEffort({ actor_type: 'user', user_id: userId, identity_key: identity, membership: norm as any, tool: toolKey || null, outcome: 'ERROR_SERVER', http_status: 503, error_code: 'SERVER_ERROR', retryable: true, units: costUnits, charged_units: 0 });
     return { ok: false, status: 503, error: 'Usage tracking unavailable. Try again shortly.', error_code: 'SERVER_ERROR', retryable: true };
   }
 
@@ -877,6 +925,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
   const burstLimit = BURST_LIMITS[tier] ?? BURST_LIMITS.trial;
   const burst = enforceBurst(userId, burstLimit);
   if (!burst.ok) {
+    await telemetryBestEffort({ actor_type: 'user', user_id: userId, identity_key: identity, membership: tier as any, tool: opts?.tool ?? null, outcome: 'BLOCKED_RATE_LIMIT', http_status: 429, error_code: 'RATE_LIMITED', retryable: true, units: costUnits, charged_units: 0 });
     return {
       ok: false,
       status: 429,
@@ -895,6 +944,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
   const remaining = Math.max(0, limit - generationCount);
 
   if (remaining < costUnits) {
+    await telemetryBestEffort({ actor_type: 'user', user_id: userId, identity_key: identity, membership: tier as any, tool: opts?.tool ?? null, outcome: 'BLOCKED_QUOTA', http_status: 429, error_code: 'USAGE_LIMIT_REACHED', retryable: true, units: costUnits, charged_units: 0 });
     return {
       ok: false,
       status: 429,
@@ -922,6 +972,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
   if (incErr) {
     console.error('Usage increment error:', incErr);
     // Fail safe: if we can't record usage, block to protect costs.
+    await telemetryBestEffort({ actor_type: 'user', user_id: userId, identity_key: identity, membership: tier as any, tool: opts?.tool ?? null, outcome: 'ERROR_SERVER', http_status: 503, error_code: 'SERVER_ERROR', retryable: true, units: costUnits, charged_units: 0 });
     return { ok: false, status: 503, error: 'Usage tracking unavailable. Try again shortly.', error_code: 'SERVER_ERROR', retryable: true };
 
   }
@@ -941,6 +992,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
     // ignore
   }
 
+  await telemetryBestEffort({ actor_type: 'user', user_id: userId, identity_key: identity, membership: tier as any, tool: opts?.tool ?? null, outcome: 'ALLOWED', http_status: 200, error_code: null, retryable: false, units: costUnits, charged_units: costUnits });
   return {
     ok: true,
     remaining: Math.max(0, limit - newCount),
@@ -991,6 +1043,7 @@ export async function enforceLiveMinutes(
     };
   }
 
+  await telemetryBestEffort({ actor_type: 'user', user_id: userId, identity_key: identity, membership: tier as any, tool: opts?.tool ?? null, outcome: 'ALLOWED', http_status: 200, error_code: null, retryable: false, units: costUnits, charged_units: costUnits });
   return {
     ok: true,
     membership: status?.membership ?? enforced.membership,
