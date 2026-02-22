@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import type { GoTrueClient } from '@supabase/auth-js';
-import { getIpFromReq, hashIp, logUsageEvent, } from './telemetry.js';
+import { getIpFromReq, hashIp, logUsageEvent, estimateCostUSD } from './telemetry.js';
 
 // Canonical membership tiers used for usage enforcement.
 // Legacy tiers are accepted and normalized server-side.
@@ -697,10 +697,46 @@ export async function enforceAiUsage(
     const remaining = Math.max(0, limit - used);
 
     if (remaining < costUnits) {
+      await logUsageEvent({
+        request_id: requestId,
+        actor_type: 'guest',
+        user_id: null,
+        identity_key: anonIdentity,
+        ip_hash,
+        tool: opts?.tool ?? null,
+        endpoint: req?.url ?? null,
+        outcome: 'BLOCKED_QUOTA',
+        http_status: 429,
+        error_code: 'USAGE_LIMIT_REACHED',
+        retryable: true,
+        units: costUnits,
+        charged_units: 0,
+        membership: 'free',
+        user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
+        estimated_cost_usd: 0,
+      });
       return { ok: false, status: 429, error: 'AI usage limit reached for today (server not configured).', error_code: 'USAGE_LIMIT_REACHED', retryable: true, resetAt: nextResetAtISO(), remaining, limit, burstRemaining: burst.remaining, burstLimit: burst.limit };
     }
 
     map.set(memKey, used + costUnits);
+    await logUsageEvent({
+      request_id: requestId,
+      actor_type: 'guest',
+      user_id: null,
+      identity_key: anonIdentity,
+      ip_hash,
+      tool: opts?.tool ?? null,
+      endpoint: req?.url ?? null,
+      outcome: 'SUCCESS_NOT_CHARGED',
+      http_status: 200,
+      error_code: null,
+      retryable: false,
+      units: costUnits,
+      charged_units: 0,
+      membership: 'free',
+      user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
+      estimated_cost_usd: 0,
+    });
     return { ok: true, remaining: limit - (used + costUnits), limit, burstRemaining: burst.remaining, burstLimit: burst.limit };
   }
 
@@ -719,6 +755,51 @@ export async function enforceAiUsage(
 
   const identity_key = userId || ipKey(req);
   const today = usageDayKey();
+
+  // ---- Telemetry helper (best-effort; never blocks) ----
+  const baseEvent = {
+    request_id: requestId,
+    actor_type: (userId ? 'user' : 'guest') as 'user' | 'guest',
+    user_id: userId,
+    identity_key,
+    ip_hash,
+    tool: opts?.tool ?? null,
+    endpoint: req?.url ?? null,
+    units: Number.isFinite(costUnits) ? costUnits : 0,
+    user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
+  };
+
+  async function emitTelemetry(input: {
+    outcome: any;
+    http_status?: number | null;
+    error_code?: string | null;
+    retryable?: boolean | null;
+    charged_units?: number | null;
+    membership?: string | null;
+  }) {
+    try {
+      const charged_units = Number.isFinite(Number(input.charged_units ?? 0)) ? Number(input.charged_units ?? 0) : 0;
+      const estimated_cost_usd = estimateCostUSD({
+        provider: null,
+        model: null,
+        charged_units,
+        tool: baseEvent.tool ?? undefined,
+      }) ?? 0;
+
+      await logUsageEvent({
+        ...baseEvent,
+        outcome: input.outcome,
+        http_status: input.http_status ?? null,
+        error_code: input.error_code ?? null,
+        retryable: input.retryable ?? null,
+        charged_units,
+        membership: input.membership ?? null,
+        estimated_cost_usd,
+      } as any);
+    } catch {
+      // ignore
+    }
+  }
 
   // Anonymous / IP-based enforcement: strict caps + burst
   if (!userId) {
@@ -756,9 +837,11 @@ export async function enforceAiUsage(
     const remaining = Math.max(0, limit - used);
 
     if (remaining < costUnits) {
+      await emitTelemetry({ outcome: 'BLOCKED_QUOTA', http_status: 429, error_code: 'USAGE_LIMIT_REACHED', retryable: true, charged_units: 0, membership: 'free' });
       return { ok: false, status: 429, error: 'AI usage limit reached for today.', error_code: 'USAGE_LIMIT_REACHED', retryable: true, resetAt: nextResetAtISO(), remaining, limit, burstRemaining: burst.remaining, burstLimit: burst.limit };
     }
     map.set(key, used + costUnits);
+    await emitTelemetry({ outcome: 'SUCCESS_NOT_CHARGED', http_status: 200, error_code: null, retryable: false, charged_units: 0, membership: 'free' });
     return {
       ok: true,
       remaining: limit - (used + costUnits),
@@ -825,7 +908,8 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
 
   // Hard gate by tier (ex: video_rehearsal is pro-only)
   if (tierRank(norm) < tierRank(policy.minTier)) {
-    return {
+    await emitTelemetry({ outcome: 'BLOCKED_QUOTA', http_status: 402, error_code: 'USAGE_LIMIT_REACHED', retryable: false, charged_units: 0, membership: norm });
+      return {
       ok: false,
       status: 402,
       error: 'Upgrade required to use this tool.',
@@ -845,7 +929,8 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
   const units = Number.isFinite(costUnits) ? Math.max(0, Math.ceil(costUnits)) : 0;
 
   if (currentRemaining < units) {
-    return {
+    await emitTelemetry({ outcome: 'BLOCKED_QUOTA', http_status: 402, error_code: 'USAGE_LIMIT_REACHED', retryable: false, charged_units: 0, membership: norm });
+      return {
       ok: false,
       status: 402,
       error: 'Monthly quota exceeded for your plan.',
@@ -865,6 +950,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
 
   if (qErr) {
     console.error('Quota decrement error:', qErr);
+    await emitTelemetry({ outcome: 'ERROR_UPSTREAM', http_status: 503, error_code: 'SERVER_ERROR', retryable: true, charged_units: 0, membership: norm });
     return { ok: false, status: 503, error: 'Usage tracking unavailable. Try again shortly.', error_code: 'SERVER_ERROR', retryable: true };
   }
 
@@ -878,6 +964,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
   const burstLimit = BURST_LIMITS[tier] ?? BURST_LIMITS.trial;
   const burst = enforceBurst(userId, burstLimit);
   if (!burst.ok) {
+    await emitTelemetry({ outcome: 'BLOCKED_RATE_LIMIT', http_status: 429, error_code: 'RATE_LIMITED', retryable: true, charged_units: 0, membership: tier });
     return {
       ok: false,
       status: 429,
@@ -896,6 +983,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
   const remaining = Math.max(0, limit - generationCount);
 
   if (remaining < costUnits) {
+    await emitTelemetry({ outcome: 'BLOCKED_QUOTA', http_status: 429, error_code: 'USAGE_LIMIT_REACHED', retryable: true, charged_units: 0, membership: tier });
     return {
       ok: false,
       status: 429,
@@ -923,6 +1011,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
   if (incErr) {
     console.error('Usage increment error:', incErr);
     // Fail safe: if we can't record usage, block to protect costs.
+    await emitTelemetry({ outcome: 'ERROR_UPSTREAM', http_status: 503, error_code: 'SERVER_ERROR', retryable: true, charged_units: 0, membership: tier });
     return { ok: false, status: 503, error: 'Usage tracking unavailable. Try again shortly.', error_code: 'SERVER_ERROR', retryable: true };
 
   }
@@ -1002,6 +1091,8 @@ export async function enforceLiveMinutes(
       liveRemaining: status?.remaining ?? status?.liveRemaining,
     };
   }
+
+  await emitTelemetry({ outcome: 'SUCCESS_CHARGED', http_status: 200, error_code: null, retryable: false, charged_units: costUnits, membership: tier });
 
   return {
     ok: true,
