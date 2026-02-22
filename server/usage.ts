@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import type { GoTrueClient } from '@supabase/auth-js';
-import { getIpFromReq, hashIp, logUsageEvent, } from './telemetry';
+import { getIpFromReq, hashIp, logUsageEvent, } from './telemetry.js';
 
 // Canonical membership tiers used for usage enforcement.
 // Legacy tiers are accepted and normalized server-side.
@@ -355,8 +355,7 @@ async function getEngagementSignals(admin: any, userId: string): Promise<{
 export async function recordUserActivity(
   req: any,
   toolUsed: string | null
-): Promise<{ ok: boolean; status?: number; error?: string }>{
-  try {
+): Promise<{ ok: boolean; status?: number; error?: string }> {
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const token = parseBearer(req);
@@ -471,7 +470,6 @@ export async function getAiUsageStatus(req: any): Promise<{
   burstLimit?: number;
   burstRemaining?: number;
 }> {
-  try {
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const token = parseBearer(req);
@@ -644,7 +642,6 @@ export async function enforceAiUsage(
   resetTz?: string;
   resetHourLocal?: number;
 }> {
-  try {
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -954,10 +951,6 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
       resetTz: RESET_TZ,
     resetHourLocal: RESET_HOUR_LOCAL,
   };
-  } catch (e: any) {
-    console.error('enforceAiUsage crash:', e);
-    return { ok: false, status: 500, error: 'Server error', error_code: 'SERVER_ERROR', retryable: true, resetAt: nextResetAtISO(), resetTz: RESET_TZ, resetHourLocal: RESET_HOUR_LOCAL };
-  }
 }
 
 // Back-compat alias used by some hardened endpoints.

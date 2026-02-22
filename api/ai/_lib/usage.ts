@@ -1,6 +1,6 @@
 // Phase 1.5: single canonical usage implementation
 //
-// Canonical implementation lives at: /server/usage
+// Canonical implementation lives at: /server/usage.js
 // This file exists only as a stable import surface for AI endpoints.
 
 export { getAiUsageStatus, incrementAiUsage, enforceAiUsage } from '../../../server/usage';

@@ -7,7 +7,7 @@
 // - Return the standard hardened error contract
 
 import { getAiUsageStatus, incrementAiUsage } from "../../../server/usage";
-import { isPreviewEnv, mapProviderError, withTimeout } from './hardening';
+import { isPreviewEnv, mapProviderError, withTimeout } from './hardening.js';
 
 export type UsageStatus = {
   ok: true;

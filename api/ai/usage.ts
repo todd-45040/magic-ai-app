@@ -1,5 +1,5 @@
-import { getAiUsageStatus } from './_lib/usage';
-import { isPreviewEnv } from './_lib/hardening';
+import { getAiUsageStatus } from './_lib/usage.js';
+import { isPreviewEnv } from './_lib/hardening.js';
 
 function json(res: any, status: number, body: any) {
   res.status(status).setHeader('Content-Type', 'application/json; charset=utf-8');

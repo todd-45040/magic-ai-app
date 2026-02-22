@@ -1,5 +1,5 @@
 import { recordUserActivity } from '../../server/usage';
-import { isPreviewEnv } from './_lib/hardening';
+import { isPreviewEnv } from './_lib/hardening.js';
 
 function json(res: any, status: number, body: any) {
   res.status(status).setHeader('Content-Type', 'application/json; charset=utf-8');
