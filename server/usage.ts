@@ -519,7 +519,7 @@ export async function getAiUsageStatus(req: any): Promise<{
       limit,
       remaining,
       resetAt: nextResetAtISO(),
-      resetTz: RESET_TZ,
+    resetTz: RESET_TZ,
       resetHourLocal: RESET_HOUR_LOCAL,
       sessionsToday: 0,
       toolsUsedToday: [],
@@ -596,26 +596,6 @@ if (profile) {
 
   const engagement = await getEngagementSignals(admin, userId);
 
-      // Telemetry (best-effort)
-  await logUsageEvent({
-    request_id: requestId,
-    actor_type: userId ? 'user' : 'guest',
-    user_id: userId,
-    identity_key: userId || ipKey(req),
-    ip_hash,
-    tool: opts?.tool ?? null,
-    endpoint: req?.url ?? null,
-    outcome: userId ? 'SUCCESS_CHARGED' : 'SUCCESS_NOT_CHARGED',
-    http_status: 200,
-    error_code: null,
-    retryable: false,
-    units: costUnits,
-    charged_units: userId ? costUnits : 0,
-    membership: tier as any,
-    user_agent: (req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null),
-    estimated_cost_usd: 0,
-  });
-
   return {
     ok: true,
     membership: tier as any,
@@ -623,7 +603,7 @@ if (profile) {
     limit,
     remaining,
     resetAt: nextResetAtISO(),
-      resetTz: RESET_TZ,
+    resetTz: RESET_TZ,
     resetHourLocal: RESET_HOUR_LOCAL,
     sessionsToday: engagement.sessionsToday,
     toolsUsedToday: engagement.toolsUsedToday,
@@ -717,6 +697,30 @@ export async function enforceAiUsage(
     const remaining = Math.max(0, limit - used);
 
     if (remaining < costUnits) {
+// Telemetry (best-effort)
+try {
+  await logUsageEvent({
+    request_id: requestId,
+    actor_type: 'user',
+    user_id: userId,
+    identity_key: userId,
+    ip_hash,
+    tool: opts?.tool ?? null,
+    endpoint: req?.url ?? null,
+    provider: 'gemini',
+    model: null,
+    outcome: 'BLOCKED_QUOTA',
+    http_status: 429,
+    error_code: 'USAGE_LIMIT_REACHED',
+    retryable: true,
+    units: costUnits,
+    charged_units: 0,
+    membership: tier as any,
+    user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
+    estimated_cost_usd: 0,
+  });
+} catch {}
+
       return { ok: false, status: 429, error: 'AI usage limit reached for today (server not configured).', error_code: 'USAGE_LIMIT_REACHED', retryable: true, resetAt: nextResetAtISO(), remaining, limit, burstRemaining: burst.remaining, burstLimit: burst.limit };
     }
 
@@ -786,7 +790,7 @@ export async function enforceAiUsage(
       burstRemaining: burst.remaining,
       burstLimit: burst.limit,
       resetAt: nextResetAtISO(),
-      resetTz: RESET_TZ,
+    resetTz: RESET_TZ,
       resetHourLocal: RESET_HOUR_LOCAL,
     };
   }
@@ -885,24 +889,6 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
 
   if (qErr) {
     console.error('Quota decrement error:', qErr);
-    await logUsageEvent({
-      request_id: requestId,
-      actor_type: userId ? 'user' : 'guest',
-      user_id: userId,
-      identity_key: userId || ipKey(req),
-      ip_hash,
-      tool: opts?.tool ?? null,
-      endpoint: req?.url ?? null,
-      outcome: 'ERROR_UPSTREAM',
-      http_status: 503,
-      error_code: 'SERVER_ERROR',
-      retryable: true,
-      units: costUnits,
-      charged_units: 0,
-      membership: tier as any,
-      user_agent: (req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null),
-      estimated_cost_usd: 0,
-    });
     return { ok: false, status: 503, error: 'Usage tracking unavailable. Try again shortly.', error_code: 'SERVER_ERROR', retryable: true };
   }
 
@@ -916,25 +902,30 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
   const burstLimit = BURST_LIMITS[tier] ?? BURST_LIMITS.trial;
   const burst = enforceBurst(userId, burstLimit);
   if (!burst.ok) {
-    // Telemetry (best-effort)
-    await logUsageEvent({
-      request_id: requestId,
-      actor_type: userId ? 'user' : 'guest',
-      user_id: userId,
-      identity_key: userId || ipKey(req),
-      ip_hash,
-      tool: opts?.tool ?? null,
-      endpoint: req?.url ?? null,
-      outcome: 'BLOCKED_RATE_LIMIT',
-      http_status: 429,
-      error_code: 'RATE_LIMITED',
-      retryable: true,
-      units: costUnits,
-      charged_units: 0,
-      membership: tier as any,
-      user_agent: (req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null),
-      estimated_cost_usd: 0,
-    });
+// Telemetry (best-effort)
+try {
+  await logUsageEvent({
+    request_id: requestId,
+    actor_type: 'user',
+    user_id: userId,
+    identity_key: userId,
+    ip_hash,
+    tool: opts?.tool ?? null,
+    endpoint: req?.url ?? null,
+    provider: 'gemini',
+    model: null,
+    outcome: 'BLOCKED_RATE_LIMIT',
+    http_status: 429,
+    error_code: 'RATE_LIMITED',
+    retryable: true,
+    units: costUnits,
+    charged_units: 0,
+    membership: tier as any,
+    user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
+    estimated_cost_usd: 0,
+  });
+} catch {}
+
     return {
       ok: false,
       status: 429,
@@ -944,7 +935,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
       membership,
       burstRemaining: 0,
       burstLimit,
-      resetTz: RESET_TZ,
+    resetTz: RESET_TZ,
       resetHourLocal: RESET_HOUR_LOCAL,
     };
   }
@@ -953,25 +944,6 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
   const remaining = Math.max(0, limit - generationCount);
 
   if (remaining < costUnits) {
-    // Telemetry (best-effort)
-    await logUsageEvent({
-      request_id: requestId,
-      actor_type: userId ? 'user' : 'guest',
-      user_id: userId,
-      identity_key: userId || ipKey(req),
-      ip_hash,
-      tool: opts?.tool ?? null,
-      endpoint: req?.url ?? null,
-      outcome: 'BLOCKED_QUOTA',
-      http_status: 429,
-      error_code: 'USAGE_LIMIT_REACHED',
-      retryable: true,
-      units: costUnits,
-      charged_units: 0,
-      membership: tier as any,
-      user_agent: (req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null),
-      estimated_cost_usd: 0,
-    });
     return {
       ok: false,
       status: 429,
@@ -984,7 +956,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
       membership: tier as any,
       burstRemaining: burst.remaining,
       burstLimit,
-      resetTz: RESET_TZ,
+    resetTz: RESET_TZ,
       resetHourLocal: RESET_HOUR_LOCAL,
     };
   }
@@ -999,33 +971,71 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
   if (incErr) {
     console.error('Usage increment error:', incErr);
     // Fail safe: if we can't record usage, block to protect costs.
-    return { ok: false, status: 503, error: 'Usage tracking unavailable. Try again shortly.', error_code: 'SERVER_ERROR', retryable: true };
+    // Telemetry (best-effort)
+try {
+  await logUsageEvent({
+    request_id: requestId,
+    actor_type: 'user',
+    user_id: userId,
+    identity_key: userId,
+    ip_hash,
+    tool: opts?.tool ?? null,
+    endpoint: req?.url ?? null,
+    provider: 'gemini',
+    model: null,
+    outcome: 'ERROR_UPSTREAM',
+    http_status: 503,
+    error_code: 'SERVER_ERROR',
+    retryable: true,
+    units: costUnits,
+    charged_units: 0,
+    membership: tier as any,
+    user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
+    estimated_cost_usd: 0,
+  });
+} catch {}
+return { ok: false, status: 503, error: 'Usage tracking unavailable. Try again shortly.', error_code: 'SERVER_ERROR', retryable: true };
 
   }
 
-  // Phase 2A: best-effort tool telemetry (never blocks success)
-  try {
-    const tool = typeof opts?.tool === 'string' ? opts.tool.trim() : '';
-    if (tool) {
-      const { error: actErr } = await admin.from('user_activity').insert({
-        user_id: userId,
-        session_start_at: new Date().toISOString(),
-        tool_used: tool,
-      });
-      if (actErr) console.error('user_activity tool insert error:', actErr);
-    }
-  } catch {
-    // ignore
-  }
+  // Phase 2B: best-effort usage telemetry (never blocks success)
+try {
+  const actor_type = token ? 'user' : 'guest';
+  const identity_key = token ? userId : ipKey(req);
+  const outcome = token ? 'SUCCESS_CHARGED' : 'SUCCESS_NOT_CHARGED';
 
-  return {
+  await logUsageEvent({
+    request_id: requestId,
+    actor_type,
+    user_id: token ? userId : null,
+    identity_key,
+    ip_hash,
+    tool: opts?.tool ?? null,
+    endpoint: req?.url ?? null,
+    provider: 'gemini',
+    model: null,
+    outcome,
+    http_status: 200,
+    error_code: null,
+    retryable: false,
+    units: costUnits,
+    charged_units: token ? costUnits : 0,
+    membership: (tier as any) ?? (membership as any) ?? 'free',
+    user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
+    estimated_cost_usd: 0,
+  });
+} catch {
+  // ignore
+}
+
+return {
     ok: true,
     remaining: Math.max(0, limit - newCount),
     limit,
     membership: tier as any,
     burstRemaining: burst.remaining,
     burstLimit,
-      resetTz: RESET_TZ,
+    resetTz: RESET_TZ,
     resetHourLocal: RESET_HOUR_LOCAL,
   };
   } catch (e: any) {
