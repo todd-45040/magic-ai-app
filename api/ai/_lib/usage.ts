@@ -596,6 +596,26 @@ if (profile) {
 
   const engagement = await getEngagementSignals(admin, userId);
 
+      // Telemetry (best-effort)
+  await logUsageEvent({
+    request_id: requestId,
+    actor_type: userId ? 'user' : 'guest',
+    user_id: userId,
+    identity_key: userId || ipKey(req),
+    ip_hash,
+    tool: opts?.tool ?? null,
+    endpoint: req?.url ?? null,
+    outcome: userId ? 'SUCCESS_CHARGED' : 'SUCCESS_NOT_CHARGED',
+    http_status: 200,
+    error_code: null,
+    retryable: false,
+    units: costUnits,
+    charged_units: userId ? costUnits : 0,
+    membership: tier as any,
+    user_agent: (req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null),
+    estimated_cost_usd: 0,
+  });
+
   return {
     ok: true,
     membership: tier as any,
@@ -864,6 +884,24 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
 
   if (qErr) {
     console.error('Quota decrement error:', qErr);
+    await logUsageEvent({
+      request_id: requestId,
+      actor_type: userId ? 'user' : 'guest',
+      user_id: userId,
+      identity_key: userId || ipKey(req),
+      ip_hash,
+      tool: opts?.tool ?? null,
+      endpoint: req?.url ?? null,
+      outcome: 'ERROR_UPSTREAM',
+      http_status: 503,
+      error_code: 'SERVER_ERROR',
+      retryable: true,
+      units: costUnits,
+      charged_units: 0,
+      membership: tier as any,
+      user_agent: (req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null),
+      estimated_cost_usd: 0,
+    });
     return { ok: false, status: 503, error: 'Usage tracking unavailable. Try again shortly.', error_code: 'SERVER_ERROR', retryable: true };
   }
 
@@ -877,6 +915,25 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
   const burstLimit = BURST_LIMITS[tier] ?? BURST_LIMITS.trial;
   const burst = enforceBurst(userId, burstLimit);
   if (!burst.ok) {
+    // Telemetry (best-effort)
+    await logUsageEvent({
+      request_id: requestId,
+      actor_type: userId ? 'user' : 'guest',
+      user_id: userId,
+      identity_key: userId || ipKey(req),
+      ip_hash,
+      tool: opts?.tool ?? null,
+      endpoint: req?.url ?? null,
+      outcome: 'BLOCKED_RATE_LIMIT',
+      http_status: 429,
+      error_code: 'RATE_LIMITED',
+      retryable: true,
+      units: costUnits,
+      charged_units: 0,
+      membership: tier as any,
+      user_agent: (req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null),
+      estimated_cost_usd: 0,
+    });
     return {
       ok: false,
       status: 429,
@@ -895,6 +952,25 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
   const remaining = Math.max(0, limit - generationCount);
 
   if (remaining < costUnits) {
+    // Telemetry (best-effort)
+    await logUsageEvent({
+      request_id: requestId,
+      actor_type: userId ? 'user' : 'guest',
+      user_id: userId,
+      identity_key: userId || ipKey(req),
+      ip_hash,
+      tool: opts?.tool ?? null,
+      endpoint: req?.url ?? null,
+      outcome: 'BLOCKED_QUOTA',
+      http_status: 429,
+      error_code: 'USAGE_LIMIT_REACHED',
+      retryable: true,
+      units: costUnits,
+      charged_units: 0,
+      membership: tier as any,
+      user_agent: (req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null),
+      estimated_cost_usd: 0,
+    });
     return {
       ok: false,
       status: 429,
