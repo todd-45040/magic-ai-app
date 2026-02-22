@@ -31,6 +31,35 @@ async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   }
 }
 
+function extractText(result: any): string {
+  if (typeof result?.text === 'string' && result.text.trim()) return result.text;
+
+  const parts = result?.candidates?.[0]?.content?.parts;
+  if (Array.isArray(parts)) {
+    const joined = parts
+      .map((p: any) => p?.text)
+      .filter((t: any) => typeof t === 'string')
+      .join('')
+      .trim();
+    if (joined) return joined;
+  }
+
+  const maybe =
+    result?.output_text ||
+    result?.content ||
+    result?.message?.content ||
+    result?.choices?.[0]?.message?.content;
+  if (typeof maybe === 'string' && maybe.trim()) return maybe.trim();
+
+  return '';
+}
+
+function countHeadings(text: string): number {
+  const m = text.match(/\n\s*#{2,6}\s*\d+\./g);
+  return m ? m.length : 0;
+}
+
+
 export default async function handler(request: any, response: any) {
   // IMPORTANT:
   // Vercel will sometimes return a plain-text 500 "FUNCTION_INVOCATION_FAILED"
@@ -80,19 +109,19 @@ export default async function handler(request: any, response: any) {
 
     let result: any;
 
-    const run = async (override?: { providerModel?: string; hardTimeoutMs?: number }) => {
+    const run = async (override?: { providerModel?: string; hardTimeoutMs?: number; contentsOverride?: any }) => {
       const hardTimeout = override?.hardTimeoutMs ?? DEFAULT_TIMEOUT_MS;
 
       if (provider === 'openai') {
         return await withTimeout(
-          callOpenAI({ model: override?.providerModel || model, contents, config: boundedConfig }),
+          callOpenAI({ model: override?.providerModel || model, contents: override?.contentsOverride ?? contents, config: boundedConfig }),
           hardTimeout
         );
       }
 
       if (provider === 'anthropic') {
         return await withTimeout(
-          callAnthropic({ model: override?.providerModel || model, contents, config: boundedConfig }),
+          callAnthropic({ model: override?.providerModel || model, contents: override?.contentsOverride ?? contents, config: boundedConfig }),
           hardTimeout
         );
       }
@@ -117,7 +146,7 @@ export default async function handler(request: any, response: any) {
       return await withTimeout(
         ai.models.generateContent({
           model: chosenModel,
-          contents,
+          contents: override?.contentsOverride ?? contents,
           config: {
             ...boundedConfig,
           },
@@ -146,7 +175,49 @@ export default async function handler(request: any, response: any) {
       }
     }
 
-    // Return usage headers for the Usage Meter UI (best-effort)
+    
+    // Some Gemini responses can arrive "half-finished" (model stops early).
+    // If we detect fewer than 3 numbered sections, do a single quick continuation
+    // and append the remainder. Best-effort only.
+    try {
+      const firstText = extractText(result);
+
+      // Ensure `text` exists for clients that prefer the simple extraction path.
+      if (firstText) result = { ...(result || {}), text: firstText };
+
+      // Only attempt continuation for Gemini-style message arrays.
+      if (provider !== 'openai' && provider !== 'anthropic') {
+        const n = firstText ? countHeadings(firstText) : 0;
+        if (firstText && n > 0 && n < 3 && Array.isArray(contents)) {
+          const continuation = [
+            ...contents,
+            { role: 'model', parts: [{ text: firstText }] },
+            {
+              role: 'user',
+              parts: [
+                {
+                  text:
+                    'Continue from where you left off. Provide the remaining effect concepts (2 and 3). ' +
+                    'Do not repeat #1. Keep the same format and include full details.',
+                },
+              ],
+            },
+          ];
+
+          const continued = await run({ hardTimeoutMs: 15_000, contentsOverride: continuation });
+          const moreText = extractText(continued);
+
+          if (moreText) {
+            const finalText = (firstText + '\n\n' + moreText).trim();
+            result = { ...(result || {}), text: finalText };
+          }
+        }
+      }
+    } catch {
+      // ignore (best-effort)
+    }
+
+// Return usage headers for the Usage Meter UI (best-effort)
     response.setHeader('X-AI-Remaining', String(usage.remaining ?? ''));
     response.setHeader('X-AI-Limit', String(usage.limit ?? ''));
     response.setHeader('X-AI-Membership', String(usage.membership ?? ''));
