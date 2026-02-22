@@ -22,16 +22,19 @@ const DEFAULT_TIMEOUT_MS = (() => {
 
 const DEFAULT_MAX_TOKENS = (() => {
   const raw = Number(process.env.EFFECT_ENGINE_MAX_TOKENS);
-  // sensible bounds: 600–3000
-  if (Number.isFinite(raw) && raw >= 600 && raw <= 3000) return Math.floor(raw);
-  return 2200;
+  // sensible bounds: 600–4096
+  if (Number.isFinite(raw) && raw >= 600 && raw <= 4096) return Math.floor(raw);
+  // Effect Engine often needs a larger budget than other tools.
+  return 2800;
 })();
 
 function clampMaxTokens(v: any): number {
   const n = Number(v);
   if (!Number.isFinite(n)) return DEFAULT_MAX_TOKENS;
   if (n < 200) return 200;
-  if (n > 3000) return 3000;
+  // Gemini (and other providers) support higher output caps than 3k.
+  // We clamp to a safe upper bound to avoid runaway costs.
+  if (n > 4096) return 4096;
   return Math.floor(n);
 }
 
@@ -235,7 +238,7 @@ export default async function handler(request: any, response: any) {
 
     
     // Some Gemini responses can arrive "half-finished" (model stops early).
-    // If we detect fewer than 3 numbered sections, do a single quick continuation
+    // If we detect fewer than 4 numbered sections, do a small number of continuations
     // and append the remainder. Best-effort only.
     try {
       const firstText = extractText(result);
@@ -245,29 +248,42 @@ export default async function handler(request: any, response: any) {
 
       // Only attempt continuation for Gemini-style message arrays.
       if (provider !== 'openai' && provider !== 'anthropic') {
-        const n = firstText ? countHeadings(firstText) : 0;
-        if (firstText && n > 0 && n < 4 && Array.isArray(contents)) {
-          const continuation = [
-            ...contents,
-            { role: 'model', parts: [{ text: firstText }] },
-            {
-              role: 'user',
-              parts: [
-                {
-                  text:
-                    `Continue from where you left off. Provide ONLY the remaining effect concepts (#${n + 1} through #4). ` +
-                    `Do NOT repeat any earlier effects. Keep the same Markdown format and include full details for each remaining effect.`,
-                },
-              ],
-            },
-          ];
+        let accumulated = firstText || '';
+        let n = accumulated ? countHeadings(accumulated) : 0;
 
-          const continued = await run({ hardTimeoutMs: 15_000, contentsOverride: continuation });
-          const moreText = extractText(continued);
+        // Continuations: try up to 2 times to reach all 4 effects.
+        if (accumulated && n > 0 && n < 4 && Array.isArray(contents)) {
+          for (let attempt = 0; attempt < 2 && n > 0 && n < 4; attempt++) {
+            // Provide only a tail of the prior output so the model can pick up mid-sentence
+            // without re-sending a huge context blob.
+            const tail = accumulated.slice(-2000);
+            const continuation = [
+              ...contents,
+              { role: 'model', parts: [{ text: tail }] },
+              {
+                role: 'user',
+                parts: [
+                  {
+                    text:
+                      `Continue EXACTLY from where you left off. Provide ONLY the remaining effect concepts (#${n + 1} through #4). ` +
+                      `Do NOT repeat any earlier effects. Keep the same Markdown format and include full details for each remaining effect. ` +
+                      `Do not add a preamble.`,
+                  },
+                ],
+              },
+            ];
 
-          if (moreText) {
-            const finalText = (firstText + '\n\n' + moreText).trim();
-            result = { ...(result || {}), text: finalText };
+            const continued = await run({ hardTimeoutMs: 18_000, contentsOverride: continuation });
+            const moreText = extractText(continued);
+            if (!moreText) break;
+
+            accumulated = (accumulated + '\n\n' + moreText).trim();
+            n = countHeadings(accumulated);
+          }
+
+          // Ensure the response uses the accumulated text.
+          if (accumulated.trim().length > (firstText || '').trim().length) {
+            result = { ...(result || {}), text: accumulated };
           }
         }
 
