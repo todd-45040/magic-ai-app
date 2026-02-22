@@ -83,7 +83,7 @@ function extractItemsFromContents(contents: any): string[] {
       if (m1?.[1]) {
         return m1[1]
           .split(',')
-          .map(s => s.trim())
+          .map((s: string) => s.trim())
           .filter(Boolean)
           .slice(0, 4);
       }
@@ -93,7 +93,7 @@ function extractItemsFromContents(contents: any): string[] {
       if (m2?.[1]) {
         return m2[1]
           .split(',')
-          .map(s => s.trim())
+          .map((s: string) => s.trim())
           .filter(Boolean)
           .slice(0, 4);
       }
