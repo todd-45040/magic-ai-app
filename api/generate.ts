@@ -19,6 +19,22 @@ const DEFAULT_TIMEOUT_MS = (() => {
   return 40_000;
 })();
 
+
+const DEFAULT_MAX_TOKENS = (() => {
+  const raw = Number(process.env.EFFECT_ENGINE_MAX_TOKENS);
+  // sensible bounds: 600–3000
+  if (Number.isFinite(raw) && raw >= 600 && raw <= 3000) return Math.floor(raw);
+  return 2200;
+})();
+
+function clampMaxTokens(v: any): number {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return DEFAULT_MAX_TOKENS;
+  if (n < 200) return 200;
+  if (n > 3000) return 3000;
+  return Math.floor(n);
+}
+
 async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   let t: any;
   const timeout = new Promise<never>((_, reject) => {
@@ -146,10 +162,7 @@ export default async function handler(request: any, response: any) {
     const boundedConfig = {
       ...(config || {}),
       // If not specified, keep the output size sane.
-      maxOutputTokens:
-        typeof (config || {})?.maxOutputTokens === 'number'
-          ? (config || {}).maxOutputTokens
-          : 900,
+      maxOutputTokens: clampMaxTokens((config || {})?.maxOutputTokens),
     };
 
     let result: any;
@@ -171,11 +184,11 @@ export default async function handler(request: any, response: any) {
         );
       }
 
-      const apiKey = process.env.GOOGLE_API_KEY || process.env.API_KEY;
+      const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.API_KEY;
       if (!apiKey) {
         // This is an infra misconfig (not a user error)
         throw new Error(
-          'Google API key is not configured. Set GOOGLE_API_KEY (preferred) or API_KEY in Vercel environment variables.'
+          'Google API key is not configured. Set GEMINI_API_KEY (preferred), or GOOGLE_API_KEY, or legacy API_KEY in Vercel environment variables.'
         );
       }
 
@@ -233,7 +246,7 @@ export default async function handler(request: any, response: any) {
       // Only attempt continuation for Gemini-style message arrays.
       if (provider !== 'openai' && provider !== 'anthropic') {
         const n = firstText ? countHeadings(firstText) : 0;
-        if (firstText && n > 0 && n < 3 && Array.isArray(contents)) {
+        if (firstText && n > 0 && n < 4 && Array.isArray(contents)) {
           const continuation = [
             ...contents,
             { role: 'model', parts: [{ text: firstText }] },
@@ -242,8 +255,8 @@ export default async function handler(request: any, response: any) {
               parts: [
                 {
                   text:
-                    'Continue from where you left off. Provide the remaining effect concepts (2 and 3). ' +
-                    'Do not repeat #1. Keep the same format and include full details.',
+                    `Continue from where you left off. Provide ONLY the remaining effect concepts (#${n + 1} through #4). ` +
+                    `Do NOT repeat any earlier effects. Keep the same Markdown format and include full details for each remaining effect.`,
                 },
               ],
             },

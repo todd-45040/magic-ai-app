@@ -37,10 +37,10 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    const apiKey = process.env.GOOGLE_API_KEY || process.env.API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.API_KEY;
     if (!apiKey) {
       return res.status(500).json({
-        error: "Missing GOOGLE_API_KEY (or legacy API_KEY) in server environment",
+        error: "Missing GEMINI_API_KEY (preferred), GOOGLE_API_KEY, or legacy API_KEY in server environment",
       });
     }
 
