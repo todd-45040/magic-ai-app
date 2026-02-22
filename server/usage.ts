@@ -665,7 +665,7 @@ export async function enforceAiUsage(
         request_id: requestId,
         actor_type: 'guest',
         user_id: null,
-        anonIdentity_key: anonIdentity,
+        identity_key: anonIdentity,
         ip_hash,
         tool: opts?.tool ?? null,
         endpoint: req?.url ?? null,
@@ -721,7 +721,7 @@ export async function enforceAiUsage(
 
   // Anonymous / IP-based enforcement: strict caps + burst
   if (!userId) {
-    const burst = enforceBurst(anonIdentity, 8);
+    const burst = enforceBurst(identity, 8);
     if (!burst.ok) {
       // Telemetry (best-effort)
       await logUsageEvent({
