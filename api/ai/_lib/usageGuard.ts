@@ -6,7 +6,7 @@
 // - Increment usage AFTER successful upstream response (best-effort; never fail the request)
 // - Return the standard hardened error contract
 
-import { getAiUsageStatus, incrementAiUsage } from "../../../server/usage";
+import { getAiUsageStatus, incrementAiUsage } from "../../../server/usage.js";
 import { isPreviewEnv, mapProviderError, withTimeout } from './hardening.js';
 
 export type UsageStatus = {
