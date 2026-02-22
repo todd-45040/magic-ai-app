@@ -9,7 +9,15 @@
 import { enforceAiUsage } from '../server/usage.js';
 import { resolveProvider, callOpenAI, callAnthropic } from '../lib/server/providers/index.js';
 
-const DEFAULT_TIMEOUT_MS = 25_000; // Keep below Vercel maxDuration to avoid platform 504s
+// Effect Engine is inherently "idea generation" and can occasionally run long on slower models.
+// We keep an app-level timeout (to avoid platform-level 504s), but allow it to be tuned via env.
+// NOTE: Vercel maxDuration is configured separately in vercel.json.
+const DEFAULT_TIMEOUT_MS = (() => {
+  const v = Number(process.env.EFFECT_ENGINE_TIMEOUT_MS);
+  // sensible bounds: 10s–55s
+  if (Number.isFinite(v) && v >= 10_000 && v <= 55_000) return Math.floor(v);
+  return 40_000;
+})();
 
 async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   let t: any;
@@ -58,36 +66,84 @@ export default async function handler(request: any, response: any) {
     const provider = resolveProvider(request);
     const { model, contents, config } = request.body || {};
 
+    // Speed guardrails for Effect Engine (helps avoid timeouts on default configs)
+    // - keep outputs bounded
+    // - default to a fast Gemini model when caller didn't specify
+    const boundedConfig = {
+      ...(config || {}),
+      // If not specified, keep the output size sane.
+      maxOutputTokens:
+        typeof (config || {})?.maxOutputTokens === 'number'
+          ? (config || {}).maxOutputTokens
+          : 900,
+    };
+
     let result: any;
 
-    if (provider === 'openai') {
-      result = await withTimeout(callOpenAI({ model, contents, config }), DEFAULT_TIMEOUT_MS);
-    } else if (provider === 'anthropic') {
-      result = await withTimeout(callAnthropic({ model, contents, config }), DEFAULT_TIMEOUT_MS);
-    } else {
+    const run = async (override?: { providerModel?: string; hardTimeoutMs?: number }) => {
+      const hardTimeout = override?.hardTimeoutMs ?? DEFAULT_TIMEOUT_MS;
+
+      if (provider === 'openai') {
+        return await withTimeout(
+          callOpenAI({ model: override?.providerModel || model, contents, config: boundedConfig }),
+          hardTimeout
+        );
+      }
+
+      if (provider === 'anthropic') {
+        return await withTimeout(
+          callAnthropic({ model: override?.providerModel || model, contents, config: boundedConfig }),
+          hardTimeout
+        );
+      }
+
       const apiKey = process.env.GOOGLE_API_KEY || process.env.API_KEY;
       if (!apiKey) {
-        return response
-          .status(500)
-          .json({
-            error:
-              'Google API key is not configured. Set GOOGLE_API_KEY (preferred) or API_KEY in Vercel environment variables.',
-          });
+        // This is an infra misconfig (not a user error)
+        throw new Error(
+          'Google API key is not configured. Set GOOGLE_API_KEY (preferred) or API_KEY in Vercel environment variables.'
+        );
       }
 
       // Dynamic import to avoid hard crashes at module init time.
       const { GoogleGenAI } = await import('@google/genai');
       const ai = new GoogleGenAI({ apiKey });
-      result = await withTimeout(
+
+      // If no model was provided, default Effect Engine to a faster model.
+      // This dramatically reduces timeouts while keeping quality acceptable for brainstorming.
+      const defaultFast = process.env.GEMINI_EFFECT_MODEL || 'gemini-1.5-flash';
+      const chosenModel = override?.providerModel || model || defaultFast;
+
+      return await withTimeout(
         ai.models.generateContent({
-          model: model || 'gemini-3-pro-preview',
+          model: chosenModel,
           contents,
           config: {
-            ...config,
+            ...boundedConfig,
           },
         }),
-        DEFAULT_TIMEOUT_MS
+        hardTimeout
       );
+    };
+
+    // Primary attempt
+    try {
+      result = await run();
+    } catch (e: any) {
+      // One fast retry on timeout only. This keeps UX smooth without hammering providers.
+      // If the first attempt used a slower model, retry with a fast model + tighter cap.
+      if (String(e?.message || '').startsWith('TIMEOUT_')) {
+        const retryFastModel =
+          provider === 'openai'
+            ? (process.env.OPENAI_EFFECT_MODEL || 'gpt-4o-mini')
+            : provider === 'anthropic'
+              ? (process.env.ANTHROPIC_EFFECT_MODEL || 'claude-3-5-haiku-20241022')
+              : (process.env.GEMINI_EFFECT_MODEL || 'gemini-1.5-flash');
+
+        result = await run({ providerModel: retryFastModel, hardTimeoutMs: 22_000 });
+      } else {
+        throw e;
+      }
     }
 
     // Return usage headers for the Usage Meter UI (best-effort)
