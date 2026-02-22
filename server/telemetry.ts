@@ -46,6 +46,16 @@ function getEnv(name: string): string | null {
   return v && String(v).trim() ? String(v).trim() : null;
 }
 
+// Cache env reads at module load (per cold start) and emit a clear warning if telemetry is disabled.
+const __telemetrySupabaseUrl = getEnv('SUPABASE_URL');
+const __telemetryServiceRoleKey = getEnv('SUPABASE_SERVICE_ROLE_KEY');
+if (!__telemetrySupabaseUrl || !__telemetryServiceRoleKey) {
+  console.warn('[telemetry] DISABLED: missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY', {
+    hasUrl: !!__telemetrySupabaseUrl,
+    hasServiceRole: !!__telemetryServiceRoleKey,
+  });
+}
+
 export function sha256Hex(input: string): string {
   return crypto.createHash('sha256').update(input).digest('hex');
 }
@@ -62,8 +72,8 @@ export function getIpFromReq(req: any): string {
 }
 
 export function createAdminClient() {
-  const supabaseUrl = getEnv('SUPABASE_URL');
-  const serviceKey = getEnv('SUPABASE_SERVICE_ROLE_KEY');
+  const supabaseUrl = __telemetrySupabaseUrl;
+  const serviceKey = __telemetryServiceRoleKey;
   if (!supabaseUrl || !serviceKey) return null;
   return createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 }
