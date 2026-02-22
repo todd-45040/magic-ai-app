@@ -716,19 +716,19 @@ export async function enforceAiUsage(
     if (!error && data?.user?.id) userId = data.user.id;
   }
 
-  const identity = userId || ipKey(req);
+  const identity_key = userId || ipKey(req);
   const today = usageDayKey();
 
   // Anonymous / IP-based enforcement: strict caps + burst
   if (!userId) {
-    const burst = enforceBurst(identity, 8);
+    const burst = enforceBurst(identity_key, 8);
     if (!burst.ok) {
       // Telemetry (best-effort)
       await logUsageEvent({
         request_id: requestId,
         actor_type: 'guest',
         user_id: null,
-        identity_key: identity,
+        identity_key: identity_key,
         ip_hash,
         tool: opts?.tool ?? null,
         endpoint: req?.url ?? null,
@@ -747,7 +747,7 @@ export async function enforceAiUsage(
       retryable: true, burstRemaining: 0, burstLimit: burst.limit };
     }
 
-    const key = `anon:${today}:${identity}`;
+    const key = `anon:${today}:${identity_key}`;
     const map = getRateMap();
 
     const used = map.get(key) || 0;
