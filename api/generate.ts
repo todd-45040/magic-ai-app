@@ -9,6 +9,20 @@
 import { enforceAiUsage } from '../server/usage.js';
 import { resolveProvider, callOpenAI, callAnthropic } from '../lib/server/providers/index.js';
 
+const DEFAULT_TIMEOUT_MS = 25_000; // Keep below Vercel maxDuration to avoid platform 504s
+
+async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  let t: any;
+  const timeout = new Promise<never>((_, reject) => {
+    t = setTimeout(() => reject(new Error(`TIMEOUT_${ms}MS`)), ms);
+  });
+  try {
+    return await Promise.race([p, timeout]);
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 export default async function handler(request: any, response: any) {
   // IMPORTANT:
   // Vercel will sometimes return a plain-text 500 "FUNCTION_INVOCATION_FAILED"
@@ -27,7 +41,8 @@ export default async function handler(request: any, response: any) {
     }
 
     // AI cost protection (daily caps + per-minute burst limits)
-    const usage = await enforceAiUsage(request, 1);
+    // IMPORTANT: /generate powers the Effect Engine. It must be metered + logged.
+    const usage = await enforceAiUsage(request, 1, { tool: 'effect_engine' });
     if (!usage.ok) {
       return response
         .status(usage.status || 429)
@@ -46,9 +61,9 @@ export default async function handler(request: any, response: any) {
     let result: any;
 
     if (provider === 'openai') {
-      result = await callOpenAI({ model, contents, config });
+      result = await withTimeout(callOpenAI({ model, contents, config }), DEFAULT_TIMEOUT_MS);
     } else if (provider === 'anthropic') {
-      result = await callAnthropic({ model, contents, config });
+      result = await withTimeout(callAnthropic({ model, contents, config }), DEFAULT_TIMEOUT_MS);
     } else {
       const apiKey = process.env.GOOGLE_API_KEY || process.env.API_KEY;
       if (!apiKey) {
@@ -63,13 +78,16 @@ export default async function handler(request: any, response: any) {
       // Dynamic import to avoid hard crashes at module init time.
       const { GoogleGenAI } = await import('@google/genai');
       const ai = new GoogleGenAI({ apiKey });
-      result = await ai.models.generateContent({
-        model: model || 'gemini-3-pro-preview',
-        contents,
-        config: {
-          ...config,
-        },
-      });
+      result = await withTimeout(
+        ai.models.generateContent({
+          model: model || 'gemini-3-pro-preview',
+          contents,
+          config: {
+            ...config,
+          },
+        }),
+        DEFAULT_TIMEOUT_MS
+      );
     }
 
     // Return usage headers for the Usage Meter UI (best-effort)
@@ -84,6 +102,10 @@ export default async function handler(request: any, response: any) {
   } catch (error: any) {
     // Ensure we always return JSON so the client can show a helpful message.
     console.error('AI Provider Error:', error);
+
+    if (String(error?.message || '').startsWith('TIMEOUT_')) {
+      return response.status(504).json({ error: 'Request timed out. Please try again.' });
+    }
 
     if (error?.message?.includes('finishReason: SAFETY')) {
       return response.status(400).json({ error: 'The request was blocked by safety filters.' });
