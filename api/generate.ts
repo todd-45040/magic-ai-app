@@ -59,6 +59,51 @@ function countHeadings(text: string): number {
   return m ? m.length : 0;
 }
 
+function looksLikeTruncatedTeaser(text: string): boolean {
+  const t = (text || '').trim();
+  if (!t) return true;
+  // Very short responses or those that end immediately after a divider are almost always incomplete.
+  if (t.length < 140) return true;
+  if (/\n\s*\*\*\*\s*$/.test(t)) return true;
+  if (/^here are\s+\w+.*\*\*\*\s*$/i.test(t)) return true;
+  return false;
+}
+
+function extractItemsFromContents(contents: any): string[] {
+  try {
+    const arr = Array.isArray(contents) ? contents : [];
+    // Find the last user text part
+    for (let i = arr.length - 1; i >= 0; i--) {
+      const msg = arr[i];
+      if (msg?.role !== 'user') continue;
+      const text = msg?.parts?.map((p: any) => p?.text).filter(Boolean).join('') || '';
+
+      // Common pattern in EffectGenerator.ts
+      const m1 = text.match(/items:\s*([^\.\n]+)\.?/i);
+      if (m1?.[1]) {
+        return m1[1]
+          .split(',')
+          .map(s => s.trim())
+          .filter(Boolean)
+          .slice(0, 4);
+      }
+
+      // Fallback: take everything after "following items:".
+      const m2 = text.match(/following items:\s*([^\.\n]+)\.?/i);
+      if (m2?.[1]) {
+        return m2[1]
+          .split(',')
+          .map(s => s.trim())
+          .filter(Boolean)
+          .slice(0, 4);
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return [];
+}
+
 
 export default async function handler(request: any, response: any) {
   // IMPORTANT:
@@ -210,6 +255,29 @@ export default async function handler(request: any, response: any) {
           if (moreText) {
             const finalText = (firstText + '\n\n' + moreText).trim();
             result = { ...(result || {}), text: finalText };
+          }
+        }
+
+        // Fallback: sometimes the model returns only an intro line (no headings at all).
+        // In that case, do a single strict retry that forces complete, formatted output.
+        if (firstText && n === 0 && looksLikeTruncatedTeaser(firstText)) {
+          const items = extractItemsFromContents(contents);
+          const itemLine = items.length ? items.join(', ') : 'the provided items';
+          const strictPrompt =
+            `You MUST return a complete set of magic effect ideas now (do not stop after an intro).\n` +
+            `Create EXACTLY 4 effects using: ${itemLine}.\n\n` +
+            `For each effect, include these headings in Markdown:\n` +
+            `### <number>. <Effect Name>\n` +
+            `**The Experience:** (2–4 sentences)\n` +
+            `**The Secret Hint:** (high-level, no exposure)\n\n` +
+            `No preamble, no closing text—only the 4 formatted effects.`;
+
+          const retryFastModel = process.env.GEMINI_EFFECT_MODEL || 'gemini-1.5-flash';
+          const strictContents = [{ role: 'user', parts: [{ text: strictPrompt }] }];
+          const retried = await run({ providerModel: retryFastModel, hardTimeoutMs: 22_000, contentsOverride: strictContents });
+          const retryText = extractText(retried);
+          if (retryText && retryText.trim().length > firstText.trim().length) {
+            result = { ...(retried || {}), text: retryText.trim() };
           }
         }
       }
