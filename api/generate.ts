@@ -7,7 +7,7 @@
 // This avoids "FUNCTION_INVOCATION_FAILED" when a module has ESM/CJS quirks.
 
 import { enforceAiUsage } from '../server/usage.js';
-import { resolveProvider, callOpenAI, callAnthropic } from '../lib/server/providers/index';
+import { resolveProvider, callOpenAI, callAnthropic } from '../lib/server/providers/index.js';
 
 export default async function handler(request: any, response: any) {
   // IMPORTANT:
