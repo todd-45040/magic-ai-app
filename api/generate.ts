@@ -347,7 +347,8 @@ export default async function handler(request: any, response: any) {
       const { GoogleGenAI } = await import('@google/genai');
       const ai = new GoogleGenAI({ apiKey });
 
-      const defaultFast = process.env.GEMINI_EFFECT_MODEL || 'gemini-1.5-flash';
+      // Gemini 1.5 aliases can return NOT_FOUND on v1beta; default to Gemini 2.5 family.
+      const defaultFast = process.env.GEMINI_EFFECT_MODEL || process.env.GEMINI_FAST_MODEL || 'gemini-2.5-flash-lite';
       const chosenModel = useModel || defaultFast;
 
       return await withTimeout(
@@ -397,7 +398,7 @@ export default async function handler(request: any, response: any) {
               ? process.env.OPENAI_EFFECT_MODEL || 'gpt-4o-mini'
               : provider === 'anthropic'
                 ? process.env.ANTHROPIC_EFFECT_MODEL || 'claude-3-5-haiku-20241022'
-                : process.env.GEMINI_EFFECT_MODEL || 'gemini-1.5-flash';
+                : process.env.GEMINI_EFFECT_MODEL || process.env.GEMINI_FAST_MODEL || 'gemini-2.5-flash-lite';
 
           result = await run({ providerModel: retryFastModel, hardTimeoutMs: 22_000, contentsOverride: contractContents });
         } else {
@@ -419,7 +420,7 @@ export default async function handler(request: any, response: any) {
             ? process.env.OPENAI_EFFECT_MODEL || 'gpt-4o-mini'
             : provider === 'anthropic'
               ? process.env.ANTHROPIC_EFFECT_MODEL || 'claude-3-5-haiku-20241022'
-              : process.env.GEMINI_EFFECT_MODEL || 'gemini-1.5-flash';
+              : process.env.GEMINI_EFFECT_MODEL || process.env.GEMINI_FAST_MODEL || 'gemini-2.5-flash-lite';
 
         const retried = await run({ providerModel: retryFastModel, hardTimeoutMs: 22_000, contentsOverride: retryContents });
         parsed = await parseAttempt(retried);
@@ -455,7 +456,7 @@ export default async function handler(request: any, response: any) {
               ? process.env.OPENAI_CHAT_MODEL || 'gpt-4o-mini'
               : provider === 'anthropic'
                 ? process.env.ANTHROPIC_CHAT_MODEL || 'claude-3-5-haiku-20241022'
-                : process.env.GEMINI_CHAT_MODEL || process.env.GEMINI_EFFECT_MODEL || 'gemini-1.5-flash';
+                : process.env.GEMINI_CHAT_MODEL || process.env.GEMINI_EFFECT_MODEL || process.env.GEMINI_FAST_MODEL || 'gemini-2.5-flash-lite';
 
           result = await run({ providerModel: retryFastModel, hardTimeoutMs: 22_000 });
         } else {
