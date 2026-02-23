@@ -194,12 +194,21 @@ const TaskModal: React.FC<{
                         <div className="max-h-32 overflow-y-auto space-y-2 pr-2 border border-slate-700/50 bg-slate-900/50 rounded-md p-2">
                             {subtasks.length > 0 ? subtasks.map((subtask, index) => (
                                 <div key={index} className="flex items-center gap-2">
+                                    {/*
+                                      NOTE: This checkbox is for the *subtask* inside the modal.
+                                      A previous version incorrectly referenced `task` (undefined in this scope),
+                                      which can crash the entire Show Planner when the modal renders.
+                                    */}
                                     <input
-                        type="checkbox"
-                        checked={task.status === 'Completed'}
-                        onChange={() => handleToggleStatus(task)}
-                        className="mt-1 w-5 h-5 accent-purple-500 bg-slate-900 flex-shrink-0"
-                      />
+                                        type="checkbox"
+                                        checked={!!subtask.completed}
+                                        onChange={() => {
+                                            const next = [...subtasks];
+                                            next[index] = { ...next[index], completed: !next[index]?.completed };
+                                            setSubtasks(next);
+                                        }}
+                                        className="mt-1 w-5 h-5 accent-purple-500 bg-slate-900 flex-shrink-0"
+                                    />
                                     <input type="text" value={subtask.text}
                                         onChange={(e) => {
                                             const newSubtasks = [...subtasks];
@@ -342,93 +351,19 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
         };
     }, [initialShowId]);
 
-    // If another tool (like Effect Engine) wants to focus a specific beat,
-    // it can drop a hint into localStorage. This makes imports feel "connected".
     useEffect(() => {
-        try {
-            if (initialShowId || initialTaskId) return;
-            const raw = localStorage.getItem('maw_showplanner_focus');
-            if (!raw) return;
-            const parsed = JSON.parse(raw);
-            if (parsed?.showId) {
-                const show = shows.find((s) => String(s.id) === String(parsed.showId));
-                if (show) setSelectedShow(show);
+        if (selectedShow && initialTaskId) {
+            const taskRef = taskRefs.current.get(initialTaskId);
+            if (taskRef) {
+                setTimeout(() => {
+                    taskRef.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    taskRef.classList.add('ring-2', 'ring-purple-500', 'transition-all', 'duration-1000');
+                    setTimeout(() => {
+                        taskRef.classList.remove('ring-2', 'ring-purple-500');
+                    }, 2000);
+                }, 100);
             }
-        } catch {}
-    }, [shows, initialShowId, initialTaskId]);
-
-    useEffect(() => {
-        if (!selectedShow) return;
-
-        // Prefer explicit deep-link prop, otherwise fall back to localStorage focus hint.
-        let target: string | null = initialTaskId ?? null;
-
-        try {
-            if (!target) {
-                const raw = localStorage.getItem('maw_showplanner_focus');
-                if (raw) {
-                    const parsed = JSON.parse(raw);
-                    // We support focusing by taskId (if available) or by title.
-                    target = parsed?.taskId ? String(parsed.taskId) : (parsed?.taskTitle ? String(parsed.taskTitle) : null);
-                }
-            }
-        } catch {}
-
-        if (!target) return;
-
-        // 1) If target matches an id, use it.
-        let taskIdToScroll: string | null = taskRefs.current.has(target) ? target : null;
-
-        // 2) Otherwise treat target as a title and find the newest matching task.
-        if (!taskIdToScroll) {
-            const tasks = Array.isArray((selectedShow as any)?.tasks) ? (selectedShow as any).tasks : [];
-            const norm = (s: any) => String(s ?? '').trim().toLowerCase();
-            const match = tasks
-                .filter((t: any) => norm(t?.title) === norm(target))
-                .sort((a: any, b: any) => Number(b?.createdAt ?? b?.created_at ?? 0) - Number(a?.createdAt ?? a?.created_at ?? 0))[0];
-            if (match?.id) taskIdToScroll = String(match.id);
         }
-
-        if (!taskIdToScroll) return;
-
-        const taskRef = taskRefs.current.get(taskIdToScroll);
-        if (!taskRef) return;
-
-        // Scroll + pulse highlight
-        window.setTimeout(() => {
-            try {
-                taskRef.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            } catch {}
-
-            try {
-                taskRef.classList.add(
-                    'ring-2',
-                    'ring-purple-500/70',
-                    'shadow-[0_0_0_6px_rgba(168,85,247,0.18)]',
-                    'transition-all',
-                    'duration-700',
-                    'animate-pulse'
-                );
-            } catch {}
-
-            // Remove highlight after a moment
-            window.setTimeout(() => {
-                try {
-                    taskRef.classList.remove(
-                        'ring-2',
-                        'ring-purple-500/70',
-                        'shadow-[0_0_0_6px_rgba(168,85,247,0.18)]',
-                        'animate-pulse'
-                    );
-                } catch {}
-            }, 2800);
-
-            // Clear one-time focus hint so it doesn't keep firing.
-            try {
-                const raw = localStorage.getItem('maw_showplanner_focus');
-                if (raw) localStorage.removeItem('maw_showplanner_focus');
-            } catch {}
-        }, 150);
     }, [selectedShow, initialTaskId]);
 
     // Show handlers
