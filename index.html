@@ -7,17 +7,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
     <title>Magicians' AI Wizard</title>
-    <meta name="description" content="AI assistant for magicians: scripting, rehearsal coaching, show planning, and audience engagement.">
+    <meta name="description" content="AI assistant for magicians: create effects, build routines, rehearse smarter, and plan shows with confidence.">
     <meta name="theme-color" content="#8b5cf6">
     <link rel="canonical" href="https://www.magicaiwizard.com/">
     <meta property="og:type" content="website">
     <meta property="og:title" content="Magicians' AI Wizard">
-    <meta property="og:description" content="AI assistant for magicians: scripting, rehearsal coaching, show planning, and audience engagement.">
+    <meta property="og:description" content="Create effects, build routines, rehearse smarter, and plan shows with confidence.">
     <meta property="og:url" content="https://www.magicaiwizard.com/">
     <meta property="og:image" content="https://www.magicaiwizard.com/og.png">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Magicians' AI Wizard">
-    <meta name="twitter:description" content="AI assistant for magicians: scripting, rehearsal coaching, show planning, and audience engagement.">
+    <meta name="twitter:description" content="Create effects, build routines, rehearse smarter, and plan shows with confidence.">
     <meta name="twitter:image" content="https://www.magicaiwizard.com/og.png">
     <script type="application/ld+json">
     {
@@ -34,17 +34,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Lato:wght@400;700&display=swap" rel="stylesheet">
 
     <style>
-
-.share-preview-img{
-  width:100%;
-  height:auto;
-  display:block;
-  border-radius:12px;
-}
-
-#preview-box img { transition: transform .25s ease, box-shadow .25s ease; }
-#preview-box:hover img { transform: scale(1.03); box-shadow: 0 0 30px rgba(139,92,246,.35); }
-
       :root {
         --yellow: #f6c343; /* brand gold */
         --bg: #020617;
@@ -53,8 +42,10 @@
         --text: rgba(255,255,255,0.92);
         --muted: rgba(255,255,255,0.72);
         --accent: #8b5cf6;
+        --accentBlue: #38bdf8;
         --accent2: #22c55e;
       }
+      * { box-sizing: border-box; }
       body {
         font-family: 'Lato', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
         margin: 0;
@@ -65,63 +56,60 @@
       .magical-bg {
         min-height: 100vh;
         background-image:
-          radial-gradient(circle at 50% -20%, rgba(124, 58, 237, 0.18), transparent 60%),
-          radial-gradient(circle at 100% 20%, rgba(56, 189, 248, 0.10), transparent 40%),
-          radial-gradient(circle at 0% 20%, rgba(236, 72, 153, 0.08), transparent 40%),
+          radial-gradient(circle at 40% -20%, rgba(124, 58, 237, 0.20), transparent 60%),
+          radial-gradient(circle at 100% 20%, rgba(56, 189, 248, 0.12), transparent 42%),
+          radial-gradient(circle at 0% 25%, rgba(236, 72, 153, 0.10), transparent 46%),
+          radial-gradient(circle at 65% 80%, rgba(34, 197, 94, 0.08), transparent 55%),
           linear-gradient(to bottom, transparent, #020617 90%);
       }
       .wrap {
-        max-width: 1040px;
+        max-width: 1100px;
         margin: 0 auto;
-        padding: 56px 20px 72px;
+        padding: 56px 20px 80px;
       }
       header {
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 16px;
-        margin-bottom: 44px;
+        margin-bottom: 34px;
       }
       .brand {
         display:flex; align-items:center; gap:12px;
       }
       .brand img { width: 36px; height: 36px; }
-      .brand-title {
-        line-height: 1.1;
-      }
-      .brand-title .name {
-        font-size: 20px;
-        font-weight: 800;
-      }
-      .brand-title .tag {
-        font-size: 13px;
-        color: var(--muted);
-        margin-top: 2px;
-      }
+      .brand-title { line-height: 1.1; }
+      .brand-title .name { font-size: 20px; font-weight: 800; }
+      .brand-title .tag { font-size: 13px; color: var(--muted); margin-top: 2px; }
+
+      /* Single CTA only */
       .btn {
         display:inline-flex;
         align-items:center;
         justify-content:center;
         gap:10px;
-        padding: 12px 16px;
-        border-radius: 12px;
-        border: 1px solid var(--border);
-        background: rgba(255,255,255,0.06);
-        color: var(--text);
-        text-decoration: none;
-        font-weight: 700;
-      }
-      .btn.primary {
+        padding: 13px 18px;
+        border-radius: 14px;
         border: 1px solid rgba(139,92,246,0.55);
         background: linear-gradient(135deg, rgba(139,92,246,0.95), rgba(56,189,248,0.75));
+        color: var(--text);
+        text-decoration: none;
+        font-weight: 800;
+        box-shadow: 0 12px 30px rgba(139,92,246,0.18);
+        transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
+        user-select: none;
+        white-space: nowrap;
       }
+      .btn:hover { transform: translateY(-1px); box-shadow: 0 16px 36px rgba(139,92,246,0.24); filter: brightness(1.03); }
+      .btn:active { transform: translateY(0); }
+
       .hero {
         display:grid;
         grid-template-columns: 1.25fr 0.75fr;
         gap: 22px;
         align-items: stretch;
       }
-      @media (max-width: 900px) {
+      @media (max-width: 940px) {
         .hero { grid-template-columns: 1fr; }
       }
       .card {
@@ -130,26 +118,77 @@
         border-radius: 18px;
         padding: 22px;
         backdrop-filter: blur(10px);
+        position: relative;
+        overflow: hidden;
       }
+      .card::before{
+        content:"";
+        position:absolute;
+        inset:-1px;
+        background:
+          radial-gradient(circle at 12% 10%, rgba(139,92,246,0.20), transparent 45%),
+          radial-gradient(circle at 88% 18%, rgba(56,189,248,0.12), transparent 45%),
+          radial-gradient(circle at 60% 110%, rgba(34,197,94,0.10), transparent 55%);
+        pointer-events:none;
+      }
+      .card > * { position: relative; }
+
       h1 {
-        font-size: 42px;
+        font-size: 44px;
         letter-spacing: -0.02em;
         margin: 0 0 12px;
+        line-height: 1.05;
       }
+      @media (max-width: 520px) {
+        h1 { font-size: 38px; }
+      }
+      .text-gold{ color: var(--yellow); }
+
       p {
         margin: 0;
         color: var(--muted);
         font-size: 16px;
-        line-height: 1.6;
+        line-height: 1.65;
       }
+
+      .badges{
+        display:flex;
+        flex-wrap:wrap;
+        gap:10px;
+        margin: 6px 0 14px;
+      }
+      .badge{
+        display:inline-flex;
+        align-items:center;
+        gap:8px;
+        padding: 8px 10px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,0.12);
+        background: rgba(255,255,255,0.05);
+        color: rgba(255,255,255,0.82);
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .badge .spark{
+        width: 9px; height: 9px; border-radius: 999px;
+        background: rgba(139,92,246,0.95);
+        box-shadow: 0 0 0 4px rgba(139,92,246,0.16);
+      }
+
       .cta {
         display:flex;
         flex-wrap: wrap;
         gap: 12px;
         margin-top: 18px;
+        align-items:center;
       }
+      .micro {
+        font-size: 13px;
+        color: rgba(255,255,255,0.62);
+      }
+
       .list {
-        margin-top: 14px;
+        margin-top: 16px;
         display:grid;
         gap: 10px;
       }
@@ -163,20 +202,65 @@
         width: 10px; height: 10px;
         margin-top: 6px;
         border-radius: 999px;
-        background: rgba(139,92,246,0.9);
-        box-shadow: 0 0 0 4px rgba(139,92,246,0.18);
+        background: rgba(246,195,67,0.95);
+        box-shadow: 0 0 0 4px rgba(246,195,67,0.14);
         flex: 0 0 auto;
       }
+
+      .right-top {
+        display:flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .logo-box{
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 14px;
+        background: rgba(0,0,0,0.10);
+      }
+      .share-preview-img{
+        width:100%;
+        height:auto;
+        display:block;
+        border-radius:12px;
+      }
+      #preview-box img { transition: transform .25s ease, box-shadow .25s ease; }
+      #preview-box:hover img { transform: scale(1.02); box-shadow: 0 0 30px rgba(139,92,246,.35); }
+
+      .right-content{
+        border-top:1px solid var(--border);
+        padding-top: 14px;
+      }
+      h2 {
+        margin:0 0 10px;
+        font-size: 22px;
+      }
+
+      .mini-grid{
+        display:grid;
+        gap: 10px;
+        margin-top: 12px;
+      }
+      .mini-item{
+        padding: 12px 12px;
+        border: 1px solid rgba(255,255,255,0.10);
+        background: rgba(255,255,255,0.04);
+        border-radius: 14px;
+        color: rgba(255,255,255,0.80);
+      }
+      .mini-item strong{
+        color: rgba(255,255,255,0.92);
+      }
+
       footer {
         margin-top: 30px;
         color: rgba(255,255,255,0.55);
         font-size: 13px;
       }
       footer a { color: rgba(255,255,255,0.75); }
-    
-      .text-gold{ color: var(--yellow); }
-</style>
+    </style>
   </head>
+
   <body class="magical-bg">
     <div class="wrap">
       <header>
@@ -184,53 +268,78 @@
           <img src="/icon.svg" alt="Magicians' AI Wizard logo">
           <div class="brand-title">
             <div class="name font-cinzel">Magicians' AI Wizard</div>
-            <div class="tag">Scripting • Coaching • Show Planning</div>
+            <div class="tag">Effect Engine • Show Planner • Rehearsal Studios</div>
           </div>
         </div>
-        <nav style="display:flex; gap:10px; flex-wrap:wrap;">
-          <a class="btn" href="/app/">Open App</a>
-        </nav>
+
+        <!-- Intentionally no button in header (single CTA only) -->
+        <div style="width:36px; height:36px;"></div>
       </header>
 
       <section class="hero">
+        <!-- Left column -->
         <div class="card">
-          <h1 class="font-cinzel">Your on-demand <span class="text-gold">AI assistant</span> for magic.</h1>
-          <p>
-            Build stronger scripts, rehearse with confidence, and create more engaging routines.
-            Designed for working magicians, hobbyists, and students.
-          </p>
-          <div class="cta">
-            <a class="btn primary" href="/app/">Launch the App</a>
-            
+          <div class="badges">
+            <span class="badge"><span class="spark"></span> Deep routine builder</span>
+            <span class="badge"><span class="spark" style="background: rgba(56,189,248,0.95); box-shadow:0 0 0 4px rgba(56,189,248,0.16);"></span> Live rehearsal coaching</span>
+            <span class="badge"><span class="spark" style="background: rgba(34,197,94,0.95); box-shadow:0 0 0 4px rgba(34,197,94,0.16);"></span> Show planner workflow</span>
           </div>
-          <div class="list">
-            <div class="li"><span class="dot"></span><span>Get routine ideas and tighter patter.</span></div>
-            <div class="li"><span class="dot"></span><span>Rehearsal coaching and performance notes.</span></div>
-            <div class="li"><span class="dot"></span><span>Audience engagement prompts and callbacks.</span></div>
-            <div class="li"><span class="dot"></span><span>Show structure, set lists, and transitions.</span></div>
 
-            <div class="li"><span class="dot"></span><span>Character development and on-stage persona refinement.</span></div>
-            <div class="li"><span class="dot"></span><span>Effect selection, pacing, and timing optimization.</span></div>
+          <h1 class="font-cinzel">
+            Build better magic—<span class="text-gold">faster</span>.
+          </h1>
 
+          <p>
+            Magic AI Wizard helps you invent stronger effects, tighten your patter, and turn ideas into
+            performance-ready beats you can rehearse and run on stage.
+          </p>
+
+          <div class="cta">
+            <a class="btn" href="/app/">Open the App</a>
+            <span class="micro">One click. Sign in if needed.</span>
+          </div>
+
+          <div class="list" aria-label="Key benefits">
+            <div class="li"><span class="dot"></span><span><strong>Effect Engine (Deep Mode):</strong> structured routines with premise, experience, method overview, notes, and secret hints.</span></div>
+            <div class="li"><span class="dot"></span><span><strong>Show Planner:</strong> convert ideas into Performance Beats and organize your set by priority.</span></div>
+            <div class="li"><span class="dot"></span><span><strong>Rehearsal Studios:</strong> get coaching feedback and performance notes while you practice.</span></div>
+            <div class="li"><span class="dot"></span><span><strong>Director Mode:</strong> refine timing, transitions, and audience management.</span></div>
+            <div class="li"><span class="dot"></span><span><strong>Identify Trick:</strong> classify an effect and get practical presentation guidance.</span></div>
           </div>
         </div>
 
+        <!-- Right column -->
         <div class="card">
-          <h2 class="font-cinzel" style="margin:0 0 10px; font-size:22px;">Get started</h2>
-          <p>Use the full wizard experience inside the app. You can bookmark it like a web app.</p>
-          <div class="cta">
-            <a class="btn primary" href="/app/">Sign in / Continue</a>
-          </div>
-          <div style="margin-top:16px; border-top:1px solid var(--border); padding-top:14px;">
-            <p style="font-size:14px;"></p>
-            <img src="/magicaiwizard-logo.png" alt="Magicians' AI Wizard preview image" style="width:100%; border-radius:12px; border:1px solid var(--border); margin-top:10px;" class="share-preview-img">
+          <!-- Logo moved to top -->
+          <div class="right-top">
+            <div id="preview-box" class="logo-box">
+              <img src="/magicaiwizard-logo.png" alt="Magicians' AI Wizard logo preview" class="share-preview-img">
+            </div>
+
+            <div class="right-content">
+              <h2 class="font-cinzel">What you can do inside</h2>
+              <p>
+                Use the full wizard experience in your browser (bookmarkable like a web app).
+                Your ideas become a working show plan—ready for rehearsal and performance.
+              </p>
+
+              <div class="mini-grid">
+                <div class="mini-item"><strong>Generate → Import:</strong> send an Effect Engine routine straight into the Show Planner as a Performance Beat.</div>
+                <div class="mini-item"><strong>Organize:</strong> prioritize beats, track notes, and keep your set tight.</div>
+                <div class="mini-item"><strong>Practice:</strong> run Live Rehearsal and improve delivery, clarity, and pacing.</div>
+              </div>
+
+              <p class="micro" style="margin-top:12px;">
+                Tip: For the best experience, bookmark <strong>Open the App</strong> to your home screen.
+              </p>
+            </div>
           </div>
         </div>
       </section>
 
       <footer>
-        © 2026 Magicians' AI Wizard • <a href="/"></a>
+        © 2026 Magicians' AI Wizard • <span style="color:rgba(255,255,255,0.68);">Actively evolving with the magic community.</span>
       </footer>
     </div>
-</body>
+  </body>
 </html>
