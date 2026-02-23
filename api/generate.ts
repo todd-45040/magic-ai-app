@@ -54,6 +54,110 @@ function extractText(result: any): string {
   return '';
 }
 
+function clampInt(v: any, def: number, min: number, max: number): number {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return def;
+  return Math.max(min, Math.min(max, Math.floor(n)));
+}
+
+function stripCodeFences(s: string): string {
+  const t = (s || '').trim();
+  if (!t) return '';
+  // ```json ... ``` or ``` ... ```
+  const m = t.match(/^```[a-zA-Z0-9_-]*\s*([\s\S]*?)\s*```\s*$/);
+  return m?.[1]?.trim() || t;
+}
+
+type EffectJson = {
+  name: string;
+  premise: string;
+  experience: string;
+  method_overview: string;
+  performance_notes: string;
+  secret_hint: string;
+};
+
+type EffectEnginePayload = { effects: EffectJson[] };
+
+function isNonEmptyString(x: any): x is string {
+  return typeof x === 'string' && x.trim().length > 0;
+}
+
+function validateEffectEngineJson(payload: any): { ok: true; data: EffectEnginePayload } | { ok: false; reason: string } {
+  if (!payload || typeof payload !== 'object') return { ok: false, reason: 'payload_not_object' };
+  const effects = (payload as any).effects;
+  if (!Array.isArray(effects)) return { ok: false, reason: 'effects_not_array' };
+  if (effects.length !== 4) return { ok: false, reason: 'effects_not_4' };
+
+  const min = {
+    name: 3,
+    premise: 40,
+    experience: 140,
+    method_overview: 90,
+    performance_notes: 90,
+    secret_hint: 50,
+  };
+
+  for (let i = 0; i < effects.length; i++) {
+    const e = effects[i];
+    if (!e || typeof e !== 'object') return { ok: false, reason: `effect_${i}_not_object` };
+    const fields: (keyof EffectJson)[] = ['name', 'premise', 'experience', 'method_overview', 'performance_notes', 'secret_hint'];
+    for (const f of fields) {
+      const val = (e as any)[f];
+      if (!isNonEmptyString(val)) return { ok: false, reason: `effect_${i}_${String(f)}_missing` };
+      if (val.trim().length < (min as any)[f]) return { ok: false, reason: `effect_${i}_${String(f)}_too_short` };
+    }
+  }
+
+  return { ok: true, data: { effects: effects as EffectJson[] } };
+}
+
+function effectEngineJsonToMarkdown(data: EffectEnginePayload): string {
+  const blocks = data.effects.map((e, idx) => {
+    const n = idx + 1;
+    return (
+      `### ${n}. ${e.name.trim()}\n\n` +
+      `**Premise:** ${e.premise.trim()}\n\n` +
+      `**The Experience:** ${e.experience.trim()}\n\n` +
+      `**Method Overview:** ${e.method_overview.trim()}\n\n` +
+      `**Performance Notes:** ${e.performance_notes.trim()}\n\n` +
+      `**The Secret Hint:** ${e.secret_hint.trim()}`
+    );
+  });
+  return blocks.join('\n\n***\n\n');
+}
+
+function buildEffectEngineJsonPrompt(items: string[]): string {
+  const itemLine = items.length ? items.join(', ') : 'the provided items';
+  return (
+    `Return ONLY valid JSON. No markdown, no prose, no commentary.\n` +
+    `Schema (MUST match exactly):\n` +
+    `{"effects":[{"name":"...","premise":"...","experience":"...","method_overview":"...","performance_notes":"...","secret_hint":"..."}, ... (exactly 4 total)]}\n\n` +
+    `Create EXACTLY 4 professional, performance-ready magic effects using: ${itemLine}.\n\n` +
+    `Field requirements:\n` +
+    `- name: short, punchy title\n` +
+    `- premise: emotional hook + why these props belong together\n` +
+    `- experience: audience-facing routine flow (8–14 sentences)\n` +
+    `- method_overview: high-level method category + structure (NO step-by-step exposure)\n` +
+    `- performance_notes: angles, timing, volunteer handling, reset, outs/contingency\n` +
+    `- secret_hint: concise non-exposure hint + convincer framing\n\n` +
+    `Rules:\n` +
+    `- Output MUST be strict JSON (double quotes, no trailing commas).\n` +
+    `- effects array MUST have exactly 4 objects.\n`
+  );
+}
+
+function buildEffectEngineRetryPrompt(items: string[], reason: string, lastText: string): string {
+  const base = buildEffectEngineJsonPrompt(items);
+  return (
+    base +
+    `\nYour previous output was invalid (${reason}). Fix it.\n` +
+    `Return ONLY corrected JSON that validates.\n` +
+    `Previous output (for reference, do NOT repeat as-is):\n` +
+    `${lastText}`
+  );
+}
+
 function countHeadings(text: string): number {
   const m = text.match(/\n\s*#{2,6}\s*\d+\./g);
   return m ? m.length : 0;
@@ -140,16 +244,30 @@ export default async function handler(request: any, response: any) {
     const provider = resolveProvider(request);
     const { model, contents, config } = request.body || {};
 
+    // Effect Engine detection: keep it conservative so other /api/generate callers
+    // aren't forced into JSON mode.
+    const sys = String((config || {})?.systemInstruction || '');
+    const isEffectEngine =
+      /Effect Engine/i.test(sys) ||
+      /Combine everyday objects/i.test(sys) ||
+      /The Secret Hint/i.test(sys) ||
+      /Effect Name/i.test(sys) ||
+      // UI may not send a system prompt; in that case, detect by 1–4 item pattern
+      (Array.isArray(contents) && extractItemsFromContents(contents).length >= 2);
+
     // Speed guardrails for Effect Engine (helps avoid timeouts on default configs)
     // - keep outputs bounded
     // - default to a fast Gemini model when caller didn't specify
+    const effectMax = clampInt(process.env.EFFECT_ENGINE_MAX_TOKENS, 9000, 1200, 12000);
+    const defaultMax = 900;
     const boundedConfig = {
       ...(config || {}),
       // If not specified, keep the output size sane.
+      // Effect Engine uses a larger default (JSON contract is validated + retried).
       maxOutputTokens:
         typeof (config || {})?.maxOutputTokens === 'number'
           ? (config || {}).maxOutputTokens
-          : 900,
+          : (isEffectEngine ? effectMax : defaultMax),
     };
 
     let result: any;
@@ -171,7 +289,7 @@ export default async function handler(request: any, response: any) {
         );
       }
 
-      const apiKey = process.env.GOOGLE_API_KEY || process.env.API_KEY;
+      const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.API_KEY;
       if (!apiKey) {
         // This is an infra misconfig (not a user error)
         throw new Error(
@@ -200,23 +318,69 @@ export default async function handler(request: any, response: any) {
       );
     };
 
-    // Primary attempt
-    try {
-      result = await run();
-    } catch (e: any) {
-      // One fast retry on timeout only. This keeps UX smooth without hammering providers.
-      // If the first attempt used a slower model, retry with a fast model + tighter cap.
-      if (String(e?.message || '').startsWith('TIMEOUT_')) {
-        const retryFastModel =
-          provider === 'openai'
-            ? (process.env.OPENAI_EFFECT_MODEL || 'gpt-4o-mini')
-            : provider === 'anthropic'
-              ? (process.env.ANTHROPIC_EFFECT_MODEL || 'claude-3-5-haiku-20241022')
-              : (process.env.GEMINI_EFFECT_MODEL || process.env.GEMINI_FAST_MODEL || 'gemini-2.5-flash-lite');
+    // Effect Engine "never cut off" path: strict JSON contract + validation + single retry.
+    // We still render to markdown for the UI, but include the structured JSON for later reuse.
+    if (isEffectEngine && provider !== 'openai' && provider !== 'anthropic') {
+      const items = extractItemsFromContents(contents);
+      const effectModel = process.env.GEMINI_EFFECT_MODEL || 'gemini-2.5-flash';
+      const prompt = buildEffectEngineJsonPrompt(items);
+      const jsonContents = [{ role: 'user', parts: [{ text: prompt }] }];
 
-        result = await run({ providerModel: retryFastModel, hardTimeoutMs: 22_000 });
+      const attemptOnce = async (retry?: { reason: string; lastText: string }) => {
+        const prompt2 = retry ? buildEffectEngineRetryPrompt(items, retry.reason, retry.lastText) : prompt;
+        const jsonContents2 = [{ role: 'user', parts: [{ text: prompt2 }] }];
+        const r = await run({ providerModel: effectModel, hardTimeoutMs: DEFAULT_TIMEOUT_MS, contentsOverride: jsonContents2 });
+        const txt = stripCodeFences(extractText(r));
+        let parsed: any = null;
+        try {
+          parsed = JSON.parse(txt);
+        } catch {
+          return { ok: false as const, reason: 'json_parse_failed', text: txt };
+        }
+        const v = validateEffectEngineJson(parsed);
+        if (!v.ok) return { ok: false as const, reason: v.reason, text: txt };
+        return { ok: true as const, data: v.data, rawText: txt };
+      };
+
+      // Primary + single retry
+      const a1 = await attemptOnce();
+      if (!a1.ok) {
+        const a2 = await attemptOnce({ reason: a1.reason, lastText: a1.text });
+        if (!a2.ok) {
+          // As a last resort, return whatever we got so the UI isn't blank.
+          // (But we still keep it short to avoid truncation.)
+          result = { text: (a2.text || a1.text || '').trim() };
+        } else {
+          result = {
+            text: effectEngineJsonToMarkdown(a2.data),
+            effect_engine_json: a2.data,
+          };
+        }
       } else {
-        throw e;
+        result = {
+          text: effectEngineJsonToMarkdown(a1.data),
+          effect_engine_json: a1.data,
+        };
+      }
+    } else {
+      // Primary attempt (non Effect Engine or non-Gemini providers)
+      try {
+        result = await run();
+      } catch (e: any) {
+        // One fast retry on timeout only. This keeps UX smooth without hammering providers.
+        // If the first attempt used a slower model, retry with a fast model + tighter cap.
+        if (String(e?.message || '').startsWith('TIMEOUT_')) {
+          const retryFastModel =
+            provider === 'openai'
+              ? (process.env.OPENAI_EFFECT_MODEL || 'gpt-4o-mini')
+              : provider === 'anthropic'
+                ? (process.env.ANTHROPIC_EFFECT_MODEL || 'claude-3-5-haiku-20241022')
+                : (process.env.GEMINI_EFFECT_MODEL || process.env.GEMINI_FAST_MODEL || 'gemini-2.5-flash-lite');
+
+          result = await run({ providerModel: retryFastModel, hardTimeoutMs: 22_000 });
+        } else {
+          throw e;
+        }
       }
     }
 
@@ -231,7 +395,7 @@ export default async function handler(request: any, response: any) {
       if (firstText) result = { ...(result || {}), text: firstText };
 
       // Only attempt continuation for Gemini-style message arrays.
-      if (provider !== 'openai' && provider !== 'anthropic') {
+      if (!isEffectEngine && provider !== 'openai' && provider !== 'anthropic') {
         const n = firstText ? countHeadings(firstText) : 0;
         if (firstText && n > 0 && n < 3 && Array.isArray(contents)) {
           const continuation = [
