@@ -35,6 +35,18 @@ const PRIORITY_ORDER: Record<TaskPriority, number> = {
     'Low': 3,
 };
 
+// Defensive priority mapping.
+// Some older rows (or future migrations) could potentially store priority in unexpected casing.
+// Keeping this local prevents runtime ReferenceErrors if a mapping is referenced in the UI.
+const priorityLabelMap: Record<string, TaskPriority> = {
+    High: 'High',
+    Medium: 'Medium',
+    Low: 'Low',
+    high: 'High',
+    medium: 'Medium',
+    low: 'Low',
+};
+
 // --- Helper Components ---
 
 const PriorityBadge: React.FC<{ priority: TaskPriority }> = ({ priority }) => (
@@ -67,7 +79,8 @@ const TaskModal: React.FC<{
             setPriority(taskToEdit.priority);
             setNotes(taskToEdit.notes || '');
             setMusicCue(taskToEdit.musicCue || '');
-            setSubtasks(taskToEdit.subtasks || []);
+            // Defensive: ensure subtasks is always an array in the modal.
+            setSubtasks(Array.isArray(taskToEdit.subtasks) ? taskToEdit.subtasks : []);
             if (taskToEdit.dueDate) {
                 const d = new Date(taskToEdit.dueDate);
                 d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
@@ -195,11 +208,16 @@ const TaskModal: React.FC<{
                             {subtasks.length > 0 ? subtasks.map((subtask, index) => (
                                 <div key={index} className="flex items-center gap-2">
                                     <input
-                        type="checkbox"
-                        checked={task.status === 'Completed'}
-                        onChange={() => handleToggleStatus(task)}
-                        className="mt-1 w-5 h-5 accent-purple-500 bg-slate-900 flex-shrink-0"
-                      />
+                                        type="checkbox"
+                                        checked={!!subtask.completed}
+                                        onChange={() => {
+                                            const newSubtasks = [...subtasks];
+                                            newSubtasks[index].completed = !newSubtasks[index].completed;
+                                            setSubtasks(newSubtasks);
+                                        }}
+                                        className="w-4 h-4 accent-purple-500 bg-slate-900 flex-shrink-0"
+                                        aria-label="Toggle sub-performance beat"
+                                    />
                                     <input type="text" value={subtask.text}
                                         onChange={(e) => {
                                             const newSubtasks = [...subtasks];
@@ -509,9 +527,11 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
     const TaskItem: React.FC<{task: Task}> = ({ task }) => {
         const isOverdue = task.status === 'To-Do' && task.dueDate && task.dueDate < new Date(new Date().toDateString()).getTime();
         const priorityBorders: Record<TaskPriority, string> = { 'High': 'border-l-red-500', 'Medium': 'border-l-amber-400', 'Low': 'border-l-green-500' };
-        
-        const completedSubtasks = task.subtasks?.filter(st => st.completed).length || 0;
-        const totalSubtasks = task.subtasks?.length || 0;
+
+        // Defensive: prevent the show planner from crashing if a row contains malformed subtasks.
+        const safeSubtasks: Subtask[] = Array.isArray(task.subtasks) ? task.subtasks : [];
+        const completedSubtasks = safeSubtasks.filter(st => st.completed).length;
+        const totalSubtasks = safeSubtasks.length;
         const progress = totalSubtasks > 0 ? (completedSubtasks / totalSubtasks) * 100 : 0;
         
         return (
@@ -527,10 +547,10 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                         <button onClick={() => handleDeleteTask(task.id)} className="p-2 text-slate-400 hover:text-red-400 rounded-full hover:bg-slate-700 transition-colors"><TrashIcon className="w-5 h-5"/></button>
                     </div>
                 </div>
-                {task.subtasks && task.subtasks.length > 0 && (
+                {safeSubtasks.length > 0 && (
                     <div className="pl-8 space-y-1">
                         <div className="w-full bg-slate-700 rounded-full h-1.5 mb-2"><div className="bg-purple-500 h-1.5 rounded-full" style={{ width: `${progress}%` }}></div></div>
-                        {task.subtasks.map(st => (
+                        {safeSubtasks.map(st => (
                             <div key={st.id} className="flex items-center gap-2">
                                 <input type="checkbox" checked={st.completed} onChange={() => handleToggleSubtask(task.id, st.id)} className="w-4 h-4 accent-purple-500 bg-slate-900" />
                                 <span className={`text-sm ${st.completed ? 'text-slate-500 line-through' : 'text-slate-300'}`}>{st.text}</span>
