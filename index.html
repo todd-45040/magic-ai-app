@@ -258,7 +258,93 @@
         font-size: 13px;
       }
       footer a { color: rgba(255,255,255,0.75); }
-    </style>
+    
+      .section-title{
+        margin: 18px 0 10px;
+        font-size: 16px;
+        color: rgba(255,255,255,0.86);
+        font-weight: 800;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+      }
+      .how{
+        display:grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-top: 10px;
+      }
+      @media (max-width: 520px) {
+        .how { grid-template-columns: 1fr; }
+      }
+      .how .step{
+        padding: 14px 14px;
+        border: 1px solid rgba(255,255,255,0.10);
+        background: rgba(255,255,255,0.04);
+        border-radius: 16px;
+      }
+      .how .step .kicker{
+        display:flex; align-items:center; gap:10px;
+        font-weight: 900;
+        color: rgba(255,255,255,0.92);
+      }
+      .pill{
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        font-size: 12px;
+        font-weight: 900;
+        padding: 4px 10px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,0.12);
+        background: rgba(0,0,0,0.10);
+        color: rgba(255,255,255,0.82);
+      }
+      .how .step p{
+        margin-top: 8px;
+        font-size: 14px;
+        line-height: 1.55;
+        color: rgba(255,255,255,0.72);
+      }
+      .feature-grid{
+        display:grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-top: 10px;
+      }
+      @media (max-width: 520px) {
+        .feature-grid { grid-template-columns: 1fr; }
+      }
+      .feature-tile{
+        padding: 14px 14px;
+        border-radius: 16px;
+        border: 1px solid rgba(255,255,255,0.10);
+        background: rgba(255,255,255,0.04);
+      }
+      .feature-tile .t{
+        font-weight: 900;
+        color: rgba(255,255,255,0.92);
+        display:flex;
+        align-items:center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .feature-tile .d{
+        margin-top: 6px;
+        color: rgba(255,255,255,0.70);
+        font-size: 14px;
+        line-height: 1.55;
+      }
+      .callout{
+        margin-top: 14px;
+        padding: 14px 14px;
+        border-radius: 16px;
+        border: 1px solid rgba(246,195,67,0.28);
+        background: linear-gradient(180deg, rgba(246,195,67,0.10), rgba(255,255,255,0.03));
+        color: rgba(255,255,255,0.78);
+      }
+      .callout strong{ color: rgba(255,255,255,0.92); }
+
+\1
   </head>
 
   <body class="magical-bg">
@@ -305,7 +391,53 @@
             <div class="li"><span class="dot"></span><span><strong>Rehearsal Studios:</strong> get coaching feedback and performance notes while you practice.</span></div>
             <div class="li"><span class="dot"></span><span><strong>Director Mode:</strong> refine timing, transitions, and audience management.</span></div>
             <div class="li"><span class="dot"></span><span><strong>Identify Trick:</strong> classify an effect and get practical presentation guidance.</span></div>
+
           </div>
+
+          <div class="section-title">How it works</div>
+          <div class="how" aria-label="How it works">
+            <div class="step">
+              <div class="kicker"><span class="pill">1</span> Generate something real</div>
+              <p>Use Deep Mode to produce a structured routine (premise, experience, method overview, notes, secret hints)—not a vague idea dump.</p>
+            </div>
+            <div class="step">
+              <div class="kicker"><span class="pill">2</span> Import to your show</div>
+              <p>One click creates a Performance Beat in Show Planner so you can organize, edit, and prioritize it inside an actual set.</p>
+            </div>
+            <div class="step">
+              <div class="kicker"><span class="pill">3</span> Rehearse with coaching</div>
+              <p>Run rehearsal tools for delivery and clarity. Keep performance notes attached to the beat so improvements persist.</p>
+            </div>
+            <div class="step">
+              <div class="kicker"><span class="pill">4</span> Perform with confidence</div>
+              <p>Use your planner as a working run-of-show. Tight transitions, stronger audience moments, and a cleaner arc.</p>
+            </div>
+          </div>
+
+          <div class="section-title">Made for real performers</div>
+          <div class="feature-grid" aria-label="Made for real performers">
+            <div class="feature-tile">
+              <div class="t">Close-up & strolling <span class="pill">Practical</span></div>
+              <div class="d">Build modular beats you can reset fast and run repeatedly with consistent structure.</div>
+            </div>
+            <div class="feature-tile">
+              <div class="t">Stage & parlor <span class="pill">Scalable</span></div>
+              <div class="d">Expand ideas into full audience experiences with pacing, callbacks, and transitions.</div>
+            </div>
+            <div class="feature-tile">
+              <div class="t">Corporate & family <span class="pill">Safe</span></div>
+              <div class="d">Sharpen language, tone, and clarity so routines land clean for real-world crowds.</div>
+            </div>
+            <div class="feature-tile">
+              <div class="t">Students & hobbyists <span class="pill">Guided</span></div>
+              <div class="d">Learn why beats work—then practice with feedback loops that build skill over time.</div>
+            </div>
+          </div>
+
+          <div class="callout" role="note">
+            <strong>Quick win:</strong> Generate an effect, import it, then add 2–3 “beats” underneath (setup → reveal → applause cue). Your show becomes a repeatable system.
+          </div>
+
         </div>
 
         <!-- Right column -->
