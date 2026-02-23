@@ -16,6 +16,39 @@ const toIsoOrNull = (value?: string | number | Date | null) => {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 };
 
+// Normalize timestamps coming back from Supabase.
+// Some rows use `created_at`/`updated_at` ISO strings, while the UI expects `createdAt`/`updatedAt` numbers.
+const toTsOrNow = (value: any) => {
+  if (value === undefined || value === null || value === '') return Date.now();
+  if (typeof value === 'number') return value;
+  const d = new Date(value);
+  const ts = d.getTime();
+  return Number.isNaN(ts) ? Date.now() : ts;
+};
+
+const toTsOrNull = (value: any) => {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value === 'number') return value;
+  const d = new Date(value);
+  const ts = d.getTime();
+  return Number.isNaN(ts) ? undefined : ts;
+};
+
+// Ensure subtasks is always an array (older rows/environments might return null, object, or stringified JSON).
+const normalizeSubtasks = (value: any) => {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+};
+
 // Normalize priority values coming from UI/DB to the canonical set used by the app.
 // Protects against older data like "high"/"LOW" or labels like "High Priority".
 const normalizePriority = (value: any): 'High' | 'Medium' | 'Low' => {
@@ -158,17 +191,37 @@ export const getShows = async (): Promise<Show[]> => {
     .order('created_at', { foreignTable: 'tasks', ascending: true });
 
   if (error) throw error;
-  // Normalize task fields to keep UI grouping/filtering stable across older rows.
-  return (((data as any[]) ?? []) as any[]).map((show) => ({
-    ...show,
-    tasks: Array.isArray(show.tasks)
-      ? show.tasks.map((t: any) => ({
-          ...t,
-          priority: getPriorityFromRow(t),
-          status: t.status ?? 'To-Do'
-        }))
-      : []
-  })) as Show[];
+  // Normalize task/show fields to keep UI stable across schema drift and older rows.
+  // The UI expects camelCase timestamps and arrays (e.g., subtasks), while Supabase returns snake_case/ISO.
+  return (((data as any[]) ?? []) as any[]).map((show) => {
+    const normalizedTasks = Array.isArray(show.tasks)
+      ? show.tasks.map((t: any) => {
+          const createdAt = toTsOrNow(t.createdAt ?? t.created_at);
+          const dueDate = toTsOrNull(t.dueDate ?? t.due_date);
+          return {
+            ...t,
+            // Canonicalize priority/status used by board filters
+            priority: getPriorityFromRow(t),
+            status: t.status ?? 'To-Do',
+            // Canonicalize timestamps expected by UI
+            createdAt,
+            dueDate,
+            // Canonicalize optional fields
+            musicCue: t.musicCue ?? t.music_cue ?? undefined,
+            subtasks: normalizeSubtasks(t.subtasks)
+          };
+        })
+      : [];
+
+    return {
+      ...show,
+      // Canonicalize timestamps expected by UI
+      createdAt: toTsOrNow(show.createdAt ?? show.created_at),
+      updatedAt: toTsOrNow(show.updatedAt ?? show.updated_at),
+      clientId: show.clientId ?? show.client_id,
+      tasks: normalizedTasks
+    };
+  }) as Show[];
 };
 
 export const getShowById = async (id: string): Promise<Show | undefined> => {
