@@ -67,7 +67,7 @@ const TaskModal: React.FC<{
             setPriority(taskToEdit.priority);
             setNotes(taskToEdit.notes || '');
             setMusicCue(taskToEdit.musicCue || '');
-            setSubtasks(taskToEdit.subtasks || []);
+            setSubtasks(Array.isArray(taskToEdit.subtasks) ? taskToEdit.subtasks : []);
             if (taskToEdit.dueDate) {
                 const d = new Date(taskToEdit.dueDate);
                 d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
@@ -199,8 +199,7 @@ const TaskModal: React.FC<{
                                         checked={!!subtask.completed}
                                         onChange={() => {
                                             const newSubtasks = [...subtasks];
-                                            const current = newSubtasks[index];
-                                            newSubtasks[index] = { ...current, completed: !current?.completed };
+                                            newSubtasks[index].completed = !newSubtasks[index].completed;
                                             setSubtasks(newSubtasks);
                                         }}
                                         className="mt-1 w-5 h-5 accent-purple-500 bg-slate-900 flex-shrink-0"
@@ -490,8 +489,9 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
             let segment = `CUE #${index + 1}: ${task.title} {task.status === 'Completed' && <span className="ml-2 text-xs text-[#C6A84A]">Locked In</span>}\n`;
             if (task.musicCue) segment += `MUSIC: ${task.musicCue}\n`;
             if (task.notes) segment += `\n--- NOTES / SCRIPT ---\n${task.notes}\n`;
-            if (task.subtasks && task.subtasks.length > 0) {
-                segment += `\n--- SUB-TASKS ---\n${task.subtasks.map(st => `- [ ] ${st.text}`).join('\n')}\n`;
+            const scriptSubtasks = Array.isArray(task.subtasks) ? task.subtasks : [];
+            if (scriptSubtasks.length > 0) {
+                segment += `\n--- SUB-TASKS ---\n${scriptSubtasks.map(st => `- [ ] ${st.text}`).join('\n')}\n`;
             }
             return segment;
         }).join('\n========================\n\n');
@@ -514,9 +514,10 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
     const TaskItem: React.FC<{task: Task}> = ({ task }) => {
         const isOverdue = task.status === 'To-Do' && task.dueDate && task.dueDate < new Date(new Date().toDateString()).getTime();
         const priorityBorders: Record<TaskPriority, string> = { 'High': 'border-l-red-500', 'Medium': 'border-l-amber-400', 'Low': 'border-l-green-500' };
+        const safeSubtasks = Array.isArray(task.subtasks) ? task.subtasks : [];
         
-        const completedSubtasks = task.subtasks?.filter(st => st.completed).length || 0;
-        const totalSubtasks = task.subtasks?.length || 0;
+        const completedSubtasks = safeSubtasks.filter(st => st.completed).length;
+        const totalSubtasks = safeSubtasks.length;
         const progress = totalSubtasks > 0 ? (completedSubtasks / totalSubtasks) * 100 : 0;
         
         return (
@@ -532,10 +533,10 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                         <button onClick={() => handleDeleteTask(task.id)} className="p-2 text-slate-400 hover:text-red-400 rounded-full hover:bg-slate-700 transition-colors"><TrashIcon className="w-5 h-5"/></button>
                     </div>
                 </div>
-                {task.subtasks && task.subtasks.length > 0 && (
+                {safeSubtasks.length > 0 && (
                     <div className="pl-8 space-y-1">
                         <div className="w-full bg-slate-700 rounded-full h-1.5 mb-2"><div className="bg-purple-500 h-1.5 rounded-full" style={{ width: `${progress}%` }}></div></div>
-                        {task.subtasks.map(st => (
+                        {safeSubtasks.map(st => (
                             <div key={st.id} className="flex items-center gap-2">
                                 <input type="checkbox" checked={st.completed} onChange={() => handleToggleSubtask(task.id, st.id)} className="w-4 h-4 accent-purple-500 bg-slate-900" />
                                 <span className={`text-sm ${st.completed ? 'text-slate-500 line-through' : 'text-slate-300'}`}>{st.text}</span>
@@ -544,7 +545,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                     </div>
                 )}
                 <div className="flex items-center flex-wrap gap-x-4 gap-y-1 mt-2 text-sm pl-8">
-                    <PriorityBadge priority={priorityLabelMap[task.priority] || task.priority} />
+                    <PriorityBadge priority={task.priority} />
                     {task.dueDate && <div className="flex items-center gap-1.5"><CalendarIcon className={`w-4 h-4 ${isOverdue ? 'text-red-400' : 'text-slate-500'}`} /><span className={`font-medium ${isOverdue ? 'text-red-400' : 'text-slate-400'}`}>{formatRelativeDate(task.dueDate)}</span></div>}
                     {task.musicCue && <div className="flex items-center gap-1.5"><MusicNoteIcon className="w-4 h-4 text-slate-500" /><span className="text-slate-400">{task.musicCue}</span></div>}
                 </div>
