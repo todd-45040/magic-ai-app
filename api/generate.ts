@@ -120,7 +120,10 @@ function extractFirstJsonObject(s: string): string {
 type EffectJson = {
   effects: Array<{
     name: string;
+    premise: string;
     experience: string;
+    method_overview: string;
+    performance_notes: string;
     secret_hint: string;
   }>;
 };
@@ -129,15 +132,35 @@ function validateEffectJson(obj: any): obj is EffectJson {
   if (!obj || typeof obj !== 'object') return false;
   if (!Array.isArray(obj.effects) || obj.effects.length !== 4) return false;
 
+  // Minimum lengths tuned for "deep, professional routine builder"
+  const MIN_NAME = 3;
+  const MIN_PREMISE = 40;
+  const MIN_EXPERIENCE = 140; // should describe the full audience-facing sequence
+  const MIN_METHOD = 90; // high-level method overview (no step-by-step exposure)
+  const MIN_NOTES = 90; // staging, timing, angles, outs, audience management
+  const MIN_HINT = 50; // method category + convincer framing
+
   for (const e of obj.effects) {
     if (!e || typeof e !== 'object') return false;
-    if (typeof e.name !== 'string' || !e.name.trim()) return false;
-    if (typeof e.experience !== 'string' || e.experience.trim().length < 20) return false;
-    if (typeof e.secret_hint !== 'string' || e.secret_hint.trim().length < 10) return false;
+
+    const name = typeof e.name === 'string' ? e.name.trim() : '';
+    const premise = typeof e.premise === 'string' ? e.premise.trim() : '';
+    const experience = typeof e.experience === 'string' ? e.experience.trim() : '';
+    const method_overview = typeof e.method_overview === 'string' ? e.method_overview.trim() : '';
+    const performance_notes = typeof e.performance_notes === 'string' ? e.performance_notes.trim() : '';
+    const secret_hint = typeof e.secret_hint === 'string' ? e.secret_hint.trim() : '';
+
+    if (name.length < MIN_NAME) return false;
+    if (premise.length < MIN_PREMISE) return false;
+    if (experience.length < MIN_EXPERIENCE) return false;
+    if (method_overview.length < MIN_METHOD) return false;
+    if (performance_notes.length < MIN_NOTES) return false;
+    if (secret_hint.length < MIN_HINT) return false;
   }
 
   return true;
 }
+
 
 function jsonToMarkdown(obj: EffectJson): string {
   return obj.effects
@@ -146,13 +169,25 @@ function jsonToMarkdown(obj: EffectJson): string {
       return [
         `### ${n}. ${String(e.name).trim()}`,
         '',
+        `**Premise:** ${String(e.premise).trim()}`,
+        '',
         `**The Experience:** ${String(e.experience).trim()}`,
         '',
+        `**Method Overview:** ${String(e.method_overview).trim()}`,
+        '',
+        `**Performance Notes:** ${String(e.performance_notes).trim()}`,
+        '',
         `**The Secret Hint:** ${String(e.secret_hint).trim()}`,
-      ].join('\n');
+      ].join('
+');
     })
-    .join('\n\n***\n\n');
+    .join('
+
+***
+
+');
 }
+
 
 function extractItemsFromContents(contents: any): string[] {
   try {
@@ -193,24 +228,65 @@ function buildJsonContractPrompt(items: string[]): string {
   const itemLine = items.length ? items.join(', ') : 'the provided items';
 
   return (
-    `Return ONLY valid JSON (no Markdown, no code fences, no commentary).\n` +
-    `You are generating magic effect ideas using exactly these everyday items: ${itemLine}.\n\n` +
-    `JSON schema (must match exactly):\n` +
-    `{\n` +
-    `  "effects": [\n` +
-    `    {"name":"...","experience":"...","secret_hint":"..."},\n` +
-    `    {"name":"...","experience":"...","secret_hint":"..."},\n` +
-    `    {"name":"...","experience":"...","secret_hint":"..."},\n` +
-    `    {"name":"...","experience":"...","secret_hint":"..."}\n` +
-    `  ]\n` +
-    `}\n\n` +
-    `Rules:\n` +
-    `- effects MUST be exactly 4 objects (no more, no less).\n` +
-    `- experience: 2–4 sentences, present tense, audience-facing.\n` +
-    `- secret_hint: high-level method category only (no exposure, no step-by-step).\n` +
-    `- Keep everything concise to fit within limits.\n`
+    `Return ONLY valid JSON (no Markdown, no code fences, no commentary).
+` +
+    `You are a world-class magic inventor and director. Generate FOUR deep, professional, performance-ready routines using exactly these everyday items: ${itemLine}.
+
+` +
+    `JSON schema (must match exactly):
+` +
+    `{
+` +
+    `  "effects": [
+` +
+    `    {
+` +
+    `      "name": "...",
+` +
+    `      "premise": "...",
+` +
+    `      "experience": "...",
+` +
+    `      "method_overview": "...",
+` +
+    `      "performance_notes": "...",
+` +
+    `      "secret_hint": "..."
+` +
+    `    },
+` +
+    `    { ... },
+` +
+    `    { ... },
+` +
+    `    { ... }
+` +
+    `  ]
+` +
+    `}
+
+` +
+    `Rules (strict):
+` +
+    `- effects MUST be exactly 4 objects (no more, no less).
+` +
+    `- Each routine must feel distinct (different plot, structure, and climax).
+` +
+    `- premise: 1–2 sentences that frame the emotional hook + why these props belong together.
+` +
+    `- experience: audience-facing, step-by-step performance description (8–14 sentences), present tense. Include at least one strong spectator moment.
+` +
+    `- method_overview: high-level method category + structure (misdirection beats, gimmick category, switch/force/penetration/transport/etc.). NO step-by-step exposure.
+` +
+    `- performance_notes: staging, angles, timing, handling tips, volunteer management, reset/cleanup, and at least one “out” or contingency.
+` +
+    `- secret_hint: a concise, non-exposure hint that suggests the secret principle + a convincer (still high-level).
+` +
+    `- Use plain text strings. Do NOT include Markdown. Do NOT include extra keys.
+`
   );
 }
+
 
 export default async function handler(request: any, response: any) {
   try {
