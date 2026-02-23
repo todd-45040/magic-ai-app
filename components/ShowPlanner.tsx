@@ -194,18 +194,14 @@ const TaskModal: React.FC<{
                         <div className="max-h-32 overflow-y-auto space-y-2 pr-2 border border-slate-700/50 bg-slate-900/50 rounded-md p-2">
                             {subtasks.length > 0 ? subtasks.map((subtask, index) => (
                                 <div key={index} className="flex items-center gap-2">
-                                    {/*
-                                      NOTE: This checkbox is for the *subtask* inside the modal.
-                                      A previous version incorrectly referenced `task` (undefined in this scope),
-                                      which can crash the entire Show Planner when the modal renders.
-                                    */}
                                     <input
                                         type="checkbox"
                                         checked={!!subtask.completed}
                                         onChange={() => {
-                                            const next = [...subtasks];
-                                            next[index] = { ...next[index], completed: !next[index]?.completed };
-                                            setSubtasks(next);
+                                            const newSubtasks = [...subtasks];
+                                            const current = newSubtasks[index];
+                                            newSubtasks[index] = { ...current, completed: !current?.completed };
+                                            setSubtasks(newSubtasks);
                                         }}
                                         className="mt-1 w-5 h-5 accent-purple-500 bg-slate-900 flex-shrink-0"
                                     />
