@@ -22,12 +22,10 @@ type EffectEnginePayload = {
   effects: EffectJson[];
 };
 
-// Effect Engine generations are intentionally heavy (deep JSON contract).
-// Timeout must be tunable via env and long enough for "Deep Mode".
-// NOTE: Keep this below Vercel function maxDuration (see vercel.json).
 const DEFAULT_TIMEOUT_MS = (() => {
   const v = Number(process.env.EFFECT_ENGINE_TIMEOUT_MS);
-  // sensible bounds: 10s–85s
+  // sensible bounds: 10s–85s (deep mode can legitimately take longer)
+  // Keep this under Vercel maxDuration so we can return a controlled error instead of a 504.
   if (Number.isFinite(v) && v >= 10_000 && v <= 85_000) return Math.floor(v);
   return 75_000;
 })();
