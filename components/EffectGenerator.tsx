@@ -1,11 +1,57 @@
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { generateResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
 import { EFFECT_GENERATOR_SYSTEM_INSTRUCTION } from '../constants';
 import { LightbulbIcon, WandIcon, SaveIcon, CheckIcon, CopyIcon, ShareIcon } from './icons';
 import ShareButton from './ShareButton';
-import { useAppState } from '../store';
+import { useAppDispatch, useAppState } from '../store';
+import { addTaskToShow } from '../services/showsService';
+
+type ParsedEffect = {
+  name: string;
+  premise: string;
+  experience: string;
+};
+
+const normalize = (s: string) => String(s ?? '').replace(/\r\n/g, '\n').trim();
+
+// Best-effort parser for the Effect Engine markdown output.
+// Supports headings like "### 1. The Safehouse" and sections like **Premise:**, **The Experience:**
+const parseEffectsFromMarkdown = (markdown: string): ParsedEffect[] => {
+  const text = normalize(markdown);
+  if (!text) return [];
+
+  const headingRe = /^#{3,4}\s*\d+\.?\s*(.+)$/gm;
+  const headings: Array<{ index: number; name: string }> = [];
+  let m: RegExpExecArray | null;
+  while ((m = headingRe.exec(text))) {
+    headings.push({ index: m.index, name: String(m[1] ?? '').trim() });
+  }
+  if (headings.length === 0) return [];
+
+  const getSection = (block: string, label: string) => {
+    // Capture from **Label:** to the next **Something:** or next heading.
+    const re = new RegExp(`\\*\\*${label}\\*\\*\\s*:?\\s*([\\s\\S]*?)(?=\\n\\*\\*[^*]+\\*\\*\\s*:|\\n#{3,4}\\s*\\d+\\.?\\s+|$)`, 'i');
+    const mm = re.exec(block);
+    return normalize(mm?.[1] ?? '');
+  };
+
+  const effects: ParsedEffect[] = [];
+  for (let i = 0; i < headings.length; i++) {
+    const start = headings[i].index;
+    const end = i + 1 < headings.length ? headings[i + 1].index : text.length;
+    const block = text.slice(start, end);
+
+    const name = headings[i].name;
+    const premise = getSection(block, 'Premise');
+    // some outputs use "The Experience" exactly
+    const experience = getSection(block, 'The Experience') || getSection(block, 'Experience');
+
+    if (name) effects.push({ name, premise, experience });
+  }
+  return effects;
+};
 
 interface EffectGeneratorProps {
     onIdeaSaved: () => void;
@@ -26,12 +72,20 @@ const LoadingIndicator: React.FC = () => (
 
 const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
   const { currentUser } = useAppState() as any;
+  const { shows } = useAppState() as any;
+  const dispatch = useAppDispatch();
   const [items, setItems] = useState(['', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ideas, setIdeas] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied'>('idle');
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [selectedShowId, setSelectedShowId] = useState<string>('');
+  const [selectedEffectIndex, setSelectedEffectIndex] = useState<number>(0);
+  const [importStatus, setImportStatus] = useState<'idle' | 'importing' | 'imported'>('idle');
+
+  const parsedEffects = useMemo(() => (ideas ? parseEffectsFromMarkdown(ideas) : []), [ideas]);
 
   const handleItemChange = (index: number, value: string) => {
     const newItems = [...items];
@@ -87,6 +141,61 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
       setTimeout(() => setCopyStatus('idle'), 2000);
     }
   }
+
+  const openImport = () => {
+    if (!ideas) return;
+    setError(null);
+    setImportStatus('idle');
+    // Default to most recent show if available.
+    const firstShowId = Array.isArray(shows) && shows.length ? String(shows[0].id) : '';
+    setSelectedShowId(firstShowId);
+    setSelectedEffectIndex(0);
+    setIsImportOpen(true);
+  };
+
+  const handleImportToShowPlanner = async () => {
+    if (!ideas) return;
+    if (!selectedShowId) {
+      setError('Please create or select a Show in Show Planner first.');
+      setIsImportOpen(false);
+      return;
+    }
+
+    const effects = parsedEffects;
+    const effect = effects[selectedEffectIndex];
+    if (!effect) {
+      setError('Could not parse an effect from the output. Try generating again.');
+      setIsImportOpen(false);
+      return;
+    }
+
+    setImportStatus('importing');
+    try {
+      const title = effect.name.trim() || 'Imported Effect';
+      const notesParts = [
+        effect.premise ? `Premise:\n${effect.premise}` : '',
+        effect.experience ? `Experience:\n${effect.experience}` : ''
+      ].filter(Boolean);
+      const notes = notesParts.join('\n\n');
+
+      const updatedShows = await addTaskToShow(selectedShowId, {
+        title,
+        notes,
+        priority: 'Medium',
+        status: 'To-Do',
+        createdAt: Date.now(),
+      } as any);
+
+      dispatch({ type: 'SET_SHOWS', payload: updatedShows } as any);
+      setImportStatus('imported');
+      setTimeout(() => setImportStatus('idle'), 2000);
+      setIsImportOpen(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to import to Show Planner.');
+      setImportStatus('idle');
+      setIsImportOpen(false);
+    }
+  };
 
   return (
     <main className="flex-1 overflow-y-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
@@ -176,7 +285,88 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
                                 </>
                             )}
                         </button>
+
+                        <button
+                            onClick={openImport}
+                            disabled={importStatus === 'importing'}
+                            className="flex items-center gap-2 px-3 py-1.5 text-sm bg-purple-700/80 hover:bg-purple-700 rounded-md text-slate-100 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                            title="Create a Performance Beat from this effect and add it to a Show"
+                        >
+                            {importStatus === 'imported' ? (
+                              <>
+                                <CheckIcon className="w-4 h-4 text-green-300" />
+                                <span>Added</span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="font-bold">+</span>
+                                <span>Add to Show Planner</span>
+                              </>
+                            )}
+                        </button>
                     </div>
+
+                    {isImportOpen && (
+                      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+                        <div className="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-900 shadow-xl">
+                          <div className="p-4 border-b border-slate-800">
+                            <h3 className="text-slate-100 font-bold text-lg">Add to Show Planner</h3>
+                            <p className="text-slate-400 text-sm mt-1">Select a show and choose which generated effect to import as a Performance Beat.</p>
+                          </div>
+
+                          <div className="p-4 space-y-4">
+                            <div>
+                              <label className="block text-sm font-medium text-slate-300 mb-1">Show</label>
+                              <select
+                                value={selectedShowId}
+                                onChange={(e) => setSelectedShowId(e.target.value)}
+                                className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500"
+                              >
+                                <option value="">Select a show…</option>
+                                {(Array.isArray(shows) ? shows : []).map((s: any) => (
+                                  <option key={s.id} value={s.id}>{s.title}</option>
+                                ))}
+                              </select>
+                              {!Array.isArray(shows) || shows.length === 0 ? (
+                                <p className="text-xs text-slate-500 mt-1">No shows found yet. Create one in Show Planner first.</p>
+                              ) : null}
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-slate-300 mb-1">Effect</label>
+                              <select
+                                value={String(selectedEffectIndex)}
+                                onChange={(e) => setSelectedEffectIndex(Number(e.target.value))}
+                                className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500"
+                              >
+                                {(parsedEffects.length ? parsedEffects : [{ name: 'Effect 1', premise: '', experience: '' }]).map((ef, idx) => (
+                                  <option key={idx} value={idx}>{idx + 1}. {ef.name || `Effect ${idx + 1}`}</option>
+                                ))}
+                              </select>
+                              {parsedEffects.length === 0 ? (
+                                <p className="text-xs text-slate-500 mt-1">Could not parse effect headings. Import will still try the first effect.</p>
+                              ) : null}
+                            </div>
+                          </div>
+
+                          <div className="p-4 border-t border-slate-800 flex justify-end gap-2">
+                            <button
+                              onClick={() => setIsImportOpen(false)}
+                              className="px-3 py-2 rounded-md bg-slate-700 hover:bg-slate-600 text-slate-200 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={handleImportToShowPlanner}
+                              disabled={importStatus === 'importing'}
+                              className="px-4 py-2 rounded-md bg-purple-600 hover:bg-purple-700 text-white font-bold disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                            >
+                              {importStatus === 'importing' ? 'Adding…' : 'Add Beat'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                 </div>
             ) : (
                 <div className="flex-1 flex items-center justify-center text-center text-slate-500 p-4">
