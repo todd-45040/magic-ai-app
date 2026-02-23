@@ -272,7 +272,6 @@ export default async function handler(request: any, response: any) {
     // --- Never-cut-off path: Deep JSON contract + validate + retry once ---
     const items = extractItemsFromContents(contents);
     const jsonPrompt = buildDeepEffectEngineJsonPrompt(items);
-    const jsonContents = [{ role: 'user', parts: [{ text: jsonPrompt }] }];
 
     const attemptOnce = async (extra?: { strengthen?: boolean; lastText?: string }) => {
       const strengthened = extra?.strengthen
