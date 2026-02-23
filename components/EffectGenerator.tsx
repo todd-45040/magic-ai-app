@@ -5,6 +5,7 @@ import { saveIdea } from '../services/ideasService';
 import { EFFECT_GENERATOR_SYSTEM_INSTRUCTION } from '../constants';
 import { LightbulbIcon, WandIcon, SaveIcon, CheckIcon, CopyIcon, ShareIcon } from './icons';
 import ShareButton from './ShareButton';
+import { useToast } from './ToastProvider';
 import { useAppDispatch, useAppState } from '../store';
 import { addTaskToShow } from '../services/showsService';
 
@@ -74,6 +75,7 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
   const { currentUser } = useAppState() as any;
   const { shows } = useAppState() as any;
   const dispatch = useAppDispatch();
+  const { showToast } = useToast();
   const [items, setItems] = useState(['', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -187,6 +189,25 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
       } as any);
 
       dispatch({ type: 'SET_SHOWS', payload: updatedShows } as any);
+      // Set a focus hint so Show Planner can auto-scroll + pulse-highlight the newly added beat.
+      try {
+        const showTitle = (Array.isArray(shows) ? shows : []).find((s: any) => String(s?.id) === String(selectedShowId))?.title ?? 'your show';
+        localStorage.setItem('maw_showplanner_focus', JSON.stringify({
+          showId: String(selectedShowId),
+          taskTitle: String(title),
+          ts: Date.now(),
+        }));
+
+        showToast(`Performance Beat added to “${showTitle}”`, {
+          label: 'View beat',
+          onClick: () => {
+            try {
+              window.dispatchEvent(new CustomEvent('maw:navigate', { detail: { view: 'show-planner', primaryId: String(selectedShowId), secondaryId: String(title) } }));
+            } catch {}
+          }
+        });
+      } catch {}
+
       setImportStatus('imported');
       setTimeout(() => setImportStatus('idle'), 2000);
       setIsImportOpen(false);

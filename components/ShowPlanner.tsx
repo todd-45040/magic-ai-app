@@ -35,18 +35,6 @@ const PRIORITY_ORDER: Record<TaskPriority, number> = {
     'Low': 3,
 };
 
-// Defensive priority mapping.
-// Some older rows (or future migrations) could potentially store priority in unexpected casing.
-// Keeping this local prevents runtime ReferenceErrors if a mapping is referenced in the UI.
-const priorityLabelMap: Record<string, TaskPriority> = {
-    High: 'High',
-    Medium: 'Medium',
-    Low: 'Low',
-    high: 'High',
-    medium: 'Medium',
-    low: 'Low',
-};
-
 // --- Helper Components ---
 
 const PriorityBadge: React.FC<{ priority: TaskPriority }> = ({ priority }) => (
@@ -79,8 +67,7 @@ const TaskModal: React.FC<{
             setPriority(taskToEdit.priority);
             setNotes(taskToEdit.notes || '');
             setMusicCue(taskToEdit.musicCue || '');
-            // Defensive: ensure subtasks is always an array in the modal.
-            setSubtasks(Array.isArray(taskToEdit.subtasks) ? taskToEdit.subtasks : []);
+            setSubtasks(taskToEdit.subtasks || []);
             if (taskToEdit.dueDate) {
                 const d = new Date(taskToEdit.dueDate);
                 d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
@@ -208,16 +195,11 @@ const TaskModal: React.FC<{
                             {subtasks.length > 0 ? subtasks.map((subtask, index) => (
                                 <div key={index} className="flex items-center gap-2">
                                     <input
-                                        type="checkbox"
-                                        checked={!!subtask.completed}
-                                        onChange={() => {
-                                            const newSubtasks = [...subtasks];
-                                            newSubtasks[index].completed = !newSubtasks[index].completed;
-                                            setSubtasks(newSubtasks);
-                                        }}
-                                        className="w-4 h-4 accent-purple-500 bg-slate-900 flex-shrink-0"
-                                        aria-label="Toggle sub-performance beat"
-                                    />
+                        type="checkbox"
+                        checked={task.status === 'Completed'}
+                        onChange={() => handleToggleStatus(task)}
+                        className="mt-1 w-5 h-5 accent-purple-500 bg-slate-900 flex-shrink-0"
+                      />
                                     <input type="text" value={subtask.text}
                                         onChange={(e) => {
                                             const newSubtasks = [...subtasks];
@@ -360,19 +342,93 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
         };
     }, [initialShowId]);
 
+    // If another tool (like Effect Engine) wants to focus a specific beat,
+    // it can drop a hint into localStorage. This makes imports feel "connected".
     useEffect(() => {
-        if (selectedShow && initialTaskId) {
-            const taskRef = taskRefs.current.get(initialTaskId);
-            if (taskRef) {
-                setTimeout(() => {
-                    taskRef.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    taskRef.classList.add('ring-2', 'ring-purple-500', 'transition-all', 'duration-1000');
-                    setTimeout(() => {
-                        taskRef.classList.remove('ring-2', 'ring-purple-500');
-                    }, 2000);
-                }, 100);
+        try {
+            if (initialShowId || initialTaskId) return;
+            const raw = localStorage.getItem('maw_showplanner_focus');
+            if (!raw) return;
+            const parsed = JSON.parse(raw);
+            if (parsed?.showId) {
+                const show = shows.find((s) => String(s.id) === String(parsed.showId));
+                if (show) setSelectedShow(show);
             }
+        } catch {}
+    }, [shows, initialShowId, initialTaskId]);
+
+    useEffect(() => {
+        if (!selectedShow) return;
+
+        // Prefer explicit deep-link prop, otherwise fall back to localStorage focus hint.
+        let target: string | null = initialTaskId ?? null;
+
+        try {
+            if (!target) {
+                const raw = localStorage.getItem('maw_showplanner_focus');
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    // We support focusing by taskId (if available) or by title.
+                    target = parsed?.taskId ? String(parsed.taskId) : (parsed?.taskTitle ? String(parsed.taskTitle) : null);
+                }
+            }
+        } catch {}
+
+        if (!target) return;
+
+        // 1) If target matches an id, use it.
+        let taskIdToScroll: string | null = taskRefs.current.has(target) ? target : null;
+
+        // 2) Otherwise treat target as a title and find the newest matching task.
+        if (!taskIdToScroll) {
+            const tasks = Array.isArray((selectedShow as any)?.tasks) ? (selectedShow as any).tasks : [];
+            const norm = (s: any) => String(s ?? '').trim().toLowerCase();
+            const match = tasks
+                .filter((t: any) => norm(t?.title) === norm(target))
+                .sort((a: any, b: any) => Number(b?.createdAt ?? b?.created_at ?? 0) - Number(a?.createdAt ?? a?.created_at ?? 0))[0];
+            if (match?.id) taskIdToScroll = String(match.id);
         }
+
+        if (!taskIdToScroll) return;
+
+        const taskRef = taskRefs.current.get(taskIdToScroll);
+        if (!taskRef) return;
+
+        // Scroll + pulse highlight
+        window.setTimeout(() => {
+            try {
+                taskRef.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } catch {}
+
+            try {
+                taskRef.classList.add(
+                    'ring-2',
+                    'ring-purple-500/70',
+                    'shadow-[0_0_0_6px_rgba(168,85,247,0.18)]',
+                    'transition-all',
+                    'duration-700',
+                    'animate-pulse'
+                );
+            } catch {}
+
+            // Remove highlight after a moment
+            window.setTimeout(() => {
+                try {
+                    taskRef.classList.remove(
+                        'ring-2',
+                        'ring-purple-500/70',
+                        'shadow-[0_0_0_6px_rgba(168,85,247,0.18)]',
+                        'animate-pulse'
+                    );
+                } catch {}
+            }, 2800);
+
+            // Clear one-time focus hint so it doesn't keep firing.
+            try {
+                const raw = localStorage.getItem('maw_showplanner_focus');
+                if (raw) localStorage.removeItem('maw_showplanner_focus');
+            } catch {}
+        }, 150);
     }, [selectedShow, initialTaskId]);
 
     // Show handlers
@@ -527,11 +583,9 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
     const TaskItem: React.FC<{task: Task}> = ({ task }) => {
         const isOverdue = task.status === 'To-Do' && task.dueDate && task.dueDate < new Date(new Date().toDateString()).getTime();
         const priorityBorders: Record<TaskPriority, string> = { 'High': 'border-l-red-500', 'Medium': 'border-l-amber-400', 'Low': 'border-l-green-500' };
-
-        // Defensive: prevent the show planner from crashing if a row contains malformed subtasks.
-        const safeSubtasks: Subtask[] = Array.isArray(task.subtasks) ? task.subtasks : [];
-        const completedSubtasks = safeSubtasks.filter(st => st.completed).length;
-        const totalSubtasks = safeSubtasks.length;
+        
+        const completedSubtasks = task.subtasks?.filter(st => st.completed).length || 0;
+        const totalSubtasks = task.subtasks?.length || 0;
         const progress = totalSubtasks > 0 ? (completedSubtasks / totalSubtasks) * 100 : 0;
         
         return (
@@ -547,10 +601,10 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                         <button onClick={() => handleDeleteTask(task.id)} className="p-2 text-slate-400 hover:text-red-400 rounded-full hover:bg-slate-700 transition-colors"><TrashIcon className="w-5 h-5"/></button>
                     </div>
                 </div>
-                {safeSubtasks.length > 0 && (
+                {task.subtasks && task.subtasks.length > 0 && (
                     <div className="pl-8 space-y-1">
                         <div className="w-full bg-slate-700 rounded-full h-1.5 mb-2"><div className="bg-purple-500 h-1.5 rounded-full" style={{ width: `${progress}%` }}></div></div>
-                        {safeSubtasks.map(st => (
+                        {task.subtasks.map(st => (
                             <div key={st.id} className="flex items-center gap-2">
                                 <input type="checkbox" checked={st.completed} onChange={() => handleToggleSubtask(task.id, st.id)} className="w-4 h-4 accent-purple-500 bg-slate-900" />
                                 <span className={`text-sm ${st.completed ? 'text-slate-500 line-through' : 'text-slate-300'}`}>{st.text}</span>

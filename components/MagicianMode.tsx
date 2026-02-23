@@ -2119,6 +2119,16 @@ ${action.payload.content}`;
 
       setActiveView(view);
 
+      // Support deep-link navigation payloads (used by Effect Engine -> Show Planner imports)
+      try {
+        const primaryId = String(ce?.detail?.primaryId ?? ce?.detail?.showId ?? '');
+        const secondaryId = String(ce?.detail?.secondaryId ?? ce?.detail?.taskId ?? '');
+        if (view === 'show-planner') {
+          if (primaryId) setInitialShowId(primaryId);
+          if (secondaryId) setInitialTaskId(secondaryId);
+        }
+      } catch {}
+
       if (hash && typeof window !== 'undefined') {
         // Let the target view mount first
         window.setTimeout(() => {
@@ -2398,6 +2408,16 @@ ${action.payload.content}`;
             onClose={() => setIsHelpModalOpen(false)}
             onNavigate={(view) => {
               setActiveView(view);
+
+      // Support deep-link navigation payloads (used by Effect Engine -> Show Planner imports)
+      try {
+        const primaryId = String(ce?.detail?.primaryId ?? ce?.detail?.showId ?? '');
+        const secondaryId = String(ce?.detail?.secondaryId ?? ce?.detail?.taskId ?? '');
+        if (view === 'show-planner') {
+          if (primaryId) setInitialShowId(primaryId);
+          if (secondaryId) setInitialTaskId(secondaryId);
+        }
+      } catch {}
               setIsHelpModalOpen(false);
             }}
             contextView={activeView}
