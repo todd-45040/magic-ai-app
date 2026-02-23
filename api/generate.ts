@@ -178,14 +178,9 @@ function jsonToMarkdown(obj: EffectJson): string {
         `**Performance Notes:** ${String(e.performance_notes).trim()}`,
         '',
         `**The Secret Hint:** ${String(e.secret_hint).trim()}`,
-      ].join('
-');
+      ].join('\n');
     })
-    .join('
-
-***
-
-');
+    .join('\n\n***\n\n');
 }
 
 
