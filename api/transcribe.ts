@@ -19,7 +19,7 @@ function getApiKey(): string | undefined {
 function getModel(): string {
   // NOTE: "gemini-1.5-flash" is returning NOT_FOUND for many projects on v1beta.
   // Use a modern multimodal model that supports audio inputs.
-  return process.env.GEMINI_TRANSCRIBE_MODEL || 'gemini-2.5-flash';
+  return process.env.GEMINI_TRANSCRIBE_MODEL || 'gemini-2.0-flash';
 }
 
 async function generateWithFallback(
@@ -70,7 +70,7 @@ export default async function handler(req: any, res: any) {
     const preferred = getModel();
     // Try preferred model first, then common modern fallbacks.
     const modelFallbacks = Array.from(
-      new Set([preferred, 'gemini-2.5-flash', 'gemini-2.5-flash-lite'])
+      new Set([preferred, 'gemini-2.5-flash', 'gemini-2.0-flash'])
     );
 
     const result = await generateWithFallback(ai, modelFallbacks, {
