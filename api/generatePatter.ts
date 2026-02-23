@@ -40,7 +40,7 @@ export default async function handler(req: any, res: any) {
     const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.API_KEY;
     if (!apiKey) {
       return res.status(500).json({
-        error: "Missing GOOGLE_API_KEY (or legacy API_KEY) in server environment",
+        error: "Missing GEMINI_API_KEY / GOOGLE_API_KEY (or legacy API_KEY) in server environment",
       });
     }
 
@@ -52,7 +52,7 @@ export default async function handler(req: any, res: any) {
 
     const finalResult = await withTimeout(
       ai.models.generateContent({
-        model: process.env.AI_MODEL || process.env.GEMINI_FAST_MODEL || "gemini-2.5-flash-lite",
+        model: process.env.AI_MODEL || "gemini-2.0-flash",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
       }),
       DEFAULT_TIMEOUT_MS

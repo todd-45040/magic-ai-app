@@ -171,7 +171,7 @@ export default async function handler(request: any, response: any) {
         );
       }
 
-      const apiKey = process.env.GOOGLE_API_KEY || process.env.API_KEY;
+      const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.API_KEY;
       if (!apiKey) {
         // This is an infra misconfig (not a user error)
         throw new Error(
@@ -219,73 +219,143 @@ export default async function handler(request: any, response: any) {
         throw e;
       }
     }
-
-    
-    // Some Gemini responses can arrive "half-finished" (model stops early).
-    // If we detect fewer than 3 numbered sections, do a single quick continuation
-    // and append the remainder. Best-effort only.
+    // --- Effect Engine: "Never cut off" deep routine builder via JSON contract ---
+    // We force a strict JSON schema for exactly 4 effects, validate server-side,
+    // retry once if invalid/too short, then render JSON -> Markdown for UI.
     try {
-      const firstText = extractText(result);
+      const items = extractItemsFromContents(contents);
+      const itemLine = items.length ? items.join(', ') : 'the provided items';
 
-      // Ensure `text` exists for clients that prefer the simple extraction path.
-      if (firstText) result = { ...(result || {}), text: firstText };
+      const maxTokens = (() => {
+        const v = Number(process.env.EFFECT_ENGINE_MAX_TOKENS);
+        // Deep routine builder needs headroom. Safe bounds: 1200–12000
+        if (Number.isFinite(v) && v >= 1200 && v <= 12000) return Math.floor(v);
+        return 9000;
+      })();
 
-      // Only attempt continuation for Gemini-style message arrays.
-      if (provider !== 'openai' && provider !== 'anthropic') {
-        const n = firstText ? countHeadings(firstText) : 0;
-        if (firstText && n > 0 && n < 3 && Array.isArray(contents)) {
-          const continuation = [
-            ...contents,
-            { role: 'model', parts: [{ text: firstText }] },
+      const deepSchemaInstructions =
+        `Return ONLY valid JSON. No markdown. No backticks. No commentary.\n` +
+        `Schema (MUST match): {"effects":[{"name":string,"premise":string,"experience":string,"method_overview":string,"performance_notes":string,"secret_hint":string}, ... exactly 4 ]}\n\n` +
+        `Rules:\n` +
+        `- EXACTLY 4 effects in the "effects" array.\n` +
+        `- Each field must be plain text (no markdown).\n` +
+        `- Write for a professional magician: deep, practical, and stage-ready.\n` +
+        `- Do NOT reveal step-by-step secrets. Keep methods as high-level categories and principles.\n\n` +
+        `Minimum lengths (MUST meet):\n` +
+        `- name >= 3 chars\n` +
+        `- premise >= 60 chars\n` +
+        `- experience >= 220 chars (8–14 sentences)\n` +
+        `- method_overview >= 140 chars\n` +
+        `- performance_notes >= 160 chars\n` +
+        `- secret_hint >= 90 chars\n\n` +
+        `Props/items to use: ${itemLine}.`;
+
+      const makeJsonContents = (extra?: string) => ([
+        {
+          role: 'user',
+          parts: [
             {
-              role: 'user',
-              parts: [
-                {
-                  text:
-                    'Continue from where you left off. Provide the remaining effect concepts (2 and 3). ' +
-                    'Do not repeat #1. Keep the same format and include full details.',
-                },
-              ],
+              text: extra ? (deepSchemaInstructions + `\n\n` + extra) : deepSchemaInstructions,
             },
-          ];
+          ],
+        },
+      ]);
 
-          const continued = await run({ hardTimeoutMs: 15_000, contentsOverride: continuation });
-          const moreText = extractText(continued);
+      const cleanJsonText = (t: string) => {
+        const s = (t || '').trim();
+        // Strip accidental code fences if model includes them
+        return s.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+      };
 
-          if (moreText) {
-            const finalText = (firstText + '\n\n' + moreText).trim();
-            result = { ...(result || {}), text: finalText };
+      const validateDeep = (obj: any) => {
+        const effects = obj?.effects;
+        if (!Array.isArray(effects) || effects.length !== 4) return { ok: false, why: 'effects must be an array of exactly 4' };
+
+        const mins: Record<string, number> = {
+          name: 3,
+          premise: 60,
+          experience: 220,
+          method_overview: 140,
+          performance_notes: 160,
+          secret_hint: 90,
+        };
+
+        for (let i = 0; i < effects.length; i++) {
+          const e = effects[i] || {};
+          for (const k of Object.keys(mins)) {
+            const v = String(e[k] ?? '').trim();
+            if (v.length < mins[k]) return { ok: false, why: `effect #${i + 1} field "${k}" too short` };
           }
         }
+        return { ok: true as const };
+      };
 
-        // Fallback: sometimes the model returns only an intro line (no headings at all).
-        // In that case, do a single strict retry that forces complete, formatted output.
-        if (firstText && n === 0 && looksLikeTruncatedTeaser(firstText)) {
-          const items = extractItemsFromContents(contents);
-          const itemLine = items.length ? items.join(', ') : 'the provided items';
-          const strictPrompt =
-            `You MUST return a complete set of magic effect ideas now (do not stop after an intro).\n` +
-            `Create EXACTLY 4 effects using: ${itemLine}.\n\n` +
-            `For each effect, include these headings in Markdown:\n` +
-            `### <number>. <Effect Name>\n` +
-            `**The Experience:** (2–4 sentences)\n` +
-            `**The Secret Hint:** (high-level, no exposure)\n\n` +
-            `No preamble, no closing text—only the 4 formatted effects.`;
+      const renderMarkdown = (obj: any) => {
+        const effects = obj.effects as any[];
+        const blocks = effects.map((e, idx) => {
+          const n = idx + 1;
+          return [
+            `### ${n}. ${String(e.name).trim()}`,
+            ``,
+            `**Premise:** ${String(e.premise).trim()}`,
+            ``,
+            `**The Experience:** ${String(e.experience).trim()}`,
+            ``,
+            `**Method Overview:** ${String(e.method_overview).trim()}`,
+            ``,
+            `**Performance Notes:** ${String(e.performance_notes).trim()}`,
+            ``,
+            `**The Secret Hint:** ${String(e.secret_hint).trim()}`,
+          ].join('\n');
+        });
+        return blocks.join('\n\n***\n\n').trim();
+      };
 
-          const retryFastModel = process.env.GEMINI_EFFECT_MODEL || process.env.GEMINI_FAST_MODEL || 'gemini-2.5-flash-lite';
-          const strictContents = [{ role: 'user', parts: [{ text: strictPrompt }] }];
-          const retried = await run({ providerModel: retryFastModel, hardTimeoutMs: 22_000, contentsOverride: strictContents });
-          const retryText = extractText(retried);
-          if (retryText && retryText.trim().length > firstText.trim().length) {
-            result = { ...(retried || {}), text: retryText.trim() };
-          }
+      const attempt = async (extra?: string) => {
+        // NOTE: We keep provider selection the same; we only override contents/config.
+        const r = await run({ contentsOverride: makeJsonContents(extra) });
+        const raw = extractText(r);
+        const cleaned = cleanJsonText(raw);
+        let parsed: any = null;
+        try {
+          parsed = JSON.parse(cleaned);
+        } catch {
+          return { ok: false as const, why: 'json parse failed', raw: cleaned };
         }
+        const v = validateDeep(parsed);
+        if (!v.ok) return { ok: false as const, why: v.why, raw: cleaned, parsed };
+        return { ok: true as const, parsed };
+      };
+
+      // Override boundedConfig token ceiling for this path (deep JSON needs more room).
+      boundedConfig.maxOutputTokens = maxTokens;
+
+      // Attempt #1
+      let out = await attempt();
+      // Retry once if invalid
+      if (!out.ok) {
+        out = await attempt(
+          `IMPORTANT: Your previous output was invalid ("${out.why}"). ` +
+            `Return ONLY valid JSON matching the schema exactly. Do not add any extra keys.`
+        );
+      }
+
+      if (out.ok) {
+        const md = renderMarkdown(out.parsed);
+        result = { text: md, effect_engine_json: out.parsed };
+      } else {
+        // Fallback to whatever we got (better than a blank UI)
+        const fallbackText = extractText(result) || '';
+        result = { ...(result || {}), text: fallbackText.trim() || 'Unable to generate effects. Please try again.' };
       }
     } catch {
-      // ignore (best-effort)
+      // If JSON contract fails unexpectedly, we fall back to the provider's text.
+      const fallbackText = extractText(result) || '';
+      result = { ...(result || {}), text: fallbackText.trim() || 'Unable to generate effects. Please try again.' };
     }
 
-// Return usage headers for the Usage Meter UI (best-effort)
+    // Return usage headers for the Usage Meter UI (best-effort)
+ for the Usage Meter UI (best-effort)
     response.setHeader('X-AI-Remaining', String(usage.remaining ?? ''));
     response.setHeader('X-AI-Limit', String(usage.limit ?? ''));
     response.setHeader('X-AI-Membership', String(usage.membership ?? ''));
