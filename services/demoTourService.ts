@@ -14,9 +14,20 @@ export const DEMO_STEPS_COMPLETED_KEY = 'maw_demo_steps_completed';
 
 type CompletedMap = Record<string, boolean>;
 
+function getSafeStorage(): Storage | null {
+  try {
+    if (typeof window === 'undefined') return null;
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+
 function readJson<T>(key: string, fallback: T): T {
   try {
-    const raw = localStorage.getItem(key);
+        const storage = getSafeStorage();
+    const raw = storage?.getItem(key);
     if (!raw) return fallback;
     return JSON.parse(raw) as T;
   } catch {
@@ -39,7 +50,7 @@ export function isDemoTourActive(): boolean {
 
 export function getDemoScenarioKey(): string {
   try {
-    return localStorage.getItem(DEMO_SCENARIO_KEY) || 'corporate_closeup';
+    return (getSafeStorage()?.getItem(DEMO_SCENARIO_KEY) ?? null) || 'corporate_closeup';
   } catch {
     return 'corporate_closeup';
   }
@@ -47,7 +58,8 @@ export function getDemoScenarioKey(): string {
 
 export function setDemoScenarioKey(key: string): void {
   try {
-    localStorage.setItem(DEMO_SCENARIO_KEY, key);
+        const storage = getSafeStorage();
+    storage?.setItem(DEMO_SCENARIO_KEY, key);
   } catch {}
 }
 
@@ -58,7 +70,8 @@ export function getDemoScenario() {
 
 export function getDemoStepIndex(): number {
   try {
-    const raw = localStorage.getItem(DEMO_STEP_INDEX_KEY);
+        const storage = getSafeStorage();
+    const raw = storage?.getItem(DEMO_STEP_INDEX_KEY);
     const n = raw ? Number(raw) : 0;
     return Number.isFinite(n) && n >= 0 ? n : 0;
   } catch {

@@ -10,6 +10,17 @@ import type { Show, SavedIdea, Client, Feedback, Task } from '../types';
 
 export const DEMO_FLAG_KEY = 'maw_demo_mode';
 
+
+function getSafeStorage(): Storage | null {
+  try {
+    if (typeof window === 'undefined') return null;
+    // Accessing localStorage can throw in some privacy modes.
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
 const KEYS = {
   shows: 'magician_show_planner_shows',
   ideas: 'magician_saved_ideas',
@@ -19,7 +30,8 @@ const KEYS = {
 
 function readJson<T>(key: string, fallback: T): T {
   try {
-    const raw = localStorage.getItem(key);
+        const storage = getSafeStorage();
+    const raw = storage?.getItem(key);
     if (!raw) return fallback;
     return JSON.parse(raw) as T;
   } catch {
@@ -37,9 +49,11 @@ function writeJson<T>(key: string, value: T): void {
 
 export function isDemoEnabled(): boolean {
   try {
+    if (typeof window === 'undefined') return false;
     const urlParams = new URLSearchParams(window.location.search);
     const urlFlag = urlParams.get('demo') === '1';
-    const lsFlag = localStorage.getItem(DEMO_FLAG_KEY) === 'true';
+    const storage = getSafeStorage();
+    const lsFlag = storage?.getItem(DEMO_FLAG_KEY) === 'true';
     return urlFlag || lsFlag;
   } catch {
     return false;
@@ -48,7 +62,8 @@ export function isDemoEnabled(): boolean {
 
 export function enableDemo(): void {
   try {
-    localStorage.setItem(DEMO_FLAG_KEY, 'true');
+        const storage = getSafeStorage();
+    storage?.setItem(DEMO_FLAG_KEY, 'true');
   } catch {
     // ignore
   }
@@ -56,7 +71,8 @@ export function enableDemo(): void {
 
 export function disableDemo(): void {
   try {
-    localStorage.removeItem(DEMO_FLAG_KEY);
+        const storage = getSafeStorage();
+    storage?.removeItem(DEMO_FLAG_KEY);
   } catch {
     // ignore
   }
@@ -148,10 +164,14 @@ export function seedDemoData(): void {
 
 export function clearDemoData(): void {
   try {
-    localStorage.removeItem(KEYS.shows);
-    localStorage.removeItem(KEYS.ideas);
-    localStorage.removeItem(KEYS.clients);
-    localStorage.removeItem(KEYS.feedback);
+        const storage = getSafeStorage();
+    storage?.removeItem(KEYS.shows);
+        const storage = getSafeStorage();
+    storage?.removeItem(KEYS.ideas);
+        const storage = getSafeStorage();
+    storage?.removeItem(KEYS.clients);
+        const storage = getSafeStorage();
+    storage?.removeItem(KEYS.feedback);
   } catch {
     // ignore
   }
