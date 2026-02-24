@@ -10,17 +10,6 @@ import type { Show, SavedIdea, Client, Feedback, Task } from '../types';
 
 export const DEMO_FLAG_KEY = 'maw_demo_mode';
 
-
-function getSafeStorage(): Storage | null {
-  try {
-    if (typeof window === 'undefined') return null;
-    // Accessing localStorage can throw in some privacy modes.
-    return window.localStorage;
-  } catch {
-    return null;
-  }
-}
-
 const KEYS = {
   shows: 'magician_show_planner_shows',
   ideas: 'magician_saved_ideas',
@@ -28,10 +17,20 @@ const KEYS = {
   feedback: 'magician_audience_feedback',
 };
 
-function readJson<T>(key: string, fallback: T): T {
+function getSafeStorage(): Storage | null {
   try {
-        const storage = getSafeStorage();
-    const raw = storage?.getItem(key);
+    if (typeof window === 'undefined') return null;
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function readJson<T>(key: string, fallback: T): T {
+  const storage = getSafeStorage();
+  if (!storage) return fallback;
+  try {
+    const raw = storage.getItem(key);
     if (!raw) return fallback;
     return JSON.parse(raw) as T;
   } catch {
@@ -40,8 +39,10 @@ function readJson<T>(key: string, fallback: T): T {
 }
 
 function writeJson<T>(key: string, value: T): void {
+  const storage = getSafeStorage();
+  if (!storage) return;
   try {
-    localStorage.setItem(key, JSON.stringify(value));
+    storage.setItem(key, JSON.stringify(value));
   } catch {
     // ignore (private browsing / storage blocked)
   }
@@ -54,25 +55,27 @@ export function isDemoEnabled(): boolean {
     const urlFlag = urlParams.get('demo') === '1';
     const storage = getSafeStorage();
     const lsFlag = storage?.getItem(DEMO_FLAG_KEY) === 'true';
-    return urlFlag || lsFlag;
+    return urlFlag || !!lsFlag;
   } catch {
     return false;
   }
 }
 
 export function enableDemo(): void {
+  const storage = getSafeStorage();
+  if (!storage) return;
   try {
-        const storage = getSafeStorage();
-    storage?.setItem(DEMO_FLAG_KEY, 'true');
+    storage.setItem(DEMO_FLAG_KEY, 'true');
   } catch {
     // ignore
   }
 }
 
 export function disableDemo(): void {
+  const storage = getSafeStorage();
+  if (!storage) return;
   try {
-        const storage = getSafeStorage();
-    storage?.removeItem(DEMO_FLAG_KEY);
+    storage.removeItem(DEMO_FLAG_KEY);
   } catch {
     // ignore
   }
@@ -163,15 +166,13 @@ export function seedDemoData(): void {
 }
 
 export function clearDemoData(): void {
+  const storage = getSafeStorage();
+  if (!storage) return;
   try {
-        const storage = getSafeStorage();
-    storage?.removeItem(KEYS.shows);
-        const storage = getSafeStorage();
-    storage?.removeItem(KEYS.ideas);
-        const storage = getSafeStorage();
-    storage?.removeItem(KEYS.clients);
-        const storage = getSafeStorage();
-    storage?.removeItem(KEYS.feedback);
+    storage.removeItem(KEYS.shows);
+    storage.removeItem(KEYS.ideas);
+    storage.removeItem(KEYS.clients);
+    storage.removeItem(KEYS.feedback);
   } catch {
     // ignore
   }

@@ -29,23 +29,8 @@ const DemoTourBar: React.FC<Props> = ({ activeView, onNavigate }) => {
     return () => window.clearInterval(id);
   }, [enabled]);
 
-  const safeState = useMemo(() => {
-    try {
-      return getCurrentDemoStep();
-    } catch {
-      return { step: { title: 'Demo Tour', description: '' }, index: 0, total: 1, scenario: { steps: [] } } as any;
-    }
-  }, [tick]);
-
-  const currentView = useMemo(() => {
-    try {
-      return getCurrentDemoView();
-    } catch {
-      return null as any;
-    }
-  }, [tick]);
-
-  const state = safeState;
+  const state = useMemo(() => getCurrentDemoStep(), [tick]);
+  const currentView = useMemo(() => getCurrentDemoView(), [tick]);
   const isOnCurrentStep = enabled && currentView === activeView;
 
   if (!enabled) return null;
