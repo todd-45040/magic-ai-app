@@ -18,6 +18,8 @@ import VisualBrainstorm from './VisualBrainstorm';
 import SavedIdeas from './SavedIdeas';
 import PropChecklists from './PropChecklists';
 import EffectGenerator from './EffectGenerator';
+import DemoTourBar from './DemoTourBar';
+import { getCurrentDemoView, isViewLocked } from '../services/demoTourService';
 import MagicArchives from './MagicArchives';
 import GospelMagicAssistant from './GospelMagicAssistant';
 import MentalismAssistant from './MentalismAssistant';
@@ -1304,6 +1306,21 @@ useEffect(() => {
     }
   });
 
+  // Demo Mode v2 (Phase 3): enforce guided tour locking for specific views.
+  useEffect(() => {
+    try {
+      const current = getCurrentDemoView();
+      if (current && isViewLocked(activeView as any)) {
+        // Snap back to the current tour step if the user navigated ahead.
+        setActiveView(current as any);
+      }
+    } catch {
+      // ignore
+    }
+  }, [activeView]);
+
+
+
 // Global navigation escape hatch:
 // The top-level App header dispatches 'maw:go-dashboard' so we can reliably
 // exit any tool view (even if localStorage has a "sticky" view saved).
@@ -1835,36 +1852,36 @@ useEffect(() => {
     }
 
     switch (prompt.title) {
-        case 'Live Patter Rehearsal': setActiveView('live-rehearsal'); return;
-        case 'Video Rehearsal Studio': setActiveView('video-rehearsal'); return;
-        case 'Visual Brainstorm Studio': setActiveView('visual-brainstorm'); return;
-        case 'My Saved Ideas': setActiveView('saved-ideas'); return;
-        case 'Prop Checklist Generator': setActiveView('prop-checklists'); return;
-        case 'Show Feedback': setActiveView('show-feedback'); return;
-        case 'Magic Archives': setActiveView('magic-archives'); return;
-        case 'Patter Engine': setActiveView('patter-engine'); return;
-        case 'Marketing Campaign': setActiveView('marketing-campaign'); return;
-        case 'Contract Generator': setActiveView('contract-generator'); return;
-        case 'Assistant\'s Studio': setActiveView('assistant-studio'); return;
-        case 'Director Mode': setActiveView('director-mode'); return;
-        case 'Illusion Blueprint Generator': setActiveView('illusion-blueprint'); return;
-        case 'Magic Theory Tutor': setActiveView('magic-theory-tutor'); return;
-        case 'Magic Dictionary': setActiveView('magic-dictionary'); return;
-        case 'Persona Simulator': setActiveView('persona-simulator'); return;
-        case 'Gospel Magic Assistant': setActiveView('gospel-magic-assistant'); return;
-        case 'Mentalism Assistant': setActiveView('mentalism-assistant'); return;
-        case 'Client Management': setActiveView('client-management'); return;
-        case 'Global Search': setActiveView('global-search'); return;
+        case 'Live Patter Rehearsal': demoGuardSetActiveView('live-rehearsal'); return;
+        case 'Video Rehearsal Studio': demoGuardSetActiveView('video-rehearsal'); return;
+        case 'Visual Brainstorm Studio': demoGuardSetActiveView('visual-brainstorm'); return;
+        case 'My Saved Ideas': demoGuardSetActiveView('saved-ideas'); return;
+        case 'Prop Checklist Generator': demoGuardSetActiveView('prop-checklists'); return;
+        case 'Show Feedback': demoGuardSetActiveView('show-feedback'); return;
+        case 'Magic Archives': demoGuardSetActiveView('magic-archives'); return;
+        case 'Patter Engine': demoGuardSetActiveView('patter-engine'); return;
+        case 'Marketing Campaign': demoGuardSetActiveView('marketing-campaign'); return;
+        case 'Contract Generator': demoGuardSetActiveView('contract-generator'); return;
+        case 'Assistant\'s Studio': demoGuardSetActiveView('assistant-studio'); return;
+        case 'Director Mode': demoGuardSetActiveView('director-mode'); return;
+        case 'Illusion Blueprint Generator': demoGuardSetActiveView('illusion-blueprint'); return;
+        case 'Magic Theory Tutor': demoGuardSetActiveView('magic-theory-tutor'); return;
+        case 'Magic Dictionary': demoGuardSetActiveView('magic-dictionary'); return;
+        case 'Persona Simulator': demoGuardSetActiveView('persona-simulator'); return;
+        case 'Gospel Magic Assistant': demoGuardSetActiveView('gospel-magic-assistant'); return;
+        case 'Mentalism Assistant': demoGuardSetActiveView('mentalism-assistant'); return;
+        case 'Client Management': demoGuardSetActiveView('client-management'); return;
+        case 'Global Search': demoGuardSetActiveView('global-search'); return;
         case 'Member Management': if (user.isAdmin) { setActiveView('member-management'); } return;
         case 'Angle/Risk Analysis':
-            setActiveView('angle-risk');
+            demoGuardSetActiveView('angle-risk');
             return;
         case 'Rehearsal Coaching':
-            setActiveView('director-mode');
+            demoGuardSetActiveView('director-mode');
             setShowRehearsalForm(true);
             break;
         case 'Innovation Engine':
-            setActiveView('chat');
+            demoGuardSetActiveView('chat');
             setShowInnovationEngineForm(true);
             break;
         default: clearChatSession(); handleSend(prompt.prompt);
@@ -1921,7 +1938,7 @@ useEffect(() => {
 
       // Switch to Chat and send the analysis prompt using an explicit history array
       // (avoids React state timing issues).
-      setActiveView('chat');
+      demoGuardSetActiveView('chat');
       handleSendWithHistory(
         'Please analyze the rehearsal transcript above. Give actionable feedback on pacing, clarity, audience engagement, and suggested rewrites for stronger impact. Provide a short prioritized checklist at the end.',
         baseHistory
@@ -2003,17 +2020,17 @@ useEffect(() => {
         return;
     }
     if (tab === 'search') {
-        setActiveView('global-search');
+        demoGuardSetActiveView('global-search');
         return;
     }
     if (tab === 'admin') {
         if (!user?.isAdmin) return;
         resetInlineForms();
-        setActiveView('admin');
+        demoGuardSetActiveView('admin');
         return;
     }
     resetInlineForms();
-    setActiveView(tab);
+    demoGuardSetActiveView(tab);
   };
   
   const handleNavigate = (view: MagicianView) => {
@@ -2099,7 +2116,7 @@ ${action.payload.content}`;
     }
     // Tier 3: When other tools (Dictionary, Search, etc.) trigger an AI action,
     // jump the user into the AI Assistant chat so it feels connected.
-    setActiveView('chat');
+    demoGuardSetActiveView('chat');
     handleSend(prompt);
   };
 
@@ -2579,6 +2596,9 @@ ${action.payload.content}`;
 
       <main className="flex-1 flex flex-col overflow-y-auto">
         <div className="flex-1 flex flex-col animate-fade-in">
+          {/* Demo Mode v2 (Phase 3): Guided Showcase tour bar */}
+          <DemoTourBar activeView={activeView} onNavigate={demoGuardSetActiveView} />
+
           {renderContent()}
         </div>
       </main>

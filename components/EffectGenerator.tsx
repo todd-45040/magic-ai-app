@@ -9,6 +9,7 @@ import { useToast } from './ToastProvider';
 import { useAppDispatch, useAppState } from '../store';
 import { addTaskToShow } from '../services/showsService';
 import { isDemoMode } from '../src/demo/demoEngine';
+import { markDemoToolCompleted } from '../services/demoTourService';
 
 type ParsedEffect = {
   name: string;
@@ -135,6 +136,9 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
           : undefined
       );
       setIdeas(response);
+      if (demoActive) {
+        try { markDemoToolCompleted('effect_engine'); } catch {}
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "An unknown error occurred.");
     } finally {
