@@ -51,13 +51,14 @@ async function getBearerToken(): Promise<string> {
   }
 }
 
-async function postJson<T>(url: string, body: any, currentUser?: User): Promise<T> {
+async function postJson<T>(url: string, body: any, currentUser?: User, extraHeaders?: Record<string, string>): Promise<T> {
   const res = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': await getBearerToken(),
       'X-AI-Provider': getAiProvider(),
+      ...(extraHeaders || {}),
     },
     body: JSON.stringify(body),
   });
@@ -127,7 +128,8 @@ export const generateResponse = async (
   prompt: string,
   systemInstruction: string,
   currentUser?: User,
-  history?: ChatMessage[]
+  history?: ChatMessage[],
+  options?: { extraHeaders?: Record<string, string> }
 ): Promise<string> => {
   const apiHistory = history?.map(msg => ({
     role: msg.role,
@@ -141,7 +143,7 @@ export const generateResponse = async (
   };
 
   try {
-    const result = await postJson<any>('/api/generate', body, currentUser);
+    const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders);
     return extractText(result);
   } catch (error: any) {
     console.error('AI Error:', error);
@@ -154,7 +156,8 @@ export const generateResponseWithParts = async (
   parts: any[],
   systemInstruction: string,
   currentUser?: User,
-  history?: ChatMessage[]
+  history?: ChatMessage[],
+  options?: { extraHeaders?: Record<string, string> }
 ): Promise<string> => {
   const apiHistory = history?.map(msg => ({
     role: msg.role,
@@ -168,7 +171,7 @@ export const generateResponseWithParts = async (
   };
 
   try {
-    const result = await postJson<any>('/api/generate', body, currentUser);
+    const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders);
     return extractText(result);
   } catch (error: any) {
     console.error('AI Error:', error);
@@ -180,7 +183,8 @@ export const generateStructuredResponse = async (
   prompt: string,
   systemInstruction: string,
   responseSchema: any,
-  currentUser?: User
+  currentUser?: User,
+  options?: { extraHeaders?: Record<string, string> }
 ): Promise<any> => {
   const body: GeminiGenerateBody = {
     model: 'gemini-3-flash-preview',
@@ -192,7 +196,7 @@ export const generateStructuredResponse = async (
     },
   };
 
-  const result = await postJson<any>('/api/generate', body, currentUser);
+  const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders);
   const text = extractText(result);
   return JSON.parse(text || '{}');
 };

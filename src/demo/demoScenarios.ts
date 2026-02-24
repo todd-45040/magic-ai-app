@@ -1,5 +1,6 @@
-// Demo Mode v2 (Phase 1): Scenario definitions (placeholder).
-// These will be expanded in Phase 2/3 to power deterministic "Guided Showcase" flows.
+// Demo Mode v2: Scenario definitions.
+// Phase 2 wires deterministic outputs for the Effect Engine only.
+// Phase 3 will add step orchestration across multiple tools.
 
 export type DemoToolKey = string;
 
@@ -20,11 +21,24 @@ export interface DemoScenario {
 
 // Phase 1: ship with a single placeholder scenario.
 export const demoScenarios: Record<string, DemoScenario> = {
-  guided_showcase_placeholder: {
-    key: 'guided_showcase_placeholder',
-    title: 'Guided Showcase (Placeholder)',
-    description:
-      'Phase 1 placeholder scenario. Phase 2 will add deterministic tool outputs and step orchestration.',
-    steps: [],
+  corporate_closeup: {
+    key: 'corporate_closeup',
+    title: 'Corporate Close-Up Journey',
+    description: 'A polished, deterministic showcase path designed for onboarding recordings.',
+    steps: [
+      {
+        tool: 'effect_engine',
+        title: 'Effect Engine',
+        description: 'Generate 4 curated, convention-safe effects for a corporate cocktail setting.',
+      },
+      {
+        tool: 'script_builder',
+        title: 'Script Builder (Coming in Phase 3)',
+      },
+      {
+        tool: 'rehearsal_feedback',
+        title: 'Rehearsal Feedback (Coming in Phase 3)',
+      },
+    ],
   },
 };

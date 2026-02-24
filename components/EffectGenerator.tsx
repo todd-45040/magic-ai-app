@@ -8,6 +8,7 @@ import ShareButton from './ShareButton';
 import { useToast } from './ToastProvider';
 import { useAppDispatch, useAppState } from '../store';
 import { addTaskToShow } from '../services/showsService';
+import { isDemoMode } from '../src/demo/demoEngine';
 
 type ParsedEffect = {
   name: string;
@@ -87,6 +88,10 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
   const [selectedEffectIndex, setSelectedEffectIndex] = useState<number>(0);
   const [importStatus, setImportStatus] = useState<'idle' | 'importing' | 'imported'>('idle');
 
+  // Demo Mode v2 (Phase 2): deterministic Effect Engine responses when demo mode is active.
+  const demoActive = isDemoMode();
+  const demoScenario = 'corporate_closeup';
+
   const parsedEffects = useMemo(() => (ideas ? parseEffectsFromMarkdown(ideas) : []), [ideas]);
 
   const handleItemChange = (index: number, value: string) => {
@@ -114,7 +119,21 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
     
     try {
       // FIX: pass currentUser as the 3rd argument to generateResponse
-      const response = await generateResponse(prompt, EFFECT_GENERATOR_SYSTEM_INSTRUCTION, currentUser || { email: '', membership: 'free', generationCount: 0, lastResetDate: '' });
+      const response = await generateResponse(
+        prompt,
+        EFFECT_GENERATOR_SYSTEM_INSTRUCTION,
+        currentUser || { email: '', membership: 'free', generationCount: 0, lastResetDate: '' },
+        undefined,
+        demoActive
+          ? {
+              extraHeaders: {
+                'X-Demo-Mode': 'true',
+                'X-Demo-Tool': 'effect_engine',
+                'X-Demo-Scenario': demoScenario,
+              },
+            }
+          : undefined
+      );
       setIdeas(response);
     } catch (err) {
       setError(err instanceof Error ? err.message : "An unknown error occurred.");
@@ -220,6 +239,17 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
 
   return (
     <main className="flex-1 overflow-y-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
+        {demoActive && (
+            <div className="lg:col-span-2 rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-200">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <span className="font-semibold">✨ DEMO MODE — Guided Showcase</span>
+                        <span className="ml-2 text-yellow-100/80">Step 1 of 3: Effect Engine</span>
+                    </div>
+                    <div className="text-yellow-100/70">Scenario: Corporate Close-Up</div>
+                </div>
+            </div>
+        )}
         {/* Control Panel */}
         <div className="flex flex-col">
             <h2 className="text-xl font-bold text-slate-300 mb-2">The Effect Engine</h2>

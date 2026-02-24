@@ -196,6 +196,75 @@ function buildDeepEffectEngineJsonPrompt(items: string[]): string {
   );
 }
 
+function getDemoEffectEnginePayload(scenario: string | undefined): EffectEnginePayload {
+  // Demo Mode v2 (Phase 2): deterministic, pre-curated payload.
+  // Keep methods NON-EXPOSURE — this is a showcase, not a teaching reveal.
+  const s = String(scenario || '').trim().toLowerCase();
+
+  // Default: corporate close-up journey (safe, universal, great for onboarding recordings)
+  if (!s || s === 'corporate_closeup' || s === 'corporate-closeup' || s === 'corporate') {
+    return {
+      effects: [
+        {
+          name: "The CEO's Promise",
+          premise:
+            "A borrowed ring and a simple rubber band become a playful metaphor for commitment and trust. The audience feels like they're watching a personal story unfold rather than 'a trick.'",
+          experience:
+            "You borrow a ring and briefly 'test' the tension of a rubber band as you talk about promises that stretch but don't break. The ring is fairly displayed, then the band is looped in a clean, casual way that looks like nothing. With a gentle tug and a beat of eye contact, the ring appears to melt through the band in a moment of impossible softness. You reset the picture and repeat the moment in slow-motion framing, letting the audience call the timing. For a final beat, you hand everything out and let them feel the band and ring themselves, reinforcing that nothing sneaky happened. The tone stays elegant and corporate-friendly, with the impossibility landing as 'that can't be real.'",
+          method_overview:
+            "A classic close-up penetration structure using clean displays, rhythm management, and motivated hand positions. The strength comes from choreography and timing rather than complicated technique.",
+          performance_notes:
+            "Work chest-high at a cocktail height; keep elbows relaxed and hands in the light. Use a short pause before the moment to let the picture register. If the group is large, angle the final moment toward the widest side and immediately hand the props forward to a spectator to lock in fairness. Build in a quick 'try it' joke line, but avoid turning it into a challenge.",
+          secret_hint:
+            "Treat the band as the 'story' and the ring as the 'proof.' The clearer the picture before the moment, the stronger the impossibility after.",
+        },
+        {
+          name: 'Key to the Corner Office',
+          premise:
+            "A key represents access and opportunity—perfect corporate symbolism. A coin becomes the 'investment' that makes the key finally turn.",
+          experience:
+            "You introduce a key as the symbol of 'earned access' and a coin as the 'small investment' that changes outcomes. The key is openly shown and the coin is placed fairly. With an upbeat patter beat, the coin seems to jump from your fingertips to appear impossibly trapped with the key. The moment is framed like an earned promotion—one clean change and the picture is instantly readable. You hand the key forward while keeping the coin visible, letting the audience react to the impossible pairing.",
+          method_overview:
+            "A visual object-to-object relationship change built around clarity: show key, show coin, then show the new impossible condition. Use clean transitions and avoid over-proving.",
+          performance_notes:
+            "This plays best in a standing cluster. Keep the 'before' picture simple and the 'after' picture held still for two full beats. If someone reaches, invite it—confidence sells. Have a backup line ready if someone tries to inspect early: 'In a moment—let the photo in your mind develop first.'",
+          secret_hint:
+            "The reaction is in the stillness. Freeze the final display like a product reveal.",
+        },
+        {
+          name: 'The Rubber Contract',
+          premise:
+            "A rubber band becomes a 'contract'—flexible but binding. A Sharpie signature makes it personal and impossible to fake.",
+          experience:
+            "You stretch a band and talk about how agreements can flex, but the signature is what makes them real. A spectator signs a bold mark that visually tags the moment. The band is shown unmistakably as the same object, then it seems to change position in a way that matches your story beat. The ending is a clean reveal that the signed condition is preserved, which locks the impossibility emotionally.",
+          method_overview:
+            "A signed-object continuity effect—audience tracking replaces technical complexity. The magic is framed as preserving identity through change.",
+          performance_notes:
+            "Use a bold marker and keep the signature large. Don't rush the signing moment; it creates ownership. Maintain spectator involvement: let them hold something at least once during the sequence.",
+          secret_hint:
+            "When they 'own' the object, they stop hunting for method and start remembering the moment.",
+        },
+        {
+          name: 'The Quiet Upgrade',
+          premise:
+            "A normal object becomes 'premium' in an instant—mirroring a brand upgrade. The transformation is visual, fast, and clean.",
+          experience:
+            "You talk about subtle improvements that change everything, then demonstrate a crisp visual transformation with everyday props. The change happens at the exact moment you say the word 'upgrade,' creating a perfect audio/visual sync. You immediately hand the item out and pivot, leaving them with a story that sounds impossible but feels true.",
+          method_overview:
+            "A visual transformation structure: establish normal, isolate moment, reveal new condition. The method stays concealed by pacing and motivated actions.",
+          performance_notes:
+            "Keep the moment short—less is more. Use strong contrast if possible (lighting matters). Rehearse the reveal angle for standing audiences.",
+          secret_hint:
+            "Say less, show more. The cleaner the sentence, the louder the magic.",
+        },
+      ],
+    };
+  }
+
+  // Fallback
+  return getDemoEffectEnginePayload('corporate_closeup');
+}
+
 export default async function handler(request: any, response: any) {
   try {
     if (request.method !== 'POST') {
@@ -205,6 +274,22 @@ export default async function handler(request: any, response: any) {
     const authHeader = request.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return response.status(401).json({ error: 'Unauthorized. Please log in.' });
+    }
+
+    // Demo Mode v2 (Phase 2): intercept ONLY the Effect Engine when explicitly requested.
+    const demoMode = String(request.headers['x-demo-mode'] || '').toLowerCase() === 'true';
+    const demoTool = String(request.headers['x-demo-tool'] || '').toLowerCase();
+    const demoScenario = String(request.headers['x-demo-scenario'] || '').trim();
+    if (demoMode && demoTool === 'effect_engine') {
+      const payload = getDemoEffectEnginePayload(demoScenario);
+      const markdown = renderEffectsToMarkdown(payload);
+      response.setHeader('X-AI-Membership', 'demo');
+      response.setHeader('X-AI-Remaining', '');
+      response.setHeader('X-AI-Limit', '');
+      response.setHeader('X-AI-Burst-Remaining', '');
+      response.setHeader('X-AI-Burst-Limit', '');
+      response.setHeader('X-AI-Provider-Used', 'demo');
+      return response.status(200).json({ text: markdown, effect_engine_json: payload, demo: true, scenario: demoScenario || 'corporate_closeup' });
     }
 
     // Meter + log (Effect Engine)
