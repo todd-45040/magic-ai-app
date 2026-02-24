@@ -14,9 +14,20 @@ export const DEMO_STEPS_COMPLETED_KEY = 'maw_demo_steps_completed';
 
 type CompletedMap = Record<string, boolean>;
 
-function readJson<T>(key: string, fallback: T): T {
+function getSafeStorage(): Storage | null {
   try {
-    const raw = localStorage.getItem(key);
+    if (typeof window === 'undefined') return null;
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function readJson<T>(key: string, fallback: T): T {
+  const storage = getSafeStorage();
+  if (!storage) return fallback;
+  try {
+    const raw = storage.getItem(key);
     if (!raw) return fallback;
     return JSON.parse(raw) as T;
   } catch {
@@ -25,8 +36,10 @@ function readJson<T>(key: string, fallback: T): T {
 }
 
 function writeJson<T>(key: string, value: T): void {
+  const storage = getSafeStorage();
+  if (!storage) return;
   try {
-    localStorage.setItem(key, JSON.stringify(value));
+    storage.setItem(key, JSON.stringify(value));
   } catch {
     // ignore
   }
@@ -38,16 +51,20 @@ export function isDemoTourActive(): boolean {
 }
 
 export function getDemoScenarioKey(): string {
+  const storage = getSafeStorage();
+  if (!storage) return 'corporate_closeup';
   try {
-    return localStorage.getItem(DEMO_SCENARIO_KEY) || 'corporate_closeup';
+    return storage.getItem(DEMO_SCENARIO_KEY) || 'corporate_closeup';
   } catch {
     return 'corporate_closeup';
   }
 }
 
 export function setDemoScenarioKey(key: string): void {
+  const storage = getSafeStorage();
+  if (!storage) return;
   try {
-    localStorage.setItem(DEMO_SCENARIO_KEY, key);
+    storage.setItem(DEMO_SCENARIO_KEY, key);
   } catch {}
 }
 
@@ -57,8 +74,10 @@ export function getDemoScenario() {
 }
 
 export function getDemoStepIndex(): number {
+  const storage = getSafeStorage();
+  if (!storage) return 0;
   try {
-    const raw = localStorage.getItem(DEMO_STEP_INDEX_KEY);
+    const raw = storage.getItem(DEMO_STEP_INDEX_KEY);
     const n = raw ? Number(raw) : 0;
     return Number.isFinite(n) && n >= 0 ? n : 0;
   } catch {
@@ -67,8 +86,10 @@ export function getDemoStepIndex(): number {
 }
 
 export function setDemoStepIndex(index: number): void {
+  const storage = getSafeStorage();
+  if (!storage) return;
   try {
-    localStorage.setItem(DEMO_STEP_INDEX_KEY, String(Math.max(0, index)));
+    storage.setItem(DEMO_STEP_INDEX_KEY, String(Math.max(0, index)));
   } catch {}
 }
 
@@ -134,17 +155,21 @@ export function advanceDemoStep(): void {
 }
 
 export function resetDemoTourProgress(): void {
+  const storage = getSafeStorage();
+  if (!storage) return;
   try {
-    localStorage.removeItem(DEMO_STEP_INDEX_KEY);
-    localStorage.removeItem(DEMO_STEPS_COMPLETED_KEY);
+    storage.removeItem(DEMO_STEP_INDEX_KEY);
+    storage.removeItem(DEMO_STEPS_COMPLETED_KEY);
   } catch {}
 }
 
 export function exitDemoModeHard(): void {
   // Used by UI to fully exit demo mode and clear progress.
   resetDemoTourProgress();
+  const storage = getSafeStorage();
+  if (!storage) return;
   try {
-    localStorage.removeItem(DEMO_SCENARIO_KEY);
-    localStorage.removeItem(DEMO_FLAG_KEY);
+    storage.removeItem(DEMO_SCENARIO_KEY);
+    storage.removeItem(DEMO_FLAG_KEY);
   } catch {}
 }

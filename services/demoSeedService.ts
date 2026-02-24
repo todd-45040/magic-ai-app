@@ -17,20 +17,9 @@ const KEYS = {
   feedback: 'magician_audience_feedback',
 };
 
-function getSafeStorage(): Storage | null {
-  try {
-    if (typeof window === 'undefined') return null;
-    return window.localStorage;
-  } catch {
-    return null;
-  }
-}
-
 function readJson<T>(key: string, fallback: T): T {
-  const storage = getSafeStorage();
-  if (!storage) return fallback;
   try {
-    const raw = storage.getItem(key);
+    const raw = localStorage.getItem(key);
     if (!raw) return fallback;
     return JSON.parse(raw) as T;
   } catch {
@@ -39,10 +28,8 @@ function readJson<T>(key: string, fallback: T): T {
 }
 
 function writeJson<T>(key: string, value: T): void {
-  const storage = getSafeStorage();
-  if (!storage) return;
   try {
-    storage.setItem(key, JSON.stringify(value));
+    localStorage.setItem(key, JSON.stringify(value));
   } catch {
     // ignore (private browsing / storage blocked)
   }
@@ -50,32 +37,26 @@ function writeJson<T>(key: string, value: T): void {
 
 export function isDemoEnabled(): boolean {
   try {
-    if (typeof window === 'undefined') return false;
     const urlParams = new URLSearchParams(window.location.search);
     const urlFlag = urlParams.get('demo') === '1';
-    const storage = getSafeStorage();
-    const lsFlag = storage?.getItem(DEMO_FLAG_KEY) === 'true';
-    return urlFlag || !!lsFlag;
+    const lsFlag = localStorage.getItem(DEMO_FLAG_KEY) === 'true';
+    return urlFlag || lsFlag;
   } catch {
     return false;
   }
 }
 
 export function enableDemo(): void {
-  const storage = getSafeStorage();
-  if (!storage) return;
   try {
-    storage.setItem(DEMO_FLAG_KEY, 'true');
+    localStorage.setItem(DEMO_FLAG_KEY, 'true');
   } catch {
     // ignore
   }
 }
 
 export function disableDemo(): void {
-  const storage = getSafeStorage();
-  if (!storage) return;
   try {
-    storage.removeItem(DEMO_FLAG_KEY);
+    localStorage.removeItem(DEMO_FLAG_KEY);
   } catch {
     // ignore
   }
@@ -166,13 +147,11 @@ export function seedDemoData(): void {
 }
 
 export function clearDemoData(): void {
-  const storage = getSafeStorage();
-  if (!storage) return;
   try {
-    storage.removeItem(KEYS.shows);
-    storage.removeItem(KEYS.ideas);
-    storage.removeItem(KEYS.clients);
-    storage.removeItem(KEYS.feedback);
+    localStorage.removeItem(KEYS.shows);
+    localStorage.removeItem(KEYS.ideas);
+    localStorage.removeItem(KEYS.clients);
+    localStorage.removeItem(KEYS.feedback);
   } catch {
     // ignore
   }

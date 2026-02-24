@@ -25,6 +25,7 @@ const DemoTourBar: React.FC<Props> = ({ activeView, onNavigate }) => {
   // Re-render when localStorage-driven progress changes
   useEffect(() => {
     if (!enabled) return;
+    if (typeof window === 'undefined') return;
     const id = window.setInterval(() => setTick(t => (t + 1) % 100000), 500);
     return () => window.clearInterval(id);
   }, [enabled]);
