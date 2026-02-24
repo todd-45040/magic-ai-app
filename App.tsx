@@ -49,6 +49,7 @@ function App() {
     const perfId = urlParams.get('performanceId');
     const showIdParam = urlParams.get('showId');
     const tokenParam = urlParams.get('token');
+    const recordParam = urlParams.get('record') === '1';
 
     const getAppBasePath = () => {
       try {
@@ -74,6 +75,12 @@ function App() {
     })();
 
     if (demoEnabled) {
+      // Optional recording-friendly mode (Demo only): slightly larger type + spacing.
+      try {
+        if (recordParam) document.documentElement.classList.add('maw-record');
+        else document.documentElement.classList.remove('maw-record');
+      } catch {}
+
       try {
         enableDemo();
         seedDemoData();
@@ -93,6 +100,9 @@ function App() {
       window.clearTimeout(loadingTimeout);
       return;
     }
+
+    // Ensure recording class is not left on in normal mode.
+    try { document.documentElement.classList.remove('maw-record'); } catch {}
 
     if (modeParam === 'live-feedback' && perfId) {
       setLivePerformanceId(perfId);

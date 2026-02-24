@@ -2511,26 +2511,7 @@ ${action.payload.content}`;
         </div>
       </header>
 
-      {isDemoMode && (
-        <div className="flex items-center justify-between gap-3 px-4 py-2 border-b border-amber-400/20 bg-amber-500/10">
-          <div className="text-sm text-amber-200">
-            <span className="font-semibold">Demo Mode</span> — changes are not saved
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleResetDemoData}
-              className="text-sm px-3 py-1 rounded-md border border-amber-400/30 text-amber-200 hover:text-white hover:border-amber-400/60 hover:bg-amber-500/10 transition-colors"
-              title="Reset the demo show, client, ideas, and feedback to the default sample data">
-              Reset Demo Data
-            </button>
-            <button
-              onClick={handleExitDemo}
-              className="text-sm px-3 py-1 rounded-md border border-amber-400/30 text-amber-200 hover:text-white hover:border-amber-400/60 hover:bg-amber-500/10 transition-colors">
-              Exit Demo
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Demo banner is handled globally by <DemoBanner /> to avoid stacked indicators in recordings. */}
 
 {!isDemoMode && showBackupReminder && (
   <div className="flex items-center justify-between gap-3 px-4 py-2 border-b border-sky-400/20 bg-sky-500/10">

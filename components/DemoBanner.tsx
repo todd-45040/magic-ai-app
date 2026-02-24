@@ -19,13 +19,10 @@ const DemoBanner: React.FC = () => {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 md:px-8 pt-3">
         <div className="rounded-xl border border-amber-400/30 bg-black/40 backdrop-blur px-4 py-3 flex items-center justify-between shadow-lg">
           <div className="flex items-center gap-3">
-            <span className="inline-flex items-center rounded-full bg-amber-400/15 border border-amber-400/30 px-3 py-1 text-xs font-semibold tracking-widest text-amber-200">
-              ✨ DEMO MODE
-            </span>
-            <div className="text-sm text-slate-200">
-              Guided Showcase is active (seeded data, safe sandbox).{' '}
-              <span className="text-slate-400">Great for recording onboarding examples.</span>
-            </div>
+	            <div className="text-sm text-slate-200">
+	              <span className="font-semibold text-amber-200">✨ DEMO MODE — Guided Showcase</span>
+	              <span className="text-slate-300/90"> (seeded data • changes not saved)</span>
+	            </div>
           </div>
 
           <button

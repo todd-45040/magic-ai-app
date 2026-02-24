@@ -27,6 +27,15 @@ const DemoTourBar: React.FC<Props> = ({ activeView, onNavigate }) => {
   const [enabled, setEnabled] = useState(false);
   const [tick, setTick] = useState(0);
 
+  const recordMode = useMemo(() => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get('record') === '1';
+    } catch {
+      return false;
+    }
+  }, []);
+
   useEffect(() => {
     setEnabled(isDemoTourActive());
   }, []);
@@ -44,7 +53,10 @@ const DemoTourBar: React.FC<Props> = ({ activeView, onNavigate }) => {
 
   if (!enabled) return null;
 
-  const canContinue = isOnCurrentStep && canContinueFromCurrentStep();
+  // Continue is enabled when:
+  // - On current step AND step requirements met
+  // - OR user is off-path (Continue snaps them back to the tour step)
+  const canContinue = isOnCurrentStep ? canContinueFromCurrentStep() : true;
 
   const handleContinue = () => {
     if (!isOnCurrentStep) {
@@ -95,17 +107,21 @@ const DemoTourBar: React.FC<Props> = ({ activeView, onNavigate }) => {
 
   return (
     <div className="mb-4">
-      <div className="rounded-2xl border border-amber-400/35 bg-gradient-to-r from-amber-500/15 via-purple-600/10 to-black/30 backdrop-blur px-4 py-3 shadow-lg">
+      <div className={
+        "rounded-2xl border border-amber-400/35 bg-gradient-to-r from-amber-500/15 via-purple-600/10 to-black/30 backdrop-blur shadow-lg " +
+        (recordMode ? "px-5 py-4" : "px-4 py-3")
+      }>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
             <div className="inline-flex items-center rounded-full bg-amber-400/15 border border-amber-400/40 px-3 py-1 text-xs font-semibold tracking-widest text-amber-200">
               ✨ DEMO TOUR
             </div>
             <div className="min-w-0">
-              <div className="text-sm font-semibold text-slate-200">
-                Step {state.index + 1} of {state.total}: <span className="text-amber-200">{state.step.title}</span>
+              <div className={"text-slate-200 font-semibold " + (recordMode ? "text-sm" : "text-xs")}>Step {state.index + 1} of {state.total}</div>
+              <div className={"text-amber-200 font-bold leading-tight " + (recordMode ? "text-lg" : "text-base")}>
+                {state.step.title}
               </div>
-              <div className="text-xs text-slate-300/80">
+              <div className={"text-slate-300/80 " + (recordMode ? "text-sm" : "text-xs")}>
                 {state.step.description ?? state.scenario.description}
               </div>
             </div>
@@ -131,9 +147,9 @@ const DemoTourBar: React.FC<Props> = ({ activeView, onNavigate }) => {
                   : "border-slate-700/60 bg-slate-900/30 text-slate-400 cursor-not-allowed")
               }
               onClick={handleContinue}
-              title={isOnCurrentStep ? state.step.continueLabel ?? 'Continue' : 'Return to current demo step'}
+              title={isOnCurrentStep ? (state.step.continueLabel ?? 'Continue') : 'Return to the current demo step'}
             >
-              {isOnCurrentStep ? (state.step.continueLabel ?? 'Continue') : 'Go to current step'}
+              {state.step.continueLabel ?? 'Continue'}
             </button>
           </div>
         </div>
