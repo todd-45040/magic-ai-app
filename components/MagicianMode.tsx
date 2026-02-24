@@ -1771,6 +1771,19 @@ useEffect(() => {
     resetInlineForms();
   };
 
+  /**
+   * Demo Mode guard shim.
+   *
+   * Phase 3 introduced a guided demo tour that can *optionally* restrict navigation.
+   * In normal mode this should behave exactly like setActiveView.
+   *
+   * IMPORTANT: Keep this function defined (even if the tour logic changes)
+   * so callers don't crash at runtime.
+   */
+  const demoGuardSetActiveView = (tab: string) => {
+    setActiveView(tab);
+  };
+
   const handleSend = async (prompt?: string) => {
     if (isExpired) {
       setIsUpgradeModalOpen(true);
