@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { generateResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
 import { EFFECT_GENERATOR_SYSTEM_INSTRUCTION } from '../constants';
@@ -82,6 +82,9 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ideas, setIdeas] = useState<string | null>(null);
+  // Phase 4 (Recording Optimization): separate "display" ideas so we can simulate a cinematic reveal in Demo Mode.
+  const [displayIdeas, setDisplayIdeas] = useState<string | null>(null);
+  const [revealReady, setRevealReady] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied'>('idle');
   const [isImportOpen, setIsImportOpen] = useState(false);
@@ -92,6 +95,21 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
   // Demo Mode v2 (Phase 2): deterministic Effect Engine responses when demo mode is active.
   const demoActive = isDemoMode();
   const demoScenario = 'corporate_closeup';
+
+  const outputRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!displayIdeas) return;
+    // Fade in + gentle auto-scroll for recording polish.
+    setRevealReady(false);
+    const t = window.setTimeout(() => {
+      setRevealReady(true);
+      try {
+        outputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } catch {}
+    }, 30);
+    return () => window.clearTimeout(t);
+  }, [displayIdeas]);
 
   const parsedEffects = useMemo(() => (ideas ? parseEffectsFromMarkdown(ideas) : []), [ideas]);
 
@@ -112,6 +130,8 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
     setIsLoading(true);
     setError(null);
     setIdeas(null);
+    setDisplayIdeas(null);
+    setRevealReady(false);
     setSaveStatus('idle');
     setCopyStatus('idle');
 
@@ -136,6 +156,14 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
           : undefined
       );
       setIdeas(response);
+
+      // Phase 4: simulated reveal delay in demo mode (800–1200ms) to make recordings feel cinematic.
+      if (demoActive) {
+        const delay = 800 + Math.floor(Math.random() * 401);
+        await new Promise<void>((resolve) => window.setTimeout(() => resolve(), delay));
+      }
+
+      setDisplayIdeas(response);
       if (demoActive) {
         try { markDemoToolCompleted('effect_engine'); } catch {}
       }
@@ -287,20 +315,61 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
         </div>
 
         {/* Ideas Display Area */}
-        <div className="flex flex-col bg-slate-900/50 rounded-lg border border-slate-800 min-h-[300px]">
+        <div ref={outputRef} className="flex flex-col bg-slate-900/50 rounded-lg border border-slate-800 min-h-[300px]">
             {isLoading ? (
                 <div className="flex-1 flex items-center justify-center">
                     <LoadingIndicator />
                 </div>
-            ) : ideas ? (
+            ) : displayIdeas ? (
                  <div className="relative group flex-1 flex flex-col">
                     <div className="p-4">
-                        <pre className="whitespace-pre-wrap break-words text-slate-200 font-sans text-sm">{ideas}</pre>
+                        {/*
+                          Phase 4: Fade-in reveal + highlighted sections for Demo Mode.
+                          - Non-demo: show raw output.
+                          - Demo: show structured cards for the parsed effects (more cinematic and scannable).
+                        */}
+                        <div className={`transition-opacity duration-700 ${revealReady ? 'opacity-100' : 'opacity-0'}`}>
+                          {demoActive && parsedEffects.length ? (
+                            <div className="space-y-4">
+                              {parsedEffects.map((ef, idx) => (
+                                <div
+                                  key={idx}
+                                  className={`rounded-xl border bg-slate-950/40 p-4 shadow-sm ${idx === 0 ? 'border-yellow-500/30 ring-1 ring-yellow-500/10' : 'border-slate-800'}`}
+                                >
+                                  <div className="flex items-center justify-between gap-3">
+                                    <h3 className="text-slate-100 font-bold text-base">
+                                      <span className="text-yellow-300/90">#{idx + 1}</span> {ef.name}
+                                    </h3>
+                                    {idx === 0 ? (
+                                      <span className="text-xs rounded-full border border-yellow-500/30 bg-yellow-500/10 px-2 py-1 text-yellow-200">Featured</span>
+                                    ) : null}
+                                  </div>
+
+                                  {ef.premise ? (
+                                    <div className="mt-3">
+                                      <div className="text-xs font-semibold tracking-wide text-yellow-200/80">PREMISE</div>
+                                      <div className="mt-1 text-sm text-slate-200 whitespace-pre-wrap">{ef.premise}</div>
+                                    </div>
+                                  ) : null}
+
+                                  {ef.experience ? (
+                                    <div className="mt-3">
+                                      <div className="text-xs font-semibold tracking-wide text-yellow-200/80">THE EXPERIENCE</div>
+                                      <div className="mt-1 text-sm text-slate-200 whitespace-pre-wrap">{ef.experience}</div>
+                                    </div>
+                                  ) : null}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <pre className="whitespace-pre-wrap break-words text-slate-200 font-sans text-sm">{displayIdeas}</pre>
+                          )}
+                        </div>
                     </div>
                     <div className="mt-auto p-2 bg-slate-900/50 flex justify-end gap-2 border-t border-slate-800">
                         <ShareButton
                             title={`Magic Effect Ideas for: ${items.map(item => item.trim()).filter(item => item !== '').join(', ')}`}
-                            text={ideas}
+                            text={ideas ?? displayIdeas ?? ''}
                             className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 transition-colors"
                         >
                             <ShareIcon className="w-4 h-4" />
