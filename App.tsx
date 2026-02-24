@@ -18,6 +18,7 @@ import DisclaimerModal from './components/DisclaimerModal';
 import LiveFeedbackView from './components/LiveFeedbackView';
 import PublicFeedbackForm from './components/PublicFeedbackForm';
 import AppSuggestionModal from './components/AppSuggestionModal';
+import DemoBanner from './components/DemoBanner';
 import { isDemoEnabled, enableDemo, seedDemoData } from './services/demoSeedService';
 
 const DISCLAIMER_ACKNOWLEDGED_KEY = 'magician_ai_disclaimer_acknowledged';
@@ -253,7 +254,9 @@ function App() {
 
   return (
     <div className="magical-bg text-white min-h-screen flex flex-col relative">
-      <div className="relative z-10 flex flex-col flex-1 w-full max-w-7xl mx-auto p-4 sm:p-6 md:p-8 justify-center">
+      
+      <DemoBanner />
+<div className="relative z-10 flex flex-col flex-1 w-full max-w-7xl mx-auto p-4 sm:p-6 md:p-8 justify-center">
         {renderContent()}
       </div>
 
