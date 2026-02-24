@@ -17,7 +17,20 @@ function getAppBasePath(): string {
 }
 
 export default function Auth({ onLoginSuccess, onBack }: AuthProps) {
-  const [mode, setMode] = useState<AuthMode>('login');
+
+const initialMode = (() => {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const a = (params.get('auth') || '').toLowerCase();
+    if (a === 'signup' || a === 'join' || a === 'trial') return 'signup' as const;
+    if (a === 'reset') return 'reset' as const;
+    return 'login' as const;
+  } catch {
+    return 'login' as const;
+  }
+})();
+
+  const [mode, setMode] = useState<AuthMode>(initialMode);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

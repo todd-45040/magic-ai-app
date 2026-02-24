@@ -7,7 +7,16 @@ import {
   isDemoTourActive,
   resetDemoTourProgress,
   setDemoStepIndex,
+  exitDemoModeHard,
 } from '../services/demoTourService';
+
+function getAppBasePath(): string {
+  try {
+    return window.location.pathname.startsWith('/app') ? '/app' : '';
+  } catch {
+    return '';
+  }
+}
 
 type Props = {
   activeView: string;
@@ -54,7 +63,7 @@ const DemoTourBar: React.FC<Props> = ({ activeView, onNavigate }) => {
 
     // If already at the last step, we just inform.
     if (state.index >= scenario.steps.length - 1) {
-      window.alert('Demo Tour complete! You can restart the tour from Step 1 any time.');
+      window.alert('Demo Tour complete! Scroll down for next steps.');
       return;
     }
 
@@ -69,6 +78,20 @@ const DemoTourBar: React.FC<Props> = ({ activeView, onNavigate }) => {
     const first = state.scenario.steps[0]?.view;
     if (first) onNavigate(first as any);
   };
+
+  const goToSignup = (intent: 'trial' | 'live') => {
+    // Leave demo mode and route to Auth screen (signup tab preselected).
+    exitDemoModeHard();
+    const base = getAppBasePath();
+    const params = new URLSearchParams();
+    params.set('mode', 'auth');
+    params.set('auth', 'signup');
+    if (intent === 'live') params.set('intent', 'live');
+    window.location.href = `${window.location.origin}${base}/?${params.toString()}`;
+  };
+
+  const handleStartTrial = () => goToSignup('trial');
+  const handleUnlockLive = () => goToSignup('live');
 
   return (
     <div className="mb-4">
@@ -116,6 +139,40 @@ const DemoTourBar: React.FC<Props> = ({ activeView, onNavigate }) => {
         </div>
       </div>
     </div>
+
+{enabled && isOnCurrentStep && state.index === state.total - 1 && canContinueFromCurrentStep() && (
+  <div className="mt-3 rounded-2xl border border-amber-400/30 bg-gradient-to-r from-black/40 via-amber-500/10 to-purple-700/10 px-4 py-4 shadow-lg">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0">
+        <div className="text-sm font-semibold text-slate-100">
+          Ready to build your own?
+        </div>
+        <div className="text-xs text-slate-300/80">
+          Start a free trial to save your work, unlock full generation limits, and access Live tools.
+        </div>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-end">
+        <button
+          type="button"
+          className="text-xs font-semibold tracking-wide rounded-lg border border-amber-400/60 bg-amber-400/15 px-3 py-2 text-amber-100 hover:bg-amber-400/25 transition"
+          onClick={handleStartTrial}
+        >
+          Start Free Trial
+        </button>
+        <button
+          type="button"
+          className="text-xs font-semibold tracking-wide rounded-lg border border-purple-400/60 bg-purple-500/15 px-3 py-2 text-purple-100 hover:bg-purple-500/25 transition"
+          onClick={handleUnlockLive}
+          title="Creates an account and unlocks Live Rehearsal features"
+        >
+          Unlock Live Mode
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
   );
 };
 

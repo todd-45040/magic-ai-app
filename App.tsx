@@ -110,6 +110,13 @@ function App() {
       return;
     }
 
+    if (modeParam === 'auth') {
+      setMode('auth');
+      setAuthLoading(false);
+      window.clearTimeout(loadingTimeout);
+      return;
+    }
+
     if (modeParam === 'auth-callback') {
       setMode('auth');
     }
