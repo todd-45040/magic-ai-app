@@ -70,7 +70,7 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
                         <div className="text-center">
                             <p className="text-3xl font-bold text-sky-300">$15.95<span className="text-base font-normal text-slate-400">/month</span></p>
                             <p className="text-sm text-slate-400">$159.00 one-time annual billing</p>
-<p className="text-xs text-slate-300 mt-1">Save $32/year</p>
+<p className="text-xs text-slate-300 mt-1"><span className="mt-2 block text-sm text-slate-400">Save $32/year</span></p>
                         </div>
                     </div>
                     <hr className="border-slate-700 my-4" />
@@ -86,7 +86,7 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
                         <div className="text-center">
                             <p className="text-3xl font-bold text-amber-300">$29.95<span className="text-base font-normal text-slate-400">/month</span></p>
                             <p className="text-sm text-slate-400">$299.00 one-time annual billing</p>
-<p className="text-xs text-slate-300 mt-1">Save $60/year</p>
+<p className="text-xs text-slate-300 mt-1"><span className="mt-2 block text-sm text-slate-400">Save $60/year</span></p>
                         </div>
                     </div>
                     <hr className="border-slate-700 my-4" />
