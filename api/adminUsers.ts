@@ -1,4 +1,5 @@
 import { requireSupabaseAuth } from './_auth.js';
+import { ADMIN_WINDOW_OPTIONS_DAYS, adminWindowLabel, isoDaysAgo, parseAdminWindowDays } from './_adminWindow.js';
 
 function clampInt(n: any, def = 50, min = 1, max = 500) {
   const v = Number(n);
@@ -6,15 +7,6 @@ function clampInt(n: any, def = 50, min = 1, max = 500) {
   return Math.min(max, Math.max(min, Math.floor(v)));
 }
 
-function clampDays(n: any, def = 30, min = 1, max = 365) {
-  const v = Number(n);
-  if (!Number.isFinite(v)) return def;
-  return Math.min(max, Math.max(min, Math.floor(v)));
-}
-
-function isoDaysAgo(days: number): string {
-  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-}
 
 type UserRow = {
   id: string;
@@ -37,7 +29,7 @@ export default async function handler(req: any, res: any) {
 
     const limit = clampInt(req?.query?.limit ?? 50, 50, 1, 200);
     const offset = clampInt(req?.query?.offset ?? 0, 0, 0, 500000);
-    const days = clampDays(req?.query?.days ?? 30, 30, 1, 365);
+    const days = parseAdminWindowDays(req?.query?.days, 30);
     const sinceIso = isoDaysAgo(days);
 
     const plan = (req?.query?.plan ?? 'all') as string;
@@ -108,7 +100,7 @@ export default async function handler(req: any, res: any) {
 
     return res.status(200).json({
       ok: true,
-      window: { days, sinceIso },
+      window: { days, label: adminWindowLabel(days), sinceIso, optionsDays: ADMIN_WINDOW_OPTIONS_DAYS },
       paging: { limit, offset, total: Number(count || 0) },
       users: out,
     });

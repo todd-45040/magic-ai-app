@@ -1,20 +1,8 @@
 import { requireSupabaseAuth } from './_auth.js';
+import { ADMIN_WINDOW_OPTIONS_DAYS, adminWindowLabel, isoDaysAgo, parseAdminWindowDays, ymdDaysAgo } from './_adminWindow.js';
 
 type PlanKey = 'trial' | 'amateur' | 'professional' | 'admin' | 'free' | 'expired' | 'unknown';
 
-function clampDays(n: any, min = 1, max = 365) {
-  const v = Number(n);
-  if (!Number.isFinite(v)) return 30;
-  return Math.min(max, Math.max(min, v));
-}
-
-function isoDaysAgo(days: number): string {
-  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-}
-
-function ymdDaysAgo(days: number): string {
-  return isoDaysAgo(days).slice(0, 10);
-}
 
 export default async function handler(req: any, res: any) {
   try {
@@ -33,7 +21,7 @@ export default async function handler(req: any, res: any) {
     if (meErr) return res.status(500).json({ ok: false, error: 'Admin check failed', details: meErr });
     if (!me?.is_admin) return res.status(403).json({ ok: false, error: 'Forbidden' });
 
-    const days = clampDays(req?.query?.days ?? 30, 1, 365);
+    const days = parseAdminWindowDays(req?.query?.days, 30);
     const sinceIso = isoDaysAgo(days);
     const sinceDay = ymdDaysAgo(days);
 
@@ -118,7 +106,7 @@ export default async function handler(req: any, res: any) {
 
     return res.status(200).json({
       ok: true,
-      window: { days, sinceIso, sinceDay },
+      window: { days, label: adminWindowLabel(days), sinceIso, sinceDay, optionsDays: ADMIN_WINDOW_OPTIONS_DAYS },
       users: {
         total: Number(totalUsers || 0),
         active: activeUsers,

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import AdminWindowSelector from './AdminWindowSelector';
 import { fetchAdminUsers, type AdminUserRow } from '../services/adminUsersService';
 
 function money(n: any, digits = 4) {
@@ -85,20 +86,13 @@ export default function AdminUsersPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <select
+          <AdminWindowSelector
             value={days}
-            onChange={(e) => {
-              setDays(Number(e.target.value));
+            onChange={(d) => {
+              setDays(d);
               setOffset(0);
             }}
-            className="px-2 py-1 rounded border border-white/10 bg-black/20"
-          >
-            <option value={7}>7d</option>
-            <option value={14}>14d</option>
-            <option value={30}>30d</option>
-            <option value={60}>60d</option>
-            <option value={90}>90d</option>
-          </select>
+          />
 
           <select
             value={plan}

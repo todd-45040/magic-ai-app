@@ -4,6 +4,7 @@ import AdminOverviewDashboard from './AdminOverviewDashboard';
 import AdminUsageDashboard from './AdminUsageDashboard';
 import AdminUsersPage from './AdminUsersPage';
 import AdminSettingsModal from './AdminSettingsModal';
+import AdminMetricDictionaryModal from './AdminMetricDictionaryModal';
 import {
   fetchSuggestions,
   updateSuggestionStatus,
@@ -14,6 +15,7 @@ import {
 
 export default function AdminPanel({ user }: { user: User }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [metricOpen, setMetricOpen] = useState(false);
   const [tab, setTab] = useState<'overview' | 'users' | 'telemetry' | 'feedback'>('overview');
 
   // App Feedback state
@@ -86,6 +88,13 @@ export default function AdminPanel({ user }: { user: User }) {
               </button>
               <button
                 type="button"
+                onClick={() => setTab('users')}
+                className={`px-3 py-1.5 rounded-full text-sm transition ${tab === 'users' ? 'bg-white/10 text-white' : 'text-white/70 hover:text-white'}`}
+              >
+                Users
+              </button>
+              <button
+                type="button"
                 onClick={() => setTab('feedback')}
                 className={`px-3 py-1.5 rounded-full text-sm transition ${tab === 'feedback' ? 'bg-white/10 text-white' : 'text-white/70 hover:text-white'}`}
               >
@@ -99,6 +108,14 @@ export default function AdminPanel({ user }: { user: User }) {
                 Telemetry
               </button>
             </div>
+
+            <button
+              type="button"
+              onClick={() => setMetricOpen(true)}
+              className="px-3 py-2 rounded-lg bg-white/10 border border-white/10 text-white/90 hover:bg-white/15 transition"
+            >
+              Metric Definitions
+            </button>
 
             <button
               type="button"
@@ -294,6 +311,7 @@ export default function AdminPanel({ user }: { user: User }) {
         )}
       </div>
 
+      <AdminMetricDictionaryModal open={metricOpen} onClose={() => setMetricOpen(false)} />
       <AdminSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );

@@ -1,4 +1,5 @@
 import { requireSupabaseAuth } from './_auth.js';
+import { ADMIN_WINDOW_OPTIONS_DAYS, adminWindowLabel, isoDaysAgo, parseAdminWindowDays, ymdDaysAgo } from './_adminWindow.js';
 
 export default async function handler(req: any, res: any) {
   try {
@@ -12,8 +13,9 @@ export default async function handler(req: any, res: any) {
     const { data: me } = await admin.from('users').select('id,is_admin').eq('id', userId).maybeSingle();
     if (!me?.is_admin) return res.status(403).json({ ok: false, error: 'Forbidden' });
 
-    const days = Math.min(30, Math.max(1, Number(req?.query?.days || 7)));
-    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+    const days = parseAdminWindowDays(req?.query?.days, 7);
+    const since = isoDaysAgo(days);
+    const sinceDay = ymdDaysAgo(days);
 
     const { data: events, error: evErr } = await admin
       .from('ai_usage_events')
@@ -35,7 +37,7 @@ export default async function handler(req: any, res: any) {
     const { data: rollups, error: rErr } = await admin
       .from('ai_usage_rollups_daily')
       .select('day,tool,membership,total_events,total_success,total_429,total_charged_units,total_estimated_cost_usd')
-      .gte('day', since.slice(0,10))
+      .gte('day', sinceDay)
       .order('day', { ascending: false })
       .limit(2000);
 
@@ -63,7 +65,7 @@ export default async function handler(req: any, res: any) {
         totals2.byMembership[m] = (totals2.byMembership[m] || 0) + (Number(r.total_events) || 0);
       }
 
-      return res.status(200).json({ ok: true, since, days, totals: totals2, rollups, events, flags });
+      return res.status(200).json({ ok: true, window: { days, label: adminWindowLabel(days), sinceIso: since, sinceDay, optionsDays: ADMIN_WINDOW_OPTIONS_DAYS }, totals: totals2, rollups, events, flags });
     }
 
     // Compute simple aggregates server-side
@@ -84,7 +86,7 @@ export default async function handler(req: any, res: any) {
       totals.byMembership[m] = (totals.byMembership[m] || 0) + 1;
     }
 
-    return res.status(200).json({ ok: true, since, days, totals, events, flags });
+    return res.status(200).json({ ok: true, window: { days, label: adminWindowLabel(days), sinceIso: since, sinceDay, optionsDays: ADMIN_WINDOW_OPTIONS_DAYS }, totals, events, flags });
   } catch (err: any) {
     console.error('adminUsageDashboard error', err);
     return res.status(500).json({ ok: false, error: 'Server error' });

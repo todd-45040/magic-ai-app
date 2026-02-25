@@ -1,4 +1,5 @@
 import { requireSupabaseAuth } from './_auth.js';
+import { ADMIN_WINDOW_OPTIONS_DAYS, adminWindowLabel, isoDaysAgo, parseAdminWindowDays } from './_adminWindow.js';
 
 function clampInt(n: any, def = 20, min = 1, max = 200) {
   const v = Number(n);
@@ -6,15 +7,6 @@ function clampInt(n: any, def = 20, min = 1, max = 200) {
   return Math.min(max, Math.max(min, Math.floor(v)));
 }
 
-function clampDays(n: any, def = 30, min = 1, max = 365) {
-  const v = Number(n);
-  if (!Number.isFinite(v)) return def;
-  return Math.min(max, Math.max(min, Math.floor(v)));
-}
-
-function isoDaysAgo(days: number): string {
-  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-}
 
 export default async function handler(req: any, res: any) {
   try {
@@ -27,7 +19,7 @@ export default async function handler(req: any, res: any) {
     if (meErr) return res.status(500).json({ ok: false, error: 'Admin check failed', details: meErr });
     if (!me?.is_admin) return res.status(403).json({ ok: false, error: 'Forbidden' });
 
-    const days = clampDays(req?.query?.days ?? 30, 30, 1, 365);
+    const days = parseAdminWindowDays(req?.query?.days, 30);
     const sinceIso = isoDaysAgo(days);
     const limit = clampInt(req?.query?.limit ?? 20, 20, 1, 100);
 
@@ -69,7 +61,7 @@ export default async function handler(req: any, res: any) {
 
     return res.status(200).json({
       ok: true,
-      window: { days, sinceIso },
+      window: { days, label: adminWindowLabel(days), sinceIso, optionsDays: ADMIN_WINDOW_OPTIONS_DAYS },
       top_spenders: rows,
     });
   } catch (err: any) {

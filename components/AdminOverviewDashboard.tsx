@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import AdminWindowSelector from './AdminWindowSelector';
 import { fetchAdminSummary } from '../services/adminSummaryService';
 import { fetchAdminTopSpenders, type TopSpenderRow } from '../services/adminTopSpendersService';
 
@@ -69,18 +70,7 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
         </div>
 
         <div className="flex items-center gap-2">
-          <label className="text-sm opacity-80">Window</label>
-          <select
-            className="px-2 py-1 rounded border border-white/10 bg-black/20"
-            value={days}
-            onChange={(e) => setDays(Number(e.target.value))}
-          >
-            <option value={7}>7 days</option>
-            <option value={14}>14 days</option>
-            <option value={30}>30 days</option>
-            <option value={60}>60 days</option>
-            <option value={90}>90 days</option>
-          </select>
+          <AdminWindowSelector value={days} onChange={(d) => setDays(d)} />
           <button className="px-3 py-1 rounded bg-white/10 hover:bg-white/15" onClick={load} disabled={loading}>
             {loading ? 'Loading…' : 'Refresh'}
           </button>
