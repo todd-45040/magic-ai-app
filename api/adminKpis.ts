@@ -15,6 +15,7 @@ function isoDaysAgo(days: number): string {
 }
 
 function percentile(values: number[], p: number): number | null {
+
   if (!values || values.length === 0) return null;
   const arr = values.filter((n) => Number.isFinite(n)).sort((a, b) => a - b);
   if (arr.length === 0) return null;
@@ -24,6 +25,10 @@ function percentile(values: number[], p: number): number | null {
   if (lo === hi) return arr[lo];
   const w = idx - lo;
   return arr[lo] * (1 - w) + arr[hi] * w;
+}
+
+function median(values: number[]): number | null {
+  return percentile(values, 0.5);
 }
 
 // Define "core tools" for activation (first value). Keep this list small + meaningful.
@@ -162,10 +167,15 @@ export default async function handler(req: any, res: any) {
 
     // --- Activated users: first core-tool use within 24h of signup (among new users)
     let activatedUsers = 0;
+    let medianTtfvMs: number | null = null;
+    let ttfvSampleSize = 0;
+    let returningUsersWau7 = 0;
+    let signupTrend30d: { date: string; new_users: number }[] = [];
     if (newUserCreatedAt.size > 0) {
       const ids = Array.from(newUserCreatedAt.keys());
       const batchSize = 500; // Supabase "in" works best with modest sizes
       const activatedSet = new Set<string>();
+      const firstCoreEventAt = new Map<string, string>();
 
       for (let i = 0; i < ids.length; i += batchSize) {
         const batch = ids.slice(i, i + batchSize);
@@ -188,6 +198,7 @@ export default async function handler(req: any, res: any) {
           const uid = ev?.user_id ? String(ev.user_id) : null;
           const occ = ev?.occurred_at ? String(ev.occurred_at) : null;
           if (!uid || !occ) continue;
+          if (!firstCoreEventAt.has(uid)) firstCoreEventAt.set(uid, occ);
           if (activatedSet.has(uid)) continue;
 
           const createdAt = newUserCreatedAt.get(uid);
@@ -200,6 +211,19 @@ export default async function handler(req: any, res: any) {
           if (occMs <= createdMs + 24 * 60 * 60 * 1000) {
             activatedSet.add(uid);
           }
+      // TTFV: created_at -> first CORE_TOOL event (for new users in window)
+      const ttfvArr: number[] = [];
+      for (const [uid, occ] of firstCoreEventAt.entries()) {
+        const createdAt = newUserCreatedAt.get(uid);
+        if (!createdAt) continue;
+        const createdMs = Date.parse(createdAt);
+        const occMs = Date.parse(occ);
+        if (!Number.isFinite(createdMs) || !Number.isFinite(occMs)) continue;
+        const delta = occMs - createdMs;
+        if (Number.isFinite(delta) && delta >= 0) ttfvArr.push(delta);
+      }
+      ttfvSampleSize = ttfvArr.length;
+      medianTtfvMs = median(ttfvArr);
         }
       }
 
@@ -214,6 +238,58 @@ export default async function handler(req: any, res: any) {
     const errorRate = totalEvents > 0 ? errorEvents / totalEvents : 0;
 
     const p95LatencyMs = percentile(latency, 0.95);
+
+    // --- Returning users (WAU = unique users with ≥1 event in last 7d)
+    try {
+      const since7Iso = isoDaysAgo(7);
+      const { data: ev7, error: ev7Err } = await admin
+        .from('ai_usage_events')
+        .select('user_id,occurred_at')
+        .gte('occurred_at', since7Iso)
+        .order('occurred_at', { ascending: false })
+        .limit(200000);
+      if (!ev7Err) {
+        const s = new Set<string>();
+        for (const e of (ev7 || []) as any[]) {
+          const uid = e?.user_id ? String(e.user_id) : null;
+          if (uid) s.add(uid);
+        }
+        returningUsersWau7 = s.size;
+      }
+    } catch (e) {
+      // non-fatal
+    }
+
+    // --- Signup trend (last 30d, by day)
+    try {
+      const since30Iso = isoDaysAgo(30);
+      const { data: u30, error: u30Err } = await admin
+        .from('users')
+        .select('created_at')
+        .gte('created_at', since30Iso)
+        .order('created_at', { ascending: true })
+        .limit(200000);
+      if (!u30Err) {
+        const counts: Record<string, number> = {};
+        for (const r of (u30 || []) as any[]) {
+          const d = r?.created_at ? String(r.created_at).slice(0, 10) : null;
+          if (!d) continue;
+          counts[d] = (counts[d] || 0) + 1;
+        }
+        const today = new Date();
+        const daysBack = 30;
+        const series: { date: string; new_users: number }[] = [];
+        for (let i = daysBack - 1; i >= 0; i -= 1) {
+          const dt = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+          dt.setUTCDate(dt.getUTCDate() - i);
+          const key = dt.toISOString().slice(0, 10);
+          series.push({ date: key, new_users: counts[key] || 0 });
+        }
+        signupTrend30d = series;
+      }
+    } catch (e) {
+      // non-fatal
+    }
 
     const toolRows = Object.entries(toolAgg).map(([tool, v]) => ({
       tool,
@@ -235,6 +311,8 @@ export default async function handler(req: any, res: any) {
       definitions: {
         active_user: `Unique users with ≥1 ai_usage_event in the selected window`,
         activated_user: `New users with first core-tool use within 24h of signup`,
+        returning_wau_7d: `Unique users with ≥1 ai_usage_event in the last 7 days`,
+        ttfv_median: `Median time from users.created_at to first core-tool ai_usage_event (for new users in window)`,
         core_tools: CORE_TOOLS,
       },
       users: {
@@ -242,6 +320,19 @@ export default async function handler(req: any, res: any) {
         active: activeUsers,
         activated: activatedUsers,
         activation_rate: activationRate,
+      },
+      growth: {
+        funnel: {
+          new_users: newUsersN,
+          activated_users: activatedUsers,
+          returning_wau_7d: returningUsersWau7,
+        },
+        ttfv: {
+          median_ms: medianTtfvMs,
+          median_minutes: medianTtfvMs != null ? medianTtfvMs / 60000 : null,
+          sample_size: ttfvSampleSize,
+        },
+        signup_trend_30d: signupTrend30d,
       },
       ai: {
         total_events: totalEvents,

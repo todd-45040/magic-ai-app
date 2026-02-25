@@ -21,6 +21,17 @@ function ms(n: any) {
   return `${Math.round(v)}ms`;
 }
 
+function durationFromMinutes(mins: any) {
+  const v = Number(mins);
+  if (!Number.isFinite(v)) return '—';
+  if (v < 1) return `${Math.round(v * 60)}s`;
+  if (v < 60) return `${Math.round(v)}m`;
+  const h = v / 60;
+  if (h < 24) return `${h.toFixed(1)}h`;
+  const d = h / 24;
+  return `${d.toFixed(1)}d`;
+}
+
 const WINDOW_OPTIONS = [
   { days: 1, label: 'Today' },
   { days: 7, label: '7d' },
@@ -73,9 +84,14 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
   const kUsers = data?.users || {};
   const kAi = data?.ai || {};
   const tools = data?.tools || {};
+  const growth = data?.growth || {};
+  const funnel = growth?.funnel || {};
+  const ttfv = growth?.ttfv || {};
+  const signupTrend = (growth?.signup_trend_30d || []) as any[];
 
   const topByUsage = useMemo(() => (tools?.top_by_usage || []).slice(0, 8), [tools]);
   const topByCost = useMemo(() => (tools?.top_by_cost || []).slice(0, 8), [tools]);
+  const maxSignup = useMemo(() => Math.max(0, ...signupTrend.map((d: any) => Number(d?.new_users || 0))), [signupTrend]);
 
   return (
     <div className="p-4 space-y-4">
@@ -136,6 +152,48 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
           <div className="text-sm opacity-80">AI Cost</div>
           <div className="text-2xl font-bold">{money(kAi.cost_usd)}</div>
           <div className="text-xs opacity-70 mt-1">Estimated cost in window</div>
+        </div>
+      </div>
+
+      {/* Phase 2 — Growth + Activation Funnel */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+          <div className="text-sm font-medium">Funnel</div>
+          <div className="text-xs opacity-70 mt-0.5">New → Activated → Returning (WAU)</div>
+          <div className="mt-3 space-y-1 text-sm">
+            <div className="flex items-center justify-between"><span className="opacity-80">New</span><span className="font-semibold">{Number(funnel.new_users || 0) || '—'}</span></div>
+            <div className="flex items-center justify-between"><span className="opacity-80">Activated</span><span className="font-semibold">{Number(funnel.activated_users || 0) || '—'}</span></div>
+            <div className="flex items-center justify-between"><span className="opacity-80">Returning (WAU 7d)</span><span className="font-semibold">{Number(funnel.returning_wau_7d || 0) || '—'}</span></div>
+          </div>
+          <div className="text-xs opacity-60 mt-2">Returning = ≥1 event in last 7 days</div>
+        </div>
+
+        <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+          <div className="text-sm font-medium">Median TTFV</div>
+          <div className="text-xs opacity-70 mt-0.5">Time to first core-tool value</div>
+          <div className="mt-2 text-2xl font-bold">{durationFromMinutes(ttfv.median_minutes)}</div>
+          <div className="text-xs opacity-60 mt-1">Sample size: {Number(ttfv.sample_size || 0).toLocaleString()}</div>
+        </div>
+
+        <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+          <div className="text-sm font-medium">Signup Trend</div>
+          <div className="text-xs opacity-70 mt-0.5">Last 30 days (daily new users)</div>
+          <div className="mt-3 flex items-end gap-[2px] h-16">
+            {signupTrend.length === 0 && <div className="text-sm opacity-70">No data.</div>}
+            {signupTrend.length > 0 &&
+              signupTrend.map((d: any) => {
+                const v = Number(d?.new_users || 0);
+                const h = maxSignup > 0 ? Math.max(2, Math.round((v / maxSignup) * 64)) : 2;
+                return (
+                  <div
+                    key={String(d?.date)}
+                    title={`${String(d?.date)}: ${v}`}
+                    className="w-[6px] rounded bg-white/15"
+                    style={{ height: `${h}px` }}
+                  />
+                );
+              })}
+          </div>
         </div>
       </div>
 
