@@ -96,7 +96,7 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
 
               <div className="mt-4">
                 <div className="text-3xl font-bold text-white">$15.95<span className="text-sm font-normal text-slate-400">/mo</span></div>
-                <div className="text-sm text-slate-400">Annual billing coming soon</div>
+                <div className="text-sm text-slate-400">$159.00 one-time annual billing</div>
               </div>
 
               <ul className="space-y-2 mt-5 mb-6 flex-1">
@@ -128,7 +128,7 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
 
               <div className="mt-4">
                 <div className="text-3xl font-bold text-white">$29.95<span className="text-sm font-normal text-slate-400">/mo</span></div>
-                <div className="text-sm text-slate-400">$299/year (2 months free)</div>
+                <div className="text-sm text-slate-400">$299.00 one-time annual billing (2 months free)</div>
 
                 {/* Founding member callout (visually separated) */}
                 <div className="mt-4 rounded-xl border border-amber-300/40 bg-amber-500/10 px-4 py-3">
