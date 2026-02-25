@@ -166,12 +166,15 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
           </div>
         </div>
 
-        <div className="p-3 rounded-xl bg-white/5 border border-white/10">
-          <div className="font-semibold mb-2">Raw JSON (Debug)</div>
-          <div className="text-xs opacity-70 mb-2">Useful during early rollout</div>
-          <pre className="text-xs overflow-auto rounded-lg bg-black/30 border border-white/10 p-3 max-h-[320px]">
-            {data ? JSON.stringify(data, null, 2) : '{ }'}
-          </pre>
+        {/* Debug payload (keep compact + scrollable). Note: avoid leading whitespace inside <pre> */}
+        <div className="p-3 rounded-xl bg-white/5 border border-white/10 flex flex-col min-h-0">
+          <div className="font-semibold">Raw JSON (Debug)</div>
+          <div className="text-xs opacity-70 mt-1">Useful during early rollout</div>
+          <div className="mt-2 flex-1 min-h-0">
+            <pre className="text-[11px] leading-snug font-mono overflow-auto rounded-lg bg-black/30 border border-white/10 p-2 max-h-[320px]">
+{data ? JSON.stringify(data, null, 2) : '{ }'}
+            </pre>
+          </div>
         </div>
       </div>
     </div>
