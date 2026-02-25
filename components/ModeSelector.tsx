@@ -15,7 +15,8 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({ onSelectMode }) => {
           Magicians' AI Wizard
         </h1>
       </div>
-      <p className="text-slate-300 mb-12 text-lg text-center">Choose your experience</p>
+      <p className="text-slate-200 mb-2 text-lg text-center font-semibold">The operating system for professional magicians.</p>
+      <p className="text-slate-300 mb-12 text-base text-center">Choose your experience</p>
       <div className="flex flex-col md:flex-row gap-8 w-full max-w-4xl px-4">
         <button
           // If the user isn't authenticated yet, route them into the Auth flow.

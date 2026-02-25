@@ -19,10 +19,15 @@ const DemoBanner: React.FC = () => {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 md:px-8 pt-3">
         <div className="rounded-xl border border-amber-400/30 bg-black/40 backdrop-blur px-4 py-3 flex items-center justify-between shadow-lg">
           <div className="flex items-center gap-3">
-	            <div className="text-sm text-slate-200">
-	              <span className="font-semibold text-amber-200">✨ DEMO MODE — Guided Showcase</span>
-	              <span className="text-slate-300/90"> (seeded data • changes not saved)</span>
-	            </div>
+            <div className="text-sm text-slate-200">
+              <div>
+                <span className="font-semibold text-amber-200">✨ DEMO MODE — Guided Showcase</span>
+                <span className="text-slate-300/90"> (seeded data • changes not saved)</span>
+              </div>
+              <div className="text-xs text-slate-300/80 mt-0.5">
+                Experiencing the operating system for professional magicians.
+              </div>
+            </div>
           </div>
 
           <button

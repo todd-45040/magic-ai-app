@@ -156,13 +156,16 @@ const DemoTourBar: React.FC<Props> = ({ activeView, onNavigate }) => {
       </div>
         {enabled && isOnCurrentStep && state.index === state.total - 1 && canContinueFromCurrentStep() && (
       <div className="mt-3 rounded-2xl border border-amber-400/30 bg-gradient-to-r from-black/40 via-amber-500/10 to-purple-700/10 px-4 py-4 shadow-lg">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <div className="text-sm font-semibold text-slate-100">
-              Ready to build your own?
+              Ready to build your real show?
             </div>
             <div className="text-xs text-slate-300/80">
-              Start a free trial to save your work, unlock full generation limits, and access Live tools.
+              You’ve experienced the system in demo mode. Now create your private workspace and start building performances that are truly yours.
+            </div>
+            <div className="text-xs text-slate-300/70 mt-1">
+              The operating system for professional magicians — now in your hands.
             </div>
           </div>
 
@@ -172,15 +175,15 @@ const DemoTourBar: React.FC<Props> = ({ activeView, onNavigate }) => {
               className="text-xs font-semibold tracking-wide rounded-lg border border-amber-400/60 bg-amber-400/15 px-3 py-2 text-amber-100 hover:bg-amber-400/25 transition"
               onClick={handleStartTrial}
             >
-              Start Free Trial
+              Start Your Free Trial
             </button>
             <button
               type="button"
               className="text-xs font-semibold tracking-wide rounded-lg border border-purple-400/60 bg-purple-500/15 px-3 py-2 text-purple-100 hover:bg-purple-500/25 transition"
               onClick={handleUnlockLive}
-              title="Creates an account and unlocks Live Rehearsal features"
+              title="Creates an account and locks in the founding professional rate"
             >
-              Unlock Live Mode
+              Lock Founding Professional Rate — $29.95/mo
             </button>
           </div>
         </div>

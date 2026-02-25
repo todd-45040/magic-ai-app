@@ -20,12 +20,12 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
       ? 'Your trial has ended'
       : variant === 'locked-tool'
       ? 'Upgrade to unlock this tool'
-      : 'Upgrade Your Membership';
+      : 'Choose Your Access Level';
 
   const subtitle =
     variant === 'trial-expired'
-      ? 'Choose a plan to keep using Magic AI Wizard.'
-      : 'Choose the plan that matches how often you create, rehearse, and perform.';
+      ? 'Choose an access level to keep using the operating system for professional magicians.'
+      : 'Choose your access level. Write. Rehearse. Book. Perform — in one unified workspace.';
 
   return (
     <div
@@ -59,7 +59,7 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
                 </span>
               </div>
 
-              <p className="text-slate-400 mt-2">Designed for regular practice and show preparation.</p>
+              <p className="text-slate-400 mt-2">For consistent practice and show prep.</p>
 
               <div className="mt-4">
                 <div className="text-3xl font-bold text-white">$19.95<span className="text-sm font-normal text-slate-400">/mo</span></div>
@@ -95,6 +95,9 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
               <div className="mt-4">
                 <div className="text-3xl font-bold text-white">$29.95<span className="text-sm font-normal text-slate-400">/mo</span></div>
                 <div className="text-sm text-slate-400">$299/year (2 months free)</div>
+                <div className="mt-3 text-xs text-amber-200/90 bg-amber-500/10 border border-amber-400/30 rounded-lg px-3 py-2">
+                  <span className="font-semibold">Founding Professional Rate</span> — $29.95/mo locked for life (pre-launch).
+                </div>
               </div>
 
               <ul className="space-y-2 mt-5 mb-6 flex-1">
