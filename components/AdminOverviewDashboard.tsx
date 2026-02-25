@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import AdminWindowSelector from './AdminWindowSelector';
-import { fetchAdminSummary } from '../services/adminSummaryService';
+import { fetchAdminKpis } from '../services/adminKpisService';
 import { fetchAdminTopSpenders, type TopSpenderRow } from '../services/adminTopSpendersService';
 
 function money(n: any, digits = 2) {
@@ -9,23 +8,44 @@ function money(n: any, digits = 2) {
   return `$${v.toFixed(digits)}`;
 }
 
+function pct(n: any, digits = 0) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return '—';
+  return `${(v * 100).toFixed(digits)}%`;
+}
+
+function ms(n: any) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return '—';
+  if (v >= 1000) return `${(v / 1000).toFixed(1)}s`;
+  return `${Math.round(v)}ms`;
+}
+
+const WINDOW_OPTIONS = [
+  { days: 1, label: 'Today' },
+  { days: 7, label: '7d' },
+  { days: 30, label: '30d' },
+  { days: 90, label: '90d' },
+];
+
 export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () => void }) {
-  const [days, setDays] = useState(30);
+  const [days, setDays] = useState<number>(7);
   const [data, setData] = useState<any>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
   const [topSpenders, setTopSpenders] = useState<TopSpenderRow[]>([]);
   const [topErr, setTopErr] = useState<string | null>(null);
   const [topLoading, setTopLoading] = useState(false);
-  const [showAllTools, setShowAllTools] = useState(false);
 
   async function load() {
     setLoading(true);
     setErr(null);
     try {
-      const d = await fetchAdminSummary(days);
+      const d = await fetchAdminKpis(days);
       setData(d);
-      // load top spenders for anomaly detection
+
+      // Top spenders (ops / anomaly watchlist)
       setTopLoading(true);
       setTopErr(null);
       try {
@@ -39,6 +59,7 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
       }
     } catch (e: any) {
       setErr(e?.message || 'Failed to load');
+      setData(null);
     } finally {
       setLoading(false);
     }
@@ -49,31 +70,44 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [days]);
 
-  const byPlan = data?.users?.byPlan || {};
-  const total = Number(data?.users?.total || 0);
-  const active = Number(data?.users?.active || 0);
-  const proCount = Number(byPlan.professional || 0) + Number(byPlan.pro || 0);
-  const paid = proCount + Number(byPlan.amateur || 0);
+  const kUsers = data?.users || {};
+  const kAi = data?.ai || {};
+  const tools = data?.tools || {};
 
-  const costByTool = useMemo(() => {
-    const obj = data?.cost?.cost_by_tool_usd_window || {};
-    const entries = Object.entries(obj);
-    return showAllTools ? entries : entries.slice(0, 8);
-  }, [data, showAllTools]);
+  const topByUsage = useMemo(() => (tools?.top_by_usage || []).slice(0, 8), [tools]);
+  const topByCost = useMemo(() => (tools?.top_by_cost || []).slice(0, 8), [tools]);
 
   return (
     <div className="p-4 space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold">Admin – Overview</h2>
-          <div className="text-sm opacity-75">User base health + revenue & cost estimates (pre-Stripe).</div>
+          <div className="text-sm opacity-75">Single-source KPIs (growth, activation, cost, reliability).</div>
         </div>
 
         <div className="flex items-center gap-2">
-          <AdminWindowSelector value={days} onChange={(d) => setDays(d)} />
+          <label className="text-sm opacity-80">Window</label>
+          <select
+            className="px-2 py-1 rounded border border-white/10 bg-black/20"
+            value={days}
+            onChange={(e) => setDays(Number(e.target.value))}
+          >
+            {WINDOW_OPTIONS.map((o) => (
+              <option key={o.days} value={o.days}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+
           <button className="px-3 py-1 rounded bg-white/10 hover:bg-white/15" onClick={load} disabled={loading}>
             {loading ? 'Loading…' : 'Refresh'}
           </button>
+
+          {onGoUsers && (
+            <button className="px-3 py-1 rounded bg-white/10 hover:bg-white/15" onClick={onGoUsers}>
+              Users →
+            </button>
+          )}
         </div>
       </div>
 
@@ -81,105 +115,118 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
         <div className="p-3 rounded-xl bg-white/5 border border-white/10">
-          <div className="text-sm opacity-80">Total Users</div>
-          <div className="text-2xl font-bold">{total || '—'}</div>
-          <div className="text-xs opacity-70 mt-1">From users table</div>
+          <div className="text-sm opacity-80">New Users</div>
+          <div className="text-2xl font-bold">{Number(kUsers.new || 0) || '—'}</div>
+          <div className="text-xs opacity-70 mt-1">users.created_at in window</div>
         </div>
+
         <div className="p-3 rounded-xl bg-white/5 border border-white/10">
           <div className="text-sm opacity-80">Active Users</div>
-          <div className="text-2xl font-bold">{active || '—'}</div>
-          <div className="text-xs opacity-70 mt-1">Any AI usage in window</div>
+          <div className="text-2xl font-bold">{Number(kUsers.active || 0) || '—'}</div>
+          <div className="text-xs opacity-70 mt-1">≥1 ai_usage_event</div>
         </div>
+
         <div className="p-3 rounded-xl bg-white/5 border border-white/10">
-          <div className="text-sm opacity-80">Paid Users</div>
-          <div className="text-2xl font-bold">{paid || '—'}</div>
-          <div className="text-xs opacity-70 mt-1">Pro + Amateur</div>
+          <div className="text-sm opacity-80">Activated Users</div>
+          <div className="text-2xl font-bold">{Number(kUsers.activated || 0) || '—'}</div>
+          <div className="text-xs opacity-70 mt-1">Activation rate: {pct(kUsers.activation_rate, 0)}</div>
         </div>
+
         <div className="p-3 rounded-xl bg-white/5 border border-white/10">
-          <div className="text-sm opacity-80">Estimated MRR</div>
-          <div className="text-2xl font-bold">{money(data?.revenue?.mrr_est, 2)}</div>
-          <div className="text-xs opacity-70 mt-1">Pre-Stripe estimate</div>
+          <div className="text-sm opacity-80">AI Cost</div>
+          <div className="text-2xl font-bold">{money(kAi.cost_usd)}</div>
+          <div className="text-xs opacity-70 mt-1">Estimated cost in window</div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div className="p-3 rounded-xl bg-white/5 border border-white/10">
-          <div className="text-sm opacity-80">Trial</div>
-          <div className="text-2xl font-bold">{Number(byPlan.trial || 0)}</div>
-          <div className="text-xs opacity-70 mt-1">users.membership = trial</div>
+          <div className="text-sm opacity-80">Success Rate</div>
+          <div className="text-2xl font-bold">{pct(kAi.success_rate, 0)}</div>
+          <div className="text-xs opacity-70 mt-1">{Number(kAi?.outcomes?.success || 0)} of {Number(kAi?.total_events || 0)} events</div>
         </div>
+
         <div className="p-3 rounded-xl bg-white/5 border border-white/10">
-          <div className="text-sm opacity-80">Amateur</div>
-          <div className="text-2xl font-bold">{Number(byPlan.amateur || 0)}</div>
-          <div className="text-xs opacity-70 mt-1">${Number(data?.revenue?.pricesUSD?.amateur || 9.95).toFixed(2)}/mo</div>
+          <div className="text-sm opacity-80">Error Rate</div>
+          <div className="text-2xl font-bold">{pct(kAi.error_rate, 0)}</div>
+          <div className="text-xs opacity-70 mt-1">
+            RL {Number(kAi?.outcomes?.rate_limit || 0)} · Quota {Number(kAi?.outcomes?.quota || 0)} · Timeout {Number(kAi?.outcomes?.timeout || 0)}
+          </div>
         </div>
+
         <div className="p-3 rounded-xl bg-white/5 border border-white/10">
-          <div className="text-sm opacity-80">Pro</div>
-          <div className="text-2xl font-bold">{proCount}</div>
-          <div className="text-xs opacity-70 mt-1">${Number(data?.revenue?.pricesUSD?.pro || 29.95).toFixed(2)}/mo</div>
-        </div>
-        <div className="p-3 rounded-xl bg-white/5 border border-white/10">
-          <div className="text-sm opacity-80">Est. Margin</div>
-          <div className="text-2xl font-bold">{money(data?.margin?.gross_margin_est_window, 2)}</div>
-          <div className="text-xs opacity-70 mt-1">MRR − AI cost − infra est.</div>
+          <div className="text-sm opacity-80">P95 Latency</div>
+          <div className="text-2xl font-bold">{ms(kAi.p95_latency_ms)}</div>
+          <div className="text-xs opacity-70 mt-1">Overall (latency_ms)</div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="p-3 rounded-xl bg-white/5 border border-white/10">
-          <div className="flex items-center justify-between mb-2">
-            <div className="font-semibold">Costs</div>
-            <div className="text-xs opacity-70">Window</div>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="p-3 rounded-lg bg-black/20 border border-white/10">
-              <div className="text-xs opacity-70">AI Cost</div>
-              <div className="text-lg font-bold">{money(data?.cost?.ai_cost_usd_window, 4)}</div>
-            </div>
-            <div className="p-3 rounded-lg bg-black/20 border border-white/10">
-              <div className="text-xs opacity-70">Infra (est.)</div>
-              <div className="text-lg font-bold">{money(data?.margin?.infra_est_usd_month, 2)}</div>
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-medium">Top Tools (Usage)</div>
+              <div className="text-xs opacity-70">Most events in window</div>
             </div>
           </div>
 
-          <div className="mt-3">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-sm font-semibold">Top cost by tool</div>
-              {Object.keys(data?.cost?.cost_by_tool_usd_window || {}).length > 8 && (
-                <button
-                  className="text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/15"
-                  onClick={() => setShowAllTools((v) => !v)}
-                  type="button"
-                >
-                  {showAllTools ? 'Show top 8' : 'Show all'}
-                </button>
-              )}
-            </div>
-            {costByTool.length === 0 ? (
-              <div className="text-sm opacity-70">No cost data found in this window.</div>
-            ) : (
-              <ul className="text-sm space-y-1">
-                {costByTool.map(([k, v]: any) => (
-                  <li key={k} className="flex justify-between">
-                    <span className="opacity-80">{k}</span>
-                    <span className="font-mono">{money(v, 4)}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
+          <div className="mt-3 space-y-2">
+            {topByUsage.length === 0 && <div className="text-sm opacity-70">No tool data.</div>}
+            {topByUsage.map((r: any) => (
+              <div key={r.tool} className="flex items-center justify-between text-sm">
+                <div className="truncate max-w-[60%]">{r.tool}</div>
+                <div className="opacity-80">{Number(r.events || 0).toLocaleString()} ev</div>
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Debug payload (keep compact + scrollable). Note: avoid leading whitespace inside <pre> */}
-        <div className="p-3 rounded-xl bg-white/5 border border-white/10 flex flex-col min-h-0">
-          <div className="font-semibold">Raw JSON (Debug)</div>
-          <div className="text-xs opacity-70 mt-1">Useful during early rollout</div>
-          <div className="mt-2 flex-1 min-h-0">
-            <pre className="text-[11px] leading-snug font-mono overflow-auto rounded-lg bg-black/30 border border-white/10 p-2 max-h-[320px]">
-{data ? JSON.stringify(data, null, 2) : '{ }'}
-            </pre>
+        <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-medium">Top Tools (Cost)</div>
+              <div className="text-xs opacity-70">Highest estimated cost</div>
+            </div>
+          </div>
+
+          <div className="mt-3 space-y-2">
+            {topByCost.length === 0 && <div className="text-sm opacity-70">No tool data.</div>}
+            {topByCost.map((r: any) => (
+              <div key={r.tool} className="flex items-center justify-between text-sm">
+                <div className="truncate max-w-[60%]">{r.tool}</div>
+                <div className="opacity-80">{money(r.cost_usd)}</div>
+              </div>
+            ))}
           </div>
         </div>
+      </div>
+
+      <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-medium">Cost Anomaly Watchlist</div>
+            <div className="text-xs opacity-70">Top spenders (estimated) in selected window</div>
+          </div>
+          {topLoading && <div className="text-xs opacity-70">Loading…</div>}
+        </div>
+
+        {topErr && <div className="mt-2 text-sm text-red-200">{topErr}</div>}
+
+        <div className="mt-3 space-y-2">
+          {!topLoading && topSpenders.length === 0 && <div className="text-sm opacity-70">No spenders found.</div>}
+
+          {topSpenders.map((u) => (
+            <div key={u.user_id} className="flex items-center justify-between text-sm">
+              <div className="truncate max-w-[60%]">{u.email || u.user_id}</div>
+              <div className="opacity-80">{money(u.total_estimated_cost_usd)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="text-xs opacity-60">
+        Definitions: Active = ≥1 event; Activated = new user with core-tool use within 24h. Core tools:{' '}
+        {(data?.definitions?.core_tools || []).join(', ') || '—'}
       </div>
     </div>
   );
