@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import type { User } from '../types';
 import AdminOverviewDashboard from './AdminOverviewDashboard';
 import AdminUsageDashboard from './AdminUsageDashboard';
+import AdminUsersPage from './AdminUsersPage';
 import AdminSettingsModal from './AdminSettingsModal';
 import {
   fetchSuggestions,
@@ -13,7 +14,7 @@ import {
 
 export default function AdminPanel({ user }: { user: User }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [tab, setTab] = useState<'overview' | 'telemetry' | 'feedback'>('overview');
+  const [tab, setTab] = useState<'overview' | 'users' | 'telemetry' | 'feedback'>('overview');
 
   // App Feedback state
   const [statusFilter, setStatusFilter] = useState<SuggestionStatus | 'all'>('new');
@@ -125,7 +126,9 @@ export default function AdminPanel({ user }: { user: User }) {
 
       <div className="flex-1 overflow-y-auto">
         {tab === 'overview' ? (
-          <AdminOverviewDashboard />
+          <AdminOverviewDashboard onGoUsers={() => setTab('users')} />
+        ) : tab === 'users' ? (
+          <AdminUsersPage />
         ) : tab === 'telemetry' ? (
           <AdminUsageDashboard />
         ) : (

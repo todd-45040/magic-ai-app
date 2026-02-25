@@ -1,6 +1,6 @@
 import { requireSupabaseAuth } from './_auth.js';
 
-type PlanKey = 'trial' | 'amateur' | 'pro' | 'admin' | 'free' | 'unknown';
+type PlanKey = 'trial' | 'amateur' | 'professional' | 'admin' | 'free' | 'expired' | 'unknown';
 
 function clampDays(n: any, min = 1, max = 365) {
   const v = Number(n);
@@ -44,7 +44,7 @@ export default async function handler(req: any, res: any) {
     };
 
     // --- Users by plan (cheap counts; avoids large scans)
-    const plans: PlanKey[] = ['trial', 'amateur', 'pro', 'admin', 'free'];
+    const plans: PlanKey[] = ['trial', 'amateur', 'professional', 'admin', 'free', 'expired'];
     const byPlan: Record<string, number> = {};
 
     const { count: totalUsers, error: totalErr } = await admin
@@ -119,7 +119,7 @@ export default async function handler(req: any, res: any) {
     }
 
     // --- Revenue estimates (until Stripe is live)
-    const pro = byPlan.pro || 0;
+    const pro = (byPlan.professional || 0) + (byPlan.pro || 0);
     const amateur = byPlan.amateur || 0;
     const mrrEst = pro * pricesUSD.pro + amateur * pricesUSD.amateur;
     const arrEst = mrrEst * 12;

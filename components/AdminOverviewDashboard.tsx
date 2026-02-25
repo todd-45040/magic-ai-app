@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { fetchAdminSummary } from '../services/adminSummaryService';
+import { fetchAdminTopSpenders, type TopSpenderRow } from '../services/adminTopSpendersService';
 
 function money(n: any, digits = 2) {
   const v = Number(n);
@@ -7,11 +8,14 @@ function money(n: any, digits = 2) {
   return `$${v.toFixed(digits)}`;
 }
 
-export default function AdminOverviewDashboard() {
+export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () => void }) {
   const [days, setDays] = useState(30);
   const [data, setData] = useState<any>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [topSpenders, setTopSpenders] = useState<TopSpenderRow[]>([]);
+  const [topErr, setTopErr] = useState<string | null>(null);
+  const [topLoading, setTopLoading] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -19,6 +23,18 @@ export default function AdminOverviewDashboard() {
     try {
       const d = await fetchAdminSummary(days);
       setData(d);
+      // load top spenders for anomaly detection
+      setTopLoading(true);
+      setTopErr(null);
+      try {
+        const t = await fetchAdminTopSpenders(days, 15);
+        setTopSpenders(t.top_spenders || []);
+      } catch (e: any) {
+        setTopErr(e?.message || 'Failed to load top spenders');
+        setTopSpenders([]);
+      } finally {
+        setTopLoading(false);
+      }
     } catch (e: any) {
       setErr(e?.message || 'Failed to load');
     } finally {
