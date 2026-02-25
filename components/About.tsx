@@ -59,14 +59,18 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
 
                 {/* Amateur Plan */}
                 <div className="w-full max-w-sm p-6 bg-slate-800/50 border border-sky-500/50 rounded-lg flex flex-col">
-                    <h3 className="text-2xl font-bold text-sky-300 font-cinzel mb-4">Amateur</h3>
-            <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-slate-600/60 bg-slate-900/40 px-3 py-1 text-xs font-semibold text-amber-200 shadow-sm"><span aria-hidden="true">⭐</span> Most Popular</div>
+                    <h3 className="text-2xl font-bold text-sky-300 font-cinzel mb-4 flex items-center justify-between gap-3">
+  <span>Amateur</span>
+  <span className="inline-flex items-center gap-2 rounded-full border border-slate-600/60 bg-slate-900/40 px-3 py-1 text-xs font-semibold text-amber-200 shadow-sm whitespace-nowrap">
+    <span aria-hidden="true">⭐</span> Most Popular
+  </span>
+</h3>
                     <div className="min-h-[10rem] flex flex-col">
                         <p className="text-slate-400 mb-4">The Creative Tier — built to level up your material and rehearsal.</p>
                         <div className="text-center">
                             <p className="text-3xl font-bold text-sky-300">$15.95<span className="text-base font-normal text-slate-400">/month</span></p>
-                            <p className="text-sm text-slate-400">$159.00 one-time annual billing
-              <span className="text-xs text-slate-300">Save $32/year</span></p>
+                            <p className="text-sm text-slate-400">$159.00 one-time annual billing</p>
+<p className="text-xs text-slate-300 mt-1">Save $32/year</p>
                         </div>
                     </div>
                     <hr className="border-slate-700 my-4" />
@@ -81,8 +85,8 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
                         <p className="text-slate-400 mb-4">The Business Tier — client, contracts, finance, and analytics.</p>
                         <div className="text-center">
                             <p className="text-3xl font-bold text-amber-300">$29.95<span className="text-base font-normal text-slate-400">/month</span></p>
-                            <p className="text-sm text-slate-400">$299.00 one-time annual billing
-              <span className="text-xs text-slate-300">Save $60/year</span></p>
+                            <p className="text-sm text-slate-400">$299.00 one-time annual billing</p>
+<p className="text-xs text-slate-300 mt-1">Save $60/year</p>
                         </div>
                     </div>
                     <hr className="border-slate-700 my-4" />
