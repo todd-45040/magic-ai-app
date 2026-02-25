@@ -55,7 +55,7 @@ const initialMode = (() => {
     mode === 'login'
       ? 'Enter your credentials to open the Studio.'
       : mode === 'signup'
-      ? 'Create an account and unlock your AI rehearsal & creative suite.'
+      ? 'Create your account and start your private workspace — no credit card required.'
       : 'We’ll email you a secure reset link.';
 
   function formatAuthError(err: any, context: 'login' | 'signup' | 'reset'): string {
@@ -183,6 +183,30 @@ const initialMode = (() => {
                 />
                 <div className="mt-4 text-white text-xl font-semibold">{title}</div>
                 <div className="mt-1 text-white/65 text-sm text-center">{subtitle}</div>
+
+                {mode === 'signup' && (
+                  <div className="mt-4 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+                    <div className="text-xs font-semibold tracking-wide text-white/80">Free Trial includes</div>
+                    <ul className="mt-2 space-y-1.5 text-sm text-white/75">
+                      <li className="flex items-start gap-2">
+                        <span className="mt-1 inline-block h-1.5 w-1.5 rounded-full bg-yellow-400/90" />
+                        <span>Up to <span className="font-semibold text-white">10</span> saved ideas</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="mt-1 inline-block h-1.5 w-1.5 rounded-full bg-yellow-400/90" />
+                        <span><span className="font-semibold text-white">10 minutes</span> of rehearsal coaching</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="mt-1 inline-block h-1.5 w-1.5 rounded-full bg-yellow-400/90" />
+                        <span><span className="font-semibold text-white">1</span> active show in Show Planner</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="mt-1 inline-block h-1.5 w-1.5 rounded-full bg-yellow-400/90" />
+                        <span>Full Demo Mode access</span>
+                      </li>
+                    </ul>
+                  </div>
+                )}
               </div>
 
               <div className="mt-6 grid grid-cols-3 rounded-xl border border-white/10 bg-white/5 p-1">

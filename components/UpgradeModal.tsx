@@ -49,7 +49,38 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
         </div>
 
         <div className="p-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Free Trial (informational) */}
+            <div className="p-6 bg-slate-950/30 border border-slate-800 rounded-2xl flex flex-col">
+              <div className="flex items-center justify-between">
+                <h3 className="text-2xl font-bold text-slate-100 font-cinzel">Free Trial</h3>
+                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-800/70 border border-slate-700 text-slate-200">
+                  Start Here
+                </span>
+              </div>
+
+              <p className="text-slate-400 mt-2">Experience the operating system — without commitment.</p>
+
+              <div className="mt-4">
+                <div className="text-3xl font-bold text-white">$0</div>
+                <div className="text-sm text-slate-400">No credit card required</div>
+              </div>
+
+              <ul className="space-y-2 mt-5 mb-6 flex-1">
+                <Row>Up to <span className="font-semibold">10</span> saved ideas</Row>
+                <Row><span className="font-semibold">10 minutes</span> of rehearsal coaching</Row>
+                <Row><span className="font-semibold">1</span> active show in Show Planner</Row>
+                <Row>Full Demo Mode access</Row>
+              </ul>
+
+              <button
+                onClick={onClose}
+                className="w-full py-3 px-4 bg-slate-800 hover:bg-slate-700 rounded-xl text-white font-bold transition-colors"
+              >
+                Continue Free Trial
+              </button>
+            </div>
+
             {/* Performer */}
             <div className="p-6 bg-slate-950/40 border border-slate-700 rounded-2xl flex flex-col">
               <div className="flex items-center justify-between">
@@ -67,10 +98,10 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
               </div>
 
               <ul className="space-y-2 mt-5 mb-6 flex-1">
-                <Row>Generous daily AI usage for scripts, ideas, and planning</Row>
-                <Row>Live rehearsal support (30 min/day)</Row>
-                <Row>Video rehearsal analysis (20 uploads/day)</Row>
-                <Row>Visual Brainstorm Studio (25 images/day)</Row>
+                <Row>Save unlimited ideas & drafts</Row>
+                <Row>Live rehearsal coaching</Row>
+                <Row>Video rehearsal analysis</Row>
+                <Row>Visual Brainstorm Studio</Row>
               </ul>
 
               <button
@@ -82,29 +113,38 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
             </div>
 
             {/* Professional */}
-            <div className="p-6 bg-slate-950/40 border-2 border-amber-400/70 rounded-2xl flex flex-col">
-              <div className="flex items-center justify-between">
-                <h3 className="text-2xl font-bold text-amber-200 font-cinzel">Professional</h3>
-                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-400/40 text-amber-200">
+            <div className="p-6 bg-gradient-to-b from-amber-500/10 to-slate-950/40 border-2 border-amber-400/70 rounded-2xl flex flex-col">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-2xl font-bold text-amber-200 font-cinzel">Professional</h3>
+                  <p className="text-slate-400 mt-2">Business-grade tools for working performers.</p>
+                </div>
+                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-400/40 text-amber-200 whitespace-nowrap">
                   Best for Pros
                 </span>
               </div>
 
-              <p className="text-slate-400 mt-2">Business-grade tools for working performers.</p>
-
               <div className="mt-4">
                 <div className="text-3xl font-bold text-white">$29.95<span className="text-sm font-normal text-slate-400">/mo</span></div>
                 <div className="text-sm text-slate-400">$299/year (2 months free)</div>
-                <div className="mt-3 text-xs text-amber-200/90 bg-amber-500/10 border border-amber-400/30 rounded-lg px-3 py-2">
-                  <span className="font-semibold">Founding Professional Rate</span> — $29.95/mo locked for life (pre-launch).
+
+                {/* Founding member callout (visually separated) */}
+                <div className="mt-4 rounded-xl border border-amber-300/40 bg-amber-500/10 px-4 py-3">
+                  <div className="text-xs uppercase tracking-wider text-amber-200/90 font-semibold">Founding Professional Rate</div>
+                  <div className="mt-1 text-sm text-amber-100">
+                    <span className="font-extrabold">$29.95/month</span> — locked for life (pre-launch).
+                  </div>
+                  <div className="mt-1 text-xs text-slate-300/90">Available to early adopters before public launch.</div>
                 </div>
               </div>
 
               <ul className="space-y-2 mt-5 mb-6 flex-1">
-                <Row>Everything in Performer</Row>
-                <Row>Unlimited text AI within fair use</Row>
-                <Row>More rehearsal capacity (120 min/day)</Row>
-                <Row>Higher image cap (100 images/day)</Row>
+                <Row>Unlimited ideas, scripts, and show assets</Row>
+                <Row>Full rehearsal suite (audio + video + diagnostics)</Row>
+                <Row>CRM + client performance history</Row>
+                <Row>Contracts + invoicing-ready docs</Row>
+                <Row>Finance tracking for every gig</Row>
+                <Row>Audience feedback analytics</Row>
               </ul>
 
               <button
