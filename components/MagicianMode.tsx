@@ -56,6 +56,7 @@ import MagicTheoryTutor from './MagicTheoryTutor';
 import MagicDictionary from './MagicDictionary';
 import AdminPanel from './AdminPanel';
 import AppSuggestionModal from './AppSuggestionModal';
+import FirstWinGate from './FirstWinGate';
 
 interface AngleRiskFormProps {
     trickName: string;
@@ -2201,8 +2202,16 @@ ${action.payload.content}`;
 
   const renderContent = () => {
     switch(activeView) {
-        case 'dashboard': return (
-          <>
+        case 'dashboard': {
+          // Phase 2 (Activation Optimization): First Win Under 90 Seconds
+          // If the user has no ideas and no shows yet, guide them into a single-click flow.
+          const showFirstWinGate = !user?.isAdmin && (ideas?.length ?? 0) === 0 && (shows?.length ?? 0) === 0;
+          if (showFirstWinGate) {
+            return <FirstWinGate user={user} onNavigate={handleNavigate} />;
+          }
+
+          return (
+            <>
             <div className="px-4 md:px-6 pt-6">
               <p className="text-sm uppercase tracking-wider text-yellow-300/80">
                 Magic AI Wizard Dashboard
@@ -2286,8 +2295,9 @@ ${action.payload.content}`;
               onShowsUpdate={handleShowsUpdate}
               onPromptClick={handlePromptClick}
             />
-          </>
-        );
+            </>
+          );
+        }
         case 'live-rehearsal':
           return (
             <LiveRehearsal
