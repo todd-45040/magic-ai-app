@@ -131,7 +131,7 @@ const DemoTourBar: React.FC<Props> = ({ activeView, onNavigate }) => {
     setLeadMessage(null);
 
     try {
-      const res = await fetch(`${getAppBasePath()}/api/waitlistSignup`, {
+      const res = await fetch(`/api/waitlistSignup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
