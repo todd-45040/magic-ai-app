@@ -40,7 +40,7 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
         className="w-full max-w-4xl bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl shadow-purple-900/40 max-h-[calc(100vh-3rem)] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-8 text-center border-b border-slate-800">
+        <div className="sticky top-0 z-20 p-6 sm:p-8 text-center border-b border-slate-800 bg-slate-900/95 backdrop-blur">
           <WandIcon className="w-14 h-14 mx-auto mb-3 text-amber-300" />
           <h2 className="font-cinzel text-3xl font-bold text-white">{title}</h2>
           <p className="text-slate-300 mt-2">{subtitle}</p>
