@@ -50,7 +50,7 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
           </div>
         </div>
 
-        <div className="p-8">
+        <div className="p-8 pb-28">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Free Trial (informational) */}
             <div className="p-6 bg-slate-950/30 border border-slate-800 rounded-2xl flex flex-col">
@@ -161,14 +161,44 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
           <div className="mt-6 text-center text-xs text-slate-500">
             Your material is not shared. Audience tools never reveal methods. AI assistance follows ethical magic guidelines.
           </div>
-
-          <button
-            onClick={onClose}
-            className="w-full mt-5 py-2.5 px-4 text-slate-400 hover:text-white transition-colors"
-          >
-            Not now
-          </button>
         </div>
+
+<div className="sticky bottom-0 z-20 border-t border-slate-800 bg-slate-900/95 backdrop-blur px-6 py-4">
+  <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+    <button
+      onClick={onClose}
+      className="text-slate-400 hover:text-white transition-colors text-sm font-semibold"
+    >
+      Close
+    </button>
+
+    <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
+      {variant !== 'trial-expired' && (
+        <button
+          onClick={onClose}
+          className="py-2.5 px-4 bg-slate-800 hover:bg-slate-700 rounded-xl text-white font-bold transition-colors"
+        >
+          Continue Free Trial
+        </button>
+      )}
+
+      <button
+        onClick={() => onUpgrade('performer')}
+        className="py-2.5 px-4 bg-purple-700/80 hover:bg-purple-700 rounded-xl text-white font-bold transition-colors"
+      >
+        Upgrade to Performer
+      </button>
+
+      <button
+        onClick={() => onUpgrade('professional')}
+        className="py-2.5 px-4 bg-amber-500/90 hover:bg-amber-500 rounded-xl text-slate-950 font-extrabold transition-colors"
+      >
+        Upgrade to Professional
+      </button>
+    </div>
+  </div>
+</div>
+
       </div>
     </div>
   );
