@@ -16,6 +16,7 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
   const [topSpenders, setTopSpenders] = useState<TopSpenderRow[]>([]);
   const [topErr, setTopErr] = useState<string | null>(null);
   const [topLoading, setTopLoading] = useState(false);
+  const [showAllTools, setShowAllTools] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -50,12 +51,14 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
   const byPlan = data?.users?.byPlan || {};
   const total = Number(data?.users?.total || 0);
   const active = Number(data?.users?.active || 0);
-  const paid = Number(byPlan.pro || 0) + Number(byPlan.amateur || 0);
+  const proCount = Number(byPlan.professional || 0) + Number(byPlan.pro || 0);
+  const paid = proCount + Number(byPlan.amateur || 0);
 
   const costByTool = useMemo(() => {
     const obj = data?.cost?.cost_by_tool_usd_window || {};
-    return Object.entries(obj).slice(0, 8);
-  }, [data]);
+    const entries = Object.entries(obj);
+    return showAllTools ? entries : entries.slice(0, 8);
+  }, [data, showAllTools]);
 
   return (
     <div className="p-4 space-y-4">
@@ -122,7 +125,7 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
         </div>
         <div className="p-3 rounded-xl bg-white/5 border border-white/10">
           <div className="text-sm opacity-80">Pro</div>
-          <div className="text-2xl font-bold">{Number(byPlan.pro || 0)}</div>
+          <div className="text-2xl font-bold">{proCount}</div>
           <div className="text-xs opacity-70 mt-1">${Number(data?.revenue?.pricesUSD?.pro || 29.95).toFixed(2)}/mo</div>
         </div>
         <div className="p-3 rounded-xl bg-white/5 border border-white/10">
@@ -150,7 +153,18 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
           </div>
 
           <div className="mt-3">
-            <div className="text-sm font-semibold mb-2">Top cost by tool</div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-sm font-semibold">Top cost by tool</div>
+              {Object.keys(data?.cost?.cost_by_tool_usd_window || {}).length > 8 && (
+                <button
+                  className="text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/15"
+                  onClick={() => setShowAllTools((v) => !v)}
+                  type="button"
+                >
+                  {showAllTools ? 'Show top 8' : 'Show all'}
+                </button>
+              )}
+            </div>
             {costByTool.length === 0 ? (
               <div className="text-sm opacity-70">No cost data found in this window.</div>
             ) : (

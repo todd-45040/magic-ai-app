@@ -85,37 +85,25 @@ export default async function handler(req: any, res: any) {
       // optional
     }
 
-    // --- Cost (prefer rollups if available)
+    // --- Cost (ALWAYS aggregate from raw events for accuracy + full tool breakdown)
     let aiCostUSD = 0;
     const costByTool: Record<string, number> = {};
 
-    // Rollups table fields: day, tool, total_estimated_cost_usd
-    const { data: rollups, error: rErr } = await admin
-      .from('ai_usage_rollups_daily')
-      .select('day,tool,total_estimated_cost_usd')
-      .gte('day', sinceDay)
-      .limit(5000);
+    const { data: evs, error: evErr } = await admin
+      .from('ai_usage_events')
+      .select('tool,estimated_cost_usd')
+      .gte('occurred_at', sinceIso)
+      .limit(200000);
 
-    if (!rErr && Array.isArray(rollups) && rollups.length > 0) {
-      for (const r of rollups as any[]) {
-        const c = Number(r?.total_estimated_cost_usd || 0);
-        aiCostUSD += c;
-        const t = String(r?.tool || 'unknown');
-        costByTool[t] = (costByTool[t] || 0) + c;
-      }
-    } else {
-      // Fallback to raw events
-      const { data: evs } = await admin
-        .from('ai_usage_events')
-        .select('tool,estimated_cost_usd')
-        .gte('occurred_at', sinceIso)
-        .limit(50000);
-      for (const e of (evs || []) as any[]) {
-        const c = Number(e?.estimated_cost_usd || 0);
-        aiCostUSD += c;
-        const t = String(e?.tool || 'unknown');
-        costByTool[t] = (costByTool[t] || 0) + c;
-      }
+    if (evErr) {
+      return res.status(500).json({ ok: false, error: 'Cost scan failed', details: evErr });
+    }
+
+    for (const e of (evs || []) as any[]) {
+      const c = Number(e?.estimated_cost_usd || 0);
+      aiCostUSD += c;
+      const t = String(e?.tool || 'unknown');
+      costByTool[t] = (costByTool[t] || 0) + c;
     }
 
     // --- Revenue estimates (until Stripe is live)
