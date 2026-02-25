@@ -7,7 +7,7 @@ import {
   updateUserMembership,
   getUserProfile,
 } from './services/usersService';
-import { ADMIN_EMAIL } from './constants';
+import { ADMIN_EMAIL, APP_VERSION } from './constants';
 import { useAppDispatch, refreshAllData } from './store';
 import ModeSelector from './components/ModeSelector';
 import Auth from './components/Auth';
@@ -329,7 +329,7 @@ function App() {
           <button
             type="button"
             onClick={() => setMode('about')}
-            className="text-purple-300 hover:text-white transition underline underline-offset-4"
+            className="text-purple-300 hover:text-white transition hover:underline hover:underline-offset-4"
           >
             Membership Types
           </button>
@@ -337,21 +337,21 @@ function App() {
           <button
             type="button"
             onClick={() => setIsDisclaimerOpen(true)}
-            className="text-purple-300 hover:text-white transition underline underline-offset-4"
+            className="text-purple-300 hover:text-white transition hover:underline hover:underline-offset-4"
           >
-            Disclaimer
+            Privacy &amp; Disclaimer
           </button>
           <span className="text-slate-600">•</span>
           <button
             type="button"
             onClick={() => setIsSuggestionModalOpen(true)}
-            className="text-purple-300 hover:text-white transition underline underline-offset-4"
+            className="text-purple-300 hover:text-white transition hover:underline hover:underline-offset-4"
           >
             Feedback
           </button>
         </div>
 
-        <p>Copyright 2026 Magicians&apos; AI Wizard, LLC - v0.94-Beta</p>
+        <p>Copyright 2026 Magicians&apos; AI Wizard, LLC — {APP_VERSION}</p>
       </footer>
     </div>
   );

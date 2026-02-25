@@ -30,7 +30,8 @@ import {
 } from './components/icons';
 
 export const ADMIN_EMAIL = 'admin@magicaiwizard.com';
-export const APP_VERSION = 'v0.8 Beta';
+// Keep this in sync with your current git benchmark/tag so the UI + SW cache are coherent.
+export const APP_VERSION = 'v0.99.2-beta-footer-polish';
 
 // Add GUEST_USER for Audience Mode services
 export const GUEST_USER: User = {

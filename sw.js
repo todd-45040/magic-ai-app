@@ -1,5 +1,6 @@
 
-const CACHE_NAME = 'magicians-ai-wizard-v0.79';
+// Bump cache name when shipping UI/UX changes so clients get the latest assets.
+const CACHE_NAME = 'magicians-ai-wizard-v0.99.2-footer-polish';
 // All app shell files and external assets
 const urlsToCache = [
   '/',
