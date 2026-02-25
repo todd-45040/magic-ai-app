@@ -85,7 +85,7 @@ export const registerOrUpdateUser = async (user: User, uid: string): Promise<voi
       membership === 'trial' &&
       existingMembership &&
       existingMembership !== 'trial' &&
-      (['performer', 'professional', 'amateur', 'semi-pro', 'admin'] as string[]).includes(existingMembership)
+      (['amateur', 'professional', 'performer', 'semi-pro', 'admin'] as string[]).includes(existingMembership)
     ) {
       membership = existingMembership as Membership;
     }
@@ -100,7 +100,7 @@ export const registerOrUpdateUser = async (user: User, uid: string): Promise<voi
     }
 
     // Enforce trial logic ONLY if not a recognized tier.
-    if (!(['performer', 'professional', 'amateur', 'semi-pro', 'admin'] as Membership[]).includes(membership)) {
+    if (!(['amateur', 'professional', 'performer', 'semi-pro', 'admin'] as Membership[]).includes(membership)) {
       membership = 'trial';
       if (!trialEndDate) {
         trialEndDate = Date.now() + 14 * 24 * 60 * 60 * 1000;

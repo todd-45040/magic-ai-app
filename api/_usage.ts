@@ -3,15 +3,15 @@ import { requireSupabaseAuth } from './_auth.js';
 // Legacy tiers are accepted and normalized server-side.
 type Membership = 'free' | 'trial' | 'performer' | 'professional' | 'expired' | 'amateur' | 'semi-pro';
 
-function normalizeTier(m?: string | null): 'free' | 'trial' | 'performer' | 'professional' | 'expired' {
+function normalizeTier(m?: string | null): 'free' | 'trial' | 'amateur' | 'professional' | 'expired' {
   switch (m) {
     case 'professional':
       return 'professional';
-    case 'performer':
-      return 'performer';
     case 'amateur':
+      return 'amateur';
+    case 'performer':
     case 'semi-pro':
-      return 'performer';
+      return 'amateur';
     case 'expired':
       return 'expired';
     case 'trial':
@@ -24,24 +24,24 @@ function normalizeTier(m?: string | null): 'free' | 'trial' | 'performer' | 'pro
 const TIER_LIMITS: Record<string, number> = {
   free: 10,
   trial: 20,
-  performer: 100,
+  amateur: 200,
   professional: 10000,
   expired: 0,
   // legacy
-  amateur: 100,
-  'semi-pro': 100,
+  performer: 200,
+  'semi-pro': 200,
 };
 
 // Per-minute burst limits (requests per minute), even if daily remaining is high.
 const BURST_LIMITS: Record<string, number> = {
   free: 10,
   trial: 20,
-  performer: 30,
+  amateur: 60,
   professional: 120,
   expired: 0,
   // legacy
-  amateur: 30,
-  'semi-pro': 30,
+  performer: 60,
+  'semi-pro': 60,
 };
 
 function getTodayKeyUTC(d = new Date()): string {

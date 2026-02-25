@@ -3,7 +3,7 @@ import { CheckIcon, WandIcon, ShieldIcon } from './icons';
 
 interface UpgradeModalProps {
   onClose: () => void;
-  onUpgrade: (tier: 'performer' | 'professional') => void;
+  onUpgrade: (tier: 'amateur' | 'professional') => void;
   variant?: 'locked-tool' | 'trial-expired' | 'generic';
 }
 
@@ -83,10 +83,10 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
               </button>
             </div>
 
-            {/* Performer */}
+            {/* Amateur (Creative Tier) */}
             <div className="p-6 bg-slate-950/40 border border-slate-700 rounded-2xl flex flex-col">
               <div className="flex items-center justify-between">
-                <h3 className="text-2xl font-bold text-purple-200 font-cinzel">Performer</h3>
+                <h3 className="text-2xl font-bold text-purple-200 font-cinzel">Amateur</h3>
                 <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-purple-500/15 border border-purple-400/30 text-purple-200">
                   Most Popular
                 </span>
@@ -107,10 +107,10 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
               </ul>
 
               <button
-                onClick={() => onUpgrade('performer')}
+                onClick={() => onUpgrade('amateur')}
                 className="w-full py-3 px-4 bg-purple-600 hover:bg-purple-700 rounded-xl text-white font-bold transition-colors"
               >
-                Upgrade to Performer
+                Upgrade to Amateur
               </button>
             </div>
 
@@ -175,7 +175,7 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
     {/*
       Mobile-friendly CTA layout:
       - Professional is primary and full-width on mobile
-      - Performer is secondary on mobile
+      - Amateur is secondary on mobile
       - Desktop keeps a standard right-aligned row
     */}
     <div className="grid grid-cols-1 sm:flex sm:flex-row gap-3 sm:justify-end sm:items-center w-full sm:w-auto">
@@ -187,10 +187,10 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
       </button>
 
       <button
-        onClick={() => onUpgrade('performer')}
+        onClick={() => onUpgrade('amateur')}
         className="order-2 sm:order-2 w-full sm:w-auto py-2.5 px-4 rounded-xl font-bold transition-colors border border-purple-400/40 text-purple-200 bg-slate-900/30 hover:bg-slate-800/60 sm:border-0 sm:text-white sm:bg-purple-700/80 sm:hover:bg-purple-700"
       >
-        Upgrade to Performer
+        Upgrade to Amateur
       </button>
 
       {variant !== 'trial-expired' && (

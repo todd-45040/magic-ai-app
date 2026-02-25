@@ -7,12 +7,12 @@ import { normalizeTier } from './membershipService';
 const TIER_LIMITS: Record<string, number> = {
   free: 10,
   trial: 20,
-  performer: 100,
+  amateur: 200,
   professional: 10000, // effectively unlimited (fair use)
   expired: 0,
   // legacy
-  amateur: 100,
-  'semi-pro': 100,
+  performer: 200,
+  'semi-pro': 200,
 };
 
 function getTodayKeyUTC(d = new Date()): string {

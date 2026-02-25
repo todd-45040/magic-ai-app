@@ -32,7 +32,7 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
   const planLabel = useMemo(() => {
     if (plan === 'admin') return 'Admin';
     if (plan === 'professional') return 'Pro';
-    if (plan === 'performer') return 'Performer';
+    if (plan === 'amateur') return 'Amateur';
     if (plan === 'trial') return 'Trial';
     return String(plan).slice(0, 1).toUpperCase() + String(plan).slice(1);
   }, [plan]);
@@ -40,7 +40,7 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
   const planBadgeClasses = useMemo(() => {
     if (plan === 'admin') return 'bg-amber-500/15 border-amber-500/25 text-amber-200';
     if (plan === 'professional') return 'bg-purple-500/15 border-purple-500/25 text-purple-200';
-    if (plan === 'performer') return 'bg-indigo-500/15 border-indigo-500/25 text-indigo-200';
+    if (plan === 'amateur') return 'bg-indigo-500/15 border-indigo-500/25 text-indigo-200';
     if (plan === 'trial') return 'bg-yellow-500/15 border-yellow-500/25 text-[#E6C77A]';
     return 'bg-slate-900/60 border-slate-700 text-slate-200';
   }, [plan]);

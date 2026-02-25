@@ -13,7 +13,7 @@ const DAILY_LIMITS: Record<CanonicalTier, Limits> = {
   free: { image: 0, video_upload: 0, live_minutes: 0 },
   expired: { image: 0, video_upload: 0, live_minutes: 0 },
   trial: { image: 5, video_upload: 5, live_minutes: 10 },
-  performer: { image: 25, video_upload: 20, live_minutes: 30 },
+  amateur: { image: 25, video_upload: 20, live_minutes: 120 },
   professional: { image: 100, video_upload: 9999, live_minutes: 120 },
 };
 

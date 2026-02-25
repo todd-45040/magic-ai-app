@@ -38,17 +38,18 @@ function makeRequestId(): string {
 
 // NOTE: For ADMC soft launch, "free" behaves like "trial".
 // We keep the legacy string accepted, but normalize it to "trial".
-function normalizeTier(m?: string | null): 'trial' | 'performer' | 'professional' | 'admin' | 'expired' {
+function normalizeTier(m?: string | null): 'trial' | 'amateur' | 'professional' | 'admin' | 'expired' {
   switch (m) {
     case 'admin':
       return 'admin';
     case 'professional':
       return 'professional';
-    case 'performer':
-      return 'performer';
     case 'amateur':
+      return 'amateur';
+    case 'performer':
     case 'semi-pro':
-      return 'performer';
+      // legacy tiers
+      return 'amateur';
     case 'expired':
       return 'expired';
     case 'trial':
@@ -62,26 +63,26 @@ function normalizeTier(m?: string | null): 'trial' | 'performer' | 'professional
 const TIER_LIMITS: Record<string, number> = {
   // free behaves like trial
   trial: 20,
-  performer: 100,
+  amateur: 200,
   professional: 10000,
   admin: 10000,
   expired: 0,
   // legacy
-  amateur: 100,
-  'semi-pro': 100,
+  performer: 200,
+  'semi-pro': 200,
 };
 
 // Per-minute burst limits (requests per minute), even if daily remaining is high.
 const BURST_LIMITS: Record<string, number> = {
   // free behaves like trial
   trial: 20,
-  performer: 30,
+  amateur: 60,
   professional: 120,
   admin: 120,
   expired: 0,
   // legacy
-  amateur: 30,
-  'semi-pro': 30,
+  performer: 60,
+  'semi-pro': 60,
 };
 
 
@@ -99,9 +100,9 @@ type ToolPolicy = {
 
 const TOOL_POLICIES: Record<ToolKey, ToolPolicy> = {
   live_rehearsal_audio: { key: 'live_rehearsal_audio', minTier: 'trial', quotaColumn: 'quota_live_audio_minutes' },
-  image_generation: { key: 'image_generation', minTier: 'trial', quotaColumn: 'quota_image_gen' },
+  image_generation: { key: 'image_generation', minTier: 'amateur', quotaColumn: 'quota_image_gen' },
   identify_trick: { key: 'identify_trick', minTier: 'trial', quotaColumn: 'quota_identify' },
-  video_rehearsal: { key: 'video_rehearsal', minTier: 'professional', quotaColumn: 'quota_video_uploads' },
+  video_rehearsal: { key: 'video_rehearsal', minTier: 'amateur', quotaColumn: 'quota_video_uploads' },
 };
 
 function tierRank(tier: string): number {
@@ -133,12 +134,12 @@ function defaultMonthlyQuotas(tier: string): {
   const t = normalizeTier(tier as any);
   switch (t) {
     case 'professional':
-      return { quota_live_audio_minutes: 120, quota_image_gen: 25, quota_identify: 25, quota_video_uploads: 10 };
-    case 'performer':
-      // "amateur" normalizes to performer
-      return { quota_live_audio_minutes: 30, quota_image_gen: 10, quota_identify: 10, quota_video_uploads: 0 };
+      return { quota_live_audio_minutes: 240, quota_image_gen: 100, quota_identify: 100, quota_video_uploads: 30 };
+    case 'amateur':
+      // legacy "performer" and "semi-pro" normalize here
+      return { quota_live_audio_minutes: 120, quota_image_gen: 25, quota_identify: 50, quota_video_uploads: 10 };
     case 'trial':
-      return { quota_live_audio_minutes: 5, quota_image_gen: 3, quota_identify: 3, quota_video_uploads: 0 };
+      return { quota_live_audio_minutes: 10, quota_image_gen: 3, quota_identify: 10, quota_video_uploads: 0 };
     case 'expired':
     default:
       return { quota_live_audio_minutes: 0, quota_image_gen: 0, quota_identify: 0, quota_video_uploads: 0 };

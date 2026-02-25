@@ -294,33 +294,47 @@ export const PERSONAS: Persona[] = [
 ];
 
 export const AMATEUR_FEATURES = [
+    'Unlimited saved ideas & drafts',
+    'Unlimited live rehearsal coaching',
+    'Video Rehearsal Studio',
     'Effect Generator',
     'Patter Engine',
+    'Innovation Engine',
+    'Visual Brainstorm Studio',
+    'Illusion Blueprint Generator',
+    'Director Mode',
+    'Persona Simulator',
+    "Assistant's Studio",
+    'Angle & Risk Analysis',
+    'Show Planner',
+    'Magic Dictionary',
+    'Magic Theory Tutor',
+    'Mentalism Assistant',
+    'Gospel Magic Assistant',
     'Magic Archives',
     'Global Search',
-    'Show Planner',
 ];
 
 // Define missing SEMI_PRO_FEATURES
 export const SEMI_PRO_FEATURES = [
-    'Marketing Campaign',
-    'Contract Generator',
-    'Prop Checklist Generator',
-    'Client Management',
-    'Show Feedback',
-    'Innovation Engine'
+    'Client Management (CRM)',
+    'Contracts + performance riders',
+    'Marketing Campaign Generator',
+    'Show Finance Tracker',
+    'Audience feedback collection',
+    'Performance analytics timeline',
 ];
 
 export const PROFESSIONAL_FEATURES = [
-    'Director Mode',
-    'Persona Simulator',
-    'Video Rehearsal Studio',
-    'Assistant\'s Studio',
-    'Illusion Blueprint Generator',
-    'Magic Theory Tutor',
-    'Mentalism Assistant',
-    'Gospel Magic Assistant',
-    'Magic Dictionary',
+    'Client Management (CRM)',
+    'Contracts + performance riders',
+    'Marketing Campaign Generator',
+    'Show Finance Tracker',
+    'Audience feedback collection',
+    'Performance analytics timeline',
+    'Advanced analytics dashboard',
+    'Priority feature access',
+    'Founding Member perks (where available)',
 ];
 
 export const AUDIENCE_PROMPTS: PredefinedPrompt[] = [
