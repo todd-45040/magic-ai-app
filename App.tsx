@@ -354,23 +354,7 @@ function App() {
                 <rect x="4" y="11" width="16" height="10" rx="2" />
                 <path d="M12 16h.01" />
               </svg>
-              <span><span className="inline-flex items-center gap-1">
-            <svg
-              aria-hidden="true"
-              viewBox="0 0 24 24"
-              className="h-4 w-4 opacity-70"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M12 11V8a4 4 0 0 0-8 0v3" />
-              <rect x="4" y="11" width="16" height="10" rx="2" />
-              <path d="M12 16h.01" />
-            </svg>
-            <span>Privacy &amp; Disclaimer</span>
-          </span></span>
+              <span>Privacy &amp; Disclaimer</span>
             </span>
           </button>
           <span className="text-slate-600">•</span>
