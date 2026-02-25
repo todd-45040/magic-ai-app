@@ -424,6 +424,11 @@
       .quote-wide{
         grid-column: 1 / -1;
         padding: 22px;
+        /* Micro-polish: make this feel like a wider “statement banner” */
+        margin-inline: -10px; /* ~2–4% wider inside 1100px wrap */
+      }
+      @media (max-width: 520px) {
+        .quote-wide{ margin-inline: 0; }
       }
       .quote-wide .quote{
         margin-top: 0;
@@ -456,8 +461,8 @@
       }
 
       .quote {
-        border: 1px solid rgba(246,195,67,0.35);
-        box-shadow: 0 0 18px rgba(246,195,67,0.08);
+        border: 1px solid rgba(246,195,67,0.24);
+        box-shadow: 0 0 18px rgba(246,195,67,0.06);
       }
 
       .badge {
