@@ -95,8 +95,8 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
               <p className="text-slate-400 mt-2">For consistent practice and show prep.</p>
 
               <div className="mt-4">
-                <div className="text-3xl font-bold text-white">$19.95<span className="text-sm font-normal text-slate-400">/mo</span></div>
-                <div className="text-sm text-slate-400">$199/year (2 months free)</div>
+                <div className="text-3xl font-bold text-white">$15.95<span className="text-sm font-normal text-slate-400">/mo</span></div>
+                <div className="text-sm text-slate-400">Annual billing coming soon</div>
               </div>
 
               <ul className="space-y-2 mt-5 mb-6 flex-1">
