@@ -107,8 +107,9 @@
       .hero {
         display:grid;
         grid-template-columns: 1.25fr 0.75fr;
-        gap: 22px;
-        align-items: start;
+        column-gap: 22px;
+        row-gap: 18px;
+        align-items: stretch;
       }
       @media (max-width: 940px) {
         .hero { grid-template-columns: 1fr; }
@@ -134,6 +135,13 @@
         pointer-events:none;
       }
       .card > * { position: relative; }
+
+      /* Make cards behave like columns so bottoms align cleanly when grid stretches */
+      .left-card, .right-card{
+        display:flex;
+        flex-direction:column;
+        padding-bottom: 26px;
+      }
 
       h1 {
         font-size: 44px;
@@ -255,7 +263,7 @@
       }
 
       footer {
-        margin-top: 30px;
+        margin-top: 26px;
         color: rgba(255,255,255,0.55);
         font-size: 13px;
       }
@@ -403,19 +411,19 @@
       .quote{
         border: 1px solid rgba(148, 163, 184, 0.18);
         background: rgba(0,0,0,0.08);
-        border-radius: 16px;
-        padding: 14px 14px;
+        border-radius: 18px;
+        padding: 18px 18px;
         margin-top: 12px;
-        color: rgba(255,255,255,0.76);
-        font-size: 14px;
-        line-height: 1.55;
+        color: rgba(255,255,255,0.78);
+        font-size: 16px;
+        line-height: 1.7;
       }
       .quote strong{ color: rgba(255,255,255,0.92); }
 
       /* Full-width bottom callout to balance columns */
       .quote-wide{
         grid-column: 1 / -1;
-        padding: 18px;
+        padding: 22px;
       }
       .quote-wide .quote{
         margin-top: 0;
@@ -485,7 +493,7 @@
 
       <section class="hero">
         <!-- Left column -->
-        <div class="card">
+        <div class="card left-card">
           <div class="badges">
             <span class="badge"><span class="spark"></span> Deep routine builder</span>
             <span class="badge"><span class="spark" style="background: rgba(56,189,248,0.95); box-shadow:0 0 0 4px rgba(56,189,248,0.16);"></span> Live rehearsal coaching</span>
