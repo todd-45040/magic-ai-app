@@ -423,12 +423,7 @@
       /* Full-width bottom callout to balance columns */
       .quote-wide{
         grid-column: 1 / -1;
-        padding: 22px;
-        /* Micro-polish: make this feel like a wider “statement banner” */
-        margin-inline: -10px; /* ~2–4% wider inside 1100px wrap */
-      }
-      @media (max-width: 520px) {
-        .quote-wide{ margin-inline: 0; }
+        padding: 30px 22px; /* aligned with wrap padding */
       }
       .quote-wide .quote{
         margin-top: 0;
@@ -461,8 +456,10 @@
       }
 
       .quote {
-        border: 1px solid rgba(246,195,67,0.24);
-        box-shadow: 0 0 18px rgba(246,195,67,0.06);
+        border: 1px solid rgba(246,195,67,0.32);
+        box-shadow: 0 0 22px rgba(246,195,67,0.08);
+        padding: 24px 26px;
+        font-size: 17px;
       }
 
       .badge {
@@ -628,7 +625,15 @@
         <!-- Full-width bridge callout (spans both columns) -->
         <div class="card quote-wide">
           <div class="quote" role="note">
-            <strong>Why it feels different:</strong> you can generate a routine, import it, and immediately see it as a beat inside a show. That “bridge” is what turns AI into a real performance tool.
+            <strong>Why it feels different:</strong>
+            you can generate a routine, import it, and immediately see it as a beat inside a show.
+            That “bridge” is what turns AI into a real performance tool.
+
+            <br><br>
+
+            Instead of collecting isolated ideas, you build connected performances —
+            structured, rehearsed, and ready for real audiences.
+            Planning, refining, and performing all happen in one continuous workflow.
           </div>
         </div>
 
