@@ -100,9 +100,9 @@ type ToolPolicy = {
 
 const TOOL_POLICIES: Record<ToolKey, ToolPolicy> = {
   live_rehearsal_audio: { key: 'live_rehearsal_audio', minTier: 'trial', quotaColumn: 'quota_live_audio_minutes' },
-  image_generation: { key: 'image_generation', minTier: 'amateur', quotaColumn: 'quota_image_gen' },
+  image_generation: { key: 'image_generation', minTier: 'trial', quotaColumn: 'quota_image_gen' },
   identify_trick: { key: 'identify_trick', minTier: 'trial', quotaColumn: 'quota_identify' },
-  video_rehearsal: { key: 'video_rehearsal', minTier: 'amateur', quotaColumn: 'quota_video_uploads' },
+  video_rehearsal: { key: 'video_rehearsal', minTier: 'trial', quotaColumn: 'quota_video_uploads' },
 };
 
 function tierRank(tier: string): number {
@@ -139,11 +139,18 @@ function defaultMonthlyQuotas(tier: string): {
       // legacy "performer" and "semi-pro" normalize here
       return { quota_live_audio_minutes: 120, quota_image_gen: 25, quota_identify: 50, quota_video_uploads: 10 };
     case 'trial':
-      return { quota_live_audio_minutes: 10, quota_image_gen: 3, quota_identify: 10, quota_video_uploads: 0 };
+      return { quota_live_audio_minutes: 10, quota_image_gen: 2, quota_identify: 10, quota_video_uploads: 1 };
     case 'expired':
     default:
       return { quota_live_audio_minutes: 0, quota_image_gen: 0, quota_identify: 0, quota_video_uploads: 0 };
   }
+}
+
+function isTrialActive(trialEnd: any, nowMs = Date.now()): boolean {
+  if (!trialEnd) return true;
+  const t = typeof trialEnd === 'number' ? trialEnd : Number(trialEnd);
+  if (!Number.isFinite(t)) return true;
+  return nowMs < t;
 }
 
 function needsMonthlyReset(resetDateISO?: string | null, now = new Date()): boolean {
@@ -584,6 +591,12 @@ if (profile) {
     generationCount = 0;
   }
 
+  // Trial expiration: if the 14-day window has ended and user is still on trial, treat as expired.
+  const trialActive = isTrialActive(profile?.trial_end_date);
+  if (!trialActive && normalizeTier(membership as any) === 'trial') {
+    membership = 'expired';
+  }
+
   const tier = normalizeTier(membership as any);
   const limit = TIER_LIMITS[tier] ?? TIER_LIMITS.trial;
   const remaining = Math.max(0, limit - generationCount);
@@ -895,6 +908,12 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
   const policy = (TOOL_POLICIES as any)[toolKey] as ToolPolicy;
 
   // Normalize membership tier for comparisons
+  // Trial expiration: if the 14-day window has ended and user is still on trial, treat as expired.
+  const trialActive = isTrialActive(profile?.trial_end_date);
+  if (!trialActive && normalizeTier(membership as any) === 'trial') {
+    membership = 'expired';
+  }
+
   const norm = normalizeTier(membership as any);
 
   // Hard gate by tier (ex: video_rehearsal is pro-only)
@@ -984,6 +1003,12 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
 }
 
   // Burst limit (per minute) — enforce BEFORE reserving daily units
+  // Trial expiration: if the 14-day window has ended and user is still on trial, treat as expired.
+  const trialActive = isTrialActive(profile?.trial_end_date);
+  if (!trialActive && normalizeTier(membership as any) === 'trial') {
+    membership = 'expired';
+  }
+
   const tier = normalizeTier(membership as any);
   const burstLimit = BURST_LIMITS[tier] ?? BURST_LIMITS.trial;
   const burst = enforceBurst(userId, burstLimit);

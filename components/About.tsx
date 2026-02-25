@@ -44,15 +44,16 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
             <div className="grid w-full max-w-5xl grid-cols-1 gap-6 text-left justify-items-center md:grid-cols-2 lg:grid-cols-3">
                 {/* Trial Card */}
                 <div className="w-full max-w-sm p-6 bg-slate-800/50 border border-green-500/50 rounded-lg flex flex-col">
-                    <h3 className="text-2xl font-bold text-green-300 font-cinzel mb-4">Free Trial</h3>
+                    <h3 className="text-2xl font-bold text-green-300 font-cinzel mb-4">14-Day Free Trial</h3>
                     <div className="min-h-[10rem] flex flex-col">
-                        <p className="text-slate-400 mb-4">Start here. Get a fast first win with guided access and starter limits.</p>
+                        <p className="text-slate-400 mb-4">Start here. Enjoy 14 days with access to most tools (with low trial quotas to protect costs).</p>
                         <div className="text-center">
                             <p className="text-3xl font-bold text-green-300">Free</p>
+                            <p className="text-sm text-slate-400">for 14 days</p>
                         </div>
                     </div>
                     <hr className="border-slate-700 my-4" />
-                    <FeatureList features={['Up to 10 saved ideas', '10 minutes of rehearsal coaching', '1 active show in Show Planner', 'Demo Mode access']} />
+                    <FeatureList features={['14-day trial access (most tools)', 'Up to 10 saved ideas', '10 minutes of rehearsal coaching', '1 active show in Show Planner', 'Includes Image Generation (2) + Video Rehearsal (1) during trial', 'Demo Mode access']} />
                     <div className="flex-grow" />
                 </div>
 
@@ -78,7 +79,7 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
                         <p className="text-slate-400 mb-4">The Business Tier — client, contracts, finance, and analytics.</p>
                         <div className="text-center">
                             <p className="text-3xl font-bold text-amber-300">$29.95<span className="text-base font-normal text-slate-400">/month</span></p>
-                            <p className="text-sm text-slate-400">or $299.00/year</p>
+                            <p className="text-sm text-slate-400">$299.00 one-time annual billing</p>
                         </div>
                     </div>
                     <hr className="border-slate-700 my-4" />
