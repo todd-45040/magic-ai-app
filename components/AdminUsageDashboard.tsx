@@ -1,9 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import AdminWindowSelector from './AdminWindowSelector';
+import { snapAdminWindowDays } from '../utils/adminMetrics';
 import { fetchAdminUsageDashboard, resolveAnomalyFlag } from '../services/adminUsageDashboardService';
 
 export default function AdminUsageDashboard() {
-  const [days, setDays] = useState(7);
+  const [days, setDays] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return snapAdminWindowDays(params.get('days') ?? 7, 7);
+  });
   const [data, setData] = useState<any>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -14,6 +18,8 @@ export default function AdminUsageDashboard() {
     try {
       const d = await fetchAdminUsageDashboard(days);
       setData(d);
+      // Keep UI in sync with backend snapping (prevents drift if URL/query is non-standard)
+      if (d?.window?.days && d.window.days !== days) setDays(d.window.days);
     } catch (e: any) {
       setErr(e?.message || 'Failed to load');
     } finally {

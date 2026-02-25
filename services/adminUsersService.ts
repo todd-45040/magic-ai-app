@@ -1,4 +1,5 @@
 import { supabase } from '../supabase';
+import { snapAdminWindowDays } from '../utils/adminMetrics';
 
 async function getAccessToken(): Promise<string | null> {
   const { data } = await supabase.auth.getSession();
@@ -30,7 +31,7 @@ export async function fetchAdminUsers(params: {
   if (params.q) qs.set('q', params.q);
   if (params.limit != null) qs.set('limit', String(params.limit));
   if (params.offset != null) qs.set('offset', String(params.offset));
-  if (params.days != null) qs.set('days', String(params.days));
+  if (params.days != null) qs.set('days', String(snapAdminWindowDays(params.days, 30)));
 
   const r = await fetch(`/api/adminUsers?${qs.toString()}`, {
     method: 'GET',

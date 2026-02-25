@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import AdminWindowSelector from './AdminWindowSelector';
+import { snapAdminWindowDays } from '../utils/adminMetrics';
 import { fetchAdminUsers, type AdminUserRow } from '../services/adminUsersService';
 
 function money(n: any, digits = 4) {
@@ -31,7 +32,10 @@ function labelPlan(m: string | null) {
 export default function AdminUsersPage() {
   const [plan, setPlan] = useState<string>('all');
   const [q, setQ] = useState<string>('');
-  const [days, setDays] = useState<number>(30);
+  const [days, setDays] = useState<number>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return snapAdminWindowDays(params.get('days') ?? 30, 30);
+  });
   const [limit, setLimit] = useState<number>(50);
   const [offset, setOffset] = useState<number>(0);
 
@@ -50,6 +54,8 @@ export default function AdminUsersPage() {
       const res = await fetchAdminUsers({ plan, q, days, limit, offset });
       setRows(res.users || []);
       setTotal(Number(res.paging?.total || 0));
+      // Keep UI in sync with backend snapping (prevents drift if URL/query is non-standard)
+      if (res.window?.days && res.window.days !== days) setDays(res.window.days);
     } catch (e: any) {
       setErr(e?.message || 'Failed to load users');
     } finally {

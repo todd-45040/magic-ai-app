@@ -1,4 +1,5 @@
 import { supabase } from '../supabase';
+import { snapAdminWindowDays } from '../utils/adminMetrics';
 
 async function getAccessToken(): Promise<string | null> {
   const { data } = await supabase.auth.getSession();
@@ -6,10 +7,11 @@ async function getAccessToken(): Promise<string | null> {
 }
 
 export async function fetchAdminUsageDashboard(days = 7): Promise<any> {
+  const snappedDays = snapAdminWindowDays(days, 7);
   const token = await getAccessToken();
   if (!token) throw new Error('Not authenticated');
 
-  const r = await fetch(`/api/adminUsageDashboard?days=${encodeURIComponent(String(days))}`, {
+  const r = await fetch(`/api/adminUsageDashboard?days=${encodeURIComponent(String(snappedDays))}`, {
     method: 'GET',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
   });

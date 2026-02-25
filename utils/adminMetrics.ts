@@ -7,6 +7,34 @@ export const ADMIN_WINDOWS = [
 
 export type AdminWindowDays = (typeof ADMIN_WINDOWS)[number]['days'];
 
+export const ADMIN_WINDOW_OPTIONS_DAYS = ADMIN_WINDOWS.map((w) => w.days) as readonly AdminWindowDays[];
+
+/**
+ * Snap any provided window to our supported Admin windows.
+ * This mirrors the backend parseAdminWindowDays helper so UI and API stay in lockstep.
+ */
+export function snapAdminWindowDays(input: any, fallback: AdminWindowDays = 30): AdminWindowDays {
+  const n = Number(input);
+  if (!Number.isFinite(n)) return fallback;
+
+  for (const d of ADMIN_WINDOW_OPTIONS_DAYS) {
+    if (n === d) return d;
+  }
+
+  const clamped = Math.max(1, Math.min(365, Math.floor(n)));
+  let best: AdminWindowDays = fallback;
+  let bestDist = Infinity;
+  for (const d of ADMIN_WINDOW_OPTIONS_DAYS) {
+    const dist = Math.abs(clamped - d);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = d;
+    }
+  }
+  return best;
+}
+
+
 export const CORE_ACTIVATION_TOOLS = [
   'effect_engine',
   'patter_engine',
