@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import type { User } from '../types';
+import AdminOverviewDashboard from './AdminOverviewDashboard';
 import AdminUsageDashboard from './AdminUsageDashboard';
 import AdminSettingsModal from './AdminSettingsModal';
 import {
@@ -12,7 +13,7 @@ import {
 
 export default function AdminPanel({ user }: { user: User }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [tab, setTab] = useState<'telemetry' | 'feedback'>('feedback');
+  const [tab, setTab] = useState<'overview' | 'telemetry' | 'feedback'>('overview');
 
   // App Feedback state
   const [statusFilter, setStatusFilter] = useState<SuggestionStatus | 'all'>('new');
@@ -77,6 +78,13 @@ export default function AdminPanel({ user }: { user: User }) {
             <div className="flex items-center gap-1 rounded-full bg-black/20 border border-white/10 p-1">
               <button
                 type="button"
+                onClick={() => setTab('overview')}
+                className={`px-3 py-1.5 rounded-full text-sm transition ${tab === 'overview' ? 'bg-white/10 text-white' : 'text-white/70 hover:text-white'}`}
+              >
+                Overview
+              </button>
+              <button
+                type="button"
                 onClick={() => setTab('feedback')}
                 className={`px-3 py-1.5 rounded-full text-sm transition ${tab === 'feedback' ? 'bg-white/10 text-white' : 'text-white/70 hover:text-white'}`}
               >
@@ -116,7 +124,9 @@ export default function AdminPanel({ user }: { user: User }) {
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {tab === 'telemetry' ? (
+        {tab === 'overview' ? (
+          <AdminOverviewDashboard />
+        ) : tab === 'telemetry' ? (
           <AdminUsageDashboard />
         ) : (
           <div className="p-4">
