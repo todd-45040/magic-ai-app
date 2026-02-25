@@ -412,6 +412,15 @@
       }
       .quote strong{ color: rgba(255,255,255,0.92); }
 
+      /* Full-width bottom callout to balance columns */
+      .quote-wide{
+        grid-column: 1 / -1;
+        padding: 18px;
+      }
+      .quote-wide .quote{
+        margin-top: 0;
+      }
+
 
       /* Gold accent enhancements */
       h1, h2, .section-title {
@@ -598,13 +607,18 @@
                 </div>
               </div>
 
-              <div class="quote" role="note">
-                <strong>Why it feels different:</strong> you can generate a routine, import it, and immediately see it as a beat inside a show. That “bridge” is what turns AI into a real performance tool.
-              </div>
 
             </div>
           </div>
         </div>
+
+        <!-- Full-width bridge callout (spans both columns) -->
+        <div class="card quote-wide">
+          <div class="quote" role="note">
+            <strong>Why it feels different:</strong> you can generate a routine, import it, and immediately see it as a beat inside a show. That “bridge” is what turns AI into a real performance tool.
+          </div>
+        </div>
+
       </section>
 
       <footer>
