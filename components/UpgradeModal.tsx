@@ -172,29 +172,35 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
       Close
     </button>
 
-    <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
-      {variant !== 'trial-expired' && (
-        <button
-          onClick={onClose}
-          className="py-2.5 px-4 bg-slate-800 hover:bg-slate-700 rounded-xl text-white font-bold transition-colors"
-        >
-          Continue Free Trial
-        </button>
-      )}
+    {/*
+      Mobile-friendly CTA layout:
+      - Professional is primary and full-width on mobile
+      - Performer is secondary on mobile
+      - Desktop keeps a standard right-aligned row
+    */}
+    <div className="grid grid-cols-1 sm:flex sm:flex-row gap-3 sm:justify-end sm:items-center w-full sm:w-auto">
+      <button
+        onClick={() => onUpgrade('professional')}
+        className="order-1 sm:order-3 w-full sm:w-auto py-2.5 px-4 bg-amber-500/90 hover:bg-amber-500 rounded-xl text-slate-950 font-extrabold transition-colors"
+      >
+        Upgrade to Professional
+      </button>
 
       <button
         onClick={() => onUpgrade('performer')}
-        className="py-2.5 px-4 bg-purple-700/80 hover:bg-purple-700 rounded-xl text-white font-bold transition-colors"
+        className="order-2 sm:order-2 w-full sm:w-auto py-2.5 px-4 rounded-xl font-bold transition-colors border border-purple-400/40 text-purple-200 bg-slate-900/30 hover:bg-slate-800/60 sm:border-0 sm:text-white sm:bg-purple-700/80 sm:hover:bg-purple-700"
       >
         Upgrade to Performer
       </button>
 
-      <button
-        onClick={() => onUpgrade('professional')}
-        className="py-2.5 px-4 bg-amber-500/90 hover:bg-amber-500 rounded-xl text-slate-950 font-extrabold transition-colors"
-      >
-        Upgrade to Professional
-      </button>
+      {variant !== 'trial-expired' && (
+        <button
+          onClick={onClose}
+          className="order-3 sm:order-1 w-full sm:w-auto py-2.5 px-4 bg-slate-800 hover:bg-slate-700 rounded-xl text-white font-bold transition-colors"
+        >
+          Continue Free Trial
+        </button>
+      )}
     </div>
   </div>
 </div>
