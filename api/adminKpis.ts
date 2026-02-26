@@ -103,7 +103,11 @@ export default async function handler(req: any, res: any) {
 
     const activeUserSet = new Set<string>();
     const toolAgg: Record<string, { events: number; cost: number; users: Set<string> }> = {};
-const latency: number[] = [];
+    const latency: number[] = [];
+
+    // Unit economics aggregations
+    const userAgg: Record<string, { cost: number; events: number; success_sessions: number; latencies: number[] }> = {};
+    const successRequestIds = new Set<string>();
 
 // Reliability aggregations (per-tool / per-provider)
 const toolReliability: Record<
@@ -194,6 +198,8 @@ function classifyEvent(e: any): {
 
       const uid = e?.user_id ? String(e.user_id) : null;
       if (uid) activeUserSet.add(uid);
+      if (uid && !userAgg[uid]) userAgg[uid] = { cost: 0, events: 0, success_sessions: 0, latencies: [] };
+      if (uid) userAgg[uid].events += 1;
 
       const tool = String(e?.tool || 'unknown');
       if (!toolAgg[tool]) toolAgg[tool] = { events: 0, cost: 0, users: new Set<string>() };
@@ -204,12 +210,16 @@ function classifyEvent(e: any): {
       if (Number.isFinite(c)) {
         aiCostUSD += c;
         toolAgg[tool].cost += c;
+        if (uid) userAgg[uid].cost += c;
       }
 
       const l = Number(e?.latency_ms);
-      if (Number.isFinite(l) && l >= 0) latency.push(l);
+      if (Number.isFinite(l) && l >= 0) {
+        latency.push(l);
+        if (uid) userAgg[uid].latencies.push(l);
+      }
 
-const cls = classifyEvent(e);
+      const cls = classifyEvent(e);
 
 if (cls.isRateLimit) rateLimitEvents += 1;
 if (cls.isQuota) quotaEvents += 1;
@@ -218,6 +228,9 @@ if (cls.isTimeout) timeoutEvents += 1;
 
 if (cls.isSuccess) {
   successEvents += 1;
+  if (uid) userAgg[uid].success_sessions += 1;
+  const rid = e?.request_id ? String(e.request_id) : null;
+  if (rid) successRequestIds.add(rid);
 } else {
   errorEvents += 1;
   if (String(e?.outcome || '') === 'ERROR_UPSTREAM') upstreamErrorEvents += 1;
@@ -336,6 +349,242 @@ if (!cls.isSuccess && recentFailures.length < 25) {
     const errorRate = totalEvents > 0 ? errorEvents / totalEvents : 0;
 
     const p95LatencyMs = percentile(latency, 0.95);
+
+    // --- Phase 5: Unit economics + cost controls
+    const successfulSessions = successRequestIds.size > 0 ? successRequestIds.size : successEvents;
+    const costPerActiveUser = activeUsers > 0 ? aiCostUSD / activeUsers : null;
+    const costPerActivatedUser = activatedUsers > 0 ? aiCostUSD / activatedUsers : null;
+    const costPerToolSession = successfulSessions > 0 ? aiCostUSD / successfulSessions : null;
+
+    // Top spenders (in selected window)
+    let topSpenders: any[] = [];
+    try {
+      const rows = Object.entries(userAgg)
+        .map(([user_id, v]) => ({
+          user_id,
+          total_cost_usd: v.cost,
+          events: v.events,
+          success_sessions: v.success_sessions,
+          avg_latency_ms: v.latencies.length ? (v.latencies.reduce((a, b) => a + b, 0) / v.latencies.length) : null,
+        }))
+        .sort((a, b) => (b.total_cost_usd || 0) - (a.total_cost_usd || 0))
+        .slice(0, 10);
+
+      const ids = rows.map((r) => r.user_id);
+      const emailMap = new Map<string, string>();
+      if (ids.length) {
+        const batchSize = 500;
+        for (let i = 0; i < ids.length; i += batchSize) {
+          const batch = ids.slice(i, i + batchSize);
+          const { data: urows, error: uerr } = await admin.from('users').select('id,email').in('id', batch).limit(50000);
+          if (uerr) continue;
+          for (const u of (urows || []) as any[]) {
+            if (u?.id && u?.email) emailMap.set(String(u.id), String(u.email));
+          }
+        }
+      }
+
+      topSpenders = rows.map((r) => ({ ...r, email: emailMap.get(r.user_id) || null }));
+    } catch (e) {
+      topSpenders = [];
+    }
+
+    // Spend trend (last 30d, total cost per day)
+    let spendTrend30d: { date: string; total_cost_usd: number }[] = [];
+    // Top spenders trend (last 30d, top 3 users by cost)
+    let topSpendersTrend30d:
+      | { user_id: string; email: string | null; total_cost_usd_30d: number; series: { date: string; cost_usd: number }[] }[]
+      | [] = [];
+
+    try {
+      const since30Iso = isoDaysAgo(30);
+      const { data: ev30c, error: ev30cErr } = await admin
+        .from('ai_usage_events')
+        .select('user_id,estimated_cost_usd,occurred_at')
+        .gte('occurred_at', since30Iso)
+        .order('occurred_at', { ascending: false })
+        .limit(200000);
+
+      if (!ev30cErr) {
+        const totalsByDay: Record<string, number> = {};
+        const userDayCost: Record<string, Record<string, number>> = {};
+        const userTotal30: Record<string, number> = {};
+
+        for (const e of (ev30c || []) as any[]) {
+          const day = e?.occurred_at ? String(e.occurred_at).slice(0, 10) : null;
+          const uid = e?.user_id ? String(e.user_id) : null;
+          if (!day) continue;
+          const c = Number(e?.estimated_cost_usd || 0);
+          const cv = Number.isFinite(c) ? c : 0;
+
+          totalsByDay[day] = (totalsByDay[day] || 0) + cv;
+
+          if (uid) {
+            if (!userDayCost[uid]) userDayCost[uid] = {};
+            userDayCost[uid][day] = (userDayCost[uid][day] || 0) + cv;
+            userTotal30[uid] = (userTotal30[uid] || 0) + cv;
+          }
+        }
+
+        const today = new Date();
+        const daysBack = 30;
+        const series: { date: string; total_cost_usd: number }[] = [];
+        for (let i = daysBack - 1; i >= 0; i -= 1) {
+          const dt = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+          dt.setUTCDate(dt.getUTCDate() - i);
+          const key = dt.toISOString().slice(0, 10);
+          series.push({ date: key, total_cost_usd: totalsByDay[key] || 0 });
+        }
+        spendTrend30d = series;
+
+        const topIds = Object.entries(userTotal30)
+          .sort((a, b) => (b[1] || 0) - (a[1] || 0))
+          .slice(0, 3)
+          .map(([uid]) => uid);
+
+        const emailMap = new Map<string, string>();
+        if (topIds.length) {
+          const { data: ur, error: urErr } = await admin.from('users').select('id,email').in('id', topIds).limit(50000);
+          if (!urErr) {
+            for (const u of (ur || []) as any[]) {
+              if (u?.id && u?.email) emailMap.set(String(u.id), String(u.email));
+            }
+          }
+        }
+
+        topSpendersTrend30d = topIds.map((uid) => {
+          const s: { date: string; cost_usd: number }[] = [];
+          for (const d of series.map((x) => x.date)) {
+            const v = userDayCost?.[uid]?.[d] || 0;
+            s.push({ date: d, cost_usd: v });
+          }
+          return {
+            user_id: uid,
+            email: emailMap.get(uid) || null,
+            total_cost_usd_30d: userTotal30[uid] || 0,
+            series: s,
+          };
+        });
+      }
+    } catch (e) {
+      spendTrend30d = [];
+      topSpendersTrend30d = [];
+    }
+
+    // Cost anomalies (richer rules)
+    let costAnomalies: any[] = [];
+    try {
+      const since8Iso = isoDaysAgo(8);
+      const { data: ev8, error: ev8Err } = await admin
+        .from('ai_usage_events')
+        .select('user_id,tool,estimated_cost_usd,occurred_at')
+        .gte('occurred_at', since8Iso)
+        .order('occurred_at', { ascending: false })
+        .limit(200000);
+
+      if (!ev8Err) {
+        const todayKey = new Date().toISOString().slice(0, 10);
+
+        const dailyTotals: Record<string, number> = {};
+        const toolDaily: Record<string, Record<string, number>> = {};
+
+        for (const e of (ev8 || []) as any[]) {
+          const day = e?.occurred_at ? String(e.occurred_at).slice(0, 10) : null;
+          const tool = String(e?.tool || 'unknown');
+          if (!day) continue;
+          const c = Number(e?.estimated_cost_usd || 0);
+          const cv = Number.isFinite(c) ? c : 0;
+
+          dailyTotals[day] = (dailyTotals[day] || 0) + cv;
+
+          if (!toolDaily[tool]) toolDaily[tool] = {};
+          toolDaily[tool][day] = (toolDaily[tool][day] || 0) + cv;
+        }
+
+        const todayCost = dailyTotals[todayKey] || 0;
+
+        const baselineDays = Object.keys(dailyTotals)
+          .filter((d) => d !== todayKey)
+          .sort()
+          .slice(-7);
+
+        const baselineAvg =
+          baselineDays.length > 0
+            ? baselineDays.reduce((sum, d) => sum + (dailyTotals[d] || 0), 0) / baselineDays.length
+            : 0;
+
+        if (baselineAvg > 0 && todayCost > baselineAvg * 2.5) {
+          costAnomalies.push({
+            type: 'daily_spike',
+            entity: 'all',
+            current_value: todayCost,
+            baseline: baselineAvg,
+            multiplier: todayCost / baselineAvg,
+          });
+        }
+
+        // Tool spikes
+        for (const [tool, byDay] of Object.entries(toolDaily)) {
+          const tToday = byDay[todayKey] || 0;
+          if (tToday <= 0) continue;
+
+          const tBaselineAvg =
+            baselineDays.length > 0
+              ? baselineDays.reduce((sum, d) => sum + (byDay[d] || 0), 0) / baselineDays.length
+              : 0;
+
+          if (tBaselineAvg > 0 && tToday > tBaselineAvg * 3) {
+            costAnomalies.push({
+              type: 'tool_spike',
+              entity: tool,
+              current_value: tToday,
+              baseline: tBaselineAvg,
+              multiplier: tToday / tBaselineAvg,
+            });
+          }
+        }
+      }
+
+      // User outliers in selected window (p95)
+      const userCosts = Object.values(userAgg).map((v) => Number(v?.cost || 0));
+      const p95User = percentile(userCosts, 0.95);
+      if (p95User != null && p95User > 0) {
+        const outliers = Object.entries(userAgg)
+          .map(([user_id, v]) => ({ user_id, total_cost_usd: Number(v?.cost || 0) }))
+          .filter((r) => r.total_cost_usd > p95User)
+          .sort((a, b) => b.total_cost_usd - a.total_cost_usd)
+          .slice(0, 5);
+
+        if (outliers.length > 0) {
+          const ids = outliers.map((o) => o.user_id);
+          const emailMap = new Map<string, string>();
+          const { data: ur, error: urErr } = await admin.from('users').select('id,email').in('id', ids).limit(50000);
+          if (!urErr) {
+            for (const u of (ur || []) as any[]) {
+              if (u?.id && u?.email) emailMap.set(String(u.id), String(u.email));
+            }
+          }
+
+          for (const o of outliers) {
+            costAnomalies.push({
+              type: 'user_outlier',
+              entity: emailMap.get(o.user_id) || o.user_id,
+              current_value: o.total_cost_usd,
+              baseline: p95User,
+              multiplier: o.total_cost_usd / p95User,
+            });
+          }
+        }
+      }
+
+      // Sort anomalies by multiplier desc and keep top 10
+      costAnomalies = costAnomalies
+        .filter((a) => Number.isFinite(Number(a?.multiplier)))
+        .sort((a, b) => Number(b.multiplier) - Number(a.multiplier))
+        .slice(0, 10);
+    } catch (e) {
+      costAnomalies = [];
+    }
 
     // --- Returning users (WAU = unique users with ≥1 event in last 7d)
     try {
@@ -871,6 +1120,17 @@ const provider_breakdown = Object.entries(providerReliability)
           timeout: timeoutEvents,
           upstream_error: upstreamErrorEvents,
         },
+      },
+      unit_economics: {
+        total_cost_usd: aiCostUSD,
+        successful_sessions: successfulSessions,
+        cost_per_active_user: costPerActiveUser,
+        cost_per_activated_user: costPerActivatedUser,
+        cost_per_tool_session: costPerToolSession,
+        top_spenders: topSpenders,
+        spend_trend_30d: spendTrend30d,
+        top_spenders_trend_30d: topSpendersTrend30d,
+        cost_anomalies: costAnomalies,
       },
       reliability: {
         by_tool: reliability_by_tool,

@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { fetchAdminKpis } from '../services/adminKpisService';
-import { fetchAdminTopSpenders, type TopSpenderRow } from '../services/adminTopSpendersService';
 
 function money(n: any, digits = 2) {
   const v = Number(n);
@@ -46,9 +45,6 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const [topSpenders, setTopSpenders] = useState<TopSpenderRow[]>([]);
-  const [topErr, setTopErr] = useState<string | null>(null);
-  const [topLoading, setTopLoading] = useState(false);
   const [selectedFailure, setSelectedFailure] = useState<any | null>(null);
 
   async function load() {
@@ -57,19 +53,6 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
     try {
       const d = await fetchAdminKpis(days);
       setData(d);
-
-      // Top spenders (ops / anomaly watchlist)
-      setTopLoading(true);
-      setTopErr(null);
-      try {
-        const t = await fetchAdminTopSpenders(days, 15);
-        setTopSpenders(t.top_spenders || []);
-      } catch (e: any) {
-        setTopErr(e?.message || 'Failed to load top spenders');
-        setTopSpenders([]);
-      } finally {
-        setTopLoading(false);
-      }
     } catch (e: any) {
       setErr(e?.message || 'Failed to load');
       setData(null);
@@ -85,6 +68,7 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
 
   const kUsers = data?.users || {};
   const kAi = data?.ai || {};
+  const unit = data?.unit_economics || {};
   const tools = data?.tools || {};
   const reliability = data?.reliability || {};
   const relByTool = (reliability?.by_tool || []) as any[];
@@ -111,6 +95,17 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
   const topByUsage = useMemo(() => (tools?.top_by_usage || []).slice(0, 8), [tools]);
   const topByCost = useMemo(() => (tools?.top_by_cost || []).slice(0, 8), [tools]);
   const maxSignup = useMemo(() => Math.max(0, ...signupTrend.map((d: any) => Number(d?.new_users || 0))), [signupTrend]);
+
+  const spendTrend = (unit?.spend_trend_30d || []) as any[];
+  const costAnomalies = (unit?.cost_anomalies || []) as any[];
+  const topSpendersUE = (unit?.top_spenders || []) as any[];
+  const topSpendersTrend = (unit?.top_spenders_trend_30d || []) as any[];
+
+  const maxSpend = useMemo(() => Math.max(0, ...spendTrend.map((d: any) => Number(d?.total_cost_usd || 0))), [spendTrend]);
+  const maxTopSpenderSpend = useMemo(() => {
+    const s = topSpendersTrend?.[0]?.series || [];
+    return Math.max(0, ...s.map((d: any) => Number(d?.cost_usd || 0)));
+  }, [topSpendersTrend]);
 
   return (
     <div className="p-4 space-y-4">
@@ -420,133 +415,124 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
 
       {/* Phase 3.1 — True MAU Trend + Adoption Over Time */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        
+      {/* Phase 5 — Unit economics + cost controls */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <div className="p-3 rounded-xl bg-white/5 border border-white/10">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-sm font-medium">MAU Trend</div>
-              <div className="text-xs opacity-70">Daily MAU (rolling 30d) • Weekly WAU (7d)</div>
+          <div className="text-sm font-medium">Unit economics</div>
+          <div className="text-xs opacity-70 mt-0.5">Cost safety while you optimize activation</div>
+
+          <div className="mt-3 space-y-2 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="opacity-80">Cost / active user</span>
+              <span className="font-semibold">{money(unit.cost_per_active_user, 4)}</span>
             </div>
-            <div className="flex items-center gap-1 text-xs">
-              <button
-                className={`px-2 py-1 rounded border border-white/10 ${mauMode === 'daily' ? 'bg-white/15' : 'bg-black/20 hover:bg-white/10'}`}
-                onClick={() => setMauMode('daily')}
-              >
-                Daily
-              </button>
-              <button
-                className={`px-2 py-1 rounded border border-white/10 ${mauMode === 'weekly' ? 'bg-white/15' : 'bg-black/20 hover:bg-white/10'}`}
-                onClick={() => setMauMode('weekly')}
-              >
-                Weekly
-              </button>
+            <div className="flex items-center justify-between">
+              <span className="opacity-80">Cost / activated user</span>
+              <span className="font-semibold">{money(unit.cost_per_activated_user, 4)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="opacity-80">Cost / tool session</span>
+              <span className="font-semibold">{money(unit.cost_per_tool_session, 4)}</span>
             </div>
           </div>
 
-          <div className="mt-3 flex items-end gap-[2px] h-16">
-            {mauMode === 'daily' && mauDaily.length === 0 && <div className="text-sm opacity-70">No data.</div>}
-            {mauMode === 'weekly' && mauWeekly.length === 0 && <div className="text-sm opacity-70">No data.</div>}
+          <div className="text-xs opacity-60 mt-2">
+            Sessions = successful requests in window ({Number(unit.successful_sessions || 0).toLocaleString()}).
+          </div>
+        </div>
 
-            {mauMode === 'daily' &&
-              mauDaily.map((d: any) => {
-                const v = Number(d?.mau_rolling_30d || 0);
-                const h = maxMauDaily > 0 ? Math.max(2, Math.round((v / maxMauDaily) * 64)) : 2;
+        <div className="p-3 rounded-xl bg-white/5 border border-white/10 lg:col-span-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-medium">Spend trend</div>
+              <div className="text-xs opacity-70 mt-0.5">Last 30 days (daily total estimated cost)</div>
+            </div>
+            <div className="text-sm font-semibold">{money(spendTrend.reduce((s: number, d: any) => s + Number(d?.total_cost_usd || 0), 0))}</div>
+          </div>
+
+          <div className="mt-3 flex items-end gap-[2px] h-16">
+            {spendTrend.length === 0 && <div className="text-sm opacity-70">No data.</div>}
+            {spendTrend.length > 0 &&
+              spendTrend.map((d: any) => {
+                const v = Number(d?.total_cost_usd || 0);
+                const h = maxSpend > 0 ? Math.max(2, Math.round((v / maxSpend) * 64)) : 2;
                 return (
                   <div
                     key={String(d?.date)}
-                    title={`${String(d?.date)}: ${v}`}
+                    title={`${String(d?.date)}: $${v.toFixed(4)}`}
                     className="w-[6px] rounded bg-white/15"
                     style={{ height: `${h}px` }}
                   />
                 );
               })}
+          </div>
 
-            {mauMode === 'weekly' &&
-              mauWeekly.map((d: any) => {
-                const v = Number(d?.wau_7d || 0);
-                const h = maxMauWeekly > 0 ? Math.max(2, Math.round((v / maxMauWeekly) * 64)) : 2;
-                return (
-                  <div
-                    key={String(d?.week_end)}
-                    title={`${String(d?.week_end)}: ${v}`}
-                    className="w-[10px] rounded bg-white/15"
-                    style={{ height: `${h}px` }}
-                  />
-                );
-              })}
+          {topSpendersTrend?.[0]?.series?.length > 0 && (
+            <div className="mt-4">
+              <div className="text-xs opacity-70">Top spender trend: {String(topSpendersTrend?.[0]?.email || topSpendersTrend?.[0]?.user_id || '—')}</div>
+              <div className="mt-2 flex items-end gap-[2px] h-12">
+                {(topSpendersTrend?.[0]?.series || []).map((d: any) => {
+                  const v = Number(d?.cost_usd || 0);
+                  const h = maxTopSpenderSpend > 0 ? Math.max(2, Math.round((v / maxTopSpenderSpend) * 48)) : 2;
+                  return (
+                    <div
+                      key={String(d?.date)}
+                      title={`${String(d?.date)}: $${v.toFixed(4)}`}
+                      className="w-[5px] rounded bg-white/10"
+                      style={{ height: `${h}px` }}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+          <div className="text-sm font-medium">Top spenders</div>
+          <div className="text-xs opacity-70 mt-0.5">Highest estimated cost in selected window</div>
+
+          <div className="mt-3 space-y-2 text-sm">
+            {topSpendersUE.length === 0 && <div className="text-sm opacity-70">No spenders found.</div>}
+            {topSpendersUE.slice(0, 10).map((u: any) => (
+              <div key={String(u.user_id)} className="flex items-center justify-between">
+                <div className="truncate max-w-[70%]">{String(u.email || u.user_id)}</div>
+                <div className="opacity-80">{money(u.total_cost_usd, 4)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="p-3 rounded-xl bg-white/5 border border-white/10 lg:col-span-2">
+          <div className="text-sm font-medium">Cost anomalies</div>
+          <div className="text-xs opacity-70 mt-0.5">Spike + outlier detection (rules-based)</div>
+
+          <div className="mt-3 space-y-2 text-sm">
+            {costAnomalies.length === 0 && <div className="text-sm opacity-70">No cost anomalies detected — system stable.</div>}
+            {costAnomalies.map((a: any, i: number) => (
+              <div key={`${a.type}-${i}`} className="flex items-center justify-between gap-3">
+                <div className="truncate">
+                  <span className="font-medium">{String(a.type)}</span>
+                  <span className="opacity-70"> · {String(a.entity)}</span>
+                </div>
+                <div className="text-right whitespace-nowrap opacity-80">
+                  {Number(a.multiplier || 0).toFixed(1)}×
+                </div>
+              </div>
+            ))}
           </div>
 
           <div className="text-xs opacity-60 mt-2">
-            {mauMode === 'daily' ? 'Last 30 days' : 'Last 12 weeks'} • Daily = rolling 30-day MAU • Weekly = WAU (7-day active users)
+            daily_spike: today &gt; 2.5× 7‑day avg · tool_spike: today &gt; 3× tool 7‑day avg · user_outlier: &gt; P95 user cost
           </div>
-        </div>
-
-        <div className="p-3 rounded-xl bg-white/5 border border-white/10">
-          <div className="text-sm font-medium">Adoption Over Time</div>
-          <div className="text-xs opacity-70 mt-0.5">Daily % of active users using each tool (last 30d)</div>
-
-          {!adoptionTrend?.tools?.length && <div className="mt-3 text-sm opacity-70">No trend data.</div>}
-
-          {adoptionTrend?.tools?.length > 0 && (
-            <div className="mt-3 space-y-3">
-              {adoptionTrend.tools.slice(0, 5).map((t: any) => (
-                <div key={t.tool} className="space-y-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <div className="truncate max-w-[65%] opacity-90">{t.tool}</div>
-                    <div className="opacity-70">
-                      Avg: {pct((t.adoption_rates || []).reduce((a: number, b: number) => a + b, 0) / Math.max(1, (t.adoption_rates || []).length), 0)}
-                    </div>
-                  </div>
-                  <div className="flex items-end gap-[2px] h-10">
-                    {(t.adoption_rates || []).map((r: any, i: number) => {
-                      const v = Number(r || 0);
-                      const h = Math.max(2, Math.round(v * 40)); // since v is 0..1
-                      const day = adoptionTrend?.days?.[i] || '';
-                      return (
-                        <div
-                          key={`${t.tool}-${i}`}
-                          title={`${day}: ${pct(v, 0)} (${Number(t.unique_users?.[i] || 0)} users)`}
-                          className="w-[5px] rounded bg-white/15"
-                          style={{ height: `${h}px` }}
-                        />
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="text-xs opacity-60 mt-2">Denominator = daily active users (any tool).</div>
-        </div>
-      </div>
-
-</div>
-      </div>
-
-      <div className="p-3 rounded-xl bg-white/5 border border-white/10">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="text-sm font-medium">Cost Anomaly Watchlist</div>
-            <div className="text-xs opacity-70">Top spenders (estimated) in selected window</div>
-          </div>
-          {topLoading && <div className="text-xs opacity-70">Loading…</div>}
-        </div>
-
-        {topErr && <div className="mt-2 text-sm text-red-200">{topErr}</div>}
-
-        <div className="mt-3 space-y-2">
-          {!topLoading && topSpenders.length === 0 && <div className="text-sm opacity-70">No spenders found.</div>}
-
-          {topSpenders.map((u) => (
-            <div key={u.user_id} className="flex items-center justify-between text-sm">
-              <div className="truncate max-w-[60%]">{u.email || u.user_id}</div>
-              <div className="opacity-80">{money(u.total_estimated_cost_usd)}</div>
-            </div>
-          ))}
         </div>
       </div>
 
       <div className="text-xs opacity-60">
+
         Definitions: Active = ≥1 event; Activated = new user with core-tool use within 24h. Core tools:{' '}
         {(data?.definitions?.core_tools || []).join(', ') || '—'}
       </div>
