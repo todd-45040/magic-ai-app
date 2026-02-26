@@ -413,9 +413,99 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
           </div>
         
 
+        </div>
+      </div>
+
       {/* Phase 3.1 — True MAU Trend + Adoption Over Time */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        
+        <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-sm font-medium">MAU / WAU Trend</div>
+              <div className="text-xs opacity-70 mt-0.5">Daily = rolling 30-day MAU · Weekly = WAU</div>
+            </div>
+            <div className="flex items-center gap-1 text-xs">
+              <button
+                className={`px-2 py-1 rounded border border-white/10 ${mauMode === 'daily' ? 'bg-white/15' : 'bg-white/5 hover:bg-white/10'}`}
+                onClick={() => setMauMode('daily')}
+              >
+                Daily
+              </button>
+              <button
+                className={`px-2 py-1 rounded border border-white/10 ${mauMode === 'weekly' ? 'bg-white/15' : 'bg-white/5 hover:bg-white/10'}`}
+                onClick={() => setMauMode('weekly')}
+              >
+                Weekly
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-3 flex items-end gap-[2px] h-16">
+            {(() => {
+              const series = mauMode === 'daily' ? mauDaily : mauWeekly;
+              const maxV = Math.max(0, ...series.map((d: any) => Number(d?.value ?? d?.mau ?? d?.wau ?? 0)));
+              if (!series || series.length === 0) return <div className="text-sm opacity-70">No data.</div>;
+              return series.map((d: any, idx: number) => {
+                const v = Number(d?.value ?? d?.mau ?? d?.wau ?? 0);
+                const h = maxV > 0 ? Math.max(2, Math.round((v / maxV) * 64)) : 2;
+                const label = String(d?.date || d?.week_end || idx);
+                return (
+                  <div
+                    key={label}
+                    title={`${label}: ${v}`}
+                    className="w-[6px] rounded bg-white/15"
+                    style={{ height: `${h}px` }}
+                  />
+                );
+              });
+            })()}
+          </div>
+
+          <div className="text-xs opacity-60 mt-2">
+            {mauMode === 'daily'
+              ? `Rolling MAU (30d): ${Number((mauDaily?.at?.(-1)?.value ?? 0)).toLocaleString()}`
+              : `WAU (7d): ${Number((mauWeekly?.at?.(-1)?.value ?? 0)).toLocaleString()}`}
+          </div>
+        </div>
+
+        <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+          <div className="text-sm font-medium">Adoption over time</div>
+          <div className="text-xs opacity-70 mt-0.5">Top tools · daily % of active users (last 30d)</div>
+
+          <div className="mt-3 space-y-2">
+            {(!adoptionTrend || !(adoptionTrend as any).tools || (adoptionTrend as any).tools.length === 0) && (
+              <div className="text-sm opacity-70">No adoption trend yet.</div>
+            )}
+            {((adoptionTrend as any)?.tools || []).slice(0, 5).map((t: any) => {
+              const arr = (t?.adoption_rates || []) as any[];
+              const maxA = Math.max(0, ...arr.map((x: any) => Number(x || 0)));
+              return (
+                <div key={String(t?.tool)} className="p-2 rounded bg-white/5 border border-white/10">
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="truncate max-w-[70%]">{String(t?.tool || '—')}</div>
+                    <div className="text-xs opacity-70">latest: {pct(arr?.at?.(-1), 0)}</div>
+                  </div>
+                  <div className="mt-2 flex items-end gap-[2px] h-10">
+                    {arr.slice(-30).map((v: any, idx: number) => {
+                      const n = Number(v || 0);
+                      const h = maxA > 0 ? Math.max(2, Math.round((n / maxA) * 40)) : 2;
+                      return (
+                        <div
+                          key={idx}
+                          className="w-[4px] rounded bg-white/15"
+                          style={{ height: `${h}px` }}
+                          title={`${n}`}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
       {/* Phase 5 — Unit economics + cost controls */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <div className="p-3 rounded-xl bg-white/5 border border-white/10">
