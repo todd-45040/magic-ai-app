@@ -67,40 +67,50 @@ export default async function handler(req: any, res: any) {
     // --- New users (created in window)
     // Prefer an exact count() for new-user total, but fall back to scan length if count fails
     // (some deployments may restrict count/head behavior or return errors for large tables).
-    let newUsersCount: number | null = null;
-    {
-      const { count, error } = await admin
-        .from('users')
-        .select('id', { count: 'exact', head: true })
-        .gte('created_at', sinceIso);
+    // --- New users (use Auth as canonical source for created_at + email)
+// NOTE: public.users may not include created_at in some deployments.
+let newUsersCount: number | null = null;
+const newUserCreatedAt = new Map<string, string>();
 
-      if (error) {
-        warnings.push('new_users_count_fallback');
-      } else {
-        newUsersCount = Number(count ?? 0);
-      }
+try {
+  const perPage = 1000;
+  let page = 1;
+  let fetched = 0;
+  const maxScan = 20000; // safety cap
+  while (fetched < maxScan) {
+    let r: any;
+    try {
+      r = await admin.auth.admin.listUsers({ page, perPage });
+    } catch {
+      r = await admin.auth.admin.listUsers();
+    }
+    const users = (r?.data?.users || []) as any[];
+    if (!users || users.length === 0) break;
+
+    for (const u of users) {
+      const id = u?.id ? String(u.id) : null;
+      const created = u?.created_at ? String(u.created_at) : null;
+      if (!id || !created) continue;
+      if (created >= sinceIso) newUserCreatedAt.set(id, created);
     }
 
-    // Pull ids + created_at for activation check (bounded)
-    const { data: newUsersRows, error: newUsersRowsErr } = await admin
-      .from('users')
-      .select('id,created_at')
-      .gte('created_at', sinceIso)
-      .order('created_at', { ascending: false })
-      .limit(50000);
+    fetched += users.length;
+    page += 1;
 
-    if (newUsersRowsErr) {
-      return res.status(500).json({ ok: false, error: 'New users scan failed', details: newUsersRowsErr });
-    }
+    // If the API provides total, we can stop early
+    const total = r?.data?.total;
+    if (Number.isFinite(total) && fetched >= Number(total)) break;
+    if (users.length < perPage) break;
+  }
 
-    const newUsers = (newUsersRows || []) as any[];
-    if (newUsersCount === null) newUsersCount = newUsers.length;
-    const newUserCreatedAt = new Map<string, string>();
-    for (const u of newUsers) {
-      if (u?.id && u?.created_at) newUserCreatedAt.set(String(u.id), String(u.created_at));
-    }
+  newUsersCount = newUserCreatedAt.size;
+} catch (e) {
+  // Do not fail the dashboard if auth listing is unavailable.
+  newUsersCount = 0;
+}
 
-    // --- Raw events in window (for active users, cost, success/error, latency, tool aggregation)
+// --- Raw events in window (for active users, cost, success/error, latency, tool aggregation)
+ (for active users, cost, success/error, latency, tool aggregation)
     const { data: events, error: evErr } = await admin
       .from('ai_usage_events')
       .select('request_id,user_id,tool,endpoint,provider,model,outcome,http_status,error_code,latency_ms,estimated_cost_usd,occurred_at')
