@@ -110,7 +110,6 @@ try {
 }
 
 // --- Raw events in window (for active users, cost, success/error, latency, tool aggregation)
- (for active users, cost, success/error, latency, tool aggregation)
     const { data: events, error: evErr } = await admin
       .from('ai_usage_events')
       .select('request_id,user_id,tool,endpoint,provider,model,outcome,http_status,error_code,latency_ms,estimated_cost_usd,occurred_at')
