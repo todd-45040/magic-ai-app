@@ -92,7 +92,7 @@ export default async function handler(req: any, res: any) {
     // --- Raw events in window (for active users, cost, success/error, latency, tool aggregation)
     const { data: events, error: evErr } = await admin
       .from('ai_usage_events')
-      .select('user_id,tool,outcome,http_status,error_code,latency_ms,estimated_cost_usd,occurred_at')
+      .select('request_id,user_id,tool,endpoint,provider,model,outcome,http_status,error_code,latency_ms,estimated_cost_usd,occurred_at')
       .gte('occurred_at', sinceIso)
       .order('occurred_at', { ascending: false })
       .limit(200000);
@@ -103,7 +103,77 @@ export default async function handler(req: any, res: any) {
 
     const activeUserSet = new Set<string>();
     const toolAgg: Record<string, { events: number; cost: number; users: Set<string> }> = {};
-    const latency: number[] = [];
+const latency: number[] = [];
+
+// Reliability aggregations (per-tool / per-provider)
+const toolReliability: Record<
+  string,
+  {
+    total: number;
+    success: number;
+    error: number;
+    timeout: number;
+    rate_limit: number;
+    quota: number;
+    unauthorized: number;
+    latencies: number[];
+  }
+> = {};
+
+const providerReliability: Record<
+  string,
+  {
+    total: number;
+    success: number;
+    error: number;
+    timeout: number;
+    rate_limit: number;
+    quota: number;
+    unauthorized: number;
+    latencies: number[];
+  }
+> = {};
+
+const recentFailures: any[] = [];
+
+function ensureRel(map: any, key: string) {
+  if (!map[key]) {
+    map[key] = {
+      total: 0,
+      success: 0,
+      error: 0,
+      timeout: 0,
+      rate_limit: 0,
+      quota: 0,
+      unauthorized: 0,
+      latencies: [],
+    };
+  }
+  return map[key];
+}
+
+function classifyEvent(e: any): {
+  isSuccess: boolean;
+  isRateLimit: boolean;
+  isQuota: boolean;
+  isUnauthorized: boolean;
+  isTimeout: boolean;
+  isError: boolean;
+} {
+  const outcome = String(e?.outcome || '');
+  const http = Number(e?.http_status || 0);
+  const code = String(e?.error_code || '');
+
+  const isRateLimit = outcome === 'BLOCKED_RATE_LIMIT' || http === 429 || code === 'RATE_LIMITED';
+  const isQuota = outcome === 'BLOCKED_QUOTA' || code === 'USAGE_LIMIT_REACHED' || code === 'QUOTA_EXCEEDED';
+  const isUnauthorized = outcome === 'UNAUTHORIZED' || http === 401 || http === 403 || code === 'UNAUTHORIZED';
+  const isTimeout = code === 'TIMEOUT' || http === 504 || http === 408;
+
+  const isSuccess = outcome === 'SUCCESS_CHARGED' || outcome === 'SUCCESS_NOT_CHARGED' || outcome === 'ALLOWED';
+  const isError = !isSuccess;
+
+  return { isSuccess, isRateLimit, isQuota, isUnauthorized, isTimeout, isError };
+}
 
     // Outcome buckets
     let totalEvents = 0;
@@ -143,26 +213,58 @@ export default async function handler(req: any, res: any) {
       const l = Number(e?.latency_ms);
       if (Number.isFinite(l) && l >= 0) latency.push(l);
 
-      const outcome = String(e?.outcome || '');
-      const http = Number(e?.http_status || 0);
-      const code = String(e?.error_code || '');
+const cls = classifyEvent(e);
 
-      const isRateLimit = outcome === 'BLOCKED_RATE_LIMIT' || http === 429 || code === 'RATE_LIMITED';
-      const isQuota = outcome === 'BLOCKED_QUOTA' || code === 'QUOTA_EXCEEDED';
-      const isUnauthorized = outcome === 'UNAUTHORIZED' || http === 401 || http === 403 || code === 'UNAUTHORIZED';
-      const isTimeout = code === 'TIMEOUT' || http === 504 || http === 408;
+if (cls.isRateLimit) rateLimitEvents += 1;
+if (cls.isQuota) quotaEvents += 1;
+if (cls.isUnauthorized) unauthorizedEvents += 1;
+if (cls.isTimeout) timeoutEvents += 1;
 
-      if (isRateLimit) rateLimitEvents += 1;
-      if (isQuota) quotaEvents += 1;
-      if (isUnauthorized) unauthorizedEvents += 1;
-      if (isTimeout) timeoutEvents += 1;
+if (cls.isSuccess) {
+  successEvents += 1;
+} else {
+  errorEvents += 1;
+  if (String(e?.outcome || '') === 'ERROR_UPSTREAM') upstreamErrorEvents += 1;
+}
 
-      if (isSuccessOutcome(outcome)) {
-        successEvents += 1;
-      } else {
-        errorEvents += 1;
-        if (outcome === 'ERROR_UPSTREAM') upstreamErrorEvents += 1;
-      }
+// Per-tool / per-provider reliability stats
+const relTool = ensureRel(toolReliability, tool);
+relTool.total += 1;
+if (cls.isSuccess) relTool.success += 1;
+if (cls.isError) relTool.error += 1;
+if (cls.isTimeout) relTool.timeout += 1;
+if (cls.isRateLimit) relTool.rate_limit += 1;
+if (cls.isQuota) relTool.quota += 1;
+if (cls.isUnauthorized) relTool.unauthorized += 1;
+if (Number.isFinite(l) && l >= 0) relTool.latencies.push(l);
+
+const provider = String(e?.provider || 'unknown');
+const relProv = ensureRel(providerReliability, provider);
+relProv.total += 1;
+if (cls.isSuccess) relProv.success += 1;
+if (cls.isError) relProv.error += 1;
+if (cls.isTimeout) relProv.timeout += 1;
+if (cls.isRateLimit) relProv.rate_limit += 1;
+if (cls.isQuota) relProv.quota += 1;
+if (cls.isUnauthorized) relProv.unauthorized += 1;
+if (Number.isFinite(l) && l >= 0) relProv.latencies.push(l);
+
+// Recent failures feed (bounded)
+if (!cls.isSuccess && recentFailures.length < 25) {
+  recentFailures.push({
+    occurred_at: e?.occurred_at ?? null,
+    request_id: e?.request_id ?? null,
+    user_id: e?.user_id ?? null,
+    tool,
+    endpoint: e?.endpoint ?? null,
+    provider: e?.provider ?? null,
+    model: e?.model ?? null,
+    outcome: e?.outcome ?? null,
+    error_code: e?.error_code ?? null,
+    http_status: e?.http_status ?? null,
+    latency_ms: e?.latency_ms ?? null,
+  });
+}
     }
 
     // --- Activated users: first core-tool use within 24h of signup (among new users)
@@ -665,6 +767,44 @@ const toolRows = Object.entries(toolAgg).map(([tool, v]) => ({
     const topToolsByUsage = toolRows.slice().sort((a, b) => b.events - a.events).slice(0, 10);
     const topToolsByCost = toolRows.slice().sort((a, b) => b.cost_usd - a.cost_usd).slice(0, 10);
 
+const reliability_by_tool = Object.entries(toolReliability)
+  .map(([tool, r]) => {
+    const total = r.total || 0;
+    const p95 = percentile(r.latencies, 0.95);
+    return {
+      tool,
+      total,
+      success_rate: total ? r.success / total : null,
+      error_rate: total ? r.error / total : null,
+      timeout_rate: total ? r.timeout / total : null,
+      rate_limit_rate: total ? r.rate_limit / total : null,
+      quota_rate: total ? r.quota / total : null,
+      unauthorized_rate: total ? r.unauthorized / total : null,
+      p95_latency_ms: p95,
+    };
+  })
+  .sort((a, b) => (b.total || 0) - (a.total || 0))
+  .slice(0, 25);
+
+const provider_breakdown = Object.entries(providerReliability)
+  .map(([provider, r]) => {
+    const total = r.total || 0;
+    const p95 = percentile(r.latencies, 0.95);
+    return {
+      provider,
+      total,
+      success_rate: total ? r.success / total : null,
+      error_rate: total ? r.error / total : null,
+      timeout_rate: total ? r.timeout / total : null,
+      rate_limit_rate: total ? r.rate_limit / total : null,
+      quota_rate: total ? r.quota / total : null,
+      unauthorized_rate: total ? r.unauthorized / total : null,
+      p95_latency_ms: p95,
+    };
+  })
+  .sort((a, b) => (b.total || 0) - (a.total || 0));
+
+
     return res.status(200).json({
       ok: true,
       window: {
@@ -735,6 +875,12 @@ const toolRows = Object.entries(toolAgg).map(([tool, v]) => ({
           timeout: timeoutEvents,
           upstream_error: upstreamErrorEvents,
         },
+      },
+      reliability: {
+        by_tool: reliability_by_tool,
+        p95_latency_by_tool: reliability_by_tool.map((t:any)=>({ tool: t.tool, p95_latency_ms: t.p95_latency_ms })),
+        recent_failures: recentFailures,
+        provider_breakdown,
       },
       tools: {
         top_by_usage: topToolsByUsage,

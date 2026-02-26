@@ -49,6 +49,7 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
   const [topSpenders, setTopSpenders] = useState<TopSpenderRow[]>([]);
   const [topErr, setTopErr] = useState<string | null>(null);
   const [topLoading, setTopLoading] = useState(false);
+  const [selectedFailure, setSelectedFailure] = useState<any | null>(null);
 
   async function load() {
     setLoading(true);
@@ -85,6 +86,11 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
   const kUsers = data?.users || {};
   const kAi = data?.ai || {};
   const tools = data?.tools || {};
+  const reliability = data?.reliability || {};
+  const relByTool = (reliability?.by_tool || []) as any[];
+  const providerBreakdown = (reliability?.provider_breakdown || []) as any[];
+  const recentFailures = (reliability?.recent_failures || []) as any[];
+
   const growth = data?.growth || {};
   const funnel = growth?.funnel || {};
   const ttfv = growth?.ttfv || {};
@@ -108,6 +114,89 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
 
   return (
     <div className="p-4 space-y-4">
+
+{selectedFailure && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
+    <div className="w-full max-w-2xl rounded-2xl border border-white/10 bg-[#0b0f1a] shadow-xl">
+      <div className="flex items-start justify-between gap-3 p-4 border-b border-white/10">
+        <div>
+          <div className="text-sm font-semibold">Failure details</div>
+          <div className="text-xs opacity-70 mt-0.5">Request + user + tool + provider snapshot</div>
+        </div>
+        <button
+          className="px-3 py-1 rounded bg-white/10 hover:bg-white/15 text-sm"
+          onClick={() => setSelectedFailure(null)}
+        >
+          Close
+        </button>
+      </div>
+
+      <div className="p-4 text-sm space-y-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <div className="p-2 rounded bg-white/5 border border-white/10">
+            <div className="text-xs opacity-70">Occurred</div>
+            <div className="font-medium">{String(selectedFailure.occurred_at || '—')}</div>
+          </div>
+          <div className="p-2 rounded bg-white/5 border border-white/10">
+            <div className="text-xs opacity-70">Request ID</div>
+            <div className="font-mono text-xs break-all">{String(selectedFailure.request_id || '—')}</div>
+          </div>
+          <div className="p-2 rounded bg-white/5 border border-white/10">
+            <div className="text-xs opacity-70">User</div>
+            <div className="font-mono text-xs break-all">{String(selectedFailure.user_id || '—')}</div>
+          </div>
+          <div className="p-2 rounded bg-white/5 border border-white/10">
+            <div className="text-xs opacity-70">Tool</div>
+            <div className="font-medium">{String(selectedFailure.tool || '—')}</div>
+          </div>
+          <div className="p-2 rounded bg-white/5 border border-white/10">
+            <div className="text-xs opacity-70">Provider / Model</div>
+            <div className="font-medium">{String(selectedFailure.provider || '—')} / {String(selectedFailure.model || '—')}</div>
+          </div>
+          <div className="p-2 rounded bg-white/5 border border-white/10">
+            <div className="text-xs opacity-70">Outcome</div>
+            <div className="font-medium">{String(selectedFailure.outcome || '—')}</div>
+          </div>
+          <div className="p-2 rounded bg-white/5 border border-white/10">
+            <div className="text-xs opacity-70">HTTP / Code</div>
+            <div className="font-medium">{String(selectedFailure.http_status || '—')} / {String(selectedFailure.error_code || '—')}</div>
+          </div>
+          <div className="p-2 rounded bg-white/5 border border-white/10">
+            <div className="text-xs opacity-70">Latency</div>
+            <div className="font-medium">{ms(selectedFailure.latency_ms)}</div>
+          </div>
+        </div>
+
+        <div className="p-3 rounded bg-white/5 border border-white/10">
+          <div className="text-xs opacity-70">Endpoint</div>
+          <div className="font-mono text-xs break-all">{String(selectedFailure.endpoint || '—')}</div>
+        </div>
+
+        <div className="flex items-center gap-2 pt-2">
+          <button
+            className="px-3 py-1 rounded bg-white/10 hover:bg-white/15 text-sm"
+            onClick={() => {
+              const txt = String(selectedFailure.request_id || '');
+              if (txt) navigator.clipboard?.writeText(txt);
+            }}
+          >
+            Copy request id
+          </button>
+          <button
+            className="px-3 py-1 rounded bg-white/10 hover:bg-white/15 text-sm"
+            onClick={() => {
+              const txt = String(selectedFailure.user_id || '');
+              if (txt) navigator.clipboard?.writeText(txt);
+            }}
+          >
+            Copy user id
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold">Admin – Overview</h2>
@@ -461,6 +550,124 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
         Definitions: Active = ≥1 event; Activated = new user with core-tool use within 24h. Core tools:{' '}
         {(data?.definitions?.core_tools || []).join(', ') || '—'}
       </div>
+
+<div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+  <div className="p-3 rounded-xl bg-white/5 border border-white/10 lg:col-span-2">
+    <div className="text-sm font-medium">Reliability by tool</div>
+    <div className="text-xs opacity-70 mt-0.5">Success / error / timeout / rate-limit + P95 latency</div>
+
+    <div className="mt-3 overflow-auto">
+      <table className="w-full text-sm">
+        <thead className="text-xs opacity-70">
+          <tr className="border-b border-white/10">
+            <th className="text-left py-2 pr-2">Tool</th>
+            <th className="text-right py-2 px-2">Events</th>
+            <th className="text-right py-2 px-2">Success</th>
+            <th className="text-right py-2 px-2">Error</th>
+            <th className="text-right py-2 px-2">Timeout</th>
+            <th className="text-right py-2 px-2">Rate‑limit</th>
+            <th className="text-right py-2 pl-2">P95</th>
+          </tr>
+        </thead>
+        <tbody>
+          {(relByTool || []).slice(0, 12).map((r, i) => (
+            <tr key={r.tool || i} className="border-b border-white/5">
+              <td className="py-2 pr-2 whitespace-nowrap">{String(r.tool || '—')}</td>
+              <td className="py-2 px-2 text-right">{Number(r.total || 0).toLocaleString()}</td>
+              <td className="py-2 px-2 text-right">{pct(r.success_rate, 1)}</td>
+              <td className="py-2 px-2 text-right">{pct(r.error_rate, 1)}</td>
+              <td className="py-2 px-2 text-right">{pct(r.timeout_rate, 2)}</td>
+              <td className="py-2 px-2 text-right">{pct(r.rate_limit_rate, 2)}</td>
+              <td className="py-2 pl-2 text-right">{ms(r.p95_latency_ms)}</td>
+            </tr>
+          ))}
+          {(!relByTool || relByTool.length === 0) && (
+            <tr>
+              <td className="py-3 opacity-70" colSpan={7}>
+                No telemetry in window.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+    <div className="text-sm font-medium">Provider breakdown</div>
+    <div className="text-xs opacity-70 mt-0.5">How each provider is behaving</div>
+
+    <div className="mt-3 space-y-2 text-sm">
+      {(providerBreakdown || []).slice(0, 6).map((p, i) => (
+        <div key={p.provider || i} className="p-2 rounded bg-white/5 border border-white/10">
+          <div className="flex items-center justify-between">
+            <div className="font-medium">{String(p.provider || 'unknown')}</div>
+            <div className="text-xs opacity-70">{Number(p.total || 0).toLocaleString()} ev</div>
+          </div>
+          <div className="mt-1 grid grid-cols-2 gap-1 text-xs opacity-90">
+            <div className="flex items-center justify-between"><span className="opacity-70">Success</span><span>{pct(p.success_rate, 1)}</span></div>
+            <div className="flex items-center justify-between"><span className="opacity-70">Error</span><span>{pct(p.error_rate, 1)}</span></div>
+            <div className="flex items-center justify-between"><span className="opacity-70">Timeout</span><span>{pct(p.timeout_rate, 2)}</span></div>
+            <div className="flex items-center justify-between"><span className="opacity-70">P95</span><span>{ms(p.p95_latency_ms)}</span></div>
+          </div>
+        </div>
+      ))}
+      {(!providerBreakdown || providerBreakdown.length === 0) && (
+        <div className="text-sm opacity-70">No provider data yet.</div>
+      )}
+    </div>
+  </div>
+</div>
+
+<div className="p-3 rounded-xl bg-white/5 border border-white/10">
+  <div className="flex items-start justify-between gap-3">
+    <div>
+      <div className="text-sm font-medium">Recent failures</div>
+      <div className="text-xs opacity-70 mt-0.5">Click a row to inspect request + user + tool</div>
+    </div>
+    <div className="text-xs opacity-60">
+      Showing {Math.min(25, (recentFailures || []).length)} newest
+    </div>
+  </div>
+
+  <div className="mt-3 overflow-auto">
+    <table className="w-full text-sm">
+      <thead className="text-xs opacity-70">
+        <tr className="border-b border-white/10">
+          <th className="text-left py-2 pr-2">When</th>
+          <th className="text-left py-2 px-2">Tool</th>
+          <th className="text-left py-2 px-2">Provider</th>
+          <th className="text-left py-2 px-2">Outcome</th>
+          <th className="text-right py-2 pl-2">Latency</th>
+        </tr>
+      </thead>
+      <tbody>
+        {(recentFailures || []).map((f, i) => (
+          <tr
+            key={f.request_id || i}
+            className="border-b border-white/5 hover:bg-white/5 cursor-pointer"
+            onClick={() => setSelectedFailure(f)}
+            title="Click to view details"
+          >
+            <td className="py-2 pr-2 whitespace-nowrap text-xs opacity-80">{String(f.occurred_at || '').slice(0, 19).replace('T',' ')}</td>
+            <td className="py-2 px-2">{String(f.tool || '—')}</td>
+            <td className="py-2 px-2">{String(f.provider || '—')}</td>
+            <td className="py-2 px-2">{String(f.outcome || '—')}</td>
+            <td className="py-2 pl-2 text-right">{ms(f.latency_ms)}</td>
+          </tr>
+        ))}
+        {(!recentFailures || recentFailures.length === 0) && (
+          <tr>
+            <td className="py-3 opacity-70" colSpan={5}>
+              No recent failures in this window.
+            </td>
+          </tr>
+        )}
+      </tbody>
+    </table>
+  </div>
+</div>
+
     </div>
   );
 }
