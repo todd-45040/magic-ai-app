@@ -62,14 +62,24 @@ export default async function handler(req: any, res: any) {
 
     const days = asDays(req?.query?.days ?? 7, 7);
     const sinceIso = isoDaysAgo(days);
+    const warnings: string[] = [];
 
     // --- New users (created in window)
-    const { count: newUsersCount, error: newUsersErr } = await admin
-      .from('users')
-      .select('id', { count: 'exact', head: true })
-      .gte('created_at', sinceIso);
+    // Prefer an exact count() for new-user total, but fall back to scan length if count fails
+    // (some deployments may restrict count/head behavior or return errors for large tables).
+    let newUsersCount: number | null = null;
+    {
+      const { count, error } = await admin
+        .from('users')
+        .select('id', { count: 'exact', head: true })
+        .gte('created_at', sinceIso);
 
-    if (newUsersErr) return res.status(500).json({ ok: false, error: 'New user count failed', details: newUsersErr });
+      if (error) {
+        warnings.push('new_users_count_fallback');
+      } else {
+        newUsersCount = Number(count ?? 0);
+      }
+    }
 
     // Pull ids + created_at for activation check (bounded)
     const { data: newUsersRows, error: newUsersRowsErr } = await admin
@@ -84,6 +94,7 @@ export default async function handler(req: any, res: any) {
     }
 
     const newUsers = (newUsersRows || []) as any[];
+    if (newUsersCount === null) newUsersCount = newUsers.length;
     const newUserCreatedAt = new Map<string, string>();
     for (const u of newUsers) {
       if (u?.id && u?.created_at) newUserCreatedAt.set(String(u.id), String(u.created_at));
@@ -1057,6 +1068,7 @@ const provider_breakdown = Object.entries(providerReliability)
         sinceIso,
         optionsDays: ALLOWED_WINDOWS,
       },
+      warnings,
       definitions: {
         active_user: `Unique users with ≥1 ai_usage_event in the selected window`,
         activated_user: `New users with first core-tool use within 24h of signup`,
