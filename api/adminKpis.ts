@@ -188,11 +188,7 @@ function classifyEvent(e: any): {
 
     let aiCostUSD = 0;
 
-    const isSuccessOutcome = (o: any) => {
-      const s = String(o || '');
-      return s === 'SUCCESS_CHARGED' || s === 'SUCCESS_NOT_CHARGED' || s === 'ALLOWED';
-    };
-
+    
     for (const e of evs) {
       totalEvents += 1;
 
