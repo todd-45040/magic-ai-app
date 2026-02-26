@@ -41,6 +41,7 @@ const WINDOW_OPTIONS = [
 
 export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () => void }) {
   const [days, setDays] = useState<number>(7);
+  const [mauMode, setMauMode] = useState<'daily' | 'weekly'>('daily');
   const [data, setData] = useState<any>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -92,7 +93,12 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
   const engagement = data?.engagement || {};
   const adoption = (engagement?.tool_adoption_top || []) as any[];
   const returningTrend = (engagement?.returning_trend_30d || []) as any[];
+  const mauDaily = (engagement?.mau_trend_30d_daily || []) as any[];
+  const mauWeekly = (engagement?.mau_trend_12w_weekly || []) as any[];
+  const adoptionTrend = engagement?.tool_adoption_trend_30d as any;
   const maxReturning = useMemo(() => Math.max(0, ...returningTrend.map((d: any) => Number(d?.returning_users || 0))), [returningTrend]);
+  const maxMauDaily = useMemo(() => Math.max(0, ...mauDaily.map((d: any) => Number(d?.mau_rolling_30d || 0))), [mauDaily]);
+  const maxMauWeekly = useMemo(() => Math.max(0, ...mauWeekly.map((d: any) => Number(d?.mau_rolling_30d || 0))), [mauWeekly]);
 
   const topByUsage = useMemo(() => (tools?.top_by_usage || []).slice(0, 8), [tools]);
   const topByCost = useMemo(() => (tools?.top_by_cost || []).slice(0, 8), [tools]);
@@ -319,7 +325,111 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
               ({Number(engagement?.week1_retention?.retained || 0)} / {Number(engagement?.week1_retention?.cohort_size || 0)})
             </span>
           </div>
+        
+
+      {/* Phase 3.1 — True MAU Trend + Adoption Over Time */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-medium">MAU Trend</div>
+              <div className="text-xs opacity-70">Rolling 30-day active users</div>
+            </div>
+            <div className="flex items-center gap-1 text-xs">
+              <button
+                className={`px-2 py-1 rounded border border-white/10 ${mauMode === 'daily' ? 'bg-white/15' : 'bg-black/20 hover:bg-white/10'}`}
+                onClick={() => setMauMode('daily')}
+              >
+                Daily
+              </button>
+              <button
+                className={`px-2 py-1 rounded border border-white/10 ${mauMode === 'weekly' ? 'bg-white/15' : 'bg-black/20 hover:bg-white/10'}`}
+                onClick={() => setMauMode('weekly')}
+              >
+                Weekly
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-3 flex items-end gap-[2px] h-16">
+            {mauMode === 'daily' && mauDaily.length === 0 && <div className="text-sm opacity-70">No data.</div>}
+            {mauMode === 'weekly' && mauWeekly.length === 0 && <div className="text-sm opacity-70">No data.</div>}
+
+            {mauMode === 'daily' &&
+              mauDaily.map((d: any) => {
+                const v = Number(d?.mau_rolling_30d || 0);
+                const h = maxMauDaily > 0 ? Math.max(2, Math.round((v / maxMauDaily) * 64)) : 2;
+                return (
+                  <div
+                    key={String(d?.date)}
+                    title={`${String(d?.date)}: ${v}`}
+                    className="w-[6px] rounded bg-white/15"
+                    style={{ height: `${h}px` }}
+                  />
+                );
+              })}
+
+            {mauMode === 'weekly' &&
+              mauWeekly.map((d: any) => {
+                const v = Number(d?.mau_rolling_30d || 0);
+                const h = maxMauWeekly > 0 ? Math.max(2, Math.round((v / maxMauWeekly) * 64)) : 2;
+                return (
+                  <div
+                    key={String(d?.week_end)}
+                    title={`${String(d?.week_end)}: ${v}`}
+                    className="w-[10px] rounded bg-white/15"
+                    style={{ height: `${h}px` }}
+                  />
+                );
+              })}
+          </div>
+
+          <div className="text-xs opacity-60 mt-2">
+            {mauMode === 'daily' ? 'Last 30 days' : 'Last 12 weeks'} • Each bar is a 30-day rolling MAU snapshot
+          </div>
         </div>
+
+        <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+          <div className="text-sm font-medium">Adoption Over Time</div>
+          <div className="text-xs opacity-70 mt-0.5">Daily % of active users using each tool (last 30d)</div>
+
+          {!adoptionTrend?.tools?.length && <div className="mt-3 text-sm opacity-70">No trend data.</div>}
+
+          {adoptionTrend?.tools?.length > 0 && (
+            <div className="mt-3 space-y-3">
+              {adoptionTrend.tools.slice(0, 5).map((t: any) => (
+                <div key={t.tool} className="space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="truncate max-w-[65%] opacity-90">{t.tool}</div>
+                    <div className="opacity-70">
+                      Avg: {pct((t.adoption_rates || []).reduce((a: number, b: number) => a + b, 0) / Math.max(1, (t.adoption_rates || []).length), 0)}
+                    </div>
+                  </div>
+                  <div className="flex items-end gap-[2px] h-10">
+                    {(t.adoption_rates || []).map((r: any, i: number) => {
+                      const v = Number(r || 0);
+                      const h = Math.max(2, Math.round(v * 40)); // since v is 0..1
+                      const day = adoptionTrend?.days?.[i] || '';
+                      return (
+                        <div
+                          key={`${t.tool}-${i}`}
+                          title={`${day}: ${pct(v, 0)} (${Number(t.unique_users?.[i] || 0)} users)`}
+                          className="w-[5px] rounded bg-white/15"
+                          style={{ height: `${h}px` }}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="text-xs opacity-60 mt-2">Denominator = daily active users (any tool).</div>
+        </div>
+      </div>
+
+</div>
       </div>
 
       <div className="p-3 rounded-xl bg-white/5 border border-white/10">

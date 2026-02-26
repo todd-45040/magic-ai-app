@@ -301,6 +301,14 @@ export default async function handler(req: any, res: any) {
     let toolAdoption: { tool: string; adoption_rate: number; unique_users: number; events: number; cost_usd: number }[] = [];
     let returningTrend30d: { date: string; returning_users: number }[] = [];
 
+    let mauTrendDaily30: { date: string; mau_rolling_30d: number }[] = [];
+    let mauTrendWeekly12: { week_end: string; mau_rolling_30d: number }[] = [];
+    let toolAdoptionTrend30d: {
+      days: string[];
+      daily_active_users: number[];
+      tools: { tool: string; adoption_rates: number[]; unique_users: number[] }[];
+    } | null = null;
+
     let week1CohortSize = 0;
     let week1Retained = 0;
     let week1RetentionRate: number | null = null;
@@ -426,6 +434,133 @@ export default async function handler(req: any, res: any) {
     }
 
     // Week-1 retention (lightweight):
+
+    // True MAU trend: rolling 30-day active users (daily last 30d, weekly last 12w).
+    // Tool adoption over time: daily % of active users using each tool (last 30d) for top tools.
+    try {
+      const lookbackDays = 120; // enough for 12 weekly points + rolling 30d
+      const sinceIsoLong = isoDaysAgo(lookbackDays);
+
+      const { data: evLong, error: evLongErr } = await admin
+        .from('ai_usage_events')
+        .select('user_id,tool,occurred_at')
+        .gte('occurred_at', sinceIsoLong)
+        .order('occurred_at', { ascending: false })
+        .limit(200000);
+
+      if (!evLongErr) {
+        const today = new Date();
+        const dayKeys: string[] = [];
+        // Build ordered day keys oldest->newest
+        for (let i = lookbackDays - 1; i >= 0; i -= 1) {
+          const dt = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+          dt.setUTCDate(dt.getUTCDate() - i);
+          dayKeys.push(dt.toISOString().slice(0, 10));
+        }
+
+        const dailyUsers: Record<string, Set<string>> = {};
+        const dailyToolUsers: Record<string, Record<string, Set<string>>> = {}; // tool -> dayKey -> Set(user)
+
+        for (const e of (evLong || []) as any[]) {
+          const uid = e?.user_id ? String(e.user_id) : null;
+          const occ = e?.occurred_at ? String(e.occurred_at) : null;
+          if (!uid || !occ) continue;
+          const dayKey = toDayKeyUTC(occ);
+          if (!dailyUsers[dayKey]) dailyUsers[dayKey] = new Set<string>();
+          dailyUsers[dayKey].add(uid);
+
+          const tool = String(e?.tool || 'unknown');
+          if (!dailyToolUsers[tool]) dailyToolUsers[tool] = {};
+          if (!dailyToolUsers[tool][dayKey]) dailyToolUsers[tool][dayKey] = new Set<string>();
+          dailyToolUsers[tool][dayKey].add(uid);
+        }
+
+        // Rolling MAU (30d) for each day in the lookback range (sliding window)
+        const roll: number[] = [];
+        const counts = new Map<string, number>();
+
+        const addDay = (day: string) => {
+          const set = dailyUsers[day];
+          if (!set) return;
+          for (const uid of set) counts.set(uid, (counts.get(uid) || 0) + 1);
+        };
+        const removeDay = (day: string) => {
+          const set = dailyUsers[day];
+          if (!set) return;
+          for (const uid of set) {
+            const next = (counts.get(uid) || 0) - 1;
+            if (next <= 0) counts.delete(uid);
+            else counts.set(uid, next);
+          }
+        };
+
+        const windowSize = 30;
+        for (let i = 0; i < dayKeys.length; i += 1) {
+          addDay(dayKeys[i]);
+          if (i >= windowSize) {
+            removeDay(dayKeys[i - windowSize]);
+          }
+          roll[i] = counts.size;
+        }
+
+        // Daily MAU curve: last 30 days, use rolling value ending each day
+        const dailyStart = Math.max(0, dayKeys.length - 30);
+        mauTrendDaily30 = dayKeys.slice(dailyStart).map((d, idx) => ({
+          date: d,
+          mau_rolling_30d: Number(roll[dailyStart + idx] || 0),
+        }));
+
+        // Weekly MAU curve: last 12 weeks, sample at week ends (every 7 days, including today)
+        const weekly: { week_end: string; mau_rolling_30d: number }[] = [];
+        for (let w = 0; w < 12; w += 1) {
+          const offset = w * 7;
+          const idx = dayKeys.length - 1 - offset;
+          if (idx < 0) break;
+          const wkEnd = dayKeys[idx];
+          weekly.unshift({ week_end: wkEnd, mau_rolling_30d: Number(roll[idx] || 0) });
+        }
+        mauTrendWeekly12 = weekly;
+
+        // Tool adoption over time (last 30d): daily tool users / daily active users
+        const last30Keys = dayKeys.slice(-30);
+        const dailyActiveArr = last30Keys.map((d) => (dailyUsers[d] ? dailyUsers[d].size : 0));
+
+        // Choose top tools by unique users in last 30d
+        const toolTotals: { tool: string; unique: number }[] = [];
+        for (const [tool, perDay] of Object.entries(dailyToolUsers)) {
+          let s = new Set<string>();
+          for (const d of last30Keys) {
+            const set = (perDay as any)[d] as Set<string> | undefined;
+            if (!set) continue;
+            for (const uid of set) s.add(uid);
+          }
+          const n = s.size;
+          if (n > 0) toolTotals.push({ tool, unique: n });
+        }
+        toolTotals.sort((a, b) => b.unique - a.unique);
+        const topTools = toolTotals.slice(0, 5).map((t) => t.tool);
+
+        const toolSeries = topTools.map((tool) => {
+          const perDay = dailyToolUsers[tool] || {};
+          const users = last30Keys.map((d) => ((perDay as any)[d] ? (perDay as any)[d].size : 0));
+          const rates = users.map((n, i) => {
+            const denom = dailyActiveArr[i] || 0;
+            return denom > 0 ? n / denom : 0;
+          });
+          return { tool, adoption_rates: rates, unique_users: users };
+        });
+
+        toolAdoptionTrend30d = {
+          days: last30Keys,
+          daily_active_users: dailyActiveArr,
+          tools: toolSeries,
+        };
+      }
+    } catch (e) {
+      // non-fatal
+    }
+
+
     // Cohort: users created 7–14 days ago.
     // Retained: had ≥1 event within first 7 days after signup.
     try {
@@ -548,6 +683,9 @@ const toolRows = Object.entries(toolAgg).map(([tool, v]) => ({
         stickiness_dau_mau: stickinessDauMau,
         tool_adoption_top: toolAdoption,
         returning_trend_30d: returningTrend30d,
+        mau_trend_30d_daily: mauTrendDaily30,
+        mau_trend_12w_weekly: mauTrendWeekly12,
+        tool_adoption_trend_30d: toolAdoptionTrend30d,
         week1_retention: {
           cohort_size: week1CohortSize,
           retained: week1Retained,
