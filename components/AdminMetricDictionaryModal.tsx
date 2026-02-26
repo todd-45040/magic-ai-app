@@ -11,7 +11,7 @@ export default function AdminMetricDictionaryModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center">
+    <div className="fixed inset-0 z-[1000] flex items-start justify-center p-4 pt-20 overflow-y-auto">
       <div className="absolute inset-0 bg-black/70" onClick={onClose} />
       <div className="relative w-[min(900px,92vw)] max-h-[85vh] overflow-auto rounded-2xl border border-white/10 bg-[#0b0f19] shadow-2xl">
         <div className="p-5 border-b border-white/10 flex items-start justify-between gap-3">

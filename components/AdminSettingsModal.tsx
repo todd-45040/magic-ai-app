@@ -33,7 +33,19 @@ export default function AdminSettingsModal({ open, onClose }: { open: boolean; o
   if (!open) return null;
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.55)',
+        zIndex: 50,
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'center',
+        padding: '72px 16px 16px',
+        overflowY: 'auto',
+      }}
+    >
       <div style={{ width: 420, maxWidth: '100%', background: 'rgba(20,20,30,0.98)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: 16, padding: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <div style={{ fontSize: 18, fontWeight: 700 }}>Administrator Settings</div>
