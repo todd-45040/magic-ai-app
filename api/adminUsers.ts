@@ -34,10 +34,22 @@ export default async function handler(req: any, res: any) {
 
     const plan = (req?.query?.plan ?? 'all') as string;
     const q = String(req?.query?.q ?? '').trim();
+    const userIdsRaw = String(req?.query?.user_ids ?? '').trim();
+    const userIds = userIdsRaw
+      ? userIdsRaw
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .slice(0, 200)
+      : [];
 
     let query = admin.from('users').select('id,email,membership,created_at', { count: 'exact' });
 
-    if (plan && plan !== 'all') {
+    if (userIds.length > 0) {
+      query = query.in('id', userIds);
+    }
+
+    if (userIds.length === 0 && plan && plan !== 'all') {
       // support "pro" alias
       if (plan === 'pro' || plan === 'professional') {
         query = query.in('membership', ['professional', 'pro']);
@@ -46,14 +58,13 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    if (q) {
+    if (userIds.length === 0 && q) {
       // basic email search
       query = query.ilike('email', `%${q.replace(/%/g, '')}%`);
     }
 
-    const { data: users, error: uErr, count } = await query
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1);
+    const base = query.order('created_at', { ascending: false });
+    const { data: users, error: uErr, count } = userIds.length > 0 ? await base.limit(userIds.length) : await base.range(offset, offset + limit - 1);
 
     if (uErr) return res.status(500).json({ ok: false, error: 'Failed to load users', details: uErr });
 

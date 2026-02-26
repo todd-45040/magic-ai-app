@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { fetchAdminKpis } from '../services/adminKpisService';
+import { fetchAdminWatchlist, fetchAdminOpsNotes, addAdminOpsNote } from '../services/adminOpsService';
+import { downloadCsv } from './adminCsv';
 
 function money(n: any, digits = 2) {
   const v = Number(n);
@@ -47,6 +49,15 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
 
   const [selectedFailure, setSelectedFailure] = useState<any | null>(null);
 
+  // Phase 6 — Ops polish
+  const [watchlist, setWatchlist] = useState<any>(null);
+  const [watchErr, setWatchErr] = useState<string | null>(null);
+  const [notesEntity, setNotesEntity] = useState<{ entity_type: string; entity_id: string; title: string } | null>(null);
+  const [notes, setNotes] = useState<any[]>([]);
+  const [notesMissingTable, setNotesMissingTable] = useState(false);
+  const [noteDraft, setNoteDraft] = useState('');
+  const [notesBusy, setNotesBusy] = useState(false);
+
   async function load() {
     setLoading(true);
     setErr(null);
@@ -65,6 +76,68 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [days]);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        setWatchErr(null);
+        const w = await fetchAdminWatchlist(days);
+        if (alive) setWatchlist(w);
+      } catch (e: any) {
+        if (alive) setWatchErr(e?.message || 'Failed to load watchlist');
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [days]);
+
+  async function openNotes(entity_type: string, entity_id: string, title: string) {
+    setNotesEntity({ entity_type, entity_id, title });
+    setNotes([]);
+    setNotesMissingTable(false);
+    setNoteDraft('');
+    setNotesBusy(true);
+    try {
+      const r = await fetchAdminOpsNotes({ entity_type, entity_id, limit: 100 });
+      setNotes(r?.notes || []);
+      setNotesMissingTable(!!r?.missingTable);
+    } catch {
+      // ignore
+    } finally {
+      setNotesBusy(false);
+    }
+  }
+
+  async function addNote(resolved?: boolean) {
+    if (!notesEntity) return;
+    setNotesBusy(true);
+    try {
+      const r = await addAdminOpsNote({
+        entity_type: notesEntity.entity_type,
+        entity_id: notesEntity.entity_id,
+        note: noteDraft,
+        resolved: resolved === true,
+      });
+      if (r?.missingTable) {
+        setNotesMissingTable(true);
+      } else {
+        setNoteDraft('');
+        const rr = await fetchAdminOpsNotes({
+          entity_type: notesEntity.entity_type,
+          entity_id: notesEntity.entity_id,
+          limit: 100,
+        });
+        setNotes(rr?.notes || []);
+        setNotesMissingTable(!!rr?.missingTable);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setNotesBusy(false);
+    }
+  }
 
   const kUsers = data?.users || {};
   const kAi = data?.ai || {};
@@ -169,6 +242,18 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
 
         <div className="flex items-center gap-2 pt-2">
           <button
+            className="px-3 py-1 rounded bg-purple-500/15 border border-purple-400/25 hover:bg-purple-500/20 text-sm"
+            onClick={() =>
+              openNotes(
+                'failure',
+                String(selectedFailure.request_id || selectedFailure.id || ''),
+                `Failure notes — ${String(selectedFailure.tool || '—')} · ${String(selectedFailure.outcome || '—')}`
+              )
+            }
+          >
+            Notes
+          </button>
+          <button
             className="px-3 py-1 rounded bg-white/10 hover:bg-white/15 text-sm"
             onClick={() => {
               const txt = String(selectedFailure.request_id || '');
@@ -186,6 +271,72 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
           >
             Copy user id
           </button>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+
+{notesEntity && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
+    <div className="w-full max-w-2xl rounded-2xl border border-white/10 bg-[#0b0f1a] shadow-xl">
+      <div className="flex items-start justify-between gap-3 p-4 border-b border-white/10">
+        <div>
+          <div className="text-sm font-semibold">Notes</div>
+          <div className="text-xs opacity-70 mt-0.5">{notesEntity.title}</div>
+        </div>
+        <button
+          className="px-3 py-1 rounded bg-white/10 hover:bg-white/15 text-sm"
+          onClick={() => setNotesEntity(null)}
+        >
+          Close
+        </button>
+      </div>
+
+      <div className="p-4">
+        {notesMissingTable && (
+          <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-400/20 text-amber-100 text-sm">
+            Notes table not installed yet. Run <span className="font-mono">supabase/phase6_admin_ops.sql</span> to enable.
+          </div>
+        )}
+
+        <div className="mt-3 space-y-2 max-h-[260px] overflow-auto">
+          {notesBusy && notes.length === 0 && <div className="text-sm opacity-70">Loading…</div>}
+          {!notesBusy && notes.length === 0 && <div className="text-sm opacity-70">No notes yet.</div>}
+          {notes.map((n: any) => (
+            <div key={String(n.id)} className="p-3 rounded-lg bg-white/5 border border-white/10">
+              <div className="text-xs opacity-70">{String(n.created_at || '')}</div>
+              <div className="text-sm mt-1 whitespace-pre-wrap">{String(n.note || '')}</div>
+              {n.resolved && <div className="text-xs mt-2 text-emerald-200">Marked resolved</div>}
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-4">
+          <textarea
+            value={noteDraft}
+            onChange={(e) => setNoteDraft(e.target.value)}
+            placeholder="Add a note about investigation, mitigation, or resolution…"
+            className="w-full min-h-[90px] px-3 py-2 rounded-lg bg-black/30 border border-white/10 text-white/90"
+          />
+          <div className="mt-2 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              disabled={notesBusy || noteDraft.trim().length === 0}
+              onClick={() => addNote(false)}
+              className="px-3 py-2 rounded-lg bg-white/10 border border-white/10 text-white/90 hover:bg-white/15 transition text-sm disabled:opacity-50"
+            >
+              Add note
+            </button>
+            <button
+              type="button"
+              disabled={notesBusy}
+              onClick={() => addNote(true)}
+              className="px-3 py-2 rounded-lg bg-emerald-500/15 border border-emerald-400/25 text-emerald-100 hover:bg-emerald-500/20 transition text-sm disabled:opacity-50"
+            >
+              Resolve
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -582,8 +733,31 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <div className="p-3 rounded-xl bg-white/5 border border-white/10">
-          <div className="text-sm font-medium">Top spenders</div>
-          <div className="text-xs opacity-70 mt-0.5">Highest estimated cost in selected window</div>
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <div className="text-sm font-medium">Top spenders</div>
+              <div className="text-xs opacity-70 mt-0.5">Highest estimated cost in selected window</div>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                downloadCsv(
+                  `top_spenders_${days}d.csv`,
+                  topSpendersUE.map((u: any) => ({
+                    user_id: u.user_id,
+                    email: u.email,
+                    total_cost_usd: u.total_cost_usd,
+                    events: u.events,
+                    successful_sessions: u.successful_sessions,
+                    avg_latency_ms: u.avg_latency_ms,
+                  }))
+                )
+              }
+              className="px-3 py-2 rounded-lg bg-white/10 border border-white/10 text-white/90 hover:bg-white/15 transition text-xs"
+            >
+              Export CSV
+            </button>
+          </div>
 
           <div className="mt-3 space-y-2 text-sm">
             {topSpendersUE.length === 0 && <div className="text-sm opacity-70">No spenders found.</div>}
@@ -597,13 +771,41 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
         </div>
 
         <div className="p-3 rounded-xl bg-white/5 border border-white/10 lg:col-span-2">
-          <div className="text-sm font-medium">Cost anomalies</div>
-          <div className="text-xs opacity-70 mt-0.5">Spike + outlier detection (rules-based)</div>
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <div className="text-sm font-medium">Cost anomalies</div>
+              <div className="text-xs opacity-70 mt-0.5">Spike + outlier detection (rules-based)</div>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                downloadCsv(
+                  `cost_anomalies_${days}d.csv`,
+                  costAnomalies.map((a: any) => ({
+                    type: a.type,
+                    entity: a.entity,
+                    current_value: a.current_value,
+                    baseline: a.baseline,
+                    multiplier: a.multiplier,
+                  }))
+                )
+              }
+              className="px-3 py-2 rounded-lg bg-white/10 border border-white/10 text-white/90 hover:bg-white/15 transition text-xs"
+            >
+              Export CSV
+            </button>
+          </div>
 
           <div className="mt-3 space-y-2 text-sm">
             {costAnomalies.length === 0 && <div className="text-sm opacity-70">No cost anomalies detected — system stable.</div>}
             {costAnomalies.map((a: any, i: number) => (
-              <div key={`${a.type}-${i}`} className="flex items-center justify-between gap-3">
+              <button
+                type="button"
+                key={`${a.type}-${i}`}
+                onClick={() => openNotes('cost_anomaly', `${String(a.type)}:${String(a.entity)}`, `Cost anomaly — ${String(a.type)} · ${String(a.entity)}`)}
+                className="w-full text-left flex items-center justify-between gap-3 px-2 py-2 rounded-lg hover:bg-white/10 transition"
+                title="Open notes"
+              >
                 <div className="truncate">
                   <span className="font-medium">{String(a.type)}</span>
                   <span className="opacity-70"> · {String(a.entity)}</span>
@@ -611,12 +813,103 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
                 <div className="text-right whitespace-nowrap opacity-80">
                   {Number(a.multiplier || 0).toFixed(1)}×
                 </div>
-              </div>
+              </button>
             ))}
           </div>
 
           <div className="text-xs opacity-60 mt-2">
             daily_spike: today &gt; 2.5× 7‑day avg · tool_spike: today &gt; 3× tool 7‑day avg · user_outlier: &gt; P95 user cost
+          </div>
+        </div>
+      </div>
+
+      {/* Phase 6 — Admin Ops polish */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <div className="text-sm font-medium">Watchlist — near quota</div>
+              <div className="text-xs opacity-70 mt-0.5">Users with &le; 20% remaining in any monthly quota</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => downloadCsv(`watchlist_near_quota_${days}d.csv`, (watchlist?.watchlist?.near_quota || []) as any[])}
+              className="px-3 py-2 rounded-lg bg-white/10 border border-white/10 text-white/90 hover:bg-white/15 transition text-xs"
+            >
+              Export
+            </button>
+          </div>
+          {watchErr && <div className="mt-3 text-sm text-red-200">{watchErr}</div>}
+          <div className="mt-3 space-y-2 text-sm">
+            {(watchlist?.watchlist?.near_quota || []).length === 0 && <div className="opacity-70">No users near quota.</div>}
+            {(watchlist?.watchlist?.near_quota || []).slice(0, 8).map((u: any) => (
+              <div key={String(u.user_id)} className="flex items-center justify-between gap-3">
+                <div className="truncate max-w-[70%]">{String(u.email || u.user_id)}</div>
+                <div className="text-xs opacity-70 truncate">{(u.triggers || []).join(', ')}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <div className="text-sm font-medium">Watchlist — repeated errors</div>
+              <div className="text-xs opacity-70 mt-0.5">Users with ≥ 5 error/timeout/rate-limit events</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => downloadCsv(`watchlist_repeated_errors_${days}d.csv`, (watchlist?.watchlist?.repeated_errors || []) as any[])}
+              className="px-3 py-2 rounded-lg bg-white/10 border border-white/10 text-white/90 hover:bg-white/15 transition text-xs"
+            >
+              Export
+            </button>
+          </div>
+          <div className="mt-3 space-y-2 text-sm">
+            {(watchlist?.watchlist?.repeated_errors || []).length === 0 && <div className="opacity-70">No repeated-error users.</div>}
+            {(watchlist?.watchlist?.repeated_errors || []).slice(0, 8).map((u: any) => (
+              <button
+                type="button"
+                key={String(u.user_id)}
+                onClick={() => openNotes('user', String(u.user_id), `User notes — ${String(u.email || u.user_id)}`)}
+                className="w-full text-left flex items-center justify-between gap-3 px-2 py-2 rounded-lg hover:bg-white/10 transition"
+                title="Open notes"
+              >
+                <div className="truncate max-w-[70%]">{String(u.email || u.user_id)}</div>
+                <div className="text-xs opacity-70">{Number(u.error_events || 0)} events</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <div className="text-sm font-medium">Watchlist — big spenders</div>
+              <div className="text-xs opacity-70 mt-0.5">Top spenders in the selected window</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => downloadCsv(`watchlist_big_spenders_${days}d.csv`, (watchlist?.watchlist?.big_spenders || []) as any[])}
+              className="px-3 py-2 rounded-lg bg-white/10 border border-white/10 text-white/90 hover:bg-white/15 transition text-xs"
+            >
+              Export
+            </button>
+          </div>
+          <div className="mt-3 space-y-2 text-sm">
+            {(watchlist?.watchlist?.big_spenders || []).length === 0 && <div className="opacity-70">No spenders found.</div>}
+            {(watchlist?.watchlist?.big_spenders || []).slice(0, 8).map((u: any) => (
+              <button
+                type="button"
+                key={String(u.user_id)}
+                onClick={() => openNotes('user', String(u.user_id), `User notes — ${String(u.email || u.user_id)}`)}
+                className="w-full text-left flex items-center justify-between gap-3 px-2 py-2 rounded-lg hover:bg-white/10 transition"
+                title="Open notes"
+              >
+                <div className="truncate max-w-[70%]">{String(u.email || u.user_id)}</div>
+                <div className="text-xs opacity-70">{money(u.total_cost_usd, 4)}</div>
+              </button>
+            ))}
           </div>
         </div>
       </div>

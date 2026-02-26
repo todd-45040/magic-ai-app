@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import AdminWindowSelector from './AdminWindowSelector';
 import { snapAdminWindowDays } from '../utils/adminMetrics';
-import { fetchAdminUsageDashboard, resolveAnomalyFlag } from '../services/adminUsageDashboardService';
+import { fetchAdminUsageDashboard } from '../services/adminUsageDashboardService';
+import { downloadCsv } from './adminCsv';
 
 export default function AdminUsageDashboard() {
   const [days, setDays] = useState(() => {
@@ -11,6 +12,11 @@ export default function AdminUsageDashboard() {
   const [data, setData] = useState<any>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Phase 6 — quick filters
+  const [flagResolved, setFlagResolved] = useState<'all' | 'unresolved' | 'resolved'>('unresolved');
+  const [flagSeverity, setFlagSeverity] = useState<string>('all');
+  const [flagQuery, setFlagQuery] = useState('');
 
   async function load() {
     setLoading(true);
@@ -33,6 +39,21 @@ export default function AdminUsageDashboard() {
   const topStatuses = useMemo(() => Object.entries(totals?.byStatus || {}).sort((a:any,b:any)=>b[1]-a[1]).slice(0,8), [totals]);
   const topTools = useMemo(() => Object.entries(totals?.byTool || {}).sort((a:any,b:any)=>b[1]-a[1]).slice(0,8), [totals]);
   const topMembership = useMemo(() => Object.entries(totals?.byMembership || {}).sort((a:any,b:any)=>b[1]-a[1]).slice(0,8), [totals]);
+
+  const filteredFlags = useMemo(() => {
+    const rows = (data?.flags || []) as any[];
+    const q = flagQuery.trim().toLowerCase();
+    return rows.filter((f) => {
+      if (flagResolved === 'resolved' && !f.resolved) return false;
+      if (flagResolved === 'unresolved' && f.resolved) return false;
+      if (flagSeverity !== 'all' && String(f.severity || '') !== flagSeverity) return false;
+      if (q) {
+        const hay = `${f.reason || ''} ${f.user_id || ''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [data, flagResolved, flagSeverity, flagQuery]);
 
   return (
     <div className="p-4 space-y-4">
@@ -95,7 +116,42 @@ export default function AdminUsageDashboard() {
       <div className="p-3 rounded-xl bg-white/5 border border-white/10">
         <div className="flex items-center justify-between mb-2">
           <div className="font-semibold">Recent Anomaly Flags</div>
-          <div className="text-xs opacity-70">Showing up to 200</div>
+          <div className="flex items-center gap-2">
+            <select
+              value={flagResolved}
+              onChange={(e) => setFlagResolved(e.target.value as any)}
+              className="px-2 py-1 rounded bg-black/30 border border-white/10 text-xs"
+              title="Resolved filter"
+            >
+              <option value="unresolved">Unresolved</option>
+              <option value="resolved">Resolved</option>
+              <option value="all">All</option>
+            </select>
+            <select
+              value={flagSeverity}
+              onChange={(e) => setFlagSeverity(e.target.value)}
+              className="px-2 py-1 rounded bg-black/30 border border-white/10 text-xs"
+              title="Severity"
+            >
+              <option value="all">All severities</option>
+              <option value="low">low</option>
+              <option value="medium">medium</option>
+              <option value="high">high</option>
+            </select>
+            <input
+              value={flagQuery}
+              onChange={(e) => setFlagQuery(e.target.value)}
+              placeholder="Search reason/user…"
+              className="px-2 py-1 rounded bg-black/30 border border-white/10 text-xs"
+            />
+            <button
+              type="button"
+              onClick={() => downloadCsv(`anomaly_flags_${days}d.csv`, filteredFlags)}
+              className="px-3 py-1 rounded bg-white/10 hover:bg-white/15 text-xs"
+            >
+              Export CSV
+            </button>
+          </div>
         </div>
         <div className="overflow-auto">
           <table className="min-w-full text-sm">
@@ -109,7 +165,7 @@ export default function AdminUsageDashboard() {
               </tr>
             </thead>
             <tbody>
-              {(data?.flags || []).slice(0, 50).map((f: any, idx: number) => (
+              {filteredFlags.slice(0, 50).map((f: any, idx: number) => (
                 <tr key={idx} className="border-t border-white/10">
                   <td className="py-2 pr-4 font-mono text-xs">{String(f.created_at).replace('T',' ').slice(0,19)}</td>
                   <td className="py-2 pr-4">{f.severity}</td>

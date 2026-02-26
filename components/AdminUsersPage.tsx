@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import AdminWindowSelector from './AdminWindowSelector';
 import { snapAdminWindowDays } from '../utils/adminMetrics';
 import { fetchAdminUsers, type AdminUserRow } from '../services/adminUsersService';
+import { fetchAdminWatchlist } from '../services/adminOpsService';
+import { downloadCsv } from './adminCsv';
 
 function money(n: any, digits = 4) {
   const v = Number(n);
@@ -32,6 +34,8 @@ function labelPlan(m: string | null) {
 export default function AdminUsersPage() {
   const [plan, setPlan] = useState<string>('all');
   const [q, setQ] = useState<string>('');
+  const [watchMode, setWatchMode] = useState<'none' | 'near_quota' | 'repeated_errors' | 'big_spenders'>('none');
+  const [watchIds, setWatchIds] = useState<string[]>([]);
   const [days, setDays] = useState<number>(() => {
     const params = new URLSearchParams(window.location.search);
     return snapAdminWindowDays(params.get('days') ?? 30, 30);
@@ -51,7 +55,7 @@ export default function AdminUsersPage() {
     setLoading(true);
     setErr(null);
     try {
-      const res = await fetchAdminUsers({ plan, q, days, limit, offset });
+      const res = await fetchAdminUsers({ plan, q, user_ids: watchMode === 'none' ? undefined : watchIds, days, limit, offset });
       setRows(res.users || []);
       setTotal(Number(res.paging?.total || 0));
       // Keep UI in sync with backend snapping (prevents drift if URL/query is non-standard)
@@ -66,7 +70,32 @@ export default function AdminUsersPage() {
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plan, days, limit, offset]);
+  }, [plan, days, limit, offset, watchMode, watchIds.join(',')]);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (watchMode === 'none') {
+        setWatchIds([]);
+        return;
+      }
+      try {
+        const w = await fetchAdminWatchlist(days);
+        const list = (w?.watchlist?.[watchMode] || []) as any[];
+        const ids = list.map((x: any) => String(x.user_id || '')).filter(Boolean);
+        if (alive) {
+          setWatchIds(ids);
+          setOffset(0);
+        }
+      } catch {
+        if (alive) setWatchIds([]);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchMode, days]);
 
   const onSearch = () => {
     setOffset(0);
@@ -101,11 +130,27 @@ export default function AdminUsersPage() {
           />
 
           <select
+            value={watchMode}
+            onChange={(e) => {
+              setWatchMode(e.target.value as any);
+              setOffset(0);
+            }}
+            className="px-2 py-1 rounded border border-white/10 bg-black/20"
+            title="Watchlist"
+          >
+            <option value="none">Watchlist: off</option>
+            <option value="near_quota">Watchlist: near quota</option>
+            <option value="repeated_errors">Watchlist: repeated errors</option>
+            <option value="big_spenders">Watchlist: big spenders</option>
+          </select>
+
+          <select
             value={plan}
             onChange={(e) => {
               setPlan(e.target.value);
               setOffset(0);
             }}
+            disabled={watchMode !== 'none'}
             className="px-2 py-1 rounded border border-white/10 bg-black/20"
           >
             <option value="all">All plans</option>
@@ -138,6 +183,7 @@ export default function AdminUsersPage() {
               onKeyDown={(e) => {
                 if (e.key === 'Enter') onSearch();
               }}
+              disabled={watchMode !== 'none'}
               placeholder="Search email…"
               className="px-3 py-1.5 rounded-lg bg-black/20 border border-white/10 text-white/90 w-[220px]"
             />
@@ -158,6 +204,27 @@ export default function AdminUsersPage() {
             disabled={loading}
           >
             {loading ? 'Loading…' : 'Refresh'}
+          </button>
+
+          <button
+            type="button"
+            onClick={() =>
+              downloadCsv(
+                `admin_users_${days}d.csv`,
+                rows.map((r) => ({
+                  id: r.id,
+                  email: r.email,
+                  membership: r.membership,
+                  created_at: r.created_at,
+                  last_active_at: r.last_active_at,
+                  events_window: r.events_window,
+                  cost_usd_window: r.cost_usd_window,
+                }))
+              )
+            }
+            className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 border border-white/10"
+          >
+            Export CSV
           </button>
         </div>
       </div>
