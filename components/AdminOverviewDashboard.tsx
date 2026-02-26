@@ -89,6 +89,11 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
   const ttfv = growth?.ttfv || {};
   const signupTrend = (growth?.signup_trend_30d || []) as any[];
 
+  const engagement = data?.engagement || {};
+  const adoption = (engagement?.tool_adoption_top || []) as any[];
+  const returningTrend = (engagement?.returning_trend_30d || []) as any[];
+  const maxReturning = useMemo(() => Math.max(0, ...returningTrend.map((d: any) => Number(d?.returning_users || 0))), [returningTrend]);
+
   const topByUsage = useMemo(() => (tools?.top_by_usage || []).slice(0, 8), [tools]);
   const topByCost = useMemo(() => (tools?.top_by_cost || []).slice(0, 8), [tools]);
   const maxSignup = useMemo(() => Math.max(0, ...signupTrend.map((d: any) => Number(d?.new_users || 0))), [signupTrend]);
@@ -255,6 +260,64 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
                 <div className="opacity-80">{money(r.cost_usd)}</div>
               </div>
             ))}
+          </div>
+        </div>
+      </div>
+
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+          <div className="text-sm font-medium">Engagement</div>
+          <div className="text-xs opacity-70 mt-0.5">DAU / WAU / MAU + stickiness</div>
+          <div className="mt-3 space-y-2 text-sm">
+            <div className="flex items-center justify-between"><span className="opacity-80">DAU</span><span className="font-semibold">{Number(engagement?.dau || 0).toLocaleString()}</span></div>
+            <div className="flex items-center justify-between"><span className="opacity-80">WAU</span><span className="font-semibold">{Number(engagement?.wau || 0).toLocaleString()}</span></div>
+            <div className="flex items-center justify-between"><span className="opacity-80">MAU</span><span className="font-semibold">{Number(engagement?.mau || 0).toLocaleString()}</span></div>
+            <div className="flex items-center justify-between"><span className="opacity-80">Stickiness (DAU/MAU)</span><span className="font-semibold">{pct(engagement?.stickiness_dau_mau, 0)}</span></div>
+          </div>
+          <div className="text-xs opacity-60 mt-2">DAU/WAU/MAU use fixed 1/7/30-day windows</div>
+        </div>
+
+        <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+          <div className="text-sm font-medium">Returning Trend</div>
+          <div className="text-xs opacity-70 mt-0.5">Last 30 days (daily returning users)</div>
+          <div className="mt-3 flex items-end gap-[2px] h-16">
+            {returningTrend.length === 0 && <div className="text-sm opacity-70">No data.</div>}
+            {returningTrend.length > 0 &&
+              returningTrend.map((d: any) => {
+                const v = Number(d?.returning_users || 0);
+                const h = maxReturning > 0 ? Math.max(2, Math.round((v / maxReturning) * 64)) : 2;
+                return (
+                  <div
+                    key={String(d?.date)}
+                    title={`${String(d?.date)}: ${v}`}
+                    className="w-[6px] rounded bg-white/15"
+                    style={{ height: `${h}px` }}
+                  />
+                );
+              })}
+          </div>
+          <div className="text-xs opacity-60 mt-2">Returning = created before that day + active on that day</div>
+        </div>
+
+        <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+          <div className="text-sm font-medium">Tool Adoption</div>
+          <div className="text-xs opacity-70 mt-0.5">% of active users using each tool (window)</div>
+          <div className="mt-3 space-y-2">
+            {adoption.length === 0 && <div className="text-sm opacity-70">No adoption data.</div>}
+            {adoption.slice(0, 8).map((r: any) => (
+              <div key={r.tool} className="flex items-center justify-between text-sm">
+                <div className="truncate max-w-[60%]">{r.tool}</div>
+                <div className="opacity-80">{pct(r.adoption_rate, 0)}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-3 pt-2 border-t border-white/10 text-xs opacity-70">
+            Week-1 retention: <span className="font-medium">{pct(engagement?.week1_retention?.retention_rate, 0)}</span>{' '}
+            <span className="opacity-70">
+              ({Number(engagement?.week1_retention?.retained || 0)} / {Number(engagement?.week1_retention?.cohort_size || 0)})
+            </span>
           </div>
         </div>
       </div>

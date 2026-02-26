@@ -291,7 +291,209 @@ export default async function handler(req: any, res: any) {
       // non-fatal
     }
 
-    const toolRows = Object.entries(toolAgg).map(([tool, v]) => ({
+    
+    // --- Engagement metrics (DAU / WAU / MAU + stickiness, tool adoption, returning trend, week-1 retention)
+    let dau = 0;
+    let wau = 0;
+    let mau = 0;
+    let stickinessDauMau: number | null = null;
+
+    let toolAdoption: { tool: string; adoption_rate: number; unique_users: number; events: number; cost_usd: number }[] = [];
+    let returningTrend30d: { date: string; returning_users: number }[] = [];
+
+    let week1CohortSize = 0;
+    let week1Retained = 0;
+    let week1RetentionRate: number | null = null;
+
+    const toDayKeyUTC = (iso: string) => String(iso || '').slice(0, 10);
+    const dayStartUTCms = (dayKey: string) => Date.parse(`${dayKey}T00:00:00.000Z`);
+
+    // Tool adoption (% of active users in selected window using each tool)
+    try {
+      const activeN = activeUserSet.size;
+      if (activeN > 0) {
+        toolAdoption = Object.entries(toolAgg)
+          .map(([tool, v]) => ({
+            tool,
+            adoption_rate: v.users.size / activeN,
+            unique_users: v.users.size,
+            events: v.events,
+            cost_usd: v.cost,
+          }))
+          .sort((a, b) => b.adoption_rate - a.adoption_rate)
+          .slice(0, 20);
+      }
+    } catch (e) {
+      // non-fatal
+    }
+
+    // DAU / WAU / MAU (fixed windows: 1d, 7d, 30d)
+    const uniqueUsersSince = async (d: number) => {
+      const since = isoDaysAgo(d);
+      const { data, error } = await admin
+        .from('ai_usage_events')
+        .select('user_id,occurred_at')
+        .gte('occurred_at', since)
+        .order('occurred_at', { ascending: false })
+        .limit(200000);
+      if (error) return null;
+      const s = new Set<string>();
+      for (const r of (data || []) as any[]) {
+        const uid = r?.user_id ? String(r.user_id) : null;
+        if (uid) s.add(uid);
+      }
+      return s.size;
+    };
+
+    try {
+      const [d1, d7, d30] = await Promise.all([uniqueUsersSince(1), uniqueUsersSince(7), uniqueUsersSince(30)]);
+      dau = Number(d1 || 0);
+      wau = Number(d7 || 0);
+      mau = Number(d30 || 0);
+      stickinessDauMau = mau > 0 ? dau / mau : null;
+    } catch (e) {
+      // non-fatal
+    }
+
+    // Returning users trend (last 30d): users with events on day D AND created_at < day start of D
+    try {
+      const since30Iso = isoDaysAgo(30);
+      const { data: ev30, error: ev30Err } = await admin
+        .from('ai_usage_events')
+        .select('user_id,occurred_at')
+        .gte('occurred_at', since30Iso)
+        .order('occurred_at', { ascending: false })
+        .limit(200000);
+
+      if (!ev30Err) {
+        const events30 = (ev30 || []) as any[];
+
+        const idsSet = new Set<string>();
+        for (const e of events30) {
+          const uid = e?.user_id ? String(e.user_id) : null;
+          if (uid) idsSet.add(uid);
+        }
+        const ids = Array.from(idsSet);
+        const createdMap = new Map<string, string>();
+
+        // Fetch created_at for users seen in last 30d events (batch)
+        const batchSize = 500;
+        for (let i = 0; i < ids.length; i += batchSize) {
+          const batch = ids.slice(i, i + batchSize);
+          const { data: ur, error: urErr } = await admin.from('users').select('id,created_at').in('id', batch).limit(50000);
+          if (urErr) continue;
+          for (const u of (ur || []) as any[]) {
+            if (u?.id && u?.created_at) createdMap.set(String(u.id), String(u.created_at));
+          }
+        }
+
+        // Build daily sets
+        const daily: Record<string, Set<string>> = {};
+        for (const e of events30) {
+          const uid = e?.user_id ? String(e.user_id) : null;
+          const occ = e?.occurred_at ? String(e.occurred_at) : null;
+          if (!uid || !occ) continue;
+          const dayKey = toDayKeyUTC(occ);
+          if (!daily[dayKey]) daily[dayKey] = new Set<string>();
+          daily[dayKey].add(uid);
+        }
+
+        // Turn into series (fill missing)
+        const today = new Date();
+        const series: { date: string; returning_users: number }[] = [];
+        for (let i = 29; i >= 0; i -= 1) {
+          const dt = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+          dt.setUTCDate(dt.getUTCDate() - i);
+          const key = dt.toISOString().slice(0, 10);
+          const dayStart = dayStartUTCms(key);
+
+          let count = 0;
+          const set = daily[key] || new Set<string>();
+          for (const uid of set) {
+            const createdAt = createdMap.get(uid);
+            if (!createdAt) continue;
+            const createdMs = Date.parse(createdAt);
+            if (!Number.isFinite(createdMs) || !Number.isFinite(dayStart)) continue;
+            if (createdMs < dayStart) count += 1;
+          }
+
+          series.push({ date: key, returning_users: count });
+        }
+        returningTrend30d = series;
+      }
+    } catch (e) {
+      // non-fatal
+    }
+
+    // Week-1 retention (lightweight):
+    // Cohort: users created 7–14 days ago.
+    // Retained: had ≥1 event within first 7 days after signup.
+    try {
+      const since14Iso = isoDaysAgo(14);
+      const since7Iso = isoDaysAgo(7);
+
+      const { data: cohortUsers, error: cohortErr } = await admin
+        .from('users')
+        .select('id,created_at')
+        .gte('created_at', since14Iso)
+        .lt('created_at', since7Iso)
+        .order('created_at', { ascending: false })
+        .limit(50000);
+
+      if (!cohortErr) {
+        const cohort = (cohortUsers || []) as any[];
+        week1CohortSize = cohort.length;
+
+        const cohortMap = new Map<string, string>();
+        for (const u of cohort) {
+          if (u?.id && u?.created_at) cohortMap.set(String(u.id), String(u.created_at));
+        }
+
+        if (cohortMap.size > 0) {
+          // Pull events from last 14 days for cohort users, then test occurred_at <= created_at + 7d
+          const ids = Array.from(cohortMap.keys());
+          const batchSize = 500;
+          const retainedSet = new Set<string>();
+
+          for (let i = 0; i < ids.length; i += batchSize) {
+            const batch = ids.slice(i, i + batchSize);
+            const { data: evC, error: evCErr } = await admin
+              .from('ai_usage_events')
+              .select('user_id,occurred_at')
+              .in('user_id', batch)
+              .gte('occurred_at', since14Iso)
+              .order('occurred_at', { ascending: true })
+              .limit(200000);
+
+            if (evCErr) continue;
+
+            for (const e of (evC || []) as any[]) {
+              const uid = e?.user_id ? String(e.user_id) : null;
+              const occ = e?.occurred_at ? String(e.occurred_at) : null;
+              if (!uid || !occ) continue;
+              if (retainedSet.has(uid)) continue;
+
+              const createdAt = cohortMap.get(uid);
+              if (!createdAt) continue;
+
+              const createdMs = Date.parse(createdAt);
+              const occMs = Date.parse(occ);
+              if (!Number.isFinite(createdMs) || !Number.isFinite(occMs)) continue;
+
+              if (occMs <= createdMs + 7 * 24 * 60 * 60 * 1000) {
+                retainedSet.add(uid);
+              }
+            }
+          }
+
+          week1Retained = retainedSet.size;
+          week1RetentionRate = week1CohortSize > 0 ? week1Retained / week1CohortSize : null;
+        }
+      }
+    } catch (e) {
+      // non-fatal
+    }
+const toolRows = Object.entries(toolAgg).map(([tool, v]) => ({
       tool,
       events: v.events,
       unique_users: v.users.size,
@@ -313,6 +515,11 @@ export default async function handler(req: any, res: any) {
         activated_user: `New users with first core-tool use within 24h of signup`,
         returning_wau_7d: `Unique users with ≥1 ai_usage_event in the last 7 days`,
         ttfv_median: `Median time from users.created_at to first core-tool ai_usage_event (for new users in window)`,
+        dau_wau_mau: `DAU/WAU/MAU = unique users with ≥1 ai_usage_event in last 1/7/30 days`,
+        stickiness: `Stickiness = DAU / MAU`,
+        tool_adoption: `For each tool: (unique users using tool in window) / (active users in window)`,
+        returning_trend_30d: `Daily returning users (last 30d): events on day D where users.created_at < start of day D`,
+        week1_retention: `Users who signed up 7–14 days ago and used the product at least once within their first 7 days`,
         core_tools: CORE_TOOLS,
       },
       users: {
@@ -333,6 +540,19 @@ export default async function handler(req: any, res: any) {
           sample_size: ttfvSampleSize,
         },
         signup_trend_30d: signupTrend30d,
+      },
+      engagement: {
+        dau,
+        wau,
+        mau,
+        stickiness_dau_mau: stickinessDauMau,
+        tool_adoption_top: toolAdoption,
+        returning_trend_30d: returningTrend30d,
+        week1_retention: {
+          cohort_size: week1CohortSize,
+          retained: week1Retained,
+          retention_rate: week1RetentionRate,
+        },
       },
       ai: {
         total_events: totalEvents,
