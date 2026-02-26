@@ -19,19 +19,18 @@ type UserRow = {
 function isUndefinedColumn(err: any): boolean {
   const code = String(err?.code || '');
   const msg = String(err?.message || err?.details || '');
-
   // Postgres undefined_column is 42703
   if (code === '42703') return true;
-
-  // PostgREST schema cache / missing column often returns PGRST204 with wording like:
-  // "Could not find the 'membership' column of 'users' in the schema cache"
+  // PostgREST schema cache missing column
   if (code === 'PGRST204') return true;
+  return /column\s+.+\s+does not exist/i.test(msg);
+}
 
-  if (/schema\s+cache/i.test(msg) && /could\s+not\s+find/i.test(msg)) return true;
-  if (/could\s+not\s+find\s+the\s+'?.+?'?\s+column/i.test(msg)) return true;
-  if (/column\s+.+\s+does not exist/i.test(msg)) return true;
-
-  return false;
+function isMissingSelectColumn(err: any): boolean {
+  const code = String(err?.code || '');
+  const msg = String(err?.message || err?.details || '');
+  if (code === 'PGRST204') return true;
+  return /could not find.*column/i.test(msg) || /schema cache/i.test(msg);
 }
 
 export default async function handler(req: any, res: any) {
@@ -62,71 +61,75 @@ export default async function handler(req: any, res: any) {
           .slice(0, 200)
       : [];
 
-    // Some deployments may use `tier` instead of `membership`. We attempt membership first,
-    // but gracefully fall back to tier if the column doesn't exist.
-    const selectMembership = () => admin.from('users').select('id,email,membership,created_at', { count: 'exact' });
-    const selectTier = () => admin.from('users').select('id,email,tier,created_at', { count: 'exact' });
+    // Some deployments differ:
+    // - plan column: `membership` vs `tier`
+    // - created timestamp: `created_at` may not exist on users table
+    // We progressively fall back to a compatible select set.
+    const selectMembership = (withCreatedAt: boolean) =>
+      admin
+        .from('users')
+        .select(withCreatedAt ? 'id,email,membership,created_at' : 'id,email,membership', { count: 'exact' });
+    const selectTier = (withCreatedAt: boolean) =>
+      admin.from('users').select(withCreatedAt ? 'id,email,tier,created_at' : 'id,email,tier', { count: 'exact' });
 
-    let query: any = selectMembership();
-
-    if (userIds.length > 0) {
-      query = query.in('id', userIds);
-    }
-
-    if (userIds.length === 0 && plan && plan !== 'all') {
-      // support "pro" alias
-      if (plan === 'pro' || plan === 'professional') {
-        query = query.in('membership', ['professional', 'pro']);
-      } else {
-        query = query.eq('membership', plan);
-      }
-    }
-
-    if (userIds.length === 0 && q) {
-      // basic email search
-      query = query.ilike('email', `%${q.replace(/%/g, '')}%`);
-    }
+    let usingTier = false;
+    let withCreatedAt = true;
 
     const run = async (q: any) => {
-      const base = q.order('created_at', { ascending: false });
+      // Only order by created_at if it exists in the select
+      const base = withCreatedAt ? q.order('created_at', { ascending: false }) : q;
       return userIds.length > 0 ? await base.limit(userIds.length) : await base.range(offset, offset + limit - 1);
+    };
+
+    const applyFilters = (q0: any, planCol: 'membership' | 'tier') => {
+      let qq: any = q0;
+      if (userIds.length > 0) qq = qq.in('id', userIds);
+
+      if (userIds.length === 0 && plan && plan !== 'all') {
+        if (plan === 'pro' || plan === 'professional') {
+          qq = qq.in(planCol, ['professional', 'pro']);
+        } else {
+          qq = qq.eq(planCol, plan);
+        }
+      }
+
+      if (userIds.length === 0 && q) {
+        qq = qq.ilike('email', `%${q.replace(/%/g, '')}%`);
+      }
+      return qq;
     };
 
     let users: any[] | null = null;
     let count: number | null = null;
     let uErr: any = null;
 
-    {
-      const r = await run(query);
+    const attempt = async () => {
+      const base = usingTier ? selectTier(withCreatedAt) : selectMembership(withCreatedAt);
+      const planCol = usingTier ? ('tier' as const) : ('membership' as const);
+      const q1 = applyFilters(base, planCol);
+      const r = await run(q1);
       users = (r as any).data ?? null;
       count = (r as any).count ?? null;
       uErr = (r as any).error ?? null;
+    };
+
+    // Attempt 1: membership + created_at
+    await attempt();
+
+    // If created_at missing, retry without it (same plan column)
+    if (uErr && isMissingSelectColumn(uErr) && withCreatedAt) {
+      withCreatedAt = false;
+      await attempt();
     }
 
+    // If plan column missing, switch to tier (keeping created_at preference)
     if (uErr && isUndefinedColumn(uErr)) {
-      // retry with tier
-      query = selectTier();
-
-      if (userIds.length > 0) {
-        query = query.in('id', userIds);
+      usingTier = true;
+      await attempt();
+      if (uErr && isMissingSelectColumn(uErr) && withCreatedAt) {
+        withCreatedAt = false;
+        await attempt();
       }
-
-      if (userIds.length === 0 && plan && plan !== 'all') {
-        if (plan === 'pro' || plan === 'professional') {
-          query = query.in('tier', ['professional', 'pro']);
-        } else {
-          query = query.eq('tier', plan);
-        }
-      }
-
-      if (userIds.length === 0 && q) {
-        query = query.ilike('email', `%${q.replace(/%/g, '')}%`);
-      }
-
-      const r2 = await run(query);
-      users = (r2 as any).data ?? null;
-      count = (r2 as any).count ?? null;
-      uErr = (r2 as any).error ?? null;
     }
 
     if (uErr) return res.status(500).json({ ok: false, error: 'Failed to load users', details: uErr });
