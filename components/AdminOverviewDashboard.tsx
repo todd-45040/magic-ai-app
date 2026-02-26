@@ -202,41 +202,41 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
       <div className="p-4 text-sm space-y-2">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           <div className="p-2 rounded bg-white/5 border border-white/10">
-            <div className="text-xs opacity-70">Occurred</div>
+            <div className="text-xs text-amber-200/80">Occurred</div>
             <div className="font-medium">{String(selectedFailure.occurred_at || '—')}</div>
           </div>
           <div className="p-2 rounded bg-white/5 border border-white/10">
-            <div className="text-xs opacity-70">Request ID</div>
+            <div className="text-xs text-amber-200/80">Request ID</div>
             <div className="font-mono text-xs break-all">{String(selectedFailure.request_id || '—')}</div>
           </div>
           <div className="p-2 rounded bg-white/5 border border-white/10">
-            <div className="text-xs opacity-70">User</div>
+            <div className="text-xs text-amber-200/80">User</div>
             <div className="font-mono text-xs break-all">{String(selectedFailure.user_id || '—')}</div>
           </div>
           <div className="p-2 rounded bg-white/5 border border-white/10">
-            <div className="text-xs opacity-70">Tool</div>
+            <div className="text-xs text-amber-200/80">Tool</div>
             <div className="font-medium">{String(selectedFailure.tool || '—')}</div>
           </div>
           <div className="p-2 rounded bg-white/5 border border-white/10">
-            <div className="text-xs opacity-70">Provider / Model</div>
+            <div className="text-xs text-amber-200/80">Provider / Model</div>
             <div className="font-medium">{String(selectedFailure.provider || '—')} / {String(selectedFailure.model || '—')}</div>
           </div>
           <div className="p-2 rounded bg-white/5 border border-white/10">
-            <div className="text-xs opacity-70">Outcome</div>
+            <div className="text-xs text-amber-200/80">Outcome</div>
             <div className="font-medium">{String(selectedFailure.outcome || '—')}</div>
           </div>
           <div className="p-2 rounded bg-white/5 border border-white/10">
-            <div className="text-xs opacity-70">HTTP / Code</div>
+            <div className="text-xs text-amber-200/80">HTTP / Code</div>
             <div className="font-medium">{String(selectedFailure.http_status || '—')} / {String(selectedFailure.error_code || '—')}</div>
           </div>
           <div className="p-2 rounded bg-white/5 border border-white/10">
-            <div className="text-xs opacity-70">Latency</div>
+            <div className="text-xs text-amber-200/80">Latency</div>
             <div className="font-medium">{ms(selectedFailure.latency_ms)}</div>
           </div>
         </div>
 
         <div className="p-3 rounded bg-white/5 border border-white/10">
-          <div className="text-xs opacity-70">Endpoint</div>
+          <div className="text-xs text-amber-200/80">Endpoint</div>
           <div className="font-mono text-xs break-all">{String(selectedFailure.endpoint || '—')}</div>
         </div>
 
@@ -305,7 +305,7 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
           {!notesBusy && notes.length === 0 && <div className="text-sm opacity-70">No notes yet.</div>}
           {notes.map((n: any) => (
             <div key={String(n.id)} className="p-3 rounded-lg bg-white/5 border border-white/10">
-              <div className="text-xs opacity-70">{String(n.created_at || '')}</div>
+              <div className="text-xs text-amber-200/80">{String(n.created_at || '')}</div>
               <div className="text-sm mt-1 whitespace-pre-wrap">{String(n.note || '')}</div>
               {n.resolved && <div className="text-xs mt-2 text-emerald-200">Marked resolved</div>}
             </div>
@@ -345,7 +345,7 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
 
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold">Admin – Overview</h2>
+          <h2 className="text-lg font-semibold text-amber-200">Admin – Overview</h2>
           <div className="text-sm opacity-75">Single-source KPIs (growth, activation, cost, reliability).</div>
         </div>
 
@@ -472,7 +472,7 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
           <div className="flex items-center justify-between">
             <div>
               <div className="text-sm font-medium">Top Tools (Usage)</div>
-              <div className="text-xs opacity-70">Most events in window</div>
+              <div className="text-xs text-amber-200/80">Most events in window</div>
             </div>
           </div>
 
@@ -491,7 +491,7 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
           <div className="flex items-center justify-between">
             <div>
               <div className="text-sm font-medium">Top Tools (Cost)</div>
-              <div className="text-xs opacity-70">Highest estimated cost</div>
+              <div className="text-xs text-amber-200/80">Highest estimated cost</div>
             </div>
           </div>
 
@@ -634,7 +634,7 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
                 <div key={String(t?.tool)} className="p-2 rounded bg-white/5 border border-white/10">
                   <div className="flex items-center justify-between text-sm">
                     <div className="truncate max-w-[70%]">{String(t?.tool || '—')}</div>
-                    <div className="text-xs opacity-70">latest: {pct(arr?.at?.(-1), 0)}</div>
+                    <div className="text-xs text-amber-200/80">latest: {pct(arr?.at?.(-1), 0)}</div>
                   </div>
                   <div className="mt-2 flex items-end gap-[2px] h-10">
                     {arr.slice(-30).map((v: any, idx: number) => {
@@ -711,7 +711,7 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
 
           {topSpendersTrend?.[0]?.series?.length > 0 && (
             <div className="mt-4">
-              <div className="text-xs opacity-70">Top spender trend: {String(topSpendersTrend?.[0]?.email || topSpendersTrend?.[0]?.user_id || '—')}</div>
+              <div className="text-xs text-amber-200/80">Top spender trend: {String(topSpendersTrend?.[0]?.email || topSpendersTrend?.[0]?.user_id || '—')}</div>
               <div className="mt-2 flex items-end gap-[2px] h-12">
                 {(topSpendersTrend?.[0]?.series || []).map((d: any) => {
                   const v = Number(d?.cost_usd || 0);
@@ -876,7 +876,7 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
                 title="Open notes"
               >
                 <div className="truncate max-w-[70%]">{String(u.email || u.user_id)}</div>
-                <div className="text-xs opacity-70">{Number(u.error_events || 0)} events</div>
+                <div className="text-xs text-amber-200/80">{Number(u.error_events || 0)} events</div>
               </button>
             ))}
           </div>
@@ -907,7 +907,7 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
                 title="Open notes"
               >
                 <div className="truncate max-w-[70%]">{String(u.email || u.user_id)}</div>
-                <div className="text-xs opacity-70">{money(u.total_cost_usd, 4)}</div>
+                <div className="text-xs text-amber-200/80">{money(u.total_cost_usd, 4)}</div>
               </button>
             ))}
           </div>
@@ -927,7 +927,7 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
 
     <div className="mt-3 overflow-auto">
       <table className="w-full text-sm">
-        <thead className="text-xs opacity-70">
+        <thead className="text-xs text-amber-200/80">
           <tr className="border-b border-white/10">
             <th className="text-left py-2 pr-2">Tool</th>
             <th className="text-right py-2 px-2">Events</th>
@@ -971,7 +971,7 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
         <div key={p.provider || i} className="p-2 rounded bg-white/5 border border-white/10">
           <div className="flex items-center justify-between">
             <div className="font-medium">{String(p.provider || 'unknown')}</div>
-            <div className="text-xs opacity-70">{Number(p.total || 0).toLocaleString()} ev</div>
+            <div className="text-xs text-amber-200/80">{Number(p.total || 0).toLocaleString()} ev</div>
           </div>
           <div className="mt-1 grid grid-cols-2 gap-1 text-xs opacity-90">
             <div className="flex items-center justify-between"><span className="opacity-70">Success</span><span>{pct(p.success_rate, 1)}</span></div>
@@ -1001,7 +1001,7 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
 
   <div className="mt-3 overflow-auto">
     <table className="w-full text-sm">
-      <thead className="text-xs opacity-70">
+      <thead className="text-xs text-amber-200/80">
         <tr className="border-b border-white/10">
           <th className="text-left py-2 pr-2">When</th>
           <th className="text-left py-2 px-2">Tool</th>

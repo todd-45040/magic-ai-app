@@ -73,7 +73,7 @@ export default function AdminPanel({ user }: { user: User }) {
       <div className="p-4 border-b border-white/10 bg-white/5">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div>
-            <div className="text-xl font-bold">Admin Dashboard</div>
+            <div className="text-xl font-bold text-amber-200">Admin Dashboard</div>
             <div className="text-sm opacity-80">Diagnostics, telemetry, and system controls (admin-only).</div>
           </div>
 

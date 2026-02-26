@@ -51,6 +51,8 @@ export default async function handler(req: any, res: any) {
     const days = parseAdminWindowDays(req?.query?.days, 30);
     const sinceIso = isoDaysAgo(days);
 
+    const includeLifetime = String(req?.query?.lifetime ?? '') === '1';
+
     const plan = (req?.query?.plan ?? 'all') as string;
     const q = String(req?.query?.q ?? '').trim();
     const userIdsRaw = String(req?.query?.user_ids ?? '').trim();
@@ -137,6 +139,35 @@ export default async function handler(req: any, res: any) {
     const rows = (users || []) as UserRow[];
     const ids = rows.map((r) => r.id).filter(Boolean);
 
+
+    // Pull signup created_at from Supabase Auth (canonical), so UI can show "Created" even when public.users has no created_at
+    const authCreatedAt: Record<string, string> = {};
+    try {
+      const need = new Set(ids);
+      if (need.size > 0 && admin?.auth?.admin?.listUsers) {
+        let pageNum = 1;
+        const perPage = 1000;
+        while (need.size > 0 && pageNum <= 20) {
+          const { data, error } = await admin.auth.admin.listUsers({ page: pageNum, perPage });
+          if (error) break;
+          const list = (data?.users || []) as any[];
+          if (!list.length) break;
+          for (const u of list) {
+            const uid = String(u?.id || '');
+            if (uid && need.has(uid)) {
+              authCreatedAt[uid] = String(u?.created_at || '');
+              need.delete(uid);
+            }
+          }
+          if (list.length < perPage) break;
+          pageNum += 1;
+        }
+      }
+    } catch {
+      // ignore (created_at will remain null)
+    }
+
+
     // Compute last_active_at and cost in window for returned users
     const perUser: Record<string, { last_active_at: string | null; cost_usd: number; events: number }> = {};
     for (const id of ids) perUser[id] = { last_active_at: null, cost_usd: 0, events: 0 };
@@ -165,11 +196,33 @@ export default async function handler(req: any, res: any) {
       }
     }
 
+
+    // Optional: total lifetime events per user (used for the "Lifetime events" toggle)
+    const lifetimeEvents: Record<string, number> = {};
+    if (includeLifetime && ids.length > 0) {
+      for (const id of ids) lifetimeEvents[id] = 0;
+      try {
+        const { data: allEvs, error: allErr } = await admin
+          .from('ai_usage_events')
+          .select('user_id')
+          .in('user_id', ids)
+          .limit(50000);
+        if (!allErr && Array.isArray(allEvs)) {
+          for (const e of allEvs as any[]) {
+            const uid = String(e?.user_id || '');
+            if (uid && lifetimeEvents[uid] != null) lifetimeEvents[uid] += 1;
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+
     const out = rows.map((u) => ({
       id: u.id,
       email: u.email,
       membership: (u.membership ?? u.tier ?? null) as any,
-      created_at: u.created_at ?? null,
+      created_at: u.created_at ?? authCreatedAt[u.id] ?? null,
       last_active_at: perUser[u.id]?.last_active_at ?? null,
       cost_usd_window: Number((perUser[u.id]?.cost_usd ?? 0).toFixed(4)),
       events_window: perUser[u.id]?.events ?? 0,

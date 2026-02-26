@@ -5,6 +5,14 @@ import { fetchAdminUsers, type AdminUserRow } from '../services/adminUsersServic
 import { fetchAdminWatchlist } from '../services/adminOpsService';
 import { downloadCsv } from './adminCsv';
 
+function costTone(n: any) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return 'text-white/70';
+  if (v >= 5) return 'text-red-300';
+  if (v >= 1) return 'text-amber-300';
+  return 'text-white/50';
+}
+
 function money(n: any, digits = 4) {
   const v = Number(n);
   if (!Number.isFinite(v)) return '—';
@@ -42,6 +50,7 @@ export default function AdminUsersPage() {
   });
   const [limit, setLimit] = useState<number>(50);
   const [offset, setOffset] = useState<number>(0);
+  const [includeLifetime, setIncludeLifetime] = useState<boolean>(false);
 
   const [rows, setRows] = useState<AdminUserRow[]>([]);
   const [total, setTotal] = useState<number>(0);
@@ -55,7 +64,7 @@ export default function AdminUsersPage() {
     setLoading(true);
     setErr(null);
     try {
-      const res = await fetchAdminUsers({ plan, q, user_ids: watchMode === 'none' ? undefined : watchIds, days, limit, offset });
+      const res = await fetchAdminUsers({ plan, q, user_ids: watchMode === 'none' ? undefined : watchIds, days, limit, offset, include_lifetime: includeLifetime });
       setRows(res.users || []);
       setTotal(Number(res.paging?.total || 0));
       // Keep UI in sync with backend snapping (prevents drift if URL/query is non-standard)
@@ -70,7 +79,7 @@ export default function AdminUsersPage() {
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plan, days, limit, offset, watchMode, watchIds.join(',')]);
+  }, [plan, days, limit, offset, watchMode, watchIds.join(','), includeLifetime]);
 
   useEffect(() => {
     let alive = true;
@@ -116,7 +125,7 @@ export default function AdminUsersPage() {
     <div className="p-4 space-y-4">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold">Admin – Users</h2>
+          <h2 className="text-lg font-semibold text-amber-200">Admin – Users</h2>
           <div className="text-sm opacity-75">Drill-down list with activity + cost in the selected window.</div>
         </div>
 
@@ -175,6 +184,19 @@ export default function AdminUsersPage() {
             <option value={50}>50</option>
             <option value={100}>100</option>
           </select>
+
+
+          <label className="flex items-center gap-2 px-2 py-1 rounded border border-white/10 bg-black/20 text-sm">
+            <input
+              type="checkbox"
+              checked={includeLifetime}
+              onChange={(e) => {
+                setIncludeLifetime(e.target.checked);
+                setOffset(0);
+              }}
+            />
+            <span className="opacity-90">Lifetime events</span>
+          </label>
 
           <div className="flex items-center gap-2">
             <input
@@ -255,6 +277,7 @@ export default function AdminUsersPage() {
               <th className="p-3">Created</th>
               <th className="p-3">Last Active</th>
               <th className="p-3">Events (win)</th>
+              {includeLifetime && <th className="p-3">Events (all)</th>}
               <th className="p-3">Cost (win)</th>
               <th className="p-3">User ID</th>
             </tr>
@@ -262,7 +285,7 @@ export default function AdminUsersPage() {
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td className="p-4 opacity-70" colSpan={7}>
+                <td className="p-4 opacity-70" colSpan={includeLifetime ? 8 : 7}>
                   {loading ? 'Loading…' : 'No users found.'}
                 </td>
               </tr>
@@ -271,12 +294,13 @@ export default function AdminUsersPage() {
                 <tr key={r.id} className="border-t border-white/10 hover:bg-white/5">
                   <td className="p-3">{r.email || '—'}</td>
                   <td className="p-3">
-                    <span className="px-2 py-0.5 rounded-full bg-white/10 border border-white/10">{labelPlan(r.membership)}</span>
+                    <span className="px-2 py-0.5 rounded-full bg-white/10 border border-amber-500/20">{labelPlan(r.membership)}</span>
                   </td>
                   <td className="p-3 font-mono text-xs">{fmtDate(r.created_at)}</td>
                   <td className="p-3 font-mono text-xs">{fmtDate(r.last_active_at)}</td>
                   <td className="p-3 font-mono">{r.events_window ?? 0}</td>
-                  <td className="p-3 font-mono">{money(r.cost_usd_window, 4)}</td>
+                  {includeLifetime && <td className="p-3 font-mono">{(r as any).events_total ?? '—'}</td>}
+                  <td className={"p-3 font-mono " + costTone(r.cost_usd_window)}>{money(r.cost_usd_window, 4)}</td>
                   <td className="p-3 font-mono text-xs opacity-70">{r.id}</td>
                 </tr>
               ))

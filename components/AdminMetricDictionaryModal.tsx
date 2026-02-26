@@ -16,7 +16,7 @@ export default function AdminMetricDictionaryModal({
       <div className="relative w-[min(900px,92vw)] max-h-[85vh] overflow-auto rounded-2xl border border-white/10 bg-[#0b0f19] shadow-2xl">
         <div className="p-5 border-b border-white/10 flex items-start justify-between gap-3">
           <div>
-            <div className="text-lg font-semibold">Admin Metric Dictionary</div>
+            <div className="text-lg font-semibold text-amber-200">Admin Metric Dictionary</div>
             <div className="text-sm opacity-75">Definitions + telemetry field standards used across Admin views.</div>
           </div>
           <button

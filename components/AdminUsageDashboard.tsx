@@ -58,7 +58,7 @@ export default function AdminUsageDashboard() {
   return (
     <div className="p-4 space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Admin – Usage & Telemetry</h2>
+        <h2 className="text-lg font-semibold text-amber-200">Admin – Usage & Telemetry</h2>
         <div className="flex items-center gap-2">
           <AdminWindowSelector value={days} onChange={(d) => setDays(d)} />
           <button className="px-3 py-1 rounded bg-white/10 hover:bg-white/15" onClick={load} disabled={loading}>
@@ -186,7 +186,7 @@ export default function AdminUsageDashboard() {
       <div className="p-3 rounded-xl bg-white/5 border border-white/10">
         <div className="flex items-center justify-between mb-2">
           <div className="font-semibold">Daily Rollups</div>
-          <div className="text-xs opacity-70">Fast aggregates (up to 2000 rows)</div>
+          <div className="text-xs text-amber-200/80">Fast aggregates (up to 2000 rows)</div>
         </div>
         <div className="overflow-auto">
           <table className="min-w-full text-sm">
@@ -226,7 +226,7 @@ export default function AdminUsageDashboard() {
       <div className="p-3 rounded-xl bg-white/5 border border-white/10">
         <div className="flex items-center justify-between mb-2">
           <div className="font-semibold">Recent Events</div>
-          <div className="text-xs opacity-70">Showing up to 2000 (latest)</div>
+          <div className="text-xs text-amber-200/80">Showing up to 2000 (latest)</div>
         </div>
         <div className="overflow-auto">
           <table className="min-w-full text-sm">
