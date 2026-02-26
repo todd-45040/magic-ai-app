@@ -94,11 +94,13 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
   const adoption = (engagement?.tool_adoption_top || []) as any[];
   const returningTrend = (engagement?.returning_trend_30d || []) as any[];
   const mauDaily = (engagement?.mau_trend_30d_daily || []) as any[];
-  const mauWeekly = (engagement?.mau_trend_12w_weekly || []) as any[];
+  const mauWeekly = (engagement?.wau_trend_12w_weekly || []) as any[];
+  const mauWeeklyRolling = (engagement?.mau_trend_12w_weekly || []) as any[];
   const adoptionTrend = engagement?.tool_adoption_trend_30d as any;
   const maxReturning = useMemo(() => Math.max(0, ...returningTrend.map((d: any) => Number(d?.returning_users || 0))), [returningTrend]);
   const maxMauDaily = useMemo(() => Math.max(0, ...mauDaily.map((d: any) => Number(d?.mau_rolling_30d || 0))), [mauDaily]);
-  const maxMauWeekly = useMemo(() => Math.max(0, ...mauWeekly.map((d: any) => Number(d?.mau_rolling_30d || 0))), [mauWeekly]);
+  const maxMauWeekly = useMemo(() => Math.max(0, ...mauWeekly.map((d: any) => Number(d?.wau_7d || 0))), [mauWeekly]);
+  const maxMauWeeklyRolling = useMemo(() => Math.max(0, ...mauWeeklyRolling.map((d: any) => Number(d?.mau_rolling_30d || 0))), [mauWeeklyRolling]);
 
   const topByUsage = useMemo(() => (tools?.top_by_usage || []).slice(0, 8), [tools]);
   const topByCost = useMemo(() => (tools?.top_by_cost || []).slice(0, 8), [tools]);
@@ -333,7 +335,7 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-sm font-medium">MAU Trend</div>
-              <div className="text-xs opacity-70">Rolling 30-day active users</div>
+              <div className="text-xs opacity-70">Daily MAU (rolling 30d) • Weekly WAU (7d)</div>
             </div>
             <div className="flex items-center gap-1 text-xs">
               <button
@@ -371,7 +373,7 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
 
             {mauMode === 'weekly' &&
               mauWeekly.map((d: any) => {
-                const v = Number(d?.mau_rolling_30d || 0);
+                const v = Number(d?.wau_7d || 0);
                 const h = maxMauWeekly > 0 ? Math.max(2, Math.round((v / maxMauWeekly) * 64)) : 2;
                 return (
                   <div
@@ -385,7 +387,7 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
           </div>
 
           <div className="text-xs opacity-60 mt-2">
-            {mauMode === 'daily' ? 'Last 30 days' : 'Last 12 weeks'} • Each bar is a 30-day rolling MAU snapshot
+            {mauMode === 'daily' ? 'Last 30 days' : 'Last 12 weeks'} • Daily = rolling 30-day MAU • Weekly = WAU (7-day active users)
           </div>
         </div>
 

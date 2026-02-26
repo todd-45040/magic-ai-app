@@ -303,6 +303,8 @@ export default async function handler(req: any, res: any) {
 
     let mauTrendDaily30: { date: string; mau_rolling_30d: number }[] = [];
     let mauTrendWeekly12: { week_end: string; mau_rolling_30d: number }[] = [];
+    let wauTrendWeekly12: { week_end: string; wau_7d: number }[] = [];
+
     let toolAdoptionTrend30d: {
       days: string[];
       daily_active_users: number[];
@@ -510,16 +512,41 @@ export default async function handler(req: any, res: any) {
           mau_rolling_30d: Number(roll[dailyStart + idx] || 0),
         }));
 
-        // Weekly MAU curve: last 12 weeks, sample at week ends (every 7 days, including today)
-        const weekly: { week_end: string; mau_rolling_30d: number }[] = [];
-        for (let w = 0; w < 12; w += 1) {
-          const offset = w * 7;
-          const idx = dayKeys.length - 1 - offset;
-          if (idx < 0) break;
-          const wkEnd = dayKeys[idx];
-          weekly.unshift({ week_end: wkEnd, mau_rolling_30d: Number(roll[idx] || 0) });
-        }
-        mauTrendWeekly12 = weekly;
+        // Weekly curves (last 12 weeks, sample at week ends every 7 days, including today)
+// 1) Rolling 30d MAU snapshots (for reference)
+const weeklyRollingMau: { week_end: string; mau_rolling_30d: number }[] = [];
+// 2) WAU trend (weekly active users): unique users in the 7-day window ending on week_end
+const weeklyWau: { week_end: string; wau_7d: number }[] = [];
+
+for (let w = 0; w < 12; w += 1) {
+  const offset = w * 7;
+  const idx = dayKeys.length - 1 - offset;
+  if (idx < 0) break;
+
+  const wkEnd = dayKeys[idx];
+
+  // Rolling MAU snapshot at week end (uses precomputed 30-day rolling union size)
+  weeklyRollingMau.unshift({ week_end: wkEnd, mau_rolling_30d: Number(roll[idx] || 0) });
+
+  // WAU: union of daily active users for the 7 days ending on wkEnd
+  const startIdx = Math.max(0, idx - 6);
+  const union = new Set<string>();
+  for (let j = startIdx; j <= idx; j += 1) {
+    const dk = dayKeys[j];
+    const set = dailyUsers[dk];
+    if (!set) continue;
+    for (const uid of set) union.add(uid);
+  }
+  weeklyWau.unshift({ week_end: wkEnd, wau_7d: union.size });
+}
+
+// Phase 3.1 legacy: keep rolling MAU snapshots as a separate series
+// (UI uses WAU for weekly by default; rolling MAU weekly snapshots are still available for debugging/analysis)
+(globalThis as any).__maw_debug = (globalThis as any).__maw_debug || {};
+mauTrendWeekly12 = weeklyRollingMau;
+
+// New: weekly active users trend (WAU)
+wauTrendWeekly12 = weeklyWau;
 
         // Tool adoption over time (last 30d): daily tool users / daily active users
         const last30Keys = dayKeys.slice(-30);
@@ -685,6 +712,7 @@ const toolRows = Object.entries(toolAgg).map(([tool, v]) => ({
         returning_trend_30d: returningTrend30d,
         mau_trend_30d_daily: mauTrendDaily30,
         mau_trend_12w_weekly: mauTrendWeekly12,
+        wau_trend_12w_weekly: wauTrendWeekly12,
         tool_adoption_trend_30d: toolAdoptionTrend30d,
         week1_retention: {
           cohort_size: week1CohortSize,
