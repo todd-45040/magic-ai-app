@@ -12,8 +12,17 @@ type UserRow = {
   id: string;
   email: string | null;
   membership: string | null;
+  tier?: string | null;
   created_at?: string | null;
 };
+
+function isUndefinedColumn(err: any): boolean {
+  const code = String(err?.code || '');
+  const msg = String(err?.message || err?.details || '');
+  // Postgres undefined_column is 42703
+  if (code === '42703') return true;
+  return /column\s+.+\s+does not exist/i.test(msg);
+}
 
 export default async function handler(req: any, res: any) {
   try {
@@ -43,7 +52,12 @@ export default async function handler(req: any, res: any) {
           .slice(0, 200)
       : [];
 
-    let query = admin.from('users').select('id,email,membership,created_at', { count: 'exact' });
+    // Some deployments may use `tier` instead of `membership`. We attempt membership first,
+    // but gracefully fall back to tier if the column doesn't exist.
+    const selectMembership = () => admin.from('users').select('id,email,membership,created_at', { count: 'exact' });
+    const selectTier = () => admin.from('users').select('id,email,tier,created_at', { count: 'exact' });
+
+    let query: any = selectMembership();
 
     if (userIds.length > 0) {
       query = query.in('id', userIds);
@@ -63,8 +77,47 @@ export default async function handler(req: any, res: any) {
       query = query.ilike('email', `%${q.replace(/%/g, '')}%`);
     }
 
-    const base = query.order('created_at', { ascending: false });
-    const { data: users, error: uErr, count } = userIds.length > 0 ? await base.limit(userIds.length) : await base.range(offset, offset + limit - 1);
+    const run = async (q: any) => {
+      const base = q.order('created_at', { ascending: false });
+      return userIds.length > 0 ? await base.limit(userIds.length) : await base.range(offset, offset + limit - 1);
+    };
+
+    let users: any[] | null = null;
+    let count: number | null = null;
+    let uErr: any = null;
+
+    {
+      const r = await run(query);
+      users = (r as any).data ?? null;
+      count = (r as any).count ?? null;
+      uErr = (r as any).error ?? null;
+    }
+
+    if (uErr && isUndefinedColumn(uErr)) {
+      // retry with tier
+      query = selectTier();
+
+      if (userIds.length > 0) {
+        query = query.in('id', userIds);
+      }
+
+      if (userIds.length === 0 && plan && plan !== 'all') {
+        if (plan === 'pro' || plan === 'professional') {
+          query = query.in('tier', ['professional', 'pro']);
+        } else {
+          query = query.eq('tier', plan);
+        }
+      }
+
+      if (userIds.length === 0 && q) {
+        query = query.ilike('email', `%${q.replace(/%/g, '')}%`);
+      }
+
+      const r2 = await run(query);
+      users = (r2 as any).data ?? null;
+      count = (r2 as any).count ?? null;
+      uErr = (r2 as any).error ?? null;
+    }
 
     if (uErr) return res.status(500).json({ ok: false, error: 'Failed to load users', details: uErr });
 
@@ -102,7 +155,7 @@ export default async function handler(req: any, res: any) {
     const out = rows.map((u) => ({
       id: u.id,
       email: u.email,
-      membership: u.membership,
+      membership: (u.membership ?? u.tier ?? null) as any,
       created_at: u.created_at ?? null,
       last_active_at: perUser[u.id]?.last_active_at ?? null,
       cost_usd_window: Number((perUser[u.id]?.cost_usd ?? 0).toFixed(4)),
