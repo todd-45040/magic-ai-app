@@ -19,9 +19,19 @@ type UserRow = {
 function isUndefinedColumn(err: any): boolean {
   const code = String(err?.code || '');
   const msg = String(err?.message || err?.details || '');
+
   // Postgres undefined_column is 42703
   if (code === '42703') return true;
-  return /column\s+.+\s+does not exist/i.test(msg);
+
+  // PostgREST schema cache / missing column often returns PGRST204 with wording like:
+  // "Could not find the 'membership' column of 'users' in the schema cache"
+  if (code === 'PGRST204') return true;
+
+  if (/schema\s+cache/i.test(msg) && /could\s+not\s+find/i.test(msg)) return true;
+  if (/could\s+not\s+find\s+the\s+'?.+?'?\s+column/i.test(msg)) return true;
+  if (/column\s+.+\s+does not exist/i.test(msg)) return true;
+
+  return false;
 }
 
 export default async function handler(req: any, res: any) {
