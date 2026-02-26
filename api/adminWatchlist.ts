@@ -1,11 +1,6 @@
 import { requireSupabaseAuth } from './_auth.js';
 import { isoDaysAgo, parseAdminWindowDays } from './_adminWindow.js';
 
-function isMissingRelation(err: any) {
-  const msg = String(err?.message || err || '');
-  return msg.toLowerCase().includes('does not exist') || msg.toLowerCase().includes('relation') || msg.toLowerCase().includes('42p01');
-}
-
 export default async function handler(req: any, res: any) {
   try {
     const auth = await requireSupabaseAuth(req);
@@ -86,14 +81,14 @@ export default async function handler(req: any, res: any) {
           .limit(5000);
         if (!q2Err) {
           nearQuota = (qs || [])
-            .map((r: any) => {
+            .map((r: any): { user_id: string; email: string | null; membership: string | null; remaining: number; limit: number } => {
               const limit = Number(r.quota_limit ?? 0);
               const used = Number(r.quota_used ?? 0);
               const remaining = Math.max(0, limit - used);
               return { user_id: r.id, email: r.email ?? null, membership: r.membership ?? null, remaining, limit };
             })
-            .filter((r) => r.limit > 0 && r.remaining / r.limit <= 0.2)
-            .sort((a, b) => a.remaining - b.remaining)
+            .filter((r: { remaining: number; limit: number }) => r.limit > 0 && r.remaining / r.limit <= 0.2)
+            .sort((a: { remaining: number }, b: { remaining: number }) => a.remaining - b.remaining)
             .slice(0, 20);
         }
       }
