@@ -30,7 +30,7 @@ async function postJoin(payload: any, token?: string | null) {
 }
 
 export default function FoundingCirclePage(props: { user: User | null; onBack: () => void }) {
-  const { user, onBack } = props;
+  const { user, onBack } = props as any;
 
   const [name, setName] = useState<string>('');
   const [email, setEmail] = useState<string>('');
@@ -68,7 +68,30 @@ export default function FoundingCirclePage(props: { user: User | null; onBack: (
       };
 
       await postJoin(payload, token);
+
+      // Phase 2: force reconciliation (safe/idempotent) so the badge + lock surface instantly,
+      // even if the user joined while signed-out earlier.
+      try {
+        if (token) {
+          await fetch('/api/foundingReconcile', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({}),
+          });
+        }
+      } catch {
+        // non-blocking
+      }
+
       setDone(true);
+
+      // Ask the parent to refresh the user profile so the Founding badge appears immediately.
+      try {
+        if (typeof (props as any)?.onJoined === 'function') (props as any).onJoined();
+      } catch {}
     } catch (e: any) {
       setMsg(e?.message || 'Could not join. Please try again.');
     } finally {

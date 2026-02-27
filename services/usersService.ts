@@ -59,6 +59,37 @@ export const getUserProfile = async (uid: string): Promise<User | null> => {
   }
 };
 
+/**
+ * Founding Circle Phase 2: lead reconciliation.
+ *
+ * If a user joined Founding Circle while signed-out (lead captured),
+ * then later signs in / creates an account, this call upgrades their
+ * users row and marks the lead as converted.
+ *
+ * Safe + idempotent.
+ */
+export const reconcileFoundingLead = async (accessToken: string | null): Promise<boolean> => {
+  try {
+    const token = String(accessToken || '').trim();
+    if (!token) return false;
+
+    const r = await fetch('/api/foundingReconcile', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({}),
+    });
+
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j?.ok) return false;
+    return Boolean(j?.reconciled);
+  } catch {
+    return false;
+  }
+};
+
 export const registerOrUpdateUser = async (user: User, uid: string): Promise<void> => {
   try {
     const email = user.email.toLowerCase();

@@ -6,6 +6,7 @@ import {
   checkAndUpdateUserTrialStatus,
   updateUserMembership,
   getUserProfile,
+  reconcileFoundingLead,
 } from './services/usersService';
 import { ADMIN_EMAIL, APP_VERSION } from './constants';
 import { useAppDispatch, refreshAllData } from './store';
@@ -156,6 +157,16 @@ function App() {
         const sbUser = session?.user ?? null;
 
         if (sbUser?.email) {
+          // Phase 2: Founding lead reconciliation (signed-out join → later signup).
+          // If this flips anything, we'll re-fetch the profile so the badge/pricing lock shows immediately.
+          let reconciled = false;
+          try {
+            const token = String(session?.access_token || '').trim();
+            if (token) reconciled = await reconcileFoundingLead(token);
+          } catch {
+            reconciled = false;
+          }
+
           let appUser: User = {
             email: sbUser.email,
             membership: 'trial',
@@ -166,6 +177,13 @@ function App() {
 
           const profile = await getUserProfile(sbUser.id);
           if (profile) appUser = { ...appUser, ...profile };
+
+          // If reconciliation ran, the DB row may have just been upgraded.
+          // Pull fresh state so the Founding badge + pricing lock show immediately.
+          if (reconciled) {
+            const refreshed = await getUserProfile(sbUser.id);
+            if (refreshed) appUser = { ...appUser, ...refreshed };
+          }
 
           await registerOrUpdateUser(appUser, sbUser.id);
           appUser = await checkAndUpdateUserTrialStatus(appUser, sbUser.id);
@@ -264,7 +282,21 @@ function App() {
       case 'about':
         return <About onBack={() => setMode('selection')} />;
       case 'founding-circle':
-        return <FoundingCirclePage user={user} onBack={() => setMode('selection')} />;
+        return (
+          <FoundingCirclePage
+            user={user}
+            onBack={() => setMode('selection')}
+            onJoined={async () => {
+              try {
+                const { data } = await supabase.auth.getSession();
+                const sbUser = data?.session?.user;
+                if (!sbUser?.id) return;
+                const refreshed = await getUserProfile(sbUser.id);
+                if (refreshed) setUser((prev) => ({ ...(prev as any), ...refreshed }));
+              } catch {}
+            }}
+          />
+        );
       case 'audience':
         return <AudienceMode onBack={() => setMode('selection')} />;
       case 'auth':

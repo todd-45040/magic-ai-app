@@ -4,7 +4,10 @@ import { supabase } from '../supabase';
 type AuthMode = 'login' | 'signup' | 'reset';
 
 interface AuthProps {
-  onLoginSuccess: () => void;
+  // Back-compat: older App.tsx wires `onLogin`, newer components used `onLoginSuccess`.
+  // Support both so auth flow never breaks.
+  onLoginSuccess?: () => void;
+  onLogin?: (u: any) => void;
   onBack?: () => void;
 }
 
@@ -16,7 +19,7 @@ function getAppBasePath(): string {
   }
 }
 
-export default function Auth({ onLoginSuccess, onBack }: AuthProps) {
+export default function Auth({ onLoginSuccess, onLogin, onBack }: AuthProps) {
 
 const initialMode = (() => {
   try {
@@ -106,11 +109,13 @@ const initialMode = (() => {
       if (mode === 'login') {
         await doLogin();
         setMessage('Welcome back — loading your Studio…');
-        onLoginSuccess();
+        try { onLoginSuccess?.(); } catch {}
+        try { onLogin?.({ email }); } catch {}
       } else if (mode === 'signup') {
         await doSignup();
         setMessage('Account created! Check your email if confirmation is required.');
-        onLoginSuccess();
+        try { onLoginSuccess?.(); } catch {}
+        try { onLogin?.({ email }); } catch {}
       } else {
         await doReset();
         setMessage('If an account exists for that email, a reset link has been sent.');
