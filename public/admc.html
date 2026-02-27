@@ -745,30 +745,33 @@
           const fd = new FormData(form);
           const payload = Object.fromEntries(fd.entries());
           payload.source = 'admc';
+          payload.page = window.location.pathname || '/admc';
+
+          // Capture ref + UTM parameters for segmentation
+          const sp = new URLSearchParams(window.location.search || '');
+          const ref = sp.get('ref');
+          if (ref) payload.ref = ref;
+
+          const utm = {};
+          for (const k of ['utm_source','utm_medium','utm_campaign','utm_term','utm_content']) {
+            const v = sp.get(k);
+            if (v) utm[k] = v;
+          }
+          if (Object.keys(utm).length) payload.utm = utm;
 
           try {
-            const res = await fetch('/api/waitlistSignup', {
+            // TODO: update this endpoint to match your production waitlist route
+            const res = await fetch('/api/waitlist', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(payload)
             });
 
-            // Try to read JSON either way for better error messages
-            let data = null;
-            try { data = await res.json(); } catch (_) {}
+            if (!res.ok) throw new Error('bad response');
 
-            if (!res.ok) {
-              const msg = (data && (data.error || data.message)) ? (data.error || data.message) : 'Could not save your email. Please try again (or ask at the booth).';
-              err.textContent = msg;
-              err.style.display = 'block';
-              return;
-            }
-
-            // Treat "already subscribed" as success too
             ok.style.display = 'block';
             form.reset();
           } catch (e) {
-            err.textContent = 'Could not save your email. Please try again (or ask at the booth).';
             err.style.display = 'block';
           }
         });

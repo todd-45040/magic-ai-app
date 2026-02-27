@@ -47,6 +47,31 @@ function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
+function safeObj(v: any): Record<string, any> {
+  return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+}
+
+function parseReferrer(req: any): { page?: string; params?: Record<string, string> } {
+  const ref = String(req?.headers?.referer || req?.headers?.referrer || '').trim();
+  if (!ref) return {};
+  try {
+    const u = new URL(ref);
+    const params: Record<string, string> = {};
+    for (const [k, v] of u.searchParams.entries()) params[k] = v;
+    return { page: u.pathname || undefined, params };
+  } catch {
+    return {};
+  }
+}
+
+function pickUtm(params: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const k of ['utm_source','utm_medium','utm_campaign','utm_term','utm_content']) {
+    if (params[k]) out[k] = params[k];
+  }
+  return out;
+}
+
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
@@ -92,8 +117,32 @@ export default async function handler(req: any, res: any) {
     return json(res, 400, { ok: false, error_code: 'INVALID_EMAIL', message: 'Please provide a valid email.' });
   }
 
-  const source = typeof body?.source === 'string' ? body.source.trim().slice(0, 80) : 'unknown';
-  const meta = body?.meta ?? null;
+  const refInfo = parseReferrer(req);
+
+  // Source (force 'admc' when request came from the ADMC landing page)
+  let source = typeof body?.source === 'string' ? body.source.trim().slice(0, 80) : 'unknown';
+  const pageFromBody = typeof body?.page === 'string' ? body.page.trim().slice(0, 120) : null;
+  const page = pageFromBody || refInfo.page || null;
+
+  if (source === 'unknown' && page && page.toLowerCase().includes('admc')) source = 'admc';
+  if (typeof source === 'string' && source.toLowerCase().includes('admc')) source = 'admc';
+
+  // Meta: merge payload meta + performer type + page + ref + UTMs (from body or referrer)
+  const metaBody = safeObj(body?.meta);
+  const performerType = typeof body?.type === 'string' ? body.type.trim().slice(0, 80) : null;
+  const ref = typeof body?.ref === 'string' ? body.ref.trim().slice(0, 200) : (refInfo.params?.ref ? String(refInfo.params.ref).slice(0, 200) : null);
+
+  const utmFromBody = safeObj(body?.utm);
+  const utmFromRef = pickUtm(refInfo.params || {});
+  const utm = { ...utmFromRef, ...utmFromBody };
+
+  const meta = {
+    ...metaBody,
+    ...(performerType ? { performer_type: performerType } : null),
+    ...(page ? { page } : null),
+    ...(ref ? { ref } : null),
+    ...(Object.keys(utm).length ? { utm } : null),
+  };
 
   const ua = String(req?.headers?.['user-agent'] || '').slice(0, 500);
 
@@ -102,7 +151,7 @@ export default async function handler(req: any, res: any) {
     email,
     email_lower: email,
     source,
-    meta,
+    meta: Object.keys(meta).length ? meta : null,
     ip_hash: ipHash,
     user_agent: ua,
   };
