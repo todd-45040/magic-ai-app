@@ -302,10 +302,11 @@ if (!cls.isSuccess && recentFailures.length < 25) {
     let ttfvSampleSize = 0;
     let returningUsersWau7 = 0;
     let signupTrend30d: { date: string; new_users: number }[] = [];
+    const activatedSetGlobal = new Set<string>();
     if (newUserCreatedAt.size > 0) {
       const ids = Array.from(newUserCreatedAt.keys());
       const batchSize = 500; // Supabase "in" works best with modest sizes
-      const activatedSet = new Set<string>();
+      const activatedSet = activatedSetGlobal;
       const firstCoreEventAt = new Map<string, string>();
 
       for (let i = 0; i < ids.length; i += batchSize) {
@@ -1022,6 +1023,183 @@ wauTrendWeekly12 = weeklyWau;
     } catch (e) {
       // non-fatal
     }
+
+    // --- Phase 4: Founding Circle intelligence (segmentation + conversion + intensity)
+    const foundingWindows = [7, 30, 90] as const;
+
+    const founding: any = {
+      members_by_window: {} as Record<string, number>,
+      conversion_rate_by_window: {} as Record<string, number | null>,
+      activation: {
+        founders_new_users: 0,
+        non_founders_new_users: 0,
+        founders_activated_users: 0,
+        non_founders_activated_users: 0,
+        founders_activation_rate: null as number | null,
+        non_founders_activation_rate: null as number | null,
+      },
+      usage_intensity: {
+        active_founders: 0,
+        active_non_founders: 0,
+        founders: {
+          total_cost_usd: 0,
+          total_events: 0,
+          cost_per_active_user: null as number | null,
+          events_per_active_user: null as number | null,
+        },
+        non_founders: {
+          total_cost_usd: 0,
+          total_events: 0,
+          cost_per_active_user: null as number | null,
+          events_per_active_user: null as number | null,
+        },
+        cost_per_user_ratio: null as number | null,
+        events_per_user_ratio: null as number | null,
+      },
+    };
+
+    // Founding members (7/30/90) based on founding_joined_at
+    for (const w of foundingWindows) {
+      try {
+        const { count, error } = await admin
+          .from('users')
+          .select('id', { count: 'exact', head: true })
+          .eq('founding_circle_member', true)
+          .gte('founding_joined_at', isoDaysAgo(Number(w)));
+        if (!error) founding.members_by_window[String(w)] = Number(count || 0);
+        else {
+          founding.members_by_window[String(w)] = 0;
+          warnings.push(`Founding members count failed (${w}d)`);
+        }
+      } catch {
+        founding.members_by_window[String(w)] = 0;
+        warnings.push(`Founding members count failed (${w}d)`);
+      }
+    }
+
+    // Founding conversion rate: leads converted to users (by lead created_at window)
+    for (const w of foundingWindows) {
+      try {
+        const since = isoDaysAgo(Number(w));
+        const { count: totalLeads, error: totalErr } = await admin
+          .from('maw_founding_circle_leads')
+          .select('id', { count: 'exact', head: true })
+          .gte('created_at', since);
+        if (totalErr) {
+          founding.conversion_rate_by_window[String(w)] = null;
+          warnings.push(`Founding leads count failed (${w}d)`);
+          continue;
+        }
+        const { count: convertedLeads, error: convErr } = await admin
+          .from('maw_founding_circle_leads')
+          .select('id', { count: 'exact', head: true })
+          .gte('created_at', since)
+          .eq('converted_to_user', true);
+        if (convErr) {
+          founding.conversion_rate_by_window[String(w)] = null;
+          warnings.push(`Founding conversion count failed (${w}d)`);
+          continue;
+        }
+        const tot = Number(totalLeads || 0);
+        const conv = Number(convertedLeads || 0);
+        founding.conversion_rate_by_window[String(w)] = tot > 0 ? conv / tot : null;
+      } catch {
+        founding.conversion_rate_by_window[String(w)] = null;
+      }
+    }
+
+    // Founding vs Non-founding activation (among new users in selected window)
+    try {
+      const newUserIds = Array.from(newUserCreatedAt.keys());
+      if (newUserIds.length) {
+        const founderSetNew = new Set<string>();
+        const batchSize = 500;
+        for (let i = 0; i < newUserIds.length; i += batchSize) {
+          const batch = newUserIds.slice(i, i + batchSize);
+          const { data: urows, error: uerr } = await admin.from('users').select('id,founding_circle_member').in('id', batch).limit(50000);
+          if (uerr) continue;
+          for (const u of (urows || []) as any[]) {
+            const id = u?.id ? String(u.id) : null;
+            if (!id) continue;
+            if (u?.founding_circle_member) founderSetNew.add(id);
+          }
+        }
+
+        for (const id of newUserIds) {
+          const isFounder = founderSetNew.has(id);
+          if (isFounder) founding.activation.founders_new_users += 1;
+          else founding.activation.non_founders_new_users += 1;
+
+          const isActivated = activatedSetGlobal.has(id);
+          if (isActivated && isFounder) founding.activation.founders_activated_users += 1;
+          if (isActivated && !isFounder) founding.activation.non_founders_activated_users += 1;
+        }
+
+        founding.activation.founders_activation_rate =
+          founding.activation.founders_new_users > 0
+            ? founding.activation.founders_activated_users / founding.activation.founders_new_users
+            : null;
+        founding.activation.non_founders_activation_rate =
+          founding.activation.non_founders_new_users > 0
+            ? founding.activation.non_founders_activated_users / founding.activation.non_founders_new_users
+            : null;
+      }
+    } catch {
+      // non-fatal
+    }
+
+    // Founding usage intensity (among active users in selected window)
+    try {
+      const activeIds = Array.from(activeUserSet.values());
+      if (activeIds.length) {
+        const founderSetActive = new Set<string>();
+        const batchSize = 500;
+        for (let i = 0; i < activeIds.length; i += batchSize) {
+          const batch = activeIds.slice(i, i + batchSize);
+          const { data: urows, error: uerr } = await admin.from('users').select('id,founding_circle_member').in('id', batch).limit(50000);
+          if (uerr) continue;
+          for (const u of (urows || []) as any[]) {
+            const id = u?.id ? String(u.id) : null;
+            if (!id) continue;
+            if (u?.founding_circle_member) founderSetActive.add(id);
+          }
+        }
+
+        founding.usage_intensity.active_founders = founderSetActive.size;
+        founding.usage_intensity.active_non_founders = Math.max(0, activeIds.length - founderSetActive.size);
+
+        for (const [uid, v] of Object.entries(userAgg)) {
+          const isFounder = founderSetActive.has(String(uid));
+          if (isFounder) {
+            founding.usage_intensity.founders.total_cost_usd += Number(v.cost || 0);
+            founding.usage_intensity.founders.total_events += Number(v.events || 0);
+          } else {
+            founding.usage_intensity.non_founders.total_cost_usd += Number(v.cost || 0);
+            founding.usage_intensity.non_founders.total_events += Number(v.events || 0);
+          }
+        }
+
+        const fN = Number(founding.usage_intensity.active_founders || 0);
+        const nfN = Number(founding.usage_intensity.active_non_founders || 0);
+
+        founding.usage_intensity.founders.cost_per_active_user = fN > 0 ? founding.usage_intensity.founders.total_cost_usd / fN : null;
+        founding.usage_intensity.founders.events_per_active_user = fN > 0 ? founding.usage_intensity.founders.total_events / fN : null;
+
+        founding.usage_intensity.non_founders.cost_per_active_user = nfN > 0 ? founding.usage_intensity.non_founders.total_cost_usd / nfN : null;
+        founding.usage_intensity.non_founders.events_per_active_user = nfN > 0 ? founding.usage_intensity.non_founders.total_events / nfN : null;
+
+        const fCost = founding.usage_intensity.founders.cost_per_active_user;
+        const nfCost = founding.usage_intensity.non_founders.cost_per_active_user;
+        founding.usage_intensity.cost_per_user_ratio = Number.isFinite(fCost) && Number.isFinite(nfCost) && nfCost > 0 ? fCost / nfCost : null;
+
+        const fEv = founding.usage_intensity.founders.events_per_active_user;
+        const nfEv = founding.usage_intensity.non_founders.events_per_active_user;
+        founding.usage_intensity.events_per_user_ratio = Number.isFinite(fEv) && Number.isFinite(nfEv) && nfEv > 0 ? fEv / nfEv : null;
+      }
+    } catch {
+      // non-fatal
+    }
+
 const toolRows = Object.entries(toolAgg).map(([tool, v]) => ({
       tool,
       events: v.events,
@@ -1096,6 +1274,7 @@ const provider_breakdown = Object.entries(providerReliability)
         activated: activatedUsers,
         activation_rate: activationRate,
       },
+      founding,
       growth: {
         funnel: {
           new_users: newUsersN,

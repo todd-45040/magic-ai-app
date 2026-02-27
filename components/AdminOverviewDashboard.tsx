@@ -148,6 +148,7 @@ export default function AdminOverviewDashboard({ onGoUsers, onGoLeads }: { onGoU
   }
 
   const kUsers = data?.users || {};
+  const founding = data?.founding || {};
   const kAi = data?.ai || {};
   const unit = data?.unit_economics || {};
   const tools = data?.tools || {};
@@ -209,6 +210,70 @@ export default function AdminOverviewDashboard({ onGoUsers, onGoLeads }: { onGoU
               </button>
             )}
           </div>
+        </div>
+      </div>
+
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+          <div className="text-sm opacity-80">Founding Members</div>
+          <div className="mt-2 flex items-end justify-between">
+            <div className="text-2xl font-extrabold text-white">{founding?.members_by_window?.[String(days)] ?? '—'}</div>
+            <div className="text-xs text-white/60">Window: {days}d</div>
+          </div>
+          <div className="mt-2 text-xs text-white/70 flex gap-3">
+            <span>7d: <span className="text-white">{founding?.members_by_window?.['7'] ?? '—'}</span></span>
+            <span>30d: <span className="text-white">{founding?.members_by_window?.['30'] ?? '—'}</span></span>
+            <span>90d: <span className="text-white">{founding?.members_by_window?.['90'] ?? '—'}</span></span>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+          <div className="text-sm opacity-80">Founding Conversion (Lead→User)</div>
+          <div className="mt-2 flex items-end justify-between">
+            <div className="text-2xl font-extrabold text-white">{pct(founding?.conversion_rate_by_window?.[String(days)], 0)}</div>
+            <div className="text-xs text-white/60">Window: {days}d</div>
+          </div>
+          <div className="mt-2 text-xs text-white/70 flex gap-3">
+            <span>7d: <span className="text-white">{pct(founding?.conversion_rate_by_window?.['7'], 0)}</span></span>
+            <span>30d: <span className="text-white">{pct(founding?.conversion_rate_by_window?.['30'], 0)}</span></span>
+            <span>90d: <span className="text-white">{pct(founding?.conversion_rate_by_window?.['90'], 0)}</span></span>
+          </div>
+          <div className="mt-2 text-[11px] text-white/50">Based on founding leads table (signed-out joins).</div>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+          <div className="text-sm opacity-80">Activation Rate (Founders vs Non)</div>
+          <div className="mt-2 space-y-1">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-white/70">Founders</span>
+              <span className="text-white font-semibold">{pct(founding?.activation?.founders_activation_rate, 0)}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-white/70">Non-founders</span>
+              <span className="text-white font-semibold">{pct(founding?.activation?.non_founders_activation_rate, 0)}</span>
+            </div>
+          </div>
+          <div className="mt-2 text-[11px] text-white/50">Among new users in selected window.</div>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+          <div className="text-sm opacity-80">Usage Intensity</div>
+          <div className="mt-2 space-y-1">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-white/70">Cost / active founder</span>
+              <span className="text-white font-semibold">{money(founding?.usage_intensity?.founders?.cost_per_active_user)}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-white/70">Cost / active non-founder</span>
+              <span className="text-white font-semibold">{money(founding?.usage_intensity?.non_founders?.cost_per_active_user)}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-white/70">Cost ratio (F / NF)</span>
+              <span className="text-white font-semibold">{founding?.usage_intensity?.cost_per_user_ratio ? `${founding.usage_intensity.cost_per_user_ratio.toFixed(2)}x` : '—'}</span>
+            </div>
+          </div>
+          <div className="mt-2 text-[11px] text-white/50">Computed from ai_usage_events in selected window.</div>
         </div>
       </div>
 
