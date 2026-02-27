@@ -611,11 +611,7 @@
         margin-top: 10px;
       }
     </style>
-  
-  <!-- Plausible Analytics -->
-  <script defer data-domain="magicaiwizard.com" src="https://plausible.io/js/script.js"></script>
-
-</head>
+  </head>
 
   <body class="magical-bg">
     <div class="admc-wrap">
@@ -713,14 +709,7 @@
           </form>
 
           <div class="admc-success" id="admcSuccess">
-            <div id="admcSuccessMsgNew">You’re in! Watch your inbox tonight — we’ll send your ADMC founding access details.</div>
-            <div id="admcSuccessMsgDup" style="display:none;">You’re already on the list — you’re good.</div>
-
-            <div class="admc-actions" style="margin-top:14px;">
-              <a class="btn" href="/app/?demo=1">Try Demo Mode Now</a>
-              <a class="btn-secondary" href="#walkthrough">See the 60-second walkthrough</a>
-            </div>
-</div>
+            You’re in! Watch your inbox tonight — we’ll send your ADMC founding access details.
           </div>
 
           <div class="admc-error" id="admcError">
@@ -732,33 +721,6 @@
           </div>
         </div>
       </section>
-      <section class="card" id="walkthrough">
-        <div class="section-title section-title--white">60-second walkthrough</div>
-        <div class="admc-mini">
-          <div class="feature-tile">
-            <div class="t">1) Generate a routine</div>
-            <div class="d">Pick your style, audience, and effect goal. Get a structured routine with beats and performance notes.</div>
-          </div>
-          <div class="feature-tile">
-            <div class="t">2) Import to Show Planner</div>
-            <div class="d">Turn the routine into Performance Beats so your show becomes repeatable and stage-ready.</div>
-          </div>
-          <div class="feature-tile">
-            <div class="t">3) Rehearse + tighten</div>
-            <div class="d">Use rehearsal feedback to improve clarity, pacing, and applause cues — fast.</div>
-          </div>
-          <div class="feature-tile">
-            <div class="t">4) Save your best lines</div>
-            <div class="d">Keep strong patter and show notes organized so you never start from scratch again.</div>
-          </div>
-        </div>
-        <div class="admc-actions" style="margin-top:16px;">
-          <a class="btn" href="/app/?demo=1">Try Demo Mode Now</a>
-          <a class="btn-secondary" href="#join">Join the Founding Circle</a>
-        </div>
-      </section>
-
-
 
       <footer style="text-align:center;">
         © 2026 Magicians' AI Wizard, LLC • <span style="color:rgba(255,255,255,0.68);">Actively evolving with the magic community.</span>
@@ -785,50 +747,19 @@
           payload.source = 'admc';
 
           try {
-            const res = await fetch('/api/waitlistSignup', {
+            // TODO: update this endpoint to match your production waitlist route
+            const res = await fetch('/api/waitlist', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(payload)
             });
 
-            // Try to read JSON either way for better error messages
-            let data = null;
-            try { data = await res.json(); } catch (_) {}
+            if (!res.ok) throw new Error('bad response');
 
-            if (!res.ok) {
-              const msg = (data && (data.error || data.message)) ? (data.error || data.message) : 'Could not save your email. Please try again (or ask at the booth).';
-              err.textContent = msg;
-              if (window.plausible) {
-              plausible('admc_signup_fail');
-            }
-              err.style.display = 'block';
-              return;
-            }
-
-            // Treat "already subscribed" as success too
-            try {
-              const msgNew = document.getElementById('admcSuccessMsgNew');
-              const msgDup = document.getElementById('admcSuccessMsgDup');
-              if (data && data.already_subscribed) {
-                if (msgNew) msgNew.style.display = 'none';
-                if (msgDup) msgDup.style.display = 'block';
-              } else {
-                if (msgNew) msgNew.style.display = 'block';
-                if (msgDup) msgDup.style.display = 'none';
-              }
-            } catch (_) {}
-
-            if (window.plausible) {
-              plausible('admc_signup_success');
-            }
             ok.style.display = 'block';
             form.reset();
           } catch (e) {
-            err.textContent = 'Could not save your email. Please try again (or ask at the booth).';
-            if (window.plausible) {
-              plausible('admc_signup_fail');
-            }
-              err.style.display = 'block';
+            err.style.display = 'block';
           }
         });
       })();
