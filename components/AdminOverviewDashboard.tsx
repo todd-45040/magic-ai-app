@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { fetchAdminKpis } from '../services/adminKpisService';
 import { fetchAdminWatchlist, fetchAdminOpsNotes, addAdminOpsNote } from '../services/adminOpsService';
+import { fetchAdminWaitlistLeads } from '../services/adminLeadsService';
 import { downloadCsv } from './adminCsv';
 
 function money(n: any, digits = 2) {
@@ -40,12 +41,13 @@ const WINDOW_OPTIONS = [
   { days: 90, label: '90d' },
 ];
 
-export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () => void }) {
+export default function AdminOverviewDashboard({ onGoUsers, onGoLeads }: { onGoUsers?: () => void; onGoLeads?: () => void }) {
   const [days, setDays] = useState<number>(7);
   const [mauMode, setMauMode] = useState<'daily' | 'weekly'>('daily');
   const [data, setData] = useState<any>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [admcLeads, setAdmcLeads] = useState<number | null>(null);
 
   const [selectedFailure, setSelectedFailure] = useState<any | null>(null);
 
@@ -64,6 +66,12 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
     try {
       const d = await fetchAdminKpis(days);
       setData(d);
+      try {
+        const l = await fetchAdminWaitlistLeads({ source: 'admc', days, limit: 0, offset: 0 });
+        setAdmcLeads(typeof l?.count === 'number' ? l.count : null);
+      } catch {
+        setAdmcLeads(null);
+      }
     } catch (e: any) {
       setErr(e?.message || 'Failed to load');
       setData(null);
@@ -182,6 +190,28 @@ export default function AdminOverviewDashboard({ onGoUsers }: { onGoUsers?: () =
 
   return (
     <div className="p-4 space-y-4">
+
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm opacity-80">ADMC leads captured</div>
+            <div className="mt-1 text-3xl font-extrabold text-white">{admcLeads === null ? '—' : admcLeads}</div>
+            <div className="text-xs text-white/60 mt-1">Window: {WINDOW_OPTIONS.find((w) => w.days === days)?.label || `${days}d`}</div>
+          </div>
+          <div className="flex items-center gap-2">
+            {onGoLeads && (
+              <button
+                type="button"
+                onClick={onGoLeads}
+                className="px-3 py-2 rounded-lg bg-purple-500/15 border border-purple-400/25 text-purple-100 hover:bg-purple-500/20 hover:border-purple-300/40 transition"
+              >
+                View Leads
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
 
 {selectedFailure && (
   <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">

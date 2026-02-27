@@ -3,6 +3,7 @@ import type { User } from '../types';
 import AdminOverviewDashboard from './AdminOverviewDashboard';
 import AdminUsageDashboard from './AdminUsageDashboard';
 import AdminUsersPage from './AdminUsersPage';
+import AdminLeadsPage from './AdminLeadsPage';
 import AdminSettingsModal from './AdminSettingsModal';
 import AdminMetricDictionaryModal from './AdminMetricDictionaryModal';
 import {
@@ -16,7 +17,7 @@ import {
 export default function AdminPanel({ user }: { user: User }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [metricOpen, setMetricOpen] = useState(false);
-  const [tab, setTab] = useState<'overview' | 'users' | 'telemetry' | 'feedback'>('overview');
+  const [tab, setTab] = useState<'overview' | 'users' | 'leads' | 'telemetry' | 'feedback'>('overview');
 
   // App Feedback state
   const [statusFilter, setStatusFilter] = useState<SuggestionStatus | 'all'>('new');
@@ -95,6 +96,13 @@ export default function AdminPanel({ user }: { user: User }) {
               </button>
               <button
                 type="button"
+                onClick={() => setTab('leads')}
+                className={`px-3 py-1.5 rounded-full text-sm transition ${tab === 'leads' ? 'bg-white/10 text-white' : 'text-white/70 hover:text-white'}`}
+              >
+                Leads
+              </button>
+              <button
+                type="button"
                 onClick={() => setTab('feedback')}
                 className={`px-3 py-1.5 rounded-full text-sm transition ${tab === 'feedback' ? 'bg-white/10 text-white' : 'text-white/70 hover:text-white'}`}
               >
@@ -143,9 +151,11 @@ export default function AdminPanel({ user }: { user: User }) {
 
       <div className="flex-1 overflow-y-auto">
         {tab === 'overview' ? (
-          <AdminOverviewDashboard onGoUsers={() => setTab('users')} />
+          <AdminOverviewDashboard onGoUsers={() => setTab('users')} onGoLeads={() => setTab('leads')} />
         ) : tab === 'users' ? (
           <AdminUsersPage />
+        ) : tab === 'leads' ? (
+          <AdminLeadsPage />
         ) : tab === 'telemetry' ? (
           <AdminUsageDashboard />
         ) : (
