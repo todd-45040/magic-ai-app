@@ -51,7 +51,7 @@ export default async function handler(req: any, res: any) {
     // Pull eligible work (queued + retryable error rows) honoring send_at.
     const { data: queue, error } = await admin
       .from('maw_email_queue')
-      .select('id,to_email,template_key,payload,status,send_at,attempt_count')
+      .select('id,to_email,template_key,template_version,tracking_id,payload,status,send_at,attempt_count')
       .in('status', ['queued', 'error'])
       .lte('send_at', nowIso)
       .order('send_at', { ascending: true })
@@ -91,7 +91,8 @@ export default async function handler(req: any, res: any) {
         // ignore
       }
 
-      const rendered = renderFoundingEmail(template, { name: payload?.name ?? null, email: to });
+      const baseUrl = getEnv('APP_BASE_URL') || getEnv('PUBLIC_APP_URL') || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) || 'https://magicaiwizard.com';
+      const rendered = renderFoundingEmail(template, { name: payload?.name ?? null, email: to }, { trackingId: item.tracking_id ?? null, baseUrl, templateVersion: item.template_version ?? null });
       const r = await sendMail({ to, subject: rendered.subject, html: rendered.html, text: rendered.text });
 
       if (r.ok) {
@@ -104,6 +105,8 @@ export default async function handler(req: any, res: any) {
               sent_at: new Date().toISOString(),
               last_error: null,
               last_attempt_at: new Date().toISOString(),
+              provider_message_id: (r as any).messageId || null,
+              template_version: item.template_version ?? (rendered as any).templateVersion ?? null,
             } as any
           )
           .eq('id', id);
@@ -120,6 +123,8 @@ export default async function handler(req: any, res: any) {
           last_error: r.error,
           send_at: nextSendAt,
           last_attempt_at: new Date().toISOString(),
+              provider_message_id: (r as any).messageId || null,
+              template_version: item.template_version ?? (rendered as any).templateVersion ?? null,
           attempt_count: nextAttempt,
         };
 

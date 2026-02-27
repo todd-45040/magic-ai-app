@@ -1,5 +1,5 @@
 import { requireSupabaseAuth } from './_auth.js';
-import { renderFoundingEmail, type FoundingEmailKey } from './_lib/foundingCircleEmailTemplates.js';
+import { renderFoundingEmail, FOUNDING_EMAIL_TEMPLATE_VERSION, type FoundingEmailKey } from './_lib/foundingCircleEmailTemplates.js';
 
 function clampInt(n: any, def = 100, min = 1, max = 2000) {
   const v = Number(n);
@@ -73,7 +73,14 @@ export default async function handler(req: any, res: any) {
     const existingSet = new Set((existing || []).map((r: any) => String(r.to_email || '').toLowerCase()));
     const rows = toEmails
       .filter((email: string) => !existingSet.has(email.toLowerCase()))
-      .map((email: string) => ({ to_email: email, template_key, send_at: sendAtIso, payload: { email } }));
+      .map((email: string) => ({
+        to_email: email,
+        template_key,
+        template_version: FOUNDING_EMAIL_TEMPLATE_VERSION[template_key] || 1,
+        tracking_id: (globalThis.crypto && 'randomUUID' in globalThis.crypto ? (globalThis.crypto as any).randomUUID() : undefined),
+        send_at: sendAtIso,
+        payload: { email },
+      }));
 
     if (rows.length === 0) return res.status(200).json({ ok: true, queued: 0, note: 'All founders already had this template queued/sent' });
 
