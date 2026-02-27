@@ -709,11 +709,14 @@
           </form>
 
           <div class="admc-success" id="admcSuccess">
-            You’re in! Watch your inbox tonight — we’ll send your ADMC founding access details.
+            <div id="admcSuccessMsgNew">You’re in! Watch your inbox tonight — we’ll send your ADMC founding access details.</div>
+            <div id="admcSuccessMsgDup" style="display:none;">You’re already on the list — you’re good.</div>
+
             <div class="admc-actions" style="margin-top:14px;">
               <a class="btn" href="/app/?demo=1">Try Demo Mode Now</a>
               <a class="btn-secondary" href="#walkthrough">See the 60-second walkthrough</a>
             </div>
+</div>
           </div>
 
           <div class="admc-error" id="admcError">
@@ -796,6 +799,18 @@
             }
 
             // Treat "already subscribed" as success too
+            try {
+              const msgNew = document.getElementById('admcSuccessMsgNew');
+              const msgDup = document.getElementById('admcSuccessMsgDup');
+              if (data && data.already_subscribed) {
+                if (msgNew) msgNew.style.display = 'none';
+                if (msgDup) msgDup.style.display = 'block';
+              } else {
+                if (msgNew) msgNew.style.display = 'block';
+                if (msgDup) msgDup.style.display = 'none';
+              }
+            } catch (_) {}
+
             ok.style.display = 'block';
             form.reset();
           } catch (e) {
