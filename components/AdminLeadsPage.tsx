@@ -79,6 +79,16 @@ export default function AdminLeadsPage() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div>
           <div className="text-xl font-bold text-amber-200">ADMC Leads</div>
+
+        <div className="mt-4 mb-6 rounded-xl border border-purple-500/30 bg-gradient-to-r from-purple-900/30 to-indigo-900/30 p-4">
+          <div className="text-sm uppercase tracking-wider text-purple-300">
+            ADMC Conversion Snapshot
+          </div>
+          <div className="mt-2 text-lg font-semibold text-white">
+            QR → Leads → Demo Clicks
+          </div>
+        </div>
+
           <div className="text-sm opacity-80">Convention waitlist signups (source = admc).</div>
         </div>
 
