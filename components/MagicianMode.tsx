@@ -2475,6 +2475,12 @@ ${action.payload.content}`;
           <img src="/images/nav-wand.png" alt="Magic wand" className="h-8 w-auto wizard-nav-icon" />
         </picture>
         <div className="ml-auto flex items-center gap-2">
+            {Boolean((user as any)?.foundingCircleMember) && (
+              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full border border-amber-400/25 bg-amber-500/10">
+                <StarIcon className="w-3.5 h-3.5 text-[#E6C77A]" aria-hidden="true" />
+                <span className="text-xs font-semibold tracking-wide text-amber-200">Founding Circle</span>
+              </div>
+            )}
             {(daysRemaining != null || tier !== 'trial') && (
               <div
                 className={[

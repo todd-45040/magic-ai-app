@@ -52,6 +52,22 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({ onSelectMode }) => {
           <span className="text-slate-500">(for talks)</span>
         </button>
         <p className="mt-2 text-xs text-slate-500">Opens a presentation-ready demo with sample data. Changes are not saved.</p>
+
+        <div className="mt-6">
+          <button
+            type="button"
+            onClick={() => {
+              const base = window.location.pathname.startsWith('/app') ? '/app' : '';
+              window.location.href = `${base}/founding-circle`;
+            }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-amber-400/25 bg-amber-500/10 text-amber-200 hover:bg-amber-500/15 hover:border-amber-400/40 transition-colors text-sm"
+            title="Join the Founding Circle"
+          >
+            <span className="font-semibold">Founding Circle</span>
+            <span className="text-amber-200/70">(early access)</span>
+          </button>
+          <div className="mt-2 text-xs text-slate-500">Identity badge • ADMC pricing lock • early tool access</div>
+        </div>
       </div>
     </div>
   );

@@ -17,7 +17,13 @@ const normalizeUserRow = (row: any): User => {
     isAdmin: typeof row?.is_admin === 'boolean' ? row.is_admin : email === ADMIN_EMAIL,
     generationCount: typeof row?.generation_count === 'number' ? row.generation_count : 0,
     lastResetDate: row?.last_reset_date ?? new Date().toISOString(),
-    ...(row?.trial_end_date ? { trialEndDate: row.trial_end_date } : {})
+    ...(row?.trial_end_date ? { trialEndDate: row.trial_end_date } : {}),
+
+    // Founding Circle identity layer
+    foundingCircleMember: Boolean(row?.founding_circle_member ?? false),
+    foundingJoinedAt: (row?.founding_joined_at ?? null) as any,
+    foundingSource: (row?.founding_source ?? null) as any,
+    pricingLock: (row?.pricing_lock ?? null) as any,
   } as User;
 };
 

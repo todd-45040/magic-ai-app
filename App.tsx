@@ -19,6 +19,7 @@ import LiveFeedbackView from './components/LiveFeedbackView';
 import PublicFeedbackForm from './components/PublicFeedbackForm';
 import AppSuggestionModal from './components/AppSuggestionModal';
 import DemoBanner from './components/DemoBanner';
+import FoundingCirclePage from './components/FoundingCirclePage';
 import { isDemoEnabled, enableDemo, seedDemoData } from './services/demoSeedService';
 
 const DISCLAIMER_ACKNOWLEDGED_KEY = 'magician_ai_disclaimer_acknowledged';
@@ -58,6 +59,17 @@ function App() {
         return '';
       }
     };
+
+    // Public landing route (no login required)
+    try {
+      const p = window.location.pathname || '';
+      if (p.endsWith('/founding-circle')) {
+        setMode('founding-circle');
+        setAuthLoading(false);
+        window.clearTimeout(loadingTimeout);
+        return;
+      }
+    } catch {}
 
     const cleanupAuthCallbackUrl = () => {
       try {
@@ -251,6 +263,8 @@ function App() {
     switch (mode) {
       case 'about':
         return <About onBack={() => setMode('selection')} />;
+      case 'founding-circle':
+        return <FoundingCirclePage user={user} onBack={() => setMode('selection')} />;
       case 'audience':
         return <AudienceMode onBack={() => setMode('selection')} />;
       case 'auth':

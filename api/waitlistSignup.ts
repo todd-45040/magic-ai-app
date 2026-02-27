@@ -2,6 +2,8 @@ import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { rateLimit, rateLimitHeaders } from './ai/_lib/rateLimit.js';
 import { isPreviewEnv } from './ai/_lib/hardening.js';
+import { sendMail, isMailerConfigured } from './_lib/mailer.js';
+import { renderFoundingEmail } from './_lib/foundingCircleEmailTemplates.js';
 
 function json(res: any, status: number, body: any, headers?: Record<string, string>) {
   if (headers) {
@@ -88,6 +90,10 @@ export default async function handler(req: any, res: any) {
   const emailRaw = typeof body?.email === 'string' ? body.email : '';
   const email = normalizeEmail(emailRaw);
 
+  const isFounding = Boolean(body?.founding_circle || body?.meta?.founding_circle);
+  const foundingSource = typeof body?.founding_source === 'string' ? body.founding_source.trim().slice(0, 80) : 'ADMC_2026';
+  const pricingLock = typeof body?.pricing_lock === 'string' ? body.pricing_lock.trim().slice(0, 80) : (isFounding ? 'founding_pro_admc_2026' : null);
+
   if (!email || !isValidEmail(email)) {
     return json(res, 400, { ok: false, error_code: 'INVALID_EMAIL', message: 'Please provide a valid email.' });
   }
@@ -108,24 +114,117 @@ export default async function handler(req: any, res: any) {
   };
 
   try {
+    let alreadySubscribed = false;
     const { error } = await admin.from('maw_waitlist_signups').insert(payload);
     if (error) {
       // Duplicate email
       if ((error as any).code === '23505') {
-        return json(res, 200, { ok: true, already_subscribed: true });
+        alreadySubscribed = true;
+        // Not a founding join? We're done.
+        if (!isFounding) return json(res, 200, { ok: true, already_subscribed: true });
+      } else {
+        console.error('waitlist insert error:', error);
+        return json(res, 500, {
+          ok: false,
+          error_code: 'INSERT_FAILED',
+          message: 'Could not save your email. Please try again.',
+          retryable: true,
+          ...(isPreviewEnv() ? { details: error } : null),
+        });
       }
-
-      console.error('waitlist insert error:', error);
-      return json(res, 500, {
-        ok: false,
-        error_code: 'INSERT_FAILED',
-        message: 'Could not save your email. Please try again.',
-        retryable: true,
-        ...(isPreviewEnv() ? { details: error } : null),
-      });
     }
 
-    return json(res, 200, { ok: true, already_subscribed: false });
+    // Founding Circle upgrade path:
+    // - If Authorization Bearer token is provided, mark the signed-in user as a founder.
+    // - Always upsert into a lead table so Stripe/coupons can be reconciled later.
+    // - Queue a 4-email sequence (send first immediately if SMTP is configured).
+
+    let authedUserId: string | null = null;
+    if (isFounding) {
+      try {
+        const authHeader = String(req?.headers?.authorization || '').trim();
+        const token = authHeader.toLowerCase().startsWith('bearer ') ? authHeader.slice(7).trim() : '';
+        if (token && admin?.auth?.getUser) {
+          const { data } = await admin.auth.getUser(token);
+          authedUserId = (data as any)?.user?.id ? String((data as any).user.id) : null;
+        }
+      } catch {
+        authedUserId = null;
+      }
+
+      // 1) Upsert lead row
+      try {
+        await admin.from('maw_founding_circle_leads').upsert(
+          {
+            email,
+            email_lower: email,
+            name,
+            source: foundingSource,
+            converted_to_user: Boolean(authedUserId),
+            converted_user_id: authedUserId,
+            meta,
+            ip_hash: ipHash,
+            user_agent: ua,
+          },
+          { onConflict: 'email_lower' }
+        );
+      } catch (e) {
+        // Don't block signup on secondary tracking table.
+        console.warn('founding lead upsert failed', e);
+      }
+
+      // 2) Mark user as founder (if authenticated)
+      if (authedUserId) {
+        try {
+          await admin
+            .from('users')
+            .update({
+              founding_circle_member: true,
+              founding_joined_at: new Date().toISOString(),
+              founding_source: foundingSource,
+              ...(pricingLock ? { pricing_lock: pricingLock } : {}),
+            })
+            .eq('id', authedUserId);
+        } catch (e) {
+          console.warn('founding user update failed', e);
+        }
+      }
+
+      // 3) Queue email sequence
+      try {
+        const now = Date.now();
+        const mk = (hoursFromNow: number) => new Date(now + hoursFromNow * 60 * 60 * 1000).toISOString();
+        const basePayload = { name, email, founding_source: foundingSource, pricing_lock: pricingLock };
+
+        const queueRows = [
+          { to_email: email, template_key: 'founding_welcome', send_at: mk(0), payload: basePayload },
+          { to_email: email, template_key: 'founding_early_access', send_at: mk(24), payload: basePayload },
+          { to_email: email, template_key: 'founding_pricing_lock', send_at: mk(72), payload: basePayload },
+          { to_email: email, template_key: 'founding_next_tools', send_at: mk(144), payload: basePayload },
+        ];
+
+        await admin.from('maw_email_queue').insert(queueRows);
+
+        // Best-effort immediate send of the first message (so it works even without cron).
+        if (isMailerConfigured()) {
+          const rendered = renderFoundingEmail('founding_welcome' as any, { name, email });
+          const r = await sendMail({ to: email, subject: rendered.subject, html: rendered.html, text: rendered.text });
+          if (r.ok) {
+            // Mark the first queued email as sent to avoid duplicates.
+            await admin
+              .from('maw_email_queue')
+              .update({ status: 'sent', sent_at: new Date().toISOString(), last_error: null })
+              .eq('to_email', email)
+              .eq('template_key', 'founding_welcome')
+              .eq('status', 'queued');
+          }
+        }
+      } catch (e) {
+        console.warn('email queue failed', e);
+      }
+    }
+
+    return json(res, 200, { ok: true, already_subscribed: alreadySubscribed, founding_circle: isFounding });
   } catch (err: any) {
     return json(res, 500, {
       ok: false,

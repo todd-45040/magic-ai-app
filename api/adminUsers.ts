@@ -14,6 +14,7 @@ type UserRow = {
   membership: string | null;
   tier?: string | null;
   created_at?: string | null;
+  founding_circle_member?: boolean | null;
 };
 
 function isUndefinedColumn(err: any): boolean {
@@ -52,6 +53,7 @@ export default async function handler(req: any, res: any) {
     const sinceIso = isoDaysAgo(days);
 
     const includeLifetime = String(req?.query?.lifetime ?? '') === '1';
+    const foundersOnly = String(req?.query?.founders ?? '') === '1';
 
     const plan = (req?.query?.plan ?? 'all') as string;
     const q = String(req?.query?.q ?? '').trim();
@@ -73,8 +75,8 @@ export default async function handler(req: any, res: any) {
     //   3) tier + created_at
     //   4) tier (no created_at)
 
-    const buildQuery = (planCol: 'membership' | 'tier', includeCreatedAt: boolean) => {
-      const selectCols = includeCreatedAt
+    const buildQuery = (planCol: 'membership' | 'tier', includeCreatedAt: boolean, includeFounderCol: boolean) => {
+      const baseCols = includeCreatedAt
         ? planCol === 'membership'
           ? 'id,email,membership,created_at'
           : 'id,email,tier,created_at'
@@ -82,7 +84,14 @@ export default async function handler(req: any, res: any) {
           ? 'id,email,membership'
           : 'id,email,tier';
 
+      const selectCols = includeFounderCol ? `${baseCols},founding_circle_member` : baseCols;
+
       let query: any = admin.from('users').select(selectCols, { count: 'exact' });
+
+      if (foundersOnly) {
+        // Requires the founding_circle_member column to exist.
+        query = query.eq('founding_circle_member', true);
+      }
 
       if (userIds.length > 0) query = query.in('id', userIds);
 
@@ -110,10 +119,17 @@ export default async function handler(req: any, res: any) {
     };
 
     const variants = [
-      buildQuery('membership', true),
-      buildQuery('membership', false),
-      buildQuery('tier', true),
-      buildQuery('tier', false),
+      buildQuery('membership', true, true),
+      buildQuery('membership', false, true),
+      buildQuery('tier', true, true),
+      buildQuery('tier', false, true),
+      // Fallback (no founder column) – only valid when not filtering founders
+      ...(foundersOnly ? [] : [
+        buildQuery('membership', true, false),
+        buildQuery('membership', false, false),
+        buildQuery('tier', true, false),
+        buildQuery('tier', false, false),
+      ]),
     ];
 
     let users: any[] | null = null;
@@ -133,6 +149,10 @@ export default async function handler(req: any, res: any) {
     }
 
     if (uErr) {
+      // If the user requested Founders-only and the column doesn't exist, return a clear error.
+      if (foundersOnly && isUndefinedColumn(uErr)) {
+        return res.status(400).json({ ok: false, error: 'Founding Circle columns are not installed yet.' });
+      }
       return res.status(500).json({ ok: false, error: 'Failed to load users', details: uErr });
     }
 
@@ -223,6 +243,7 @@ export default async function handler(req: any, res: any) {
       email: u.email,
       membership: (u.membership ?? u.tier ?? null) as any,
       created_at: u.created_at ?? authCreatedAt[u.id] ?? null,
+      founding_circle_member: (u as any).founding_circle_member ?? null,
       last_active_at: perUser[u.id]?.last_active_at ?? null,
       cost_usd_window: Number((perUser[u.id]?.cost_usd ?? 0).toFixed(4)),
       events_window: perUser[u.id]?.events ?? 0,

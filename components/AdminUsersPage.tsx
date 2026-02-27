@@ -42,6 +42,7 @@ function labelPlan(m: string | null) {
 export default function AdminUsersPage() {
   const [plan, setPlan] = useState<string>('all');
   const [q, setQ] = useState<string>('');
+  const [foundersOnly, setFoundersOnly] = useState<boolean>(false);
   const [watchMode, setWatchMode] = useState<'none' | 'near_quota' | 'repeated_errors' | 'big_spenders'>('none');
   const [watchIds, setWatchIds] = useState<string[]>([]);
   const [days, setDays] = useState<number>(() => {
@@ -64,7 +65,16 @@ export default function AdminUsersPage() {
     setLoading(true);
     setErr(null);
     try {
-      const res = await fetchAdminUsers({ plan, q, user_ids: watchMode === 'none' ? undefined : watchIds, days, limit, offset, include_lifetime: includeLifetime });
+      const res = await fetchAdminUsers({
+        plan,
+        q,
+        user_ids: watchMode === 'none' ? undefined : watchIds,
+        days,
+        limit,
+        offset,
+        include_lifetime: includeLifetime,
+        founders_only: foundersOnly,
+      });
       setRows(res.users || []);
       setTotal(Number(res.paging?.total || 0));
       // Keep UI in sync with backend snapping (prevents drift if URL/query is non-standard)
@@ -79,7 +89,7 @@ export default function AdminUsersPage() {
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plan, days, limit, offset, watchMode, watchIds.join(','), includeLifetime]);
+  }, [plan, days, limit, offset, watchMode, watchIds.join(','), includeLifetime, foundersOnly]);
 
   useEffect(() => {
     let alive = true;
@@ -170,6 +180,18 @@ export default function AdminUsersPage() {
             <option value="expired">Expired</option>
             <option value="free">Free</option>
           </select>
+
+          <label className="flex items-center gap-2 px-2 py-1 rounded border border-white/10 bg-black/20 text-sm" title="Show Founding Circle members only">
+            <input
+              type="checkbox"
+              checked={foundersOnly}
+              onChange={(e) => {
+                setFoundersOnly(e.target.checked);
+                setOffset(0);
+              }}
+            />
+            <span className="opacity-90">Founders only</span>
+          </label>
 
           <select
             value={limit}
@@ -292,7 +314,16 @@ export default function AdminUsersPage() {
             ) : (
               rows.map((r) => (
                 <tr key={r.id} className="border-t border-white/10 hover:bg-white/5">
-                  <td className="p-3">{r.email || '—'}</td>
+                  <td className="p-3">
+                    <div className="flex items-center gap-2">
+                      <span>{r.email || '—'}</span>
+                      {Boolean((r as any).founding_circle_member) && (
+                        <span className="px-2 py-0.5 rounded-full text-[11px] bg-amber-500/10 border border-amber-400/25 text-amber-200">
+                          Founder
+                        </span>
+                      )}
+                    </div>
+                  </td>
                   <td className="p-3">
                     <span className="px-2 py-0.5 rounded-full bg-white/10 border border-amber-500/20">{labelPlan(r.membership)}</span>
                   </td>

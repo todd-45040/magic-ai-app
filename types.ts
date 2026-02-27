@@ -8,7 +8,8 @@ export type Mode =
   | 'auth'
   | 'about'
   | 'live-feedback'
-  | 'audience-feedback';
+  | 'audience-feedback'
+  | 'founding-circle';
 
 export interface ChatMessage {
   id: string;
@@ -91,6 +92,12 @@ export interface User {
   generationCount: number;
   lastResetDate: string; // ISO String
   emailVerified?: boolean;
+
+  // Founding Circle identity layer
+  foundingCircleMember?: boolean;
+  foundingJoinedAt?: string | null;
+  foundingSource?: string | null;
+  pricingLock?: string | null;
 }
 
 export type AudienceTab = 'chat' | 'identify' | 'publications' | 'community' | 'feedback' | 'ask' | 'story';

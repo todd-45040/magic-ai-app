@@ -15,6 +15,7 @@ export type AdminUserRow = {
   cost_usd_window: number;
   events_window: number;
   events_total?: number | null;
+  founding_circle_member?: boolean | null;
 };
 
 export async function fetchAdminUsers(params: {
@@ -25,6 +26,7 @@ export async function fetchAdminUsers(params: {
   offset?: number;
   days?: number;
   include_lifetime?: boolean;
+  founders_only?: boolean;
 }): Promise<{ window: any; paging: any; users: AdminUserRow[] }> {
   const token = await getAccessToken();
   if (!token) throw new Error('Not authenticated');
@@ -37,6 +39,7 @@ export async function fetchAdminUsers(params: {
   if (params.offset != null) qs.set('offset', String(params.offset));
   if (params.days != null) qs.set('days', String(snapAdminWindowDays(params.days, 30)));
   if (params.include_lifetime) qs.set('lifetime', '1');
+  if (params.founders_only) qs.set('founders', '1');
 
   const r = await fetch(`/api/adminUsers?${qs.toString()}`, {
     method: 'GET',
