@@ -47,29 +47,84 @@ function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-function safeObj(v: any): Record<string, any> {
+function safeObject(v: any): Record<string, any> {
   return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
 }
 
-function parseReferrer(req: any): { page?: string; params?: Record<string, string> } {
-  const ref = String(req?.headers?.referer || req?.headers?.referrer || '').trim();
-  if (!ref) return {};
-  try {
-    const u = new URL(ref);
-    const params: Record<string, string> = {};
-    for (const [k, v] of u.searchParams.entries()) params[k] = v;
-    return { page: u.pathname || undefined, params };
-  } catch {
-    return {};
-  }
-}
-
-function pickUtm(params: Record<string, string>): Record<string, string> {
+function extractUtm(params: URLSearchParams): Record<string, string> {
+  const keys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
   const out: Record<string, string> = {};
-  for (const k of ['utm_source','utm_medium','utm_campaign','utm_term','utm_content']) {
-    if (params[k]) out[k] = params[k];
+  for (const k of keys) {
+    const val = params.get(k);
+    if (val) out[k] = val;
   }
   return out;
+}
+
+async function sendConfirmationEmail(opts: {
+  to: string;
+  name: string | null;
+  isAdmc: boolean;
+}): Promise<{ ok: boolean; error?: string }> {
+  const apiKey = getEnv('RESEND_API_KEY');
+  if (!apiKey) return { ok: false, error: 'RESEND_API_KEY_MISSING' };
+
+  const from = getEnv('RESEND_FROM') || 'Magicians\' AI Wizard <hello@magicaiwizard.com>';
+  const appUrl = getEnv('APP_URL') || 'https://www.magicaiwizard.com/app/';
+  const demoUrl = `${appUrl.replace(/\/$/, '')}/?demo=1`;
+
+  const first = opts.name ? String(opts.name).split(' ')[0] : 'Magician';
+  const subject = opts.isAdmc
+    ? "You're in — ADMC Founding Access (ends Sunday night)"
+    : "You're in — Founding Access";
+
+  const html = `
+  <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;line-height:1.5;color:#0f172a;">
+    <h2 style="margin:0 0 10px 0;">You’re in, ${first}.</h2>
+    <p style="margin:0 0 12px 0;">
+      Thanks for joining the <strong>Magicians' AI Wizard</strong> list.
+      ${opts.isAdmc ? "Your <strong>ADMC founding rate</strong> ends <strong>Sunday night</strong>." : ""}
+    </p>
+    <p style="margin:0 0 12px 0;">
+      Here’s what happens next:
+      <ul style="margin:8px 0 0 18px;">
+        <li>We’ll email you early-access updates and new tool drops.</li>
+        <li>You’ll get the first invite when new features ship.</li>
+      </ul>
+    </p>
+    <p style="margin:14px 0 6px 0;">
+      <a href="${appUrl}" style="display:inline-block;padding:10px 14px;border-radius:10px;background:#7c3aed;color:#fff;text-decoration:none;font-weight:700;">Open the App</a>
+      <span style="display:inline-block;width:10px;"></span>
+      <a href="${demoUrl}" style="display:inline-block;padding:10px 14px;border-radius:10px;background:#0f172a;color:#fff;text-decoration:none;font-weight:700;">Try Demo Mode</a>
+    </p>
+    <p style="margin:14px 0 0 0;color:#475569;font-size:12px;">
+      If you didn’t request this, you can ignore this email.
+    </p>
+  </div>`;
+
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from,
+        to: opts.to,
+        subject,
+        html,
+      }),
+    });
+
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      return { ok: false, error: `RESEND_${res.status}:${txt?.slice(0, 200)}` };
+    }
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || 'RESEND_SEND_FAILED' };
+  }
 }
 
 export default async function handler(req: any, res: any) {
@@ -117,51 +172,72 @@ export default async function handler(req: any, res: any) {
     return json(res, 400, { ok: false, error_code: 'INVALID_EMAIL', message: 'Please provide a valid email.' });
   }
 
-  const refInfo = parseReferrer(req);
-
-  // Source (force 'admc' when request came from the ADMC landing page)
-  let source = typeof body?.source === 'string' ? body.source.trim().slice(0, 80) : 'unknown';
-  const pageFromBody = typeof body?.page === 'string' ? body.page.trim().slice(0, 120) : null;
-  const page = pageFromBody || refInfo.page || null;
-
-  if (source === 'unknown' && page && page.toLowerCase().includes('admc')) source = 'admc';
-  if (typeof source === 'string' && source.toLowerCase().includes('admc')) source = 'admc';
-
-  // Meta: merge payload meta + performer type + page + ref + UTMs (from body or referrer)
-  const metaBody = safeObj(body?.meta);
-  const performerType = typeof body?.type === 'string' ? body.type.trim().slice(0, 80) : null;
-  const ref = typeof body?.ref === 'string' ? body.ref.trim().slice(0, 200) : (refInfo.params?.ref ? String(refInfo.params.ref).slice(0, 200) : null);
-
-  const utmFromBody = safeObj(body?.utm);
-  const utmFromRef = pickUtm(refInfo.params || {});
-  const utm = { ...utmFromRef, ...utmFromBody };
-
-  const meta = {
-    ...metaBody,
-    ...(performerType ? { performer_type: performerType } : null),
-    ...(page ? { page } : null),
-    ...(ref ? { ref } : null),
-    ...(Object.keys(utm).length ? { utm } : null),
-  };
-
   const ua = String(req?.headers?.['user-agent'] || '').slice(0, 500);
+
+  // Request URL + referrer parsing (for UTMs + page)
+  const base = getEnv('APP_URL') || 'https://www.magicaiwizard.com';
+  let url: URL | null = null;
+  try {
+    url = new URL(req?.url || '/', base);
+  } catch {
+    url = null;
+  }
+
+  const refHeader = String(req?.headers?.referer || req?.headers?.referrer || '');
+  let refUrl: URL | null = null;
+  try {
+    if (refHeader) refUrl = new URL(refHeader);
+  } catch {
+    refUrl = null;
+  }
+
+  const utmFromUrl = url ? extractUtm(url.searchParams) : {};
+  const utmFromBody = safeObject(body?.utm);
+  const utm = { ...utmFromUrl, ...utmFromBody };
+
+  const page = typeof body?.page === 'string'
+    ? body.page.slice(0, 200)
+    : (refUrl?.pathname ? refUrl.pathname.slice(0, 200) : null);
+
+  const ref = typeof body?.ref === 'string'
+    ? body.ref.slice(0, 120)
+    : (url?.searchParams.get('ref') || refUrl?.searchParams.get('ref') || null);
+
+  const performerType = typeof body?.type === 'string' ? body.type.slice(0, 80) : null;
+
+  // Source enforcement for ADMC
+  const sourceRaw = typeof body?.source === 'string' ? body.source.trim().slice(0, 80) : 'unknown';
+  const isAdmc = sourceRaw.toLowerCase().includes('admc') || (page ? page.toLowerCase().includes('/admc') : false);
+  const source = isAdmc ? 'admc' : sourceRaw;
+
+  // Meta merge (existing meta + our normalized fields)
+  const metaIn = safeObject(body?.meta);
+  const meta: any = {
+    ...metaIn,
+    ...(performerType ? { performer_type: performerType } : {}),
+    ...(page ? { page } : {}),
+    ...(ref ? { ref } : {}),
+    ...(Object.keys(utm).length ? { utm } : {}),
+  };
 
   const payload = {
     name,
     email,
     email_lower: email,
     source,
-    meta: Object.keys(meta).length ? meta : null,
+    meta,
     ip_hash: ipHash,
     user_agent: ua,
   };
 
   try {
-    const { error } = await admin.from('maw_waitlist_signups').insert(payload);
+    // Insert + return id so we can update meta flags after email send
+    const { data, error } = await admin.from('maw_waitlist_signups').insert(payload).select('id').single();
+
     if (error) {
       // Duplicate email
       if ((error as any).code === '23505') {
-        return json(res, 200, { ok: true, already_subscribed: true });
+        return json(res, 200, { ok: true, already_subscribed: true, email_sent: false });
       }
 
       console.error('waitlist insert error:', error);
@@ -174,7 +250,28 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    return json(res, 200, { ok: true, already_subscribed: false });
+    // Try to send confirmation email (optional)
+    const emailResult = await sendConfirmationEmail({ to: email, name, isAdmc });
+
+    if (emailResult.ok) {
+      await admin
+        .from('maw_waitlist_signups')
+        .update({ meta: { ...meta, confirmation_sent_at: new Date().toISOString(), needs_followup: false } })
+        .eq('id', data.id);
+    } else {
+      // Queue fallback via meta flag (export later)
+      await admin
+        .from('maw_waitlist_signups')
+        .update({ meta: { ...meta, needs_followup: true, followup_reason: emailResult.error || 'NO_EMAIL_PROVIDER' } })
+        .eq('id', data.id);
+    }
+
+    return json(res, 200, {
+      ok: true,
+      already_subscribed: false,
+      email_sent: emailResult.ok,
+      ...(emailResult.ok ? null : { followup_queued: true }),
+    });
   } catch (err: any) {
     return json(res, 500, {
       ok: false,
