@@ -72,8 +72,8 @@ export default async function handler(req: any, res: any) {
 
     const existingSet = new Set((existing || []).map((r: any) => String(r.to_email || '').toLowerCase()));
     const rows = toEmails
-      .filter((email) => !existingSet.has(email.toLowerCase()))
-      .map((email) => ({ to_email: email, template_key, send_at: sendAtIso, payload: { email } }));
+      .filter((email: string) => !existingSet.has(email.toLowerCase()))
+      .map((email: string) => ({ to_email: email, template_key, send_at: sendAtIso, payload: { email } }));
 
     if (rows.length === 0) return res.status(200).json({ ok: true, queued: 0, note: 'All founders already had this template queued/sent' });
 
