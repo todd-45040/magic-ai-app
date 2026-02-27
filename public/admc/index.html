@@ -611,7 +611,11 @@
         margin-top: 10px;
       }
     </style>
-  </head>
+  
+  <!-- Plausible Analytics -->
+  <script defer data-domain="magicaiwizard.com" src="https://plausible.io/js/script.js"></script>
+
+</head>
 
   <body class="magical-bg">
     <div class="admc-wrap">
@@ -794,6 +798,9 @@
             if (!res.ok) {
               const msg = (data && (data.error || data.message)) ? (data.error || data.message) : 'Could not save your email. Please try again (or ask at the booth).';
               err.textContent = msg;
+              if (window.plausible) {
+              plausible('admc_signup_fail');
+            }
               err.style.display = 'block';
               return;
             }
@@ -811,11 +818,17 @@
               }
             } catch (_) {}
 
+            if (window.plausible) {
+              plausible('admc_signup_success');
+            }
             ok.style.display = 'block';
             form.reset();
           } catch (e) {
             err.textContent = 'Could not save your email. Please try again (or ask at the booth).';
-            err.style.display = 'block';
+            if (window.plausible) {
+              plausible('admc_signup_fail');
+            }
+              err.style.display = 'block';
           }
         });
       })();
