@@ -745,19 +745,6 @@
           const fd = new FormData(form);
           const payload = Object.fromEntries(fd.entries());
           payload.source = 'admc';
-          payload.page = window.location.pathname || '/admc';
-
-          // Capture ref + UTM parameters for segmentation
-          const sp = new URLSearchParams(window.location.search || '');
-          const ref = sp.get('ref');
-          if (ref) payload.ref = ref;
-
-          const utm = {};
-          for (const k of ['utm_source','utm_medium','utm_campaign','utm_term','utm_content']) {
-            const v = sp.get(k);
-            if (v) utm[k] = v;
-          }
-          if (Object.keys(utm).length) payload.utm = utm;
 
           try {
             // TODO: update this endpoint to match your production waitlist route

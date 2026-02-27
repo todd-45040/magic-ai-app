@@ -710,6 +710,10 @@
 
           <div class="admc-success" id="admcSuccess">
             You’re in! Watch your inbox tonight — we’ll send your ADMC founding access details.
+            <div class="admc-actions" style="margin-top:14px;">
+              <a class="btn" href="/app/?demo=1">Try Demo Mode Now</a>
+              <a class="btn-secondary" href="#walkthrough">See the 60-second walkthrough</a>
+            </div>
           </div>
 
           <div class="admc-error" id="admcError">
@@ -721,6 +725,33 @@
           </div>
         </div>
       </section>
+      <section class="card" id="walkthrough">
+        <div class="section-title section-title--white">60-second walkthrough</div>
+        <div class="admc-mini">
+          <div class="feature-tile">
+            <div class="t">1) Generate a routine</div>
+            <div class="d">Pick your style, audience, and effect goal. Get a structured routine with beats and performance notes.</div>
+          </div>
+          <div class="feature-tile">
+            <div class="t">2) Import to Show Planner</div>
+            <div class="d">Turn the routine into Performance Beats so your show becomes repeatable and stage-ready.</div>
+          </div>
+          <div class="feature-tile">
+            <div class="t">3) Rehearse + tighten</div>
+            <div class="d">Use rehearsal feedback to improve clarity, pacing, and applause cues — fast.</div>
+          </div>
+          <div class="feature-tile">
+            <div class="t">4) Save your best lines</div>
+            <div class="d">Keep strong patter and show notes organized so you never start from scratch again.</div>
+          </div>
+        </div>
+        <div class="admc-actions" style="margin-top:16px;">
+          <a class="btn" href="/app/?demo=1">Try Demo Mode Now</a>
+          <a class="btn-secondary" href="#join">Join the Founding Circle</a>
+        </div>
+      </section>
+
+
 
       <footer style="text-align:center;">
         © 2026 Magicians' AI Wizard, LLC • <span style="color:rgba(255,255,255,0.68);">Actively evolving with the magic community.</span>
@@ -747,18 +778,28 @@
           payload.source = 'admc';
 
           try {
-            // TODO: update this endpoint to match your production waitlist route
-            const res = await fetch('/api/waitlist', {
+            const res = await fetch('/api/waitlistSignup', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(payload)
             });
 
-            if (!res.ok) throw new Error('bad response');
+            // Try to read JSON either way for better error messages
+            let data = null;
+            try { data = await res.json(); } catch (_) {}
 
+            if (!res.ok) {
+              const msg = (data && (data.error || data.message)) ? (data.error || data.message) : 'Could not save your email. Please try again (or ask at the booth).';
+              err.textContent = msg;
+              err.style.display = 'block';
+              return;
+            }
+
+            // Treat "already subscribed" as success too
             ok.style.display = 'block';
             form.reset();
           } catch (e) {
+            err.textContent = 'Could not save your email. Please try again (or ask at the booth).';
             err.style.display = 'block';
           }
         });
