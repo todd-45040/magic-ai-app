@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import AdminWindowSelector from './AdminWindowSelector';
 import { downloadCsv } from './adminCsv';
 import { fetchAdminWaitlistLeads } from '../services/adminLeadsService';
@@ -30,6 +30,14 @@ export default function AdminLeadsPage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // Micro-polish: pulse the KPI when new leads appear
+  const prevCountRef = useRef<number | null>(null);
+  const [kpiPulse, setKpiPulse] = useState(false);
+
+  // Optional: page views + demo clicks (if you wire an analytics endpoint later)
+  const [pageViews, setPageViews] = useState<number | null>(null);
+  const [demoClicks, setDemoClicks] = useState<number | null>(null);
+
   const windowLabel = useMemo(() => (ADMIN_WINDOWS.find((w) => w.days === days)?.label ?? `${days}d`), [days]);
 
   async function load() {
@@ -53,7 +61,24 @@ export default function AdminLeadsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [days]);
 
-  const exportRows = useMemo(() => {
+  
+
+  useEffect(() => {
+    if (count == null) return;
+    if (prevCountRef.current == null) {
+      prevCountRef.current = count;
+      return;
+    }
+    if (count > prevCountRef.current) {
+      setKpiPulse(true);
+      const t = window.setTimeout(() => setKpiPulse(false), 1200);
+      prevCountRef.current = count;
+      return () => window.clearTimeout(t);
+    }
+    prevCountRef.current = count;
+  }, [count]);
+
+const exportRows = useMemo(() => {
     return (rows || []).map((r) => {
       const m = getMeta(r);
       const utm = (m?.utm && typeof m.utm === 'object') ? m.utm : {};
@@ -79,16 +104,6 @@ export default function AdminLeadsPage() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div>
           <div className="text-xl font-bold text-amber-200">ADMC Leads</div>
-
-        <div className="mt-4 mb-6 rounded-xl border border-purple-500/30 bg-gradient-to-r from-purple-900/30 to-indigo-900/30 p-4">
-          <div className="text-sm uppercase tracking-wider text-purple-300">
-            ADMC Conversion Snapshot
-          </div>
-          <div className="mt-2 text-lg font-semibold text-white">
-            QR → Leads → Demo Clicks
-          </div>
-        </div>
-
           <div className="text-sm opacity-80">Convention waitlist signups (source = admc).</div>
         </div>
 
@@ -116,7 +131,18 @@ export default function AdminLeadsPage() {
 
       <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
         <div className="text-sm opacity-80">ADMC leads captured ({windowLabel})</div>
-        <div className="mt-1 text-3xl font-extrabold text-white">{count === null ? '—' : count}</div>
+        <div className={`mt-1 text-3xl font-extrabold text-white ${kpiPulse ? "animate-pulse" : ""}`}>{count === null ? '—' : count}</div>
+
+        <div className="mt-2 text-xs text-white/70">
+          Conversion rate ({windowLabel}):{' '}
+          {pageViews && pageViews > 0 && typeof count === 'number'
+            ? `${Math.round((count / pageViews) * 100)}%`
+            : '—'}
+          {demoClicks !== null ? (
+            <span className="ml-2 opacity-80">• Demo clicks: {demoClicks}</span>
+          ) : null}
+        </div>
+
       </div>
 
       {err && <div className="p-3 rounded-lg bg-red-500/10 border border-red-400/20 text-red-100">{err}</div>}
