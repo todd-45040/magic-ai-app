@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="apple-touch-icon" href="/icon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <title>ADMC • Magicians' AI Wizard</title>
+    <meta name="description" content="Welcome ADMC magicians. Unlock founding access to Magicians' AI Wizard—build stronger patter, rehearse smarter, and plan shows with confidence.">
+    <meta name="theme-color" content="#8b5cf6">
+    <link rel="canonical" href="https://www.magicaiwizard.com/admc">
+
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="ADMC • Magicians' AI Wizard">
+    <meta property="og:description" content="Welcome ADMC magicians. Unlock founding access—patter, rehearsal feedback, and show planning built for performers.">
+    <meta property="og:url" content="https://www.magicaiwizard.com/admc">
+    <meta property="og:image" content="https://www.magicaiwizard.com/og.png">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="ADMC • Magicians' AI Wizard">
+    <meta name="twitter:description" content="Welcome ADMC magicians. Unlock founding access—patter, rehearsal feedback, and show planning built for performers.">
+    <meta name="twitter:image" content="https://www.magicaiwizard.com/og.png">
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      "name": "ADMC • Magicians' AI Wizard",
+      "url": "https://www.magicaiwizard.com/admc"
+    }
+    </script>
+
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Lato:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+:root {
+        --yellow: #f6c343; /* brand gold */
+        --bg: #020617;
+        --card: rgba(15, 23, 42, 0.55);
+        --border: rgba(148, 163, 184, 0.18);
+        --text: rgba(255,255,255,0.92);
+        --muted: rgba(255,255,255,0.72);
+        --accent: #8b5cf6;
+        --accentBlue: #38bdf8;
+        --accent2: #22c55e;
+      }
+      * { box-sizing: border-box; }
+      body {
+        font-family: 'Lato', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+      }
+      .font-cinzel { font-family: 'Cinzel', serif; }
+      .magical-bg {
+        min-height: 100vh;
+        background-image:
+          radial-gradient(circle at 40% -20%, rgba(124, 58, 237, 0.20), transparent 60%),
+          radial-gradient(circle at 100% 20%, rgba(56, 189, 248, 0.12), transparent 42%),
+          radial-gradient(circle at 0% 25%, rgba(236, 72, 153, 0.10), transparent 46%),
+          /* Bottom wash: keep it premium (no green cast) */
+          radial-gradient(circle at 65% 80%, rgba(99, 102, 241, 0.10), transparent 55%),
+          linear-gradient(to bottom, transparent, #020617 90%);
+      }
+      .wrap {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 56px 20px 80px;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 34px;
+      }
+      .brand {
+        display:flex; align-items:center; gap:12px;
+      }
+      .brand img { width: 36px; height: 36px; }
+      .brand-title { line-height: 1.1; }
+      .brand-title .name { font-size: 20px; font-weight: 800; }
+      .brand-title .tag { font-size: 13px; color: var(--muted); margin-top: 2px; }
+
+      /* Single CTA only */
+      .btn {
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        gap:10px;
+        padding: 13px 18px;
+        border-radius: 14px;
+        border: 1px solid rgba(139,92,246,0.55);
+        background: linear-gradient(135deg, rgba(139,92,246,0.95), rgba(56,189,248,0.75));
+        color: var(--text);
+        text-decoration: none;
+        font-weight: 800;
+        box-shadow: 0 12px 30px rgba(139,92,246,0.18);
+        transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
+        user-select: none;
+        white-space: nowrap;
+      }
+      .btn:hover { transform: translateY(-1px); box-shadow: 0 16px 36px rgba(139,92,246,0.24); filter: brightness(1.03); }
+      .btn:active { transform: translateY(0); }
+
+      .hero {
+        display:grid;
+        grid-template-columns: 1.25fr 0.75fr;
+        column-gap: 22px;
+        row-gap: 18px;
+        align-items: stretch;
+      }
+      @media (max-width: 940px) {
+        .hero { grid-template-columns: 1fr; }
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        padding: 22px;
+        backdrop-filter: blur(10px);
+        position: relative;
+        overflow: hidden;
+      }
+      .card::before{
+        content:"";
+        position:absolute;
+        inset:-1px;
+        background:
+          radial-gradient(circle at 12% 10%, rgba(139,92,246,0.28), transparent 45%),
+          radial-gradient(circle at 88% 18%, rgba(56,189,248,0.18), transparent 45%),
+          /* Bottom glow: shift from green to indigo for brand consistency */
+          radial-gradient(circle at 60% 110%, rgba(99, 102, 241, 0.16), transparent 55%);
+        pointer-events:none;
+      }
+      .card > * { position: relative; }
+
+      /* Make cards behave like columns so bottoms align cleanly when grid stretches */
+      .left-card, .right-card{
+        display:flex;
+        flex-direction:column;
+        padding-bottom: 26px;
+      }
+
+      h1 {
+        font-size: 44px;
+        letter-spacing: -0.02em;
+        margin: 0 0 12px;
+        line-height: 1.05;
+      }
+      @media (max-width: 520px) {
+        h1 { font-size: 38px; }
+      }
+      .text-gold{ color: var(--yellow); }
+
+      p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 16px;
+        line-height: 1.65;
+      }
+
+      .badges{
+        display:flex;
+        flex-wrap:wrap;
+        gap:10px;
+        margin: 6px 0 14px;
+      }
+      .badge{
+        display:inline-flex;
+        align-items:center;
+        gap:8px;
+        padding: 8px 10px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,0.12);
+        background: rgba(15, 23, 42, 0.58);
+        color: rgba(255,255,255,0.82);
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .badge .spark{
+        width: 9px; height: 9px; border-radius: 999px;
+        background: rgba(139,92,246,0.95);
+        box-shadow: 0 0 0 4px rgba(139,92,246,0.16);
+      }
+
+      .cta {
+        display:flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 18px;
+        align-items:center;
+      }
+      .micro {
+        font-size: 13px;
+        color: rgba(255,255,255,0.62);
+      }
+
+      .list {
+        margin-top: 16px;
+        display:grid;
+        gap: 10px;
+      }
+      .li {
+        display:flex;
+        gap: 10px;
+        align-items:flex-start;
+        color: var(--muted);
+      }
+      .dot {
+        width: 10px; height: 10px;
+        margin-top: 6px;
+        border-radius: 999px;
+        background: rgba(246,195,67,0.95);
+        box-shadow: 0 0 0 4px rgba(246,195,67,0.14);
+        flex: 0 0 auto;
+      }
+
+      .right-top {
+        display:flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .logo-box{
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 14px;
+        background: rgba(0,0,0,0.10);
+      }
+      .share-preview-img{
+        width:100%;
+        height:auto;
+        display:block;
+        border-radius:12px;
+      }
+      #preview-box img { transition: transform .25s ease, box-shadow .25s ease; }
+      #preview-box:hover img { transform: scale(1.02); box-shadow: 0 0 30px rgba(139,92,246,.35); }
+
+      .right-content{
+        border-top:1px solid var(--border);
+        padding-top: 14px;
+      }
+      h2 {
+        margin:0 0 10px;
+        font-size: 22px;
+      }
+
+      .mini-grid{
+        display:grid;
+        gap: 10px;
+        margin-top: 12px;
+      }
+      .mini-item{
+        padding: 12px 12px;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        background: rgba(15, 23, 42, 0.52);
+        border-radius: 14px;
+        color: rgba(255,255,255,0.80);
+      }
+      .mini-item strong{
+        color: rgba(255,255,255,0.92);
+      }
+
+      footer {
+        margin-top: 26px;
+        color: rgba(255,255,255,0.55);
+        font-size: 13px;
+      }
+      footer a { color: rgba(255,255,255,0.75); }
+    
+      .section-title{
+        margin: 18px 0 10px;
+        font-size: 16px;
+        color: rgba(255,255,255,0.92);
+        font-weight: 800;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+      }
+      .how{
+        display:grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-top: 10px;
+      }
+      @media (max-width: 520px) {
+        .how { grid-template-columns: 1fr; }
+      }
+      .how .step{
+        padding: 14px 14px;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        background: rgba(15, 23, 42, 0.52);
+        border-radius: 16px;
+      }
+      .how .step .kicker{
+        display:flex; align-items:center; gap:10px;
+        font-weight: 900;
+        color: rgba(255,255,255,0.92);
+      }
+      .pill{
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        font-size: 12px;
+        font-weight: 900;
+        padding: 4px 10px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,0.12);
+        background: rgba(0,0,0,0.10);
+        color: rgba(255,255,255,0.82);
+      }
+      .how .step p{
+        margin-top: 8px;
+        font-size: 14px;
+        line-height: 1.55;
+        color: rgba(255,255,255,0.72);
+      }
+      .feature-grid{
+        display:grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-top: 10px;
+      }
+      @media (max-width: 520px) {
+        .feature-grid { grid-template-columns: 1fr; }
+      }
+      .feature-tile{
+        padding: 14px 14px;
+        border-radius: 16px;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        background: rgba(15, 23, 42, 0.52);
+      }
+      .feature-tile .t{
+        font-weight: 900;
+        color: rgba(255,255,255,0.92);
+        display:flex;
+        align-items:center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .feature-tile .d{
+        margin-top: 6px;
+        color: rgba(255,255,255,0.70);
+        font-size: 14px;
+        line-height: 1.55;
+      }
+      .callout{
+        margin-top: 14px;
+        padding: 14px 14px;
+        border-radius: 16px;
+        border: 1px solid rgba(246,195,67,0.28);
+        background: linear-gradient(180deg, rgba(246,195,67,0.10), rgba(255,255,255,0.03));
+        color: rgba(255,255,255,0.78);
+      }
+      .callout strong{ color: rgba(255,255,255,0.92); }
+
+
+  
+    
+      .right-card{
+        display:flex;
+        flex-direction: column;
+      }
+      .right-card .right-top{
+        flex: 1 1 auto;
+      }
+      .right-sections{
+        display:grid;
+        gap: 12px;
+        margin-top: 14px;
+      }
+      .right-section{
+        padding: 14px 14px;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        background: rgba(15, 23, 42, 0.52);
+        border-radius: 16px;
+      }
+      .right-section .h{
+        font-weight: 900;
+        color: rgba(255,255,255,0.92);
+        margin-bottom: 6px;
+      }
+      .right-section .b{
+        color: rgba(255,255,255,0.70);
+        font-size: 14px;
+        line-height: 1.55;
+      }
+      .mini-bullets{
+        margin: 10px 0 0;
+        padding: 0;
+        list-style: none;
+        display:grid;
+        gap: 8px;
+      }
+      .mini-bullets li{
+        display:flex;
+        gap: 10px;
+        align-items:flex-start;
+        color: rgba(255,255,255,0.72);
+        font-size: 14px;
+        line-height: 1.45;
+      }
+      .mini-bullets .dot2{
+        width: 9px; height: 9px;
+        margin-top: 6px;
+        border-radius: 999px;
+        background: rgba(139,92,246,0.95);
+        box-shadow: 0 0 0 4px rgba(139,92,246,0.14);
+        flex: 0 0 auto;
+      }
+      .quote{
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        background: rgba(0,0,0,0.08);
+        border-radius: 18px;
+        padding: 18px 18px;
+        margin-top: 12px;
+        color: rgba(255,255,255,0.78);
+        font-size: 16px;
+        line-height: 1.7;
+      }
+      .quote strong{ color: rgba(255,255,255,0.92); }
+
+      /* Full-width bottom callout to balance columns */
+      .quote-wide{
+        grid-column: 1 / -1;
+        padding: 30px 22px; /* aligned with wrap padding */
+      }
+      .quote-wide .quote{
+        margin-top: 0;
+      }
+
+
+      /* Gold accent enhancements */
+      h1, h2, .section-title {
+        background: linear-gradient(90deg, var(--yellow), #ffd976);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      /* Section titles that should be white (not gold) */
+      .section-title.section-title--white{
+        background: none;
+        -webkit-background-clip: initial;
+        -webkit-text-fill-color: rgba(255,255,255,0.92);
+        color: rgba(255,255,255,0.92);
+      }
+
+      .feature-tile .t,
+      .right-section .h {
+        color: var(--yellow);
+      }
+
+      .callout {
+        border: 1px solid rgba(246,195,67,0.45);
+        box-shadow: 0 0 20px rgba(246,195,67,0.12);
+      }
+
+      .quote {
+        border: 1px solid rgba(246,195,67,0.32);
+        box-shadow: 0 0 22px rgba(246,195,67,0.08);
+        padding: 24px 26px;
+        font-size: 17px;
+      }
+
+      .badge {
+        border: 1px solid rgba(246,195,67,0.35);
+        box-shadow: 0 0 10px rgba(246,195,67,0.15);
+      }
+
+
+      /* Make How It Works step titles gold */
+      .how .step .kicker {
+        background: linear-gradient(90deg, var(--yellow), #ffd976);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      /* ADMC page specific additions (small + safe) */
+      .admc-wrap {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 56px 20px 90px;
+      }
+      .admc-hero {
+        text-align: center;
+        margin-top: 8px;
+      }
+      .admc-badge {
+        display:inline-flex;
+        align-items:center;
+        gap:10px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        border: 1px solid rgba(246,195,67,0.40);
+        background: rgba(0,0,0,0.14);
+        box-shadow: 0 0 18px rgba(246,195,67,0.10);
+        color: rgba(255,255,255,0.88);
+        font-weight: 900;
+        font-size: 13px;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+      }
+      .admc-badge .star {
+        width: 10px; height: 10px; border-radius: 999px;
+        background: rgba(246,195,67,0.95);
+        box-shadow: 0 0 0 4px rgba(246,195,67,0.14);
+      }
+      .admc-sub {
+        max-width: 640px;
+        margin: 14px auto 0;
+        font-size: 18px;
+        line-height: 1.65;
+      }
+      .admc-sub strong {
+        color: rgba(255,255,255,0.92);
+      }
+      .admc-grid {
+        display:grid;
+        grid-template-columns: 1fr;
+        gap: 14px;
+        margin-top: 18px;
+      }
+      .admc-mini {
+        display:grid;
+        grid-template-columns: 1fr;
+        gap: 12px;
+        margin-top: 14px;
+      }
+      @media (min-width: 760px) {
+        .admc-mini {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+      .admc-form {
+        display:grid;
+        gap: 10px;
+        margin-top: 10px;
+      }
+      .field {
+        width: 100%;
+        border-radius: 14px;
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        background: rgba(2, 6, 23, 0.55);
+        color: rgba(255,255,255,0.92);
+        padding: 12px 14px;
+        font-size: 16px;
+        outline: none;
+      }
+      .field:focus {
+        border-color: rgba(139,92,246,0.65);
+        box-shadow: 0 0 0 4px rgba(139,92,246,0.18);
+      }
+      .admc-actions {
+        display:flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 12px;
+        margin-top: 14px;
+      }
+      .btn-secondary {
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        padding: 13px 18px;
+        border-radius: 14px;
+        border: 1px solid rgba(246,195,67,0.55);
+        background: rgba(0,0,0,0.12);
+        color: rgba(255,255,255,0.86);
+        text-decoration: none;
+        font-weight: 900;
+        user-select:none;
+        white-space: nowrap;
+      }
+      .btn-secondary:hover {
+        filter: brightness(1.05);
+        transform: translateY(-1px);
+      }
+      .admc-note {
+        margin-top: 10px;
+        color: rgba(255,255,255,0.68);
+        font-size: 13px;
+        line-height: 1.55;
+        text-align: center;
+      }
+      .admc-success {
+        display:none;
+        margin-top: 12px;
+        padding: 14px 14px;
+        border-radius: 16px;
+        border: 1px solid rgba(34,197,94,0.35);
+        background: rgba(34,197,94,0.08);
+        color: rgba(255,255,255,0.84);
+        text-align: center;
+        font-weight: 800;
+      }
+      .admc-error {
+        display:none;
+        margin-top: 12px;
+        padding: 14px 14px;
+        border-radius: 16px;
+        border: 1px solid rgba(239,68,68,0.35);
+        background: rgba(239,68,68,0.08);
+        color: rgba(255,255,255,0.84);
+        text-align: center;
+        font-weight: 800;
+      }
+      .admc-tight {
+        margin-top: 10px;
+      }
+    </style>
+  </head>
+
+  <body class="magical-bg">
+    <div class="admc-wrap">
+      <header>
+        <div class="brand">
+          <img src="/icon.svg" alt="Magicians' AI Wizard logo">
+          <div class="brand-title">
+            <div class="name font-cinzel">Magicians' AI Wizard</div>
+            <div class="tag">Effect Engine • Show Planner • Rehearsal Studios</div>
+          </div>
+        </div>
+
+        <a class="btn" href="/app/">Open the App</a>
+      </header>
+
+      <section class="card admc-hero">
+        <div class="admc-badge"><span class="star"></span> ADMC Exclusive Access</div>
+
+        <h1 class="font-cinzel" style="margin-top:14px;">
+          Welcome <span class="text-gold">ADMC</span> Magicians.
+        </h1>
+
+        <p class="admc-sub">
+          Build <strong>stronger patter</strong>, rehearse smarter, and turn ideas into a real show plan —
+          with tools designed specifically for performers (not generic AI).
+        </p>
+
+        <div class="admc-actions">
+          <a class="btn" href="#join">Unlock Founding Access</a>
+          <a class="btn-secondary" href="/app/?demo=1">Try Demo Mode</a>
+        </div>
+
+        <div class="admc-note">
+          ADMC Founding Rate ends <strong>Sunday night</strong>. Lock it in while you’re here.
+        </div>
+      </section>
+
+      <section class="admc-grid">
+        <div class="card">
+          <div class="section-title section-title--white">What it does (in real performer terms)</div>
+
+          <div class="admc-mini">
+            <div class="feature-tile">
+              <div class="t">Generate routines <span class="pill">Structured</span></div>
+              <div class="d">Get real routines with premise, beats, method overview, and performance notes — not vague “idea dumps.”</div>
+            </div>
+            <div class="feature-tile">
+              <div class="t">Rehearse with feedback <span class="pill">Coached</span></div>
+              <div class="d">Practice and capture improvement notes so your delivery, clarity, and pacing get tighter over time.</div>
+            </div>
+            <div class="feature-tile">
+              <div class="t">Build your set <span class="pill">Practical</span></div>
+              <div class="d">Turn ideas into Performance Beats in Show Planner so your show becomes a repeatable system.</div>
+            </div>
+            <div class="feature-tile">
+              <div class="t">Work like a pro <span class="pill">Ready</span></div>
+              <div class="d">Keep your best material organized so you’re always ready to step on stage with confidence.</div>
+            </div>
+          </div>
+
+          <div class="callout admc-tight" role="note">
+            <strong>Best ADMC quick win:</strong> Generate a routine → import it → add 2–3 beats (setup → reveal → applause cue).
+            Your show instantly becomes more repeatable.
+          </div>
+        </div>
+
+        <div class="card" id="join">
+          <div class="section-title section-title--white">Join the Founding Circle</div>
+          <p style="margin-bottom: 10px;">
+            Get early access updates, ADMC-only pricing, and the first invite when new tools ship.
+          </p>
+
+          <!--
+            Hook this up to your existing waitlist endpoint if you want.
+            For now, this submits to /api/waitlist (example). Update the action to match your backend.
+          -->
+          <form class="admc-form" id="admcForm">
+            <input class="field" type="text" name="name" placeholder="First name" autocomplete="given-name" required>
+            <input class="field" type="email" name="email" placeholder="Email" autocomplete="email" required>
+
+            <select class="field" name="type">
+              <option value="">Performer type (optional)</option>
+              <option>Hobbyist</option>
+              <option>Part-time performer</option>
+              <option>Full-time pro</option>
+              <option>Mentalist</option>
+              <option>Close-up / strolling</option>
+              <option>Stage / parlor</option>
+              <option>Kids performer</option>
+              <option>Gospel / church</option>
+              <option>Other</option>
+            </select>
+
+            <button class="btn" type="submit" style="width:100%;">Unlock My Founding Access</button>
+          </form>
+
+          <div class="admc-success" id="admcSuccess">
+            You’re in! Watch your inbox tonight — we’ll send your ADMC founding access details.
+          </div>
+
+          <div class="admc-error" id="admcError">
+            Could not save your email. Please try again (or ask at the booth).
+          </div>
+
+          <div class="admc-note">
+            We respect privacy. No spam — just product updates and early access.
+          </div>
+        </div>
+      </section>
+
+      <footer style="text-align:center;">
+        © 2026 Magicians' AI Wizard, LLC • <span style="color:rgba(255,255,255,0.68);">Actively evolving with the magic community.</span>
+      </footer>
+    </div>
+
+    <script>
+      // Optional: lightweight demo submit handler.
+      // Replace fetch URL with your real endpoint (e.g., /api/waitlist or Supabase edge function).
+      (function() {
+        const form = document.getElementById('admcForm');
+        const ok = document.getElementById('admcSuccess');
+        const err = document.getElementById('admcError');
+
+        if (!form) return;
+
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          ok.style.display = 'none';
+          err.style.display = 'none';
+
+          const fd = new FormData(form);
+          const payload = Object.fromEntries(fd.entries());
+          payload.source = 'admc';
+
+          try {
+            // TODO: update this endpoint to match your production waitlist route
+            const res = await fetch('/api/waitlist', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+
+            if (!res.ok) throw new Error('bad response');
+
+            ok.style.display = 'block';
+            form.reset();
+          } catch (e) {
+            err.style.display = 'block';
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>
