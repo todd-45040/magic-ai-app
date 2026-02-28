@@ -683,6 +683,24 @@ if (!cls.isSuccess && recentFailures.length < 25) {
     let week1Retained = 0;
     let week1RetentionRate: number | null = null;
 
+    // Phase 4.5 — Founder vs non-founder Week-1 retention split (7–14d cohort)
+    let week1FoundersCohortSize = 0;
+    let week1FoundersRetained = 0;
+    let week1FoundersRetentionRate: number | null = null;
+
+    let week1NonFoundersCohortSize = 0;
+    let week1NonFoundersRetained = 0;
+    let week1NonFoundersRetentionRate: number | null = null;
+
+    // Phase 4.5 — WAU/MAU stickiness split (Founders vs non-founders)
+    let foundersWau7 = 0;
+    let foundersMau30 = 0;
+    let nonFoundersWau7 = 0;
+    let nonFoundersMau30 = 0;
+    let foundersStickinessWauMau: number | null = null;
+    let nonFoundersStickinessWauMau: number | null = null;
+    let stickinessDeltaFoundersMinusNon: number | null = null;
+
     const toDayKeyUTC = (iso: string) => String(iso || '').slice(0, 10);
     const dayStartUTCms = (dayKey: string) => Date.parse(`${dayKey}T00:00:00.000Z`);
 
@@ -706,7 +724,7 @@ if (!cls.isSuccess && recentFailures.length < 25) {
     }
 
     // DAU / WAU / MAU (fixed windows: 1d, 7d, 30d)
-    const uniqueUsersSince = async (d: number) => {
+    const uniqueUserSetSince = async (d: number) => {
       const since = isoDaysAgo(d);
       const { data, error } = await admin
         .from('ai_usage_events')
@@ -720,15 +738,62 @@ if (!cls.isSuccess && recentFailures.length < 25) {
         const uid = r?.user_id ? String(r.user_id) : null;
         if (uid) s.add(uid);
       }
-      return s.size;
+      return s;
+    };
+
+    const uniqueUsersSince = async (d: number) => {
+      const s = await uniqueUserSetSince(d);
+      return s ? s.size : null;
     };
 
     try {
-      const [d1, d7, d30] = await Promise.all([uniqueUsersSince(1), uniqueUsersSince(7), uniqueUsersSince(30)]);
+      const [s1, s7, s30] = await Promise.all([uniqueUserSetSince(1), uniqueUserSetSince(7), uniqueUserSetSince(30)]);
+      const d1 = s1 ? s1.size : 0;
+      const d7 = s7 ? s7.size : 0;
+      const d30 = s30 ? s30.size : 0;
+
       dau = Number(d1 || 0);
       wau = Number(d7 || 0);
       mau = Number(d30 || 0);
       stickinessDauMau = mau > 0 ? dau / mau : null;
+
+      // Phase 4.5 — WAU/MAU stickiness delta (Founders vs Non-founders)
+      const unionIds = new Set<string>();
+      for (const uid of (s7 ? Array.from(s7) : [])) unionIds.add(String(uid));
+      for (const uid of (s30 ? Array.from(s30) : [])) unionIds.add(String(uid));
+
+      if (unionIds.size > 0) {
+        const ids = Array.from(unionIds);
+        const founderFlags = new Map<string, boolean>();
+        const batchSize = 500;
+        for (let i = 0; i < ids.length; i += batchSize) {
+          const batch = ids.slice(i, i + batchSize);
+          const { data: urows, error: uerr } = await admin.from('users').select('id,founding_circle_member').in('id', batch).limit(50000);
+          if (uerr) continue;
+          for (const u of (urows || []) as any[]) {
+            const id = u?.id ? String(u.id) : null;
+            if (!id) continue;
+            founderFlags.set(id, !!u?.founding_circle_member);
+          }
+        }
+
+        for (const uid of (s7 ? Array.from(s7) : [])) {
+          const isFounder = founderFlags.get(String(uid)) === true;
+          if (isFounder) foundersWau7 += 1;
+          else nonFoundersWau7 += 1;
+        }
+
+        for (const uid of (s30 ? Array.from(s30) : [])) {
+          const isFounder = founderFlags.get(String(uid)) === true;
+          if (isFounder) foundersMau30 += 1;
+          else nonFoundersMau30 += 1;
+        }
+
+        foundersStickinessWauMau = foundersMau30 > 0 ? foundersWau7 / foundersMau30 : null;
+        nonFoundersStickinessWauMau = nonFoundersMau30 > 0 ? nonFoundersWau7 / nonFoundersMau30 : null;
+        stickinessDeltaFoundersMinusNon =
+          foundersStickinessWauMau != null && nonFoundersStickinessWauMau != null ? foundersStickinessWauMau - nonFoundersStickinessWauMau : null;
+      }
     } catch (e) {
       // non-fatal
     }
@@ -758,7 +823,7 @@ if (!cls.isSuccess && recentFailures.length < 25) {
         const batchSize = 500;
         for (let i = 0; i < ids.length; i += batchSize) {
           const batch = ids.slice(i, i + batchSize);
-          const { data: ur, error: urErr } = await admin.from('users').select('id,created_at').in('id', batch).limit(50000);
+          const { data: ur, error: urErr } = await admin.from('users').select('id,created_at,founding_circle_member').in('id', batch).limit(50000);
           if (urErr) continue;
           for (const u of (ur || []) as any[]) {
             if (u?.id && u?.created_at) createdMap.set(String(u.id), String(u.created_at));
@@ -975,8 +1040,13 @@ wauTrendWeekly12 = weeklyWau;
         week1CohortSize = cohort.length;
 
         const cohortMap = new Map<string, string>();
+        const cohortIsFounder = new Map<string, boolean>();
         for (const u of cohort) {
-          if (u?.id && u?.created_at) cohortMap.set(String(u.id), String(u.created_at));
+          if (u?.id && u?.created_at) {
+            const id = String(u.id);
+            cohortMap.set(id, String(u.created_at));
+            cohortIsFounder.set(id, !!u?.founding_circle_member);
+          }
         }
 
         if (cohortMap.size > 0) {
@@ -984,6 +1054,8 @@ wauTrendWeekly12 = weeklyWau;
           const ids = Array.from(cohortMap.keys());
           const batchSize = 500;
           const retainedSet = new Set<string>();
+          const retainedFounders = new Set<string>();
+          const retainedNonFounders = new Set<string>();
 
           for (let i = 0; i < ids.length; i += batchSize) {
             const batch = ids.slice(i, i + batchSize);
@@ -1012,12 +1084,25 @@ wauTrendWeekly12 = weeklyWau;
 
               if (occMs <= createdMs + 7 * 24 * 60 * 60 * 1000) {
                 retainedSet.add(uid);
+                const isFounder = cohortIsFounder.get(uid) === true;
+                if (isFounder) retainedFounders.add(uid);
+                else retainedNonFounders.add(uid);
               }
             }
           }
 
           week1Retained = retainedSet.size;
           week1RetentionRate = week1CohortSize > 0 ? week1Retained / week1CohortSize : null;
+          // Phase 4.5 split
+          week1FoundersCohortSize = cohort.filter((u: any) => !!u?.founding_circle_member).length;
+          week1NonFoundersCohortSize = Math.max(0, week1CohortSize - week1FoundersCohortSize);
+
+          week1FoundersRetained = retainedFounders.size;
+          week1NonFoundersRetained = retainedNonFounders.size;
+
+          week1FoundersRetentionRate = week1FoundersCohortSize > 0 ? week1FoundersRetained / week1FoundersCohortSize : null;
+          week1NonFoundersRetentionRate = week1NonFoundersCohortSize > 0 ? week1NonFoundersRetained / week1NonFoundersCohortSize : null;
+
         }
       }
     } catch (e) {
@@ -1055,6 +1140,26 @@ wauTrendWeekly12 = weeklyWau;
         },
         cost_per_user_ratio: null as number | null,
         events_per_user_ratio: null as number | null,
+      },
+      // Phase 4.5 — Retention + stickiness + adoption split (added later in handler)
+      retention_week1_split: {
+        cohort_window: '7-14d ago',
+        founders: { cohort_size: 0, retained: 0, retention_rate: null as number | null },
+        non_founders: { cohort_size: 0, retained: 0, retention_rate: null as number | null },
+        delta_founders_minus_non: null as number | null,
+      },
+      stickiness_wau_mau_split: {
+        founders: { wau_7d: 0, mau_30d: 0, wau_mau: null as number | null },
+        non_founders: { wau_7d: 0, mau_30d: 0, wau_mau: null as number | null },
+        delta_founders_minus_non: null as number | null,
+      },
+      tool_adoption_split: {
+        window_days: days,
+        founders_active_users: 0,
+        non_founders_active_users: 0,
+        top_tools_founders: [] as any[],
+        top_tools_non_founders: [] as any[],
+        top_delta: [] as any[],
       },
     };
 
@@ -1149,6 +1254,7 @@ wauTrendWeekly12 = weeklyWau;
     }
 
     // Founding usage intensity (among active users in selected window)
+    let founderSetActiveGlobal = new Set<string>();
     try {
       const activeIds = Array.from(activeUserSet.values());
       if (activeIds.length) {
@@ -1165,6 +1271,7 @@ wauTrendWeekly12 = weeklyWau;
           }
         }
 
+        founderSetActiveGlobal = founderSetActive;
         founding.usage_intensity.active_founders = founderSetActive.size;
         founding.usage_intensity.active_non_founders = Math.max(0, activeIds.length - founderSetActive.size);
 
@@ -1199,6 +1306,102 @@ wauTrendWeekly12 = weeklyWau;
     } catch {
       // non-fatal
     }
+
+    // --- Phase 4.5: Founders vs Non-founders retention (week-1) + stickiness + tool adoption split
+    try {
+      // Week-1 retention split (computed earlier from 7–14d cohort)
+      founding.retention_week1_split.founders.cohort_size = week1FoundersCohortSize;
+      founding.retention_week1_split.founders.retained = week1FoundersRetained;
+      founding.retention_week1_split.founders.retention_rate = week1FoundersRetentionRate;
+
+      founding.retention_week1_split.non_founders.cohort_size = week1NonFoundersCohortSize;
+      founding.retention_week1_split.non_founders.retained = week1NonFoundersRetained;
+      founding.retention_week1_split.non_founders.retention_rate = week1NonFoundersRetentionRate;
+
+      founding.retention_week1_split.delta_founders_minus_non =
+        week1FoundersRetentionRate != null && week1NonFoundersRetentionRate != null ? week1FoundersRetentionRate - week1NonFoundersRetentionRate : null;
+
+      // WAU/MAU stickiness split (computed earlier)
+      founding.stickiness_wau_mau_split.founders.wau_7d = foundersWau7;
+      founding.stickiness_wau_mau_split.founders.mau_30d = foundersMau30;
+      founding.stickiness_wau_mau_split.founders.wau_mau = foundersStickinessWauMau;
+
+      founding.stickiness_wau_mau_split.non_founders.wau_7d = nonFoundersWau7;
+      founding.stickiness_wau_mau_split.non_founders.mau_30d = nonFoundersMau30;
+      founding.stickiness_wau_mau_split.non_founders.wau_mau = nonFoundersStickinessWauMau;
+
+      founding.stickiness_wau_mau_split.delta_founders_minus_non = stickinessDeltaFoundersMinusNon;
+
+      // Tool adoption breakdown (top tools) — Founders vs Non-founders in selected window
+      founding.tool_adoption_split.window_days = days;
+      founding.tool_adoption_split.founders_active_users = Number(founding.usage_intensity.active_founders || 0);
+      founding.tool_adoption_split.non_founders_active_users = Number(founding.usage_intensity.active_non_founders || 0);
+
+      const fDen = founding.tool_adoption_split.founders_active_users || 0;
+      const nfDen = founding.tool_adoption_split.non_founders_active_users || 0;
+
+      const splitAgg: Record<
+        string,
+        { founders_users: Set<string>; non_users: Set<string>; founders_events: number; non_events: number }
+      > = {};
+
+      const ensure = (tool: string) => {
+        if (!splitAgg[tool]) splitAgg[tool] = { founders_users: new Set<string>(), non_users: new Set<string>(), founders_events: 0, non_events: 0 };
+        return splitAgg[tool];
+      };
+
+      for (const e of evs) {
+        const uid = e?.user_id ? String(e.user_id) : null;
+        if (!uid) continue;
+        const tool = String(e?.tool || 'unknown');
+        const row = ensure(tool);
+        const isFounder = founderSetActiveGlobal.has(uid);
+        if (isFounder) {
+          row.founders_events += 1;
+          row.founders_users.add(uid);
+        } else {
+          row.non_events += 1;
+          row.non_users.add(uid);
+        }
+      }
+
+      const rows = Object.entries(splitAgg).map(([tool, v]) => {
+        const fUsers = v.founders_users.size;
+        const nfUsers = v.non_users.size;
+        const fRate = fDen > 0 ? fUsers / fDen : null;
+        const nfRate = nfDen > 0 ? nfUsers / nfDen : null;
+        const delta = fRate != null && nfRate != null ? fRate - nfRate : null;
+        return {
+          tool,
+          founders: { unique_users: fUsers, events: v.founders_events, adoption_rate: fRate },
+          non_founders: { unique_users: nfUsers, events: v.non_events, adoption_rate: nfRate },
+          delta_adoption_rate: delta,
+        };
+      });
+
+      const topFounders = rows
+        .slice()
+        .sort((a, b) => (Number(b?.founders?.adoption_rate || 0) - Number(a?.founders?.adoption_rate || 0)))
+        .slice(0, 6);
+
+      const topNon = rows
+        .slice()
+        .sort((a, b) => (Number(b?.non_founders?.adoption_rate || 0) - Number(a?.non_founders?.adoption_rate || 0)))
+        .slice(0, 6);
+
+      const topDelta = rows
+        .slice()
+        .filter((r) => r.delta_adoption_rate != null)
+        .sort((a, b) => Math.abs(Number(b.delta_adoption_rate)) - Math.abs(Number(a.delta_adoption_rate)))
+        .slice(0, 8);
+
+      founding.tool_adoption_split.top_tools_founders = topFounders;
+      founding.tool_adoption_split.top_tools_non_founders = topNon;
+      founding.tool_adoption_split.top_delta = topDelta;
+    } catch {
+      // non-fatal
+    }
+
 
 const toolRows = Object.entries(toolAgg).map(([tool, v]) => ({
       tool,

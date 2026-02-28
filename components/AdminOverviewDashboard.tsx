@@ -276,6 +276,64 @@ export default function AdminOverviewDashboard({ onGoUsers, onGoLeads }: { onGoU
           <div className="mt-2 text-[11px] text-white/50">Computed from ai_usage_events in selected window.</div>
         </div>
       </div>
+      {/* Phase 4.5 — Founding Intelligence (Retention / Stickiness / Adoption) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+          <div className="text-sm opacity-80">Week-1 Retention (Founders vs Non)</div>
+          <div className="mt-2 space-y-1">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-white/70">Founders</span>
+              <span className="text-white font-semibold">{pct(founding?.retention_week1_split?.founders?.retention_rate, 0)}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-white/70">Non-founders</span>
+              <span className="text-white font-semibold">{pct(founding?.retention_week1_split?.non_founders?.retention_rate, 0)}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-white/70">Delta (F − NF)</span>
+              <span className="text-white font-semibold">{pct(founding?.retention_week1_split?.delta_founders_minus_non, 0)}</span>
+            </div>
+          </div>
+          <div className="mt-2 text-[11px] text-white/50">Cohort: users created 7–14 days ago.</div>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+          <div className="text-sm opacity-80">Stickiness (WAU / MAU)</div>
+          <div className="mt-2 space-y-1">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-white/70">Founders</span>
+              <span className="text-white font-semibold">{pct(founding?.stickiness_wau_mau_split?.founders?.wau_mau, 0)}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-white/70">Non-founders</span>
+              <span className="text-white font-semibold">{pct(founding?.stickiness_wau_mau_split?.non_founders?.wau_mau, 0)}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-white/70">Delta (F − NF)</span>
+              <span className="text-white font-semibold">{pct(founding?.stickiness_wau_mau_split?.delta_founders_minus_non, 0)}</span>
+            </div>
+          </div>
+          <div className="mt-2 text-[11px] text-white/50">WAU=7d active, MAU=30d active.</div>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+          <div className="text-sm opacity-80">Founder Tool Adoption (Delta)</div>
+          <div className="mt-3 space-y-2">
+            {((founding?.tool_adoption_split?.top_delta || []) as any[]).slice(0, 5).map((r: any) => (
+              <div key={String(r?.tool)} className="flex items-center justify-between text-sm">
+                <span className="text-white/70 truncate">{String(r?.tool || '—')}</span>
+                <span className="text-white font-semibold">{pct(r?.delta_adoption_rate, 0)}</span>
+              </div>
+            ))}
+            {(!founding?.tool_adoption_split?.top_delta || (founding.tool_adoption_split.top_delta as any[]).length === 0) && (
+              <div className="text-sm text-white/60">—</div>
+            )}
+          </div>
+          <div className="mt-2 text-[11px] text-white/50">Delta = Founder adoption − Non-founder adoption (selected window).</div>
+        </div>
+      </div>
+
+
 
 
 {selectedFailure && (
