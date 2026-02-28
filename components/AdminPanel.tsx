@@ -6,6 +6,7 @@ import AdminUsersPage from './AdminUsersPage';
 import AdminLeadsPage from './AdminLeadsPage';
 import AdminStripeReadinessPanel from './AdminStripeReadinessPanel';
 import AdminTestimonialsPage from './AdminTestimonialsPage';
+import AdminFeedbackInboxPage from './AdminFeedbackInboxPage';
 import AdminSettingsModal from './AdminSettingsModal';
 import AdminMetricDictionaryModal from './AdminMetricDictionaryModal';
 import {
@@ -123,6 +124,13 @@ export default function AdminPanel({ user }: { user: User }) {
                 className={`px-3 py-1.5 rounded-full text-sm transition ${tab === 'testimonials' ? 'bg-white/10 text-white' : 'text-white/70 hover:text-white'}`}
               >
                 Testimonials
+              </button>
+              <button
+                type="button"
+                onClick={() => setTab('founder_inbox')}
+                className={`px-3 py-1.5 rounded-full text-sm transition ${tab === 'founder_inbox' ? 'bg-white/10 text-white' : 'text-white/70 hover:text-white'}`}
+              >
+                Founder Inbox
               </button>
             </div>
 
