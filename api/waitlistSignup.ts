@@ -116,6 +116,16 @@ export default async function handler(req: any, res: any) {
   const emailRaw = typeof body?.email === 'string' ? body.email : '';
   const email = normalizeEmail(emailRaw);
 
+  if (!email || !isValidEmail(email)) {
+    return json(res, 400, {
+      ok: false,
+      error_code: 'INVALID_EMAIL',
+      message: 'Please enter a valid email address.',
+      retryable: false,
+    });
+  }
+
+
   const isFounding = Boolean(body?.founding_circle || body?.meta?.founding_circle);
 
   // Attribution (Phase 8 segmentation)
