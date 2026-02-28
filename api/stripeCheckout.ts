@@ -159,11 +159,15 @@ export default async function handler(req: any, res: any) {
   params.set('metadata[founding_member]', foundingMember ? 'true' : 'false');
   if (foundingJoinedAt) params.set('metadata[founding_joined_at]', foundingJoinedAt);
   if (foundingSource) params.set('metadata[founding_source]', foundingSource);
+  // Include founding bucket to enforce ADMC vs Reserve allocation in webhook.
+  const foundingBucket = profile?.founding_bucket ? String(profile.founding_bucket) : inferBucketFromProfile(profile);
+  if (foundingBucket) params.set('metadata[founding_bucket]', foundingBucket);
   if (pricingLockKey) {
-    params.set('metadata[pricing_lock]', 'true');
+    // Store the locked founder price explicitly for future-proofing.
+    params.set('metadata[pricing_lock]', '29.95');
     params.set('metadata[pricing_lock_key]', pricingLockKey);
   } else {
-    params.set('metadata[pricing_lock]', founderLocked ? 'true' : 'false');
+    params.set('metadata[pricing_lock]', founderLocked ? '29.95' : 'false');
     if (founderLocked) params.set('metadata[pricing_lock_key]', 'founding_pro_admc_2026');
   }
 

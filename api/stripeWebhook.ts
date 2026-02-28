@@ -12,12 +12,60 @@
 //   immediately via Stripe API (best-effort), and logs the condition.
 
 import { createClient } from '@supabase/supabase-js';
+import crypto from 'node:crypto';
 
 export const config = {
   api: {
-    bodyParser: true,
+    // Required for Stripe signature verification.
+    bodyParser: false,
   },
 };
+
+async function readRawBody(req: any): Promise<Buffer> {
+  return await new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    req.on('data', (c: any) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+
+function timingSafeEqual(a: string, b: string): boolean {
+  try {
+    const ab = Buffer.from(a, 'hex');
+    const bb = Buffer.from(b, 'hex');
+    if (ab.length !== bb.length) return false;
+    return crypto.timingSafeEqual(ab, bb);
+  } catch {
+    return false;
+  }
+}
+
+function verifyStripeSignature(rawBody: Buffer, signatureHeader: string, secret: string): { ok: boolean; reason?: string } {
+  if (!signatureHeader) return { ok: false, reason: 'missing_signature_header' };
+
+  // Stripe-Signature: t=...,v1=...,v1=...
+  const parts = signatureHeader.split(',').map((p) => p.trim());
+  const tPart = parts.find((p) => p.startsWith('t='));
+  const v1Parts = parts.filter((p) => p.startsWith('v1='));
+  if (!tPart || v1Parts.length === 0) return { ok: false, reason: 'invalid_signature_header' };
+
+  const timestamp = Number(tPart.slice(2));
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return { ok: false, reason: 'invalid_timestamp' };
+
+  // Tolerance: 5 minutes
+  const now = Math.floor(Date.now() / 1000);
+  if (Math.abs(now - timestamp) > 300) return { ok: false, reason: 'timestamp_out_of_tolerance' };
+
+  const signedPayload = `${timestamp}.${rawBody.toString('utf8')}`;
+  const expected = crypto.createHmac('sha256', secret).update(signedPayload, 'utf8').digest('hex');
+
+  for (const p of v1Parts) {
+    const sig = p.slice(3);
+    if (timingSafeEqual(expected, sig)) return { ok: true };
+  }
+  return { ok: false, reason: 'signature_mismatch' };
+}
 
 function getEnv(name: string): string | null {
   const v = process.env[name];
@@ -32,8 +80,9 @@ function getAdminClient() {
 }
 
 function isFounderPricing(meta: any): boolean {
-  const v = String(meta?.pricing_lock || meta?.founding_member || '').toLowerCase();
-  return v === 'true' || v === '1' || v === 'yes';
+  // Founders are indicated by either founding_member=true OR a pricing_lock value.
+  const v = String(meta?.pricing_lock ?? meta?.founding_member ?? '').toLowerCase();
+  return v === 'true' || v === '1' || v === 'yes' || v === '29.95' || v === '2995';
 }
 
 function normalizeBucket(meta: any): 'admc_2026' | 'reserve_2026' {
@@ -78,7 +127,15 @@ export default async function handler(req: any, res: any) {
 
   try {
     const sig = String(req?.headers?.['stripe-signature'] || '').trim();
-    const event = req?.body || {};
+
+    const rawBody = await readRawBody(req);
+    const verified = verifyStripeSignature(rawBody, sig, webhookSecret);
+    if (!verified.ok) {
+      // Invalid webhook: reject (Stripe will retry).
+      return res.status(400).json({ ok: false, error: 'Invalid Stripe signature', reason: verified.reason });
+    }
+
+    const event = JSON.parse(rawBody.toString('utf8') || '{}');
     const type = String(event?.type || '');
     const obj = (event?.data?.object || {}) as any;
     const meta = (obj?.metadata || {}) as any;
@@ -139,6 +196,48 @@ export default async function handler(req: any, res: any) {
         reason,
         subscriptionCanceled: Boolean(cancel?.ok),
       });
+    }
+
+    // Best-effort user sync + hard lock pricing tier marker.
+    // Note: DB trigger `maw_enforce_pricing_lock` prevents pricing_lock from being unset.
+    try {
+      if (type === 'checkout.session.completed') {
+        const customerId = String(obj?.customer || '').trim();
+        const subscriptionId = String(obj?.subscription || '').trim();
+        await admin
+          .from('users')
+          .update({
+            stripe_customer_id: customerId || null,
+            stripe_subscription_id: subscriptionId || null,
+            pricing_lock: '29.95',
+            founding_circle_member: true,
+            founding_bucket: desiredBucket,
+          })
+          .eq('id', userId);
+      }
+
+      if (type === 'customer.subscription.created' || type === 'customer.subscription.updated') {
+        const subscriptionId = String(obj?.id || '').trim();
+        const status = String(obj?.status || '').trim();
+        const priceId = String(obj?.items?.data?.[0]?.price?.id || '').trim();
+        const periodEnd = obj?.current_period_end ? new Date(Number(obj.current_period_end) * 1000).toISOString() : null;
+
+        const patch: any = {
+          stripe_subscription_id: subscriptionId || null,
+          stripe_price_id: priceId || null,
+          stripe_status: status || null,
+          stripe_current_period_end: periodEnd,
+        };
+
+        // Only grant membership upgrades; never auto-downgrade founders.
+        if (status === 'active' || status === 'trialing') {
+          patch.membership = 'professional';
+        }
+
+        await admin.from('users').update(patch).eq('id', userId);
+      }
+    } catch (e) {
+      console.warn('[stripeWebhook] best-effort user sync failed', String((e as any)?.message || e || ''));
     }
 
     return res.status(200).json({
