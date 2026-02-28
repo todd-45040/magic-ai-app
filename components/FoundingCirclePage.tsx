@@ -5,6 +5,24 @@ import { StarIcon, LockIcon, CheckIcon, UsersIcon } from './icons';
 
 const PRICING_LOCK = 'founding_pro_admc_2026';
 
+
+function getAttributionFromUrl(): { raw: string; bucket: 'admc' | 'reddit' | 'organic' | 'other' } {
+  try {
+    const params = new URLSearchParams(window.location.search || '');
+    const raw = (params.get('src') || params.get('utm_source') || params.get('source') || '').trim().slice(0, 120);
+    const s = raw.toLowerCase();
+    let bucket: 'admc' | 'reddit' | 'organic' | 'other' = 'organic';
+    if (!s) bucket = 'organic';
+    else if (s.includes('admc') || s.includes('convention') || s.includes('booth') || s.includes('table')) bucket = 'admc';
+    else if (s.includes('reddit')) bucket = 'reddit';
+    else if (s.includes('organic') || s.includes('direct') || s.includes('site') || s.includes('web')) bucket = 'organic';
+    else bucket = 'other';
+    return { raw, bucket };
+  } catch {
+    return { raw: '', bucket: 'organic' };
+  }
+}
+
 async function getAccessToken(): Promise<string | null> {
   try {
     const { data } = await supabase.auth.getSession();
@@ -80,16 +98,22 @@ export default function FoundingCirclePage(props: { user: User | null; onBack: (
       const token = await getAccessToken();
       const finalEmail = (prefillEmail || email).trim();
 
+      const attribution = getAttributionFromUrl();
+
       const payload = {
         name: (name || '').trim() || null,
         email: finalEmail,
-        source: 'FOUNDING_CIRCLE',
+        source: attribution.bucket,
         meta: {
           founding_circle: true,
+          attribution_raw: attribution.raw,
+          source_bucket: attribution.bucket,
           pricing_lock: PRICING_LOCK,
           joined_from: 'founding-circle-page',
         },
         founding_circle: true,
+          attribution_raw: attribution.raw,
+          source_bucket: attribution.bucket,
         pricing_lock: PRICING_LOCK,
         founding_source: 'ADMC_2026',
       };

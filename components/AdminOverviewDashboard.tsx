@@ -363,6 +363,67 @@ export default function AdminOverviewDashboard({ onGoUsers, onGoLeads }: { onGoU
 
 
 
+
+      {/* Phase 8 — Segmentation Intelligence (ADMC vs Organic vs Reddit) */}
+      <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4">
+        <div className="flex items-center justify-between">
+          <div className="text-sm opacity-80">Founder Sources (Segmentation)</div>
+          <div className="text-[11px] text-white/50">Window: {days}d</div>
+        </div>
+
+        <div className="mt-3 grid grid-cols-1 md:grid-cols-4 gap-3">
+          {(((founding as any)?.segmentation?.engagement_by_source || []) as any[]).map((r: any) => {
+            const src = String(r?.source || 'other').toUpperCase();
+            const total = Number((founding as any)?.segmentation?.founders_total_by_source?.[String(r?.source)] || 0) || 0;
+            const joined = Number((founding as any)?.segmentation?.founders_joined_by_source?.[String(r?.source)] || 0) || 0;
+            return (
+              <div key={String(r?.source)} className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-semibold text-white">{src}</div>
+                  <div className="text-[11px] text-white/50">{total} founders</div>
+                </div>
+
+                <div className="mt-2 space-y-1 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-white/70">Joined ({days}d)</span>
+                    <span className="text-white font-semibold">{joined}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-white/70">Active</span>
+                    <span className="text-white font-semibold">{Number(r?.active_founders || 0)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-white/70">$/Active</span>
+                    <span className="text-white font-semibold">{money(r?.cost_per_active_founder)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-white/70">Waitlist → Founder</span>
+                    <span className="text-white font-semibold">{pct(r?.waitlist?.waitlist_to_founder_rate, 0)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-white/70">Lead → User</span>
+                    <span className="text-white font-semibold">{pct(r?.founding_leads?.lead_to_user_rate, 0)}</span>
+                  </div>
+                </div>
+
+                <div className="mt-2 text-[11px] text-white/50 truncate">
+                  Top tools: {((r?.top_tools_by_cost || []) as any[]).slice(0, 3).map((t: any) => String(t?.tool || '')).filter(Boolean).join(', ') || '—'}
+                </div>
+              </div>
+            );
+          })}
+
+          {(!((founding as any)?.segmentation?.engagement_by_source) || ((founding as any).segmentation.engagement_by_source as any[]).length === 0) && (
+            <div className="text-sm text-white/60">No segmentation data yet.</div>
+          )}
+        </div>
+
+        <div className="mt-2 text-[11px] text-white/50">
+          Sources derived from founding_source / source fields (normalized to ADMC, Reddit, Organic, Other).
+        </div>
+      </div>
+
+
 {selectedFailure && (
   <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
     <div className="w-full max-w-2xl rounded-2xl border border-white/10 bg-[#0b0f1a] shadow-xl">

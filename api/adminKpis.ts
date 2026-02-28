@@ -10,6 +10,16 @@ function asDays(raw: any, fallback: AllowedWindowDays = 7): AllowedWindowDays {
   return (ALLOWED_WINDOWS as readonly number[]).includes(v) ? (v as AllowedWindowDays) : fallback;
 }
 
+
+function normalizeAttributionSource(raw: any): 'admc' | 'reddit' | 'organic' | 'other' {
+  const s = String(raw || '').trim().toLowerCase();
+  if (!s) return 'organic';
+  if (s.includes('admc') || s.includes('another-darn-magic') || s.includes('convention') || s.includes('booth') || s.includes('table')) return 'admc';
+  if (s.includes('reddit')) return 'reddit';
+  if (s.includes('organic') || s.includes('direct') || s.includes('site') || s.includes('web')) return 'organic';
+  return 'other';
+}
+
 function isoDaysAgo(days: number): string {
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 }
@@ -1442,6 +1452,179 @@ wauTrendWeekly12 = weeklyWau;
     } catch {
       // non-fatal
     }
+
+
+    // --- Phase 8: Segmentation intelligence (ADMC vs Organic vs Reddit + conversion + engagement by source)
+    try {
+      const segments: Array<'admc' | 'reddit' | 'organic' | 'other'> = ['admc', 'reddit', 'organic', 'other'];
+
+      // 1) Founders by source (total + joined in window)
+      const { data: founderUsers, error: fErr } = await admin
+        .from('users')
+        .select('id, email, founding_source, founding_joined_at, founding_circle_member')
+        .eq('founding_circle_member', true)
+        .limit(50000);
+
+      if (!fErr) {
+        const founderById = new Map<string, { source: typeof segments[number] }>();
+        const foundersTotalBySource: Record<string, number> = {};
+        const foundersJoinedBySource: Record<string, number> = {};
+        for (const s of segments) { foundersTotalBySource[s] = 0; foundersJoinedBySource[s] = 0; }
+
+        const windowStartIso = new Date(Date.now() - Number(days) * 24 * 60 * 60 * 1000).toISOString();
+
+        for (const u of (founderUsers || []) as any[]) {
+          const id = u?.id ? String(u.id) : null;
+          if (!id) continue;
+          const seg = normalizeAttributionSource(u?.founding_source);
+          foundersTotalBySource[seg] = (foundersTotalBySource[seg] || 0) + 1;
+          const joinedAt = u?.founding_joined_at ? String(u.founding_joined_at) : null;
+          if (joinedAt && joinedAt >= windowStartIso) foundersJoinedBySource[seg] = (foundersJoinedBySource[seg] || 0) + 1;
+          founderById.set(id, { source: seg });
+        }
+
+        // 2) Founder engagement by source (active founders + cost/events + top tools) over selected window
+        const foundersActiveUsersBySource: Record<string, Set<string>> = {};
+        const foundersCostBySource: Record<string, number> = {};
+        const foundersEventsBySource: Record<string, number> = {};
+        const foundersToolsBySource: Record<string, Record<string, { events: number; cost: number; users: Set<string> }>> = {};
+
+        for (const s of segments) {
+          foundersActiveUsersBySource[s] = new Set<string>();
+          foundersCostBySource[s] = 0;
+          foundersEventsBySource[s] = 0;
+          foundersToolsBySource[s] = {};
+        }
+
+        const sinceIso = new Date(Date.now() - Number(days) * 24 * 60 * 60 * 1000).toISOString();
+        const { data: founderEvents, error: fevErr } = await admin
+          .from('ai_usage_events')
+          .select('user_id, tool_name, estimated_cost_usd')
+          .gte('created_at', sinceIso)
+          .limit(100000);
+
+        if (!fevErr) {
+          for (const ev of (founderEvents || []) as any[]) {
+            const uid = ev?.user_id ? String(ev.user_id) : null;
+            if (!uid) continue;
+            const meta = founderById.get(uid);
+            if (!meta) continue; // only founders
+            const seg = meta.source;
+            const cost = Number(ev?.estimated_cost_usd || 0) || 0;
+            const tool = String(ev?.tool_name || 'unknown');
+            foundersActiveUsersBySource[seg].add(uid);
+            foundersCostBySource[seg] += cost;
+            foundersEventsBySource[seg] += 1;
+
+            const bucket = foundersToolsBySource[seg][tool] || { events: 0, cost: 0, users: new Set<string>() };
+            bucket.events += 1;
+            bucket.cost += cost;
+            bucket.users.add(uid);
+            foundersToolsBySource[seg][tool] = bucket;
+          }
+        }
+
+        // 3) Convention conversion % (waitlist source → founder)
+        // We compute: (unique waitlist emails with matching founder user email) / (unique waitlist emails) for each segment.
+        const conversionBySource: Record<string, { waitlist_signups: number; matched_founders: number; waitlist_to_founder_rate: number | null }> = {};
+        for (const s of segments) conversionBySource[s] = { waitlist_signups: 0, matched_founders: 0, waitlist_to_founder_rate: null };
+
+        const { data: wlRows, error: wlErr } = await admin
+          .from('maw_waitlist_signups')
+          .select('email_lower, source, created_at')
+          .gte('created_at', sinceIso)
+          .limit(50000);
+
+        if (!wlErr) {
+          const wlBySourceEmails: Record<string, Set<string>> = {};
+          for (const s of segments) wlBySourceEmails[s] = new Set<string>();
+          for (const r of (wlRows || []) as any[]) {
+            const em = r?.email_lower ? String(r.email_lower) : null;
+            if (!em) continue;
+            const seg = normalizeAttributionSource(r?.source);
+            wlBySourceEmails[seg].add(em);
+          }
+          // build founder email set
+          const founderEmailSetBySource: Record<string, Set<string>> = {};
+          for (const s of segments) founderEmailSetBySource[s] = new Set<string>();
+          for (const u of (founderUsers || []) as any[]) {
+            const email = u?.email ? String(u.email).trim().toLowerCase() : null;
+            if (!email) continue;
+            const seg = normalizeAttributionSource(u?.founding_source);
+            founderEmailSetBySource[seg].add(email);
+          }
+
+          for (const s of segments) {
+            const total = wlBySourceEmails[s].size;
+            const matched = Array.from(wlBySourceEmails[s]).filter((em) => founderEmailSetBySource[s].has(em)).length;
+            conversionBySource[s] = {
+              waitlist_signups: total,
+              matched_founders: matched,
+              waitlist_to_founder_rate: total > 0 ? Math.round((matched / total) * 10000) / 100 : null,
+            };
+          }
+        }
+
+        // 4) Founding leads conversion by source (signed-out join funnel quality)
+        const leadsConversionBySource: Record<string, { leads: number; converted: number; lead_to_user_rate: number | null }> = {};
+        for (const s of segments) leadsConversionBySource[s] = { leads: 0, converted: 0, lead_to_user_rate: null };
+        const { data: leadRows, error: lErr } = await admin
+          .from('maw_founding_circle_leads')
+          .select('source, converted_to_user, created_at')
+          .gte('created_at', sinceIso)
+          .limit(50000);
+        if (!lErr) {
+          for (const r of (leadRows || []) as any[]) {
+            const seg = normalizeAttributionSource(r?.source);
+            leadsConversionBySource[seg].leads += 1;
+            if (r?.converted_to_user) leadsConversionBySource[seg].converted += 1;
+          }
+          for (const s of segments) {
+            const total = leadsConversionBySource[s].leads;
+            const conv = leadsConversionBySource[s].converted;
+            leadsConversionBySource[s].lead_to_user_rate = total > 0 ? Math.round((conv / total) * 10000) / 100 : null;
+          }
+        }
+
+        // finalize top tools per source (founders)
+        const topToolsBySource: Record<string, any[]> = {};
+        for (const s of segments) {
+          const rows = Object.entries(foundersToolsBySource[s] || {}).map(([tool, v]) => ({
+            tool,
+            events: v.events,
+            unique_users: v.users.size,
+            cost_usd: Math.round(Number(v.cost || 0) * 100) / 100,
+          }));
+          topToolsBySource[s] = rows.slice().sort((a, b) => (b.cost_usd - a.cost_usd)).slice(0, 5);
+        }
+
+        founding.segmentation = {
+          window_days: days,
+          sources: segments,
+          founders_total_by_source: foundersTotalBySource,
+          founders_joined_by_source: foundersJoinedBySource,
+          engagement_by_source: segments.map((s) => {
+            const active = foundersActiveUsersBySource[s].size;
+            const cost = Math.round(Number(foundersCostBySource[s] || 0) * 100) / 100;
+            const events = foundersEventsBySource[s] || 0;
+            return {
+              source: s,
+              active_founders: active,
+              total_cost_usd: cost,
+              total_events: events,
+              cost_per_active_founder: active > 0 ? Math.round((cost / active) * 100) / 100 : null,
+              events_per_active_founder: active > 0 ? Math.round((events / active) * 100) / 100 : null,
+              top_tools_by_cost: topToolsBySource[s] || [],
+              waitlist: conversionBySource[s],
+              founding_leads: leadsConversionBySource[s],
+            };
+          }),
+        };
+      }
+    } catch {
+      // non-fatal
+    }
+
 
 
 const toolRows = Object.entries(toolAgg).map(([tool, v]) => ({

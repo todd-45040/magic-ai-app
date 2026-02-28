@@ -5,6 +5,32 @@ import { isPreviewEnv } from './ai/_lib/hardening.js';
 import { sendMail, isMailerConfigured } from './_lib/mailer.js';
 import { renderFoundingEmail } from './_lib/foundingCircleEmailTemplates.js';
 
+
+function normalizeAttributionSource(raw: any): 'admc' | 'reddit' | 'organic' | 'other' {
+  const s = String(raw || '').trim().toLowerCase();
+  if (!s) return 'organic';
+  if (s.includes('admc') || s.includes('another-darn-magic') || s.includes('convention') || s.includes('booth') || s.includes('table')) return 'admc';
+  if (s.includes('reddit')) return 'reddit';
+  if (s.includes('organic') || s.includes('direct') || s.includes('site') || s.includes('web')) return 'organic';
+  return 'other';
+}
+
+function pickAttributionRaw(req: any, body: any): string {
+  const q = (req as any)?.query || {};
+  const candidates = [
+    body?.source,
+    body?.founding_source,
+    body?.meta?.utm_source,
+    q?.src,
+    q?.source,
+    q?.utm_source,
+  ];
+  for (const c of candidates) {
+    const v = typeof c === 'string' ? c.trim() : '';
+    if (v) return v.slice(0, 120);
+  }
+  return '';
+}
 function json(res: any, status: number, body: any, headers?: Record<string, string>) {
   if (headers) {
     for (const [k, v] of Object.entries(headers)) res.setHeader(k, v);
@@ -91,15 +117,20 @@ export default async function handler(req: any, res: any) {
   const email = normalizeEmail(emailRaw);
 
   const isFounding = Boolean(body?.founding_circle || body?.meta?.founding_circle);
-  const foundingSource = typeof body?.founding_source === 'string' ? body.founding_source.trim().slice(0, 80) : 'ADMC_2026';
+  const foundingSource = typeof body?.founding_source === 'string' ? body.founding_source.trim().slice(0, 80) : (source ? String(source) : 'organic');
   const pricingLock = typeof body?.pricing_lock === 'string' ? body.pricing_lock.trim().slice(0, 80) : (isFounding ? 'founding_pro_admc_2026' : null);
 
   if (!email || !isValidEmail(email)) {
     return json(res, 400, { ok: false, error_code: 'INVALID_EMAIL', message: 'Please provide a valid email.' });
   }
 
-  const source = typeof body?.source === 'string' ? body.source.trim().slice(0, 80) : 'unknown';
+  const attributionRaw = pickAttributionRaw(req, body);
+  const source = normalizeAttributionSource(attributionRaw || (typeof body?.source === 'string' ? body.source : ''));
   const meta = body?.meta ?? null;
+  if (meta && typeof meta === 'object') {
+    (meta as any).attribution_raw = attributionRaw || (meta as any).attribution_raw || null;
+    (meta as any).source_bucket = source;
+  }
 
   const ua = String(req?.headers?.['user-agent'] || '').slice(0, 500);
 
