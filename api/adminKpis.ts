@@ -492,6 +492,52 @@ if (!cls.isSuccess && recentFailures.length < 25) {
       topSpendersTrend30d = [];
     }
 
+    // Phase 6.5: Top daily spenders alert (last 24h)
+    let topDailySpenders: { user_id: string; email: string | null; total_cost_usd_24h: number; events: number; tools: string[] }[] = [];
+    try {
+      const since24Iso = isoDaysAgo(1);
+      const { data: ev24, error: ev24Err } = await admin
+        .from('ai_usage_events')
+        .select('user_id,tool,estimated_cost_usd,occurred_at')
+        .gte('occurred_at', since24Iso)
+        .order('occurred_at', { ascending: false })
+        .limit(200000);
+
+      if (!ev24Err) {
+        const agg: Record<string, { cost: number; events: number; tools: Set<string> }> = {};
+        for (const e of (ev24 || []) as any[]) {
+          const uid = e?.user_id ? String(e.user_id) : null;
+          if (!uid) continue;
+          if (!agg[uid]) agg[uid] = { cost: 0, events: 0, tools: new Set<string>() };
+          const c = Number(e?.estimated_cost_usd || 0);
+          agg[uid].cost += Number.isFinite(c) ? c : 0;
+          agg[uid].events += 1;
+          const tool = String(e?.tool || 'unknown');
+          if (tool) agg[uid].tools.add(tool);
+        }
+
+        const rows = Object.entries(agg)
+          .map(([user_id, v]) => ({ user_id, total_cost_usd_24h: v.cost, events: v.events, tools: Array.from(v.tools) }))
+          .sort((a, b) => (b.total_cost_usd_24h || 0) - (a.total_cost_usd_24h || 0))
+          .slice(0, 5);
+
+        const ids = rows.map((r) => r.user_id);
+        const emailMap = new Map<string, string>();
+        if (ids.length) {
+          const { data: ur, error: urErr } = await admin.from('users').select('id,email').in('id', ids).limit(50000);
+          if (!urErr) {
+            for (const u of (ur || []) as any[]) {
+              if (u?.id && u?.email) emailMap.set(String(u.id), String(u.email));
+            }
+          }
+        }
+
+        topDailySpenders = rows.map((r) => ({ ...r, email: emailMap.get(r.user_id) || null }));
+      }
+    } catch (e) {
+      topDailySpenders = [];
+    }
+
     // Cost anomalies (richer rules)
     let costAnomalies: any[] = [];
     try {
@@ -1454,6 +1500,9 @@ const provider_breakdown = Object.entries(providerReliability)
         optionsDays: ALLOWED_WINDOWS,
       },
       warnings,
+      alerts: {
+        top_daily_spenders_24h: topDailySpenders,
+      },
       definitions: {
         active_user: `Unique users with ≥1 ai_usage_event in the selected window`,
         activated_user: `New users with first core-tool use within 24h of signup`,

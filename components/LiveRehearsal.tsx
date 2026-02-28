@@ -134,6 +134,34 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
     const [takes, setTakes] = useState<Take[]>([]);
     const [selectedTake, setSelectedTake] = useState<number>(0);
 
+    // Phase 6.5: show daily live rehearsal remaining (server-backed when available)
+    const [dailyLive, setDailyLive] = useState<{ used: number; limit: number; remaining: number; source: 'server' | 'local' } | null>(null);
+    const dailyLiveStartRemainingRef = useRef<number | null>(null);
+
+    const refreshDailyLive = async () => {
+        try {
+            const s = await fetchUsageStatus();
+            const daily = (s as any)?.quota?.live_audio_minutes?.daily;
+            if ((s as any)?.ok && daily && Number(daily.limit ?? 0) > 0) {
+                setDailyLive({ used: Number(daily.used ?? 0), limit: Number(daily.limit ?? 0), remaining: Number(daily.remaining ?? 0), source: 'server' });
+                return;
+            }
+        } catch {
+            // ignore
+        }
+        try {
+            const cur = getUsage(user, 'live_minutes');
+            setDailyLive({ used: Number(cur.used ?? 0), limit: Number(cur.limit ?? 0), remaining: Number(cur.remaining ?? 0), source: 'local' });
+        } catch {
+            // ignore
+        }
+    };
+
+    useEffect(() => {
+        void refreshDailyLive();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     // Keep refs in sync so we can persist draft reliably even during rapid state transitions
     const sessionIdeaIdRef = useRef<string | null>(null);
     const sessionTitleRef = useRef<string>('');
@@ -339,7 +367,13 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         // Server-backed cap for live rehearsal minutes (daily), consistent across devices.
         try {
             const s = await fetchUsageStatus();
-            if (s?.ok && s.liveLimit != null && s.liveRemaining != null && s.liveLimit > 0 && s.liveRemaining <= 0) {
+            const daily = (s as any)?.quota?.live_audio_minutes?.daily;
+            if ((s as any)?.ok && daily && Number(daily.limit ?? 0) > 0) {
+                setDailyLive({ used: Number(daily.used ?? 0), limit: Number(daily.limit ?? 0), remaining: Number(daily.remaining ?? 0), source: 'server' });
+                dailyLiveStartRemainingRef.current = Number(daily.remaining ?? 0);
+            }
+
+            if ((s as any)?.ok && daily && Number(daily.limit ?? 0) > 0 && Number(daily.remaining ?? 0) <= 0) {
                 setBlockedUx(
                     normalizeBlockedUx(
                         { error_code: 'QUOTA_EXCEEDED', message: 'Live rehearsal minutes limit reached.', status: 429, retryable: false },
@@ -348,7 +382,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 );
                 setStatus('error');
                 setErrorMessage(
-                    `Daily live rehearsal minutes limit reached (${Number(s.liveUsed ?? 0)}/${Number(s.liveLimit ?? 0)} min). This is separate from the AI message limit. Upgrade to continue.`
+                    `Daily live rehearsal minutes limit reached (${Number(daily.used ?? 0)}/${Number(daily.limit ?? 0)} min). This is separate from the AI message limit. Upgrade to continue.`
                 );
                 return;
             }
@@ -356,6 +390,8 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             // If server usage is unavailable, fall back to the existing local tracker.
             try {
                 const cur = getUsage(user, 'live_minutes');
+                setDailyLive({ used: Number(cur.used ?? 0), limit: Number(cur.limit ?? 0), remaining: Number(cur.remaining ?? 0), source: 'local' });
+                dailyLiveStartRemainingRef.current = Number(cur.remaining ?? 0);
                 if (cur.limit > 0 && cur.remaining <= 0) {
                     setBlockedUx(
                         normalizeBlockedUx(
@@ -501,9 +537,9 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                             const start = sessionStartRef.current;
                             if (!start) return;
                             const elapsedMin = (Date.now() - start) / 60000;
-                            const cur2 = getUsage(user, 'live_minutes');
-                            // When elapsed session time reaches remaining daily minutes, stop.
-                            if (cur2.limit > 0 && elapsedMin >= cur2.remaining) {
+                            const startRemaining = dailyLiveStartRemainingRef.current;
+                            // When elapsed session time reaches remaining daily minutes (at session start), stop.
+                            if (startRemaining != null && startRemaining > 0 && elapsedMin >= startRemaining) {
                                 void handleStopRehearsal('Daily live rehearsal minutes reached. Upgrade to continue.');
                             }
                         }, 5000);
@@ -776,6 +812,8 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             try {
                 const res = await consumeLiveMinutesServer(minutes);
                 emitLiveUsageUpdate(res);
+                // Refresh chip after server-side consumption
+                void refreshDailyLive();
                 if (!res.ok) {
                     // If we hit the cap, show it immediately (unified blocked UX).
                     setBlockedUx(
@@ -791,6 +829,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 // Fall back to local tracker if server is unavailable.
                 try {
                     consumeLiveMinutes(user, minutes);
+                    void refreshDailyLive();
                 } catch {
                     // ignore
                 }
@@ -917,6 +956,21 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 <div className="flex items-center gap-3">
                     <MicrophoneIcon className="w-6 h-6 text-purple-400" />
                     <h2 className="text-xl font-bold text-white">Live Rehearsal Studio</h2>
+                    {dailyLive && dailyLive.limit > 0 ? (
+                        <div
+                            title={`Daily live rehearsal minutes remaining (${dailyLive.source}).`}
+                            className={`ml-2 inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold border ${
+                                dailyLive.remaining <= 2
+                                    ? 'bg-red-900/30 border-red-600/40 text-red-200'
+                                    : dailyLive.remaining <= 5
+                                      ? 'bg-amber-900/30 border-amber-600/40 text-amber-200'
+                                      : 'bg-slate-800/60 border-slate-600/50 text-slate-200'
+                            }`}
+                        >
+                            <span className="opacity-80">Daily Remaining</span>
+                            <span className="text-white">{Math.max(0, Math.round(dailyLive.remaining))}m</span>
+                        </div>
+                    ) : null}
                 </div>
                 <button 
                     onClick={handleHeaderButtonClick} 

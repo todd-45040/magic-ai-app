@@ -214,6 +214,33 @@ export default function AdminOverviewDashboard({ onGoUsers, onGoLeads }: { onGoU
       </div>
 
 
+      {/* Phase 6.5 — Safety alert: top daily spenders (last 24h) */}
+      {Array.isArray(data?.alerts?.top_daily_spenders_24h) && data.alerts.top_daily_spenders_24h.length > 0 ? (
+        <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm text-red-100 font-semibold">Top daily spenders (last 24h)</div>
+              <div className="text-xs text-white/60 mt-1">Quick safety check so heavy usage can’t surprise you.</div>
+            </div>
+          </div>
+          <div className="mt-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+            {data.alerts.top_daily_spenders_24h.slice(0, 3).map((r: any) => (
+              <div key={r.user_id} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+                <div className="text-xs text-white/70 truncate">{r.email || r.user_id}</div>
+                <div className="mt-1 flex items-center justify-between">
+                  <div className="text-sm font-extrabold text-white">{money(r.total_cost_usd_24h, 2)}</div>
+                  <div className="text-xs text-white/60">{Number(r.events || 0)} events</div>
+                </div>
+                {Array.isArray(r.tools) && r.tools.length ? (
+                  <div className="mt-1 text-[11px] text-white/60 truncate">Tools: {r.tools.slice(0, 4).join(', ')}{r.tools.length > 4 ? '…' : ''}</div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
         <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
           <div className="text-sm opacity-80">Founding Members</div>
