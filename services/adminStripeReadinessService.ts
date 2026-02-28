@@ -8,6 +8,10 @@ async function getAccessToken(): Promise<string | null> {
 export type StripeReadinessResult = {
   ok: boolean;
   env?: Record<string, boolean>;
+  backup?: {
+    payment_link_configured: boolean;
+    payment_link_url: string | null;
+  };
   founders?: {
     founders_total: number;
     founders_with_lock: number;
@@ -16,6 +20,26 @@ export type StripeReadinessResult = {
   dryRun?: any;
   error?: string;
 };
+
+export type ManualFounderClaimResult = { ok: boolean; message?: string; error?: string };
+
+export async function manualFounderClaim(email: string): Promise<ManualFounderClaimResult> {
+  const token = await getAccessToken();
+  if (!token) return { ok: false, error: 'Not authenticated.' };
+
+  const r = await fetch('/api/adminManualFounderClaim', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email, founding_bucket: 'admc_2026', source: 'backup_payment_link' }),
+  });
+
+  const j = (await r.json().catch(() => ({}))) as any;
+  if (!r.ok) return { ok: false, error: j?.error || j?.message || 'Manual claim failed.' };
+  return { ok: true, message: j?.message || 'Founder claimed.' };
+}
 
 export async function fetchStripeReadiness(dryRun = false): Promise<StripeReadinessResult> {
   const token = await getAccessToken();

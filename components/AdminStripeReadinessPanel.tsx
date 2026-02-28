@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { fetchStripeReadiness, fetchStripeWebhookHealth, type StripeReadinessResult, type StripeWebhookHealthResult } from '../services/adminStripeReadinessService';
+import { fetchStripeReadiness, fetchStripeWebhookHealth, manualFounderClaim, type StripeReadinessResult, type StripeWebhookHealthResult } from '../services/adminStripeReadinessService';
 
 function Badge({ ok, label }: { ok: boolean; label: string }) {
   return (
@@ -16,6 +16,9 @@ export default function AdminStripeReadinessPanel() {
   const [loading, setLoading] = useState(false);
   const [dryRunLoading, setDryRunLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [manualEmail, setManualEmail] = useState('');
+  const [manualStatus, setManualStatus] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [manualLoading, setManualLoading] = useState(false);
 
   async function load(dryRun = false) {
     setError(null);
@@ -62,6 +65,7 @@ export default function AdminStripeReadinessPanel() {
   }, [data]);
 
   const founders = data?.founders;
+  const backup = data?.backup;
 
   const webhookStatus = useMemo(() => {
     const last = webhook?.last_event_received_at ? Date.parse(webhook.last_event_received_at) : NaN;
@@ -78,6 +82,49 @@ export default function AdminStripeReadinessPanel() {
     if (minutesAgo !== null) label = `Last webhook: ${minutesAgo} min ago`;
     return { ok, minutesAgo, label };
   }, [webhook]);
+
+  const backupLinkMasked = useMemo(() => {
+    const url = backup?.payment_link_url;
+    if (!url) return null;
+    if (url.length <= 42) return url;
+    return `${url.slice(0, 26)}…${url.slice(-12)}`;
+  }, [backup?.payment_link_url]);
+
+  async function copyBackupLink() {
+    const url = backup?.payment_link_url;
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      setManualStatus({ ok: true, msg: 'Backup link copied.' });
+      setTimeout(() => setManualStatus(null), 2500);
+    } catch {
+      setManualStatus({ ok: false, msg: 'Could not copy link (clipboard blocked).' });
+      setTimeout(() => setManualStatus(null), 3000);
+    }
+  }
+
+  async function runManualClaim() {
+    const email = manualEmail.trim().toLowerCase();
+    if (!email) {
+      setManualStatus({ ok: false, msg: 'Enter an email address first.' });
+      return;
+    }
+    setManualLoading(true);
+    setManualStatus(null);
+    try {
+      const r = await manualFounderClaim(email);
+      if (!r.ok) throw new Error(r.error || 'Manual claim failed.');
+      setManualStatus({ ok: true, msg: r.message || 'Founder claimed.' });
+      setManualEmail('');
+      // refresh counts
+      load(false);
+    } catch (e: any) {
+      setManualStatus({ ok: false, msg: e?.message || 'Manual claim failed.' });
+    } finally {
+      setManualLoading(false);
+      setTimeout(() => setManualStatus(null), 4500);
+    }
+  }
 
 
   return (
@@ -210,6 +257,67 @@ export default function AdminStripeReadinessPanel() {
             {data?.dryRun?.error ? <div className="text-sm text-rose-200">{String(data.dryRun.error)}</div> : null}
           </div>
         )}
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-4">
+        <div className="p-4 rounded-2xl bg-black/20 border border-white/10">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-white font-semibold">Fail-Safe Backup Link</div>
+              <div className="text-white/60 text-sm">Booth fallback if WiFi or app flow fails.</div>
+            </div>
+            <Badge ok={!!backup?.payment_link_configured} label={backup?.payment_link_configured ? 'Configured' : 'Missing'} />
+          </div>
+
+          <div className="mt-3 p-3 rounded-xl bg-white/5 border border-white/10">
+            <div className="text-xs text-white/60">STRIPE_FOUNDER_PAYMENT_LINK_URL</div>
+            <div className="mt-1 flex items-center justify-between gap-3">
+              <div className="text-sm text-white font-semibold break-all">{backupLinkMasked || '—'}</div>
+              <button
+                type="button"
+                disabled={!backup?.payment_link_url}
+                onClick={copyBackupLink}
+                className="shrink-0 px-3 py-2 rounded-lg bg-white/10 border border-white/10 text-white text-sm hover:bg-white/15 disabled:opacity-60"
+              >
+                Copy
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-3 text-xs text-white/50">
+            Use this link at ADMC if the in-app checkout flow fails. After payment, manually claim the founder slot below to lock pricing.
+          </div>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-black/20 border border-white/10">
+          <div className="text-white font-semibold">Manual Founder Claim</div>
+          <div className="text-white/60 text-sm">After backup-link payment, mark a user as an ADMC Founder (atomic cap-safe).</div>
+
+          <div className="mt-3 flex items-center gap-2">
+            <input
+              value={manualEmail}
+              onChange={(e) => setManualEmail(e.target.value)}
+              placeholder="email@example.com"
+              className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/10 text-white text-sm outline-none focus:border-white/20"
+            />
+            <button
+              type="button"
+              onClick={runManualClaim}
+              disabled={manualLoading}
+              className="px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-400/20 text-emerald-100 text-sm hover:bg-emerald-500/15 disabled:opacity-60"
+            >
+              {manualLoading ? 'Claiming…' : 'Claim'}
+            </button>
+          </div>
+
+          {manualStatus ? (
+            <div className={`mt-3 text-sm ${manualStatus.ok ? 'text-emerald-200' : 'text-rose-200'}`}>{manualStatus.msg}</div>
+          ) : null}
+
+          <div className="mt-3 text-xs text-white/50">
+            This writes <span className="text-white/70">founding_bucket=admc_2026</span> and applies <span className="text-white/70">pricing_lock</span> while enforcing the 75/100 caps.
+          </div>
+        </div>
       </div>
     </div>
   );

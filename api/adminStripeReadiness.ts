@@ -66,7 +66,11 @@ export default async function handler(req: any, res: any) {
     STRIPE_PRICE_PRO_FOUNDER_MONTHLY: hasEnv('STRIPE_PRICE_PRO_FOUNDER_MONTHLY'),
     STRIPE_PRICE_PRO_FOUNDER_ANNUAL: hasEnv('STRIPE_PRICE_PRO_FOUNDER_ANNUAL'),
     STRIPE_COUPON_FOUNDER_PRO: hasEnv('STRIPE_COUPON_FOUNDER_PRO'),
+    // Phase 4 fail-safe backup
+    STRIPE_FOUNDER_PAYMENT_LINK_URL: hasEnv('STRIPE_FOUNDER_PAYMENT_LINK_URL'),
   };
+
+  const backupPaymentLinkUrl = getEnv('STRIPE_FOUNDER_PAYMENT_LINK_URL');
 
   // Founder lock stats
   const [{ count: foundersTotal }, { count: foundersLocked }] = await Promise.all([
@@ -138,6 +142,10 @@ export default async function handler(req: any, res: any) {
   return res.status(200).json({
     ok: true,
     env: envChecks,
+    backup: {
+      payment_link_configured: !!backupPaymentLinkUrl,
+      payment_link_url: backupPaymentLinkUrl,
+    },
     founders: {
       founders_total: foundersTotal,
       founders_with_lock: foundersLocked,
