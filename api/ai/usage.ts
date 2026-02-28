@@ -51,7 +51,48 @@ export default async function handler(req: any, res: any) {
     };
 
     // Phase 2A: intelligence signals
-    const nearLimit = limit > 0 ? remaining <= Math.ceil(limit * 0.15) : false;
+    const warnings: string[] = [];
+
+    const dailyNear = (node: any, label: string) => {
+      const d = node?.daily;
+      if (!d || typeof d.limit !== 'number' || d.limit <= 0) return false;
+      const rem = Number(d.remaining ?? 0);
+      const lim = Number(d.limit ?? 0);
+      const pct = lim > 0 ? rem / lim : 1;
+      if (pct <= 0.2) {
+        warnings.push(`${label} daily limit is running low.`);
+        return true;
+      }
+      return false;
+    };
+
+    const monthlyNear = (node: any, label: string) => {
+      const rem = node?.remaining;
+      const lim = node?.limit;
+      if (typeof rem !== 'number' || typeof lim !== 'number' || lim <= 0) return false;
+      const pct = rem / lim;
+      if (pct <= 0.15) {
+        warnings.push(`${label} monthly quota is running low.`);
+        return true;
+      }
+      return false;
+    };
+
+    const nearDailyLive = dailyNear(quota?.live_audio_minutes, 'Live Rehearsal');
+    const nearMonthlyLive = monthlyNear(quota?.live_audio_minutes, 'Live Rehearsal');
+    const nearMonthlyIdentify = monthlyNear(quota?.identify, 'Identify');
+    const nearMonthlyImages = monthlyNear(quota?.image_gen, 'Image Generation');
+    const nearDailyVideo = dailyNear(quota?.video_uploads, 'Video Rehearsal');
+    const nearMonthlyVideo = monthlyNear(quota?.video_uploads, 'Video Rehearsal');
+
+    const nearLimit = (limit > 0 ? remaining <= Math.ceil(limit * 0.15) : false)
+      || nearDailyLive
+      || nearMonthlyLive
+      || nearMonthlyIdentify
+      || nearMonthlyImages
+      || nearDailyVideo
+      || nearMonthlyVideo;
+
     const upgradeRecommended = membership === 'trial' && nearLimit;
 
     res.setHeader('X-AI-Remaining', String(remaining));
@@ -70,6 +111,7 @@ export default async function handler(req: any, res: any) {
       quota,
       nearLimit,
       upgradeRecommended,
+      warnings,
       sessionsToday: (status as any).sessionsToday ?? 0,
       toolsUsedToday: (status as any).toolsUsedToday ?? [],
       distinctToolsToday: (status as any).distinctToolsToday ?? 0,

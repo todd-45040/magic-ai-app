@@ -14,12 +14,14 @@ export default async function handler(request: any, response: any) {
       if (!status.ok) {
         return response.status(status.status || 503).json({ error: status.error || 'Usage status unavailable.' });
       }
+
+      const daily = status.quota?.live_audio_minutes?.daily;
       return response.status(200).json({
         ok: true,
         membership: status.membership,
-        liveUsed: status.liveUsed ?? 0,
-        liveLimit: status.liveLimit ?? 0,
-        liveRemaining: status.liveRemaining ?? 0,
+        liveUsed: daily?.used ?? 0,
+        liveLimit: daily?.limit ?? 0,
+        liveRemaining: daily?.remaining ?? 0,
       });
     }
 

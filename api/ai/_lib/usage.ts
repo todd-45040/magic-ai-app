@@ -146,6 +146,37 @@ function defaultMonthlyQuotas(tier: string): {
   }
 }
 
+// Phase 6 — Daily safeguards for high-cost usage (pre‑Pro launch)
+const DAILY_LIVE_AUDIO_LIMITS_MIN: Record<string, number> = {
+  admin: 9999,
+  professional: 180,
+  amateur: 45,
+  trial: 10,
+  free: 10,
+  expired: 0,
+};
+
+const DAILY_VIDEO_UPLOAD_LIMITS: Record<string, number> = {
+  admin: 9999,
+  professional: 6,
+  amateur: 0,
+  trial: 0,
+  free: 0,
+  expired: 0,
+};
+
+function clampInt(n: any): number {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return 0;
+  return Math.max(0, Math.floor(v));
+}
+
+function isNewUsageDay(lastISO?: string | null): boolean {
+  const todayKey = usageDayKey();
+  const lastKey = lastISO ? usageDayKey(new Date(lastISO)) : '';
+  return lastKey !== todayKey;
+}
+
 function isTrialActive(trialEnd: any, nowMs = Date.now()): boolean {
   if (!trialEnd) return true;
   const t = typeof trialEnd === 'number' ? trialEnd : Number(trialEnd);
@@ -177,7 +208,7 @@ async function ensureMonthlyQuotas(admin: any, userId: string, membership: strin
     .from('users')
     .update(next)
     .eq('id', userId)
-    .select('id, email, membership, is_admin, generation_count, last_reset_date, trial_end_date, quota_live_audio_minutes, quota_image_gen, quota_identify, quota_video_uploads, quota_reset_date')
+    .select('id, email, membership, is_admin, generation_count, last_reset_date, trial_end_date, quota_live_audio_minutes, quota_image_gen, quota_identify, quota_video_uploads, quota_reset_date, daily_live_audio_minutes_used, daily_live_audio_reset_date, daily_video_uploads_used, daily_video_uploads_reset_date')
     .maybeSingle();
 
 
@@ -465,10 +496,18 @@ export async function getAiUsageStatus(req: any): Promise<{
   toolsUsedToday?: string[];
   distinctToolsToday?: number;
   quota?: {
-    live_audio_minutes: { remaining: number | null };
-    image_gen: { remaining: number | null };
-    identify: { remaining: number | null };
-    video_uploads: { remaining: number | null };
+    live_audio_minutes: {
+      remaining: number | null;
+      limit?: number;
+      daily?: { used: number; limit: number; remaining: number };
+    };
+    image_gen: { remaining: number | null; limit?: number };
+    identify: { remaining: number | null; limit?: number };
+    video_uploads: {
+      remaining: number | null;
+      limit?: number;
+      daily?: { used: number; limit: number; remaining: number };
+    };
     resetAt: string | null;
   };
   // Back-compat aliases for older endpoints/UI
@@ -541,7 +580,7 @@ export async function getAiUsageStatus(req: any): Promise<{
   }
   const { data: profileData, error: profileErr } = await admin
     .from('users')
-    .select('id, email, membership, is_admin, generation_count, last_reset_date, trial_end_date, quota_live_audio_minutes, quota_image_gen, quota_identify, quota_video_uploads, quota_reset_date')
+    .select('id, email, membership, is_admin, generation_count, last_reset_date, trial_end_date, quota_live_audio_minutes, quota_image_gen, quota_identify, quota_video_uploads, quota_reset_date, daily_live_audio_minutes_used, daily_live_audio_reset_date, daily_video_uploads_used, daily_video_uploads_reset_date')
     .eq('id', userId)
     .maybeSingle();
 
@@ -610,6 +649,21 @@ if (profile) {
 
   const engagement = await getEngagementSignals(admin, userId);
 
+  // Phase 6: daily rehearsal guardrails (minutes + uploads)
+  const monthlyDefaults = defaultMonthlyQuotas(tier);
+
+  let dailyLiveUsed = clampInt(profile?.daily_live_audio_minutes_used);
+  const dailyLiveResetISO = profile?.daily_live_audio_reset_date ? new Date(profile.daily_live_audio_reset_date).toISOString() : null;
+  if (isNewUsageDay(dailyLiveResetISO)) dailyLiveUsed = 0;
+  const dailyLiveLimit = clampInt(DAILY_LIVE_AUDIO_LIMITS_MIN[tier] ?? DAILY_LIVE_AUDIO_LIMITS_MIN.trial);
+  const dailyLiveRemaining = Math.max(0, dailyLiveLimit - dailyLiveUsed);
+
+  let dailyVideoUsed = clampInt(profile?.daily_video_uploads_used);
+  const dailyVideoResetISO = profile?.daily_video_uploads_reset_date ? new Date(profile.daily_video_uploads_reset_date).toISOString() : null;
+  if (isNewUsageDay(dailyVideoResetISO)) dailyVideoUsed = 0;
+  const dailyVideoLimit = clampInt(DAILY_VIDEO_UPLOAD_LIMITS[tier] ?? 0);
+  const dailyVideoRemaining = Math.max(0, dailyVideoLimit - dailyVideoUsed);
+
   return {
     ok: true,
     membership: tier as any,
@@ -626,10 +680,18 @@ if (profile) {
     liveLimit: limit,
     liveRemaining: remaining,
     quota: {
-      live_audio_minutes: { remaining: profile?.quota_live_audio_minutes ?? null },
-      image_gen: { remaining: profile?.quota_image_gen ?? null },
-      identify: { remaining: profile?.quota_identify ?? null },
-      video_uploads: { remaining: profile?.quota_video_uploads ?? null },
+      live_audio_minutes: {
+        remaining: profile?.quota_live_audio_minutes ?? null,
+        limit: monthlyDefaults.quota_live_audio_minutes,
+        daily: { used: dailyLiveUsed, limit: dailyLiveLimit, remaining: dailyLiveRemaining },
+      },
+      image_gen: { remaining: profile?.quota_image_gen ?? null, limit: monthlyDefaults.quota_image_gen },
+      identify: { remaining: profile?.quota_identify ?? null, limit: monthlyDefaults.quota_identify },
+      video_uploads: {
+        remaining: profile?.quota_video_uploads ?? null,
+        limit: monthlyDefaults.quota_video_uploads,
+        daily: { used: dailyVideoUsed, limit: dailyVideoLimit, remaining: dailyVideoRemaining },
+      },
       resetAt: profile?.quota_reset_date ? new Date(profile.quota_reset_date).toISOString() : null,
     },
 burstLimit,
@@ -861,7 +923,7 @@ export async function enforceAiUsage(
   // Authed user: enforce against public.users table
   const { data: profileData, error: profileErr } = await admin
     .from('users')
-    .select('id, email, membership, is_admin, generation_count, last_reset_date, trial_end_date, quota_live_audio_minutes, quota_image_gen, quota_identify, quota_video_uploads, quota_reset_date')
+    .select('id, email, membership, is_admin, generation_count, last_reset_date, trial_end_date, quota_live_audio_minutes, quota_image_gen, quota_identify, quota_video_uploads, quota_reset_date, daily_live_audio_minutes_used, daily_live_audio_reset_date, daily_video_uploads_used, daily_video_uploads_reset_date')
     .eq('id', userId)
     .maybeSingle();
 

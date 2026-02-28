@@ -55,6 +55,7 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
     const node = quota?.[key];
     const remaining = node?.remaining;
     const limit = node?.limit;
+    const daily = node?.daily;
 
     const isProOnly = Boolean(opts?.proOnly);
     const locked = isProOnly && plan !== 'professional';
@@ -69,9 +70,10 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
     const exhausted = !locked && typeof remaining === 'number' && remaining <= 0;
 
     return (
-      <div className="flex items-center justify-between gap-3 py-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="text-sm text-slate-200 truncate">{label}</span>
+      <div className="flex items-start justify-between gap-3 py-2">
+        <div className="flex flex-col gap-1 min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-sm text-slate-200 truncate">{label}</span>
           {exhausted && (
             <span className="text-[11px] px-2 py-0.5 rounded-full border border-rose-400/25 bg-rose-500/10 text-rose-200">
               0 remaining
@@ -81,6 +83,13 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
             <span className="text-[11px] px-2 py-0.5 rounded-full border border-amber-400/20 bg-amber-500/10 text-amber-200">
               Pro-only
             </span>
+          )}
+          </div>
+
+          {daily && typeof daily?.limit === 'number' && daily.limit > 0 && (
+            <div className="text-[12px] text-slate-400">
+              Daily: <span className="tabular-nums text-slate-300">{daily.remaining}</span> / <span className="tabular-nums">{daily.limit}</span>{opts?.unit ? ` ${opts.unit}` : ''}
+            </div>
           )}
         </div>
         <div className="text-sm font-semibold text-slate-100 tabular-nums">{display}</div>
@@ -151,6 +160,12 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
                   Limit: {dailyLimit || '—'} • Burst: {usageSnapshot?.burstRemaining ?? '—'} / {usageSnapshot?.burstLimit ?? '—'}
                 </div>
               </div>
+
+              {Array.isArray((usageSnapshot as any)?.warnings) && (usageSnapshot as any).warnings.length > 0 && (
+                <div className="mt-3 rounded-xl border border-[#E6C77A]/20 bg-[#E6C77A]/10 px-3 py-2 text-sm text-[#E6C77A]">
+                  {(usageSnapshot as any).warnings.slice(0, 2).join(' ')}
+                </div>
+              )}
 
               <div className="mt-4">
                 <div className="flex items-center justify-between gap-2">
