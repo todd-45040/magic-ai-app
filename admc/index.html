@@ -585,6 +585,23 @@
         line-height: 1.55;
         text-align: center;
       }
+      .admc-counter {
+        margin-top: 10px;
+        text-align: center;
+        font-weight: 900;
+        letter-spacing: 0.01em;
+        color: rgba(255,255,255,0.86);
+      }
+      .admc-counter .num {
+        color: var(--yellow);
+      }
+      .admc-counter .sub {
+        display:block;
+        margin-top: 4px;
+        font-size: 12.5px;
+        font-weight: 700;
+        color: rgba(255,255,255,0.62);
+      }
       .admc-success {
         display:none;
         margin-top: 12px;
@@ -646,6 +663,11 @@
 
         <div class="admc-note">
           ADMC Founding Rate ends <strong>Sunday night</strong>. Lock it in while you’re here.
+        </div>
+
+        <div class="admc-counter" aria-live="polite">
+          <span id="founderCount" class="num">—</span> / <span id="founderLimit">75</span> Claimed
+          <span class="sub">Founders Circle spots are limited to ADMC.</span>
         </div>
       </section>
 
@@ -762,6 +784,34 @@
             err.style.display = 'block';
           }
         });
+      })();
+
+      // Live Founder Counter (auto-refresh every 30s)
+      (function() {
+        const elCount = document.getElementById('founderCount');
+        const elLimit = document.getElementById('founderLimit');
+        if (!elCount || !elLimit) return;
+
+        const endpoint = '/api/admin/founder-count';
+
+        async function refresh() {
+          try {
+            const res = await fetch(endpoint, { method: 'GET' });
+            if (!res.ok) throw new Error('bad response');
+            const data = await res.json();
+            const c = Number(data?.admc_count);
+            const l = Number(data?.admc_limit);
+
+            if (Number.isFinite(c)) elCount.textContent = String(c);
+            if (Number.isFinite(l) && l > 0) elLimit.textContent = String(l);
+          } catch (_e) {
+            // Fail silently – we don't want the landing page to feel "broken" if the endpoint is unavailable.
+            if (elCount.textContent === '—') elCount.textContent = '0';
+          }
+        }
+
+        refresh();
+        setInterval(refresh, 30000);
       })();
     </script>
   </body>
