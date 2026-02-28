@@ -548,8 +548,26 @@ const Dashboard: React.FC<DashboardProps> = ({ user, shows, feedback, ideas, onN
 
             <header className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-3xl font-bold text-yellow-200 font-cinzel">Welcome, {user.email.split('@')[0]}</h1>
-                    <p className="text-slate-400">Here's your magic dashboard for today.</p>
+                    <h1 className="text-3xl font-bold text-yellow-200 font-cinzel flex items-center gap-3 flex-wrap">
+  <span>Welcome, {user.email.split('@')[0]}</span>
+  {Boolean((user as any)?.foundingCircleMember) && (
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border border-amber-400/40 bg-gradient-to-r from-amber-500/15 via-yellow-400/10 to-purple-500/10 text-amber-200 shadow-[0_0_18px_rgba(251,191,36,0.15)]">
+      <span aria-hidden>🏆</span>
+      <span>Founding Member</span>
+    </span>
+  )}
+</h1>
+<p className="text-slate-400">Here's your magic dashboard for today.</p>
+{Boolean((user as any)?.foundingCircleMember) && (
+  <div className="mt-3 inline-flex items-start gap-2 rounded-xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100/90 shadow-[0_0_30px_rgba(251,191,36,0.08)]">
+    <span className="mt-[1px]" aria-hidden>✨</span>
+    <div className="leading-snug">
+      <div className="font-semibold text-amber-200">Your Pro rate is locked for life.</div>
+      <div className="text-amber-100/70 text-xs mt-0.5">Thank you for being early — your Founders pricing stays attached to your account.</div>
+    </div>
+  </div>
+)}
+
                 </div>
                 {hasProAccess && (
                     <button onClick={() => setIsCustomizeMode(prev => !prev)} className={`flex items-center gap-2 px-4 py-2 rounded-md font-semibold transition-colors ${isCustomizeMode ? 'bg-purple-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>

@@ -78,6 +78,15 @@ const [pos, setPos] = useState({ top: 0, left: 0, width: 288 });
           <div className="mt-1 text-xs text-slate-300">
             Membership: <span className="text-slate-200">{user.membership}</span>
           </div>
+          {Boolean((user as any)?.foundingCircleMember) && (
+            <div className="mt-2 inline-flex items-center gap-2 rounded-lg border border-amber-400/25 bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-amber-100/90">
+              <span aria-hidden>🏆</span>
+              <span className="font-semibold text-amber-200">Founding Member</span>
+              <span className="text-amber-100/60">•</span>
+              <span className="text-amber-100/80">Rate locked for life</span>
+            </div>
+          )}
+
         </div>
 
         <div className="p-2">
