@@ -140,6 +140,33 @@ export default async function handler(req: any, res: any) {
     const obj = (event?.data?.object || {}) as any;
     const meta = (obj?.metadata || {}) as any;
 
+    // Record receipt for health checks (best-effort; never blocks webhook).
+    try {
+      const eventId = String(event?.id || '').trim();
+      if (eventId) {
+        const stripeCreatedAt = event?.created ? new Date(Number(event.created) * 1000).toISOString() : null;
+        const requestId = String(req?.headers?.['stripe-request-id'] || req?.headers?.['request-id'] || '').trim() || null;
+
+        await admin
+          .from('maw_stripe_webhook_events')
+          .upsert(
+            [
+              {
+                stripe_event_id: eventId,
+                event_type: type || 'unknown',
+                livemode: Boolean(event?.livemode),
+                stripe_created_at: stripeCreatedAt,
+                request_id: requestId,
+                signature_present: Boolean(sig),
+              },
+            ],
+            { onConflict: 'stripe_event_id' }
+          );
+      }
+    } catch (_) {
+      // ignore
+    }
+
     // We only care about events that can carry a subscription id + metadata.
     const relevant =
       type === 'checkout.session.completed' ||
