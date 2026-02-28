@@ -13,6 +13,8 @@
 
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'node:crypto';
+import { sendMail, isMailerConfigured } from './_lib/mailer.js';
+import { renderFoundingEmail, FOUNDING_EMAIL_TEMPLATE_VERSION } from './_lib/foundingCircleEmailTemplates.js';
 
 export const config = {
   api: {
@@ -77,6 +79,18 @@ function getAdminClient() {
   const serviceKey = getEnv('SUPABASE_SERVICE_ROLE_KEY');
   if (!supabaseUrl || !serviceKey) return null;
   return createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+}
+
+
+async function enqueueAndMaybeMarkSent(admin: any, row: any) {
+  // Insert queue row (best-effort). Supports older schemas where some columns may not exist.
+  try {
+    const { error } = await admin.from('maw_email_queue').insert(row as any);
+    if (!error) return { ok: true };
+    return { ok: false, error };
+  } catch (e: any) {
+    return { ok: false, error: e };
+  }
 }
 
 function isFounderPricing(meta: any): boolean {
@@ -267,7 +281,90 @@ export default async function handler(req: any, res: any) {
       console.warn('[stripeWebhook] best-effort user sync failed', String((e as any)?.message || e || ''));
     }
 
-    return res.status(200).json({
+    
+    // Immediate Founder Paid Welcome email (0 minutes) — best-effort, idempotent by queue dedupe.
+    try {
+      if (type === 'checkout.session.completed' && isMailerConfigured()) {
+        // Resolve recipient
+        const { data: urow } = await admin.from('users').select('email,full_name,name').eq('id', userId).maybeSingle();
+        const toEmail =
+          String(urow?.email || obj?.customer_details?.email || meta?.email || '').trim();
+
+        if (toEmail) {
+          // Dedupe: avoid re-sending the same template to same email if webhook retries.
+          const { data: existing } = await admin
+            .from('maw_email_queue')
+            .select('id,status')
+            .eq('to_email', toEmail)
+            .eq('template_key', 'founder_paid_welcome')
+            .limit(1);
+
+          const alreadyQueuedOrSent = Array.isArray(existing) && existing.length > 0;
+
+          if (!alreadyQueuedOrSent) {
+            const name = String(urow?.full_name || urow?.name || obj?.customer_details?.name || meta?.name || '').trim() || null;
+
+            const baseUrl =
+              getEnv('APP_BASE_URL') ||
+              getEnv('PUBLIC_APP_URL') ||
+              (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+              'https://magicaiwizard.com';
+
+            const trackingId = crypto.randomUUID();
+
+            const rendered = renderFoundingEmail(
+              'founder_paid_welcome' as any,
+              { name, email: toEmail },
+              {
+                trackingId,
+                baseUrl,
+                templateVersion: (FOUNDING_EMAIL_TEMPLATE_VERSION as any).founder_paid_welcome || 1,
+                vars: {
+                  founder_claimed: Number(claim?.total_count ?? claim?.total_count ?? claim?.total ?? null),
+                  founder_limit: 100,
+                },
+              } as any
+            );
+
+            const sendRes = await sendMail({ to: toEmail, subject: rendered.subject, html: rendered.html, text: rendered.text });
+
+            // Record in queue for visibility + future analytics (best-effort).
+            const nowIso = new Date().toISOString();
+            const queueRow: any = {
+              send_at: nowIso,
+              to_email: toEmail,
+              template_key: 'founder_paid_welcome',
+              payload: { email: toEmail, name, founder_claimed: Number(claim?.total_count ?? null), founder_limit: 100 },
+              status: sendRes.ok ? 'sent' : 'error',
+              sent_at: sendRes.ok ? nowIso : null,
+              last_error: sendRes.ok ? null : (sendRes as any).error || 'send_failed',
+              tracking_id: trackingId,
+              template_version: (FOUNDING_EMAIL_TEMPLATE_VERSION as any).founder_paid_welcome || 1,
+              provider_message_id: sendRes.ok ? (sendRes as any).messageId || null : null,
+            };
+
+            // Fallback for older schemas: strip optional columns if insert fails.
+            const ins1 = await enqueueAndMaybeMarkSent(admin, queueRow);
+            if (!ins1.ok) {
+              const minimalRow: any = {
+                send_at: nowIso,
+                to_email: toEmail,
+                template_key: 'founder_paid_welcome',
+                payload: { email: toEmail, name },
+                status: sendRes.ok ? 'sent' : 'error',
+                sent_at: sendRes.ok ? nowIso : null,
+                last_error: sendRes.ok ? null : (sendRes as any).error || 'send_failed',
+              };
+              await enqueueAndMaybeMarkSent(admin, minimalRow);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[stripeWebhook] founder paid welcome email failed', String((e as any)?.message || e || ''));
+    }
+
+return res.status(200).json({
       ok: true,
       received: true,
       hasSignature: Boolean(sig),

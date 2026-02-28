@@ -8,7 +8,8 @@ export type FoundingEmailKey =
   | 'founding_welcome'
   | 'founding_early_access'
   | 'founding_pricing_lock'
-  | 'founding_next_tools';
+  | 'founding_next_tools'
+  | 'founder_paid_welcome';
 
 /**
  * Template versioning: bump per template whenever copy/layout changes that you want tracked.
@@ -18,9 +19,12 @@ export const FOUNDING_EMAIL_TEMPLATE_VERSION: Record<FoundingEmailKey, number> =
   founding_early_access: 1,
   founding_pricing_lock: 1,
   founding_next_tools: 1,
+  founder_paid_welcome: 1,
 };
 
 type TrackingOpts = {
+  /** Optional template variables */
+  vars?: Record<string, any> | null;
   /** Queue-level tracking id (uuid) */
   trackingId?: string | null;
   /** Base URL like https://magicaiwizard.com */
@@ -70,7 +74,7 @@ export function renderFoundingEmail(
   const appUrl = (safeBaseUrl(opts?.baseUrl) || 'https://magicaiwizard.com') + '/founding-circle';
   const ctaUrl = makeClickUrl(opts, appUrl, key);
 
-  const baseHtml = (inner: string) => `
+  const baseHtml = (inner: string, cta: { href: string; label: string } = { href: ctaUrl, label: '${cta.label}' }) => `
   <div style="background:#070A12;color:#E5E7EB;padding:28px 16px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;">
     <div style="max-width:640px;margin:0 auto;border:1px solid rgba(168,85,247,0.25);border-radius:18px;background:linear-gradient(180deg, rgba(88,28,135,0.18), rgba(2,6,23,0.35));padding:22px;">
       <div style="font-weight:700;letter-spacing:0.08em;color:#FDE68A;">FOUNDING CIRCLE</div>
@@ -78,7 +82,7 @@ export function renderFoundingEmail(
       ${inner}
       <div style="height:16px"></div>
 
-      <a href="${ctaUrl}" style="display:inline-block;text-decoration:none;background:rgba(253,230,138,0.12);border:1px solid rgba(253,230,138,0.35);color:#FDE68A;padding:10px 14px;border-radius:12px;font-weight:700;">
+      <a href="${cta.href}" style="display:inline-block;text-decoration:none;background:rgba(253,230,138,0.12);border:1px solid rgba(253,230,138,0.35);color:#FDE68A;padding:10px 14px;border-radius:12px;font-weight:700;">
         Open Founding Circle
       </a>
 
@@ -91,10 +95,66 @@ export function renderFoundingEmail(
     </div>
   </div>`;
 
-  const baseText = (inner: string) =>
-    `FOUNDING CIRCLE\n\n${inner}\n\nOpen Founding Circle: ${appUrl}\n\n★ Founding Circle Member • ${BRAND.company} • Privacy-first • Replies: ${BRAND.supportEmail}`;
+  const baseText = (inner: string, ctaLabel = 'Open Founding Circle', ctaHref = appUrl) =>
+    `FOUNDING CIRCLE\n\n${inner}\n\n${ctaLabel}: ${ctaHref}\n\n★ Founding Circle Member • ${BRAND.company} • Privacy-first • Replies: ${BRAND.supportEmail}`;
 
-  if (key === 'founding_welcome') {
+  
+  if (key === 'founder_paid_welcome') {
+    const claimed = Number((opts?.vars as any)?.founder_claimed ?? (opts?.vars as any)?.total_claimed);
+    const limit = Number((opts?.vars as any)?.founder_limit ?? 100);
+    const hasCounts = Number.isFinite(claimed) && Number.isFinite(limit) && limit > 0;
+
+    const subject = `You’re Officially a Founding Member 🎩`;
+
+    const inner = `
+      <h1 style="margin:0;font-size:22px;color:#FFFFFF;">🎩 Welcome, ${firstName}.</h1>
+      <p style="margin:10px 0 0;opacity:0.92;line-height:1.55;">
+        Todd, you’re in.<br/>
+        You are now one of the first <b>${limit}</b> Founding Members of <b>${BRAND.product}</b>.
+      </p>
+      ${hasCounts ? `<p style="margin:12px 0 0;opacity:0.9;line-height:1.55;">
+        As of right now, only <b>${claimed}</b> of the <b>${limit}</b> Founder spots have been claimed.
+      </p>` : ``}
+      <div style="height:10px"></div>
+      <p style="margin:0;opacity:0.92;line-height:1.55;">
+        <b>Your Pro rate is now permanently locked.</b><br/>
+        No future price increases will ever affect you.
+      </p>
+      <div style="height:10px"></div>
+      <p style="margin:0;opacity:0.92;line-height:1.55;">
+        You didn’t just subscribe.<br/>
+        <b>You helped launch a category.</b>
+      </p>
+    `;
+
+    const base = safeBaseUrl(opts?.baseUrl) || 'https://magicaiwizard.com';
+    const target = `${base}/app/founder-success`;
+    const ctaHref = makeClickUrl(opts, target, key);
+    const html = baseHtml(inner, { href: ctaHref, label: 'Build Your First Routine' });
+    const text = baseText(
+      `🎩 Welcome, ${firstName}.
+
+Todd, you’re in.
+You are now one of the first ${limit} Founding Members of ${BRAND.product}.
+
+${
+        hasCounts ? `As of right now, only ${claimed} of the ${limit} Founder spots have been claimed.
+
+` : ''
+      }Your Pro rate is now permanently locked.
+No future price increases will ever affect you.
+
+You didn’t just subscribe.
+You helped launch a category.
+`,
+      'Build Your First Routine',
+      target
+    );
+
+    return { subject, html, text, templateVersion };
+  }
+
+if (key === 'founding_welcome') {
     const subject = `Welcome to the Founding Circle — you’re in`;
     const inner = `
       <h1 style="margin:0;font-size:22px;color:#FFFFFF;">Welcome, ${firstName}.</h1>
