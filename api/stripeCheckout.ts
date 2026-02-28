@@ -17,6 +17,19 @@ function getOrigin(req: any): string {
 type Tier = 'amateur' | 'professional';
 type Billing = 'monthly' | 'annual';
 
+
+function inferBucketFromProfile(profile: any): 'admc_2026' | 'reserve_2026' {
+  const explicit = String(profile?.founding_bucket || '').trim();
+  if (explicit === 'admc_2026' || explicit === 'reserve_2026') return explicit as any;
+
+  const src = String(profile?.founding_source || '').toLowerCase();
+  if (src.includes('admc') || src.includes('convention') || src.includes('booth') || src.includes('table')) return 'admc_2026';
+
+  // Default: keep founder pricing tied to ADMC allocation unless explicitly marked as reserve.
+  return 'admc_2026';
+}
+
+
 function pickPriceId(tier: Tier, billing: Billing, founderLocked: boolean): { priceId: string | null; couponId: string | null } {
   // Default (public) price ids
   const amateurMonthly = getEnv('STRIPE_PRICE_AMATEUR_MONTHLY');
@@ -72,7 +85,7 @@ export default async function handler(req: any, res: any) {
   // Load user profile so pricing locks can override pricing forever.
   let profile: any = null;
   try {
-    const { data } = await auth.admin.from('users').select('email,founding_circle_member,founding_joined_at,founding_source,pricing_lock').eq('id', auth.userId).maybeSingle();
+    const { data } = await auth.admin.from('users').select('email,founding_circle_member,founding_joined_at,founding_source,founding_bucket,pricing_lock').eq('id', auth.userId).maybeSingle();
     profile = data || null;
   } catch {
     profile = null;
@@ -85,6 +98,34 @@ export default async function handler(req: any, res: any) {
   const pricingLockKey = profile?.pricing_lock ? String(profile.pricing_lock) : '';
 
   const founderLocked = Boolean(pricingLockKey || foundingMember);
+
+  // Step 1 (Allocation Enforcement):
+  // If user is attempting to use founder pricing, atomically claim/verify capacity server-side.
+  if (tier === 'professional' && founderLocked) {
+    const desiredBucket = inferBucketFromProfile(profile);
+    try {
+      const { data: claimRows, error: claimErr } = await auth.admin.rpc('maw_claim_founding_bucket', {
+        p_user_id: auth.userId,
+        p_bucket: desiredBucket,
+      });
+      const claim = Array.isArray(claimRows) ? (claimRows[0] as any) : (claimRows as any);
+      if (claimErr || !claim?.ok) {
+        const reason = String(claim?.reason || claimErr?.message || 'limit_reached');
+        return res.status(409).json({
+          ok: false,
+          error_code: 'FOUNDERS_CLOSED',
+          message:
+            reason === 'admc_limit_reached'
+              ? 'ADMC Founders Circle is full (75/75).'
+              : reason === 'total_limit_reached'
+              ? 'Founders Circle is full.'
+              : 'Founder pricing is currently unavailable.',
+        });
+      }
+    } catch {
+      return res.status(409).json({ ok: false, error_code: 'FOUNDERS_CLOSED', message: 'Founder pricing is currently unavailable.' });
+    }
+  }
 
   const { priceId, couponId } = pickPriceId(tier, billing, founderLocked);
   if (!priceId) {

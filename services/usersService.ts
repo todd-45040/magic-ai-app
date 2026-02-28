@@ -24,6 +24,7 @@ const normalizeUserRow = (row: any): User => {
     foundingJoinedAt: (row?.founding_joined_at ?? null) as any,
     foundingSource: (row?.founding_source ?? null) as any,
     pricingLock: (row?.pricing_lock ?? null) as any,
+    foundingBucket: (row?.founding_bucket ?? null) as any,
   } as User;
 };
 

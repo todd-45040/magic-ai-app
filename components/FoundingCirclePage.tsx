@@ -116,6 +116,7 @@ export default function FoundingCirclePage(props: { user: User | null; onBack: (
           source_bucket: attribution.bucket,
         pricing_lock: PRICING_LOCK,
         founding_source: 'ADMC_2026',
+        founding_bucket: 'admc_2026',
       };
 
       await postJoin(payload, token);

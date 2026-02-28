@@ -70,9 +70,18 @@ function normalizeEmail(email: string): string {
   return String(email || '').trim().toLowerCase();
 }
 
-function isValidEmail(email: string): boolean {
-  // Good-enough sanity check; Supabase constraint is the real guard.
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+\1
+
+function isValidFoundingBucket(v: any): v is 'admc_2026' | 'reserve_2026' {
+  return v === 'admc_2026' || v === 'reserve_2026';
+}
+
+function inferFoundingBucket(isFounding: boolean, sourceBucket: string, foundingSource: string): 'admc_2026' | 'reserve_2026' | null {
+  if (!isFounding) return null;
+  const s = String(foundingSource || sourceBucket || '').toLowerCase();
+  if (s.includes('admc') || s.includes('convention') || s.includes('booth') || s.includes('table')) return 'admc_2026';
+  // Default to reserve only if explicitly requested; otherwise prefer ADMC for Founders Circle.
+  return 'admc_2026';
 }
 
 export default async function handler(req: any, res: any) {
@@ -140,7 +149,12 @@ export default async function handler(req: any, res: any) {
   const pricingLock =
     typeof body?.pricing_lock === 'string'
       ? body.pricing_lock.trim().slice(0, 80)
-      : (isFounding ? 'founding_pro_admc_2026' : null); 
+      : (isFounding ? 'founding_pro_admc_2026' : null);
+
+  const foundingBucketInput = typeof body?.founding_bucket === 'string' ? body.founding_bucket.trim() : null;
+  const foundingBucket = isValidFoundingBucket(foundingBucketInput)
+    ? foundingBucketInput
+    : inferFoundingBucket(isFounding, source, foundingSource);
 
   const meta = body?.meta ?? null;
   if (meta && typeof meta === 'object') {
@@ -209,6 +223,7 @@ export default async function handler(req: any, res: any) {
             source: foundingSource,
             converted_to_user: Boolean(authedUserId),
             converted_user_id: authedUserId,
+            founding_bucket: foundingBucket,
             meta,
             ip_hash: ipHash,
             user_agent: ua,
@@ -222,12 +237,44 @@ export default async function handler(req: any, res: any) {
 
       // 2) Mark user as founder (if authenticated)
       if (authedUserId) {
+        // 2a) Atomically claim the founding bucket + enforce caps (prevents race conditions).
+        try {
+          const desiredBucket = (foundingBucket || 'admc_2026') as any;
+          const { data: claimRows, error: claimErr } = await admin.rpc('maw_claim_founding_bucket', {
+            p_user_id: authedUserId,
+            p_bucket: desiredBucket,
+          });
+
+          const claim = Array.isArray(claimRows) ? (claimRows[0] as any) : (claimRows as any);
+          if (claimErr || !claim?.ok) {
+            const reason = String(claim?.reason || claimErr?.message || 'limit_reached');
+            return json(res, 409, {
+              ok: false,
+              error_code: 'FOUNDERS_CLOSED',
+              message:
+                reason === 'admc_limit_reached'
+                  ? 'ADMC Founders Circle is full (75/75).'
+                  : reason === 'total_limit_reached'
+                  ? 'Founders Circle is full.'
+                  : 'Founders Circle is currently unavailable.',
+              retryable: false,
+            });
+          }
+        } catch (e) {
+          console.warn('founding bucket claim failed', e);
+          return json(res, 409, {
+            ok: false,
+            error_code: 'FOUNDERS_CLOSED',
+            message: 'Founders Circle is currently unavailable.',
+            retryable: false,
+          });
+        }
+
+        // 2b) Set additional identity fields (safe/idempotent).
         try {
           await admin
             .from('users')
             .update({
-              founding_circle_member: true,
-              founding_joined_at: new Date().toISOString(),
               founding_source: foundingSource,
               ...(pricingLock ? { pricing_lock: pricingLock } : {}),
             })
@@ -241,7 +288,7 @@ export default async function handler(req: any, res: any) {
       try {
         const now = Date.now();
         const mk = (hoursFromNow: number) => new Date(now + hoursFromNow * 60 * 60 * 1000).toISOString();
-        const basePayload = { name, email, founding_source: foundingSource, pricing_lock: pricingLock };
+        const basePayload = { name, email, founding_source: foundingSource, pricing_lock: pricingLock, founding_bucket: foundingBucket || 'admc_2026' };
 
         const queueRows = [
           { to_email: email, template_key: 'founding_welcome', send_at: mk(0), payload: basePayload },

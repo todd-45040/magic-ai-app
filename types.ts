@@ -98,6 +98,7 @@ export interface User {
   foundingJoinedAt?: string | null;
   foundingSource?: string | null;
   pricingLock?: string | null;
+  foundingBucket?: 'admc_2026' | 'reserve_2026' | null;
 }
 
 export type AudienceTab = 'chat' | 'identify' | 'publications' | 'community' | 'feedback' | 'ask' | 'story';
