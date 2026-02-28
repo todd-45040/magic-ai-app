@@ -5,6 +5,7 @@ interface UpgradeModalProps {
   onClose: () => void;
   onUpgrade: (tier: 'amateur' | 'professional') => void;
   variant?: 'locked-tool' | 'trial-expired' | 'generic';
+  user?: any;
 }
 
 const Row: React.FC<{ children: React.ReactNode }> = ({ children }) => (
@@ -14,7 +15,9 @@ const Row: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   </li>
 );
 
-const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant = 'generic' }) => {
+const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant = 'generic', user }) => {
+  const founderLocked = Boolean(user?.pricingLock || user?.foundingCircleMember);
+  const pricingLockKey = (user?.pricingLock ?? null) as string | null;
   const title =
     variant === 'trial-expired'
       ? 'Your trial has ended'
@@ -130,14 +133,18 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
                 <div className="text-3xl font-bold text-white">$29.95<span className="text-sm font-normal text-slate-400">/mo</span></div>
                 <div className="text-sm text-slate-400">$299.00 one-time annual billing (2 months free)</div>
 
-                {/* Founding member callout (visually separated) */}
-                <div className="mt-4 rounded-xl border border-amber-300/40 bg-amber-500/10 px-4 py-3">
-                  <div className="text-xs uppercase tracking-wider text-amber-200/90 font-semibold">Founding Professional Rate</div>
-                  <div className="mt-1 text-sm text-amber-100">
-                    <span className="font-extrabold">$29.95/month</span> — locked for life (pre-launch).
+                {/* Founder lock callout (only if applicable) */}
+                {founderLocked && (
+                  <div className="mt-4 rounded-xl border border-amber-300/40 bg-amber-500/10 px-4 py-3">
+                    <div className="text-xs uppercase tracking-wider text-amber-200/90 font-semibold">Founder Rate Locked</div>
+                    <div className="mt-1 text-sm text-amber-100">
+                      <span className="font-extrabold">Your pricing is locked</span> — protected across plan changes.
+                    </div>
+                    <div className="mt-1 text-xs text-slate-300/90">
+                      Lock key: <span className="font-mono text-amber-200/90">{pricingLockKey || 'founding_pro_admc_2026'}</span>
+                    </div>
                   </div>
-                  <div className="mt-1 text-xs text-slate-300/90">Available to early adopters before public launch.</div>
-                </div>
+                )}
               </div>
 
               <ul className="space-y-2 mt-5 mb-6 flex-1">
@@ -153,7 +160,7 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
                 onClick={() => onUpgrade('professional')}
                 className="w-full py-3 px-4 bg-amber-500 hover:bg-amber-600 rounded-xl text-slate-900 font-extrabold transition-colors"
               >
-                Upgrade to Professional
+                {founderLocked ? 'Upgrade to Professional (Founder Rate Locked)' : 'Upgrade to Professional'}
               </button>
             </div>
           </div>

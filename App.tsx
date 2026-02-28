@@ -41,6 +41,38 @@ function App() {
   const dispatch = useAppDispatch();
   const loggingOutRef = useRef(false);
 
+  const handleUpgrade = async (tier: 'amateur' | 'professional') => {
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data?.session?.access_token;
+      if (!token) {
+        alert('Please sign in to upgrade.');
+        return;
+      }
+
+      const r = await fetch('/api/stripeCheckout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ tier, billing: 'monthly' }),
+      });
+
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j?.url) {
+        const msg = j?.error || 'Stripe is not configured yet.';
+        alert(msg);
+        return;
+      }
+
+      window.location.href = String(j.url);
+    } catch (e: any) {
+      alert('Upgrade could not start. Please try again.');
+      console.error(e);
+    }
+  };
+
   useEffect(() => {
     const loadingTimeout = window.setTimeout(() => {
       setAuthLoading(false);
@@ -266,7 +298,7 @@ function App() {
         <MagicianMode
           onBack={() => setMode('selection')}
           user={user}
-          onUpgrade={() => {}}
+          onUpgrade={handleUpgrade as any}
           onLogout={async () => {
             loggingOutRef.current = true;
             await supabase.auth.signOut();

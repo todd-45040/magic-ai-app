@@ -2443,7 +2443,14 @@ ${action.payload.content}`;
 
   return (
     <div className="relative flex flex-col h-full rounded-lg border border-slate-800 shadow-2xl shadow-purple-900/20 overflow-hidden">
-        {isUpgradeModalOpen && <UpgradeModal onClose={() => setIsUpgradeModalOpen(false)} onUpgrade={handleUpgrade} variant={isExpired ? 'trial-expired' : 'locked-tool'} />}
+        {isUpgradeModalOpen && (
+          <UpgradeModal
+            onClose={() => setIsUpgradeModalOpen(false)}
+            onUpgrade={handleUpgrade}
+            variant={isExpired ? 'trial-expired' : 'locked-tool'}
+            user={user as any}
+          />
+        )}
         {isHelpModalOpen && <HelpModal
             onClose={() => setIsHelpModalOpen(false)}
             onNavigate={(view) => {
