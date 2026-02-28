@@ -812,13 +812,13 @@ const handleCreateBookingPitch = async () => {
 <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4 space-y-3">
     <div className="flex items-center justify-between gap-3">
         <div>
-            <p className={`text-sm font-semibold ${goldHeadingSmall}`}>\1</p>
+	            <p className={`text-sm font-semibold ${goldHeadingSmall}`}>Live Preview</p>
             <p className="text-xs text-slate-500 mt-0.5">Updates live as you select options.</p>
         </div>
 
         <div className="text-right">
             <p className="text-xs text-slate-500">Campaign Readiness</p>
-            <p className={`text-sm font-semibold ${goldHeadingSmall}`}>\1</p>
+	            <p className={`text-sm font-semibold ${goldHeadingSmall}`}>{conversionStrength} • {readinessScore}%</p>
         </div>
     </div>
 
@@ -911,7 +911,7 @@ const handleCreateBookingPitch = async () => {
                         <div className="p-4 overflow-y-auto space-y-4 pb-32">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
-                                    <p className={`text-sm font-semibold ${goldHeadingSmall}`}>\1</p>
+									<p className={`text-sm font-semibold ${goldHeadingSmall}`}>Advisor Notes</p>
                                     <ul className="mt-2 space-y-1 text-sm text-slate-300">
                                         {advisorNotes.map((n, idx) => (
                                             <li key={idx}>• {n}</li>
@@ -919,7 +919,7 @@ const handleCreateBookingPitch = async () => {
                                     </ul>
                                 </div>
                                 <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
-                                    <p className={`text-sm font-semibold ${goldHeadingSmall}`}>\1</p>
+									<p className={`text-sm font-semibold ${goldHeadingSmall}`}>Conversion Outlook</p>
                                     <div className="mt-2 grid grid-cols-1 gap-1 text-sm">
                                         <div className="flex items-start justify-between gap-2">
                                             <span className="text-slate-400">Predicted Response Rate</span>
@@ -939,7 +939,7 @@ const handleCreateBookingPitch = async () => {
 
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
                                 <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
-                                    <p className={`text-sm font-semibold ${goldHeadingSmall}`}>\1</p>
+									<p className={`text-sm font-semibold ${goldHeadingSmall}`}>Competitive Position</p>
                                     <p className="mt-2 text-sm text-slate-300">Compared to similar performers:</p>
                                     <ul className="mt-2 space-y-1 text-sm text-slate-300">
                                         <li>• You rank strongest in <span className="text-slate-100 font-semibold">{competitivePositioning.strongest}</span></li>
@@ -949,7 +949,7 @@ const handleCreateBookingPitch = async () => {
                                 </div>
 
                                 <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
-                                    <p className={`text-sm font-semibold ${goldHeadingSmall}`}>\1</p>
+									<p className={`text-sm font-semibold ${goldHeadingSmall}`}>Persona Variations</p>
                                     <p className="mt-2 text-xs text-slate-400">Generate tailored variations for different buyers. Switch personas to view versions.</p>
 
                                     <div className="mt-3 flex flex-wrap gap-2">
@@ -989,7 +989,7 @@ const handleCreateBookingPitch = async () => {
                                 </div>
 
                                 <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
-                                    <p className={`text-sm font-semibold ${goldHeadingSmall}`}>\1</p>
+									<p className={`text-sm font-semibold ${goldHeadingSmall}`}>ROI Projection</p>
                                     <p className="mt-2 text-sm text-slate-300">Estimated bookings from campaign:</p>
                                     <p className="mt-2 text-xl font-bold text-slate-100">{roiProjection}</p>
                                     <p className="mt-2 text-xs text-slate-400">Heuristic estimate based on campaign completeness + channel fit. Improve readiness to push the range upward.</p>

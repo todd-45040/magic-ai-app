@@ -70,7 +70,13 @@ function normalizeEmail(email: string): string {
   return String(email || '').trim().toLowerCase();
 }
 
-\1
+function isValidEmail(email: string): boolean {
+  // Pragmatic validation (server-side). We only need to block obviously invalid input.
+  // Intentionally not a strict RFC validator.
+  const e = String(email || '').trim();
+  if (e.length < 6 || e.length > 254) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e);
+}
 
 function isValidFoundingBucket(v: any): v is 'admc_2026' | 'reserve_2026' {
   return v === 'admc_2026' || v === 'reserve_2026';
