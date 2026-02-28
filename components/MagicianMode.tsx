@@ -2089,6 +2089,22 @@ useEffect(() => {
       return;
     }
 
+    // Phase 7: Founder-only preview access (scarcity + identity).
+    // Certain tools can be temporarily restricted to Founding Circle members before Stripe goes live.
+    const founderPreviewViews = new Set<MagicianView>([
+      'video-rehearsal',
+    ]);
+
+    if (founderPreviewViews.has(view) && !user?.isAdmin && !user?.foundingCircleMember) {
+      showToast('Founder Preview: this tool is currently available to Founding Circle members.', {
+        label: 'Join Founding Circle',
+        onClick: () => {
+          try { window.location.href = '/founding-circle'; } catch {}
+        },
+      });
+      return;
+    }
+
     setActiveView(view);
   };
 

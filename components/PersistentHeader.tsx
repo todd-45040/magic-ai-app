@@ -38,8 +38,16 @@ export default function PersistentHeader({ mode, user, onGoMainMenu, onGoDashboa
             </button>
           </div>
 
-          <div className="hidden sm:block text-xs text-slate-300/70 truncate max-w-[320px]">
-            {user?.email ? `Signed in as ${user.email}` : ''}
+          <div className="hidden sm:flex items-center gap-2 text-xs text-slate-300/70 truncate max-w-[520px]">
+            {user?.foundingCircleMember ? (
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-amber-400/25 bg-amber-500/10 text-amber-200 font-semibold">
+                <span className="text-[11px]">★</span>
+                Founder
+              </span>
+            ) : null}
+            <div className="truncate">
+              {user?.email ? `Signed in as ${user.email}` : ''}
+            </div>
           </div>
         </div>
       </div>

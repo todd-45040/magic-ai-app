@@ -35,11 +35,13 @@ function safeBaseUrl(baseUrl?: string | null): string {
   return v.replace(/\/$/, '');
 }
 
-function makeClickUrl(opts: TrackingOpts | undefined, targetUrl: string): string {
+function makeClickUrl(opts: TrackingOpts | undefined, targetUrl: string, key?: FoundingEmailKey): string {
   const base = safeBaseUrl(opts?.baseUrl);
   const tid = String(opts?.trackingId || '').trim();
   if (!base || !tid) return targetUrl;
-  return `${base}/api/emailClick?tid=${encodeURIComponent(tid)}&u=${encodeURIComponent(targetUrl)}`;
+  const k = key ? `&k=${encodeURIComponent(String(key))}` : '';
+  const v = key ? `&v=${encodeURIComponent(String(Number(opts?.templateVersion || FOUNDING_EMAIL_TEMPLATE_VERSION[key] || 1)))}` : '';
+  return `${base}/api/emailClick?tid=${encodeURIComponent(tid)}&u=${encodeURIComponent(targetUrl)}${k}${v}`;
 }
 
 function makeOpenPixel(opts: TrackingOpts | undefined, key: FoundingEmailKey): string {
@@ -66,7 +68,7 @@ export function renderFoundingEmail(
   const templateVersion = Number(opts?.templateVersion || FOUNDING_EMAIL_TEMPLATE_VERSION[key] || 1);
 
   const appUrl = (safeBaseUrl(opts?.baseUrl) || 'https://magicaiwizard.com') + '/founding-circle';
-  const ctaUrl = makeClickUrl(opts, appUrl);
+  const ctaUrl = makeClickUrl(opts, appUrl, key);
 
   const baseHtml = (inner: string) => `
   <div style="background:#070A12;color:#E5E7EB;padding:28px 16px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;">
@@ -82,14 +84,15 @@ export function renderFoundingEmail(
 
       <div style="height:18px"></div>
       <div style="font-size:12px;opacity:0.75;line-height:1.45">
-        ${BRAND.company} • Privacy-first • Replies: ${BRAND.supportEmail}
+        <span style="color:#FDE68A;font-weight:700;">★ Founding Circle Member</span>
+        <span style="opacity:0.85;"> • ★ Founding Circle Member • ${BRAND.company} • Privacy-first • Replies: ${BRAND.supportEmail}</span>
       </div>
       ${makeOpenPixel(opts, key)}
     </div>
   </div>`;
 
   const baseText = (inner: string) =>
-    `FOUNDING CIRCLE\n\n${inner}\n\nOpen Founding Circle: ${appUrl}\n\n${BRAND.company} • Privacy-first • Replies: ${BRAND.supportEmail}`;
+    `FOUNDING CIRCLE\n\n${inner}\n\nOpen Founding Circle: ${appUrl}\n\n★ Founding Circle Member • ${BRAND.company} • Privacy-first • Replies: ${BRAND.supportEmail}`;
 
   if (key === 'founding_welcome') {
     const subject = `Welcome to the Founding Circle — you’re in`;

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import type { User } from '../types';
 import { supabase } from '../supabase';
 import { StarIcon, LockIcon, CheckIcon, UsersIcon } from './icons';
@@ -38,12 +38,39 @@ export default function FoundingCirclePage(props: { user: User | null; onBack: (
   const [done, setDone] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
+  const [foundersCount, setFoundersCount] = useState<number | null>(null);
+  const [isClosed, setIsClosed] = useState<boolean>(false);
+  const [closeReason, setCloseReason] = useState<string | null>(null);
+  const [maxMembers, setMaxMembers] = useState<number | null>(null);
+  const [closesAt, setClosesAt] = useState<string | null>(null);
+
   const prefillEmail = useMemo(() => {
     const u = (user?.email || '').trim();
     return u || '';
   }, [user?.email]);
 
   const isAlreadyFounder = Boolean(user?.foundingCircleMember);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch('/api/foundingStats');
+        const j = await r.json().catch(() => ({}));
+        if (cancelled) return;
+        if (j?.ok) {
+          setFoundersCount(typeof j.foundersCount === 'number' ? j.foundersCount : null);
+          setIsClosed(Boolean(j.isClosed));
+          setCloseReason(j.reason || null);
+          setMaxMembers(typeof j.maxMembers === 'number' ? j.maxMembers : null);
+          setClosesAt(j.closesAt || null);
+        }
+      } catch {
+        // non-blocking
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const handleJoin = async () => {
     setLoading(true);
@@ -173,7 +200,24 @@ export default function FoundingCirclePage(props: { user: User | null; onBack: (
               <div className="flex items-start justify-between gap-4 flex-col sm:flex-row">
                 <div>
                   <div className="text-white font-semibold">Join the Founding Circle</div>
-                  <div className="text-sm text-slate-300 mt-1">Limited early group. Calm authority. No spam.</div>
+                  <div className="text-sm text-slate-300 mt-1">
+                    Limited early group. Calm authority. No spam.
+                    {typeof foundersCount === 'number' ? (
+                      <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-white/10 bg-white/5 text-xs text-slate-200">
+                        <UsersIcon className="w-3.5 h-3.5 text-slate-300" />
+                        {maxMembers ? `${foundersCount} / ${maxMembers} founders` : `${foundersCount} founders joined`}
+                      </span>
+                    ) : null}
+                  </div>
+                  {isClosed ? (
+                    <div className="mt-2 text-xs text-amber-200/90">
+                      Founding Circle is currently closed{closeReason === 'limit_reached' ? ' (limit reached)' : closeReason === 'date_passed' ? ' (window ended)' : ''}.
+                    </div>
+                  ) : closesAt ? (
+                    <div className="mt-2 text-xs text-slate-400">
+                      Founders close at <span className="text-slate-200">{new Date(closesAt).toLocaleString()}</span>.
+                    </div>
+                  ) : null}
                 </div>
                 <div className="text-xs text-slate-400">
                   Trust: We don’t sell your data. Ever.
@@ -199,10 +243,10 @@ export default function FoundingCirclePage(props: { user: User | null; onBack: (
                 <button
                   type="button"
                   onClick={handleJoin}
-                  disabled={loading || !(prefillEmail || email).trim()}
+                  disabled={isClosed || loading || !(prefillEmail || email).trim()}
                   className="px-4 py-3 rounded-lg bg-amber-400/90 hover:bg-amber-400 text-black font-bold transition disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {loading ? 'Joining…' : 'Join Founding Circle'}
+                  {isClosed ? 'Founding Closed' : (loading ? 'Joining…' : 'Join Founding Circle')}
                 </button>
               </div>
 
