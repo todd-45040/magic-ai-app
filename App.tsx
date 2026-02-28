@@ -21,6 +21,7 @@ import PublicFeedbackForm from './components/PublicFeedbackForm';
 import AppSuggestionModal from './components/AppSuggestionModal';
 import DemoBanner from './components/DemoBanner';
 import FoundingCirclePage from './components/FoundingCirclePage';
+import FounderSuccessPage from './components/FounderSuccessPage';
 import { isDemoEnabled, enableDemo, seedDemoData } from './services/demoSeedService';
 
 const DISCLAIMER_ACKNOWLEDGED_KEY = 'magician_ai_disclaimer_acknowledged';
@@ -101,6 +102,13 @@ function App() {
         setAuthLoading(false);
         window.clearTimeout(loadingTimeout);
         return;
+      }
+
+      // Post-checkout founder success route.
+      // This page guides activation BEFORE any email sequence begins.
+      if (p.endsWith('/founder-success')) {
+        setMode('founder-success');
+        // Do not early-return: allow auth hydration to run so we can confirm Founder status.
       }
     } catch {}
 
@@ -326,6 +334,24 @@ function App() {
                 const refreshed = await getUserProfile(sbUser.id);
                 if (refreshed) setUser((prev) => ({ ...(prev as any), ...refreshed }));
               } catch {}
+            }}
+          />
+        );
+      case 'founder-success':
+        return (
+          <FounderSuccessPage
+            user={user}
+            onBack={() => setMode('selection')}
+            onStartIdea={() => {
+              try { localStorage.setItem('magician_active_view', 'effect-generator'); } catch {}
+              setMode('magician');
+            }}
+            onRefreshProfile={async () => {
+              const { data } = await supabase.auth.getSession();
+              const sbUser = data?.session?.user;
+              if (!sbUser?.id) return;
+              const refreshed = await getUserProfile(sbUser.id);
+              if (refreshed) setUser((prev) => ({ ...(prev as any), ...refreshed }));
             }}
           />
         );

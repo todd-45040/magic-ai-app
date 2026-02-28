@@ -133,7 +133,11 @@ export default async function handler(req: any, res: any) {
   }
 
   const origin = getOrigin(req);
-  const successUrl = `${origin}/app/?stripe=success&tier=${encodeURIComponent(tier)}`;
+  // Post-checkout: if this is a Founder-locked Professional checkout, route to the
+  // guided Founder Success Page (activation-first). Otherwise, use the generic return.
+  const successUrl = (tier === 'professional' && founderLocked)
+    ? `${origin}/app/founder-success?session_id={CHECKOUT_SESSION_ID}`
+    : `${origin}/app/?stripe=success&tier=${encodeURIComponent(tier)}`;
   const cancelUrl = `${origin}/app/?stripe=cancel`;
 
   // Stripe Checkout API (REST) – no stripe SDK dependency required.

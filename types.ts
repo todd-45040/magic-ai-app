@@ -9,7 +9,8 @@ export type Mode =
   | 'about'
   | 'live-feedback'
   | 'audience-feedback'
-  | 'founding-circle';
+  | 'founding-circle'
+  | 'founder-success';
 
 export interface ChatMessage {
   id: string;
