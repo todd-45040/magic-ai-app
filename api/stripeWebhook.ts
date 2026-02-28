@@ -358,6 +358,46 @@ export default async function handler(req: any, res: any) {
               await enqueueAndMaybeMarkSent(admin, minimalRow);
             }
           }
+
+          // Queue Founder Activation Email (24h later) — only sent if they have NOT saved an idea yet.
+          // This uses /api/emailDrip (cron) and is also idempotent by (to_email + template_key) dedupe.
+          try {
+            const templateKey = 'founder_activation_day1';
+            const { data: existing2 } = await admin
+              .from('maw_email_queue')
+              .select('id,status')
+              .eq('to_email', toEmail)
+              .eq('template_key', templateKey)
+              .limit(1);
+
+            const alreadyQueued = Array.isArray(existing2) && existing2.length > 0;
+            if (!alreadyQueued) {
+              const sendAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+              const trackingId2 = crypto.randomUUID();
+              const queueRow2: any = {
+                send_at: sendAt,
+                to_email: toEmail,
+                template_key: templateKey,
+                payload: { email: toEmail, name: String(urow?.full_name || urow?.name || obj?.customer_details?.name || meta?.name || '').trim() || null, user_id: userId },
+                status: 'queued',
+                tracking_id: trackingId2,
+                template_version: (FOUNDING_EMAIL_TEMPLATE_VERSION as any)[templateKey] || 1,
+              };
+
+              const ins2 = await enqueueAndMaybeMarkSent(admin, queueRow2);
+              if (!ins2.ok) {
+                await admin.from('maw_email_queue').insert({
+                  send_at: sendAt,
+                  to_email: toEmail,
+                  template_key: templateKey,
+                  payload: { email: toEmail, user_id: userId },
+                  status: 'queued',
+                } as any);
+              }
+            }
+          } catch {
+            // ignore
+          }
         }
       }
     } catch (e) {

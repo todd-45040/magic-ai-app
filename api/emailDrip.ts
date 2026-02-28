@@ -75,6 +75,37 @@ export default async function handler(req: any, res: any) {
 
       if (!id || !to || !template) continue;
 
+      // Activation-aware drip: If this is the Day-1 Founder activation nudge,
+      // only send if the user has NOT saved an idea yet.
+      if (template === ('founder_activation_day1' as any)) {
+        try {
+          let uid = String(payload?.user_id || '').trim();
+          if (!uid) {
+            const { data: urow } = await admin.from('users').select('id').eq('email', to).maybeSingle();
+            uid = String((urow as any)?.id || '').trim();
+          }
+
+          if (uid) {
+            const { count, error: cErr } = await admin
+              .from('ideas')
+              .select('id', { count: 'exact', head: true })
+              .eq('user_id', uid);
+
+            if (!cErr && Number(count || 0) > 0) {
+              // Mark skipped so it doesn't retry forever.
+              await admin
+                .from('maw_email_queue')
+                .update({ status: 'skipped', sent_at: new Date().toISOString(), last_error: 'activation_already_complete' } as any)
+                .eq('id', id);
+              skipped += 1;
+              continue;
+            }
+          }
+        } catch {
+          // If check fails, default to sending (don't block founders from receiving it).
+        }
+      }
+
       if (Number.isFinite(attemptCount) && attemptCount >= maxAttempts) {
         skipped += 1;
         continue;

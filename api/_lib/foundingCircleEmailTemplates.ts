@@ -9,7 +9,8 @@ export type FoundingEmailKey =
   | 'founding_early_access'
   | 'founding_pricing_lock'
   | 'founding_next_tools'
-  | 'founder_paid_welcome';
+  | 'founder_paid_welcome'
+  | 'founder_activation_day1';
 
 /**
  * Template versioning: bump per template whenever copy/layout changes that you want tracked.
@@ -20,6 +21,7 @@ export const FOUNDING_EMAIL_TEMPLATE_VERSION: Record<FoundingEmailKey, number> =
   founding_pricing_lock: 1,
   founding_next_tools: 1,
   founder_paid_welcome: 1,
+  founder_activation_day1: 1,
 };
 
 type TrackingOpts = {
@@ -74,7 +76,7 @@ export function renderFoundingEmail(
   const appUrl = (safeBaseUrl(opts?.baseUrl) || 'https://magicaiwizard.com') + '/founding-circle';
   const ctaUrl = makeClickUrl(opts, appUrl, key);
 
-  const baseHtml = (inner: string, cta: { href: string; label: string } = { href: ctaUrl, label: '${cta.label}' }) => `
+  const baseHtml = (inner: string, cta: { href: string; label: string } = { href: ctaUrl, label: 'Open Founding Circle' }) => `
   <div style="background:#070A12;color:#E5E7EB;padding:28px 16px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;">
     <div style="max-width:640px;margin:0 auto;border:1px solid rgba(168,85,247,0.25);border-radius:18px;background:linear-gradient(180deg, rgba(88,28,135,0.18), rgba(2,6,23,0.35));padding:22px;">
       <div style="font-weight:700;letter-spacing:0.08em;color:#FDE68A;">FOUNDING CIRCLE</div>
@@ -83,7 +85,7 @@ export function renderFoundingEmail(
       <div style="height:16px"></div>
 
       <a href="${cta.href}" style="display:inline-block;text-decoration:none;background:rgba(253,230,138,0.12);border:1px solid rgba(253,230,138,0.35);color:#FDE68A;padding:10px 14px;border-radius:12px;font-weight:700;">
-        Open Founding Circle
+        ${cta.label}
       </a>
 
       <div style="height:18px"></div>
@@ -148,6 +150,48 @@ You didn’t just subscribe.
 You helped launch a category.
 `,
       'Build Your First Routine',
+      target
+    );
+
+    return { subject, html, text, templateVersion };
+  }
+
+  if (key === 'founder_activation_day1') {
+    const subject = `Don’t waste your Founder advantage`;
+
+    const inner = `
+      <h1 style="margin:0;font-size:22px;color:#FFFFFF;">Founders don’t observe.<br/>They build.</h1>
+      <p style="margin:10px 0 0;opacity:0.92;line-height:1.55;">
+        Here’s the fastest way to use your Founder advantage today:
+      </p>
+      <ol style="margin:12px 0 0;padding-left:18px;line-height:1.75;opacity:0.95;">
+        <li><b>Open</b> the Effect Generator</li>
+        <li><b>Enter</b> 2 everyday objects</li>
+        <li><b>Save</b> the idea</li>
+      </ol>
+      <div style="height:10px"></div>
+      <p style="margin:0;opacity:0.92;line-height:1.55;">
+        Once you save your first idea, you’ve started building your <b>private creative vault</b>.
+        That’s when this becomes <i>yours</i> — not just something you tried.
+      </p>
+    `;
+
+    const base = safeBaseUrl(opts?.baseUrl) || 'https://magicaiwizard.com';
+    const target = `${base}/app/founder-success`;
+    const ctaHref = makeClickUrl(opts, target, key);
+    const html = baseHtml(inner, { href: ctaHref, label: 'Generate Your First Idea' });
+
+    const text = baseText(
+      `Founders don’t observe. They build.
+
+Here’s the fastest way to use your Founder advantage today:
+
+1) Open the Effect Generator
+2) Enter 2 everyday objects
+3) Save the idea
+
+Once you save your first idea, you’ve started building your private creative vault. That’s when this becomes yours — not just something you tried.`,
+      'Generate Your First Idea',
       target
     );
 
