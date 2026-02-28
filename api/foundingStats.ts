@@ -1,4 +1,3 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 
 function getEnv(name: string): string | null {
@@ -12,7 +11,7 @@ function parseIsoDate(v: string | null): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(_req: any, res: any) {
   try {
     const SUPABASE_URL = getEnv('SUPABASE_URL');
     const SERVICE_ROLE = getEnv('SUPABASE_SERVICE_ROLE_KEY');
