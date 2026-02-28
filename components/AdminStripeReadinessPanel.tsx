@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { fetchStripeReadiness, type StripeReadinessResult } from '../services/adminStripeReadinessService';
+import { fetchStripeReadiness, fetchStripeWebhookHealth, type StripeReadinessResult, type StripeWebhookHealthResult } from '../services/adminStripeReadinessService';
 
 function Badge({ ok, label }: { ok: boolean; label: string }) {
   return (
@@ -12,6 +12,7 @@ function Badge({ ok, label }: { ok: boolean; label: string }) {
 
 export default function AdminStripeReadinessPanel() {
   const [data, setData] = useState<StripeReadinessResult | null>(null);
+  const [webhook, setWebhook] = useState<StripeWebhookHealthResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [dryRunLoading, setDryRunLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,9 +23,13 @@ export default function AdminStripeReadinessPanel() {
     else setLoading(true);
 
     try {
-      const r = await fetchStripeReadiness(dryRun);
+      const [r, w] = await Promise.all([
+        fetchStripeReadiness(dryRun),
+        fetchStripeWebhookHealth(),
+      ]);
       if (!r.ok) throw new Error(r.error || 'Stripe readiness failed.');
       setData(r);
+      setWebhook(w.ok ? w : w);
     } catch (e: any) {
       setError(e?.message || 'Stripe readiness failed.');
     } finally {
@@ -58,6 +63,23 @@ export default function AdminStripeReadinessPanel() {
 
   const founders = data?.founders;
 
+  const webhookStatus = useMemo(() => {
+    const last = webhook?.last_event_received_at ? Date.parse(webhook.last_event_received_at) : NaN;
+    const minutesAgo = Number.isFinite(last) ? Math.floor((Date.now() - last) / 60000) : null;
+
+    const configured = !!webhook?.webhook_secret_configured;
+    const sigActive = !!webhook?.signature_verification_active;
+
+    // Green only if configured + signature verification active + we received an event recently.
+    const recentOk = minutesAgo !== null && minutesAgo <= 10;
+    const ok = configured && sigActive && recentOk;
+
+    let label = 'No webhook events yet';
+    if (minutesAgo !== null) label = `Last webhook: ${minutesAgo} min ago`;
+    return { ok, minutesAgo, label };
+  }, [webhook]);
+
+
   return (
     <div className="space-y-4">
       <div className="p-4 rounded-2xl bg-black/20 border border-white/10">
@@ -89,7 +111,7 @@ export default function AdminStripeReadinessPanel() {
         {error ? <div className="mt-3 text-sm text-rose-200">{error}</div> : null}
       </div>
 
-      <div className="grid md:grid-cols-2 gap-4">
+      <div className="grid md:grid-cols-3 gap-4">
         <div className="p-4 rounded-2xl bg-black/20 border border-white/10">
           <div className="text-white font-semibold mb-2">Required Env Vars</div>
           <div className="space-y-2">
@@ -127,6 +149,33 @@ export default function AdminStripeReadinessPanel() {
             Goal: <span className="text-white">100%</span> founders have <span className="text-white">pricing_lock</span> set before Stripe goes live.
           </div>
         </div>
+        <div className="p-4 rounded-2xl bg-black/20 border border-white/10">
+          <div className="text-white font-semibold mb-2">Webhook Health</div>
+
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm text-white/80">{webhookStatus.label}</div>
+            <Badge ok={webhookStatus.ok} label={webhookStatus.ok ? 'Healthy' : 'Needs Attention'} />
+          </div>
+
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+              <div className="text-xs text-white/60">Secret</div>
+              <div className="text-sm text-white font-semibold">{webhook?.webhook_secret_configured ? 'Configured' : 'Missing'}</div>
+            </div>
+            <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+              <div className="text-xs text-white/60">Signature Verify</div>
+              <div className="text-sm text-white font-semibold">{webhook?.signature_verification_active ? 'Active' : 'Inactive'}</div>
+            </div>
+          </div>
+
+          <div className="mt-3 text-xs text-white/50">
+            Green = secret configured + signature verification active + webhook received in last <span className="text-white/70">10 minutes</span>.
+            {webhook?.last_event_type ? (
+              <span className="block mt-1">Last type: <span className="text-white/70">{webhook.last_event_type}</span></span>
+            ) : null}
+          </div>
+        </div>
+
       </div>
 
       <div className="p-4 rounded-2xl bg-black/20 border border-white/10">
