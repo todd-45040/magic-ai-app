@@ -12,7 +12,8 @@ export type FoundingEmailKey =
   | 'founder_paid_welcome'
   | 'founder_activation_day1'
   | 'founder_business_day3'
-  | 'founder_identity_day5';
+  | 'founder_identity_day5'
+  | 'founder_spotlight_day7';
 
 /**
  * Template versioning: bump per template whenever copy/layout changes that you want tracked.
@@ -26,6 +27,8 @@ export const FOUNDING_EMAIL_TEMPLATE_VERSION: Record<FoundingEmailKey, number> =
   founder_activation_day1: 1,
   founder_business_day3: 1,
   founder_identity_day5: 1,
+  // Optional later — enabled only when you’re ready to start spotlighting real Founder results.
+  founder_spotlight_day7: 1,
 };
 
 type TrackingOpts = {
@@ -293,6 +296,57 @@ What feature would make this indispensable for you?
 
 Even one sentence helps. Your reply goes directly into the Founder roadmap.`,
       'Generate Your First Idea',
+      target
+    );
+
+    return { subject, html, text, templateVersion };
+  }
+
+  if (key === 'founder_spotlight_day7') {
+    // This template is intentionally “optional later” — enable it when you have real testimonials.
+    // You can pass spotlight fields via opts.vars.
+    const subject = `Founder Spotlight (Optional Later)`;
+    const spotlight = (opts?.vars as any)?.spotlight || (opts?.vars as any) || {};
+
+    const founderName = String(spotlight.founder_name || spotlight.name || 'A Founding Member');
+    const useCase = String(spotlight.use_case || 'Close-up / corporate');
+    const headline = String(spotlight.headline || '“This feels like having a director in my pocket.”');
+    const quote = String(
+      spotlight.quote ||
+        'I used Live Rehearsal to tighten my pacing, Director Mode to restructure the arc, and the Business tools to generate a contract in minutes. It instantly paid for itself.'
+    );
+
+    const inner = `
+      <h1 style="margin:0;font-size:22px;color:#FFFFFF;">Founder Spotlight</h1>
+      <p style="margin:10px 0 0;opacity:0.92;line-height:1.55;">
+        Real-world results from a Founding Member using the full stack — rehearsal, direction, and business.
+      </p>
+      <div style="height:12px"></div>
+      <div style="border:1px solid rgba(253,230,138,0.25);background:rgba(2,6,23,0.35);border-radius:16px;padding:14px;">
+        <p style="margin:0;opacity:0.92;line-height:1.55;"><b>${founderName}</b> <span style="opacity:0.75;">— ${useCase}</span></p>
+        <p style="margin:10px 0 0;opacity:0.95;line-height:1.55;"><b>${headline}</b></p>
+        <p style="margin:10px 0 0;opacity:0.90;line-height:1.55;">${quote}</p>
+      </div>
+      <div style="height:12px"></div>
+      <p style="margin:0;opacity:0.92;line-height:1.55;">What this Founder used:</p>
+      <ul style="margin:10px 0 0;padding-left:18px;opacity:0.92;line-height:1.6;">
+        <li><b>Live Rehearsal</b> to tighten timing and delivery</li>
+        <li><b>Director Mode</b> to shape the arc and beats</li>
+        <li><b>Business OS</b> (Contracts / CRM / Show Finance) to run gigs like a pro</li>
+      </ul>
+      <div style="height:12px"></div>
+      <p style="margin:0;opacity:0.88;line-height:1.55;">
+        Social proof matters — and this is just the beginning. Your Founder badge means you’re part of the group shaping what ships next.
+      </p>
+    `;
+
+    const base = safeBaseUrl(opts?.baseUrl) || 'https://magicaiwizard.com';
+    const target = `${base}/app/founder-success`;
+    const ctaHref = makeClickUrl(opts, target, key);
+    const html = baseHtml(inner, { href: ctaHref, label: 'Generate a Contract in 15 Seconds' });
+    const text = baseText(
+      `Founder Spotlight\n\n${founderName} — ${useCase}\n\n${headline}\n\n${quote}\n\nWhat this Founder used:\n- Live Rehearsal\n- Director Mode\n- Business OS (Contracts / CRM / Show Finance)\n\nTry the same workflow today: generate a contract in 15 seconds.`,
+      'Generate a Contract in 15 Seconds',
       target
     );
 

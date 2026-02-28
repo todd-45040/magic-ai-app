@@ -484,6 +484,50 @@ export default async function handler(req: any, res: any) {
           } catch {
             // ignore
           }
+
+          // Optional later: Founder Spotlight (Day 7 / 168h)
+          // Only queued when explicitly enabled (FOUNDER_SPOTLIGHT_ENABLED=1).
+          try {
+            const spotlightEnabled = String(process.env.FOUNDER_SPOTLIGHT_ENABLED || '').trim() === '1';
+            if (spotlightEnabled) {
+              const templateKey = 'founder_spotlight_day7';
+              const { data: existing5 } = await admin
+                .from('maw_email_queue')
+                .select('id,status')
+                .eq('to_email', founderToEmail)
+                .eq('template_key', templateKey)
+                .limit(1);
+
+              const alreadyQueued = Array.isArray(existing5) && existing5.length > 0;
+              if (!alreadyQueued) {
+                const sendAt = new Date(Date.now() + 168 * 60 * 60 * 1000).toISOString();
+                const trackingId5 = crypto.randomUUID();
+                const queueRow5: any = {
+                  send_at: sendAt,
+                  to_email: founderToEmail,
+                  template_key: templateKey,
+                  // Spotlight copy can be overridden later via payload/vars when you have real testimonials.
+                  payload: { email: founderToEmail, name: founderName, user_id: userId },
+                  status: 'queued',
+                  tracking_id: trackingId5,
+                  template_version: (FOUNDING_EMAIL_TEMPLATE_VERSION as any)[templateKey] || 1,
+                };
+
+                const ins5 = await enqueueAndMaybeMarkSent(admin, queueRow5);
+                if (!ins5.ok) {
+                  await admin.from('maw_email_queue').insert({
+                    send_at: sendAt,
+                    to_email: founderToEmail,
+                    template_key: templateKey,
+                    payload: { email: founderToEmail, user_id: userId },
+                    status: 'queued',
+                  } as any);
+                }
+              }
+            }
+          } catch {
+            // ignore
+          }
     } catch (e) {
       console.warn('[stripeWebhook] founder paid welcome email failed', String((e as any)?.message || e || ''));
     }
