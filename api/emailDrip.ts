@@ -24,6 +24,23 @@ function getAdminClient() {
   return createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 }
 
+async function fetchLatestPublishedTestimonial(admin: any) {
+  try {
+    const { data, error } = await admin
+      .from('maw_founder_testimonials')
+      .select('founder_name,use_case,headline,quote,meta,featured_at,created_at')
+      .eq('is_published', true)
+      .order('featured_at', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error || !data) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
 export default async function handler(req: any, res: any) {
   // This endpoint is designed for Vercel Cron (or manual admin trigger).
   // Keep it locked with a secret.
@@ -75,6 +92,41 @@ export default async function handler(req: any, res: any) {
 
       if (!id || !to || !template) continue;
 
+      // Spotlight email is optional + gated. If disabled, skip queued items.
+      if (template === ('founder_spotlight_day7' as any)) {
+        const enabled = String(process.env.FOUNDER_SPOTLIGHT_ENABLED || '').trim() === '1';
+        if (!enabled) {
+          await admin
+            .from('maw_email_queue')
+            .update({ status: 'skipped', sent_at: new Date().toISOString(), last_error: 'spotlight_disabled' } as any)
+            .eq('id', id);
+          skipped += 1;
+          continue;
+        }
+
+        // Auto-pull the latest published testimonial; if none exist, skip (no placeholders).
+        const t = await fetchLatestPublishedTestimonial(admin);
+        if (!t) {
+          await admin
+            .from('maw_email_queue')
+            .update({ status: 'skipped', sent_at: new Date().toISOString(), last_error: 'no_published_testimonial' } as any)
+            .eq('id', id);
+          skipped += 1;
+          continue;
+        }
+
+        payload.vars = {
+          ...(payload.vars || {}),
+          spotlight: {
+            founder_name: t.founder_name,
+            use_case: t.use_case,
+            headline: t.headline,
+            quote: t.quote,
+            meta: t.meta,
+          },
+        };
+      }
+
       // Activation-aware drip: If this is the Day-1 Founder activation nudge,
       // only send if the user has NOT saved an idea yet.
       if (template === ('founder_activation_day1' as any)) {
@@ -123,7 +175,11 @@ export default async function handler(req: any, res: any) {
       }
 
       const baseUrl = getEnv('APP_BASE_URL') || getEnv('PUBLIC_APP_URL') || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) || 'https://magicaiwizard.com';
-      const rendered = renderFoundingEmail(template, { name: payload?.name ?? null, email: to }, { trackingId: item.tracking_id ?? null, baseUrl, templateVersion: item.template_version ?? null });
+      const rendered = renderFoundingEmail(
+        template,
+        { name: payload?.name ?? null, email: to },
+        { trackingId: item.tracking_id ?? null, baseUrl, templateVersion: item.template_version ?? null, vars: payload?.vars ?? null }
+      );
       const replyTo = item.template_key === 'founder_identity_day5' ? (process.env.MAIL_REPLY_TO || 'support@magicaiwizard.com') : undefined;
       const r = await sendMail({ to, subject: rendered.subject, html: rendered.html, text: rendered.text, ...(replyTo ? { replyTo } : {}) });
 

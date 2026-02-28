@@ -5,6 +5,7 @@ import AdminUsageDashboard from './AdminUsageDashboard';
 import AdminUsersPage from './AdminUsersPage';
 import AdminLeadsPage from './AdminLeadsPage';
 import AdminStripeReadinessPanel from './AdminStripeReadinessPanel';
+import AdminTestimonialsPage from './AdminTestimonialsPage';
 import AdminSettingsModal from './AdminSettingsModal';
 import AdminMetricDictionaryModal from './AdminMetricDictionaryModal';
 import {
@@ -18,7 +19,7 @@ import {
 export default function AdminPanel({ user }: { user: User }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [metricOpen, setMetricOpen] = useState(false);
-  const [tab, setTab] = useState<'overview' | 'users' | 'leads' | 'telemetry' | 'feedback' | 'stripe'>('overview');
+  const [tab, setTab] = useState<'overview' | 'users' | 'leads' | 'telemetry' | 'feedback' | 'stripe' | 'testimonials'>('overview');
 
   // App Feedback state
   const [statusFilter, setStatusFilter] = useState<SuggestionStatus | 'all'>('new');
@@ -116,6 +117,13 @@ export default function AdminPanel({ user }: { user: User }) {
               >
                 Telemetry
               </button>
+              <button
+                type="button"
+                onClick={() => setTab('testimonials')}
+                className={`px-3 py-1.5 rounded-full text-sm transition ${tab === 'testimonials' ? 'bg-white/10 text-white' : 'text-white/70 hover:text-white'}`}
+              >
+                Testimonials
+              </button>
             </div>
 
             <button
@@ -157,6 +165,8 @@ export default function AdminPanel({ user }: { user: User }) {
           <AdminUsersPage />
         ) : tab === 'leads' ? (
           <AdminLeadsPage />
+        ) : tab === 'testimonials' ? (
+          <AdminTestimonialsPage />
         ) : tab === 'telemetry' ? (
           <AdminUsageDashboard />
         ) : tab === 'stripe' ? (
