@@ -117,15 +117,21 @@ export default async function handler(req: any, res: any) {
   const email = normalizeEmail(emailRaw);
 
   const isFounding = Boolean(body?.founding_circle || body?.meta?.founding_circle);
-  const foundingSource = typeof body?.founding_source === 'string' ? body.founding_source.trim().slice(0, 80) : (source ? String(source) : 'organic');
-  const pricingLock = typeof body?.pricing_lock === 'string' ? body.pricing_lock.trim().slice(0, 80) : (isFounding ? 'founding_pro_admc_2026' : null);
 
-  if (!email || !isValidEmail(email)) {
-    return json(res, 400, { ok: false, error_code: 'INVALID_EMAIL', message: 'Please provide a valid email.' });
-  }
-
+  // Attribution (Phase 8 segmentation)
   const attributionRaw = pickAttributionRaw(req, body);
   const source = normalizeAttributionSource(attributionRaw || (typeof body?.source === 'string' ? body.source : ''));
+
+  const foundingSource =
+    typeof body?.founding_source === 'string'
+      ? body.founding_source.trim().slice(0, 80)
+      : (source ? String(source) : 'organic');
+
+  const pricingLock =
+    typeof body?.pricing_lock === 'string'
+      ? body.pricing_lock.trim().slice(0, 80)
+      : (isFounding ? 'founding_pro_admc_2026' : null); 
+
   const meta = body?.meta ?? null;
   if (meta && typeof meta === 'object') {
     (meta as any).attribution_raw = attributionRaw || (meta as any).attribution_raw || null;
