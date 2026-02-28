@@ -548,26 +548,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, shows, feedback, ideas, onN
 
             <header className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-3xl font-bold text-yellow-200 font-cinzel flex items-center gap-3 flex-wrap">
-  <span>Welcome, {user.email.split('@')[0]}</span>
-  {Boolean((user as any)?.foundingCircleMember) && (
-    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border border-amber-400/40 bg-gradient-to-r from-amber-500/15 via-yellow-400/10 to-purple-500/10 text-amber-200 shadow-[0_0_18px_rgba(251,191,36,0.15)]">
-      <span aria-hidden>🏆</span>
-      <span>Founding Member</span>
-    </span>
-  )}
-</h1>
-<p className="text-slate-400">Here's your magic dashboard for today.</p>
-{Boolean((user as any)?.foundingCircleMember) && (
-  <div className="mt-3 inline-flex items-start gap-2 rounded-xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100/90 shadow-[0_0_30px_rgba(251,191,36,0.08)]">
-    <span className="mt-[1px]" aria-hidden>✨</span>
-    <div className="leading-snug">
-      <div className="font-semibold text-amber-200">Your Pro rate is locked for life.</div>
-      <div className="text-amber-100/70 text-xs mt-0.5">Thank you for being early — your Founders pricing stays attached to your account.</div>
-    </div>
-  </div>
-)}
-
+                    <h1 className="text-3xl font-bold text-yellow-200 font-cinzel">Welcome, {user.email.split('@')[0]}</h1>
+                    <p className="text-slate-400">Here's your magic dashboard for today.</p>
                 </div>
                 {hasProAccess && (
                     <button onClick={() => setIsCustomizeMode(prev => !prev)} className={`flex items-center gap-2 px-4 py-2 rounded-md font-semibold transition-colors ${isCustomizeMode ? 'bg-purple-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
@@ -576,7 +558,44 @@ const Dashboard: React.FC<DashboardProps> = ({ user, shows, feedback, ideas, onN
                     </button>
                 )}
             </header>
-            
+
+
+            {user.foundingCircleMember && (
+                <div className="rounded-xl border border-yellow-500/30 bg-gradient-to-br from-yellow-500/10 via-slate-900/40 to-purple-900/20 p-5 shadow-sm">
+                    <div className="flex items-start justify-between gap-4">
+                        <div>
+                            <p className="text-xs uppercase tracking-widest text-yellow-200/80">Founding Member Benefits</p>
+                            <h2 className="mt-1 text-lg font-bold text-yellow-100">You’re part of the founding cohort.</h2>
+                            <p className="mt-1 text-sm text-slate-300/90">
+                                Thanks for helping shape Magic AI Wizard early — your access stays premium as we ship new tools.
+                            </p>
+                        </div>
+                        <div className="shrink-0 rounded-full bg-yellow-400/15 px-3 py-1 text-sm font-semibold text-yellow-200 border border-yellow-400/25">
+                            🏆 Founder
+                        </div>
+                    </div>
+
+                    <ul className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                        <li className="flex items-start gap-2 text-slate-200">
+                            <span className="mt-0.5 text-yellow-300">✓</span>
+                            <span><span className="font-semibold text-yellow-100">Locked pricing</span> — your Pro rate is locked for life.</span>
+                        </li>
+                        <li className="flex items-start gap-2 text-slate-200">
+                            <span className="mt-0.5 text-yellow-300">✓</span>
+                            <span><span className="font-semibold text-yellow-100">Early access tools</span> — first invite when new tools ship.</span>
+                        </li>
+                        <li className="flex items-start gap-2 text-slate-200">
+                            <span className="mt-0.5 text-yellow-300">✓</span>
+                            <span><span className="font-semibold text-yellow-100">Priority consideration</span> — your feedback helps steer the roadmap.</span>
+                        </li>
+                        <li className="flex items-start gap-2 text-slate-200">
+                            <span className="mt-0.5 text-yellow-300">✓</span>
+                            <span><span className="font-semibold text-yellow-100">Beta toggles (future)</span> — optional early experiments as they roll out.</span>
+                        </li>
+                    </ul>
+                </div>
+            )}
+
             <div className="space-y-6">
                 {layout.visible.map(widgetId => (
                     <div key={widgetId} data-widget-id={widgetId}>

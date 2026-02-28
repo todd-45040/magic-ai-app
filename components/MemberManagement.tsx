@@ -138,21 +138,14 @@ const MemberManagement: React.FC = () => {
               <tr key={user.email} className="border-t border-slate-700 hover:bg-slate-800/40">
                 <td className="p-3 text-slate-200">{user.email}</td>
                 <td className="p-3">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`px-2 py-1 text-xs font-bold rounded-full ${
-                      user.membership === 'professional' ? 'bg-amber-500/20 text-amber-300' :
-                      user.membership === 'amateur' ? 'bg-sky-500/20 text-sky-300' :
-                      user.membership === 'trial' ? 'bg-green-500/20 text-green-300' :
-                      'bg-slate-600/50 text-slate-300'
-                    }`}>
-                      {user.membership.toUpperCase()}
-                    </span>
-                    {Boolean((user as any)?.foundingCircleMember) && (
-                      <span className="px-2 py-1 text-xs font-bold rounded-full border border-amber-400/30 bg-amber-500/10 text-amber-200">
-                        🏆 FOUNDER
-                      </span>
-                    )}
-                  </div>
+                  <span className={`px-2 py-1 text-xs font-bold rounded-full ${
+                    user.membership === 'professional' ? 'bg-amber-500/20 text-amber-300' :
+                    user.membership === 'amateur' ? 'bg-sky-500/20 text-sky-300' :
+                    user.membership === 'trial' ? 'bg-green-500/20 text-green-300' :
+                    'bg-slate-600/50 text-slate-300'
+                  }`}>
+                    {user.membership.toUpperCase()}
+                  </span>
                 </td>
                 <td className="p-3 text-right">
                     {user.isAdmin ? (
