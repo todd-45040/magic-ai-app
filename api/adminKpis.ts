@@ -741,11 +741,6 @@ if (!cls.isSuccess && recentFailures.length < 25) {
       return s;
     };
 
-    const uniqueUsersSince = async (d: number) => {
-      const s = await uniqueUserSetSince(d);
-      return s ? s.size : null;
-    };
-
     try {
       const [s1, s7, s30] = await Promise.all([uniqueUserSetSince(1), uniqueUserSetSince(7), uniqueUserSetSince(30)]);
       const d1 = s1 ? s1.size : 0;
