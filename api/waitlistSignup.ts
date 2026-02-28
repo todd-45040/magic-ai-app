@@ -296,11 +296,16 @@ export default async function handler(req: any, res: any) {
         const mk = (hoursFromNow: number) => new Date(now + hoursFromNow * 60 * 60 * 1000).toISOString();
         const basePayload = { name, email, founding_source: foundingSource, pricing_lock: pricingLock, founding_bucket: foundingBucket || 'admc_2026' };
 
+        // Founders Circle Email Sequence (Step #3)
+        // 0h  - Welcome confirmation
+        // 1h  - “You are officially locked in” (pricing lock recorded)
+        // 24h - Pre-Stripe early access notice
+        // 7d  - Value reinforcement
         const queueRows = [
           { to_email: email, template_key: 'founding_welcome', send_at: mk(0), payload: basePayload },
+          { to_email: email, template_key: 'founding_pricing_lock', send_at: mk(1), payload: basePayload },
           { to_email: email, template_key: 'founding_early_access', send_at: mk(24), payload: basePayload },
-          { to_email: email, template_key: 'founding_pricing_lock', send_at: mk(72), payload: basePayload },
-          { to_email: email, template_key: 'founding_next_tools', send_at: mk(144), payload: basePayload },
+          { to_email: email, template_key: 'founding_next_tools', send_at: mk(168), payload: basePayload },
         ];
 
         await admin.from('maw_email_queue').insert(queueRows);
