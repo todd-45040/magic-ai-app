@@ -4,6 +4,7 @@ import AdminOverviewDashboard from './AdminOverviewDashboard';
 import AdminUsageDashboard from './AdminUsageDashboard';
 import AdminUsersPage from './AdminUsersPage';
 import AdminLeadsPage from './AdminLeadsPage';
+import AdminStripeReadinessPanel from './AdminStripeReadinessPanel';
 import AdminSettingsModal from './AdminSettingsModal';
 import AdminMetricDictionaryModal from './AdminMetricDictionaryModal';
 import {
@@ -17,7 +18,7 @@ import {
 export default function AdminPanel({ user }: { user: User }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [metricOpen, setMetricOpen] = useState(false);
-  const [tab, setTab] = useState<'overview' | 'users' | 'leads' | 'telemetry' | 'feedback'>('overview');
+  const [tab, setTab] = useState<'overview' | 'users' | 'leads' | 'telemetry' | 'feedback' | 'stripe'>('overview');
 
   // App Feedback state
   const [statusFilter, setStatusFilter] = useState<SuggestionStatus | 'all'>('new');
@@ -158,6 +159,10 @@ export default function AdminPanel({ user }: { user: User }) {
           <AdminLeadsPage />
         ) : tab === 'telemetry' ? (
           <AdminUsageDashboard />
+        ) : tab === 'stripe' ? (
+          <div className="p-4">
+            <AdminStripeReadinessPanel />
+          </div>
         ) : (
           <div className="p-4">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
