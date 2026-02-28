@@ -72,3 +72,34 @@ export async function fetchStripeWebhookHealth(): Promise<StripeWebhookHealthRes
   if (!r.ok) return { ok: false, webhook_secret_configured: false, signature_verification_active: false, last_event_received_at: null, last_event_type: null, last_event_id: null, livemode: null, error: j?.error || j?.message || 'Webhook health failed.' };
   return j as StripeWebhookHealthResult;
 }
+
+export type FounderCountResult = {
+  ok: boolean;
+  admc_count: number;
+  reserve_count: number;
+  total_count: number;
+  admc_limit: number;
+  reserve_limit: number;
+  total_limit: number;
+  reason?: string;
+  error?: string;
+};
+
+export async function fetchFounderCounts(): Promise<FounderCountResult> {
+  const r = await fetch('/api/admin/founder-count');
+  const j = (await r.json().catch(() => ({}))) as any;
+  if (!r.ok) {
+    return {
+      ok: false,
+      admc_count: 0,
+      reserve_count: 0,
+      total_count: 0,
+      admc_limit: 75,
+      reserve_limit: 25,
+      total_limit: 100,
+      error: j?.error || j?.message || 'Founder count failed.',
+    };
+  }
+  return j as FounderCountResult;
+}
+

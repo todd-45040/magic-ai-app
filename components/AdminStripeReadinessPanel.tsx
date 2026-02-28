@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { fetchStripeReadiness, fetchStripeWebhookHealth, manualFounderClaim, type StripeReadinessResult, type StripeWebhookHealthResult } from '../services/adminStripeReadinessService';
+import { fetchStripeReadiness, fetchStripeWebhookHealth, fetchFounderCounts, manualFounderClaim, type FounderCountResult, type StripeReadinessResult, type StripeWebhookHealthResult } from '../services/adminStripeReadinessService';
 
 function Badge({ ok, label }: { ok: boolean; label: string }) {
   return (
@@ -13,6 +13,7 @@ function Badge({ ok, label }: { ok: boolean; label: string }) {
 export default function AdminStripeReadinessPanel() {
   const [data, setData] = useState<StripeReadinessResult | null>(null);
   const [webhook, setWebhook] = useState<StripeWebhookHealthResult | null>(null);
+  const [founderCounts, setFounderCounts] = useState<FounderCountResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [dryRunLoading, setDryRunLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,6 +45,20 @@ export default function AdminStripeReadinessPanel() {
   useEffect(() => {
     load(false);
   }, []);
+
+
+  useEffect(() => {
+    const t = setInterval(async () => {
+      try {
+        const fc = await fetchFounderCounts();
+        setFounderCounts(fc?.ok ? fc : fc);
+      } catch {
+        // ignore
+      }
+    }, 30000);
+    return () => clearInterval(t);
+  }, []);
+
 
   const envRows = useMemo(() => {
     const env = data?.env || {};
@@ -158,7 +173,7 @@ export default function AdminStripeReadinessPanel() {
         {error ? <div className="mt-3 text-sm text-rose-200">{error}</div> : null}
       </div>
 
-      <div className="grid md:grid-cols-3 gap-4">
+      <div className="grid md:grid-cols-4 gap-4">
         <div className="p-4 rounded-2xl bg-black/20 border border-white/10">
           <div className="text-white font-semibold mb-2">Required Env Vars</div>
           <div className="space-y-2">
@@ -196,7 +211,41 @@ export default function AdminStripeReadinessPanel() {
             Goal: <span className="text-white">100%</span> founders have <span className="text-white">pricing_lock</span> set before Stripe goes live.
           </div>
         </div>
+        
         <div className="p-4 rounded-2xl bg-black/20 border border-white/10">
+          <div className="text-white font-semibold mb-2">Founder Allocation</div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+              <div className="text-xs text-white/60">ADMC</div>
+              <div className="text-lg text-white font-semibold">
+                {typeof founderCounts?.admc_count === 'number' ? `${founderCounts.admc_count} / ${founderCounts.admc_limit ?? 75}` : '—'}
+              </div>
+            </div>
+            <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+              <div className="text-xs text-white/60">Reserve</div>
+              <div className="text-lg text-white font-semibold">
+                {typeof founderCounts?.reserve_count === 'number' ? `${founderCounts.reserve_count} / ${founderCounts.reserve_limit ?? 25}` : '—'}
+              </div>
+            </div>
+            <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+              <div className="text-xs text-white/60">Total</div>
+              <div className="text-lg text-white font-semibold">
+                {typeof founderCounts?.total_count === 'number' ? `${founderCounts.total_count} / ${founderCounts.total_limit ?? 100}` : '—'}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <div className="text-xs text-white/50">Auto-refreshes every 30s.</div>
+            <Badge
+              ok={!!founderCounts && founderCounts.admc_count < (founderCounts.admc_limit ?? 75)}
+              label={!!founderCounts && founderCounts.admc_count < (founderCounts.admc_limit ?? 75) ? 'ADMC spots available' : 'ADMC full'}
+            />
+          </div>
+        </div>
+
+<div className="p-4 rounded-2xl bg-black/20 border border-white/10">
           <div className="text-white font-semibold mb-2">Webhook Health</div>
 
           <div className="flex items-center justify-between gap-3">
