@@ -48,6 +48,8 @@ export default function AdminOverviewDashboard({ onGoUsers, onGoLeads }: { onGoU
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [admcLeads, setAdmcLeads] = useState<number | null>(null);
+  const [founderCounts, setFounderCounts] = useState<any>(null);
+  const [founderCountsErr, setFounderCountsErr] = useState<string | null>(null);
 
   const [selectedFailure, setSelectedFailure] = useState<any | null>(null);
 
@@ -84,6 +86,38 @@ export default function AdminOverviewDashboard({ onGoUsers, onGoLeads }: { onGoU
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [days]);
+
+
+  // Phase 9 — Founders allocation widget (ADMC / Reserve / Total)
+  useEffect(() => {
+    let alive = true;
+
+    async function loadCounts() {
+      try {
+        setFounderCountsErr(null);
+        const r = await fetch('/api/admin/founder-count', { headers: { 'Accept': 'application/json' } });
+        const j = await r.json().catch(() => ({}));
+        if (!alive) return;
+        if (j && j.ok) {
+          setFounderCounts(j);
+        } else {
+          setFounderCounts(null);
+          setFounderCountsErr('Failed to load founder counts');
+        }
+      } catch (e: any) {
+        if (!alive) return;
+        setFounderCounts(null);
+        setFounderCountsErr(e?.message || 'Failed to load founder counts');
+      }
+    }
+
+    loadCounts();
+    const t = setInterval(loadCounts, 30000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -191,8 +225,8 @@ export default function AdminOverviewDashboard({ onGoUsers, onGoLeads }: { onGoU
 
   return (
     <div className="p-4 space-y-4">
-
-      <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="text-sm opacity-80">ADMC leads captured</div>
@@ -213,6 +247,53 @@ export default function AdminOverviewDashboard({ onGoUsers, onGoLeads }: { onGoU
         </div>
       </div>
 
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm opacity-80">Founder allocation</div>
+
+            <div className="mt-2 space-y-1 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-white/70">ADMC Founders</span>
+                <span className="text-white font-semibold">
+                  {founderCounts ? `${founderCounts.admc_count ?? 0} / ${founderCounts.admc_limit ?? 75}` : '—'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-white/70">Reserve</span>
+                <span className="text-white font-semibold">
+                  {founderCounts ? `${founderCounts.reserve_count ?? 0} / ${founderCounts.reserve_limit ?? 25}` : '—'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-white/70">Total</span>
+                <span className="text-white font-semibold">
+                  {founderCounts ? `${founderCounts.total_count ?? 0} / ${founderCounts.total_limit ?? 100}` : '—'}
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-2 text-[11px] text-white/50">
+              {founderCountsErr ? `Note: ${founderCountsErr}` : 'Auto-refreshes every 30 seconds.'}
+            </div>
+          </div>
+
+          <div className="shrink-0">
+            {(() => {
+              const admcCount = Number(founderCounts?.admc_count ?? 0);
+              const admcLimit = Number(founderCounts?.admc_limit ?? 75);
+              const ok = Number.isFinite(admcCount) && Number.isFinite(admcLimit) && admcCount < admcLimit;
+              return (
+                <div className={`px-3 py-2 rounded-xl border text-xs ${ok ? 'bg-emerald-500/10 border-emerald-400/20 text-emerald-100' : 'bg-red-500/10 border-red-400/20 text-red-100'}`}>
+                  {founderCounts ? (ok ? 'ADMC spots available' : 'ADMC full') : 'Loading…'}
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      </div>
+
+      </div>
 
       {/* Phase 6.5 — Safety alert: top daily spenders (last 24h) */}
       {Array.isArray(data?.alerts?.top_daily_spenders_24h) && data.alerts.top_daily_spenders_24h.length > 0 ? (
