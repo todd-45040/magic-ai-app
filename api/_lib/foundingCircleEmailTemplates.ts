@@ -11,7 +11,8 @@ export type FoundingEmailKey =
   | 'founding_next_tools'
   | 'founder_paid_welcome'
   | 'founder_activation_day1'
-  | 'founder_business_day3';
+  | 'founder_business_day3'
+  | 'founder_identity_day5';
 
 /**
  * Template versioning: bump per template whenever copy/layout changes that you want tracked.
@@ -24,6 +25,7 @@ export const FOUNDING_EMAIL_TEMPLATE_VERSION: Record<FoundingEmailKey, number> =
   founder_paid_welcome: 1,
   founder_activation_day1: 1,
   founder_business_day3: 1,
+  founder_identity_day5: 1,
 };
 
 type TrackingOpts = {
@@ -245,6 +247,58 @@ That’s not “software.” That’s leverage.`,
 
     return { subject, html, text, templateVersion };
   }
+
+  if (key === 'founder_identity_day5') {
+    const subject = `You’re building something bigger than software`;
+
+    const inner = `
+      <h1 style="margin:0;font-size:22px;color:#FFFFFF;">Magic is ancient.<br/>AI is new.<br/>You’re standing at the intersection.</h1>
+      <p style="margin:12px 0 0;opacity:0.92;line-height:1.55;">
+        As a Founding Member, you’re not just an early customer — you’re part of the group that shapes what this becomes.
+      </p>
+      <div style="height:10px"></div>
+      <ul style="margin:0;padding-left:18px;opacity:0.92;line-height:1.6;">
+        <li><b>Early adopters</b> who get there first</li>
+        <li><b>Influencers</b> who set the tone</li>
+        <li><b>Shape-the-future members</b> who help decide what ships next</li>
+      </ul>
+      <div style="height:12px"></div>
+      <p style="margin:0;opacity:0.92;line-height:1.55;">
+        <b>Reply to this email:</b><br/>
+        What feature would make this <i>indispensable</i> for you?
+      </p>
+      <div style="height:12px"></div>
+      <p style="margin:0;opacity:0.85;line-height:1.55;">
+        Even one sentence helps. Your reply goes directly into the Founder roadmap.
+      </p>
+    `;
+
+    const base = safeBaseUrl(opts?.baseUrl) || 'https://magicaiwizard.com';
+    const target = `${base}/app/founder-success`;
+    const ctaHref = makeClickUrl(opts, target, key);
+    const html = baseHtml(inner, { href: ctaHref, label: 'Generate Your First Idea' });
+    const text = baseText(
+      `Magic is ancient.
+AI is new.
+You’re standing at the intersection.
+
+As a Founding Member, you’re not just an early customer — you’re part of the group that shapes what this becomes.
+
+- Early adopters who get there first
+- Influencers who set the tone
+- Shape-the-future members who help decide what ships next
+
+Reply to this email:
+What feature would make this indispensable for you?
+
+Even one sentence helps. Your reply goes directly into the Founder roadmap.`,
+      'Generate Your First Idea',
+      target
+    );
+
+    return { subject, html, text, templateVersion };
+  }
+
 
 if (key === 'founding_welcome') {
     const subject = `Welcome to the Founding Circle — you’re in`;

@@ -124,7 +124,8 @@ export default async function handler(req: any, res: any) {
 
       const baseUrl = getEnv('APP_BASE_URL') || getEnv('PUBLIC_APP_URL') || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) || 'https://magicaiwizard.com';
       const rendered = renderFoundingEmail(template, { name: payload?.name ?? null, email: to }, { trackingId: item.tracking_id ?? null, baseUrl, templateVersion: item.template_version ?? null });
-      const r = await sendMail({ to, subject: rendered.subject, html: rendered.html, text: rendered.text });
+      const replyTo = item.template_key === 'founder_identity_day5' ? (process.env.MAIL_REPLY_TO || 'support@magicaiwizard.com') : undefined;
+      const r = await sendMail({ to, subject: rendered.subject, html: rendered.html, text: rendered.text, ...(replyTo ? { replyTo } : {}) });
 
       if (r.ok) {
         sent += 1;
