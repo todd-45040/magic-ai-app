@@ -282,27 +282,30 @@ export default async function handler(req: any, res: any) {
     }
 
     
-    // Immediate Founder Paid Welcome email (0 minutes) — best-effort, idempotent by queue dedupe.
+        let founderToEmail = '';
+    let founderName: string | null = null;
+
+// Immediate Founder Paid Welcome email (0 minutes) — best-effort, idempotent by queue dedupe.
     try {
       if (type === 'checkout.session.completed' && isMailerConfigured()) {
         // Resolve recipient
         const { data: urow } = await admin.from('users').select('email,full_name,name').eq('id', userId).maybeSingle();
-        const toEmail =
-          String(urow?.email || obj?.customer_details?.email || meta?.email || '').trim();
+        founderName = String(urow?.full_name || urow?.name || obj?.customer_details?.name || meta?.name || '').trim() || null;
+        founderToEmail = String(urow?.email || obj?.customer_details?.email || meta?.email || '').trim();
 
-        if (toEmail) {
+        if (founderToEmail) {
           // Dedupe: avoid re-sending the same template to same email if webhook retries.
           const { data: existing } = await admin
             .from('maw_email_queue')
             .select('id,status')
-            .eq('to_email', toEmail)
+            .eq('to_email', founderToEmail)
             .eq('template_key', 'founder_paid_welcome')
             .limit(1);
 
           const alreadyQueuedOrSent = Array.isArray(existing) && existing.length > 0;
 
           if (!alreadyQueuedOrSent) {
-            const name = String(urow?.full_name || urow?.name || obj?.customer_details?.name || meta?.name || '').trim() || null;
+            const name = founderName;
 
             const baseUrl =
               getEnv('APP_BASE_URL') ||
@@ -314,7 +317,7 @@ export default async function handler(req: any, res: any) {
 
             const rendered = renderFoundingEmail(
               'founder_paid_welcome' as any,
-              { name, email: toEmail },
+              { name, email: founderToEmail },
               {
                 trackingId,
                 baseUrl,
@@ -326,15 +329,15 @@ export default async function handler(req: any, res: any) {
               } as any
             );
 
-            const sendRes = await sendMail({ to: toEmail, subject: rendered.subject, html: rendered.html, text: rendered.text });
+            const sendRes = await sendMail({ to: founderToEmail, subject: rendered.subject, html: rendered.html, text: rendered.text });
 
             // Record in queue for visibility + future analytics (best-effort).
             const nowIso = new Date().toISOString();
             const queueRow: any = {
               send_at: nowIso,
-              to_email: toEmail,
+              to_email: founderToEmail,
               template_key: 'founder_paid_welcome',
-              payload: { email: toEmail, name, founder_claimed: Number(claim?.total_count ?? null), founder_limit: 100 },
+              payload: { email: founderToEmail, name, founder_claimed: Number(claim?.total_count ?? null), founder_limit: 100 },
               status: sendRes.ok ? 'sent' : 'error',
               sent_at: sendRes.ok ? nowIso : null,
               last_error: sendRes.ok ? null : (sendRes as any).error || 'send_failed',
@@ -348,9 +351,9 @@ export default async function handler(req: any, res: any) {
             if (!ins1.ok) {
               const minimalRow: any = {
                 send_at: nowIso,
-                to_email: toEmail,
+                to_email: founderToEmail,
                 template_key: 'founder_paid_welcome',
-                payload: { email: toEmail, name },
+                payload: { email: founderToEmail, name },
                 status: sendRes.ok ? 'sent' : 'error',
                 sent_at: sendRes.ok ? nowIso : null,
                 last_error: sendRes.ok ? null : (sendRes as any).error || 'send_failed',
@@ -366,7 +369,7 @@ export default async function handler(req: any, res: any) {
             const { data: existing2 } = await admin
               .from('maw_email_queue')
               .select('id,status')
-              .eq('to_email', toEmail)
+              .eq('to_email', founderToEmail)
               .eq('template_key', templateKey)
               .limit(1);
 
@@ -376,9 +379,9 @@ export default async function handler(req: any, res: any) {
               const trackingId2 = crypto.randomUUID();
               const queueRow2: any = {
                 send_at: sendAt,
-                to_email: toEmail,
+                to_email: founderToEmail,
                 template_key: templateKey,
-                payload: { email: toEmail, name: String(urow?.full_name || urow?.name || obj?.customer_details?.name || meta?.name || '').trim() || null, user_id: userId },
+                payload: { email: founderToEmail, name: founderName, user_id: userId },
                 status: 'queued',
                 tracking_id: trackingId2,
                 template_version: (FOUNDING_EMAIL_TEMPLATE_VERSION as any)[templateKey] || 1,
@@ -388,9 +391,9 @@ export default async function handler(req: any, res: any) {
               if (!ins2.ok) {
                 await admin.from('maw_email_queue').insert({
                   send_at: sendAt,
-                  to_email: toEmail,
+                  to_email: founderToEmail,
                   template_key: templateKey,
-                  payload: { email: toEmail, user_id: userId },
+                  payload: { email: founderToEmail, user_id: userId },
                   status: 'queued',
                 } as any);
               }
@@ -406,7 +409,7 @@ export default async function handler(req: any, res: any) {
             const { data: existing3 } = await admin
               .from('maw_email_queue')
               .select('id,status')
-              .eq('to_email', toEmail)
+              .eq('to_email', founderToEmail)
               .eq('template_key', templateKey)
               .limit(1);
 
@@ -416,9 +419,9 @@ export default async function handler(req: any, res: any) {
               const trackingId3 = crypto.randomUUID();
               const queueRow3: any = {
                 send_at: sendAt,
-                to_email: toEmail,
+                to_email: founderToEmail,
                 template_key: templateKey,
-                payload: { email: toEmail, name: String(urow?.full_name || urow?.name || obj?.customer_details?.name || meta?.name || '').trim() || null, user_id: userId },
+                payload: { email: founderToEmail, name: founderName, user_id: userId },
                 status: 'queued',
                 tracking_id: trackingId3,
                 template_version: (FOUNDING_EMAIL_TEMPLATE_VERSION as any)[templateKey] || 1,
@@ -428,9 +431,9 @@ export default async function handler(req: any, res: any) {
               if (!ins3.ok) {
                 await admin.from('maw_email_queue').insert({
                   send_at: sendAt,
-                  to_email: toEmail,
+                  to_email: founderToEmail,
                   template_key: templateKey,
-                  payload: { email: toEmail, user_id: userId },
+                  payload: { email: founderToEmail, user_id: userId },
                   status: 'queued',
                 } as any);
               }
@@ -449,7 +452,7 @@ export default async function handler(req: any, res: any) {
             const { data: existing4 } = await admin
               .from('maw_email_queue')
               .select('id,status')
-              .eq('to_email', toEmail)
+              .eq('to_email', founderToEmail)
               .eq('template_key', templateKey)
               .limit(1);
 
@@ -459,9 +462,9 @@ export default async function handler(req: any, res: any) {
               const trackingId4 = crypto.randomUUID();
               const queueRow4: any = {
                 send_at: sendAt,
-                to_email: toEmail,
+                to_email: founderToEmail,
                 template_key: templateKey,
-                payload: { email: toEmail, name: String(urow?.full_name || urow?.name || obj?.customer_details?.name || meta?.name || '').trim() || null, user_id: userId },
+                payload: { email: founderToEmail, name: founderName, user_id: userId },
                 status: 'queued',
                 tracking_id: trackingId4,
                 template_version: (FOUNDING_EMAIL_TEMPLATE_VERSION as any)[templateKey] || 1,
@@ -471,9 +474,9 @@ export default async function handler(req: any, res: any) {
               if (!ins4.ok) {
                 await admin.from('maw_email_queue').insert({
                   send_at: sendAt,
-                  to_email: toEmail,
+                  to_email: founderToEmail,
                   template_key: templateKey,
-                  payload: { email: toEmail, user_id: userId },
+                  payload: { email: founderToEmail, user_id: userId },
                   status: 'queued',
                 } as any);
               }
