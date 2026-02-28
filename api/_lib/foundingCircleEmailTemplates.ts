@@ -10,7 +10,8 @@ export type FoundingEmailKey =
   | 'founding_pricing_lock'
   | 'founding_next_tools'
   | 'founder_paid_welcome'
-  | 'founder_activation_day1';
+  | 'founder_activation_day1'
+  | 'founder_business_day3';
 
 /**
  * Template versioning: bump per template whenever copy/layout changes that you want tracked.
@@ -22,6 +23,7 @@ export const FOUNDING_EMAIL_TEMPLATE_VERSION: Record<FoundingEmailKey, number> =
   founding_next_tools: 1,
   founder_paid_welcome: 1,
   founder_activation_day1: 1,
+  founder_business_day3: 1,
 };
 
 type TrackingOpts = {
@@ -192,6 +194,52 @@ Here’s the fastest way to use your Founder advantage today:
 
 Once you save your first idea, you’ve started building your private creative vault. That’s when this becomes yours — not just something you tried.`,
       'Generate Your First Idea',
+      target
+    );
+
+    return { subject, html, text, templateVersion };
+  }
+
+  if (key === 'founder_business_day3') {
+    const subject = `Most magicians will never do this`;
+
+    const inner = `
+      <h1 style="margin:0;font-size:22px;color:#FFFFFF;">Most magicians track gigs in notebooks.<br/>Founders don’t.</h1>
+      <p style="margin:10px 0 0;opacity:0.92;line-height:1.55;">
+        You now have a <b>Business OS</b> inside <b>${BRAND.product}</b>.
+        The goal is simple: spend less time on admin… and more time on stage.
+      </p>
+      <ul style="margin:14px 0 0;padding-left:18px;line-height:1.75;opacity:0.95;">
+        <li><b>Contract Generator</b> — generate a clean performance agreement in seconds</li>
+        <li><b>CRM</b> — keep every client, note, and follow-up in one place</li>
+        <li><b>Show Finance Tracker</b> — track fees, expenses, and profit per gig</li>
+      </ul>
+      <div style="height:10px"></div>
+      <p style="margin:0;opacity:0.92;line-height:1.55;">
+        <b>One contract generated inside the app pays for your entire year.</b><br/>
+        That’s not “software.” That’s leverage.
+      </p>
+    `;
+
+    const base = safeBaseUrl(opts?.baseUrl) || 'https://magicaiwizard.com';
+    // Send them to the Founder Success page first (guided), then they can jump into the Contract Generator.
+    const target = `${base}/app/founder-success`;
+    const ctaHref = makeClickUrl(opts, target, key);
+    const html = baseHtml(inner, { href: ctaHref, label: 'Generate a Contract in 15 Seconds' });
+
+    const text = baseText(
+      `Most magicians track gigs in notebooks. Founders don’t.
+
+You now have a Business OS inside ${BRAND.product}.
+The goal is simple: spend less time on admin… and more time on stage.
+
+- Contract Generator — generate a clean performance agreement in seconds
+- CRM — keep every client, note, and follow-up in one place
+- Show Finance Tracker — track fees, expenses, and profit per gig
+
+One contract generated inside the app pays for your entire year.
+That’s not “software.” That’s leverage.`,
+      'Generate a Contract in 15 Seconds',
       target
     );
 

@@ -398,6 +398,46 @@ export default async function handler(req: any, res: any) {
           } catch {
             // ignore
           }
+
+          // Queue Founder Business OS Email (Day 3 ~ 72h later).
+          // Goal: Introduce contracts/CRM/finance to increase stickiness.
+          try {
+            const templateKey = 'founder_business_day3';
+            const { data: existing3 } = await admin
+              .from('maw_email_queue')
+              .select('id,status')
+              .eq('to_email', toEmail)
+              .eq('template_key', templateKey)
+              .limit(1);
+
+            const alreadyQueued = Array.isArray(existing3) && existing3.length > 0;
+            if (!alreadyQueued) {
+              const sendAt = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
+              const trackingId3 = crypto.randomUUID();
+              const queueRow3: any = {
+                send_at: sendAt,
+                to_email: toEmail,
+                template_key: templateKey,
+                payload: { email: toEmail, name: String(urow?.full_name || urow?.name || obj?.customer_details?.name || meta?.name || '').trim() || null, user_id: userId },
+                status: 'queued',
+                tracking_id: trackingId3,
+                template_version: (FOUNDING_EMAIL_TEMPLATE_VERSION as any)[templateKey] || 1,
+              };
+
+              const ins3 = await enqueueAndMaybeMarkSent(admin, queueRow3);
+              if (!ins3.ok) {
+                await admin.from('maw_email_queue').insert({
+                  send_at: sendAt,
+                  to_email: toEmail,
+                  template_key: templateKey,
+                  payload: { email: toEmail, user_id: userId },
+                  status: 'queued',
+                } as any);
+              }
+            }
+          } catch {
+            // ignore
+          }
         }
       }
     } catch (e) {
