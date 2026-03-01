@@ -572,7 +572,6 @@ const Dashboard: React.FC<DashboardProps> = ({ variant = 'full', user, shows, fe
         'quick-actions': <QuickActionsWidget onNavigate={onNavigate} />,
         'business-metrics': <BusinessMetricsWidget shows={shows} feedback={feedback} />,
         'contract-pipeline': <ContractPipelineWidget />,
-        'strategic-insights': <StrategicInsightsWidget shows={shows} feedback={feedback} onNavigate={onNavigate} />,
         'upcoming-tasks': <UpcomingTasksWidget shows={shows} onNavigate={onNavigate} onShowsUpdate={onShowsUpdate} />,
         'latest-feedback': <LatestFeedbackWidget feedback={feedback} onNavigate={onNavigate} onFeedbackClick={setSelectedFeedback} />,
         'recent-idea': <RecentIdeaWidget ideas={ideas} onNavigate={onNavigate} />,

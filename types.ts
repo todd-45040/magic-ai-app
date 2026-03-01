@@ -276,7 +276,6 @@ export type WidgetId =
   | 'recent-idea'
   | 'featured-tools'
   | 'business-metrics'
-  | 'strategic-insights'
   | 'contract-pipeline';
 
 export interface DashboardWidget {
