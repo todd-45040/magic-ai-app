@@ -34,6 +34,19 @@ function durationFromMinutes(mins: any) {
   return `${d.toFixed(1)}d`;
 }
 
+
+function humanizeMs(msLeft: number) {
+  const sec = Math.max(0, Math.floor(msLeft / 1000));
+  const days = Math.floor(sec / 86400);
+  const hrs = Math.floor((sec % 86400) / 3600);
+  const mins = Math.floor((sec % 3600) / 60);
+  const parts: string[] = [];
+  if (days > 0) parts.push(`${days}d`);
+  if (hrs > 0 || days > 0) parts.push(`${hrs}h`);
+  parts.push(`${mins}m`);
+  return parts.join(' ');
+}
+
 const WINDOW_OPTIONS = [
   { days: 1, label: 'Today' },
   { days: 7, label: '7d' },
@@ -223,8 +236,87 @@ export default function AdminOverviewDashboard({ onGoUsers, onGoLeads }: { onGoU
     return Math.max(0, ...s.map((d: any) => Number(d?.cost_usd || 0)));
   }, [topSpendersTrend]);
 
+  // Founder window status (Admin-only sanity check)
+  const founderWindow = useMemo(() => {
+    // Defaults for ADMC 2026 (America/New_York). Can be overridden by VITE_ env vars if desired.
+    const startStr = (import.meta as any).env?.VITE_FOUNDER_WINDOW_START || '2026-04-02T18:00:00-04:00';
+    const endStr = (import.meta as any).env?.VITE_FOUNDER_WINDOW_END || '2026-04-05T00:00:00-04:00';
+    const graceHours = Number((import.meta as any).env?.VITE_FOUNDER_WINDOW_GRACE_HOURS || 72);
+
+    const now = Date.now();
+    const startMs = new Date(startStr).getTime();
+    const endMs = new Date(endStr).getTime();
+    const graceEndMs = endMs + graceHours * 3600 * 1000;
+
+    const totalRemaining =
+      founderCounts && founderCounts.ok ? Math.max(0, Number(founderCounts.total_limit) - Number(founderCounts.total_count)) : null;
+    const admcRemaining =
+      founderCounts && founderCounts.ok ? Math.max(0, Number(founderCounts.admc_limit) - Number(founderCounts.admc_count)) : null;
+
+    const spotsRemaining =
+      totalRemaining == null || admcRemaining == null ? null : Math.max(0, Math.min(totalRemaining, admcRemaining));
+
+    const inWindow = Number.isFinite(startMs) && Number.isFinite(graceEndMs) && now >= startMs && now < graceEndMs;
+    const openByTime = inWindow;
+    const openByCapacity = spotsRemaining == null ? true : spotsRemaining > 0;
+    const isOpen = openByTime && openByCapacity;
+
+    let label = 'Closed';
+    let detail = 'Founder enrollment is closed.';
+    if (Number.isFinite(startMs) && now < startMs) {
+      label = 'Not Open Yet';
+      detail = `Opens in ${humanizeMs(startMs - now)}`;
+    } else if (Number.isFinite(graceEndMs) && now >= graceEndMs) {
+      label = 'Closed';
+      detail = 'Closed (window ended).';
+    } else if (openByTime) {
+      label = isOpen ? 'Open' : 'Full';
+      detail = isOpen ? `Closes in ${humanizeMs(graceEndMs - now)}` : 'Window open, but founder spots are full.';
+    }
+
+    return {
+      label,
+      detail,
+      spotsRemaining,
+      admcRemaining,
+      totalRemaining,
+    };
+  }, [founderCounts]);
+
   return (
     <div className="p-4 space-y-4">
+      {/* Founder Window Status (Admin-only) */}
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <div
+            className={`h-2.5 w-2.5 rounded-full ${
+              founderWindow.label === 'Open'
+                ? 'bg-emerald-400'
+                : founderWindow.label === 'Full'
+                  ? 'bg-amber-400'
+                  : founderWindow.label === 'Not Open Yet'
+                    ? 'bg-sky-400'
+                    : 'bg-rose-400'
+            }`}
+          />
+          <div className="font-semibold">Founder Window: {founderWindow.label}</div>
+          <div className="text-sm opacity-70">{founderWindow.detail}</div>
+        </div>
+
+        <div className="text-sm flex flex-wrap gap-x-4 gap-y-1">
+          <span className="opacity-70">
+            Spots remaining: <span className="font-semibold opacity-100">{founderWindow.spotsRemaining ?? '—'}</span>
+          </span>
+          <span className="opacity-70">
+            ADMC remaining: <span className="font-semibold opacity-100">{founderWindow.admcRemaining ?? '—'}</span>
+          </span>
+          <span className="opacity-70">
+            Total remaining: <span className="font-semibold opacity-100">{founderWindow.totalRemaining ?? '—'}</span>
+          </span>
+        </div>
+      </div>
+
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
         <div className="flex items-center justify-between gap-3">
