@@ -3,6 +3,7 @@ import { fetchAdminKpis } from '../services/adminKpisService';
 import { fetchAdminWatchlist, fetchAdminOpsNotes, addAdminOpsNote } from '../services/adminOpsService';
 import { fetchAdminWaitlistLeads } from '../services/adminLeadsService';
 import { fetchAdminAiHealth, type AdminAiHealth } from '../services/adminAiHealthService';
+import { fetchAdminEnvSanity, type AdminEnvSanity } from '../services/adminSettingsService';
 import { downloadCsv } from './adminCsv';
 
 function money(n: any, digits = 2) {
@@ -63,6 +64,8 @@ export default function AdminOverviewDashboard({ onGoUsers, onGoLeads }: { onGoU
   const [loading, setLoading] = useState(false);
   const [aiHealth, setAiHealth] = useState<AdminAiHealth | null>(null);
   const [aiHealthErr, setAiHealthErr] = useState<string | null>(null);
+  const [envSanity, setEnvSanity] = useState<AdminEnvSanity | null>(null);
+  const [envSanityErr, setEnvSanityErr] = useState<string | null>(null);
   const [admcLeads, setAdmcLeads] = useState<number | null>(null);
   const [founderCounts, setFounderCounts] = useState<any>(null);
   const [founderCountsErr, setFounderCountsErr] = useState<string | null>(null);
@@ -158,6 +161,30 @@ export default function AdminOverviewDashboard({ onGoUsers, onGoLeads }: { onGoU
     return () => {
       alive = false;
     };
+
+
+// Env sanity (server) — booth-week debugging helper
+useEffect(() => {
+  let alive = true;
+
+  async function loadEnv() {
+    try {
+      setEnvSanityErr(null);
+      const s = await fetchAdminEnvSanity();
+      if (alive) setEnvSanity(s);
+    } catch (e: any) {
+      if (alive) setEnvSanityErr(e?.message || 'Failed to load env sanity');
+    }
+  }
+
+  void loadEnv();
+  const t = setInterval(loadEnv, 60000);
+  return () => {
+    alive = false;
+    clearInterval(t);
+  };
+}, []);
+
   }, [days]);
 
   async function openNotes(entity_type: string, entity_id: string, title: string) {
@@ -442,6 +469,79 @@ export default function AdminOverviewDashboard({ onGoUsers, onGoLeads }: { onGoU
 
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+
+<div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+  <div className="flex items-center justify-between">
+    <div>
+      <div className="text-sm opacity-80">System Health</div>
+      <div className="mt-1 text-[11px] text-white/60">Server env + provider + Stripe readiness</div>
+    </div>
+    <div
+      className={`px-2.5 py-1 rounded-lg border text-[11px] ${
+        envSanity?.ok
+          ? 'bg-emerald-500/10 border-emerald-400/20 text-emerald-100'
+          : envSanityErr
+            ? 'bg-red-500/10 border-red-400/20 text-red-100'
+            : 'bg-white/5 border-white/10 text-white/70'
+      }`}
+      title={envSanityErr || ''}
+    >
+      {envSanity?.ok ? 'OK' : envSanityErr ? 'Check' : '…'}
+    </div>
+  </div>
+
+  <div className="mt-3 space-y-2 text-xs">
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-white/70">Provider source</span>
+      <span className="font-semibold text-white">
+        {envSanity
+          ? envSanity.provider.envOverrideActive
+            ? `ENV (${envSanity.provider.runtimeProvider})`
+            : `DB (${envSanity.provider.runtimeProvider})`
+          : '—'}
+      </span>
+    </div>
+
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-white/70">Stripe readiness</span>
+      <span className={`font-semibold ${envSanity?.readiness?.stripeReady ? 'text-emerald-200' : 'text-white/60'}`}>
+        {envSanity ? (envSanity.readiness.stripeReady ? 'Ready' : 'Not ready') : '—'}
+      </span>
+    </div>
+
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-white/70">Webhook verify</span>
+      <span className={`font-semibold ${envSanity?.readiness?.webhookVerificationActive ? 'text-emerald-200' : 'text-white/60'}`}>
+        {envSanity ? (envSanity.readiness.webhookVerificationActive ? 'Active' : 'Inactive') : '—'}
+      </span>
+    </div>
+
+    <div className="pt-2 border-t border-white/10">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-white/70">GOOGLE_AI_API_KEY</span>
+        <span className={`font-semibold ${envSanity?.keys?.ai?.GOOGLE_AI_API_KEY ? 'text-emerald-200' : 'text-red-200'}`}>
+          {envSanity ? (envSanity.keys.ai.GOOGLE_AI_API_KEY ? 'Yes' : 'No') : '—'}
+        </span>
+      </div>
+      <div className="flex items-center justify-between gap-2 mt-1">
+        <span className="text-white/70">SERVICE_ROLE</span>
+        <span className={`font-semibold ${envSanity?.keys?.supabase?.SUPABASE_SERVICE_ROLE_KEY ? 'text-emerald-200' : 'text-red-200'}`}>
+          {envSanity ? (envSanity.keys.supabase.SUPABASE_SERVICE_ROLE_KEY ? 'Yes' : 'No') : '—'}
+        </span>
+      </div>
+    </div>
+
+    {envSanity?.warnings?.vitePrefixedSecretsPresent ? (
+      <div className="mt-2 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-100">
+        VITE-* secret-like env vars present. Check Admin Settings for names.
+      </div>
+    ) : null}
+
+    <div className="text-[11px] text-white/50">
+      Full matrix in <span className="text-white/70">Admin → Settings</span>
+    </div>
+  </div>
+</div>
         <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
           <div className="text-sm opacity-80">Founding Members</div>
           <div className="mt-2 flex items-end justify-between">
