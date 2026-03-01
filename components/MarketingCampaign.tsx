@@ -8,6 +8,7 @@ import { createShow, addTasksToShow } from '../services/showsService';
 import { MARKETING_ASSISTANT_SYSTEM_INSTRUCTION } from '../constants';
 import { MegaphoneIcon, WandIcon, SaveIcon, CheckIcon, ShareIcon, UsersIcon, StageCurtainsIcon, CalendarIcon, FileTextIcon, MailIcon, BlueprintIcon, ChevronDownIcon, SendIcon } from './icons';
 import ShareButton from './ShareButton';
+import { CohesionActions } from './CohesionActions';
 import type { User } from '../types';
 
 interface MarketingCampaignProps {
@@ -1058,6 +1059,12 @@ const handleCreateBookingPitch = async () => {
                             </div>
 
                             <div className="flex flex-wrap items-center justify-end gap-2">
+                            <CohesionActions
+                                content={activeResult || ''}
+                                defaultTitle={`Marketing Campaign — ${showTitle || 'Untitled'}`}
+                                defaultTags={["marketing", "campaign"]}
+                                compact
+                            />
                             <ShareButton
                                 title={`Marketing Campaign for: ${showTitle}`}
                                 text={activeResult || ''}

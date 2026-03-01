@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Type } from '@google/genai';
 import { generateStructuredResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
+import { CohesionActions } from './CohesionActions';
 import { createShow, addTasksToShow } from '../services/showsService';
 import { GOSPEL_MAGIC_SYSTEM_INSTRUCTION } from '../constants';
 import { WandIcon, SaveIcon, CheckIcon, ShareIcon } from './icons';
@@ -1179,6 +1180,12 @@ Populate arrays for categories the user selected; for unselected categories, ret
               </p>
 
               <div className="flex items-center justify-end gap-2 flex-wrap">
+                <CohesionActions
+                  content={toMarkdownBlueprint(lastQuery, ministryTone, doctrinalMode, blueprint)}
+                  defaultTitle={`Gospel Blueprint — ${lastQuery || 'Untitled'}`}
+                  defaultTags={["gospel", "ministry", "blueprint"]}
+                  compact
+                />
                 <button
                   onClick={handleSendToShowPlanner}
                   disabled={isSendingToPlanner || !blueprint}

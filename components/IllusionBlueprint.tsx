@@ -3,6 +3,7 @@ import { Type } from '@google/genai';
 
 import { generateImage, generateStructuredResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
+import { CohesionActions } from './CohesionActions';
 import type { User } from '../types';
 import { BlueprintIcon, WandIcon, SaveIcon, CheckIcon } from './icons';
 
@@ -480,25 +481,23 @@ const handleRegenerateConceptArt = async () => {
   const filteredCutList = useMemo(() => (buildPack ? toFiltered(buildPack.cut_list) : []), [buildPack, selectedMechanismId]);
   const filteredSteps = useMemo(() => (buildPack ? toFiltered(buildPack.assembly_steps) : []), [buildPack, selectedMechanismId]);
 
-  const handleSave = () => {
-    if (!stagingBlueprint || !buildPack) return;
-
+  const buildFullContent = () => {
+    if (!stagingBlueprint || !buildPack) return '';
     let fullContent = `## Illusion Blueprint: ${prompt}\n\n`;
-
-    if (conceptArt) {
-      fullContent += `![Concept Art](${conceptArt})\n\n`;
-    }
-
+    if (conceptArt) fullContent += `![Concept Art](${conceptArt})\n\n`;
     fullContent += `### Potential Principles\n\n`;
     stagingBlueprint.potential_principles.forEach((p) => {
       fullContent += `**${p.name}:** ${p.description}\n\n`;
     });
-
     fullContent += `### Staging Blueprint\n\n${stagingBlueprint.blueprint_description}\n\n`;
-
     fullContent += `### Build Blueprint Pack (JSON)\n\n`;
     fullContent += JSON.stringify(buildPack, null, 2);
+    return fullContent;
+  };
 
+  const handleSave = () => {
+    if (!stagingBlueprint || !buildPack) return;
+    const fullContent = buildFullContent();
     saveIdea('text', fullContent, `Illusion Blueprint: ${prompt}`);
     onIdeaSaved();
     setSaveStatus('saved');
@@ -1036,6 +1035,12 @@ const handleRegenerateConceptArt = async () => {
 
           {/* Actions */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4 border-t border-slate-700">
+            <CohesionActions
+              content={buildFullContent()}
+              defaultTitle={`Illusion Blueprint: ${prompt || 'Untitled'}`}
+              defaultTags={["illusion-blueprint", "build"]}
+              compact
+            />
             <button onClick={handleStartOver} className="px-6 py-2 bg-slate-600 hover:bg-slate-700 rounded-md text-white font-bold">
               Start Over
             </button>

@@ -6,6 +6,7 @@ import { createShow, addTasksToShow } from '../services/showsService';
 import { MENTALISM_ASSISTANT_SYSTEM_INSTRUCTION } from '../constants';
 import { WandIcon, SaveIcon, CheckIcon, CopyIcon, ShareIcon, SearchIcon, LightbulbIcon } from './icons';
 import ShareButton from './ShareButton';
+import { CohesionActions } from './CohesionActions';
 import { useAppState } from '../store';
 
 interface MentalismAssistantProps {
@@ -1556,6 +1557,13 @@ Output guidelines:
                                     </>
                                 )}
                             </button>
+
+                            <CohesionActions
+                                content={blueprintToText(query, blueprint)}
+                                defaultTitle={`Mentalism Blueprint — ${query || 'Untitled'}`}
+                                defaultTags={["mentalism", "blueprint", "mentalism-blueprint"]}
+                                compact
+                            />
 
                             <button
                                 onClick={handleRehearseInLiveStudio}

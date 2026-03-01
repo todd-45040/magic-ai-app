@@ -2,6 +2,7 @@
 import React, { useMemo, useState } from 'react';
 import { Type } from "@google/genai";
 import { saveIdea } from '../services/ideasService';
+import { CohesionActions } from './CohesionActions';
 import { createShow, addTasksToShow } from '../services/showsService';
 import { DIRECTOR_MODE_SYSTEM_INSTRUCTION, MAGIC_DICTIONARY_TERMS } from '../constants';
 import type { DirectorModeResponse } from '../types';
@@ -669,6 +670,13 @@ ${prettyJson}
                 </div>
 
                 <div className="mt-6 flex flex-wrap items-center justify-center gap-4">
+                    {/* Cohesion: save to existing show / convert to tasks / tag to project */}
+                    <CohesionActions
+                        content={buildIdeaFromShowPlan(showPlan).content}
+                        defaultTitle={buildIdeaFromShowPlan(showPlan).title}
+                        defaultTags={buildIdeaFromShowPlan(showPlan).tags}
+                        compact
+                    />
                     <button
                         onClick={handleSaveToIdeas}
                         disabled={isSavingIdea || isSavedToIdeas}

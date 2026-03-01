@@ -6,6 +6,7 @@ import { normalizeBlockedUx } from '../services/blockedUx';
 import { saveIdea } from '../services/ideasService';
 import { BackIcon, ImageIcon, WandIcon, SaveIcon, CheckIcon, ShareIcon, TrashIcon, CameraIcon } from './icons';
 import ShareButton from './ShareButton';
+import { CohesionActions } from './CohesionActions';
 import type { User } from '../types';
 import { canConsume, consume } from '../services/usageTracker';
 
@@ -230,6 +231,13 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
                  <div className="relative group w-full h-full flex items-center justify-center">
                     <img src={generatedImage} alt="Generated concept art" className="max-w-full max-h-full object-contain rounded-md shadow-lg" />
                     <div className="absolute top-2 right-2 flex gap-2 transition-opacity">
+                        <CohesionActions
+                            content={generatedImage}
+                            defaultTitle={`Visual Brainstorm: ${prompt || 'Concept Art'}`}
+                            defaultTags={["visual", "concept"]}
+                            ideaType="image"
+                            compact
+                        />
                         {shareFile && (
                             <ShareButton
                                 title="Magic Visual Idea"

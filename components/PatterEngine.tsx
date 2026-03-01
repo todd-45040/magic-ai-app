@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { saveIdea } from "../services/ideasService";
+import { CohesionActions } from "./CohesionActions";
 import { BookIcon, WandIcon, SaveIcon, CheckIcon, CopyIcon } from "./icons";
 import type { User } from "../types";
 
@@ -216,8 +217,9 @@ const PatterEngine: React.FC<PatterEngineProps> = ({ user, onIdeaSaved }) => {
               <pre className="whitespace-pre-wrap break-words text-slate-200 font-sans text-sm">{result}</pre>
             </div>
 
-            {/* Footer: Copy + Save only */}
-            <div className="mt-auto p-2 bg-slate-900/50 flex justify-end gap-2 border-t border-slate-800">
+            {/* Footer: Cohesion actions + Copy + Save */}
+            <div className="mt-auto p-2 bg-slate-900/50 flex flex-wrap justify-end gap-2 border-t border-slate-800">
+              <CohesionActions content={fullContentForSave()} defaultTitle={"Patter"} defaultTags={["patter"]} compact />
               <button
                 type="button"
                 onClick={handleCopy}
