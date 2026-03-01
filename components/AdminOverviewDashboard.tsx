@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { fetchAdminKpis } from '../services/adminKpisService';
 import { fetchAdminWatchlist, fetchAdminOpsNotes, addAdminOpsNote } from '../services/adminOpsService';
 import { fetchAdminWaitlistLeads } from '../services/adminLeadsService';
+import { fetchAdminAiHealth, type AdminAiHealth } from '../services/adminAiHealthService';
 import { downloadCsv } from './adminCsv';
 
 function money(n: any, digits = 2) {
@@ -60,6 +61,8 @@ export default function AdminOverviewDashboard({ onGoUsers, onGoLeads }: { onGoU
   const [data, setData] = useState<any>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [aiHealth, setAiHealth] = useState<AdminAiHealth | null>(null);
+  const [aiHealthErr, setAiHealthErr] = useState<string | null>(null);
   const [admcLeads, setAdmcLeads] = useState<number | null>(null);
   const [founderCounts, setFounderCounts] = useState<any>(null);
   const [founderCountsErr, setFounderCountsErr] = useState<string | null>(null);
@@ -81,6 +84,15 @@ export default function AdminOverviewDashboard({ onGoUsers, onGoLeads }: { onGoU
     try {
       const d = await fetchAdminKpis(days);
       setData(d);
+
+      try {
+        setAiHealthErr(null);
+        const h = await fetchAdminAiHealth(days);
+        setAiHealth(h);
+      } catch (e: any) {
+        setAiHealth(null);
+        setAiHealthErr(e?.message || 'Failed to load AI health');
+      }
       try {
         const l = await fetchAdminWaitlistLeads({ source: 'admc', days, limit: 0, offset: 0 });
         setAdmcLeads(typeof l?.count === 'number' ? l.count : null);
@@ -201,8 +213,23 @@ export default function AdminOverviewDashboard({ onGoUsers, onGoLeads }: { onGoU
   const tools = data?.tools || {};
   const reliability = data?.reliability || {};
   const relByTool = (reliability?.by_tool || []) as any[];
-  const providerBreakdown = (reliability?.provider_breakdown || []) as any[];
   const recentFailures = (reliability?.recent_failures || []) as any[];
+
+  const aiHealthStatus = useMemo(() => {
+    const er = Number(aiHealth?.last_60m?.error_rate);
+    if (!aiHealth || !Number.isFinite(er)) return { label: '—', tone: 'muted' as const };
+    if (er >= 0.15) return { label: 'Down', tone: 'bad' as const };
+    if (er >= 0.05) return { label: 'Degraded', tone: 'warn' as const };
+    return { label: 'OK', tone: 'good' as const };
+  }, [aiHealth]);
+
+  function providerLabel(p: any) {
+    const s = String(p || '').toLowerCase();
+    if (s === 'openai') return 'OpenAI';
+    if (s === 'anthropic') return 'Anthropic';
+    if (s === 'gemini') return 'Google Gemini';
+    return String(p || '—');
+  }
 
   const growth = data?.growth || {};
   const funnel = growth?.funnel || {};
@@ -1377,27 +1404,110 @@ export default function AdminOverviewDashboard({ onGoUsers, onGoLeads }: { onGoU
   </div>
 
   <div className="p-3 rounded-xl bg-white/5 border border-white/10">
-    <div className="text-sm font-medium">Provider breakdown</div>
-    <div className="text-xs opacity-70 mt-0.5">How each provider is behaving</div>
+    <div className="flex items-center justify-between gap-2">
+      <div>
+        <div className="text-sm font-medium">AI Provider Health</div>
+        <div className="text-xs opacity-70 mt-0.5">Live health + costs (uses telemetry)</div>
+      </div>
+      <button
+        type="button"
+        onClick={() => void load()}
+        className="px-3 py-2 rounded-lg bg-white/10 border border-white/10 text-white/90 hover:bg-white/15 transition text-xs"
+        title="Refresh"
+      >
+        Refresh
+      </button>
+    </div>
 
-    <div className="mt-3 space-y-2 text-sm">
-      {(providerBreakdown || []).slice(0, 6).map((p, i) => (
-        <div key={p.provider || i} className="p-2 rounded bg-white/5 border border-white/10">
-          <div className="flex items-center justify-between">
-            <div className="font-medium">{String(p.provider || 'unknown')}</div>
-            <div className="text-xs text-amber-200/80">{Number(p.total || 0).toLocaleString()} ev</div>
-          </div>
-          <div className="mt-1 grid grid-cols-2 gap-1 text-xs opacity-90">
-            <div className="flex items-center justify-between"><span className="opacity-70">Success</span><span>{pct(p.success_rate, 1)}</span></div>
-            <div className="flex items-center justify-between"><span className="opacity-70">Error</span><span>{pct(p.error_rate, 1)}</span></div>
-            <div className="flex items-center justify-between"><span className="opacity-70">Timeout</span><span>{pct(p.timeout_rate, 2)}</span></div>
-            <div className="flex items-center justify-between"><span className="opacity-70">P95</span><span>{ms(p.p95_latency_ms)}</span></div>
-          </div>
+    <div className="mt-3 flex items-center justify-between gap-2">
+      <div className="text-sm">
+        <span className="opacity-70">Runtime:</span>{' '}
+        <span className="font-medium">{providerLabel(aiHealth?.runtimeProvider)}</span>{' '}
+        <span className="text-xs opacity-70">({String(aiHealth?.source || '—')})</span>
+      </div>
+      <div
+        className={
+          'text-xs px-2 py-1 rounded-full border ' +
+          (aiHealthStatus.tone === 'good'
+            ? 'bg-emerald-500/10 border-emerald-400/30 text-emerald-200'
+            : aiHealthStatus.tone === 'warn'
+            ? 'bg-amber-500/10 border-amber-400/30 text-amber-200'
+            : aiHealthStatus.tone === 'bad'
+            ? 'bg-rose-500/10 border-rose-400/30 text-rose-200'
+            : 'bg-white/5 border-white/10 text-white/70')
+        }
+      >
+        {aiHealthStatus.label}
+      </div>
+    </div>
+
+    {aiHealthErr && <div className="mt-2 text-xs text-rose-200/80">{aiHealthErr}</div>}
+
+    <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+      <div className="p-2 rounded bg-white/5 border border-white/10">
+        <div className="opacity-70">Last 60m</div>
+        <div className="mt-1 flex items-center justify-between"><span>Cost</span><span className="text-amber-200/80">{money(aiHealth?.last_60m?.cost_usd, 4)}</span></div>
+        <div className="flex items-center justify-between"><span>Error rate</span><span>{pct(aiHealth?.last_60m?.error_rate, 1)}</span></div>
+        <div className="flex items-center justify-between"><span>P95</span><span>{ms(aiHealth?.last_60m?.p95_latency_ms)}</span></div>
+      </div>
+      <div className="p-2 rounded bg-white/5 border border-white/10">
+        <div className="opacity-70">Selected window</div>
+        <div className="mt-1 flex items-center justify-between"><span>Cost</span><span className="text-amber-200/80">{money(aiHealth?.window?.cost_usd, 4)}</span></div>
+        <div className="flex items-center justify-between"><span>Error rate</span><span>{pct(aiHealth?.window?.error_rate, 1)}</span></div>
+        <div className="flex items-center justify-between"><span>P95</span><span>{ms(aiHealth?.window?.p95_latency_ms)}</span></div>
+      </div>
+      <div className="p-2 rounded bg-white/5 border border-white/10 col-span-2">
+        <div className="flex items-center justify-between">
+          <div className="opacity-70">Key status</div>
+          <div className="text-[11px] opacity-60">Configured in Vercel env</div>
         </div>
-      ))}
-      {(!providerBreakdown || providerBreakdown.length === 0) && (
-        <div className="text-sm opacity-70">No provider data yet.</div>
-      )}
+        <div className="mt-1 grid grid-cols-3 gap-2">
+          {(['gemini', 'openai', 'anthropic'] as const).map((p) => {
+            const ok = (aiHealth as any)?.key_status?.[p]?.configured;
+            return (
+              <div key={p} className="flex items-center justify-between gap-2">
+                <span className="opacity-80">{providerLabel(p)}</span>
+                <span className={ok ? 'text-emerald-200' : 'text-rose-200'}>{ok ? 'OK' : 'Missing'}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+
+    <div className="mt-3">
+      <div className="text-xs opacity-70">Provider breakdown (window)</div>
+      <div className="mt-2 overflow-auto">
+        <table className="w-full text-xs">
+          <thead className="text-[11px] text-amber-200/80">
+            <tr className="border-b border-white/10">
+              <th className="text-left py-2 pr-2">Provider</th>
+              <th className="text-right py-2 px-2">Calls</th>
+              <th className="text-right py-2 px-2">Errors</th>
+              <th className="text-right py-2 px-2">Err%</th>
+              <th className="text-right py-2 px-2">P95</th>
+              <th className="text-right py-2 pl-2">Cost</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(aiHealth?.by_provider || []).map((r: any, i: number) => (
+              <tr key={r.provider || i} className="border-b border-white/5">
+                <td className="py-2 pr-2 whitespace-nowrap">{providerLabel(r.provider)}</td>
+                <td className="py-2 px-2 text-right">{Number(r.calls || 0).toLocaleString()}</td>
+                <td className="py-2 px-2 text-right">{Number(r.errors || 0).toLocaleString()}</td>
+                <td className="py-2 px-2 text-right">{pct(r.error_rate, 1)}</td>
+                <td className="py-2 px-2 text-right">{ms(r.p95_latency_ms)}</td>
+                <td className="py-2 pl-2 text-right text-amber-200/80">{money(r.cost_usd, 4)}</td>
+              </tr>
+            ))}
+            {(!aiHealth?.by_provider || aiHealth.by_provider.length === 0) && (
+              <tr>
+                <td className="py-3 opacity-70" colSpan={6}>No provider data yet.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div>
