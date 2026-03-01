@@ -201,31 +201,31 @@ const TaskModal: React.FC<{
                         <label htmlFor="music-cue" className="block text-sm font-medium text-slate-300 mb-1">Music Cue (Optional)</label>
                         <input id="music-cue" type="text" value={musicCue} onChange={e => setMusicCue(e.target.value)} placeholder="e.g., 'Mysterious Fanfare' at 0:32" className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500" />
                     </div>
-                    <div className=\"grid grid-cols-2 gap-4\">
+                    <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label htmlFor=\"duration-min\" className=\"block text-sm font-medium text-slate-300 mb-1\">Duration (min)</label>
-                            <input id=\"duration-min\" type=\"number\" min={0} step={1} value={durationMinutes} onChange={e => setDurationMinutes(e.target.value === '' ? '' : Number(e.target.value))} className=\"w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500\" placeholder=\"e.g., 4\" />
+                            <label htmlFor="duration-min" className="block text-sm font-medium text-slate-300 mb-1">Duration (min)</label>
+                            <input id="duration-min" type="number" min={0} step={1} value={durationMinutes} onChange={e => setDurationMinutes(e.target.value === '' ? '' : Number(e.target.value))} className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500" placeholder="e.g., 4" />
                         </div>
                         <div>
-                            <label htmlFor=\"reset-min\" className=\"block text-sm font-medium text-slate-300 mb-1\">Reset (min)</label>
-                            <input id=\"reset-min\" type=\"number\" min={0} step={1} value={resetMinutes} onChange={e => setResetMinutes(e.target.value === '' ? '' : Number(e.target.value))} className=\"w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500\" placeholder=\"e.g., 1\" />
+                            <label htmlFor="reset-min" className="block text-sm font-medium text-slate-300 mb-1">Reset (min)</label>
+                            <input id="reset-min" type="number" min={0} step={1} value={resetMinutes} onChange={e => setResetMinutes(e.target.value === '' ? '' : Number(e.target.value))} className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500" placeholder="e.g., 1" />
                         </div>
                     </div>
-                    <div className=\"grid grid-cols-2 gap-4\">
+                    <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label htmlFor=\"energy\" className=\"block text-sm font-medium text-slate-300 mb-1\">Energy Level</label>
-                            <select id=\"energy\" value={energyLevel} onChange={e => setEnergyLevel(e.target.value as any)} className=\"w-full bg-slate-900 px-3 py-2 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500\">
-                                <option value=\"Low\">Low</option>
-                                <option value=\"Medium\">Medium</option>
-                                <option value=\"High\">High</option>
+                            <label htmlFor="energy" className="block text-sm font-medium text-slate-300 mb-1">Energy Level</label>
+                            <select id="energy" value={energyLevel} onChange={e => setEnergyLevel(e.target.value as any)} className="w-full bg-slate-900 px-3 py-2 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500">
+                                <option value="Low">Low</option>
+                                <option value="Medium">Medium</option>
+                                <option value="High">High</option>
                             </select>
                         </div>
                         <div>
-                            <label htmlFor=\"participation\" className=\"block text-sm font-medium text-slate-300 mb-1\">Participation</label>
-                            <select id=\"participation\" value={participationLevel} onChange={e => setParticipationLevel(e.target.value as any)} className=\"w-full bg-slate-900 px-3 py-2 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500\">
-                                <option value=\"Low\">Low</option>
-                                <option value=\"Medium\">Medium</option>
-                                <option value=\"High\">High</option>
+                            <label htmlFor="participation" className="block text-sm font-medium text-slate-300 mb-1">Participation</label>
+                            <select id="participation" value={participationLevel} onChange={e => setParticipationLevel(e.target.value as any)} className="w-full bg-slate-900 px-3 py-2 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500">
+                                <option value="Low">Low</option>
+                                <option value="Medium">Medium</option>
+                                <option value="High">High</option>
                             </select>
                         </div>
                     </div>
