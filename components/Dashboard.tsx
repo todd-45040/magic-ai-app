@@ -452,7 +452,7 @@ const Dashboard: React.FC<DashboardProps> = ({ variant = 'full', user, shows, fe
 
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <div className="bg-slate-800/50 border border-white/10 rounded-lg p-4">
+                    <div className="maw-card-flat p-4">
                         <div className="flex items-center gap-2 mb-3">
                             <ChecklistIcon className="w-5 h-5 text-purple-400" />
                             <h3 className="font-bold text-yellow-200 tracking-wide">Upcoming Tasks</h3>
@@ -460,7 +460,7 @@ const Dashboard: React.FC<DashboardProps> = ({ variant = 'full', user, shows, fe
                         <UpcomingTasksWidget shows={shows} onNavigate={onNavigate} onShowsUpdate={onShowsUpdate} />
                     </div>
 
-                    <div className="bg-slate-800/50 border border-white/10 rounded-lg p-4">
+                    <div className="maw-card-flat p-4">
                         <div className="flex items-center gap-2 mb-3">
                             <BookmarkIcon className="w-5 h-5 text-purple-400" />
                             <h3 className="font-bold text-yellow-200 tracking-wide">Recent Idea</h3>
@@ -555,7 +555,7 @@ const Dashboard: React.FC<DashboardProps> = ({ variant = 'full', user, shows, fe
         const widgetInfo = WIDGETS.find(w => w.id === widgetId)!;
 
         const widgetContent = (
-            <div className="bg-slate-800/50 border border-white/10 rounded-lg overflow-hidden">
+            <div className="maw-card-flat overflow-hidden">
                 <button
                     className="w-full flex items-center justify-between p-4 text-left"
                     onClick={() => toggleCollapse(widgetId)}
@@ -584,7 +584,7 @@ const Dashboard: React.FC<DashboardProps> = ({ variant = 'full', user, shows, fe
                     onDragStart={(e) => onDragStart(e, widgetId)}
                     onDragOver={onDragOver}
                     onDrop={(e) => onDrop(e, widgetId)}
-                    className="relative p-2 bg-slate-800/50 border-2 border-dashed border-slate-600 rounded-lg cursor-move group"
+                    className="relative p-2 maw-card-flat border-2 border-dashed border-slate-600 cursor-move group"
                 >
                     <div className="absolute top-1 right-1 flex items-center gap-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button onClick={() => handleHideWidget(widgetId)} title="Hide widget" className="p-1.5 bg-slate-700/80 rounded-full text-slate-400 hover:text-white hover:bg-red-600/80"><EyeOffIcon className="w-4 h-4" /></button>

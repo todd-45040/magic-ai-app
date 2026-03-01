@@ -855,7 +855,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
         <div ref={outputRef} className="space-y-3">
           {/* Inline tool-level error boundary */}
           {errorKind && (
-            <div className="rounded-2xl border border-slate-700 bg-slate-950/70 p-4">
+            <div className="maw-card p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="text-lg font-semibold text-slate-100">
@@ -966,7 +966,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
       {/* Send to Show Planner modal */}
       {showPickerOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-950 p-5 shadow-xl">
+          <div className="w-full max-w-lg maw-card p-5">
             <div className="flex items-center justify-between gap-3">
               <div className="text-lg font-semibold">Send to Show Planner</div>
               <button
@@ -1030,7 +1030,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
       {/* Blueprint modal */}
       {blueprintOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-950 p-5 shadow-xl">
+          <div className="w-full max-w-lg maw-card p-5">
             <div className="flex items-center justify-between gap-3">
               <div className="text-lg font-semibold">Save as Blueprint</div>
               <button

@@ -13,7 +13,7 @@ const BlockedPanel: React.FC<Props> = ({ ui, onUpgrade, onTryAgain, onDismiss })
   if (!ui?.blocked) return null;
 
   return (
-    <div className="rounded-2xl border border-slate-700 bg-slate-900/40 p-5 shadow-lg">
+    <div className="maw-card p-5">
       <div className="flex items-start gap-3">
         <div className="mt-1 flex h-10 w-10 items-center justify-center rounded-xl bg-slate-800/80 border border-slate-700">
           {ui.showUpgrade ? (

@@ -788,7 +788,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                 <div className="overflow-x-auto">
                     <div className="min-w-max flex items-stretch gap-3 pb-2">
                         {ordered.map((task, idx) => (
-                            <div key={task.id} className="w-64 bg-slate-950/50 border border-white/10 rounded-xl p-3">
+                            <div key={task.id} className="w-64 maw-card-flat p-3">
                                 <div className="flex items-start justify-between gap-2">
                                     <div>
                                         <div className="text-xs text-slate-500">Beat {idx + 1}</div>
@@ -840,7 +840,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                     </div>
 
                     {/* Show Header Intelligence */}
-                    <div className="mt-4 bg-slate-950/40 border border-white/10 rounded-xl p-4 md:p-5">
+                    <div className="mt-4 maw-card p-4 md:p-5">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                             <div className="flex items-center gap-2">
                                 <StageCurtainsIcon className="w-5 h-5 text-purple-300" />
@@ -952,19 +952,19 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                             </div>
 
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-3">
+                                <div className="maw-card-flat p-3">
                                     <div className="text-xs text-slate-400">Total Runtime</div>
                                     <div className="text-lg font-bold text-white">{runtimeMinutes ? `${runtimeMinutes}m` : '—'}</div>
                                 </div>
-                                <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-3">
+                                <div className="maw-card-flat p-3">
                                     <div className="text-xs text-slate-400">Total Profit</div>
                                     <div className="text-lg font-bold text-white">${profit.toFixed(0)}</div>
                                 </div>
-                                <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-3">
+                                <div className="maw-card-flat p-3">
                                     <div className="text-xs text-slate-400">Last Rehearsed</div>
                                     <div className="text-sm font-semibold text-slate-200">{lastRehearsedTs ? new Date(lastRehearsedTs).toLocaleString() : '—'}</div>
                                 </div>
-                                <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-3">
+                                <div className="maw-card-flat p-3">
                                     <div className="text-xs text-slate-400">Audience Rating</div>
                                     <div className="text-lg font-bold text-white">{avgRating ? avgRating.toFixed(1) : '—'}</div>
                                     <div className="text-[11px] text-slate-500">{showFeedback.length ? `${showFeedback.length} responses` : 'No feedback yet'}</div>
