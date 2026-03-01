@@ -189,6 +189,49 @@ const formatMoney = (value: number, currency: string = 'USD') => {
     }
 };
 
+
+const HomeMetricsStrip: React.FC<{ shows: Show[]; feedback: Feedback[] }> = ({ shows, feedback }) => {
+    const { gross, net, completedCount, avgRating, responseCount } = useMemo(() => {
+        const gross = shows.reduce((sum, s) => sum + (s.finances?.performanceFee || 0), 0);
+        const expenses = shows.reduce((sum, s) => {
+            const ex = s.finances?.expenses || [];
+            return sum + ex.reduce((sub, e) => sub + (e.amount || 0), 0);
+        }, 0);
+        const net = gross - expenses;
+
+        const completedCount = shows.reduce((count, s) => {
+            const perfs = getPerformancesByShowId(s.id);
+            return count + (perfs.some(p => !!p.endTime) ? 1 : 0);
+        }, 0);
+
+        const responseCount = feedback.length;
+        const avgRating = responseCount > 0 ? (feedback.reduce((sum, f) => sum + (f.rating || 0), 0) / responseCount) : 0;
+
+        return { gross, net, completedCount, avgRating, responseCount };
+    }, [shows, feedback]);
+
+    const items = [
+        { label: 'Gross', value: formatMoney(gross) },
+        { label: 'Net', value: formatMoney(net) },
+        { label: 'Completed', value: String(completedCount) },
+        { label: 'Avg Rating', value: responseCount > 0 ? avgRating.toFixed(1) : '—' },
+        { label: 'Responses', value: String(responseCount) },
+    ];
+
+    return (
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
+            <div className="flex items-center justify-between gap-3 overflow-x-auto no-scrollbar">
+                {items.map((it) => (
+                    <div key={it.label} className="min-w-[110px] px-2 py-1">
+                        <div className="text-[11px] uppercase tracking-wider text-white/50">{it.label}</div>
+                        <div className="mt-0.5 text-sm font-semibold text-white">{it.value}</div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
 const BusinessMetricsWidget: React.FC<{ shows: Show[]; feedback: Feedback[] }> = ({ shows, feedback }) => {
     const { gross, expenses, net, completedCount, avgRating, responseCount } = useMemo(() => {
         const gross = shows.reduce((sum, s) => sum + (s.finances?.performanceFee || 0), 0);
@@ -425,6 +468,15 @@ const Dashboard: React.FC<DashboardProps> = ({ variant = 'full', user, shows, fe
                         <QuickActionsWidget onNavigate={onNavigate} />
                     </div>
                 </div>
+
+
+                <div>
+                    <h2 className="text-sm uppercase tracking-wider text-slate-400">At a Glance</h2>
+                    <div className="mt-3">
+                        <HomeMetricsStrip shows={shows} feedback={feedback} />
+                    </div>
+                </div>
+
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4">

@@ -124,3 +124,7 @@ html.maw-record body {
 @media (prefers-contrast: more), (forced-colors: active){
   .brand-motif::before{ display: none; }
 }
+
+/* Hide scrollbars for horizontal metric strips */
+.no-scrollbar::-webkit-scrollbar{ display:none; }
+.no-scrollbar{ -ms-overflow-style:none; scrollbar-width:none; }
