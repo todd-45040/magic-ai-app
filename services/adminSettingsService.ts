@@ -13,6 +13,19 @@ export interface AdminAiStatus {
   runtimeProvider: AdminAIProvider;
   source: AdminAiStatusSource;
   envOverrideActive: boolean;
+  tool_support?: Array<{
+    tool: string;
+    route: string;
+    support: AdminAIProvider[];
+    note?: string;
+  }>;
+  limitations?: Array<{
+    tool: string;
+    route: string;
+    support: AdminAIProvider[];
+    note?: string;
+  }>;
+  limitations_count?: number;
   keys: {
     openai: { configured: boolean };
     gemini: { configured: boolean };

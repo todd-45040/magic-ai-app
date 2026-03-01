@@ -36,6 +36,11 @@ export default function AdminSettingsModal({ open, onClose }: { open: boolean; o
     return aiStatus.keys.gemini.configured;
   }
 
+  function previewLimitations(p: AdminAIProvider) {
+    const tools = aiStatus?.tool_support || [];
+    return tools.filter((t) => !t.support.includes(p));
+  }
+
   async function onSave() {
     setSaving(true);
     setError(null);
@@ -93,6 +98,46 @@ export default function AdminSettingsModal({ open, onClose }: { open: boolean; o
             <div style={{ marginTop: 8, fontSize: 12, color: '#ffb4b4' }}>
               Warning: Server API key for <b>{provider}</b> is not configured. Switching may fail until keys are set in Vercel.
             </div>
+          )}
+
+          {aiStatus && (aiStatus.tool_support?.length || 0) > 0 && (
+            (() => {
+              const issues = previewLimitations(provider);
+              const pretty = (p: string) => (p === 'openai' ? 'OpenAI' : p === 'anthropic' ? 'Anthropic' : 'Google Gemini');
+              if (issues.length === 0) {
+                return (
+                  <div style={{ marginTop: 10, fontSize: 12, opacity: 0.88 }}>
+                    Compatibility: <b>No known tool limitations</b> for {pretty(provider)}.
+                  </div>
+                );
+              }
+              return (
+                <div style={{ marginTop: 10, fontSize: 12 }}>
+                  <div style={{ color: '#ffd27a', fontWeight: 700 }}>
+                    Compatibility warning: {issues.length} tool{issues.length === 1 ? '' : 's'} may be limited if you switch to {pretty(provider)}
+                  </div>
+                  <div style={{ marginTop: 6, opacity: 0.9 }}>
+                    You can still save this setting, but these tools may fail or degrade under the selected provider:
+                  </div>
+                  <ul style={{ marginTop: 8, paddingLeft: 18, opacity: 0.92 }}>
+                    {issues.slice(0, 8).map((t) => (
+                      <li key={t.tool + t.route} style={{ marginBottom: 6 }}>
+                        <b>{t.tool}</b>
+                        {t.note ? <span style={{ opacity: 0.9 }}> — {t.note}</span> : null}
+                      </li>
+                    ))}
+                    {issues.length > 8 && (
+                      <li style={{ opacity: 0.9 }}>…and {issues.length - 8} more (see Admin → Overview → AI Provider Health)</li>
+                    )}
+                  </ul>
+                  {aiStatus.envOverrideActive && (
+                    <div style={{ marginTop: 8, color: '#ffb4b4', opacity: 0.95 }}>
+                      Note: ENV override is currently active, so runtime behavior may not match this selection until AI_PROVIDER is unset.
+                    </div>
+                  )}
+                </div>
+              );
+            })()
           )}
         </div>
 
