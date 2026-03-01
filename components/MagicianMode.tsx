@@ -2233,7 +2233,7 @@ ${action.payload.content}`;
                 Magic AI Wizard Dashboard
               </p>
               <h1 className="mt-2 text-2xl md:text-3xl font-semibold text-white leading-tight">
-                Your AI Assistant for Creating, Rehearsing, and Running <span className="text-yellow-200">Better Magic Shows</span>
+                Your Home Base for Creating, Rehearsing, and Running <span className="text-yellow-200">Better Magic Shows</span>
               </h1>
               <p className="mt-2 text-sm text-white/60">
                 Welcome back, {user.name || (user.email ? user.email.split('@')[0] : 'magician')}.
@@ -2593,7 +2593,7 @@ ${action.payload.content}`;
           If we route to 'chat' here, and a tool view is persisted, the app can feel "stuck".
         */}
         <TabButton
-          label="AI Assistant"
+          label="Home"
           icon={WandIcon}
           isActive={activeView === 'dashboard' || activeTab === 'chat'}
           onClick={() => {
