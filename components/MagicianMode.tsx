@@ -1106,38 +1106,38 @@ interface MagicianModeProps {
 }
 
 const VIEW_TO_TAB_MAP: Record<MagicianView, MagicianTab> = {
-    'dashboard': 'chat',
-    'chat': 'chat',
-    'live-rehearsal': 'chat',
-    'video-rehearsal': 'chat',
-    'angle-risk': 'chat',
-    'visual-brainstorm': 'chat',
-    'saved-ideas': 'chat',
-    'prop-checklists': 'chat',
-    'magic-archives': 'chat',
-    'gospel-magic-assistant': 'chat',
-    'mentalism-assistant': 'chat',
-    'member-management': 'chat',
-    'show-feedback': 'chat',
-    'patter-engine': 'chat',
-    'marketing-campaign': 'chat',
-    'contract-generator': 'chat',
-    'assistant-studio': 'chat',
-    'director-mode': 'chat',
-    'persona-simulator': 'chat',
-    'client-management': 'chat',
-    'illusion-blueprint': 'chat',
-    'magic-theory-tutor': 'chat',
-    'performance-analytics': 'show-planner',
-    'show-planner': 'show-planner',
-    'effect-generator': 'effect-generator',
-    'identify': 'identify',
-    'publications': 'publications',
-    'community': 'community',
-    'magic-wire': 'magic-wire',
-    'global-search': 'search',
-    'search': 'search',
-    'magic-dictionary': 'magic-dictionary',
+    'dashboard': 'home',
+    'chat': 'home',
+    'live-rehearsal': 'rehearse',
+    'video-rehearsal': 'rehearse',
+    'angle-risk': 'rehearse',
+    'visual-brainstorm': 'create',
+    'saved-ideas': 'manage',
+    'prop-checklists': 'manage',
+    'magic-archives': 'manage',
+    'gospel-magic-assistant': 'manage',
+    'mentalism-assistant': 'manage',
+    'member-management': 'manage',
+    'show-feedback': 'manage',
+    'patter-engine': 'create',
+    'marketing-campaign': 'create',
+    'contract-generator': 'manage',
+    'assistant-studio': 'create',
+    'director-mode': 'create',
+    'persona-simulator': 'rehearse',
+    'client-management': 'manage',
+    'illusion-blueprint': 'create',
+    'magic-theory-tutor': 'create',
+    'performance-analytics': 'manage',
+    'show-planner': 'manage',
+    'effect-generator': 'create',
+    'identify': 'create',
+    'publications': 'manage',
+    'community': 'manage',
+    'magic-wire': 'manage',
+    'global-search': 'manage',
+    'search': 'manage',
+    'magic-dictionary': 'manage',
     'admin': 'admin',
 };
 
@@ -2025,27 +2025,50 @@ useEffect(() => {
   };
 
   const handleTabClick = (tab: MagicianTab) => {
-    if (tab === 'show-planner' && !hasAmateurAccess) {
-        setIsUpgradeModalOpen(true);
+    // Intent-based top navigation (reduced density)
+    if (tab === 'home') {
+        // Always land on the Home dashboard/grid.
+        try { localStorage.removeItem('magician_active_view'); } catch {}
+        resetInlineForms();
+        setActiveView('dashboard');
         return;
     }
-     if (tab === 'magic-dictionary' && !hasProfessionalAccess) {
-        setIsUpgradeModalOpen(true);
+
+    if (tab === 'create') {
+        resetInlineForms();
+        demoGuardSetActiveView('effect-generator');
         return;
     }
-    if (tab === 'search') {
-        demoGuardSetActiveView('global-search');
+
+    if (tab === 'rehearse') {
+        // Rehearsal tools are Pro-gated (Live rehearsal, video analysis, etc.)
+        if (!hasProfessionalAccess) {
+            setIsUpgradeModalOpen(true);
+            return;
+        }
+        resetInlineForms();
+        demoGuardSetActiveView('live-rehearsal');
         return;
     }
+
+    if (tab === 'manage') {
+        // Manage includes Show Planner, contracts, clients, etc. (Amateur+)
+        if (!hasAmateurAccess) {
+            setIsUpgradeModalOpen(true);
+            return;
+        }
+        resetInlineForms();
+        demoGuardSetActiveView('show-planner');
+        return;
+    }
+
     if (tab === 'admin') {
         if (!user?.isAdmin) return;
         resetInlineForms();
         demoGuardSetActiveView('admin');
         return;
     }
-    resetInlineForms();
-    demoGuardSetActiveView(tab);
-  };
+};
   
   const handleNavigate = (view: MagicianView) => {
     if (isExpired) {
@@ -2587,28 +2610,33 @@ ${action.payload.content}`;
 
 
       <nav className="flex items-center gap-1 border-b border-slate-800 px-2 md:px-4 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-        {/*
-          "AI Assistant" is the *home* of the assistant area (the grid of feature cards).
-          Users expect this to act like a Home button.
-          If we route to 'chat' here, and a tool view is persisted, the app can feel "stuck".
-        */}
+        {/* Reduced-density, intent-based navigation */}
         <TabButton
           label="Home"
           icon={WandIcon}
-          isActive={activeView === 'dashboard' || activeTab === 'chat'}
-          onClick={() => {
-            // Clear any persisted tool view so we always land on the grid.
-            try { localStorage.removeItem('magician_active_view'); } catch {}
-            resetInlineForms();
-            setActiveView('dashboard');
-          }}
+          isActive={activeTab === 'home'}
+          onClick={() => handleTabClick('home')}
         />
-        <TabButton label="Show Planner" icon={ChecklistIcon} isActive={activeTab === 'show-planner'} onClick={() => handleTabClick('show-planner')} isLocked={!hasAmateurAccess} />
-        <TabButton label="Effect Generator" icon={LightbulbIcon} isActive={activeTab === 'effect-generator'} onClick={() => handleTabClick('effect-generator')} />
-        <TabButton label="Identify Trick" icon={CameraIcon} isActive={activeTab === 'identify'} onClick={() => handleTabClick('identify')} />
-        <TabButton label="Magic Wire" icon={NewspaperIcon} isActive={activeTab === 'magic-wire'} onClick={() => handleTabClick('magic-wire')} />
-        <TabButton label="Publications" icon={NewspaperIcon} isActive={activeTab === 'publications'} onClick={() => handleTabClick('publications')} />
-        <TabButton label="Community" icon={UsersIcon} isActive={activeTab === 'community'} onClick={() => handleTabClick('community')} />
+        <TabButton
+          label="Create"
+          icon={LightbulbIcon}
+          isActive={activeTab === 'create'}
+          onClick={() => handleTabClick('create')}
+        />
+        <TabButton
+          label="Rehearse"
+          icon={MicrophoneIcon}
+          isActive={activeTab === 'rehearse'}
+          onClick={() => handleTabClick('rehearse')}
+          isLocked={!hasProfessionalAccess}
+        />
+        <TabButton
+          label="Manage"
+          icon={ChecklistIcon}
+          isActive={activeTab === 'manage'}
+          onClick={() => handleTabClick('manage')}
+          isLocked={!hasAmateurAccess}
+        />
         {user?.isAdmin ? (
           <TabButton
             label="Admin"
@@ -2618,14 +2646,51 @@ ${action.payload.content}`;
           />
         ) : null}
 
-        {/* Rightmost utility: keep feedback visible without cluttering primary tools */}
+        {/* Utility: keep feedback accessible without cluttering the primary nav */}
         <TabButton
           label="Feedback"
           icon={ChatBubbleIcon}
           isActive={isFeedbackModalOpen}
           onClick={() => setIsFeedbackModalOpen(true)}
         />
-      </nav>
+      
+      {/* Context sub-navigation (keeps deep tools reachable after simplifying top nav) */}
+      {activeTab !== 'home' && (
+        <div className="px-2 md:px-4 py-2 border-b border-slate-800 bg-slate-950/20">
+          <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+            {activeTab === 'create' && (
+              <>
+                <button className="px-3 py-1.5 rounded-full text-xs border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700" onClick={() => demoGuardSetActiveView('effect-generator')}>Effect Generator</button>
+                <button className="px-3 py-1.5 rounded-full text-xs border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700" onClick={() => demoGuardSetActiveView('identify')}>Identify Trick</button>
+                <button className="px-3 py-1.5 rounded-full text-xs border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700" onClick={() => demoGuardSetActiveView('visual-brainstorm')}>Visual Brainstorm</button>
+                <button className="px-3 py-1.5 rounded-full text-xs border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700" onClick={() => demoGuardSetActiveView('director-mode')}>Director Mode</button>
+                <button className="px-3 py-1.5 rounded-full text-xs border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700" onClick={() => demoGuardSetActiveView('patter-engine')}>Patter Engine</button>
+              </>
+            )}
+            {activeTab === 'rehearse' && (
+              <>
+                <button className="px-3 py-1.5 rounded-full text-xs border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700" onClick={() => demoGuardSetActiveView('live-rehearsal')}>Live Rehearsal</button>
+                <button className="px-3 py-1.5 rounded-full text-xs border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700" onClick={() => demoGuardSetActiveView('video-rehearsal')}>Video Rehearsal</button>
+                <button className="px-3 py-1.5 rounded-full text-xs border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700" onClick={() => demoGuardSetActiveView('persona-simulator')}>Persona Simulator</button>
+                <button className="px-3 py-1.5 rounded-full text-xs border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700" onClick={() => demoGuardSetActiveView('angle-risk')}>Angle & Risk</button>
+              </>
+            )}
+            {activeTab === 'manage' && (
+              <>
+                <button className="px-3 py-1.5 rounded-full text-xs border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700" onClick={() => demoGuardSetActiveView('show-planner')}>Show Planner</button>
+                <button className="px-3 py-1.5 rounded-full text-xs border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700" onClick={() => demoGuardSetActiveView('saved-ideas')}>Saved Ideas</button>
+                <button className="px-3 py-1.5 rounded-full text-xs border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700" onClick={() => demoGuardSetActiveView('client-management')}>Clients</button>
+                <button className="px-3 py-1.5 rounded-full text-xs border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700" onClick={() => demoGuardSetActiveView('contract-generator')}>Contracts</button>
+                <button className="px-3 py-1.5 rounded-full text-xs border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700" onClick={() => demoGuardSetActiveView('show-feedback')}>Feedback</button>
+                <button className="px-3 py-1.5 rounded-full text-xs border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700" onClick={() => demoGuardSetActiveView('magic-wire')}>Magic Wire</button>
+                <button className="px-3 py-1.5 rounded-full text-xs border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700" onClick={() => demoGuardSetActiveView('publications')}>Publications</button>
+                <button className="px-3 py-1.5 rounded-full text-xs border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700" onClick={() => demoGuardSetActiveView('community')}>Community</button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+</nav>
 
       <main className="flex-1 flex flex-col overflow-y-auto">
         <div className="flex-1 flex flex-col animate-fade-in">
