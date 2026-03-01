@@ -304,7 +304,7 @@ export default async function handler(request: any, response: any) {
       });
     }
 
-    const provider = resolveProvider(request);
+    const provider = await resolveProvider(request);
     const { model, contents, config } = request.body || {};
 
     const maxOutputTokens = getEffectEngineMaxTokens(config);

@@ -115,7 +115,7 @@ export default async function handler(req: any, res: any) {
       return jsonError(res, guard.status, guard.error);
     }
 
-    const provider = resolveProvider(req);
+    const provider = await resolveProvider(req);
     const body = req.body || {};
     const { aspectRatio = '1:1' } = body;
 

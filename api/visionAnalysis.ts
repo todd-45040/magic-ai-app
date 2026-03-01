@@ -28,7 +28,7 @@ export default async function handler(request: any, response: any) {
   }
 
   try {
-    const provider = resolveProvider(request);
+    const provider = await resolveProvider(request);
 
     let result: any;
 

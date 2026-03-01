@@ -50,7 +50,7 @@ export default async function handler(request: any, response: any) {
         });
     }
 
-    const provider = resolveProvider(request);
+    const provider = await resolveProvider(request);
     const { imageBase64, mimeType, prompt, aspectRatio = '1:1' } = request.body || {};
 
     if (!imageBase64 || !mimeType || !prompt) {

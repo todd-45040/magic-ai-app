@@ -1,3 +1,5 @@
+import { getSupabaseAdmin } from '../auth/index.js';
+
 export type AIProvider = 'gemini' | 'openai' | 'anthropic';
 
 function normProvider(v: any): AIProvider | null {
@@ -6,10 +8,53 @@ function normProvider(v: any): AIProvider | null {
   return null;
 }
 
-export function resolveProvider(_req: any): AIProvider {
-  // Provider is controlled by the administrator (env/app settings). End-users cannot override.
+// Small in-memory cache so we don't hit Supabase on every AI call.
+let _cached: { provider: AIProvider; at: number } | null = null;
+const CACHE_TTL_MS = 60_000; // 60s
+
+async function fetchProviderFromDb(): Promise<AIProvider | null> {
+  try {
+    const admin = getSupabaseAdmin();
+    const { data, error } = await admin
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'ai_defaults')
+      .maybeSingle();
+
+    if (error) {
+      // If the table doesn't exist (or other schema issues), fall back safely.
+      if (String(error.message || '').includes('does not exist')) return null;
+      return null;
+    }
+
+    const v = (data as any)?.value;
+    const provider = normProvider(v?.provider);
+    return provider;
+  } catch (_e) {
+    // Missing env vars or any other error -> no DB provider
+    return null;
+  }
+}
+
+/**
+ * Resolve AI provider in priority order:
+ * 1) Env override AI_PROVIDER (break-glass)
+ * 2) DB setting app_settings[key='ai_defaults'].value.provider
+ * 3) Default: gemini
+ *
+ * End-users cannot override provider.
+ */
+export async function resolveProvider(_req: any): Promise<AIProvider> {
   const fromEnv = normProvider(process.env.AI_PROVIDER);
-  return fromEnv || 'gemini';
+  if (fromEnv) return fromEnv;
+
+  const now = Date.now();
+  if (_cached && now - _cached.at < CACHE_TTL_MS) return _cached.provider;
+
+  const fromDb = await fetchProviderFromDb();
+  const provider = fromDb || 'gemini';
+  _cached = { provider, at: now };
+  return provider;
 }
 
 function partsToText(contents: any): string {

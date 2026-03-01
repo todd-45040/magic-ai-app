@@ -27,7 +27,7 @@ export default async function handler(request: any, response: any) {
   }
 
   try {
-    const provider = resolveProvider(request);
+    const provider = await resolveProvider(request);
     const { prompt, aspectRatio = '1:1' } = request.body || {};
 
     let result: any;
