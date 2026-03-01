@@ -66,6 +66,7 @@ export default function AdminOverviewDashboard({ onGoUsers, onGoLeads }: { onGoU
   const [aiHealthErr, setAiHealthErr] = useState<string | null>(null);
   const [envSanity, setEnvSanity] = useState<AdminEnvSanity | null>(null);
   const [envSanityErr, setEnvSanityErr] = useState<string | null>(null);
+  const [envCopyState, setEnvCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
   const [admcLeads, setAdmcLeads] = useState<number | null>(null);
   const [founderCounts, setFounderCounts] = useState<any>(null);
   const [founderCountsErr, setFounderCountsErr] = useState<string | null>(null);
@@ -163,6 +164,10 @@ export default function AdminOverviewDashboard({ onGoUsers, onGoLeads }: { onGoU
     };
 
 
+
+
+  }, [days]);
+
 // Env sanity (server) — booth-week debugging helper
 useEffect(() => {
   let alive = true;
@@ -185,7 +190,6 @@ useEffect(() => {
   };
 }, []);
 
-  }, [days]);
 
   async function openNotes(entity_type: string, entity_id: string, title: string) {
     setNotesEntity({ entity_type, entity_id, title });
@@ -233,7 +237,46 @@ useEffect(() => {
     }
   }
 
-  const kUsers = data?.users || {};
+  
+
+function buildEnvHealthSnapshot(s: AdminEnvSanity | null, e: string | null) {
+  const lines: string[] = [];
+  lines.push('Magic AI Wizard — System Health Snapshot');
+  lines.push(`Time: ${new Date().toISOString()}`);
+  lines.push(`Env sanity: ${s?.ok ? 'OK' : e ? 'CHECK' : 'UNKNOWN'}`);
+
+  if (s) {
+    const providerSource = s.provider.envOverrideActive ? 'ENV override' : 'DB default';
+    lines.push(`Provider: ${s.provider.runtimeProvider} (${providerSource})`);
+    lines.push(`Stripe readiness: ${s.readiness.stripeReady ? 'READY' : 'NOT READY'}`);
+    lines.push(`Webhook verification: ${s.readiness.webhookVerificationActive ? 'ACTIVE' : 'INACTIVE'}`);
+
+    lines.push('Key presence:');
+    lines.push(`- GOOGLE_AI_API_KEY: ${s.keys.ai.GOOGLE_AI_API_KEY ? 'YES' : 'NO'}`);
+    lines.push(`- SUPABASE_SERVICE_ROLE_KEY: ${s.keys.supabase.SUPABASE_SERVICE_ROLE_KEY ? 'YES' : 'NO'}`);
+    lines.push(`- STRIPE_SECRET_KEY: ${s.keys.stripe.STRIPE_SECRET_KEY ? 'YES' : 'NO'}`);
+    lines.push(`- STRIPE_WEBHOOK_SECRET: ${s.keys.stripe.STRIPE_WEBHOOK_SECRET ? 'YES' : 'NO'}`);
+
+    lines.push(`Warnings: VITE-* secret-like vars present: ${s.warnings.vitePrefixedSecretsPresent ? 'YES' : 'NO'}`);
+  } else if (e) {
+    lines.push(`Error: ${e}`);
+  }
+
+  return lines.join('\n');
+}
+
+async function copyEnvHealthSnapshot() {
+  try {
+    const snapshot = buildEnvHealthSnapshot(envSanity, envSanityErr);
+    await navigator.clipboard.writeText(snapshot);
+    setEnvCopyState('copied');
+    window.setTimeout(() => setEnvCopyState('idle'), 2000);
+  } catch {
+    setEnvCopyState('error');
+    window.setTimeout(() => setEnvCopyState('idle'), 2500);
+  }
+}
+const kUsers = data?.users || {};
   const founding = data?.founding || {};
   const kAi = data?.ai || {};
   const unit = data?.unit_economics || {};
@@ -476,18 +519,35 @@ useEffect(() => {
       <div className="text-sm opacity-80">System Health</div>
       <div className="mt-1 text-[11px] text-white/60">Server env + provider + Stripe readiness</div>
     </div>
-    <div
-      className={`px-2.5 py-1 rounded-lg border text-[11px] ${
-        envSanity?.ok
-          ? 'bg-emerald-500/10 border-emerald-400/20 text-emerald-100'
-          : envSanityErr
-            ? 'bg-red-500/10 border-red-400/20 text-red-100'
-            : 'bg-white/5 border-white/10 text-white/70'
-      }`}
-      title={envSanityErr || ''}
-    >
-      {envSanity?.ok ? 'OK' : envSanityErr ? 'Check' : '…'}
-    </div>
+
+<div className="flex items-center gap-2">
+  <button
+    type="button"
+    onClick={copyEnvHealthSnapshot}
+    className={`px-2.5 py-1 rounded-lg border text-[11px] transition ${
+      envCopyState === 'copied'
+        ? 'bg-emerald-500/10 border-emerald-400/20 text-emerald-100'
+        : envCopyState === 'error'
+          ? 'bg-red-500/10 border-red-400/20 text-red-100'
+          : 'bg-white/5 border-white/10 text-white/70 hover:bg-white/10'
+    }`}
+    title="Copy a safe status snapshot (no secrets)"
+  >
+    {envCopyState === 'copied' ? 'Copied' : envCopyState === 'error' ? 'Failed' : 'Copy'}
+  </button>
+  <div
+    className={`px-2.5 py-1 rounded-lg border text-[11px] ${
+      envSanity?.ok
+        ? 'bg-emerald-500/10 border-emerald-400/20 text-emerald-100'
+        : envSanityErr
+          ? 'bg-red-500/10 border-red-400/20 text-red-100'
+          : 'bg-white/5 border-white/10 text-white/70'
+    }`}
+    title={envSanityErr || ''}
+  >
+    {envSanity?.ok ? 'OK' : envSanityErr ? 'Check' : '…'}
+  </div>
+</div>
   </div>
 
   <div className="mt-3 space-y-2 text-xs">
