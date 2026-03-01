@@ -39,7 +39,7 @@ export default function PersistentHeader({ mode, user, onGoMainMenu, onGoDashboa
           </div>
 
           <div className="hidden sm:flex items-center gap-2 text-xs text-slate-300/70 truncate max-w-[520px]">
-            {user?.foundingCircleMember ? (
+            {(user?.is_founder ?? user?.foundingCircleMember) ? (
               <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-amber-400/25 bg-amber-500/10 text-amber-200 font-semibold">
                 <span className="text-[11px]">★</span>
                 Founder

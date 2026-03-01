@@ -46,7 +46,7 @@ export default async function handler(req: any, res: any) {
     const { data: founders, error: fErr } = await admin
       .from('users')
       .select('id,email')
-      .eq('founding_circle_member', true)
+      .or('is_founder.eq.true,founding_circle_member.eq.true')
       .not('email', 'is', null)
       .limit(limit);
     if (fErr) return res.status(500).json({ ok: false, error: 'Founder query failed', details: fErr });

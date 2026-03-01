@@ -24,7 +24,7 @@ export default async function handler(_req: any, res: any) {
     const { count } = await admin
       .from('users')
       .select('id', { count: 'exact', head: true })
-      .eq('founding_circle_member', true);
+      .or('is_founder.eq.true,founding_circle_member.eq.true');
 
     const foundersCount = Number(count || 0);
 

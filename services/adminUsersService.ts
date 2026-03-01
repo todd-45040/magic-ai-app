@@ -16,6 +16,7 @@ export type AdminUserRow = {
   events_window: number;
   events_total?: number | null;
   founding_circle_member?: boolean | null;
+  is_founder?: boolean | null;
 };
 
 export async function fetchAdminUsers(params: {

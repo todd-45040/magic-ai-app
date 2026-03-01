@@ -116,6 +116,7 @@ export default async function handler(req: any, res: any) {
       .from('users')
       .update({
         founding_circle_member: true,
+        is_founder: true,
         founding_joined_at: new Date().toISOString(),
         founding_source: source,
         pricing_lock,

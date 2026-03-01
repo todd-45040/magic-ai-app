@@ -74,11 +74,11 @@ export default async function handler(req: any, res: any) {
 
   // Founder lock stats
   const [{ count: foundersTotal }, { count: foundersLocked }] = await Promise.all([
-    admin.from('users').select('id', { count: 'exact', head: true }).eq('founding_circle_member', true),
+    admin.from('users').select('id', { count: 'exact', head: true }).or('is_founder.eq.true,founding_circle_member.eq.true'),
     admin
       .from('users')
       .select('id', { count: 'exact', head: true })
-      .eq('founding_circle_member', true)
+      .or('is_founder.eq.true,founding_circle_member.eq.true')
       .not('pricing_lock', 'is', null),
   ]).then((arr: any[]) => arr.map((r) => ({ count: r?.count ?? 0 })));
 

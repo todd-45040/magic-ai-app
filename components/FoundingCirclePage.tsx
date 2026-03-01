@@ -67,7 +67,7 @@ export default function FoundingCirclePage(props: { user: User | null; onBack: (
     return u || '';
   }, [user?.email]);
 
-  const isAlreadyFounder = Boolean(user?.foundingCircleMember);
+  const isAlreadyFounder = Boolean((user?.is_founder ?? user?.foundingCircleMember));
 
   useEffect(() => {
     let cancelled = false;

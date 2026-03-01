@@ -252,6 +252,7 @@ export default async function handler(req: any, res: any) {
             stripe_subscription_id: subscriptionId || null,
             pricing_lock: '29.95',
             founding_circle_member: true,
+          is_founder: true,
             founding_bucket: desiredBucket,
           })
           .eq('id', userId);

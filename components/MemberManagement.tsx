@@ -157,7 +157,7 @@ const MemberManagement: React.FC = () => {
               <tr key={user.email} className="border-t border-slate-700 hover:bg-slate-800/40">
                 <td className="p-3 text-slate-200">{user.email}</td>
                 <td className="p-3">
-                  {user.foundingCircleMember ? (
+                  {(user.is_founder ?? user.foundingCircleMember) ? (
                     <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-bold rounded-full border border-amber-400/40 bg-amber-500/10 text-amber-300">
                       <span aria-hidden>🏆</span>
                       FOUNDER

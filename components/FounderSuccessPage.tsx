@@ -35,7 +35,7 @@ export default function FounderSuccessPage(props: {
   const [checkingStatus, setCheckingStatus] = useState(true);
   const [statusTries, setStatusTries] = useState(0);
 
-  const isFounder = Boolean((user as any)?.foundingCircleMember);
+  const isFounder = Boolean((user as any)?.is_founder ?? (user as any)?.foundingCircleMember);
   const lockedRate = useMemo(() => {
     // Pricing lock is immutable server-side; display a friendly, fixed anchor.
     // If you ever introduce multiple founder prices, you can map pricingLock keys here.

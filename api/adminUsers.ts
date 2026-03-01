@@ -84,13 +84,13 @@ export default async function handler(req: any, res: any) {
           ? 'id,email,membership'
           : 'id,email,tier';
 
-      const selectCols = includeFounderCol ? `${baseCols},founding_circle_member` : baseCols;
+      const selectCols = includeFounderCol ? `${baseCols},founding_circle_member,is_founder` : baseCols;
 
       let query: any = admin.from('users').select(selectCols, { count: 'exact' });
 
       if (foundersOnly) {
         // Requires the founding_circle_member column to exist.
-        query = query.eq('founding_circle_member', true);
+        query = query.or('is_founder.eq.true,founding_circle_member.eq.true');
       }
 
       if (userIds.length > 0) query = query.in('id', userIds);

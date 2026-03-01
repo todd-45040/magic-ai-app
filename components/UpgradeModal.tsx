@@ -16,7 +16,7 @@ const Row: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 );
 
 const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant = 'generic', user }) => {
-  const founderLocked = Boolean(user?.pricingLock || user?.foundingCircleMember);
+  const founderLocked = Boolean(user?.pricingLock || (user?.is_founder ?? user?.foundingCircleMember));
   const pricingLockKey = (user?.pricingLock ?? null) as string | null;
   const title =
     variant === 'trial-expired'
