@@ -617,7 +617,20 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                         {shows.map(show => <ShowListItem key={show.id} show={show} clients={clients} contractMeta={contractsMetaByShowId[show.id]} onSelect={() => setSelectedShow(show)} onDelete={() => handleDeleteShow(show.id)} />)}
                     </div>
                 ) : (
-                    <div className="text-center py-12"><StageCurtainsIcon className="w-16 h-16 mx-auto text-slate-600 mb-4" /><h3 className="text-lg font-bold text-slate-400">Your Stage is Bare</h3><p className="text-slate-500">Click "Create New Performance" to start planning your next masterpiece.</p></div>
+                    <div className="text-center py-12">
+                        <StageCurtainsIcon className="w-16 h-16 mx-auto text-slate-600 mb-4" />
+                        <h3 className="text-lg font-bold text-slate-300">Your Stage is Bare</h3>
+                        <p className="text-slate-500 mt-1">Create your first show plan — then add beats, rehearsal notes, and contracts as you go.</p>
+                        <div className="mt-5 flex justify-center">
+                            <button
+                                onClick={() => setIsShowModalOpen(true)}
+                                className="inline-flex items-center gap-2 rounded-xl border border-purple-400/25 bg-purple-500/15 px-4 py-2 text-sm font-semibold text-purple-100 transition hover:bg-purple-500/25 hover:text-white"
+                            >
+                                <WandIcon className="w-4 h-4" />
+                                Create Your First Show
+                            </button>
+                        </div>
+                    </div>
                 )}
             </main>
         </div>

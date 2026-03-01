@@ -126,9 +126,86 @@ const RecentIdeaWidget: React.FC<{ ideas: SavedIdea[], onNavigate: (view: Magici
                     <button onClick={() => onNavigate('saved-ideas')} className="text-sm text-purple-400 hover:text-purple-300 font-semibold mt-1 w-full text-center">View Ideas</button>
                 </div>
             ) : (
-                <p className="text-sm text-slate-500 text-center py-4">No saved ideas yet.</p>
+                <div className="text-center py-4">
+                    <p className="text-sm text-slate-500">No saved ideas yet.</p>
+                    <p className="text-xs text-slate-400 mt-1">Start with one quick win — generate an effect or run a rehearsal note.</p>
+                    <div className="mt-3 flex flex-col sm:flex-row gap-2 justify-center">
+                        <button
+                            onClick={() => onNavigate('effect-generator')}
+                            className="inline-flex items-center justify-center rounded-xl border border-purple-400/25 bg-purple-500/15 px-3 py-2 text-sm font-semibold text-purple-100 transition hover:bg-purple-500/25 hover:text-white"
+                        >
+                            Generate an Idea
+                        </button>
+                        <button
+                            onClick={() => onNavigate('live-rehearsal')}
+                            className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-semibold text-slate-200 transition hover:bg-white/[0.06]"
+                        >
+                            Try Live Rehearsal
+                        </button>
+                    </div>
+                </div>
             )}
         </>
+    );
+};
+
+const FirstActionGuidance: React.FC<{ shows: Show[]; ideas: SavedIdea[]; onNavigate: (view: MagicianView) => void }> = ({ shows, ideas, onNavigate }) => {
+    const hasShows = (shows || []).length > 0;
+    const hasIdeas = (ideas || []).length > 0;
+    const hasRehearsal = (ideas || []).some((i) => i.type === 'rehearsal');
+
+    const items: { key: string; title: string; message: string; cta: string; view: MagicianView }[] = [];
+    if (!hasShows) {
+        items.push({
+            key: 'no-shows',
+            title: 'Start your first show',
+            message: 'Create a show plan first — then save ideas and rehearsal notes directly into it.',
+            cta: 'Create Your First Show',
+            view: 'show-planner',
+        });
+    }
+    if (!hasIdeas) {
+        items.push({
+            key: 'no-ideas',
+            title: 'Generate your first idea',
+            message: 'Kickstart your library with a single effect concept or patter draft.',
+            cta: 'Open Effect Generator',
+            view: 'effect-generator',
+        });
+    }
+    if (!hasRehearsal) {
+        items.push({
+            key: 'no-rehearsal',
+            title: 'Log your first rehearsal',
+            message: 'Run a quick live rehearsal and save the notes so your next practice starts stronger.',
+            cta: 'Open Live Rehearsal',
+            view: 'live-rehearsal',
+        });
+    }
+
+    if (items.length === 0) return null;
+
+    return (
+        <div className="maw-card-flat p-4">
+            <div className="flex items-center gap-2 mb-2">
+                <RabbitIcon className="w-5 h-5 text-purple-400" />
+                <h3 className="font-bold text-yellow-200 tracking-wide">Next Best Step</h3>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {items.slice(0, 3).map((it) => (
+                    <div key={it.key} className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                        <div className="text-sm font-semibold text-white">{it.title}</div>
+                        <div className="text-xs text-white/60 mt-1">{it.message}</div>
+                        <button
+                            onClick={() => onNavigate(it.view)}
+                            className="mt-3 w-full inline-flex items-center justify-center rounded-xl border border-purple-400/25 bg-purple-500/15 px-3 py-2 text-sm font-semibold text-purple-100 transition hover:bg-purple-500/25 hover:text-white"
+                        >
+                            {it.cta}
+                        </button>
+                    </div>
+                ))}
+            </div>
+        </div>
     );
 };
 
@@ -435,6 +512,7 @@ const Dashboard: React.FC<DashboardProps> = ({ variant = 'full', user, shows, fe
     if (variant === 'home') {
         return (
             <div className="px-4 md:px-6 pb-10 space-y-6">
+                <FirstActionGuidance shows={shows} ideas={ideas} onNavigate={onNavigate} />
                 <div>
                     <h2 className="text-sm uppercase tracking-wider text-slate-400">Quick Paths</h2>
                     <div className="mt-3">

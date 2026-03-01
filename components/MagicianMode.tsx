@@ -1519,7 +1519,45 @@ useEffect(() => {
     const safeText = (v: any) => (typeof v === 'string' ? v : '');
     const clamp = (s: string, max = 120) => (s.length > max ? s.slice(0, max - 1).trimEnd() + '…' : s);
 
-    // Flatten tasks (best-effort; schema varies across builds)
+	    // Activation Tightening (Phase 6): First action guidance
+	    const hasShows = Array.isArray(shows) && shows.length > 0;
+	    const hasIdeas = Array.isArray(ideas) && ideas.length > 0;
+	    const hasRehearsalLog = (
+	      (Array.isArray(ideas) && ideas.some((i: any) => i?.type === 'rehearsal')) ||
+	      (Array.isArray(shows) && shows.some((s: any) => Array.isArray(s?.rehearsals) && s.rehearsals.length > 0))
+	    );
+
+	    if (!hasShows) {
+	      result.push({
+	        key: 'activation-no-shows',
+	        icon: StageCurtainsIcon,
+	        title: 'Create your first show plan',
+	        message: 'Start with one show. Once it exists, you can save ideas and rehearsal notes directly into it.',
+	        accent: 'purple',
+	      });
+	    }
+
+	    if (!hasIdeas) {
+	      result.push({
+	        key: 'activation-no-ideas',
+	        icon: WandIcon,
+	        title: 'Generate your first saved idea',
+	        message: 'Open Effect Generator and save one idea today — your library starts to compound immediately.',
+	        accent: 'gold',
+	      });
+	    }
+
+	    if (!hasRehearsalLog) {
+	      result.push({
+	        key: 'activation-no-rehearsal',
+	        icon: MicrophoneIcon,
+	        title: 'Run a quick Live Rehearsal',
+	        message: 'Do a 2–3 minute run-through and save the notes. Your next practice becomes dramatically faster.',
+	        accent: 'purple',
+	      });
+	    }
+
+	    // Flatten tasks (best-effort; schema varies across builds)
     const allTasks: any[] = (shows || []).flatMap((s: any) => (Array.isArray(s.tasks) ? s.tasks : Array.isArray(s.show_tasks) ? s.show_tasks : []));
     const openTasks = allTasks.filter((t: any) => !t?.completed && !t?.isCompleted && t?.status !== 'done' && t?.status !== 'completed');
 

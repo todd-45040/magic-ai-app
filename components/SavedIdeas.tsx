@@ -971,6 +971,23 @@ const sendToPlanner = (idea: SavedIdea) => {
                     <div className="text-3xl mb-2">✨</div>
                     <div className="text-lg font-semibold text-slate-200">No saved ideas yet</div>
                     <div className="text-sm text-slate-400 mt-1">Generate your first idea to begin building your library.</div>
+                    <div className="mt-5 flex justify-center">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                onAiSpark({
+                                    type: 'custom-prompt',
+                                    payload: {
+                                        prompt: 'Generate a strong, practical magic effect idea I can perform soon. Include: effect description, required props, reset time, and 3 lines of patter. Keep it realistic for a working magician.'
+                                    }
+                                });
+                            }}
+                            className="inline-flex items-center gap-2 rounded-xl border border-purple-400/25 bg-purple-500/15 px-4 py-2 text-sm font-semibold text-purple-100 transition hover:bg-purple-500/25 hover:text-white"
+                        >
+                            <WandIcon className="w-4 h-4" />
+                            Spark My First Idea
+                        </button>
+                    </div>
                 </div>
             ) : filteredIdeas.length === 0 ? (
                 <div className="text-center py-10 text-slate-400">
