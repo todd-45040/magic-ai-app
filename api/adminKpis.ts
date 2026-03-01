@@ -60,6 +60,10 @@ export default async function handler(req: any, res: any) {
 
     const { admin, userId } = auth as any;
 
+    // Canonical founder flag (Step 5 compatibility): treat either column as founder.
+    const isFounderRow = (u: any): boolean => Boolean(u?.is_founder || u?.founding_circle_member);
+
+
     // Admin-only gate
     const { data: me, error: meErr } = await admin
       .from('users')
@@ -1164,7 +1168,6 @@ wauTrendWeekly12 = weeklyWau;
     const foundingWindows = [7, 30, 90] as const;
 
     // Canonical founder flag (Step 5 compatibility): treat either column as founder.
-    const isFounderRow = (u: any): boolean => Boolean(u?.is_founder || u?.founding_circle_member);
 
     const founding: any = {
       members_by_window: {} as Record<string, number>,
