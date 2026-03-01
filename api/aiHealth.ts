@@ -1,3 +1,4 @@
+import { getGoogleAiApiKey } from '../server/gemini.js';
 /**
  * Lightweight server-side AI configuration check.
  *
@@ -10,7 +11,7 @@ export default async function handler(request: any, response: any) {
     return response.status(405).json({ error: 'Method not allowed' });
   }
 
-  const hasApiKey = !!process.env.API_KEY;
+  const hasGoogleAiKey = !!getGoogleAiApiKey();
   const hasSupabaseUrl = !!process.env.SUPABASE_URL;
   const hasServiceRole = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -19,7 +20,7 @@ export default async function handler(request: any, response: any) {
     provider: 'gemini',
     proxyRoute: '/api/generate',
     env: {
-      API_KEY: hasApiKey,
+      GOOGLE_AI_API_KEY: hasGoogleAiKey,
       SUPABASE_URL: hasSupabaseUrl,
       SUPABASE_SERVICE_ROLE_KEY: hasServiceRole,
     },

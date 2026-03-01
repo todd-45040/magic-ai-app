@@ -1,27 +1,11 @@
-import { Type, Modality } from "@google/genai";
+import { Type } from "@google/genai";
 import { supabase } from '../supabase';
 import type { ChatMessage, TrickIdentificationResult, User } from '../types';
 import { getAiProvider } from './aiProviderService';
 
-// DEBUG (temporary): expose which Vite env vars were baked into the client bundle.
-// Safe: does NOT reveal the API key value.
-// After deploying, open DevTools console and run:
-//   window.__LIVE_ENV_CHECK__
-// IMPORTANT: Use *static* access (import.meta.env.VITE_*) so Vite can inline values at build time.
-// If you access import.meta.env dynamically (via `as any` / optional chaining), Vite may not inline,
-// and you'll see false negatives in Production.
-const __LIVE_KEY_PRESENT__ = Boolean(import.meta.env.VITE_GEMINI_LIVE_API_KEY);
-const __FALLBACK_KEY_PRESENT__ = Boolean(import.meta.env.VITE_GEMINI_API_KEY);
-if (typeof window !== 'undefined') {
-  (window as any).__LIVE_ENV_CHECK__ = {
-    hasLiveKey: __LIVE_KEY_PRESENT__,
-    hasFallbackKey: __FALLBACK_KEY_PRESENT__,
-    ts: Date.now(),
-  };
-}
-
 // Keep this type export for components that reference live sessions.
-// Live sessions are currently not enabled through the serverless proxy.
+// NOTE: Live sessions are intentionally disabled in the production baseline because
+// they require an ephemeral-token broker to avoid exposing secrets in the frontend.
 export type LiveSession = any;
 
 /**
@@ -31,7 +15,7 @@ export type LiveSession = any;
  * crashing the app before React mounts (dark blank background).
  *
  * Instead, all AI calls go through serverless endpoints (Vercel /api/*).
- * Your Gemini API key must be configured on the SERVER as API_KEY.
+ * Your Google AI key must be configured on the SERVER as GOOGLE_AI_API_KEY.
  */
 
 type GeminiGenerateBody = {
@@ -294,77 +278,31 @@ type LiveCallbacks = {
 };
 
 // Google rotates preview suffixes; keep a short list of likely working models.
+// (Used for display only until we ship an ephemeral-token broker.)
 const LIVE_MODEL_CANDIDATES = [
   'gemini-2.5-flash-native-audio-preview-12-2025',
   'gemini-2.5-flash-native-audio-preview-09-2025',
 ];
 
-function getLiveApiKey(): string {
-  // IMPORTANT: Use static access so Vite can inline these at build time.
-  const liveKey = import.meta.env.VITE_GEMINI_LIVE_API_KEY;
-  const fallbackKey = import.meta.env.VITE_GEMINI_API_KEY;
-  const key = String(liveKey || fallbackKey || '').trim();
-
-  if (!key) {
-    throw new Error(
-      'Live Rehearsal is not configured: missing Gemini API key. Set VITE_GEMINI_API_KEY (or VITE_GEMINI_LIVE_API_KEY) in Vercel and redeploy.'
-    );
-  }
-  return key;
-}
-
 /**
  * Start a Gemini Live (native audio) session.
  *
- * Notes:
- * - This runs client-side and therefore exposes the API key in the bundle.
- *   That is acceptable for Beta testing, but for production SaaS you should
- *   broker Live sessions via ephemeral tokens.
- * - If the primary model is unavailable/gated, we try a couple common previews.
+ * Production baseline:
+ * - Disabled until we add a server-side ephemeral token broker.
+ * - This prevents exposing any Google AI keys in the client bundle.
  */
 export async function startLiveSession(
   systemInstruction: string,
   callbacks: LiveCallbacks,
   tools?: any
 ): Promise<LiveSession> {
-  const apiKey = getLiveApiKey();
-
-  // Lazy import to avoid any SDK side-effects during module init.
-  const mod: any = await import('@google/genai');
-  const GoogleGenAI = mod?.GoogleGenAI || mod?.GoogleGenerativeAI || mod?.default?.GoogleGenAI;
-  if (!GoogleGenAI) {
-    throw new Error('Live Rehearsal failed to initialize: GoogleGenAI not found in @google/genai.');
-  }
-
-  const ai = new GoogleGenAI({ apiKey });
-
-  let lastErr: any = null;
-  for (const model of LIVE_MODEL_CANDIDATES) {
-    try {
-      const session = await ai.live.connect({
-        model,
-        callbacks,
-        config: {
-          responseModalities: [Modality.AUDIO],
-          systemInstruction,
-          tools,
-        },
-      });
-      (session as any).__liveModel = model;
-      return session as LiveSession;
-    } catch (e: any) {
-      lastErr = e;
-      const msg = String(e?.message || e || 'Live connect failed');
-      // If the key is invalid/unauthorized, don't bother trying other models.
-      if (/unauthorized|invalid api key|api key|401/i.test(msg)) {
-        break;
-      }
-      // Otherwise try the next model.
-    }
-  }
-
-  const msg = String(lastErr?.message || lastErr || 'Live connect failed');
-  throw new Error(`Unable to start Live Rehearsal session. ${msg}`);
+  void systemInstruction;
+  void callbacks;
+  void tools;
+  throw new Error(
+    'Live Rehearsal (native audio) is disabled in the production baseline to prevent frontend key exposure. ' +
+      'Next step: implement a server-side ephemeral token broker for Google Live sessions.'
+  );
 }
 
 // Optional helper for UI display/diagnostics.

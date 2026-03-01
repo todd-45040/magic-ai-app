@@ -8,6 +8,7 @@
 
 import { enforceAiUsage } from '../server/usage.js';
 import { resolveProvider, callOpenAI, callAnthropic } from '../lib/server/providers/index.js';
+import { getGoogleAiApiKey } from '../server/gemini.js';
 
 type EffectJson = {
   name: string;
@@ -331,9 +332,9 @@ export default async function handler(request: any, response: any) {
         );
       }
 
-      const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.API_KEY;
+      const apiKey = getGoogleAiApiKey();
       if (!apiKey) {
-        throw new Error('Missing GEMINI_API_KEY (preferred) or GOOGLE_API_KEY (fallback) in Vercel environment variables.');
+        throw new Error('Missing GOOGLE_AI_API_KEY in Vercel environment variables.');
       }
 
       const { GoogleGenAI } = await import('@google/genai');

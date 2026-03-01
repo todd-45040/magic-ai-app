@@ -10,9 +10,11 @@ export default defineConfig(({ mode }) => {
   const env = { ...fileEnv, ...process.env };
 
   // Build-time sanity check (safe: booleans only)
+  // NOTE: No AI keys should be present as VITE_* vars in production.
   console.log("BUILD ENV MERGED CHECK:", {
-    hasGeminiKey: Boolean(env.VITE_GEMINI_API_KEY),
-    hasGeminiLiveKey: Boolean(env.VITE_GEMINI_LIVE_API_KEY),
+    hasSupabaseUrl: Boolean(env.VITE_SUPABASE_URL),
+    hasSupabaseAnonKey: Boolean(env.VITE_SUPABASE_ANON_KEY),
+    hasFounderWindowStart: Boolean(env.VITE_FOUNDER_WINDOW_START),
   });
   // Only expose VITE_* variables to the client bundle
   const clientEnv = Object.fromEntries(Object.entries(env).filter(([k]) => k.startsWith('VITE_')));

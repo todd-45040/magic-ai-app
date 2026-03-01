@@ -10,6 +10,7 @@
 
 import { enforceAiUsage } from '../server/usage.js';
 import { resolveProvider } from '../lib/server/providers/index.js';
+import { getGoogleAiApiKey } from '../server/gemini.js';
 
 function extractGeminiText(result: any): string {
   if (typeof result?.text === 'string' && result.text.trim()) return result.text.trim();
@@ -94,11 +95,11 @@ export default async function handler(request: any, response: any) {
     } else if (provider === 'anthropic') {
       return response.status(400).json({ error: 'Image editing is not supported for Anthropic provider.' });
     } else {
-      const apiKey = process.env.GOOGLE_API_KEY || process.env.API_KEY;
+      const apiKey = getGoogleAiApiKey();
       if (!apiKey) {
         return response.status(500).json({
           error:
-            'Google API key is not configured. Set GOOGLE_API_KEY (preferred) or API_KEY in Vercel environment variables.',
+            'Google AI API key is not configured. Set GOOGLE_AI_API_KEY in Vercel environment variables.',
         });
       }
 

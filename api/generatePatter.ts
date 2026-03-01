@@ -1,4 +1,5 @@
 import { enforceAiUsage } from '../server/usage.js';
+import { getGoogleAiApiKey } from '../server/gemini.js';
 
 const DEFAULT_TIMEOUT_MS = 20_000;
 
@@ -37,10 +38,10 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.API_KEY;
+    const apiKey = getGoogleAiApiKey();
     if (!apiKey) {
       return res.status(500).json({
-        error: "Missing GEMINI_API_KEY / GOOGLE_API_KEY (or legacy API_KEY) in server environment",
+        error: "Missing GOOGLE_AI_API_KEY in server environment",
       });
     }
 

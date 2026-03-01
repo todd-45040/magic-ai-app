@@ -17,6 +17,7 @@ import {
   withTimeout,
 } from './_lib/hardening.js';
 import { applyUsageHeaders, bestEffortIncrementAiUsage, guardAiUsage } from './_lib/usageGuard.js';
+import { getGoogleAiApiKey } from '../../server/gemini.js';
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024; // ~2MB
 const TIMEOUT_MS = 25_000;
@@ -134,10 +135,10 @@ export default async function handler(req: any, res: any) {
         return callAnthropic({ model, contents, config });
       }
 
-      const apiKey = process.env.GOOGLE_API_KEY || process.env.API_KEY;
+      const apiKey = getGoogleAiApiKey();
       if (!apiKey) {
         throw new Error(
-          'Google API key is not configured. Set GOOGLE_API_KEY (preferred) or API_KEY in Vercel environment variables.',
+          'Google AI API key is not configured. Set GOOGLE_AI_API_KEY in Vercel environment variables.',
         );
       }
 

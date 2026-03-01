@@ -1,4 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
+import { getGoogleAiApiKey } from '../server/gemini.js';
 
 type Body = {
   audioBase64?: string;
@@ -7,13 +8,7 @@ type Body = {
 };
 
 function getApiKey(): string | undefined {
-  // Prefer server-side env vars (Vercel).
-  // If multiple are set, GOOGLE_API_KEY is used by convention across the app.
-  return (
-    process.env.GOOGLE_API_KEY ||
-    process.env.GEMINI_API_KEY ||
-    process.env.API_KEY
-  );
+  return getGoogleAiApiKey() || undefined;
 }
 
 function getModel(): string {

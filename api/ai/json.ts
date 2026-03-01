@@ -11,6 +11,7 @@
 // - For Gemini, adapt messages -> `contents` (required by @google/genai)
 
 import { resolveProvider, callOpenAI, callAnthropic } from '../../lib/server/providers/index.js';
+import { getGoogleAiApiKey } from '../../server/gemini.js';
 import { rateLimit } from './_lib/rateLimit.js';
 import {
   getApproxBodySizeBytes,
@@ -160,10 +161,10 @@ export default async function handler(req: any, res: any) {
         return callAnthropic({ model, contents, config: { ...config, responseMimeType: 'application/json' } });
       }
 
-      const apiKey = process.env.GOOGLE_API_KEY || process.env.API_KEY;
+      const apiKey = getGoogleAiApiKey();
       if (!apiKey) {
         throw new Error(
-          'Google API key is not configured. Set GOOGLE_API_KEY (preferred) or API_KEY in Vercel environment variables.',
+          'Google AI API key is not configured. Set GOOGLE_AI_API_KEY in Vercel environment variables.',
         );
       }
 

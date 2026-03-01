@@ -1,6 +1,7 @@
 import { requireAdmin } from '../lib/server/auth/index.js';
 import { resolveProvider, type AIProvider } from '../lib/server/providers/index.js';
 import { TOOL_SUPPORT, getProviderLimitations } from '../lib/server/ai/toolSupport.js';
+import { getGoogleAiApiKey } from '../server/gemini.js';
 
 type Source = 'db' | 'env' | 'default';
 
@@ -26,12 +27,7 @@ function normProvider(v: any): AIProvider | null {
 }
 
 function hasGeminiKey(): boolean {
-  return Boolean(
-    process.env.GEMINI_API_KEY ||
-      process.env.GOOGLE_GEMINI_API_KEY ||
-      process.env.GOOGLE_API_KEY ||
-      process.env.API_KEY
-  );
+  return Boolean(getGoogleAiApiKey());
 }
 
 function percentile(nums: number[], p: number): number | null {

@@ -1,12 +1,25 @@
-export function getGeminiApiKey(): string | null {
-  // Support multiple env var names to avoid deployment confusion.
+/**
+ * Preferred production key name:
+ *   GOOGLE_AI_API_KEY
+ *
+ * Legacy fallbacks are supported to avoid breaking older deployments,
+ * but should be removed once Vercel env reconciliation is complete.
+ */
+export function getGoogleAiApiKey(): string | null {
   return (
-    process.env.API_KEY ||
+    process.env.GOOGLE_AI_API_KEY ||
+    // legacy fallbacks
     process.env.GEMINI_API_KEY ||
     process.env.GOOGLE_GEMINI_API_KEY ||
     process.env.GOOGLE_API_KEY ||
+    process.env.API_KEY ||
     null
   );
+}
+
+// Back-compat alias (older code refers to this)
+export function getGeminiApiKey(): string | null {
+  return getGoogleAiApiKey();
 }
 
 // Reasonable stable defaults (can be overridden per-request)

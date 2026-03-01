@@ -1,6 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 import { enforceAiUsage } from '../server/usage.js';
 import { resolveProvider } from '../lib/server/providers/index.js';
+import { getGoogleAiApiKey } from '../server/gemini.js';
 
 export default async function handler(request: any, response: any) {
   if (request.method !== 'POST') {
@@ -63,9 +64,9 @@ export default async function handler(request: any, response: any) {
     } else if (provider === 'anthropic') {
       return response.status(400).json({ error: 'Image generation is not supported for Anthropic provider.' });
     } else {
-      const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.API_KEY;
+      const apiKey = getGoogleAiApiKey();
       if (!apiKey) {
-        return response.status(500).json({ error: 'API_KEY is not configured on the server.' });
+        return response.status(500).json({ error: 'GOOGLE_AI_API_KEY is not configured on the server.' });
       }
 
       const ai = new GoogleGenAI({ apiKey });

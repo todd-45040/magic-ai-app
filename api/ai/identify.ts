@@ -6,6 +6,7 @@
 
 import { GoogleGenAI } from "@google/genai";
 import { enforceAiUsage } from "../../server/usage.js";
+import { getGoogleAiApiKey } from "../../server/gemini.js";
 // NOTE: This file lives in api/ai/, so _lib is a sibling folder.
 // Vercel/TS expects the correct relative path (and extensionless imports).
 import { rateLimit } from "./_lib/rateLimit.js";
@@ -49,13 +50,8 @@ function getClientIpFromRequest(req: any): string {
 }
 
 function getApiKey(): string | null {
-  return (
-    process.env.GEMINI_API_KEY ||
-    process.env.API_KEY ||
-    process.env.VITE_GEMINI_API_KEY ||
-    process.env.VITE_API_KEY ||
-    null
-  );
+  // Server-side only. Never read VITE_* here.
+  return getGoogleAiApiKey();
 }
 
 function ok(res: any, data: any, requestId?: string) {

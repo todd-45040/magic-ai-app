@@ -21,6 +21,7 @@ import {
   withTimeout,
 } from './_lib/hardening.js';
 import { applyUsageHeaders, bestEffortIncrementAiUsage, guardAiUsage } from './_lib/usageGuard.js';
+import { getGoogleAiApiKey } from '../../server/gemini.js';
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024; // prompts should be tiny; this is a safety cap
 const TIMEOUT_MS = 45_000;
@@ -177,8 +178,8 @@ export default async function handler(req: any, res: any) {
         throw e;
       }
 
-      const apiKey = process.env.GOOGLE_API_KEY || process.env.API_KEY;
-      if (!apiKey) throw new Error('Google API key is not configured.');
+      const apiKey = getGoogleAiApiKey();
+      if (!apiKey) throw new Error('Google AI API key is not configured. Set GOOGLE_AI_API_KEY.');
 
       const { GoogleGenAI } = await import('@google/genai');
       const ai = new GoogleGenAI({ apiKey });
