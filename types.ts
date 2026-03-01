@@ -355,10 +355,15 @@ export interface AppSuggestion {
 }
 
 export type MagicianTab =
-  | 'home'
-  | 'create'
-  | 'rehearse'
-  | 'manage'
+  | 'chat'
+  | 'show-planner'
+  | 'effect-generator'
+  | 'identify'
+  | 'publications'
+  | 'community'
+  | 'magic-wire'
+  | 'search'
+  | 'magic-dictionary'
   | 'admin';
 // NOTE: 'assistant-home' is a dedicated landing view for the AI Assistant tab.
 // It always shows the feature grid (prompt cards) and never restores the last chat/tool session.

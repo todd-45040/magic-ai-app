@@ -555,7 +555,7 @@ const PromptGrid: React.FC<{
   return (
     <div className="flex-1 flex flex-col items-center text-center animate-fade-in p-4">
       <RabbitIcon className="w-16 h-16 text-slate-500 mb-4" />
-      <h2 className="text-2xl font-bold text-slate-300 mb-2 font-cinzel">AI Assistant</h2>
+      <h2 className="text-2xl font-bold text-slate-300 mb-2 font-cinzel">Home</h2>
       <p className="text-slate-400 max-w-2xl mb-8">
         Choose a tool to start, or ask me anything. Recommended tools are highlighted.
       </p>
@@ -1106,38 +1106,38 @@ interface MagicianModeProps {
 }
 
 const VIEW_TO_TAB_MAP: Record<MagicianView, MagicianTab> = {
-    'dashboard': 'home',
-    'chat': 'home',
-    'live-rehearsal': 'rehearse',
-    'video-rehearsal': 'rehearse',
-    'angle-risk': 'rehearse',
-    'visual-brainstorm': 'create',
-    'saved-ideas': 'manage',
-    'prop-checklists': 'manage',
-    'magic-archives': 'manage',
-    'gospel-magic-assistant': 'manage',
-    'mentalism-assistant': 'manage',
-    'member-management': 'manage',
-    'show-feedback': 'manage',
-    'patter-engine': 'create',
-    'marketing-campaign': 'create',
-    'contract-generator': 'manage',
-    'assistant-studio': 'create',
-    'director-mode': 'create',
-    'persona-simulator': 'rehearse',
-    'client-management': 'manage',
-    'illusion-blueprint': 'create',
-    'magic-theory-tutor': 'create',
-    'performance-analytics': 'manage',
-    'show-planner': 'manage',
-    'effect-generator': 'create',
-    'identify': 'create',
-    'publications': 'manage',
-    'community': 'manage',
-    'magic-wire': 'manage',
-    'global-search': 'manage',
-    'search': 'manage',
-    'magic-dictionary': 'manage',
+    'dashboard': 'chat',
+    'chat': 'chat',
+    'live-rehearsal': 'chat',
+    'video-rehearsal': 'chat',
+    'angle-risk': 'chat',
+    'visual-brainstorm': 'chat',
+    'saved-ideas': 'chat',
+    'prop-checklists': 'chat',
+    'magic-archives': 'chat',
+    'gospel-magic-assistant': 'chat',
+    'mentalism-assistant': 'chat',
+    'member-management': 'chat',
+    'show-feedback': 'chat',
+    'patter-engine': 'chat',
+    'marketing-campaign': 'chat',
+    'contract-generator': 'chat',
+    'assistant-studio': 'chat',
+    'director-mode': 'chat',
+    'persona-simulator': 'chat',
+    'client-management': 'chat',
+    'illusion-blueprint': 'chat',
+    'magic-theory-tutor': 'chat',
+    'performance-analytics': 'show-planner',
+    'show-planner': 'show-planner',
+    'effect-generator': 'effect-generator',
+    'identify': 'identify',
+    'publications': 'publications',
+    'community': 'community',
+    'magic-wire': 'magic-wire',
+    'global-search': 'search',
+    'search': 'search',
+    'magic-dictionary': 'magic-dictionary',
     'admin': 'admin',
 };
 
@@ -1475,53 +1475,33 @@ useEffect(() => {
   const isNewUser = (!shows || shows.length === 0) && (!ideas || ideas.length === 0) && (!feedback || feedback.length === 0);
 
   const todaysFocus = (() => {
-    // New user: guide into first "win"
-    if (isNewUser) {
-      return {
-        label: "Today’s Focus",
-        title: "Generate Your First Effect",
-        subtitle: "Start with the Effect Generator and save your first idea — it only takes a minute.",
-        ctaLabel: "Open Effect Generator",
-        route: "effect-generator" as const,
-        icon: "hat" as const,
-      };
-    }
+    // Phase 3A (Home Tightening): One dominant primary action.
+    // Spec:
+    // - If user has shows: "Continue Building [Last Show]"
+    // - Else: "Create Your First Show"
+    const hasShows = !!(shows && shows.length > 0);
 
-    // Pro (or trial): emphasize next show planning
-    if (hasProfessionalAccess && latestShow?.title) {
+    if (hasShows && latestShow?.id && (latestShow?.title || latestShow?.name)) {
+      const t = String(latestShow.title || latestShow.name || 'Your Latest Show');
       return {
-        label: "Today’s Focus",
-        title: "Prepare for Your Upcoming Show",
-        subtitle: `Open Show Planner for “${latestShow.title}”.`,
-        ctaLabel: "Open Show Planner",
+        label: "Continue Building",
+        title: t,
+        subtitle: `Open Show Planner for “${t}” and keep building your set.`,
+        ctaLabel: "Open Show",
         route: "show-planner" as const,
-        icon: "planner" as const,
+        showId: String(latestShow.id),
       };
     }
 
-    // Returning user: continue latest saved work
-    if (latestIdea?.title || latestIdea?.name) {
-      const t = (latestIdea.title || latestIdea.name || "your latest idea") as string;
-      return {
-        label: "Today’s Focus",
-        title: "Continue Last Project",
-        subtitle: `Continue working on “${t}”.`,
-        ctaLabel: "View Saved Ideas",
-        route: "saved-ideas" as const,
-        icon: "idea" as const,
-      };
-    }
-
-    // Fallback
     return {
-      label: "Today’s Focus",
-      title: "Pick Up Where You Left Off",
-      subtitle: "Jump into your tools and keep building your act.",
-      ctaLabel: "Open AI Assistant",
-      route: "assistant" as const,
-      icon: "assistant" as const,
+      label: "Get Started",
+      title: "Create Your First Show",
+      subtitle: "Start your first show plan — then we’ll help you generate effects, patter, and rehearsal notes.",
+      ctaLabel: "Create Show",
+      route: "show-planner" as const,
+      showId: null as string | null,
     };
-  })();
+  })() as any;
 
   // Dashboard: Insight Tiles ("Make the dashboard talk back")
   // Accent adds a subtle gold/purple balance across the page.
@@ -2025,50 +2005,27 @@ useEffect(() => {
   };
 
   const handleTabClick = (tab: MagicianTab) => {
-    // Intent-based top navigation (reduced density)
-    if (tab === 'home') {
-        // Always land on the Home dashboard/grid.
-        try { localStorage.removeItem('magician_active_view'); } catch {}
-        resetInlineForms();
-        setActiveView('dashboard');
+    if (tab === 'show-planner' && !hasAmateurAccess) {
+        setIsUpgradeModalOpen(true);
         return;
     }
-
-    if (tab === 'create') {
-        resetInlineForms();
-        demoGuardSetActiveView('effect-generator');
+     if (tab === 'magic-dictionary' && !hasProfessionalAccess) {
+        setIsUpgradeModalOpen(true);
         return;
     }
-
-    if (tab === 'rehearse') {
-        // Rehearsal tools are Pro-gated (Live rehearsal, video analysis, etc.)
-        if (!hasProfessionalAccess) {
-            setIsUpgradeModalOpen(true);
-            return;
-        }
-        resetInlineForms();
-        demoGuardSetActiveView('live-rehearsal');
+    if (tab === 'search') {
+        demoGuardSetActiveView('global-search');
         return;
     }
-
-    if (tab === 'manage') {
-        // Manage includes Show Planner, contracts, clients, etc. (Amateur+)
-        if (!hasAmateurAccess) {
-            setIsUpgradeModalOpen(true);
-            return;
-        }
-        resetInlineForms();
-        demoGuardSetActiveView('show-planner');
-        return;
-    }
-
     if (tab === 'admin') {
         if (!user?.isAdmin) return;
         resetInlineForms();
         demoGuardSetActiveView('admin');
         return;
     }
-};
+    resetInlineForms();
+    demoGuardSetActiveView(tab);
+  };
   
   const handleNavigate = (view: MagicianView) => {
     if (isExpired) {
@@ -2253,7 +2210,7 @@ ${action.payload.content}`;
             <>
             <div className="px-4 md:px-6 pt-6">
               <p className="text-sm uppercase tracking-wider text-yellow-300/80">
-                Magic AI Wizard Dashboard
+                Home
               </p>
               <h1 className="mt-2 text-2xl md:text-3xl font-semibold text-white leading-tight">
                 Your Home Base for Creating, Rehearsing, and Running <span className="text-yellow-200">Better Magic Shows</span>
@@ -2280,7 +2237,20 @@ ${action.payload.content}`;
                   </div>
 
                   <button
-                    onClick={() => handleNavigate(todaysFocus.route)}
+                    onClick={() => {
+                    if (todaysFocus?.route === 'show-planner') {
+                      if (todaysFocus?.showId) {
+                        setInitialShowId(String(todaysFocus.showId));
+                        setInitialTaskId(null);
+                      } else {
+                        setInitialShowId(null);
+                        setInitialTaskId(null);
+                      }
+                      setActiveView('show-planner');
+                      return;
+                    }
+                    handleNavigate(todaysFocus.route);
+                  }}
                     className="inline-flex items-center justify-center rounded-xl border border-purple-400/25 bg-purple-500/15 px-4 py-2 text-sm font-medium text-purple-100 transition hover:bg-purple-500/25 hover:text-white focus:outline-none focus:ring-2 focus:ring-purple-500/40"
                   >
                     {todaysFocus.ctaLabel}
@@ -2326,6 +2296,7 @@ ${action.payload.content}`;
             )}
 
             <Dashboard
+              variant="home"
               user={user}
               shows={shows}
               feedback={feedback}
@@ -2478,6 +2449,142 @@ ${action.payload.content}`;
   );
 
   const activeTab = VIEW_TO_TAB_MAP[activeView];
+  const activeIntent = (() => {
+    if (activeTab === 'admin') return 'admin' as const;
+
+    // Create
+    const createViews = new Set<MagicianView>([
+      'effect-generator',
+      'identify',
+      'visual-brainstorm',
+      'director-mode',
+      'patter-engine',
+      'illusion-blueprint',
+      'assistant-studio',
+      'magic-dictionary',
+    ]);
+
+    // Rehearse
+    const rehearseViews = new Set<MagicianView>([
+      'live-rehearsal',
+      'video-rehearsal',
+      'persona-simulator',
+      'angle-risk',
+    ]);
+
+    // Manage
+    const manageTabs = new Set<MagicianTab>([
+      'show-planner',
+      'magic-wire',
+      'publications',
+      'community',
+      'search',
+    ]);
+    const manageViews = new Set<MagicianView>([
+      'saved-ideas',
+      'client-management',
+      'contract-generator',
+      'marketing-campaign',
+      'show-feedback',
+      'global-search',
+      'performance-analytics',
+      'prop-checklists',
+      'magic-archives',
+      'member-management',
+    ]);
+
+    if (createViews.has(activeView)) return 'create' as const;
+    if (rehearseViews.has(activeView)) return 'rehearse' as const;
+    if (manageViews.has(activeView) || manageTabs.has(activeTab)) return 'manage' as const;
+
+    return 'home' as const;
+  })();
+
+  const handlePrimaryIntentClick = (intent: typeof activeIntent) => {
+    if (intent === 'home') {
+      try { localStorage.removeItem('magician_active_view'); } catch {}
+      resetInlineForms();
+      setActiveView('dashboard');
+      return;
+    }
+    if (intent === 'create') {
+      handleNavigate('effect-generator');
+      return;
+    }
+    if (intent === 'rehearse') {
+      // Default: angle/risk is safe to access for all tiers; pro users can jump into Live Rehearsal.
+      handleNavigate(hasProfessionalAccess ? 'live-rehearsal' : 'angle-risk');
+      return;
+    }
+    if (intent === 'manage') {
+      handleNavigate('show-planner');
+      return;
+    }
+    if (intent === 'admin') {
+      if (!user?.isAdmin) return;
+      resetInlineForms();
+      setActiveView('admin');
+      return;
+    }
+  };
+
+  const renderIntentSubnav = () => {
+    if (activeIntent === 'home' || activeIntent === 'admin') return null;
+
+    const subBtn = (label: string, onClick: () => void, isActive?: boolean, locked?: boolean) => (
+      <button
+        key={label}
+        onClick={onClick}
+        className={[
+          'whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold border transition-colors',
+          locked ? 'opacity-60 cursor-not-allowed' : 'hover:bg-slate-800/60',
+          isActive ? 'bg-slate-800/70 text-white border-purple-500/30' : 'bg-transparent text-slate-300 border-slate-800',
+        ].join(' ')}
+        disabled={!!locked}
+      >
+        {label}
+      </button>
+    );
+
+    if (activeIntent === 'create') {
+      return (
+        <div className="flex items-center gap-2 px-2 md:px-4 py-2 border-b border-slate-800/70 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+          {subBtn('Effect Generator', () => handleNavigate('effect-generator'), activeTab === 'effect-generator')}
+          {subBtn('Identify Trick', () => handleNavigate('identify'), activeTab === 'identify')}
+          {subBtn('Visual Brainstorm', () => handleNavigate('visual-brainstorm'), activeView === 'visual-brainstorm', !hasProfessionalAccess)}
+          {subBtn('Director Mode', () => handleNavigate('director-mode'), activeView === 'director-mode', !hasProfessionalAccess)}
+          {subBtn('Patter Engine', () => handleNavigate('patter-engine'), activeView === 'patter-engine')}
+          {subBtn('Illusion Blueprint', () => handleNavigate('illusion-blueprint'), activeView === 'illusion-blueprint', !hasProfessionalAccess)}
+        </div>
+      );
+    }
+
+    if (activeIntent === 'rehearse') {
+      return (
+        <div className="flex items-center gap-2 px-2 md:px-4 py-2 border-b border-slate-800/70 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+          {subBtn('Angle & Risk', () => handleNavigate('angle-risk'), activeView === 'angle-risk')}
+          {subBtn('Live Rehearsal', () => handleNavigate('live-rehearsal'), activeView === 'live-rehearsal', !hasProfessionalAccess)}
+          {subBtn('Video Rehearsal', () => handleNavigate('video-rehearsal'), activeView === 'video-rehearsal', !hasProfessionalAccess)}
+          {subBtn('Persona Simulator', () => handleNavigate('persona-simulator'), activeView === 'persona-simulator', !hasProfessionalAccess)}
+        </div>
+      );
+    }
+
+    // manage
+    return (
+      <div className="flex items-center gap-2 px-2 md:px-4 py-2 border-b border-slate-800/70 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+        {subBtn('Show Planner', () => handleNavigate('show-planner'), activeTab === 'show-planner', !hasAmateurAccess)}
+        {subBtn('Saved Ideas', () => handleNavigate('saved-ideas'), activeView === 'saved-ideas', !hasAmateurAccess)}
+        {subBtn('Clients', () => handleNavigate('client-management'), activeView === 'client-management', !hasProfessionalAccess)}
+        {subBtn('Contracts', () => handleNavigate('contract-generator'), activeView === 'contract-generator', !hasProfessionalAccess)}
+        {subBtn('Magic Wire', () => handleNavigate('magic-wire'), activeTab === 'magic-wire')}
+        {subBtn('Publications', () => handleNavigate('publications'), activeTab === 'publications')}
+        {subBtn('Community', () => handleNavigate('community'), activeTab === 'community')}
+        {subBtn('Search', () => handleNavigate('global-search'), activeView === 'global-search', !hasAmateurAccess)}
+      </div>
+    );
+  };
+
   const showFooter = activeView === 'chat';
 
   return (
@@ -2610,87 +2717,51 @@ ${action.payload.content}`;
 
 
       <nav className="flex items-center gap-1 border-b border-slate-800 px-2 md:px-4 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-        {/* Reduced-density, intent-based navigation */}
+        {/* Phase 2 (Navigation Tightening): Intent-based primary navigation */}
         <TabButton
           label="Home"
           icon={WandIcon}
-          isActive={activeTab === 'home'}
-          onClick={() => handleTabClick('home')}
+          isActive={activeIntent === 'home'}
+          onClick={() => handlePrimaryIntentClick('home')}
         />
         <TabButton
           label="Create"
           icon={LightbulbIcon}
-          isActive={activeTab === 'create'}
-          onClick={() => handleTabClick('create')}
+          isActive={activeIntent === 'create'}
+          onClick={() => handlePrimaryIntentClick('create')}
         />
         <TabButton
           label="Rehearse"
           icon={MicrophoneIcon}
-          isActive={activeTab === 'rehearse'}
-          onClick={() => handleTabClick('rehearse')}
-          isLocked={!hasProfessionalAccess}
+          isActive={activeIntent === 'rehearse'}
+          onClick={() => handlePrimaryIntentClick('rehearse')}
         />
         <TabButton
           label="Manage"
           icon={ChecklistIcon}
-          isActive={activeTab === 'manage'}
-          onClick={() => handleTabClick('manage')}
+          isActive={activeIntent === 'manage'}
+          onClick={() => handlePrimaryIntentClick('manage')}
           isLocked={!hasAmateurAccess}
         />
         {user?.isAdmin ? (
           <TabButton
             label="Admin"
             icon={UsersCogIcon}
-            isActive={activeTab === 'admin'}
-            onClick={() => handleTabClick('admin')}
+            isActive={activeIntent === 'admin'}
+            onClick={() => handlePrimaryIntentClick('admin')}
           />
         ) : null}
 
-        {/* Utility: keep feedback accessible without cluttering the primary nav */}
+        {/* Rightmost utility: keep feedback visible without cluttering primary tools */}
         <TabButton
           label="Feedback"
           icon={ChatBubbleIcon}
           isActive={isFeedbackModalOpen}
           onClick={() => setIsFeedbackModalOpen(true)}
         />
-      
-      {/* Context sub-navigation (keeps deep tools reachable after simplifying top nav) */}
-      {activeTab !== 'home' && (
-        <div className="px-2 md:px-4 py-2 border-b border-slate-800 bg-slate-950/20">
-          <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-            {activeTab === 'create' && (
-              <>
-                <button className="px-3 py-1.5 rounded-full text-xs border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700" onClick={() => demoGuardSetActiveView('effect-generator')}>Effect Generator</button>
-                <button className="px-3 py-1.5 rounded-full text-xs border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700" onClick={() => demoGuardSetActiveView('identify')}>Identify Trick</button>
-                <button className="px-3 py-1.5 rounded-full text-xs border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700" onClick={() => demoGuardSetActiveView('visual-brainstorm')}>Visual Brainstorm</button>
-                <button className="px-3 py-1.5 rounded-full text-xs border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700" onClick={() => demoGuardSetActiveView('director-mode')}>Director Mode</button>
-                <button className="px-3 py-1.5 rounded-full text-xs border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700" onClick={() => demoGuardSetActiveView('patter-engine')}>Patter Engine</button>
-              </>
-            )}
-            {activeTab === 'rehearse' && (
-              <>
-                <button className="px-3 py-1.5 rounded-full text-xs border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700" onClick={() => demoGuardSetActiveView('live-rehearsal')}>Live Rehearsal</button>
-                <button className="px-3 py-1.5 rounded-full text-xs border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700" onClick={() => demoGuardSetActiveView('video-rehearsal')}>Video Rehearsal</button>
-                <button className="px-3 py-1.5 rounded-full text-xs border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700" onClick={() => demoGuardSetActiveView('persona-simulator')}>Persona Simulator</button>
-                <button className="px-3 py-1.5 rounded-full text-xs border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700" onClick={() => demoGuardSetActiveView('angle-risk')}>Angle & Risk</button>
-              </>
-            )}
-            {activeTab === 'manage' && (
-              <>
-                <button className="px-3 py-1.5 rounded-full text-xs border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700" onClick={() => demoGuardSetActiveView('show-planner')}>Show Planner</button>
-                <button className="px-3 py-1.5 rounded-full text-xs border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700" onClick={() => demoGuardSetActiveView('saved-ideas')}>Saved Ideas</button>
-                <button className="px-3 py-1.5 rounded-full text-xs border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700" onClick={() => demoGuardSetActiveView('client-management')}>Clients</button>
-                <button className="px-3 py-1.5 rounded-full text-xs border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700" onClick={() => demoGuardSetActiveView('contract-generator')}>Contracts</button>
-                <button className="px-3 py-1.5 rounded-full text-xs border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700" onClick={() => demoGuardSetActiveView('show-feedback')}>Feedback</button>
-                <button className="px-3 py-1.5 rounded-full text-xs border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700" onClick={() => demoGuardSetActiveView('magic-wire')}>Magic Wire</button>
-                <button className="px-3 py-1.5 rounded-full text-xs border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700" onClick={() => demoGuardSetActiveView('publications')}>Publications</button>
-                <button className="px-3 py-1.5 rounded-full text-xs border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700" onClick={() => demoGuardSetActiveView('community')}>Community</button>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-</nav>
+      </nav>
+
+      {renderIntentSubnav()}
 
       <main className="flex-1 flex flex-col overflow-y-auto">
         <div className="flex-1 flex flex-col animate-fade-in">

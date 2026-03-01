@@ -9,6 +9,7 @@ import FeedbackModal from './FeedbackModal';
 import { RabbitIcon, ClockIcon, StarIcon, BookmarkIcon, WandIcon, MicrophoneIcon, StageCurtainsIcon, LightbulbIcon, UsersCogIcon, ChecklistIcon, FileTextIcon, ImageIcon, BookIcon, CustomizeIcon, DragHandleIcon, EyeIcon, EyeOffIcon, ChevronDownIcon } from './icons';
 
 interface DashboardProps {
+    variant?: 'home' | 'full';
     user: User;
     shows: Show[];
     feedback: Feedback[];
@@ -25,15 +26,15 @@ const COLLAPSED_WIDGETS_KEY = 'magician_dashboard_collapsed_widgets';
 const QuickActionsWidget: React.FC<{ onNavigate: (view: MagicianView) => void }> = ({ onNavigate }) => (
     <>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <button onClick={() => onNavigate('assistant-home')} className="p-4 bg-slate-800 border border-slate-700 rounded-lg text-left h-full group transition-colors hover:bg-purple-900/50 hover:border-purple-500">
+            <button onClick={() => onNavigate('effect-generator')} className="p-4 bg-slate-800 border border-slate-700 rounded-lg text-left h-full group transition-colors hover:bg-purple-900/50 hover:border-purple-500">
                 <WandIcon className="w-8 h-8 mb-2 text-purple-400 group-hover:text-purple-300" />
-                <p className="font-bold text-yellow-200 group-hover:text-yellow-100 transition-colors">AI Assistant</p>
-                <p className="text-sm text-slate-400">Choose a tool or ask a question</p>
+                <p className="font-bold text-yellow-200 group-hover:text-yellow-100 transition-colors">Create</p>
+                <p className="text-sm text-slate-400">Generate effects, patter, and creative directions</p>
             </button>
-            <button onClick={() => onNavigate('live-rehearsal')} className="p-4 bg-slate-800 border border-slate-700 rounded-lg text-left h-full group transition-colors hover:bg-purple-900/50 hover:border-purple-500">
+            <button onClick={() => onNavigate('angle-risk')} className="p-4 bg-slate-800 border border-slate-700 rounded-lg text-left h-full group transition-colors hover:bg-purple-900/50 hover:border-purple-500">
                 <MicrophoneIcon className="w-8 h-8 mb-2 text-purple-400 group-hover:text-purple-300" />
-                <p className="font-bold text-yellow-200 group-hover:text-yellow-100 transition-colors">Live Rehearsal</p>
-                <p className="text-sm text-slate-400">Start a rehearsal session</p>
+                <p className="font-bold text-yellow-200 group-hover:text-yellow-100 transition-colors">Rehearse</p>
+                <p className="text-sm text-slate-400">Run angle/risk checks and rehearsal tools</p>
             </button>
             <button onClick={() => onNavigate('show-planner')} className="p-4 bg-slate-800 border border-slate-700 rounded-lg text-left h-full group transition-colors hover:bg-purple-900/50 hover:border-purple-500">
                 <ChecklistIcon className="w-8 h-8 mb-2 text-purple-400 group-hover:text-purple-300" />
@@ -403,7 +404,7 @@ const StrategicInsightsWidget: React.FC<{ shows: Show[]; feedback: Feedback[]; o
 
 // --- Main Dashboard Component ---
 
-const Dashboard: React.FC<DashboardProps> = ({ user, shows, feedback, ideas, onNavigate, onShowsUpdate }) => {
+const Dashboard: React.FC<DashboardProps> = ({ variant = 'full', user, shows, feedback, ideas, onNavigate, onShowsUpdate }) => {
     const [layout, setLayout] = useState<DashboardLayout>(getDefaultLayout());
     const [isCustomizeMode, setIsCustomizeMode] = useState(false);
     const [selectedFeedback, setSelectedFeedback] = useState<Feedback | null>(null);
@@ -412,6 +413,39 @@ const Dashboard: React.FC<DashboardProps> = ({ user, shows, feedback, ideas, onN
 
     const isTrialActive = user.membership === 'trial' && user.trialEndDate ? user.trialEndDate > Date.now() : false;
     const hasProAccess = user.membership === 'professional' || isTrialActive;
+
+
+    // Phase 3A (Home Tightening): render a calmer, compact dashboard on Home.
+    if (variant === 'home') {
+        return (
+            <div className="px-4 md:px-6 pb-10 space-y-6">
+                <div>
+                    <h2 className="text-sm uppercase tracking-wider text-slate-400">Quick Paths</h2>
+                    <div className="mt-3">
+                        <QuickActionsWidget onNavigate={onNavigate} />
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4">
+                        <div className="flex items-center gap-2 mb-3">
+                            <ChecklistIcon className="w-5 h-5 text-purple-400" />
+                            <h3 className="font-bold text-yellow-200 tracking-wide">Upcoming Tasks</h3>
+                        </div>
+                        <UpcomingTasksWidget shows={shows} onNavigate={onNavigate} onShowsUpdate={onShowsUpdate} />
+                    </div>
+
+                    <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4">
+                        <div className="flex items-center gap-2 mb-3">
+                            <BookmarkIcon className="w-5 h-5 text-purple-400" />
+                            <h3 className="font-bold text-yellow-200 tracking-wide">Recent Idea</h3>
+                        </div>
+                        <RecentIdeaWidget ideas={ideas} onNavigate={onNavigate} />
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     useEffect(() => {
         if (hasProAccess) {
