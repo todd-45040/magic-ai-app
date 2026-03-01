@@ -5,6 +5,33 @@ import { StarIcon, LockIcon, CheckIcon, UsersIcon } from './icons';
 
 const PRICING_LOCK = 'founding_pro_admc_2026';
 
+const FOUNDING_WINDOW = {
+  // ADMC 2026: Thu Apr 2, 2026 6:00 PM ET → closes 72 hours after event ends (Sat midnight → Wed 11:59 PM)
+  opensAtISO: '2026-04-02T18:00:00-04:00',
+  closesAtISO: '2026-04-08T23:59:00-04:00',
+  tz: 'America/New_York',
+} as const;
+
+function fmtET(iso: string) {
+  try {
+    const d = new Date(iso);
+    return (
+      new Intl.DateTimeFormat('en-US', {
+        timeZone: FOUNDING_WINDOW.tz,
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      }).format(d) +
+      ' ET'
+    );
+  } catch {
+    return iso;
+  }
+}
+
 
 function getAttributionFromUrl(): { raw: string; bucket: 'admc' | 'reddit' | 'organic' | 'other' } {
   try {
@@ -168,32 +195,58 @@ export default function FoundingCirclePage(props: { user: User | null; onBack: (
         </div>
       </div>
 
-      <div className="rounded-2xl border border-purple-500/20 bg-gradient-to-b from-purple-900/35 via-slate-950/35 to-slate-950/25 p-6 sm:p-8 shadow-[0_0_80px_rgba(168,85,247,0.10)]">
-        <h1 className="font-cinzel text-3xl sm:text-4xl font-bold text-white tracking-wide">
-          Be among the original magicians shaping Magic AI Wizard.
-        </h1>
-        <p className="mt-3 text-slate-200/90 text-base sm:text-lg max-w-2xl">
-          The Founding Circle is a calm, premium early-adopter layer. No hype — just access, identity, and an ADMC pricing lock before Stripe goes live.
-        </p>
+      <div className="rounded-2xl border border-amber-400/20 bg-gradient-to-b from-purple-900/35 via-slate-950/35 to-slate-950/25 p-6 sm:p-8 shadow-[0_0_80px_rgba(168,85,247,0.10),0_0_60px_rgba(251,191,36,0.08)]">
+        <div className="flex items-start justify-between gap-6 flex-col sm:flex-row">
+          <div className="min-w-0">
+            <h1 className="font-cinzel text-3xl sm:text-4xl font-bold text-white tracking-wide">
+              Be among the original magicians shaping Magic AI Wizard.
+            </h1>
+            <p className="mt-3 text-slate-200/90 text-base sm:text-lg max-w-2xl">
+              The Founding Circle is a calm, premium early-adopter layer. No hype — just access, identity, and an ADMC pricing lock before Stripe goes live.
+            </p>
+
+            <div className="mt-4 inline-flex flex-col gap-1 rounded-xl border border-amber-400/25 bg-amber-500/10 px-4 py-2">
+              <div className="text-xs font-semibold tracking-wide text-amber-200">Offer window (Eastern Time)</div>
+              <div className="text-xs text-slate-200/90">
+                Opens <span className="text-amber-200">{fmtET(FOUNDING_WINDOW.opensAtISO)}</span> • Closes{' '}
+                <span className="text-amber-200">{fmtET(FOUNDING_WINDOW.closesAtISO)}</span>
+              </div>
+              <div className="text-[11px] text-slate-300/90">
+                Available during ADMC and through the following Wednesday at midnight (72 hours after the convention ends).
+              </div>
+            </div>
+          </div>
+
+          <div className="w-full sm:w-[260px] shrink-0">
+            <div className="rounded-2xl border border-amber-400/20 bg-black/20 p-4 shadow-[0_0_40px_rgba(251,191,36,0.10)]">
+              <img
+                src="/assets/branding/wizard-head-wtext.png"
+                alt="Magicians' AI Wizard"
+                className="w-full h-auto opacity-95"
+                loading="lazy"
+              />
+            </div>
+          </div>
+        </div>
 
         <div className="mt-7 grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="rounded-xl border border-white/10 bg-black/20 p-4">
             <div className="flex items-center gap-2">
-              <UsersIcon className="w-5 h-5 text-purple-300" />
+              <UsersIcon className="w-5 h-5 text-amber-200/90" />
               <div className="font-semibold text-white">Identity</div>
             </div>
             <div className="mt-2 text-sm text-slate-300">In-app badge and founder status surfaced in Admin.</div>
           </div>
           <div className="rounded-xl border border-white/10 bg-black/20 p-4">
             <div className="flex items-center gap-2">
-              <LockIcon className="w-5 h-5 text-purple-300" />
+              <LockIcon className="w-5 h-5 text-amber-200/90" />
               <div className="font-semibold text-white">Pricing Lock</div>
             </div>
             <div className="mt-2 text-sm text-slate-300">Lock in the ADMC founding rate (applied automatically later).</div>
           </div>
           <div className="rounded-xl border border-white/10 bg-black/20 p-4">
             <div className="flex items-center gap-2">
-              <CheckIcon className="w-5 h-5 text-purple-300" />
+              <CheckIcon className="w-5 h-5 text-amber-200/90" />
               <div className="font-semibold text-white">Early Access</div>
             </div>
             <div className="mt-2 text-sm text-slate-300">Priority access to new tools and director-grade workflows.</div>
@@ -240,7 +293,7 @@ export default function FoundingCirclePage(props: { user: User | null; onBack: (
                     </div>
                   ) : closesAt ? (
                     <div className="mt-2 text-xs text-slate-400">
-                      Founders close at <span className="text-slate-200">{new Date(closesAt).toLocaleString()}</span>.
+                      Live window close: <span className="text-amber-200">{fmtET(closesAt)}</span>.
                     </div>
                   ) : null}
                 </div>
@@ -254,7 +307,7 @@ export default function FoundingCirclePage(props: { user: User | null; onBack: (
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Name (optional)"
-                  className="px-4 py-3 rounded-lg bg-black/30 border border-white/10 text-white placeholder:text-slate-500 focus:outline-none focus:border-purple-500/60"
+                  className="px-4 py-3 rounded-lg bg-black/30 border border-white/10 text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-400/60"
                 />
 
                 <input
@@ -262,14 +315,14 @@ export default function FoundingCirclePage(props: { user: User | null; onBack: (
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="Email"
                   disabled={Boolean(prefillEmail)}
-                  className="px-4 py-3 rounded-lg bg-black/30 border border-white/10 text-white placeholder:text-slate-500 focus:outline-none focus:border-purple-500/60 disabled:opacity-70"
+                  className="px-4 py-3 rounded-lg bg-black/30 border border-white/10 text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-400/60 disabled:opacity-70"
                 />
 
                 <button
                   type="button"
                   onClick={handleJoin}
                   disabled={isClosed || loading || !(prefillEmail || email).trim()}
-                  className="px-4 py-3 rounded-lg bg-amber-400/90 hover:bg-amber-400 text-black font-bold transition disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="px-4 py-3 rounded-lg bg-amber-400/90 hover:bg-amber-400 text-black font-bold transition shadow-[0_0_28px_rgba(251,191,36,0.18)] disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {isClosed ? 'Founding Closed' : (loading ? 'Joining…' : 'Join Founding Circle')}
                 </button>
