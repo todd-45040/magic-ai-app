@@ -1,12 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import type { User, Show, Feedback, SavedIdea, MagicianView, PredefinedPrompt, DashboardLayout, WidgetId } from '../types';
 import { getLayout, saveLayout, WIDGETS, getDefaultLayout } from '../services/dashboardService';
 import { updateTaskInShow } from '../services/showsService';
 import { getPerformancesByShowId } from '../services/performanceService';
 import { supabase } from '../supabase';
-import FeedbackModal from './FeedbackModal';
-import { RabbitIcon, ClockIcon, StarIcon, BookmarkIcon, WandIcon, MicrophoneIcon, StageCurtainsIcon, LightbulbIcon, UsersCogIcon, ChecklistIcon, FileTextIcon, ImageIcon, BookIcon, CustomizeIcon, DragHandleIcon, EyeIcon, EyeOffIcon, ChevronDownIcon } from './icons';
+import { RabbitIcon, ClockIcon, BookmarkIcon, WandIcon, MicrophoneIcon, StageCurtainsIcon, LightbulbIcon, UsersCogIcon, ChecklistIcon, FileTextIcon, ImageIcon, BookIcon, CustomizeIcon, DragHandleIcon, EyeIcon, EyeOffIcon, ChevronDownIcon } from './icons';
 
 interface DashboardProps {
     variant?: 'home' | 'full';
@@ -101,30 +99,6 @@ const UpcomingTasksWidget: React.FC<{ shows: Show[], onNavigate: (view: Magician
                 <p className="text-sm text-slate-500 text-center py-4">No upcoming tasks with due dates. Stay sharp!</p>
             )}
             <button onClick={() => onNavigate('show-planner')} className="text-sm text-purple-400 hover:text-purple-300 font-semibold mt-3 w-full text-center">Open Planner</button>
-        </>
-    );
-};
-
-const LatestFeedbackWidget: React.FC<{ feedback: Feedback[], onNavigate: (view: MagicianView) => void, onFeedbackClick: (fb: Feedback) => void }> = ({ feedback, onNavigate, onFeedbackClick }) => {
-    const recentFeedback = useMemo(() => feedback.slice(0, 3), [feedback]);
-    return (
-        <>
-            {recentFeedback.length > 0 ? (
-                <div className="space-y-3">
-                    {recentFeedback.map(fb => (
-                        <button key={fb.id} onClick={() => onFeedbackClick(fb)} className="w-full text-left p-2 bg-slate-900/50 rounded-md hover:bg-slate-700/50 transition-colors">
-                            <div className="flex items-center gap-2">
-                                <div className="flex">{[...Array(5)].map((_, i) => <StarIcon key={i} className={`w-4 h-4 ${i < fb.rating ? 'text-amber-400' : 'text-slate-600'}`} />)}</div>
-                                <p className="text-xs text-slate-500">{new Date(fb.timestamp).toLocaleDateString()}</p>
-                            </div>
-                            <p className="text-sm text-slate-300 mt-1 truncate">"{fb.comment || 'No comment provided'}"</p>
-                        </button>
-                    ))}
-                    <button onClick={() => onNavigate('show-feedback')} className="text-sm text-purple-400 hover:text-purple-300 font-semibold mt-1 w-full text-center">Open Feedback</button>
-                </div>
-            ) : (
-                <p className="text-sm text-slate-500 text-center py-4">No audience feedback yet.</p>
-            )}
         </>
     );
 };
@@ -450,7 +424,6 @@ const StrategicInsightsWidget: React.FC<{ shows: Show[]; feedback: Feedback[]; o
 const Dashboard: React.FC<DashboardProps> = ({ variant = 'full', user, shows, feedback, ideas, onNavigate, onShowsUpdate }) => {
     const [layout, setLayout] = useState<DashboardLayout>(getDefaultLayout());
     const [isCustomizeMode, setIsCustomizeMode] = useState(false);
-    const [selectedFeedback, setSelectedFeedback] = useState<Feedback | null>(null);
     const [draggedWidgetId, setDraggedWidgetId] = useState<WidgetId | null>(null);
     const [collapsedWidgets, setCollapsedWidgets] = useState<Set<WidgetId>>(new Set());
 
@@ -573,7 +546,6 @@ const Dashboard: React.FC<DashboardProps> = ({ variant = 'full', user, shows, fe
         'business-metrics': <BusinessMetricsWidget shows={shows} feedback={feedback} />,
         'contract-pipeline': <ContractPipelineWidget />,
         'upcoming-tasks': <UpcomingTasksWidget shows={shows} onNavigate={onNavigate} onShowsUpdate={onShowsUpdate} />,
-        'latest-feedback': <LatestFeedbackWidget feedback={feedback} onNavigate={onNavigate} onFeedbackClick={setSelectedFeedback} />,
         'recent-idea': <RecentIdeaWidget ideas={ideas} onNavigate={onNavigate} />,
         'featured-tools': <FeaturedToolsWidget onNavigate={onNavigate} />,
     };
@@ -629,8 +601,6 @@ const Dashboard: React.FC<DashboardProps> = ({ variant = 'full', user, shows, fe
 
     return (
         <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 animate-fade-in">
-            {selectedFeedback && createPortal(<FeedbackModal feedback={selectedFeedback} onClose={() => setSelectedFeedback(null)} />, document.body)}
-
             <header className="flex justify-between items-center">
                 <div>
                     <h1 className="text-3xl font-bold text-yellow-200 font-cinzel">Welcome, {user.email.split('@')[0]}</h1>

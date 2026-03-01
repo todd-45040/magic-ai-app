@@ -2,7 +2,6 @@ import type { DashboardLayout, DashboardWidget, WidgetId } from '../types';
 import {
     RabbitIcon,
     ClockIcon,
-    StarIcon,
     BookmarkIcon,
     WandIcon,
     UsersCogIcon,
@@ -17,13 +16,12 @@ export const WIDGETS: DashboardWidget[] = [
     { id: 'business-metrics', title: 'Business Metrics', icon: UsersCogIcon },
     { id: 'contract-pipeline', title: 'Contract Pipeline', icon: FileTextIcon },
     { id: 'upcoming-tasks', title: 'My Next Show', icon: ClockIcon },
-    { id: 'latest-feedback', title: 'Audience Reactions', icon: StarIcon },
     { id: 'recent-idea', title: 'My Current Work', icon: BookmarkIcon },
     { id: 'featured-tools', title: 'Featured Tools', icon: WandIcon },
 ];
 
 export const getDefaultLayout = (): DashboardLayout => ({
-    visible: ['quick-actions', 'business-metrics', 'contract-pipeline', 'featured-tools', 'upcoming-tasks', 'latest-feedback', 'recent-idea'],
+    visible: ['quick-actions', 'business-metrics', 'contract-pipeline', 'featured-tools', 'upcoming-tasks', 'recent-idea'],
     hidden: [],
 });
 

@@ -272,7 +272,6 @@ export interface Client {
 export type WidgetId =
   | 'quick-actions'
   | 'upcoming-tasks'
-  | 'latest-feedback'
   | 'recent-idea'
   | 'featured-tools'
   | 'business-metrics'
