@@ -33,6 +33,51 @@ export interface AdminAiStatus {
   };
 }
 
+export interface AdminEnvSanity {
+  ok: boolean;
+  generatedAt: string;
+  provider: {
+    runtimeProvider: AdminAIProvider;
+    dbDefaultProvider: AdminAIProvider;
+    envOverrideActive: boolean;
+    source: 'env' | 'db';
+    envOverrideValue: AdminAIProvider | null;
+  };
+  readiness: {
+    stripeReady: boolean;
+    webhookVerificationActive: boolean;
+  };
+  keys: {
+    ai: {
+      GOOGLE_AI_API_KEY: boolean;
+      OPENAI_API_KEY: boolean;
+      ANTHROPIC_API_KEY: boolean;
+    };
+    supabase: {
+      SUPABASE_URL: boolean;
+      SUPABASE_ANON_KEY: boolean;
+      SUPABASE_SERVICE_ROLE_KEY: boolean;
+    };
+    stripe: {
+      STRIPE_SECRET_KEY: boolean;
+      STRIPE_WEBHOOK_SECRET: boolean;
+      STRIPE_PRICE_AMATEUR: boolean;
+      STRIPE_PRICE_PRO: boolean;
+    };
+    smtp: {
+      SMTP_HOST: boolean;
+      SMTP_PORT: boolean;
+      SMTP_USER: boolean;
+      SMTP_PASS: boolean;
+      SMTP_FROM: boolean;
+    };
+  };
+  warnings?: {
+    vitePrefixedSecretsPresent: boolean;
+    viteSecretNames: string[];
+  };
+}
+
 async function getAccessToken(): Promise<string | null> {
   const { data } = await supabase.auth.getSession();
   return data.session?.access_token ?? null;
@@ -76,4 +121,17 @@ export async function fetchAdminAiStatus(): Promise<AdminAiStatus> {
   const text = await res.text();
   if (!res.ok) throw new Error(text || `Request failed (${res.status})`);
   return JSON.parse(text) as AdminAiStatus;
+}
+
+export async function fetchAdminEnvSanity(): Promise<AdminEnvSanity> {
+  const token = await getAccessToken();
+  if (!token) throw new Error('Not authenticated');
+
+  const res = await fetch('/api/adminEnvSanity', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  const text = await res.text();
+  if (!res.ok) throw new Error(text || `Request failed (${res.status})`);
+  return JSON.parse(text) as AdminEnvSanity;
 }

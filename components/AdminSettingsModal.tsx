@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { fetchAdminAiStatus, fetchAdminSettings, saveAdminSettings, type AdminAIProvider, type AdminAiStatus } from '../services/adminSettingsService';
+import { fetchAdminAiStatus, fetchAdminEnvSanity, fetchAdminSettings, saveAdminSettings, type AdminAIProvider, type AdminAiStatus, type AdminEnvSanity } from '../services/adminSettingsService';
 
 export default function AdminSettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [loading, setLoading] = useState(false);
@@ -7,6 +7,7 @@ export default function AdminSettingsModal({ open, onClose }: { open: boolean; o
   const [error, setError] = useState<string | null>(null);
   const [provider, setProvider] = useState<AdminAIProvider>('gemini');
   const [aiStatus, setAiStatus] = useState<AdminAiStatus | null>(null);
+  const [envSanity, setEnvSanity] = useState<AdminEnvSanity | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -17,10 +18,27 @@ export default function AdminSettingsModal({ open, onClose }: { open: boolean; o
     Promise.all([
       fetchAdminSettings().then((s) => setProvider(s.defaultProvider || 'gemini')),
       fetchAdminAiStatus().then((s) => setAiStatus(s)),
+      fetchAdminEnvSanity().then((s) => setEnvSanity(s)),
     ])
       .catch((e) => setError(String(e?.message || e)))
       .finally(() => setLoading(false));
   }, [open]);
+
+  function dot(ok: boolean) {
+    return (
+      <span
+        style={{
+          display: 'inline-block',
+          width: 10,
+          height: 10,
+          borderRadius: 999,
+          marginRight: 8,
+          background: ok ? '#6ee7b7' : '#ffb4b4',
+          boxShadow: ok ? '0 0 0 2px rgba(110,231,183,0.15)' : '0 0 0 2px rgba(255,180,180,0.15)',
+        }}
+      />
+    );
+  }
 
   function statusLabel() {
     if (!aiStatus) return null;
@@ -138,6 +156,70 @@ export default function AdminSettingsModal({ open, onClose }: { open: boolean; o
                 </div>
               );
             })()
+          )}
+
+          {envSanity && (
+            <div style={{ marginTop: 14, padding: 12, borderRadius: 14, border: '1px solid rgba(255,255,255,0.10)', background: 'rgba(255,255,255,0.03)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 0.2 }}>Environment sanity (server)</div>
+                <div style={{ fontSize: 11, opacity: 0.75 }}>{new Date(envSanity.generatedAt).toLocaleString()}</div>
+              </div>
+
+              <div style={{ marginTop: 10, fontSize: 12, opacity: 0.92 }}>
+                <div>
+                  <b>Provider:</b> {envSanity.provider.runtimeProvider} <span style={{ opacity: 0.8 }}>(source: {envSanity.provider.source}{envSanity.provider.envOverrideActive ? ', AI_PROVIDER set' : ''})</span>
+                </div>
+                <div style={{ marginTop: 4 }}>
+                  <b>Stripe readiness:</b> {envSanity.readiness.stripeReady ? 'READY' : 'not ready'}{' '}
+                  <span style={{ opacity: 0.8 }}>(webhook verify: {envSanity.readiness.webhookVerificationActive ? 'active' : 'inactive'})</span>
+                </div>
+              </div>
+
+              <div style={{ marginTop: 10, fontSize: 12 }}>
+                <div style={{ fontWeight: 800, opacity: 0.92, marginBottom: 6 }}>Keys present</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 11, opacity: 0.75, marginBottom: 4 }}>AI</div>
+                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 4 }}>{dot(envSanity.keys.ai.GOOGLE_AI_API_KEY)}GOOGLE_AI_API_KEY</div>
+                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 4 }}>{dot(envSanity.keys.ai.OPENAI_API_KEY)}OPENAI_API_KEY</div>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>{dot(envSanity.keys.ai.ANTHROPIC_API_KEY)}ANTHROPIC_API_KEY</div>
+                  </div>
+
+                  <div>
+                    <div style={{ fontSize: 11, opacity: 0.75, marginBottom: 4 }}>Supabase</div>
+                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 4 }}>{dot(envSanity.keys.supabase.SUPABASE_URL)}SUPABASE_URL</div>
+                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 4 }}>{dot(envSanity.keys.supabase.SUPABASE_ANON_KEY)}SUPABASE_ANON_KEY</div>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>{dot(envSanity.keys.supabase.SUPABASE_SERVICE_ROLE_KEY)}SUPABASE_SERVICE_ROLE_KEY</div>
+                  </div>
+
+                  <div>
+                    <div style={{ fontSize: 11, opacity: 0.75, marginBottom: 4 }}>Stripe</div>
+                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 4 }}>{dot(envSanity.keys.stripe.STRIPE_SECRET_KEY)}STRIPE_SECRET_KEY</div>
+                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 4 }}>{dot(envSanity.keys.stripe.STRIPE_WEBHOOK_SECRET)}STRIPE_WEBHOOK_SECRET</div>
+                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 4 }}>{dot(envSanity.keys.stripe.STRIPE_PRICE_AMATEUR)}STRIPE_PRICE_AMATEUR</div>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>{dot(envSanity.keys.stripe.STRIPE_PRICE_PRO)}STRIPE_PRICE_PRO</div>
+                  </div>
+
+                  <div>
+                    <div style={{ fontSize: 11, opacity: 0.75, marginBottom: 4 }}>SMTP</div>
+                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 4 }}>{dot(envSanity.keys.smtp.SMTP_HOST)}SMTP_HOST</div>
+                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 4 }}>{dot(envSanity.keys.smtp.SMTP_USER)}SMTP_USER</div>
+                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 4 }}>{dot(envSanity.keys.smtp.SMTP_PASS)}SMTP_PASS</div>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>{dot(envSanity.keys.smtp.SMTP_FROM)}SMTP_FROM</div>
+                  </div>
+                </div>
+              </div>
+
+              {envSanity.warnings?.vitePrefixedSecretsPresent && (
+                <div style={{ marginTop: 10, fontSize: 12, color: '#ffd27a' }}>
+                  Warning: VITE-prefixed secret-like env vars detected on the server.
+                  <div style={{ marginTop: 6, opacity: 0.95, color: 'rgba(255,255,255,0.85)' }}>
+                    {envSanity.warnings.viteSecretNames.slice(0, 8).join(', ')}
+                    {envSanity.warnings.viteSecretNames.length > 8 ? ` … +${envSanity.warnings.viteSecretNames.length - 8} more` : ''}
+                  </div>
+                </div>
+              )}
+            </div>
           )}
         </div>
 
