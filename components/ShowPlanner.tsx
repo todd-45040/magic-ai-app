@@ -2,17 +2,17 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import QRCode from 'qrcode';
-import type { Show, Task, Subtask, TaskPriority, Client, Finances, Expense, Performance, User } from '../types';
+import type { Show, Task, Subtask, TaskPriority, Client, Finances, Expense, Performance, User, ShowRehearsalSession } from '../types';
 import { getShows, addShow, updateShow, deleteShow, addTaskToShow, addTasksToShow, updateTaskInShow, deleteTaskFromShow, toggleSubtask } from '../services/showsService';
 import { startPerformance, endPerformance, getPerformancesByShowId } from '../services/performanceService';
 import { listContractsForShow, updateContractStatus, updateContractPayments, getContractsMetaForShows, type ContractRow, type ContractStatus, type ContractMeta } from '../services/contractsService';
 import { generateResponse, generateStructuredResponse } from '../services/geminiService';
 import { buildShowFeedbackUrl, rotateShowFeedbackToken } from '../services/showFeedbackService';
+import { getFeedback } from '../services/feedbackService';
 import { AI_TASK_SUGGESTER_SYSTEM_INSTRUCTION, IN_TASK_PATTER_SYSTEM_INSTRUCTION } from '../constants';
 import { AnalyticsIcon, BackIcon, CalendarIcon, CheckIcon, ChecklistIcon, CopyIcon, DollarSignIcon, FileTextIcon, MusicNoteIcon, PencilIcon, QrCodeIcon, StageCurtainsIcon, TrashIcon, UsersIcon, ViewGridIcon, ViewListIcon, WandIcon } from './icons';
-import { useAppState } from '../store';
 
-type ViewMode = 'list' | 'board';
+type ViewMode = 'list' | 'board' | 'timeline';
 type SortBy = 'dueDate' | 'priority' | 'createdAt';
 
 // Avoid importing @google/genai in UI components.
@@ -56,6 +56,10 @@ const TaskModal: React.FC<{
     const [isSaving, setIsSaving] = useState(false);
     const [dueDate, setDueDate] = useState('');
     const [musicCue, setMusicCue] = useState('');
+    const [durationMinutes, setDurationMinutes] = useState<number | ''>('');
+    const [resetMinutes, setResetMinutes] = useState<number | ''>('');
+    const [energyLevel, setEnergyLevel] = useState<'Low' | 'Medium' | 'High'>('Medium');
+    const [participationLevel, setParticipationLevel] = useState<'Low' | 'Medium' | 'High'>('Medium');
     const [subtasks, setSubtasks] = useState<Partial<Subtask>[]>([]);
     const [newSubtaskText, setNewSubtaskText] = useState('');
     const [isGeneratingPatter, setIsGeneratingPatter] = useState(false);
@@ -67,6 +71,10 @@ const TaskModal: React.FC<{
             setPriority(taskToEdit.priority);
             setNotes(taskToEdit.notes || '');
             setMusicCue(taskToEdit.musicCue || '');
+            setDurationMinutes((taskToEdit as any).durationMinutes ?? '');
+            setResetMinutes((taskToEdit as any).resetMinutes ?? '');
+            setEnergyLevel(((taskToEdit as any).energyLevel ?? 'Medium') as any);
+            setParticipationLevel(((taskToEdit as any).participationLevel ?? 'Medium') as any);
             setSubtasks(Array.isArray(taskToEdit.subtasks) ? taskToEdit.subtasks : []);
             if (taskToEdit.dueDate) {
                 const d = new Date(taskToEdit.dueDate);
@@ -120,6 +128,10 @@ const TaskModal: React.FC<{
             notes,
             priority,
             musicCue,
+            durationMinutes: durationMinutes === '' ? undefined : Number(durationMinutes),
+            resetMinutes: resetMinutes === '' ? undefined : Number(resetMinutes),
+            energyLevel,
+            participationLevel,
             subtasks: finalSubtasks,
             // Ensure newly created tasks are immediately visible in the planner.
             status: taskToEdit?.status ?? 'To-Do',
@@ -188,6 +200,34 @@ const TaskModal: React.FC<{
                     <div>
                         <label htmlFor="music-cue" className="block text-sm font-medium text-slate-300 mb-1">Music Cue (Optional)</label>
                         <input id="music-cue" type="text" value={musicCue} onChange={e => setMusicCue(e.target.value)} placeholder="e.g., 'Mysterious Fanfare' at 0:32" className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500" />
+                    </div>
+                    <div className=\"grid grid-cols-2 gap-4\">
+                        <div>
+                            <label htmlFor=\"duration-min\" className=\"block text-sm font-medium text-slate-300 mb-1\">Duration (min)</label>
+                            <input id=\"duration-min\" type=\"number\" min={0} step={1} value={durationMinutes} onChange={e => setDurationMinutes(e.target.value === '' ? '' : Number(e.target.value))} className=\"w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500\" placeholder=\"e.g., 4\" />
+                        </div>
+                        <div>
+                            <label htmlFor=\"reset-min\" className=\"block text-sm font-medium text-slate-300 mb-1\">Reset (min)</label>
+                            <input id=\"reset-min\" type=\"number\" min={0} step={1} value={resetMinutes} onChange={e => setResetMinutes(e.target.value === '' ? '' : Number(e.target.value))} className=\"w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500\" placeholder=\"e.g., 1\" />
+                        </div>
+                    </div>
+                    <div className=\"grid grid-cols-2 gap-4\">
+                        <div>
+                            <label htmlFor=\"energy\" className=\"block text-sm font-medium text-slate-300 mb-1\">Energy Level</label>
+                            <select id=\"energy\" value={energyLevel} onChange={e => setEnergyLevel(e.target.value as any)} className=\"w-full bg-slate-900 px-3 py-2 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500\">
+                                <option value=\"Low\">Low</option>
+                                <option value=\"Medium\">Medium</option>
+                                <option value=\"High\">High</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label htmlFor=\"participation\" className=\"block text-sm font-medium text-slate-300 mb-1\">Participation</label>
+                            <select id=\"participation\" value={participationLevel} onChange={e => setParticipationLevel(e.target.value as any)} className=\"w-full bg-slate-900 px-3 py-2 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500\">
+                                <option value=\"Low\">Low</option>
+                                <option value=\"Medium\">Medium</option>
+                                <option value=\"High\">High</option>
+                            </select>
+                        </div>
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-slate-300 mb-1">Sub-Performance Beats</label>
@@ -585,7 +625,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
     
     const ShowDetailView = () => {
         if (!selectedShow) return null;
-        const [activeTab, setActiveTab] = useState<'tasks' | 'finances' | 'contract' | 'history'>('tasks');
+        const [activeTab, setActiveTab] = useState<'tasks' | 'finances' | 'contract' | 'history' | 'rehearsals'>('tasks');
         const [isSuggesting, setIsSuggesting] = useState(false);
         const [suggestionError, setSuggestionError] = useState<string | null>(null);
         const [pastPerformances, setPastPerformances] = useState<Performance[]>([]);
@@ -595,10 +635,32 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
         const [activeContractStatus, setActiveContractStatus] = useState<ContractStatus>('draft');
         const [isLoadingContracts, setIsLoadingContracts] = useState(false);
         const [contractError, setContractError] = useState<string | null>(null);
+        const [isEditingHeader, setIsEditingHeader] = useState(false);
+        const [headerDraft, setHeaderDraft] = useState({
+            title: selectedShow.title,
+            venue: (selectedShow as any).venue || '',
+            performanceDate: (selectedShow as any).performanceDate || '',
+            fee: (selectedShow.finances?.performanceFee ?? 0),
+            status: ((selectedShow as any).status || 'Draft') as 'Draft' | 'Confirmed' | 'Completed'
+        });
+        const [rehearsalDraft, setRehearsalDraft] = useState({ notes: '', improvements: '' });
+        const [activeRehearsalStart, setActiveRehearsalStart] = useState<number | null>(null);
 
         const client = clients.find(c => c.id === selectedShow.clientId);
 
         useEffect(() => {
+            // Sync header draft when switching shows
+            setHeaderDraft({
+                title: selectedShow.title,
+                venue: (selectedShow as any).venue || '',
+                performanceDate: (selectedShow as any).performanceDate || '',
+                fee: (selectedShow.finances?.performanceFee ?? 0),
+                status: ((selectedShow as any).status || 'Draft') as any
+            });
+            setIsEditingHeader(false);
+            setActiveRehearsalStart(null);
+            setRehearsalDraft({ notes: '', improvements: '' });
+
             if (activeTab === 'history') {
                 // FIX: Correctly handle the async call to getPerformancesByShowId.
                 const fetchHistory = async () => {
@@ -638,6 +700,18 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
         }, [activeTab, selectedShow.id]);
 
         const tasks = selectedShow.tasks;
+        const runtimeMinutes = tasks.reduce((sum: number, tt: any) => sum + (Number(tt.durationMinutes) || 0), 0);
+        const resetMinutes = tasks.reduce((sum: number, tt: any) => sum + (Number(tt.resetMinutes) || 0), 0);
+        const energyFlow = tasks.map((tt: any) => String(tt.energyLevel || 'Medium'));
+        const resetComplexity = resetMinutes === 0 ? '—' : (resetMinutes <= Math.max(5, runtimeMinutes * 0.15) ? 'Low' : resetMinutes <= Math.max(12, runtimeMinutes * 0.35) ? 'Medium' : 'High');
+        const fee = Number(selectedShow.finances?.performanceFee ?? 0);
+        const expensesTotal = (selectedShow.finances?.expenses || []).reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0);
+        const profit = fee - expensesTotal;
+        const rehearsals = Array.isArray((selectedShow as any).rehearsals) ? ((selectedShow as any).rehearsals as ShowRehearsalSession[]) : [];
+        const lastRehearsedTs = rehearsals.length ? Math.max(...rehearsals.map(r => r.endedAt || r.startedAt)) : null;
+        const allFeedback = getFeedback();
+        const showFeedback = allFeedback.filter(f => (f as any).showId === selectedShow.id || (f.showTitle && f.showTitle === selectedShow.title));
+        const avgRating = showFeedback.length ? (showFeedback.reduce((s, f) => s + (Number(f.rating) || 0), 0) / showFeedback.length) : null;
         const processedPerformanceBeats = {
             activePerformanceTasks: tasks.filter(t => t.status === 'To-Do'),
             completedPerformanceBeats: tasks.filter(t => t.status === 'Completed').sort((a,b) => b.createdAt - a.createdAt)
@@ -706,6 +780,40 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
             );
         };
 
+
+        const TimelineView = () => {
+            const ordered = [...processedPerformanceBeats.activePerformanceTasks].sort((a,b) => a.createdAt - b.createdAt);
+            if (ordered.length === 0) return <div className="text-center py-10 text-slate-400">No beats yet.</div>;
+            return (
+                <div className="overflow-x-auto">
+                    <div className="min-w-max flex items-stretch gap-3 pb-2">
+                        {ordered.map((task, idx) => (
+                            <div key={task.id} className="w-64 bg-slate-900/50 border border-slate-700 rounded-xl p-3">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div>
+                                        <div className="text-xs text-slate-500">Beat {idx + 1}</div>
+                                        <div className="text-sm font-semibold text-slate-100 leading-5">{task.title}</div>
+                                    </div>
+                                    <PriorityBadge priority={task.priority} />
+                                </div>
+                                <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                                    {(task as any).durationMinutes !== undefined && <span className="px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-200">⏱ {Number((task as any).durationMinutes) || 0}m</span>}
+                                    {(task as any).resetMinutes !== undefined && <span className="px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-200">🔁 {Number((task as any).resetMinutes) || 0}m</span>}
+                                    {(task as any).energyLevel && <span className="px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-200">⚡ {(task as any).energyLevel}</span>}
+                                    {(task as any).participationLevel && <span className="px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-200">🙌 {(task as any).participationLevel}</span>}
+                                </div>
+                                {task.notes && <div className="mt-2 text-xs text-slate-400 line-clamp-4 whitespace-pre-wrap">{task.notes}</div>}
+                                <div className="mt-3 flex items-center justify-end gap-1">
+                                    <button onClick={() => openEditModal(task)} className="p-2 text-slate-400 hover:text-amber-300 rounded-full hover:bg-slate-800 transition-colors"><PencilIcon className="w-4 h-4"/></button>
+                                    <button onClick={() => handleDeleteTask(task.id)} className="p-2 text-slate-400 hover:text-red-400 rounded-full hover:bg-slate-800 transition-colors"><TrashIcon className="w-4 h-4"/></button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
         const TabButton: React.FC<{ icon: React.FC<any>, label: string, isActive: boolean, onClick: () => void }> = ({ icon: Icon, label, isActive, onClick }) => (
             <button onClick={onClick} className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${isActive ? 'border-b-2 border-purple-400 text-purple-300' : 'border-b-2 border-transparent text-slate-400 hover:text-white'}`}>
                 <Icon className="w-5 h-5" />
@@ -730,6 +838,151 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                             <button onClick={() => { setTaskToEdit(null); setIsTaskModalOpen(true); }} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors flex items-center gap-2 text-sm"><ChecklistIcon className="w-4 h-4" /><span>Add Beat</span></button>
                         </div>
                     </div>
+
+                    {/* Show Header Intelligence */}
+                    <div className="mt-4 bg-slate-900/40 border border-slate-700 rounded-xl p-4 md:p-5">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                                <StageCurtainsIcon className="w-5 h-5 text-purple-300" />
+                                <h3 className="text-sm font-semibold text-slate-200">Show Control Center</h3>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {!isEditingHeader ? (
+                                    <button onClick={() => setIsEditingHeader(true)} className="px-3 py-2 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-100 text-sm flex items-center gap-2">
+                                        <PencilIcon className="w-4 h-4" />
+                                        Edit Details
+                                    </button>
+                                ) : (
+                                    <>
+                                        <button
+                                            onClick={() => { setIsEditingHeader(false); setHeaderDraft({ title: selectedShow.title, venue: (selectedShow as any).venue || '', performanceDate: (selectedShow as any).performanceDate || '', fee: (selectedShow.finances?.performanceFee ?? 0), status: ((selectedShow as any).status || 'Draft') as any }); }}
+                                            className="px-3 py-2 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-100 text-sm"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            onClick={async () => {
+                                                try {
+                                                    const updates: any = {
+                                                        title: headerDraft.title?.trim() || selectedShow.title,
+                                                        venue: headerDraft.venue?.trim() || null,
+                                                        status: headerDraft.status || 'Draft',
+                                                        performanceDate: headerDraft.performanceDate ? Number(headerDraft.performanceDate) : null,
+                                                        finances: {
+                                                            ...(selectedShow.finances || { performanceFee: 0, expenses: [] }),
+                                                            performanceFee: Number(headerDraft.fee || 0),
+                                                        }
+                                                    };
+                                                    const updatedShows = await updateShow(selectedShow.id, updates);
+                                                    setShows(updatedShows);
+                                                    const refreshed = updatedShows.find(s => s.id === selectedShow.id) || null;
+                                                    setSelectedShow(refreshed);
+                                                    setIsEditingHeader(false);
+                                                    setToastMsg('Show details saved.');
+                                                    setTimeout(() => setToastMsg(null), 2500);
+                                                } catch (e) {
+                                                    console.error(e);
+                                                    setToastMsg("Couldn't save show details.");
+                                                    setTimeout(() => setToastMsg(null), 2500);
+                                                }
+                                            }}
+                                            className="px-3 py-2 rounded-md bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold"
+                                        >
+                                            Save
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <div className="text-xs text-slate-400 mb-1">Show Name</div>
+                                    {isEditingHeader ? (
+                                        <input value={headerDraft.title} onChange={e => setHeaderDraft(d => ({ ...d, title: e.target.value }))} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-md text-white" />
+                                    ) : (
+                                        <div className="px-3 py-2 bg-slate-900/40 border border-slate-800 rounded-md text-slate-200">{selectedShow.title}</div>
+                                    )}
+                                </div>
+                                <div>
+                                    <div className="text-xs text-slate-400 mb-1">Status</div>
+                                    {isEditingHeader ? (
+                                        <select value={headerDraft.status} onChange={e => setHeaderDraft(d => ({ ...d, status: e.target.value as any }))} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-md text-white">
+                                            <option value="Draft">Draft</option>
+                                            <option value="Confirmed">Confirmed</option>
+                                            <option value="Completed">Completed</option>
+                                        </select>
+                                    ) : (
+                                        <div className="px-3 py-2 bg-slate-900/40 border border-slate-800 rounded-md text-slate-200">{(selectedShow as any).status || 'Draft'}</div>
+                                    )}
+                                </div>
+                                <div>
+                                    <div className="text-xs text-slate-400 mb-1">Venue</div>
+                                    {isEditingHeader ? (
+                                        <input value={headerDraft.venue} onChange={e => setHeaderDraft(d => ({ ...d, venue: e.target.value }))} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-md text-white" placeholder="e.g., ADMC — Main Ballroom" />
+                                    ) : (
+                                        <div className="px-3 py-2 bg-slate-900/40 border border-slate-800 rounded-md text-slate-200">{(selectedShow as any).venue || '—'}</div>
+                                    )}
+                                </div>
+                                <div>
+                                    <div className="text-xs text-slate-400 mb-1">Date</div>
+                                    {isEditingHeader ? (
+                                        <input
+                                            type="date"
+                                            value={headerDraft.performanceDate ? (() => { const d = new Date(Number(headerDraft.performanceDate)); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,10); })() : ''}
+                                            onChange={e => setHeaderDraft(d => ({ ...d, performanceDate: e.target.value ? new Date(e.target.value + 'T00:00:00').getTime() : '' }))}
+                                            className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-md text-white"
+                                        />
+                                    ) : (
+                                        <div className="px-3 py-2 bg-slate-900/40 border border-slate-800 rounded-md text-slate-200">{(selectedShow as any).performanceDate ? new Date(Number((selectedShow as any).performanceDate)).toLocaleDateString() : '—'}</div>
+                                    )}
+                                </div>
+                                <div className="sm:col-span-2">
+                                    <div className="text-xs text-slate-400 mb-1">Fee</div>
+                                    {isEditingHeader ? (
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-slate-400">$</span>
+                                            <input type="number" min={0} step={1} value={headerDraft.fee} onChange={e => setHeaderDraft(d => ({ ...d, fee: Number(e.target.value || 0) }))} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-md text-white" />
+                                        </div>
+                                    ) : (
+                                        <div className="px-3 py-2 bg-slate-900/40 border border-slate-800 rounded-md text-slate-200">${fee.toFixed(0)}</div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                <div className="bg-slate-900/40 border border-slate-800 rounded-lg p-3">
+                                    <div className="text-xs text-slate-400">Total Runtime</div>
+                                    <div className="text-lg font-bold text-white">{runtimeMinutes ? `${runtimeMinutes}m` : '—'}</div>
+                                </div>
+                                <div className="bg-slate-900/40 border border-slate-800 rounded-lg p-3">
+                                    <div className="text-xs text-slate-400">Total Profit</div>
+                                    <div className="text-lg font-bold text-white">${profit.toFixed(0)}</div>
+                                </div>
+                                <div className="bg-slate-900/40 border border-slate-800 rounded-lg p-3">
+                                    <div className="text-xs text-slate-400">Last Rehearsed</div>
+                                    <div className="text-sm font-semibold text-slate-200">{lastRehearsedTs ? new Date(lastRehearsedTs).toLocaleString() : '—'}</div>
+                                </div>
+                                <div className="bg-slate-900/40 border border-slate-800 rounded-lg p-3">
+                                    <div className="text-xs text-slate-400">Audience Rating</div>
+                                    <div className="text-lg font-bold text-white">{avgRating ? avgRating.toFixed(1) : '—'}</div>
+                                    <div className="text-[11px] text-slate-500">{showFeedback.length ? `${showFeedback.length} responses` : 'No feedback yet'}</div>
+                                </div>
+
+                                <div className="col-span-2 sm:col-span-4 bg-slate-900/30 border border-slate-800 rounded-lg p-3 flex flex-wrap items-center justify-between gap-3">
+                                    <div className="text-sm text-slate-300">
+                                        <span className="text-slate-500">Reset complexity:</span> <span className="text-slate-100 font-semibold">{resetComplexity}</span>
+                                        {resetMinutes ? <span className="text-slate-500"> • total reset {resetMinutes}m</span> : null}
+                                    </div>
+                                    <div className="text-sm text-slate-300">
+                                        <span className="text-slate-500">Energy flow:</span> <span className="text-slate-100 font-semibold">{energyFlow.length ? energyFlow.join(' → ') : '—'}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     {suggestionError && <p className="text-red-400 text-center text-sm mb-2">{suggestionError}</p>}
                     <div className="bg-slate-800/50 border-y border-slate-700 -mx-4 md:-mx-6 px-4 md:px-6 flex items-center justify-between">
                          <div className="flex items-center">
@@ -737,14 +990,15 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                             <TabButton icon={DollarSignIcon} label="Finances" isActive={activeTab === 'finances'} onClick={() => setActiveTab('finances')} />
                             <TabButton icon={FileTextIcon} label="Contract" isActive={activeTab === 'contract'} onClick={() => setActiveTab('contract')} />
                             <TabButton icon={AnalyticsIcon} label="Performance History" isActive={activeTab === 'history'} onClick={() => setActiveTab('history')} />
+                            <TabButton icon={MusicNoteIcon} label="Rehearsal Log" isActive={activeTab === 'rehearsals'} onClick={() => setActiveTab('rehearsals')} />
                         </div>
-                        {activeTab === 'tasks' && <div className="bg-slate-700 p-1 rounded-md flex items-center"><button onClick={() => setViewMode('board')} className={`flex items-center gap-2 px-3 py-1 text-sm font-medium rounded transition-colors ${viewMode === 'board' ? 'bg-purple-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}><ViewGridIcon className="w-4 h-4" />Board</button><button onClick={() => setViewMode('list')} className={`flex items-center gap-2 px-3 py-1 text-sm font-medium rounded transition-colors ${viewMode === 'list' ? 'bg-purple-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}><ViewListIcon className="w-4 h-4" />List</button></div>}
+                        {activeTab === 'tasks' && <div className="bg-slate-700 p-1 rounded-md flex items-center"><button onClick={() => setViewMode('board')} className={`flex items-center gap-2 px-3 py-1 text-sm font-medium rounded transition-colors ${viewMode === 'board' ? 'bg-purple-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}><ViewGridIcon className="w-4 h-4" />Board</button><button onClick={() => setViewMode('timeline')} className={`flex items-center gap-2 px-3 py-1 text-sm font-medium rounded transition-colors ${viewMode === 'timeline' ? 'bg-purple-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}><StageCurtainsIcon className="w-4 h-4" />Flow</button><button onClick={() => setViewMode('list')} className={`flex items-center gap-2 px-3 py-1 text-sm font-medium rounded transition-colors ${viewMode === 'list' ? 'bg-purple-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}><ViewListIcon className="w-4 h-4" />List</button></div>}
                         {activeTab === 'tasks' && viewMode === 'list' && (<div className="flex items-center gap-2"><label htmlFor="sort-by" className="text-sm font-medium text-slate-400">Sort By</label><select id="sort-by" value={sortBy} onChange={e => setSortBy(e.target.value as any)} className="bg-slate-700 text-white text-sm rounded-md py-1 px-2 border border-slate-600"><option value="dueDate">Due Date</option><option value="priority">Priority</option><option value="createdAt">Created Date</option></select></div>)}
                     </div>
                 </header>
                 <div className="flex-1 overflow-y-auto px-4 md:px-6 pb-4 pt-4">
                     {activeTab === 'tasks' ? (
-                        tasks.length === 0 ? <div className="text-center py-10 text-slate-400"><p className="mb-3">Add your first beat to start building your performance flow.. Click <span className="text-slate-200 font-semibold">Add Beat</span> to get started.</p><button onClick={handleAiSuggestPerformanceBeats} disabled={isSuggesting} className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold transition-colors"><WandIcon className="w-4 h-4" /><span>{isSuggesting ? 'Thinking...' : 'AI-Suggest Performance Beats'}</span></button></div> : viewMode === 'list' ? <ListView /> : <BoardView />
+                        tasks.length === 0 ? <div className="text-center py-10 text-slate-400"><p className="mb-3">Add your first beat to start building your performance flow.. Click <span className="text-slate-200 font-semibold">Add Beat</span> to get started.</p><button onClick={handleAiSuggestPerformanceBeats} disabled={isSuggesting} className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold transition-colors"><WandIcon className="w-4 h-4" /><span>{isSuggesting ? 'Thinking...' : 'AI-Suggest Performance Beats'}</span></button></div> : viewMode === 'list' ? <ListView /> : viewMode === 'timeline' ? <TimelineView /> : <BoardView />
 
                     
                     ) : activeTab === 'finances' ? (

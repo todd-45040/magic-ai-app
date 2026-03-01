@@ -86,6 +86,10 @@ const mapTaskToDb = (showId: string, userId: string, task: Partial<Task>) => {
   // The planner UI expects 'To-Do' or 'Completed'. Default to 'To-Do' so new tasks appear immediately.
   const status = (task as any).status ?? 'To-Do';
   const subtasks = (task as any).subtasks ?? [];
+  const durationMinutes = (task as any).durationMinutes ?? (task as any).duration_minutes ?? null;
+  const resetMinutes = (task as any).resetMinutes ?? (task as any).reset_minutes ?? null;
+  const energyLevel = (task as any).energyLevel ?? (task as any).energy_level ?? null;
+  const participationLevel = (task as any).participationLevel ?? (task as any).participation_level ?? null;
 
   // Build payload cautiously: some deployments may not have newer columns (e.g., subtasks, music_cue)
   // and Supabase will throw schema-cache errors. We'll retry inserts/updates with reduced payloads.
@@ -99,7 +103,12 @@ const mapTaskToDb = (showId: string, userId: string, task: Partial<Task>) => {
     music_cue: musicCue || null,
     status,
     // Only include subtasks if present; avoids failing on older schemas.
-    ...(Array.isArray(subtasks) && subtasks.length ? { subtasks } : {})
+    ...(Array.isArray(subtasks) && subtasks.length ? { subtasks } : {}),
+    // Runtime Intelligence (optional)
+    ...(durationMinutes !== null && durationMinutes !== undefined ? { duration_minutes: Number(durationMinutes) } : {}),
+    ...(resetMinutes !== null && resetMinutes !== undefined ? { reset_minutes: Number(resetMinutes) } : {}),
+    ...(energyLevel ? { energy_level: String(energyLevel) } : {}),
+    ...(participationLevel ? { participation_level: String(participationLevel) } : {})
   };
 
   return payload;
@@ -218,6 +227,10 @@ export const getShows = async (): Promise<Show[]> => {
       // Canonicalize timestamps expected by UI
       createdAt: toTsOrNow(show.createdAt ?? show.created_at),
       updatedAt: toTsOrNow(show.updatedAt ?? show.updated_at),
+      venue: (show as any).venue ?? (show as any).location ?? (show as any).show_venue ?? undefined,
+      status: (show as any).status ?? (show as any).show_status ?? undefined,
+      performanceDate: toTsOrNull((show as any).performanceDate ?? (show as any).performance_date ?? (show as any).show_date),
+      rehearsals: (show as any).rehearsals ?? (show as any).rehearsal_sessions ?? undefined,
       clientId: show.clientId ?? show.client_id,
       tasks: normalizedTasks
     };

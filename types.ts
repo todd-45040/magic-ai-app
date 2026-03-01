@@ -125,6 +125,16 @@ export interface Finances {
   expenses: Expense[];
 }
 
+export interface ShowRehearsalSession {
+  id: string;
+  showId: string;
+  startedAt: number;
+  endedAt: number;
+  durationMinutes: number;
+  notes?: string;
+  improvementItems?: string[];
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -136,6 +146,11 @@ export interface Task {
   subtasks?: Subtask[];
   musicCue?: string;
   tags?: string[];
+  // Runtime Intelligence (optional)
+  durationMinutes?: number;
+  resetMinutes?: number;
+  energyLevel?: 'Low' | 'Medium' | 'High';
+  participationLevel?: 'Low' | 'Medium' | 'High';
 }
 
 export interface Show {
@@ -148,7 +163,13 @@ export interface Show {
     clientId?: string;
     finances?: Finances;
     tags?: string[];
+    // Show Header Intelligence (optional)
+    venue?: string;
+    performanceDate?: number;
+    status?: 'Draft' | 'Confirmed' | 'Completed';
+    rehearsals?: ShowRehearsalSession[];
 }
+
 
 export interface Feedback {
   id: string;
