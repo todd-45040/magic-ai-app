@@ -20,6 +20,23 @@ export interface AdminAiHealth {
   runtimeProvider: AdminAIProvider;
   source: AdminAiStatusSource;
   envOverrideActive: boolean;
+  tool_support?: Array<{
+    id: string;
+    label: string;
+    category: string;
+    endpoints: string[];
+    support: AdminAIProvider[];
+    note?: string;
+  }>;
+  limitations?: Array<{
+    id: string;
+    label: string;
+    category: string;
+    endpoints: string[];
+    support: AdminAIProvider[];
+    note?: string;
+  }>;
+  limitations_count?: number;
   key_status: {
     openai: { configured: boolean };
     gemini: { configured: boolean };

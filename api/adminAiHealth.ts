@@ -1,5 +1,6 @@
 import { requireAdmin } from '../lib/server/auth/index.js';
 import { resolveProvider, type AIProvider } from '../lib/server/providers/index.js';
+import { TOOL_SUPPORT, getProviderLimitations } from '../lib/server/ai/toolSupport.js';
 
 type Source = 'db' | 'env' | 'default';
 
@@ -163,11 +164,16 @@ export default async function handler(req: any, res: any) {
 
     const recent_errors = ((errRows || []) as any[]).map(sanitizeErrorRow);
 
+    const limitationInfo = getProviderLimitations(runtimeProvider);
+
     return json(res, 200, {
       ok: true,
       runtimeProvider,
       source,
       envOverrideActive,
+      tool_support: TOOL_SUPPORT,
+      limitations: limitationInfo.limitations,
+      limitations_count: limitationInfo.limitations_count,
       key_status: {
         openai: { configured: Boolean(process.env.OPENAI_API_KEY) },
         gemini: { configured: hasGeminiKey() },

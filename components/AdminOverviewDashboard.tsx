@@ -1475,6 +1475,39 @@ export default function AdminOverviewDashboard({ onGoUsers, onGoLeads }: { onGoU
       </div>
     </div>
 
+    {Number((aiHealth as any)?.limitations_count || 0) > 0 && (
+      <div className="mt-3 p-2 rounded bg-amber-500/10 border border-amber-400/30 text-xs">
+        <div className="flex items-center justify-between gap-2">
+          <div className="font-medium text-amber-200">Provider limitations detected</div>
+          <div className="text-[11px] opacity-80">
+            {Number((aiHealth as any)?.limitations_count || 0)} tool(s) not supported by{' '}
+            <span className="font-medium">{providerLabel(aiHealth?.runtimeProvider)}</span>
+          </div>
+        </div>
+        <div className="mt-2 space-y-2">
+          {(((aiHealth as any)?.limitations || []) as any[]).slice(0, 8).map((t: any) => (
+            <div key={t.id} className="p-2 rounded bg-white/5 border border-white/10">
+              <div className="flex items-center justify-between gap-2">
+                <div className="font-medium text-white/90">{String(t.label || t.id)}</div>
+                <div className="text-[11px] opacity-80">
+                  Supports: {Array.isArray(t.support) ? t.support.map((p: any) => providerLabel(p)).join(', ') : '—'}
+                </div>
+              </div>
+              {t.note && <div className="mt-1 text-[11px] opacity-80">{String(t.note)}</div>}
+              {Array.isArray(t.endpoints) && t.endpoints.length > 0 && (
+                <div className="mt-1 text-[11px] opacity-70">Endpoints: {t.endpoints.join(', ')}</div>
+              )}
+            </div>
+          ))}
+          {(((aiHealth as any)?.limitations || []) as any[]).length > 8 && (
+            <div className="text-[11px] opacity-80">
+              Showing first 8. See /api/adminAiHealth for full list.
+            </div>
+          )}
+        </div>
+      </div>
+    )}
+
     <div className="mt-3">
       <div className="text-xs opacity-70">Provider breakdown (window)</div>
       <div className="mt-2 overflow-auto">
