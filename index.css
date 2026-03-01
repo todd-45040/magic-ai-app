@@ -3,6 +3,27 @@
 @tailwind components;
 @tailwind utilities;
 
+
+@layer components {
+  /* Global density + calm surfaces */
+  .maw-card {
+    @apply rounded-2xl border border-white/10 bg-white/[0.03] shadow-[0_10px_30px_rgba(0,0,0,0.22)] backdrop-blur;
+  }
+  .maw-card-soft {
+    @apply rounded-xl border border-white/10 bg-white/[0.02] shadow-[0_8px_20px_rgba(0,0,0,0.16)] backdrop-blur;
+  }
+  .maw-card-flat {
+    @apply rounded-xl border border-white/10 bg-white/[0.02];
+  }
+  .maw-section {
+    @apply mt-5;
+  }
+  .maw-section-tight {
+    @apply mt-4;
+  }
+}
+
+
 .magical-bg {
   background-color: #020617;
   background-image: 

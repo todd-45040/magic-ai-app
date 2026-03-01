@@ -156,12 +156,12 @@ const TaskModal: React.FC<{
     
     const modalContent = (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 motion-reduce:animate-none animate-fade-in" onClick={onClose}>
-            <div className="w-full max-w-lg bg-slate-800 border border-purple-500 rounded-lg shadow-2xl flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
-                <h2 className="text-xl font-bold text-white p-6 border-b border-slate-700 flex-shrink-0">{modalTitle}</h2>
-                <form id="task-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
+            <div className="w-full max-w-lg bg-white/[0.03] border border-purple-500 rounded-lg shadow-2xl flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+                <h2 className="text-xl font-bold text-white p-5 border-b border-white/10 flex-shrink-0">{modalTitle}</h2>
+                <form id="task-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 space-y-3">
                     <div>
                         <label htmlFor="title" className="block text-sm font-medium text-slate-300 mb-1">Task Title</label>
-                        <input id="title" type="text" value={title} onChange={e => setTitle(e.target.value)} required autoFocus className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500" />
+                        <input id="title" type="text" value={title} onChange={e => setTitle(e.target.value)} required autoFocus className="w-full px-3 py-2 bg-slate-950 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500" />
                     </div>
                     <div>
                         <div className="flex justify-between items-center mb-1">
@@ -176,7 +176,7 @@ const TaskModal: React.FC<{
                                 {isGeneratingPatter ? 'Generating...' : 'Generate Patter'}
                             </button>
                         </div>
-                        <textarea id="notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full bg-slate-900/50 border border-slate-700 rounded-md p-2 text-white focus:outline-none focus:border-purple-500" />
+                        <textarea id="notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full bg-slate-950/50 border border-white/10 rounded-md p-2 text-white focus:outline-none focus:border-purple-500" />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
@@ -185,7 +185,7 @@ const TaskModal: React.FC<{
                                 id="priority"
                                 value={priority}
                                 onChange={(e) => setPriority(e.target.value as TaskPriority)}
-                                className="w-full bg-slate-900 px-3 py-2 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500"
+                                className="w-full bg-slate-950 px-3 py-2 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500"
                             >
                                 <option value="High">High</option>
                                 <option value="Medium">Medium</option>
@@ -194,27 +194,27 @@ const TaskModal: React.FC<{
                         </div>
                         <div>
                             <label htmlFor="due-date" className="block text-sm font-medium text-slate-300 mb-1">Due Date (Optional)</label>
-                            <input id="due-date" type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500" />
+                            <input id="due-date" type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="w-full px-3 py-2 bg-slate-950 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500" />
                         </div>
                     </div>
                     <div>
                         <label htmlFor="music-cue" className="block text-sm font-medium text-slate-300 mb-1">Music Cue (Optional)</label>
-                        <input id="music-cue" type="text" value={musicCue} onChange={e => setMusicCue(e.target.value)} placeholder="e.g., 'Mysterious Fanfare' at 0:32" className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500" />
+                        <input id="music-cue" type="text" value={musicCue} onChange={e => setMusicCue(e.target.value)} placeholder="e.g., 'Mysterious Fanfare' at 0:32" className="w-full px-3 py-2 bg-slate-950 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500" />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label htmlFor="duration-min" className="block text-sm font-medium text-slate-300 mb-1">Duration (min)</label>
-                            <input id="duration-min" type="number" min={0} step={1} value={durationMinutes} onChange={e => setDurationMinutes(e.target.value === '' ? '' : Number(e.target.value))} className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500" placeholder="e.g., 4" />
+                            <input id="duration-min" type="number" min={0} step={1} value={durationMinutes} onChange={e => setDurationMinutes(e.target.value === '' ? '' : Number(e.target.value))} className="w-full px-3 py-2 bg-slate-950 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500" placeholder="e.g., 4" />
                         </div>
                         <div>
                             <label htmlFor="reset-min" className="block text-sm font-medium text-slate-300 mb-1">Reset (min)</label>
-                            <input id="reset-min" type="number" min={0} step={1} value={resetMinutes} onChange={e => setResetMinutes(e.target.value === '' ? '' : Number(e.target.value))} className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500" placeholder="e.g., 1" />
+                            <input id="reset-min" type="number" min={0} step={1} value={resetMinutes} onChange={e => setResetMinutes(e.target.value === '' ? '' : Number(e.target.value))} className="w-full px-3 py-2 bg-slate-950 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500" placeholder="e.g., 1" />
                         </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label htmlFor="energy" className="block text-sm font-medium text-slate-300 mb-1">Energy Level</label>
-                            <select id="energy" value={energyLevel} onChange={e => setEnergyLevel(e.target.value as any)} className="w-full bg-slate-900 px-3 py-2 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500">
+                            <select id="energy" value={energyLevel} onChange={e => setEnergyLevel(e.target.value as any)} className="w-full bg-slate-950 px-3 py-2 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500">
                                 <option value="Low">Low</option>
                                 <option value="Medium">Medium</option>
                                 <option value="High">High</option>
@@ -222,7 +222,7 @@ const TaskModal: React.FC<{
                         </div>
                         <div>
                             <label htmlFor="participation" className="block text-sm font-medium text-slate-300 mb-1">Participation</label>
-                            <select id="participation" value={participationLevel} onChange={e => setParticipationLevel(e.target.value as any)} className="w-full bg-slate-900 px-3 py-2 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500">
+                            <select id="participation" value={participationLevel} onChange={e => setParticipationLevel(e.target.value as any)} className="w-full bg-slate-950 px-3 py-2 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500">
                                 <option value="Low">Low</option>
                                 <option value="Medium">Medium</option>
                                 <option value="High">High</option>
@@ -231,7 +231,7 @@ const TaskModal: React.FC<{
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-slate-300 mb-1">Sub-Performance Beats</label>
-                        <div className="max-h-32 overflow-y-auto space-y-2 pr-2 border border-slate-700/50 bg-slate-900/50 rounded-md p-2">
+                        <div className="max-h-32 overflow-y-auto space-y-2 pr-2 border border-white/10/50 bg-slate-950/50 rounded-md p-2">
                             {subtasks.length > 0 ? subtasks.map((subtask, index) => (
                                 <div key={index} className="flex items-center gap-2">
                                     <input
@@ -242,7 +242,7 @@ const TaskModal: React.FC<{
                                             newSubtasks[index].completed = !newSubtasks[index].completed;
                                             setSubtasks(newSubtasks);
                                         }}
-                                        className="mt-1 w-5 h-5 accent-purple-500 bg-slate-900 flex-shrink-0"
+                                        className="mt-1 w-5 h-5 accent-purple-500 bg-slate-950 flex-shrink-0"
                                     />
                                     <input type="text" value={subtask.text}
                                         onChange={(e) => {
@@ -259,12 +259,12 @@ const TaskModal: React.FC<{
                             )}
                         </div>
                         <div className="flex items-center gap-2 mt-2">
-                            <input type="text" value={newSubtaskText} onChange={(e) => setNewSubtaskText(e.target.value)} placeholder="New subtask..." className="flex-1 bg-slate-900/50 border border-slate-700 rounded-md p-2 text-white focus:outline-none focus:border-purple-500" />
+                            <input type="text" value={newSubtaskText} onChange={(e) => setNewSubtaskText(e.target.value)} placeholder="New subtask..." className="flex-1 bg-slate-950/50 border border-white/10 rounded-md p-2 text-white focus:outline-none focus:border-purple-500" />
                             <button type="button" onClick={handleAddSubtask} className="px-4 py-2 bg-slate-600 hover:bg-slate-700 rounded-md text-white font-semibold text-sm">Add</button>
                         </div>
                     </div>
                 </form>
-                <div className="flex gap-3 p-6 flex-shrink-0 bg-slate-800 border-t border-slate-700">
+                <div className="flex gap-3 p-5 flex-shrink-0 bg-white/[0.03] border-t border-white/10">
                     <button type="button" onClick={onClose} disabled={isSaving} className="w-full py-2 px-4 bg-slate-600/50 hover:bg-slate-700 rounded-md text-slate-300 font-bold transition-colors">Cancel</button>
                     <button type="submit" form="task-form" disabled={isSaving} className="w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors">{isSaving ? 'Saving...' : buttonText}</button>
                 </div>
@@ -292,8 +292,8 @@ const ScriptGuideModal: React.FC<{ script: string; onClose: () => void }> = ({ s
 
     return (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 motion-reduce:animate-none animate-fade-in" onClick={onClose}>
-            <div className="w-full max-w-2xl h-[90vh] max-h-[700px] bg-slate-800 border border-purple-500 rounded-lg shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
-                <header className="p-4 border-b border-slate-700 flex items-center justify-between flex-shrink-0">
+            <div className="w-full max-w-2xl h-[90vh] max-h-[700px] bg-white/[0.03] border border-purple-500 rounded-lg shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+                <header className="p-4 border-b border-white/10 flex items-center justify-between flex-shrink-0">
                     <h2 className="text-xl font-bold text-white">Show Script & Cue Sheet</h2>
                     <div className="flex items-center gap-2">
                          <button onClick={handleCopy} className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 transition-colors">
@@ -303,7 +303,7 @@ const ScriptGuideModal: React.FC<{ script: string; onClose: () => void }> = ({ s
                         <button onClick={onClose} className="py-1.5 px-3 bg-slate-600/50 hover:bg-slate-700 rounded-md text-slate-300 font-bold transition-colors">Close</button>
                     </div>
                 </header>
-                <main className="flex-1 overflow-y-auto p-6">
+                <main className="flex-1 overflow-y-auto p-5">
                     <pre className="whitespace-pre-wrap break-words text-slate-200 font-sans text-sm">{script}</pre>
                 </main>
             </div>
@@ -561,9 +561,9 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
         const progress = totalSubtasks > 0 ? (completedSubtasks / totalSubtasks) * 100 : 0;
         
         return (
-             <div ref={el => { taskRefs.current.set(task.id, el); }} className={`p-3 rounded-lg border flex flex-col gap-3 transition-all ${isOverdue ? 'bg-red-900/20 border-red-500/50' : `bg-slate-800 border-slate-700 border-l-4 ${priorityBorders[task.priority]}`}`}>
+             <div ref={el => { taskRefs.current.set(task.id, el); }} className={`p-3 rounded-lg border flex flex-col gap-3 transition-all ${isOverdue ? 'bg-red-900/20 border-red-500/50' : `bg-white/[0.03] border-white/10 border-l-4 ${priorityBorders[task.priority]}`}`}>
                 <div className="flex items-start gap-3">
-                    <input type="checkbox" checked={task.status === 'Completed'} onChange={() => handleToggleStatus(task)} className="mt-1 w-5 h-5 accent-purple-500 bg-slate-900 flex-shrink-0" />
+                    <input type="checkbox" checked={task.status === 'Completed'} onChange={() => handleToggleStatus(task)} className="mt-1 w-5 h-5 accent-purple-500 bg-slate-950 flex-shrink-0" />
                     <div className="flex-1">
                         <p className={`font-semibold text-slate-200 ${isOverdue ? '!text-red-300' : ''}`}>{task.title}</p>
                         {task.notes && <p className="text-sm text-slate-400 mt-1 whitespace-pre-wrap break-words">{task.notes}</p>}
@@ -578,7 +578,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                         <div className="w-full bg-slate-700 rounded-full h-1.5 mb-2"><div className="bg-purple-500 h-1.5 rounded-full" style={{ width: `${progress}%` }}></div></div>
                         {safeSubtasks.map(st => (
                             <div key={st.id} className="flex items-center gap-2">
-                                <input type="checkbox" checked={st.completed} onChange={() => handleToggleSubtask(task.id, st.id)} className="w-4 h-4 accent-purple-500 bg-slate-900" />
+                                <input type="checkbox" checked={st.completed} onChange={() => handleToggleSubtask(task.id, st.id)} className="w-4 h-4 accent-purple-500 bg-slate-950" />
                                 <span className={`text-sm ${st.completed ? 'text-slate-500 line-through' : 'text-slate-300'}`}>{st.text}</span>
                             </div>
                         ))}
@@ -604,7 +604,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                     <button onClick={() => setIsShowModalOpen(true)} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors flex items-center gap-2 text-sm"><WandIcon className="w-4 h-4" /><span>Create New Performance</span></button>
                 </div>
             </header>
-            <main className="flex-1 overflow-y-auto p-4 md:p-6">
+            <main className="flex-1 overflow-y-auto p-4 md:p-5">
                 {showsError && (
                     <div className="mb-4 p-3 rounded-md bg-red-900/30 border border-red-500/40 text-red-200 text-sm">
                         {showsError}
@@ -771,8 +771,8 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
             return (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                     {Object.entries(columns).map(([title, tasksInColumn]) => (
-                        <div key={title} className={`bg-slate-900/50 rounded-lg border-t-4 ${columnStyles[title]}`}>
-                            <h3 className="font-cinzel font-bold text-slate-300 p-3 text-base border-b-2 border-slate-700/50">{title} <span className="text-sm font-normal text-slate-500">({tasksInColumn.length})</span></h3>
+                        <div key={title} className={`bg-slate-950/50 rounded-lg border-t-4 ${columnStyles[title]}`}>
+                            <h3 className="font-cinzel font-bold text-slate-300 p-3 text-base border-b-2 border-white/10/50">{title} <span className="text-sm font-normal text-slate-500">({tasksInColumn.length})</span></h3>
                             <div className="p-3 space-y-3">{tasksInColumn.length > 0 ? tasksInColumn.map(task => <TaskItem key={task.id} task={task} />) : <div className="text-center py-6 text-sm text-slate-500">No tasks here.</div>}</div>
                         </div>
                     ))}
@@ -788,7 +788,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                 <div className="overflow-x-auto">
                     <div className="min-w-max flex items-stretch gap-3 pb-2">
                         {ordered.map((task, idx) => (
-                            <div key={task.id} className="w-64 bg-slate-900/50 border border-slate-700 rounded-xl p-3">
+                            <div key={task.id} className="w-64 bg-slate-950/50 border border-white/10 rounded-xl p-3">
                                 <div className="flex items-start justify-between gap-2">
                                     <div>
                                         <div className="text-xs text-slate-500">Beat {idx + 1}</div>
@@ -797,15 +797,15 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                     <PriorityBadge priority={task.priority} />
                                 </div>
                                 <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                                    {(task as any).durationMinutes !== undefined && <span className="px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-200">⏱ {Number((task as any).durationMinutes) || 0}m</span>}
-                                    {(task as any).resetMinutes !== undefined && <span className="px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-200">🔁 {Number((task as any).resetMinutes) || 0}m</span>}
-                                    {(task as any).energyLevel && <span className="px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-200">⚡ {(task as any).energyLevel}</span>}
-                                    {(task as any).participationLevel && <span className="px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-200">🙌 {(task as any).participationLevel}</span>}
+                                    {(task as any).durationMinutes !== undefined && <span className="px-2 py-0.5 rounded-full bg-white/[0.03] border border-white/10 text-slate-200">⏱ {Number((task as any).durationMinutes) || 0}m</span>}
+                                    {(task as any).resetMinutes !== undefined && <span className="px-2 py-0.5 rounded-full bg-white/[0.03] border border-white/10 text-slate-200">🔁 {Number((task as any).resetMinutes) || 0}m</span>}
+                                    {(task as any).energyLevel && <span className="px-2 py-0.5 rounded-full bg-white/[0.03] border border-white/10 text-slate-200">⚡ {(task as any).energyLevel}</span>}
+                                    {(task as any).participationLevel && <span className="px-2 py-0.5 rounded-full bg-white/[0.03] border border-white/10 text-slate-200">🙌 {(task as any).participationLevel}</span>}
                                 </div>
                                 {task.notes && <div className="mt-2 text-xs text-slate-400 line-clamp-4 whitespace-pre-wrap">{task.notes}</div>}
                                 <div className="mt-3 flex items-center justify-end gap-1">
-                                    <button onClick={() => openEditModal(task)} className="p-2 text-slate-400 hover:text-amber-300 rounded-full hover:bg-slate-800 transition-colors"><PencilIcon className="w-4 h-4"/></button>
-                                    <button onClick={() => handleDeleteTask(task.id)} className="p-2 text-slate-400 hover:text-red-400 rounded-full hover:bg-slate-800 transition-colors"><TrashIcon className="w-4 h-4"/></button>
+                                    <button onClick={() => openEditModal(task)} className="p-2 text-slate-400 hover:text-amber-300 rounded-full hover:bg-white/[0.03] transition-colors"><PencilIcon className="w-4 h-4"/></button>
+                                    <button onClick={() => handleDeleteTask(task.id)} className="p-2 text-slate-400 hover:text-red-400 rounded-full hover:bg-white/[0.03] transition-colors"><TrashIcon className="w-4 h-4"/></button>
                                 </div>
                             </div>
                         ))}
@@ -840,7 +840,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                     </div>
 
                     {/* Show Header Intelligence */}
-                    <div className="mt-4 bg-slate-900/40 border border-slate-700 rounded-xl p-4 md:p-5">
+                    <div className="mt-4 bg-slate-950/40 border border-white/10 rounded-xl p-4 md:p-5">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                             <div className="flex items-center gap-2">
                                 <StageCurtainsIcon className="w-5 h-5 text-purple-300" />
@@ -848,7 +848,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                             </div>
                             <div className="flex items-center gap-2">
                                 {!isEditingHeader ? (
-                                    <button onClick={() => setIsEditingHeader(true)} className="px-3 py-2 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-100 text-sm flex items-center gap-2">
+                                    <button onClick={() => setIsEditingHeader(true)} className="px-3 py-2 rounded-md bg-white/[0.03] hover:bg-slate-700 text-slate-100 text-sm flex items-center gap-2">
                                         <PencilIcon className="w-4 h-4" />
                                         Edit Details
                                     </button>
@@ -856,7 +856,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                     <>
                                         <button
                                             onClick={() => { setIsEditingHeader(false); setHeaderDraft({ title: selectedShow.title, venue: (selectedShow as any).venue || '', performanceDate: (selectedShow as any).performanceDate || '', fee: (selectedShow.finances?.performanceFee ?? 0), status: ((selectedShow as any).status || 'Draft') as any }); }}
-                                            className="px-3 py-2 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-100 text-sm"
+                                            className="px-3 py-2 rounded-md bg-white/[0.03] hover:bg-slate-700 text-slate-100 text-sm"
                                         >
                                             Cancel
                                         </button>
@@ -900,29 +900,29 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                 <div>
                                     <div className="text-xs text-slate-400 mb-1">Show Name</div>
                                     {isEditingHeader ? (
-                                        <input value={headerDraft.title} onChange={e => setHeaderDraft(d => ({ ...d, title: e.target.value }))} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-md text-white" />
+                                        <input value={headerDraft.title} onChange={e => setHeaderDraft(d => ({ ...d, title: e.target.value }))} className="w-full px-3 py-2 bg-slate-950 border border-white/10 rounded-md text-white" />
                                     ) : (
-                                        <div className="px-3 py-2 bg-slate-900/40 border border-slate-800 rounded-md text-slate-200">{selectedShow.title}</div>
+                                        <div className="px-3 py-2 bg-slate-950/40 border border-slate-800 rounded-md text-slate-200">{selectedShow.title}</div>
                                     )}
                                 </div>
                                 <div>
                                     <div className="text-xs text-slate-400 mb-1">Status</div>
                                     {isEditingHeader ? (
-                                        <select value={headerDraft.status} onChange={e => setHeaderDraft(d => ({ ...d, status: e.target.value as any }))} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-md text-white">
+                                        <select value={headerDraft.status} onChange={e => setHeaderDraft(d => ({ ...d, status: e.target.value as any }))} className="w-full px-3 py-2 bg-slate-950 border border-white/10 rounded-md text-white">
                                             <option value="Draft">Draft</option>
                                             <option value="Confirmed">Confirmed</option>
                                             <option value="Completed">Completed</option>
                                         </select>
                                     ) : (
-                                        <div className="px-3 py-2 bg-slate-900/40 border border-slate-800 rounded-md text-slate-200">{(selectedShow as any).status || 'Draft'}</div>
+                                        <div className="px-3 py-2 bg-slate-950/40 border border-slate-800 rounded-md text-slate-200">{(selectedShow as any).status || 'Draft'}</div>
                                     )}
                                 </div>
                                 <div>
                                     <div className="text-xs text-slate-400 mb-1">Venue</div>
                                     {isEditingHeader ? (
-                                        <input value={headerDraft.venue} onChange={e => setHeaderDraft(d => ({ ...d, venue: e.target.value }))} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-md text-white" placeholder="e.g., ADMC — Main Ballroom" />
+                                        <input value={headerDraft.venue} onChange={e => setHeaderDraft(d => ({ ...d, venue: e.target.value }))} className="w-full px-3 py-2 bg-slate-950 border border-white/10 rounded-md text-white" placeholder="e.g., ADMC — Main Ballroom" />
                                     ) : (
-                                        <div className="px-3 py-2 bg-slate-900/40 border border-slate-800 rounded-md text-slate-200">{(selectedShow as any).venue || '—'}</div>
+                                        <div className="px-3 py-2 bg-slate-950/40 border border-slate-800 rounded-md text-slate-200">{(selectedShow as any).venue || '—'}</div>
                                     )}
                                 </div>
                                 <div>
@@ -932,10 +932,10 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                             type="date"
                                             value={headerDraft.performanceDate ? (() => { const d = new Date(Number(headerDraft.performanceDate)); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,10); })() : ''}
                                             onChange={e => setHeaderDraft(d => ({ ...d, performanceDate: e.target.value ? new Date(e.target.value + 'T00:00:00').getTime() : '' }))}
-                                            className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-md text-white"
+                                            className="w-full px-3 py-2 bg-slate-950 border border-white/10 rounded-md text-white"
                                         />
                                     ) : (
-                                        <div className="px-3 py-2 bg-slate-900/40 border border-slate-800 rounded-md text-slate-200">{(selectedShow as any).performanceDate ? new Date(Number((selectedShow as any).performanceDate)).toLocaleDateString() : '—'}</div>
+                                        <div className="px-3 py-2 bg-slate-950/40 border border-slate-800 rounded-md text-slate-200">{(selectedShow as any).performanceDate ? new Date(Number((selectedShow as any).performanceDate)).toLocaleDateString() : '—'}</div>
                                     )}
                                 </div>
                                 <div className="sm:col-span-2">
@@ -943,34 +943,34 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                     {isEditingHeader ? (
                                         <div className="flex items-center gap-2">
                                             <span className="text-slate-400">$</span>
-                                            <input type="number" min={0} step={1} value={headerDraft.fee} onChange={e => setHeaderDraft(d => ({ ...d, fee: Number(e.target.value || 0) }))} className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-md text-white" />
+                                            <input type="number" min={0} step={1} value={headerDraft.fee} onChange={e => setHeaderDraft(d => ({ ...d, fee: Number(e.target.value || 0) }))} className="w-full px-3 py-2 bg-slate-950 border border-white/10 rounded-md text-white" />
                                         </div>
                                     ) : (
-                                        <div className="px-3 py-2 bg-slate-900/40 border border-slate-800 rounded-md text-slate-200">${fee.toFixed(0)}</div>
+                                        <div className="px-3 py-2 bg-slate-950/40 border border-slate-800 rounded-md text-slate-200">${fee.toFixed(0)}</div>
                                     )}
                                 </div>
                             </div>
 
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                <div className="bg-slate-900/40 border border-slate-800 rounded-lg p-3">
+                                <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-3">
                                     <div className="text-xs text-slate-400">Total Runtime</div>
                                     <div className="text-lg font-bold text-white">{runtimeMinutes ? `${runtimeMinutes}m` : '—'}</div>
                                 </div>
-                                <div className="bg-slate-900/40 border border-slate-800 rounded-lg p-3">
+                                <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-3">
                                     <div className="text-xs text-slate-400">Total Profit</div>
                                     <div className="text-lg font-bold text-white">${profit.toFixed(0)}</div>
                                 </div>
-                                <div className="bg-slate-900/40 border border-slate-800 rounded-lg p-3">
+                                <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-3">
                                     <div className="text-xs text-slate-400">Last Rehearsed</div>
                                     <div className="text-sm font-semibold text-slate-200">{lastRehearsedTs ? new Date(lastRehearsedTs).toLocaleString() : '—'}</div>
                                 </div>
-                                <div className="bg-slate-900/40 border border-slate-800 rounded-lg p-3">
+                                <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-3">
                                     <div className="text-xs text-slate-400">Audience Rating</div>
                                     <div className="text-lg font-bold text-white">{avgRating ? avgRating.toFixed(1) : '—'}</div>
                                     <div className="text-[11px] text-slate-500">{showFeedback.length ? `${showFeedback.length} responses` : 'No feedback yet'}</div>
                                 </div>
 
-                                <div className="col-span-2 sm:col-span-4 bg-slate-900/30 border border-slate-800 rounded-lg p-3 flex flex-wrap items-center justify-between gap-3">
+                                <div className="col-span-2 sm:col-span-4 bg-slate-950/30 border border-slate-800 rounded-lg p-3 flex flex-wrap items-center justify-between gap-3">
                                     <div className="text-sm text-slate-300">
                                         <span className="text-slate-500">Reset complexity:</span> <span className="text-slate-100 font-semibold">{resetComplexity}</span>
                                         {resetMinutes ? <span className="text-slate-500"> • total reset {resetMinutes}m</span> : null}
@@ -984,7 +984,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                     </div>
 
                     {suggestionError && <p className="text-red-400 text-center text-sm mb-2">{suggestionError}</p>}
-                    <div className="bg-slate-800/50 border-y border-slate-700 -mx-4 md:-mx-6 px-4 md:px-6 flex items-center justify-between">
+                    <div className="bg-white/[0.03]/50 border-y border-white/10 -mx-4 md:-mx-6 px-4 md:px-6 flex items-center justify-between">
                          <div className="flex items-center">
                             <TabButton icon={ChecklistIcon} label="Performance Beats" isActive={activeTab === 'tasks'} onClick={() => setActiveTab('tasks')} />
                             <TabButton icon={DollarSignIcon} label="Finances" isActive={activeTab === 'finances'} onClick={() => setActiveTab('finances')} />
@@ -1004,7 +1004,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                     ) : activeTab === 'finances' ? (
                         <FinanceTracker show={selectedShow} onUpdate={(updates) => handleUpdateShow(selectedShow.id, updates)} />
                     ) : activeTab === 'contract' ? (
-                        <div className="space-y-4">
+                        <div className="space-y-3">
                             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                                 <div className="flex flex-col items-start gap-1">
                                     <div className="flex items-center gap-3">
@@ -1020,7 +1020,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                                 setActiveContractStatus((row.status || 'draft') as ContractStatus);
                                             }
                                         }}
-                                        className="bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-slate-200 text-sm"
+                                        className="bg-white/[0.03] border border-white/10 rounded-md px-3 py-2 text-slate-200 text-sm"
                                         disabled={isLoadingContracts || contractRows.length === 0}
                                         title={contractRows.length === 0 ? 'No saved contracts yet' : 'Select a saved contract version'}
                                     >
@@ -1080,7 +1080,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                             setToastMsg('Revision ready — open Contract Generator to create the next version.');
                                         }}
                                         disabled={!activeContractId}
-                                        className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-500 text-slate-100 text-sm"
+                                        className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:bg-white/[0.03] disabled:text-slate-500 text-slate-100 text-sm"
                                         title="Create a new version based on this contract"
                                     >
                                         <PencilIcon className="w-4 h-4" />
@@ -1101,7 +1101,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
 
                                     <button
                                         disabled
-                                        className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-slate-800 text-slate-500 text-sm cursor-not-allowed"
+                                        className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-white/[0.03] text-slate-500 text-sm cursor-not-allowed"
                                         title="PDF download coming soon"
                                     >
                                         <FileTextIcon className="w-4 h-4" />
@@ -1162,7 +1162,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                             }
                                         }}
                                         disabled={!activeContractId}
-                                        className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-blue-700 hover:bg-blue-600 disabled:bg-slate-800 disabled:text-slate-500 text-white text-sm"
+                                        className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-blue-700 hover:bg-blue-600 disabled:bg-white/[0.03] disabled:text-slate-500 text-white text-sm"
                                         title="Mark as Sent"
                                     >
                                         Mark Sent
@@ -1216,7 +1216,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                                 setContractError('Failed to mark deposit paid. Please try again.');
                                             }
                                         }}
-                                        className="px-3 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:bg-slate-900 disabled:text-slate-500 text-white text-sm"
+                                        className="px-3 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:bg-slate-950 disabled:text-slate-500 text-white text-sm"
                                         title="Mark deposit as paid"
                                         disabled={!activeContractId || !!contractRows.find(r => r.id === activeContractId)?.deposit_paid}
                                     >
@@ -1302,7 +1302,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                                 setContractError('Failed to mark balance paid. Please try again.');
                                             }
                                         }}
-                                        className="px-3 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:bg-slate-900 disabled:text-slate-500 text-white text-sm"
+                                        className="px-3 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:bg-slate-950 disabled:text-slate-500 text-white text-sm"
                                         title="Mark balance as paid"
                                         disabled={!activeContractId || !!contractRows.find(r => r.id === activeContractId)?.balance_paid}
                                     >
@@ -1323,7 +1323,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                             }
                                         }}
                                         disabled={!activeContractId}
-                                        className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-green-700 hover:bg-green-600 disabled:bg-slate-800 disabled:text-slate-500 text-white text-sm"
+                                        className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-green-700 hover:bg-green-600 disabled:bg-white/[0.03] disabled:text-slate-500 text-white text-sm"
                                         title="Mark as Signed"
                                     >
                                         Mark Signed
@@ -1337,7 +1337,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                 </div>
                             )}
 
-                            <div className="bg-slate-800/40 border border-slate-700 rounded-lg p-4 min-h-[280px]">
+                            <div className="bg-white/[0.03]/40 border border-white/10 rounded-lg p-4 min-h-[280px]">
                                 {isLoadingContracts ? (
                                     <div className="text-slate-400">Loading contracts…</div>
                                 ) : !activeContractContent ? (
@@ -1399,10 +1399,10 @@ const ShowModal: React.FC<{
             onClick={onClose}
         >
             <div
-                className="w-full max-w-md bg-slate-800 border border-purple-500 rounded-lg shadow-2xl"
+                className="w-full max-w-md bg-white/[0.03] border border-purple-500 rounded-lg shadow-2xl"
                 onClick={(e) => e.stopPropagation()}
             >
-                <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                <form onSubmit={handleSubmit} className="p-6 space-y-3">
                     <h2 className="text-xl font-bold text-white">Create New Performance</h2>
 
                     {error && (
@@ -1419,7 +1419,7 @@ const ShowModal: React.FC<{
                             id="show-title"
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
-                            className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white"
+                            className="w-full px-3 py-2 bg-slate-950 border border-slate-600 rounded-md text-white"
                             placeholder="e.g., Birthday Party Show"
                             autoFocus
                         />
@@ -1433,7 +1433,7 @@ const ShowModal: React.FC<{
                             id="show-desc"
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
-                            className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white h-24"
+                            className="w-full px-3 py-2 bg-slate-950 border border-slate-600 rounded-md text-white h-24"
                             placeholder="Notes about this show..."
                         />
                     </div>
@@ -1446,7 +1446,7 @@ const ShowModal: React.FC<{
                             id="show-client"
                             value={clientId}
                             onChange={(e) => setClientId(e.target.value)}
-                            className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white"
+                            className="w-full px-3 py-2 bg-slate-950 border border-slate-600 rounded-md text-white"
                         >
                             <option value="">No Client</option>
                             {clients.map((c) => (
@@ -1492,7 +1492,7 @@ return (
             {selectedShow ? <ShowDetailView /> : <ShowListView />}
 
             {toastMsg && (
-                <div className="fixed bottom-6 right-6 z-[9999] bg-slate-900/95 text-white px-4 py-2 rounded-lg shadow-lg border border-white/10">
+                <div className="fixed bottom-6 right-6 z-[9999] bg-slate-950/95 text-white px-4 py-2 rounded-lg shadow-[0_10px_30px_rgba(0,0,0,0.22)] border border-white/10">
                     {toastMsg}
                 </div>
             )}
@@ -1507,7 +1507,7 @@ const ShowListItem: React.FC<{show: Show, clients: Client[], contractMeta?: Cont
     const client = clients.find(c => c.id === show.clientId);
 
     return (
-        <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 flex flex-col justify-between transition-all hover:border-purple-500 hover:shadow-lg hover:shadow-purple-900/20">
+        <div className="bg-white/[0.03] border border-white/10 rounded-lg p-4 flex flex-col justify-between transition-all hover:border-purple-500 hover:shadow-[0_10px_30px_rgba(0,0,0,0.22)] hover:shadow-purple-900/20">
             <div>
                 <div className="flex justify-between items-start gap-2">
                     <div>
@@ -1669,7 +1669,7 @@ const FinanceTracker: React.FC<{ show: Show; onUpdate: (updates: Partial<Show>) 
     };
 
     const SummaryCard = (
-        <div className="bg-slate-900/40 border border-slate-700 rounded-xl p-4 md:p-5">
+        <div className="bg-slate-950/40 border border-white/10 rounded-xl p-4 md:p-5">
             <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                     <h3 className="text-lg font-bold text-white">Finances</h3>
@@ -1694,15 +1694,15 @@ const FinanceTracker: React.FC<{ show: Show; onUpdate: (updates: Partial<Show>) 
             </div>
 
             <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="bg-slate-800/70 border border-slate-700 rounded-lg p-3 flex items-center justify-between">
+                <div className="bg-white/[0.03]/70 border border-white/10 rounded-lg p-3 flex items-center justify-between">
                     <span className="text-sm text-slate-300">Total Income</span>
                     <span className="text-sm font-bold text-slate-100">${formatMoney(totalIncome)}</span>
                 </div>
-                <div className="bg-slate-800/70 border border-slate-700 rounded-lg p-3 flex items-center justify-between">
+                <div className="bg-white/[0.03]/70 border border-white/10 rounded-lg p-3 flex items-center justify-between">
                     <span className="text-sm text-slate-300">Total Expenses</span>
                     <span className="text-sm font-bold text-slate-100">${formatMoney(totalExpenses)}</span>
                 </div>
-                <div className="bg-slate-800/70 border border-slate-700 rounded-lg p-3 flex items-center justify-between">
+                <div className="bg-white/[0.03]/70 border border-white/10 rounded-lg p-3 flex items-center justify-between">
                     <span className="text-sm text-slate-300">Net</span>
                     <span className={`text-sm font-bold ${netProfit >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>
                         {netProfit >= 0 ? '+' : '-'}${formatMoney(Math.abs(netProfit))}
@@ -1713,19 +1713,19 @@ const FinanceTracker: React.FC<{ show: Show; onUpdate: (updates: Partial<Show>) 
     );
 
     const EntryList = ({ type, title, items }: { type: 'income' | 'expense'; title: string; items: MoneyEntry[] }) => (
-        <div className="bg-slate-900/40 border border-slate-700 rounded-xl">
+        <div className="bg-slate-950/40 border border-white/10 rounded-xl">
             <div className="p-4 flex items-center justify-between">
                 <h4 className="text-base font-bold text-white">{title}</h4>
                 <button
                     type="button"
                     onClick={() => openAddEntry(type)}
-                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md text-slate-100 text-sm font-semibold transition-colors"
+                    className="px-3 py-1.5 bg-white/[0.03] hover:bg-slate-700 border border-white/10 rounded-md text-slate-100 text-sm font-semibold transition-colors"
                 >
                     + Add
                 </button>
             </div>
 
-            <div className="border-t border-slate-700">
+            <div className="border-t border-white/10">
                 {items.length === 0 ? (
                     <div className="p-6 text-center">
                         <p className="text-sm text-slate-400">
@@ -1753,7 +1753,7 @@ const FinanceTracker: React.FC<{ show: Show; onUpdate: (updates: Partial<Show>) 
                                         openEditEntry(type, entry);
                                     }
                                 }}
-                                className="p-3 flex items-center justify-between gap-3 border-b border-slate-800 hover:bg-slate-800/60 transition-colors cursor-pointer"
+                                className="p-3 flex items-center justify-between gap-3 border-b border-slate-800 hover:bg-white/[0.03]/60 transition-colors cursor-pointer"
                             >
                                 <div className="min-w-0">
                                     <p className="text-sm font-semibold text-slate-200 truncate">{entry.description}</p>
@@ -1768,7 +1768,7 @@ const FinanceTracker: React.FC<{ show: Show; onUpdate: (updates: Partial<Show>) 
                                             e.stopPropagation();
                                             deleteEntry(type, entry.id);
                                         }}
-                                        className="p-2 rounded-md text-slate-400 hover:text-red-300 hover:bg-slate-900/60 transition-colors"
+                                        className="p-2 rounded-md text-slate-400 hover:text-red-300 hover:bg-slate-950/60 transition-colors"
                                         aria-label="Delete entry"
                                     >
                                         <TrashIcon className="w-4 h-4" />
@@ -1786,14 +1786,14 @@ const FinanceTracker: React.FC<{ show: Show; onUpdate: (updates: Partial<Show>) 
         <div className="space-y-6">
             {SummaryCard}
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
                 <div className="lg:col-span-2 space-y-6">
                     <EntryList type="expense" title="Expenses" items={sortedExpenses} />
                     <EntryList type="income" title="Additional Income" items={sortedIncome} />
                 </div>
 
                 <div className="space-y-6">
-                    <div className="bg-slate-900/40 border border-slate-700 rounded-xl p-4">
+                    <div className="bg-slate-950/40 border border-white/10 rounded-xl p-4">
                         <h4 className="text-base font-bold text-white mb-3">Performance Fee</h4>
                         <p className="text-sm text-slate-400 mb-3">Your primary fee for performing this show.</p>
                         <div className="flex items-center gap-2">
@@ -1803,20 +1803,20 @@ const FinanceTracker: React.FC<{ show: Show; onUpdate: (updates: Partial<Show>) 
                                 value={fee}
                                 onChange={handleFeeChange}
                                 onBlur={() => setFee((prev) => (prev.trim() === "" ? "" : formatToFixed2(prev)))}
-                                className="flex-1 bg-slate-900 border border-slate-600 rounded-md px-3 py-2 text-sm text-white"
+                                className="flex-1 bg-slate-950 border border-slate-600 rounded-md px-3 py-2 text-sm text-white"
                                 placeholder="0.00"
                             />
                             <button
                                 type="button"
                                 onClick={handleFeeUpdate}
-                                className="px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md text-white font-semibold text-sm transition-colors"
+                                className="px-3 py-2 bg-white/[0.03] hover:bg-slate-700 border border-white/10 rounded-md text-white font-semibold text-sm transition-colors"
                             >
                                 Save
                             </button>
                         </div>
                     </div>
 
-                    <div className="bg-slate-900/40 border border-slate-700 rounded-xl p-4">
+                    <div className="bg-slate-950/40 border border-white/10 rounded-xl p-4">
                         <h4 className="text-base font-bold text-white mb-2">At a Glance</h4>
                         <div className="space-y-2 text-sm">
                             <div className="flex justify-between text-slate-300">
@@ -1838,7 +1838,7 @@ const FinanceTracker: React.FC<{ show: Show; onUpdate: (updates: Partial<Show>) 
 
             {isEntryModalOpen && (
                 <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
-                    <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-lg p-5">
+                    <div className="bg-slate-950 border border-white/10 rounded-xl w-full max-w-lg p-5">
                         <div className="flex items-start justify-between gap-3">
                             <div>
                                 <h3 className="text-lg font-bold text-white">
@@ -1851,7 +1851,7 @@ const FinanceTracker: React.FC<{ show: Show; onUpdate: (updates: Partial<Show>) 
                             <button
                                 type="button"
                                 onClick={closeEntryModal}
-                                className="p-2 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                                className="p-2 rounded-md text-slate-400 hover:text-white hover:bg-white/[0.03] transition-colors"
                                 aria-label="Close"
                             >
                                 ✕
@@ -1865,7 +1865,7 @@ const FinanceTracker: React.FC<{ show: Show; onUpdate: (updates: Partial<Show>) 
                                     type="text"
                                     value={entryDesc}
                                     onChange={(e) => setEntryDesc(e.target.value)}
-                                    className="mt-1 w-full bg-slate-900 border border-slate-600 rounded-md px-3 py-2 text-sm text-white"
+                                    className="mt-1 w-full bg-slate-950 border border-slate-600 rounded-md px-3 py-2 text-sm text-white"
                                     placeholder={entryType === 'income' ? 'Ticket sales, merch, add-on…' : 'Props, travel, marketing…'}
                                 />
                             </div>
@@ -1877,7 +1877,7 @@ const FinanceTracker: React.FC<{ show: Show; onUpdate: (updates: Partial<Show>) 
                                     value={entryAmount}
                                     onChange={(e) => setEntryAmount(e.target.value)}
                                     onBlur={() => setEntryAmount((prev) => (prev.trim() === "" ? "" : formatToFixed2(prev)))}
-                                    className="mt-1 w-full bg-slate-900 border border-slate-600 rounded-md px-3 py-2 text-sm text-white"
+                                    className="mt-1 w-full bg-slate-950 border border-slate-600 rounded-md px-3 py-2 text-sm text-white"
                                     placeholder="0.00"
                                 />
                                 <p className="text-xs text-slate-400 mt-1">Enter the amount in dollars. Use positive numbers.</p>
@@ -1888,7 +1888,7 @@ const FinanceTracker: React.FC<{ show: Show; onUpdate: (updates: Partial<Show>) 
                             <button
                                 type="button"
                                 onClick={closeEntryModal}
-                                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md text-white font-semibold text-sm transition-colors"
+                                className="px-4 py-2 bg-white/[0.03] hover:bg-slate-700 border border-white/10 rounded-md text-white font-semibold text-sm transition-colors"
                             >
                                 Cancel
                             </button>
@@ -1917,7 +1917,7 @@ const PerformanceHistory: React.FC<{ performances: Performance[], onNavigateToAn
     return (
         <div className="space-y-3">
             {performances.map(perf => (
-                <button key={perf.id} onClick={() => onNavigateToAnalytics(perf.id)} className="w-full text-left p-3 bg-slate-800 hover:bg-purple-900/50 border border-slate-700 rounded-lg transition-colors">
+                <button key={perf.id} onClick={() => onNavigateToAnalytics(perf.id)} className="w-full text-left p-3 bg-white/[0.03] hover:bg-purple-900/50 border border-white/10 rounded-lg transition-colors">
                     <p className="font-semibold text-slate-200">Performance on {new Date(perf.startTime).toLocaleString()}</p>
                     <p className="text-sm text-slate-400">{perf.reactions.length} reactions recorded</p>
                 </button>
@@ -1955,11 +1955,11 @@ const LivePerformanceModal: React.FC<{ show: Show; onClose: () => void; onEnd: (
 
     return createPortal(
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={onClose}>
-            <div className="w-full max-w-md bg-slate-800 border border-purple-500 rounded-lg shadow-2xl text-center p-8" onClick={(e) => e.stopPropagation()}>
+            <div className="w-full max-w-md bg-white/[0.03] border border-purple-500 rounded-lg shadow-2xl text-center p-8" onClick={(e) => e.stopPropagation()}>
                 <QrCodeIcon className="w-12 h-12 mx-auto mb-2 text-purple-400" />
                 <h2 className="text-2xl font-bold text-white font-cinzel">Live Performance Mode</h2>
                 <p className="text-slate-400 mt-2 mb-4">Display this QR code to your audience. They can scan it to provide real-time feedback during the show.</p>
-                <div className="bg-slate-900 p-4 rounded-lg inline-block border border-slate-700">
+                <div className="bg-slate-950 p-4 rounded-lg inline-block border border-white/10">
                     {performance ? <canvas ref={canvasRef} /> : <p>Generating QR Code...</p>}
                 </div>
                 <button onClick={handleEnd} className="w-full mt-6 py-3 bg-red-600 hover:bg-red-700 rounded-md text-white font-bold transition-colors">End Performance & View Analytics</button>
@@ -2014,13 +2014,13 @@ const AudienceFeedbackQrModal: React.FC<{ show: Show; onClose: () => void }> = (
 
     return createPortal(
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={onClose}>
-            <div className="w-full max-w-md bg-slate-800 border border-purple-500 rounded-lg shadow-2xl text-center p-8" onClick={(e) => e.stopPropagation()}>
+            <div className="w-full max-w-md bg-white/[0.03] border border-purple-500 rounded-lg shadow-2xl text-center p-8" onClick={(e) => e.stopPropagation()}>
                 <QrCodeIcon className="w-12 h-12 mx-auto mb-2 text-purple-400" />
                 <h2 className="text-2xl font-bold text-white font-cinzel">Post‑Show Feedback</h2>
                 <p className="text-slate-400 mt-2 mb-4">
                     Display this QR code after the show. Audience members can scan it to leave a quick rating and comments.
                 </p>
-                <div className="bg-slate-900 p-4 rounded-lg inline-block border border-slate-700">
+                <div className="bg-slate-950 p-4 rounded-lg inline-block border border-white/10">
                     {url ? <canvas ref={canvasRef} /> : <p>Generating QR Code...</p>}
                 </div>
                 <div className="mt-5 flex gap-2">

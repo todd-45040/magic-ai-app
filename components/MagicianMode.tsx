@@ -754,7 +754,7 @@ const ChatView: React.FC<{
     />;
   }
   return (
-    <div className={`flex-1 p-4 md:p-6 ${props.messages.length > 0 ? 'overflow-y-auto' : 'flex flex-col'}`}>
+    <div className={`flex-1 p-4 md:p-5 ${props.messages.length > 0 ? 'overflow-y-auto' : 'flex flex-col'}`}>
       {content}
     </div>
   );
@@ -772,7 +772,7 @@ const IdentifyTab: React.FC<{
     handleIdentifyClick: () => void;
     onRequestUpgrade: () => void;
 }> = ({ imagePreview, identificationResult, isIdentifying, identificationError, identificationBlocked, fileInputRef, handleImageUpload, handleIdentifyClick, onRequestUpgrade }) => (
-    <div className="flex-1 overflow-y-auto p-4 md:p-6">
+    <div className="flex-1 overflow-y-auto p-4 md:p-5">
         <div className="animate-fade-in space-y-4 max-w-2xl mx-auto">
             <h2 className="text-2xl font-bold text-slate-200 font-cinzel">Identify a Trick</h2>
             <p className="text-slate-400">Research an effect you've seen. Upload a picture, and the AI will try to identify it and find performance examples.</p>
@@ -799,7 +799,7 @@ const IdentifyTab: React.FC<{
                 </div>
             )}
             {isIdentifying && (
-                <div className="flex items-center justify-center p-6 bg-slate-800/50 rounded-lg">
+                <div className="flex items-center justify-center p-5 bg-slate-800/50 rounded-lg">
                    <div className="flex items-center space-x-2 text-slate-300">
                         <WandIcon className="w-5 h-5 animate-pulse text-purple-400" />
                         <span>Consulting magical archives...</span>
@@ -850,7 +850,7 @@ const IdentifyTab: React.FC<{
 );
 
 const PublicationsTab: React.FC = () => (
-    <div className="flex-1 overflow-y-auto p-4 md:p-6">
+    <div className="flex-1 overflow-y-auto p-4 md:p-5">
       <div className="animate-fade-in space-y-4">
         <h2 className="text-2xl font-bold text-slate-200 font-cinzel">Magic Publications</h2>
         <p className="text-slate-400">Essential reading for the modern magician. Stay informed on new effects, theory, and community news.</p>
@@ -916,7 +916,7 @@ const CommunityTab: React.FC = () => {
   ];
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 md:p-6">
+    <div className="flex-1 overflow-y-auto p-4 md:p-5">
       <div className="animate-fade-in space-y-8">
         <div className="text-center">
           <h2 className="text-3xl font-bold text-slate-200 font-cinzel">Magic Community</h2>
@@ -2222,7 +2222,7 @@ ${action.payload.content}`;
 
             {/* Primary Action */}
             <div className="px-4 md:px-6 mb-6">
-              <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] p-5 md:p-6">
+              <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] p-5 md:p-5">
                 <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-purple-500/10 via-transparent to-yellow-500/10" />
                 <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                   <div className="flex items-start gap-4">

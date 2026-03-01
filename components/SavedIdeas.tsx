@@ -788,7 +788,7 @@ const sendToPlanner = (idea: SavedIdea) => {
         return (
             <div
                 ref={el => { ideaRefs.current.set(idea.id, el); }}
-                className="group relative bg-gradient-to-br from-slate-800 to-slate-900/50 border-2 border-purple-700/50 rounded-lg p-4 flex flex-col justify-between col-span-1 md:col-span-2 lg:col-span-3">
+                className="group relative rounded-xl border border-white/10 bg-white/[0.02] p-4 flex flex-col justify-between col-span-1 md:col-span-2 lg:col-span-3">
                 <div>
                     <div className="flex items-start justify-between gap-3 mb-3">
                         <div className="flex items-center gap-3">

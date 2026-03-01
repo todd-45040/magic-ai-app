@@ -24,17 +24,17 @@ const COLLAPSED_WIDGETS_KEY = 'magician_dashboard_collapsed_widgets';
 const QuickActionsWidget: React.FC<{ onNavigate: (view: MagicianView) => void }> = ({ onNavigate }) => (
     <>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <button onClick={() => onNavigate('effect-generator')} className="p-4 bg-slate-800 border border-slate-700 rounded-lg text-left h-full group transition-colors hover:bg-purple-900/50 hover:border-purple-500">
+            <button onClick={() => onNavigate('effect-generator')} className="p-3 rounded-xl border border-white/10 bg-white/[0.02] text-left h-full group transition-colors hover:bg-white/[0.05] hover:border-purple-400/40">
                 <WandIcon className="w-8 h-8 mb-2 text-purple-400 group-hover:text-purple-300" />
                 <p className="font-bold text-yellow-200 group-hover:text-yellow-100 transition-colors">Create</p>
                 <p className="text-sm text-slate-400">Generate effects, patter, and creative directions</p>
             </button>
-            <button onClick={() => onNavigate('angle-risk')} className="p-4 bg-slate-800 border border-slate-700 rounded-lg text-left h-full group transition-colors hover:bg-purple-900/50 hover:border-purple-500">
+            <button onClick={() => onNavigate('angle-risk')} className="p-3 rounded-xl border border-white/10 bg-white/[0.02] text-left h-full group transition-colors hover:bg-white/[0.05] hover:border-purple-400/40">
                 <MicrophoneIcon className="w-8 h-8 mb-2 text-purple-400 group-hover:text-purple-300" />
                 <p className="font-bold text-yellow-200 group-hover:text-yellow-100 transition-colors">Rehearse</p>
                 <p className="text-sm text-slate-400">Run angle/risk checks and rehearsal tools</p>
             </button>
-            <button onClick={() => onNavigate('show-planner')} className="p-4 bg-slate-800 border border-slate-700 rounded-lg text-left h-full group transition-colors hover:bg-purple-900/50 hover:border-purple-500">
+            <button onClick={() => onNavigate('show-planner')} className="p-3 rounded-xl border border-white/10 bg-white/[0.02] text-left h-full group transition-colors hover:bg-white/[0.05] hover:border-purple-400/40">
                 <ChecklistIcon className="w-8 h-8 mb-2 text-purple-400 group-hover:text-purple-300" />
                 <p className="font-bold text-yellow-200 group-hover:text-yellow-100 transition-colors">Show Planner</p>
                 <p className="text-sm text-slate-400">Plan routines and tasks</p>
@@ -80,7 +80,7 @@ const UpcomingTasksWidget: React.FC<{ shows: Show[], onNavigate: (view: Magician
                     {upcomingTasks.map(task => {
                         const isCompleted = completedTasks.has(task.id);
                         return (
-                            <div key={task.id} className={`p-3 bg-slate-900/50 rounded-md border-l-4 border-purple-500 transition-all duration-300 ${isCompleted ? 'opacity-30' : 'opacity-100'}`}>
+                            <div key={task.id} className={`p-3 bg-white/[0.03] rounded-md border-l-4 border-purple-500 transition-all duration-300 ${isCompleted ? 'opacity-30' : 'opacity-100'}`}>
                                 <div className="flex justify-between items-start gap-2">
                                     <div className="flex items-start gap-3">
                                         <input type="checkbox" checked={isCompleted} onChange={() => handleTaskToggle(task)} className="mt-1 w-5 h-5 accent-purple-500 bg-slate-900 flex-shrink-0" />
@@ -116,7 +116,7 @@ const RecentIdeaWidget: React.FC<{ ideas: SavedIdea[], onNavigate: (view: Magici
         <>
             {recentIdea ? (
                 <div className="space-y-2">
-                    <button onClick={() => onNavigate('saved-ideas')} className="w-full text-left p-3 bg-slate-900/50 rounded-md hover:bg-slate-700/50 transition-colors">
+                    <button onClick={() => onNavigate('saved-ideas')} className="w-full text-left p-3 bg-white/[0.03] rounded-md hover:bg-slate-700/50 transition-colors">
                         <div className="flex items-center gap-2 text-sm font-semibold text-slate-300">
                             {React.createElement(getIdeaIcon(recentIdea.type), { className: "w-4 h-4" })}
                             <p className="truncate">{recentIdea.title || `Untitled ${recentIdea.type} idea`}</p>
@@ -135,19 +135,19 @@ const RecentIdeaWidget: React.FC<{ ideas: SavedIdea[], onNavigate: (view: Magici
 const FeaturedToolsWidget: React.FC<{ onNavigate: (view: MagicianView) => void }> = ({ onNavigate }) => (
     <>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <button onClick={() => onNavigate('effect-generator')} className="p-3 bg-slate-800 border border-slate-700 rounded-lg text-left h-full group transition-colors hover:bg-purple-900/50 hover:border-purple-500">
+            <button onClick={() => onNavigate('effect-generator')} className="p-3 rounded-xl border border-white/10 bg-white/[0.02] text-left h-full group transition-colors hover:bg-white/[0.05] hover:border-purple-400/40">
                 <LightbulbIcon className="w-6 h-6 mb-1 text-purple-400" />
                 <p className="font-semibold text-yellow-200 text-sm">Effect Generator</p>
             </button>
-            <button onClick={() => onNavigate('director-mode')} className="p-3 bg-slate-800 border border-slate-700 rounded-lg text-left h-full group transition-colors hover:bg-purple-900/50 hover:border-purple-500">
+            <button onClick={() => onNavigate('director-mode')} className="p-3 rounded-xl border border-white/10 bg-white/[0.02] text-left h-full group transition-colors hover:bg-white/[0.05] hover:border-purple-400/40">
                 <StageCurtainsIcon className="w-6 h-6 mb-1 text-purple-400" />
                 <p className="font-semibold text-yellow-200 text-sm">Director Mode</p>
             </button>
-            <button onClick={() => onNavigate('persona-simulator')} className="p-3 bg-slate-800 border border-slate-700 rounded-lg text-left h-full group transition-colors hover:bg-purple-900/50 hover:border-purple-500">
+            <button onClick={() => onNavigate('persona-simulator')} className="p-3 rounded-xl border border-white/10 bg-white/[0.02] text-left h-full group transition-colors hover:bg-white/[0.05] hover:border-purple-400/40">
                 <UsersCogIcon className="w-6 h-6 mb-1 text-purple-400" />
                 <p className="font-semibold text-yellow-200 text-sm">Persona Simulator</p>
             </button>
-            <button onClick={() => onNavigate('patter-engine')} className="p-3 bg-slate-800 border border-slate-700 rounded-lg text-left h-full group transition-colors hover:bg-purple-900/50 hover:border-purple-500">
+            <button onClick={() => onNavigate('patter-engine')} className="p-3 rounded-xl border border-white/10 bg-white/[0.02] text-left h-full group transition-colors hover:bg-white/[0.05] hover:border-purple-400/40">
                 <BookIcon className="w-6 h-6 mb-1 text-purple-400" />
                 <p className="font-semibold text-yellow-200 text-sm">Patter Engine</p>
             </button>
@@ -228,28 +228,28 @@ const BusinessMetricsWidget: React.FC<{ shows: Show[]; feedback: Feedback[] }> =
 
     return (
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-            <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-3">
+            <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
                 <div className="text-xs text-slate-400">Gross Revenue</div>
                 <div className="mt-1 text-xl font-bold text-slate-100">{formatMoney(gross)}</div>
             </div>
-            <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-3">
+            <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
                 <div className="text-xs text-slate-400">Expenses</div>
                 <div className="mt-1 text-xl font-bold text-slate-100">{formatMoney(expenses)}</div>
             </div>
-            <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-3">
+            <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
                 <div className="text-xs text-slate-400">Net (Estimated)</div>
                 <div className="mt-1 text-xl font-bold text-yellow-200">{formatMoney(net)}</div>
             </div>
 
-            <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-3">
+            <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
                 <div className="text-xs text-slate-400">Completed Shows</div>
                 <div className="mt-1 text-xl font-bold text-slate-100">{completedCount}</div>
             </div>
-            <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-3">
+            <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
                 <div className="text-xs text-slate-400">Avg Rating</div>
                 <div className="mt-1 text-xl font-bold text-slate-100">{avgRating ? avgRating.toFixed(1) : '—'}</div>
             </div>
-            <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-3">
+            <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
                 <div className="text-xs text-slate-400">Audience Responses</div>
                 <div className="mt-1 text-xl font-bold text-slate-100">{responseCount}</div>
             </div>
@@ -319,23 +319,23 @@ const ContractPipelineWidget: React.FC = () => {
         <>
             {error && <p className="text-sm text-red-400 mb-2">{error}</p>}
             <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 bg-slate-900/50 rounded-md border border-slate-700">
+                <div className="p-3 bg-white/[0.03] rounded-md border border-white/10">
                     <p className="text-xs text-slate-400">Contracts Draft</p>
                     <p className="text-2xl font-bold text-amber-300">{loading ? '—' : stats.draft}</p>
                 </div>
-                <div className="p-3 bg-slate-900/50 rounded-md border border-slate-700">
+                <div className="p-3 bg-white/[0.03] rounded-md border border-white/10">
                     <p className="text-xs text-slate-400">Contracts Sent</p>
                     <p className="text-2xl font-bold text-blue-300">{loading ? '—' : stats.sent}</p>
                 </div>
-                <div className="p-3 bg-slate-900/50 rounded-md border border-slate-700">
+                <div className="p-3 bg-white/[0.03] rounded-md border border-white/10">
                     <p className="text-xs text-slate-400">Contracts Signed</p>
                     <p className="text-2xl font-bold text-green-300">{loading ? '—' : stats.signed}</p>
                 </div>
-                <div className="p-3 bg-slate-900/50 rounded-md border border-slate-700">
+                <div className="p-3 bg-white/[0.03] rounded-md border border-white/10">
                     <p className="text-xs text-slate-400">Deposits Collected</p>
                     <p className="text-2xl font-bold text-slate-200">{loading ? '—' : stats.depositsCollected}</p>
                 </div>
-                <div className="col-span-2 p-3 bg-slate-900/50 rounded-md border border-slate-700 flex items-center justify-between">
+                <div className="col-span-2 p-3 bg-white/[0.03] rounded-md border border-white/10 flex items-center justify-between">
                     <div>
                         <p className="text-xs text-slate-400">Outstanding Balances</p>
                         <p className="text-2xl font-bold text-slate-200">{loading ? '—' : stats.outstandingBalances}</p>
@@ -397,7 +397,7 @@ const StrategicInsightsWidget: React.FC<{ shows: Show[]; feedback: Feedback[]; o
     return (
         <div className="space-y-3">
             {insights.slice(0, 4).map((i, idx) => (
-                <div key={idx} className="rounded-lg border border-slate-700 bg-slate-900/40 p-3">
+                <div key={idx} className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
                     <div className="flex items-start justify-between gap-3">
                         <div>
                             <div className="font-semibold text-slate-100">{i.title}</div>
@@ -452,7 +452,7 @@ const Dashboard: React.FC<DashboardProps> = ({ variant = 'full', user, shows, fe
 
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4">
+                    <div className="bg-slate-800/50 border border-white/10 rounded-lg p-4">
                         <div className="flex items-center gap-2 mb-3">
                             <ChecklistIcon className="w-5 h-5 text-purple-400" />
                             <h3 className="font-bold text-yellow-200 tracking-wide">Upcoming Tasks</h3>
@@ -460,7 +460,7 @@ const Dashboard: React.FC<DashboardProps> = ({ variant = 'full', user, shows, fe
                         <UpcomingTasksWidget shows={shows} onNavigate={onNavigate} onShowsUpdate={onShowsUpdate} />
                     </div>
 
-                    <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4">
+                    <div className="bg-slate-800/50 border border-white/10 rounded-lg p-4">
                         <div className="flex items-center gap-2 mb-3">
                             <BookmarkIcon className="w-5 h-5 text-purple-400" />
                             <h3 className="font-bold text-yellow-200 tracking-wide">Recent Idea</h3>
@@ -555,7 +555,7 @@ const Dashboard: React.FC<DashboardProps> = ({ variant = 'full', user, shows, fe
         const widgetInfo = WIDGETS.find(w => w.id === widgetId)!;
 
         const widgetContent = (
-            <div className="bg-slate-800/50 border border-slate-700 rounded-lg overflow-hidden">
+            <div className="bg-slate-800/50 border border-white/10 rounded-lg overflow-hidden">
                 <button
                     className="w-full flex items-center justify-between p-4 text-left"
                     onClick={() => toggleCollapse(widgetId)}
@@ -623,7 +623,7 @@ const Dashboard: React.FC<DashboardProps> = ({ variant = 'full', user, shows, fe
             </div>
             
             {hasProAccess && isCustomizeMode && (
-                <div className="mt-8 pt-6 border-t border-slate-700">
+                <div className="mt-8 pt-6 border-t border-white/10">
                     <h2 className="font-bold text-yellow-200/80 mb-3">Hidden Widgets</h2>
                     {layout.hidden.length > 0 ? (
                         <div className="flex flex-wrap gap-2">
