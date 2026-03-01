@@ -60,10 +60,6 @@ export default async function handler(req: any, res: any) {
 
     const { admin, userId } = auth as any;
 
-    // Canonical founder flag (Step 5 compatibility): treat either column as founder.
-    const isFounderRow = (u: any): boolean => Boolean(u?.is_founder || u?.founding_circle_member);
-
-
     // Admin-only gate
     const { data: me, error: meErr } = await admin
       .from('users')
@@ -823,12 +819,12 @@ if (!cls.isSuccess && recentFailures.length < 25) {
         const batchSize = 500;
         for (let i = 0; i < ids.length; i += batchSize) {
           const batch = ids.slice(i, i + batchSize);
-          const { data: urows, error: uerr } = await admin.from('users').select('id,is_founder,founding_circle_member').in('id', batch).limit(50000);
+          const { data: urows, error: uerr } = await admin.from('users').select('id,founding_circle_member').in('id', batch).limit(50000);
           if (uerr) continue;
           for (const u of (urows || []) as any[]) {
             const id = u?.id ? String(u.id) : null;
             if (!id) continue;
-            founderFlags.set(id, isFounderRow(u));
+            founderFlags.set(id, !!u?.founding_circle_member);
           }
         }
 
@@ -1084,7 +1080,7 @@ wauTrendWeekly12 = weeklyWau;
 
       const { data: cohortUsers, error: cohortErr } = await admin
         .from('users')
-        .select('id,created_at,is_founder,founding_circle_member')
+        .select('id,created_at')
         .gte('created_at', since14Iso)
         .lt('created_at', since7Iso)
         .order('created_at', { ascending: false })
@@ -1100,7 +1096,7 @@ wauTrendWeekly12 = weeklyWau;
           if (u?.id && u?.created_at) {
             const id = String(u.id);
             cohortMap.set(id, String(u.created_at));
-            cohortIsFounder.set(id, isFounderRow(u));
+            cohortIsFounder.set(id, !!u?.founding_circle_member);
           }
         }
 
@@ -1167,8 +1163,6 @@ wauTrendWeekly12 = weeklyWau;
     // --- Phase 4: Founding Circle intelligence (segmentation + conversion + intensity)
     const foundingWindows = [7, 30, 90] as const;
 
-    // Canonical founder flag (Step 5 compatibility): treat either column as founder.
-
     const founding: any = {
       members_by_window: {} as Record<string, number>,
       conversion_rate_by_window: {} as Record<string, number | null>,
@@ -1226,7 +1220,7 @@ wauTrendWeekly12 = weeklyWau;
         const { count, error } = await admin
           .from('users')
           .select('id', { count: 'exact', head: true })
-          .or('is_founder.eq.true,founding_circle_member.eq.true')
+          .eq('founding_circle_member', true)
           .gte('founding_joined_at', isoDaysAgo(Number(w)));
         if (!error) founding.members_by_window[String(w)] = Number(count || 0);
         else {
@@ -1278,12 +1272,12 @@ wauTrendWeekly12 = weeklyWau;
         const batchSize = 500;
         for (let i = 0; i < newUserIds.length; i += batchSize) {
           const batch = newUserIds.slice(i, i + batchSize);
-          const { data: urows, error: uerr } = await admin.from('users').select('id,is_founder,founding_circle_member').in('id', batch).limit(50000);
+          const { data: urows, error: uerr } = await admin.from('users').select('id,founding_circle_member').in('id', batch).limit(50000);
           if (uerr) continue;
           for (const u of (urows || []) as any[]) {
             const id = u?.id ? String(u.id) : null;
             if (!id) continue;
-            if (isFounderRow(u)) founderSetNew.add(id);
+            if (u?.founding_circle_member) founderSetNew.add(id);
           }
         }
 
@@ -1319,12 +1313,12 @@ wauTrendWeekly12 = weeklyWau;
         const batchSize = 500;
         for (let i = 0; i < activeIds.length; i += batchSize) {
           const batch = activeIds.slice(i, i + batchSize);
-          const { data: urows, error: uerr } = await admin.from('users').select('id,is_founder,founding_circle_member').in('id', batch).limit(50000);
+          const { data: urows, error: uerr } = await admin.from('users').select('id,founding_circle_member').in('id', batch).limit(50000);
           if (uerr) continue;
           for (const u of (urows || []) as any[]) {
             const id = u?.id ? String(u.id) : null;
             if (!id) continue;
-            if (isFounderRow(u)) founderSetActive.add(id);
+            if (u?.founding_circle_member) founderSetActive.add(id);
           }
         }
 
@@ -1467,8 +1461,8 @@ wauTrendWeekly12 = weeklyWau;
       // 1) Founders by source (total + joined in window)
       const { data: founderUsers, error: fErr } = await admin
         .from('users')
-        .select('id, email, founding_source, founding_joined_at, is_founder, founding_circle_member')
-        .or('is_founder.eq.true,founding_circle_member.eq.true')
+        .select('id, email, founding_source, founding_joined_at, founding_circle_member')
+        .eq('founding_circle_member', true)
         .limit(50000);
 
       if (!fErr) {

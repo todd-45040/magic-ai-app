@@ -441,50 +441,6 @@ export default function AdminOverviewDashboard({ onGoUsers, onGoLeads }: { onGoU
         </div>
       </div>
 
-      {/* Step 8 — Founder Cohort Tracking (Activation / WAU / Tool Usage / Retention) */}
-      <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 p-4">
-        <div className="flex items-center justify-between">
-          <div className="text-sm opacity-80">Founder Cohort Tracking</div>
-          <div className="text-[11px] text-white/50">Founders are your highest-signal test group.</div>
-        </div>
-
-        <div className="mt-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-            <div className="text-sm opacity-80">Founder Activation %</div>
-            <div className="mt-2 text-2xl font-extrabold text-white">{pct(founding?.activation?.founders_activation_rate, 0)}</div>
-            <div className="mt-1 text-[11px] text-white/50">Among new users in the selected window.</div>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-            <div className="text-sm opacity-80">Founder WAU</div>
-            <div className="mt-2 text-2xl font-extrabold text-white">{Number.isFinite(Number(founding?.stickiness_wau_mau_split?.founders?.wau_7d)) ? Number(founding.stickiness_wau_mau_split.founders.wau_7d) : '—'}</div>
-            <div className="mt-1 text-[11px] text-white/50">Unique founders active in the last 7 days.</div>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-            <div className="text-sm opacity-80">Founder Tool Usage</div>
-            <div className="mt-3 space-y-2">
-              {(((founding?.tool_adoption_split?.top_tools_founders || []) as any[]).slice(0, 5)).map((r: any) => (
-                <div key={String(r?.tool)} className="flex items-center justify-between text-sm">
-                  <span className="text-white/70 truncate">{String(r?.tool || '—')}</span>
-                  <span className="text-white font-semibold">{pct(r?.founders?.adoption_rate, 0)}</span>
-                </div>
-              ))}
-              {(!founding?.tool_adoption_split?.top_tools_founders || (founding.tool_adoption_split.top_tools_founders as any[]).length === 0) && (
-                <div className="text-sm text-white/60">—</div>
-              )}
-            </div>
-            <div className="mt-2 text-[11px] text-white/50">Adoption rate among active founders (selected window).</div>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-            <div className="text-sm opacity-80">Founder Retention</div>
-            <div className="mt-2 text-2xl font-extrabold text-white">{pct(founding?.retention_week1_split?.founders?.retention_rate, 0)}</div>
-            <div className="mt-1 text-[11px] text-white/50">Week-1 retention (cohort: users created 7–14 days ago).</div>
-          </div>
-        </div>
-      </div>
-
 
 
 

@@ -15,6 +15,34 @@ function getOrigin(req: any): string {
   return `${proto}://${host}`;
 }
 
+// Step 8.1 — Founder paid-window eligibility (ADMC + 72h)
+// Defaults (America/New_York):
+// - Starts Thu Apr 2, 2026 @ 6:00pm ET
+// - Concludes Sun Apr 5, 2026 @ 12:00am ET (midnight after Sat Apr 4)
+// - Grace: 72 hours after conclusion
+function parseIsoMs(v: string | null): number | null {
+  if (!v) return null;
+  const ms = Date.parse(v);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function getFounderWindow() {
+  const startIso = getEnv('FOUNDER_WINDOW_START') || '2026-04-02T18:00:00-04:00';
+  const endIso = getEnv('FOUNDER_WINDOW_END') || '2026-04-05T00:00:00-04:00';
+  const graceHoursRaw = getEnv('FOUNDER_WINDOW_GRACE_HOURS') || '72';
+  const startMs = parseIsoMs(startIso) ?? Date.parse('2026-04-02T22:00:00Z');
+  const endMs = parseIsoMs(endIso) ?? Date.parse('2026-04-05T04:00:00Z');
+  const graceHours = Math.max(0, Math.min(168, parseInt(String(graceHoursRaw), 10) || 72));
+  const endWithGraceMs = endMs + graceHours * 60 * 60 * 1000;
+  return { startIso, endIso, graceHours, startMs, endMs, endWithGraceMs };
+}
+
+function isWithinFounderPaidWindow(nowMs: number): boolean {
+  const w = getFounderWindow();
+  return nowMs >= w.startMs && nowMs <= w.endWithGraceMs;
+}
+
+
 type Tier = 'amateur' | 'professional';
 type Billing = 'monthly' | 'annual';
 
@@ -100,6 +128,12 @@ export default async function handler(req: any, res: any) {
 
   const founderLocked = Boolean(pricingLockKey || foundingMember);
 
+const nowMs = Date.now();
+const withinFounderWindow = isWithinFounderPaidWindow(nowMs);
+// Auto-admit paid conversions (Amateur or Pro) during the ADMC window (and 72h grace).
+const founderOfferEligible = withinFounderWindow && !foundingMember;
+
+
   // Step 1 (Allocation Enforcement):
   // If user is attempting to use founder pricing, atomically claim/verify capacity server-side.
   if (tier === 'professional' && founderLocked) {
@@ -150,6 +184,26 @@ try {
     }
   }
 
+// Step 8.1 — Founder admission window gate (paid conversions during ADMC window)
+if (founderOfferEligible) {
+  try {
+    const cfg = await getFoundersConfig(auth.admin);
+    if (cfg?.closed) {
+      return res.status(409).json({ ok: false, error_code: 'FOUNDERS_CLOSED', message: 'Founders Circle is full and permanently closed.' });
+    }
+    if (cfg?.cap) {
+      const total = await countFounders(auth.admin);
+      if (total >= cfg.cap) {
+        await permanentlyCloseFounders(auth.admin);
+        return res.status(409).json({ ok: false, error_code: 'FOUNDERS_CLOSED', message: 'Founders Circle is full and permanently closed.' });
+      }
+    }
+  } catch {
+    // If config table isn't installed yet, rely on webhook + RPC enforcement.
+  }
+}
+
+
   const { priceId, couponId } = pickPriceId(tier, billing, founderLocked);
   if (!priceId) {
     return res.status(503).json({ ok: false, error: 'Stripe price IDs are not configured yet.' });
@@ -183,11 +237,20 @@ try {
   params.set('metadata[tier_requested]', tier);
   params.set('metadata[billing]', billing);
   params.set('metadata[user_id]', auth.userId);
+
+if (founderOfferEligible) {
+  params.set('metadata[founder_offer]', 'admc_paid_window_2026');
+  const w = getFounderWindow();
+  params.set('metadata[founder_window_start]', w.startIso);
+  params.set('metadata[founder_window_end]', w.endIso);
+  params.set('metadata[founder_window_grace_hours]', String(w.graceHours));
+}
+
   params.set('metadata[founding_member]', foundingMember ? 'true' : 'false');
   if (foundingJoinedAt) params.set('metadata[founding_joined_at]', foundingJoinedAt);
   if (foundingSource) params.set('metadata[founding_source]', foundingSource);
   // Include founding bucket to enforce ADMC vs Reserve allocation in webhook.
-  const foundingBucket = profile?.founding_bucket ? String(profile.founding_bucket) : inferBucketFromProfile(profile);
+  const foundingBucket = founderOfferEligible ? 'admc_2026' : (profile?.founding_bucket ? String(profile.founding_bucket) : inferBucketFromProfile(profile));
   if (foundingBucket) params.set('metadata[founding_bucket]', foundingBucket);
   if (pricingLockKey) {
     // Store the locked founder price explicitly for future-proofing.

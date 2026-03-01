@@ -100,6 +100,12 @@ function isFounderPricing(meta: any): boolean {
   return v === 'true' || v === '1' || v === 'yes' || v === '29.95' || v === '2995';
 }
 
+
+function isFounderOffer(meta: any): boolean {
+  const v = String(meta?.founder_offer ?? '').trim().toLowerCase();
+  return Boolean(v);
+}
+
 function normalizeBucket(meta: any): 'admc_2026' | 'reserve_2026' {
   const b = String(meta?.founding_bucket || meta?.founding_source || '').toLowerCase();
   if (b.includes('reserve')) return 'reserve_2026';
@@ -192,12 +198,15 @@ export default async function handler(req: any, res: any) {
       return res.status(200).json({ ok: true, received: true, hasSignature: Boolean(sig), type });
     }
 
-    if (!isFounderPricing(meta)) {
+    const founderPricing = isFounderPricing(meta);
+    const founderOffer = isFounderOffer(meta);
+
+    if (!founderPricing && !founderOffer) {
       return res.status(200).json({ ok: true, received: true, hasSignature: Boolean(sig), type, founder: false });
     }
 
     const userId = String(meta?.user_id || '').trim();
-    const desiredBucket = normalizeBucket(meta);
+    const desiredBucket = founderOffer ? 'admc_2026' : normalizeBucket(meta);
 
     if (!userId) {
       // Can't enforce without user id; log and return.
@@ -261,9 +270,11 @@ try {
           .update({
             stripe_customer_id: customerId || null,
             stripe_subscription_id: subscriptionId || null,
-            pricing_lock: '29.95',
+            pricing_lock: 'founding_pro_admc_2026',
+            is_founder: true,
             founding_circle_member: true,
             founding_bucket: desiredBucket,
+            founding_source: String(meta?.founding_source || meta?.founder_offer || '').slice(0, 80) || null,
           })
           .eq('id', userId);
 // Step 6 — if we just hit the cap, permanently close founders (idempotent)
