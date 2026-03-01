@@ -1,21 +1,40 @@
 import React, { useEffect, useState } from 'react';
-import { fetchAdminSettings, saveAdminSettings, type AdminAIProvider } from '../services/adminSettingsService';
+import { fetchAdminAiStatus, fetchAdminSettings, saveAdminSettings, type AdminAIProvider, type AdminAiStatus } from '../services/adminSettingsService';
 
 export default function AdminSettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [provider, setProvider] = useState<AdminAIProvider>('gemini');
+  const [aiStatus, setAiStatus] = useState<AdminAiStatus | null>(null);
 
   useEffect(() => {
     if (!open) return;
     setLoading(true);
     setError(null);
-    fetchAdminSettings()
-      .then((s) => setProvider(s.defaultProvider || 'gemini'))
+
+    // Load settings + runtime status in parallel
+    Promise.all([
+      fetchAdminSettings().then((s) => setProvider(s.defaultProvider || 'gemini')),
+      fetchAdminAiStatus().then((s) => setAiStatus(s)),
+    ])
       .catch((e) => setError(String(e?.message || e)))
       .finally(() => setLoading(false));
   }, [open]);
+
+  function statusLabel() {
+    if (!aiStatus) return null;
+    const pretty = (p: string) => (p === 'openai' ? 'OpenAI' : p === 'anthropic' ? 'Anthropic' : 'Google Gemini');
+    const src = aiStatus.envOverrideActive ? 'ENV override active' : aiStatus.source === 'db' ? 'from DB' : 'default';
+    return `Runtime Provider: ${pretty(aiStatus.runtimeProvider)} (${src})`;
+  }
+
+  function providerConfigured(p: AdminAIProvider): boolean {
+    if (!aiStatus) return true;
+    if (p === 'openai') return aiStatus.keys.openai.configured;
+    if (p === 'anthropic') return aiStatus.keys.anthropic.configured;
+    return aiStatus.keys.gemini.configured;
+  }
 
   async function onSave() {
     setSaving(true);
@@ -63,6 +82,18 @@ export default function AdminSettingsModal({ open, onClose }: { open: boolean; o
             <option value="openai">OpenAI</option>
             <option value="anthropic">Anthropic</option>
           </select>
+
+          {aiStatus && (
+            <div style={{ marginTop: 10, fontSize: 12, opacity: 0.9 }}>
+              {statusLabel()}
+            </div>
+          )}
+
+          {aiStatus && !providerConfigured(provider) && (
+            <div style={{ marginTop: 8, fontSize: 12, color: '#ffb4b4' }}>
+              Warning: Server API key for <b>{provider}</b> is not configured. Switching may fail until keys are set in Vercel.
+            </div>
+          )}
         </div>
 
         {error && <div style={{ marginTop: 12, color: '#ffb4b4', fontSize: 12, whiteSpace: 'pre-wrap' }}>{error}</div>}
