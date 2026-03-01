@@ -4,22 +4,6 @@ import type { User, Membership } from '../types';
 import { getUsers, updateUserMembership, deleteUser, addUser } from '../services/usersService';
 import { TrashIcon, UsersCogIcon } from './icons';
 
-const formatFounderSource = (source?: string | null) => {
-  if (!source) return '—';
-  const s = source.toLowerCase();
-  if (s.includes('qr')) return 'QR';
-  if (s.includes('landing')) return 'Landing';
-  if (s.includes('manual') || s.includes('admin')) return 'Manual';
-  return source;
-};
-
-const formatDate = (iso?: string | null) => {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: '2-digit' });
-};
-
 const MemberManagement: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -145,9 +129,6 @@ const MemberManagement: React.FC = () => {
           <thead className="bg-slate-900/50">
             <tr>
               <th className="p-3 text-sm font-semibold text-slate-300">Email</th>
-              <th className="p-3 text-sm font-semibold text-slate-300">Founder</th>
-              <th className="p-3 text-sm font-semibold text-slate-300">Founder Join Date</th>
-              <th className="p-3 text-sm font-semibold text-slate-300">Founder Source</th>
               <th className="p-3 text-sm font-semibold text-slate-300">Status</th>
               <th className="p-3 text-sm font-semibold text-slate-300 text-right">Actions</th>
             </tr>
@@ -156,18 +137,6 @@ const MemberManagement: React.FC = () => {
             {users.map((user) => (
               <tr key={user.email} className="border-t border-slate-700 hover:bg-slate-800/40">
                 <td className="p-3 text-slate-200">{user.email}</td>
-                <td className="p-3">
-                  {(user.is_founder ?? user.foundingCircleMember) ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-bold rounded-full border border-amber-400/40 bg-amber-500/10 text-amber-300">
-                      <span aria-hidden>🏆</span>
-                      FOUNDER
-                    </span>
-                  ) : (
-                    <span className="text-slate-500">—</span>
-                  )}
-                </td>
-                <td className="p-3 text-slate-200 whitespace-nowrap">{formatDate(user.foundingJoinedAt)}</td>
-                <td className="p-3 text-slate-200">{formatFounderSource(user.foundingSource)}</td>
                 <td className="p-3">
                   <span className={`px-2 py-1 text-xs font-bold rounded-full ${
                     user.membership === 'professional' ? 'bg-amber-500/20 text-amber-300' :

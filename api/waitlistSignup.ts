@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
+import { getFoundersConfig, countFounders, permanentlyCloseFounders } from './_lib/foundersCap';
 import { rateLimit, rateLimitHeaders } from './ai/_lib/rateLimit.js';
 import { isPreviewEnv } from './ai/_lib/hardening.js';
 import { sendMail, isMailerConfigured } from './_lib/mailer.js';
@@ -243,9 +244,19 @@ export default async function handler(req: any, res: any) {
 
       // 2) Mark user as founder (if authenticated)
       if (authedUserId) {
-        // 2a) Atomically claim the founding bucket + enforce caps (prevents race conditions).
-        try {
-          const desiredBucket = (foundingBucket || 'admc_2026') as any;
+// 2a) Atomically claim the founding bucket + enforce caps (prevents race conditions).
+// Step 6 — Permanent closure gate (if config installed)
+try {
+  const cfg = await getFoundersConfig(admin);
+  if (cfg?.closed) {
+    return json(res, 409, { ok: false, error_code: 'FOUNDERS_CLOSED', message: 'Founders Circle is full and permanently closed.', retryable: false });
+  }
+} catch {
+  // non-blocking (fallback to RPC cap enforcement)
+}
+
+try {
+  const desiredBucket = (foundingBucket || 'admc_2026') as any;
           const { data: claimRows, error: claimErr } = await admin.rpc('maw_claim_founding_bucket', {
             p_user_id: authedUserId,
             p_bucket: desiredBucket,
@@ -285,6 +296,18 @@ export default async function handler(req: any, res: any) {
               ...(pricingLock ? { pricing_lock: pricingLock } : {}),
             })
             .eq('id', authedUserId);
+
+// Step 6 — if we just hit the cap, permanently close founders (idempotent)
+try {
+  const cfg = await getFoundersConfig(admin);
+  if (cfg && !cfg.closed) {
+    const current = await countFounders(admin);
+    if (current >= Number(cfg.cap || 100)) await permanentlyCloseFounders(admin);
+  }
+} catch {
+  // ignore
+}
+
         } catch (e) {
           console.warn('founding user update failed', e);
         }
@@ -296,16 +319,11 @@ export default async function handler(req: any, res: any) {
         const mk = (hoursFromNow: number) => new Date(now + hoursFromNow * 60 * 60 * 1000).toISOString();
         const basePayload = { name, email, founding_source: foundingSource, pricing_lock: pricingLock, founding_bucket: foundingBucket || 'admc_2026' };
 
-        // Founders Circle Email Sequence (Step #3)
-        // 0h  - Welcome confirmation
-        // 1h  - “You are officially locked in” (pricing lock recorded)
-        // 24h - Pre-Stripe early access notice
-        // 7d  - Value reinforcement
         const queueRows = [
           { to_email: email, template_key: 'founding_welcome', send_at: mk(0), payload: basePayload },
-          { to_email: email, template_key: 'founding_pricing_lock', send_at: mk(1), payload: basePayload },
           { to_email: email, template_key: 'founding_early_access', send_at: mk(24), payload: basePayload },
-          { to_email: email, template_key: 'founding_next_tools', send_at: mk(168), payload: basePayload },
+          { to_email: email, template_key: 'founding_pricing_lock', send_at: mk(72), payload: basePayload },
+          { to_email: email, template_key: 'founding_next_tools', send_at: mk(144), payload: basePayload },
         ];
 
         await admin.from('maw_email_queue').insert(queueRows);

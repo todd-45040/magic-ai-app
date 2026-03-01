@@ -1220,7 +1220,7 @@ wauTrendWeekly12 = weeklyWau;
         const { count, error } = await admin
           .from('users')
           .select('id', { count: 'exact', head: true })
-          .or('is_founder.eq.true,founding_circle_member.eq.true')
+          .eq('founding_circle_member', true)
           .gte('founding_joined_at', isoDaysAgo(Number(w)));
         if (!error) founding.members_by_window[String(w)] = Number(count || 0);
         else {
@@ -1462,7 +1462,7 @@ wauTrendWeekly12 = weeklyWau;
       const { data: founderUsers, error: fErr } = await admin
         .from('users')
         .select('id, email, founding_source, founding_joined_at, founding_circle_member')
-        .or('is_founder.eq.true,founding_circle_member.eq.true')
+        .eq('founding_circle_member', true)
         .limit(50000);
 
       if (!fErr) {

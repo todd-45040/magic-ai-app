@@ -12,6 +12,7 @@
 //   immediately via Stripe API (best-effort), and logs the condition.
 
 import { createClient } from '@supabase/supabase-js';
+import { getFoundersConfig, countFounders, permanentlyCloseFounders } from './_lib/foundersCap';
 import crypto from 'node:crypto';
 import { sendMail, isMailerConfigured } from './_lib/mailer.js';
 import { renderFoundingEmail, FOUNDING_EMAIL_TEMPLATE_VERSION } from './_lib/foundingCircleEmailTemplates.js';
@@ -204,6 +205,16 @@ export default async function handler(req: any, res: any) {
       return res.status(200).json({ ok: true, received: true, hasSignature: Boolean(sig), type, enforced: false, reason: 'missing_user_id' });
     }
 
+// Step 6 — Permanent closure gate (if config installed)
+try {
+  const cfg = await getFoundersConfig(admin);
+  if (cfg?.closed) {
+    return res.status(200).json({ ok: true, received: true, hasSignature: Boolean(sig), type, enforced: true, allocation_ok: false, reason: 'permanently_closed' });
+  }
+} catch {
+  // non-blocking (fallback to RPC cap enforcement)
+}
+
     // Atomically claim/verify capacity (safety net; primary enforcement is pre-checkout).
     const { data: claimRows, error: claimErr } = await admin.rpc('maw_claim_founding_bucket', {
       p_user_id: userId,
@@ -252,10 +263,20 @@ export default async function handler(req: any, res: any) {
             stripe_subscription_id: subscriptionId || null,
             pricing_lock: '29.95',
             founding_circle_member: true,
-          is_founder: true,
             founding_bucket: desiredBucket,
           })
           .eq('id', userId);
+// Step 6 — if we just hit the cap, permanently close founders (idempotent)
+try {
+  const cfg = await getFoundersConfig(admin);
+  if (cfg && !cfg.closed) {
+    const current = await countFounders(admin);
+    if (current >= Number(cfg.cap || 100)) await permanentlyCloseFounders(admin);
+  }
+} catch {
+  // ignore
+}
+
       }
 
       if (type === 'customer.subscription.created' || type === 'customer.subscription.updated') {

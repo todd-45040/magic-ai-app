@@ -1,4 +1,5 @@
 import { requireAdmin } from './ai/_lib/auth';
+import { getFoundersConfig, countFounders, permanentlyCloseFounders } from './_lib/foundersCap';
 
 function json(res: any, status: number, body: any) {
   return res.status(status).json(body);
@@ -47,6 +48,17 @@ export default async function handler(req: any, res: any) {
   const pricing_lock = 'founding_pro_admc_2026';
 
   const admin = auth.admin;
+
+// Step 6 — Permanent closure gate (if config table installed)
+try {
+  const cfg = await getFoundersConfig(admin);
+  if (cfg?.closed) {
+    return json(res, 409, { ok: false, error: 'Founders Circle is full and permanently closed.' });
+  }
+} catch {
+  // non-blocking (fallback to RPC cap enforcement)
+}
+
 
   // Find user by email
   const { data: user, error: userErr } = await admin
@@ -116,7 +128,6 @@ export default async function handler(req: any, res: any) {
       .from('users')
       .update({
         founding_circle_member: true,
-        is_founder: true,
         founding_joined_at: new Date().toISOString(),
         founding_source: source,
         pricing_lock,
@@ -146,5 +157,17 @@ export default async function handler(req: any, res: any) {
     // ignore
   }
 
-  return json(res, 200, { ok: true, message: `Founder claimed for ${email}.` });
+// Step 6 — if we just hit the cap, permanently close founders (idempotent)
+try {
+  const cfg = await getFoundersConfig(admin);
+  if (cfg && !cfg.closed) {
+    const current = await countFounders(admin);
+    if (current >= Number(cfg.cap || 100)) await permanentlyCloseFounders(admin);
+  }
+} catch {
+  // ignore
+}
+
+return json(res, 200, { ok: true, message: `Founder claimed for ${email}.` });
+
 }

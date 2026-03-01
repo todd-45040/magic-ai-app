@@ -19,10 +19,10 @@ export type FoundingEmailKey =
  * Template versioning: bump per template whenever copy/layout changes that you want tracked.
  */
 export const FOUNDING_EMAIL_TEMPLATE_VERSION: Record<FoundingEmailKey, number> = {
-  founding_welcome: 2,
-  founding_early_access: 2,
-  founding_pricing_lock: 2,
-  founding_next_tools: 2,
+  founding_welcome: 1,
+  founding_early_access: 1,
+  founding_pricing_lock: 1,
+  founding_next_tools: 1,
   founder_paid_welcome: 1,
   founder_activation_day1: 1,
   founder_business_day3: 1,
@@ -355,7 +355,7 @@ Even one sentence helps. Your reply goes directly into the Founder roadmap.`,
 
 
 if (key === 'founding_welcome') {
-    const subject = `Welcome to the Founding Circle — confirmation`;
+    const subject = `Welcome to the Founding Circle — you’re in`;
     const inner = `
       <h1 style="margin:0;font-size:22px;color:#FFFFFF;">Welcome, ${firstName}.</h1>
       <p style="margin:10px 0 0;opacity:0.9;line-height:1.55;">
@@ -368,7 +368,7 @@ if (key === 'founding_welcome') {
         <li><b>ADMC pricing lock</b> applied automatically when Stripe goes live</li>
       </ul>
       <p style="margin:14px 0 0;opacity:0.9;line-height:1.55;">
-        Next: you’ll receive a short confirmation that your <b>pricing lock is recorded</b> (no codes needed).
+        Next email: what “early access” really means, and how it will work in the product.
       </p>
     `;
 
@@ -380,21 +380,20 @@ if (key === 'founding_welcome') {
   }
 
   if (key === 'founding_early_access') {
-    const subject = `Pre‑Stripe early access: how it will work`;
+    const subject = `What “early access” really means`;
     const inner = `
-      <h1 style="margin:0;font-size:22px;color:#FFFFFF;">You’re getting access <i>before</i> Stripe.</h1>
+      <h1 style="margin:0;font-size:22px;color:#FFFFFF;">Early access = influence.</h1>
       <p style="margin:10px 0 0;opacity:0.9;line-height:1.55;">
-        Right now, <b>${BRAND.product}</b> is in the <b>Pre‑Stripe Launch Optimization</b> phase.
-        Founding Circle members get early access to new tools and flows <b>as they ship</b> — and your feedback helps shape what goes public.
+        Founding Circle members get first access to new “director-grade” tools — but more importantly:
+        you help shape what ships before public release.
       </p>
       <ul style="margin:14px 0 0;padding-left:18px;line-height:1.6;">
-        <li><b>Early access tools</b> — first invites when new tools ship</li>
-        <li><b>Priority consideration</b> — founder feedback routes to the roadmap</li>
-        <li><b>Identity layer</b> — your Founder badge stays attached to your account</li>
+        <li>Priority access to new tools and flows</li>
+        <li>Feedback loop goes directly to the product roadmap</li>
+        <li>Founding badge stays attached to your identity</li>
       </ul>
       <p style="margin:14px 0 0;opacity:0.9;line-height:1.55;">
         If you ever want to suggest a tool or improvement, reply to this email — it routes to the founder queue.
-        (Short replies are perfect: “add a wizard for first use” / “I want a director checklist” / etc.)
       </p>
     `;
     const text = baseText(
@@ -404,11 +403,10 @@ if (key === 'founding_welcome') {
   }
 
   if (key === 'founding_pricing_lock') {
-    const subject = `You are officially locked in ✅`;
+    const subject = `Your Founding Circle pricing lock is recorded`;
     const inner = `
-      <h1 style="margin:0;font-size:22px;color:#FFFFFF;">Your Founding Circle rate is recorded</h1>
+      <h1 style="margin:0;font-size:22px;color:#FFFFFF;">Pricing lock: ✅ recorded</h1>
       <p style="margin:10px 0 0;opacity:0.9;line-height:1.55;">
-        This is the “you’re officially locked in” confirmation.
         When Stripe goes live, your account will automatically qualify for the Founding Circle rate.
         You don’t need a coupon or code — it’s tied to your identity.
       </p>
@@ -418,7 +416,7 @@ if (key === 'founding_welcome') {
         <li>It’s verified server-side</li>
       </ul>
       <p style="margin:14px 0 0;opacity:0.9;line-height:1.55;">
-        Next: a quick note on <b>Pre‑Stripe early access</b> and how you’ll get the first invites.
+        Next email: what tools are shipping next and how to help test them.
       </p>
     `;
     const text = baseText(
@@ -429,29 +427,23 @@ if (key === 'founding_welcome') {
 
   // founding_next_tools
   {
-    const subject = `7‑day check‑in: make sure you feel the value`;
+    const subject = `What’s shipping next (Founding Circle preview)`;
     const inner = `
-      <h1 style="margin:0;font-size:22px;color:#FFFFFF;">A quick Founder check‑in.</h1>
+      <h1 style="margin:0;font-size:22px;color:#FFFFFF;">Next up: polish + power.</h1>
       <p style="margin:10px 0 0;opacity:0.9;line-height:1.55;">
-        If you’ve used the app even once, you should already feel the core value:
-        <b>faster ideas</b>, <b>cleaner scripts</b>, and <b>less friction</b> planning shows.
+        Founding Circle members get first access to the next set of upgrades:
       </p>
-      <div style="height:8px"></div>
-      <p style="margin:0;opacity:0.9;line-height:1.55;">
-        Here’s the fastest “proof” workflow (3 minutes):
-      </p>
-      <ol style="margin:12px 0 0;padding-left:18px;line-height:1.75;opacity:0.95;">
-        <li>Generate one idea (Effect Generator or Patter Engine)</li>
-        <li>Save it (build your private vault)</li>
-        <li>Run it through Director Mode for structure</li>
-      </ol>
-      <div style="height:10px"></div>
-      <p style="margin:0;opacity:0.9;line-height:1.55;">
-        Want to be a “fast feedback” tester for what ships next? Reply with: <b>TESTER</b>.
+      <ul style="margin:14px 0 0;padding-left:18px;line-height:1.6;">
+        <li>Better onboarding + activation flow</li>
+        <li>More director-mode structure</li>
+        <li>Faster rehearsal iteration loops</li>
+      </ul>
+      <p style="margin:14px 0 0;opacity:0.9;line-height:1.55;">
+        Want to be a “fast feedback” tester? Reply with: <b>TESTER</b>.
       </p>
     `;
     const text = baseText(
-      `7-day Founder check-in.\n\nIf you’ve used the app even once, you should already feel the core value: faster ideas, cleaner scripts, and less friction planning shows.\n\nFast “proof” workflow (3 minutes):\n1) Generate one idea (Effect Generator or Patter Engine)\n2) Save it (build your private vault)\n3) Run it through Director Mode for structure\n\nWant to be a “fast feedback” tester for what ships next? Reply with: TESTER.`
+      `Next up: polish + power.\n\nFounding Circle members get first access to the next set of upgrades:\n- Better onboarding + activation flow\n- More director-mode structure\n- Faster rehearsal iteration loops\n\nWant to be a “fast feedback” tester? Reply with: TESTER.`
     );
     return { subject, html: baseHtml(inner), text, templateVersion };
   }

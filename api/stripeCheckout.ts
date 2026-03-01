@@ -1,4 +1,5 @@
 import { requireSupabaseAuth } from './_auth';
+import { getFoundersConfig, countFounders, permanentlyCloseFounders } from './_lib/foundersCap';
 
 function getEnv(name: string): string | null {
   const v = process.env[name];
@@ -102,8 +103,19 @@ export default async function handler(req: any, res: any) {
   // Step 1 (Allocation Enforcement):
   // If user is attempting to use founder pricing, atomically claim/verify capacity server-side.
   if (tier === 'professional' && founderLocked) {
-    const desiredBucket = inferBucketFromProfile(profile);
-    try {
+const desiredBucket = inferBucketFromProfile(profile);
+
+// Step 6 — Permanent closure gate (if config installed)
+try {
+  const cfg = await getFoundersConfig(auth.admin);
+  if (cfg?.closed) {
+    return res.status(409).json({ ok: false, error_code: 'FOUNDERS_CLOSED', message: 'Founders Circle is full and permanently closed.' });
+  }
+} catch {
+  // non-blocking (fallback to RPC cap enforcement)
+}
+
+try {
       const { data: claimRows, error: claimErr } = await auth.admin.rpc('maw_claim_founding_bucket', {
         p_user_id: auth.userId,
         p_bucket: desiredBucket,
@@ -121,8 +133,19 @@ export default async function handler(req: any, res: any) {
               ? 'Founders Circle is full.'
               : 'Founder pricing is currently unavailable.',
         });
-      }
-    } catch {
+  }
+
+  // Step 6 — if we just hit the cap, permanently close founders (idempotent)
+  try {
+    const cfg = await getFoundersConfig(auth.admin);
+    if (cfg && !cfg.closed) {
+      const current = await countFounders(auth.admin);
+      if (current >= Number(cfg.cap || 100)) await permanentlyCloseFounders(auth.admin);
+    }
+  } catch {
+    // ignore
+  }
+} catch {
       return res.status(409).json({ ok: false, error_code: 'FOUNDERS_CLOSED', message: 'Founder pricing is currently unavailable.' });
     }
   }

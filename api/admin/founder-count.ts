@@ -40,14 +40,14 @@ export default async function handler(_req: any, res: any) {
       admin
         .from('users')
         .select('id', { count: 'exact', head: true })
-        .or('is_founder.eq.true,founding_circle_member.eq.true')
+        .eq('founding_circle_member', true)
         .eq('founding_bucket', 'admc_2026'),
       admin
         .from('users')
         .select('id', { count: 'exact', head: true })
-        .or('is_founder.eq.true,founding_circle_member.eq.true')
+        .eq('founding_circle_member', true)
         .eq('founding_bucket', 'reserve_2026'),
-      admin.from('users').select('id', { count: 'exact', head: true }).or('is_founder.eq.true,founding_circle_member.eq.true'),
+      admin.from('users').select('id', { count: 'exact', head: true }).eq('founding_circle_member', true),
     ]);
 
     if (admc.error || reserve.error || total.error) {

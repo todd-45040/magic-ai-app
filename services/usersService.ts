@@ -20,9 +20,7 @@ const normalizeUserRow = (row: any): User => {
     ...(row?.trial_end_date ? { trialEndDate: row.trial_end_date } : {}),
 
     // Founding Circle identity layer
-    // Canonical founder flag is `is_founder` (DB), but we keep backward compatibility with `founding_circle_member`.
-    is_founder: Boolean(row?.is_founder ?? row?.founding_circle_member ?? false),
-    foundingCircleMember: Boolean(row?.founding_circle_member ?? row?.is_founder ?? false),
+    foundingCircleMember: Boolean(row?.founding_circle_member ?? false),
     foundingJoinedAt: (row?.founding_joined_at ?? null) as any,
     foundingSource: (row?.founding_source ?? null) as any,
     pricingLock: (row?.pricing_lock ?? null) as any,

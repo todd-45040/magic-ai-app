@@ -67,7 +67,7 @@ export default function FoundingCirclePage(props: { user: User | null; onBack: (
     return u || '';
   }, [user?.email]);
 
-  const isAlreadyFounder = Boolean((user?.is_founder ?? user?.foundingCircleMember));
+  const isAlreadyFounder = Boolean(user?.foundingCircleMember);
 
   useEffect(() => {
     let cancelled = false;
@@ -226,7 +226,7 @@ export default function FoundingCirclePage(props: { user: User | null; onBack: (
                 <div>
                   <div className="text-white font-semibold">Join the Founding Circle</div>
                   <div className="text-sm text-slate-300 mt-1">
-                    Limited early group. Calm authority. No spam.
+                    Limited to the first {maxMembers || 100} Founding Members. Calm authority. No spam.
                     {typeof foundersCount === 'number' ? (
                       <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-white/10 bg-white/5 text-xs text-slate-200">
                         <UsersIcon className="w-3.5 h-3.5 text-slate-300" />
@@ -236,7 +236,7 @@ export default function FoundingCirclePage(props: { user: User | null; onBack: (
                   </div>
                   {isClosed ? (
                     <div className="mt-2 text-xs text-amber-200/90">
-                      Founding Circle is currently closed{closeReason === 'limit_reached' ? ' (limit reached)' : closeReason === 'date_passed' ? ' (window ended)' : ''}.
+                      Founding Circle is {closeReason === 'permanently_closed' || closeReason === 'limit_reached' ? 'permanently closed' : 'currently closed'}{closeReason === 'date_passed' ? ' (window ended)' : ''}.
                     </div>
                   ) : closesAt ? (
                     <div className="mt-2 text-xs text-slate-400">

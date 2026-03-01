@@ -558,44 +558,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, shows, feedback, ideas, onN
                     </button>
                 )}
             </header>
-
-
-            {(user.is_founder ?? user.foundingCircleMember) && (
-                <div className="rounded-xl border border-yellow-500/30 bg-gradient-to-br from-yellow-500/10 via-slate-900/40 to-purple-900/20 p-5 shadow-sm">
-                    <div className="flex items-start justify-between gap-4">
-                        <div>
-                            <p className="text-xs uppercase tracking-widest text-yellow-200/80">Founding Member Benefits</p>
-                            <h2 className="mt-1 text-lg font-bold text-yellow-100">You’re part of the founding cohort.</h2>
-                            <p className="mt-1 text-sm text-slate-300/90">
-                                Thanks for helping shape Magic AI Wizard early — your access stays premium as we ship new tools.
-                            </p>
-                        </div>
-                        <div className="shrink-0 rounded-full bg-yellow-400/15 px-3 py-1 text-sm font-semibold text-yellow-200 border border-yellow-400/25">
-                            🏆 Founder
-                        </div>
-                    </div>
-
-                    <ul className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                        <li className="flex items-start gap-2 text-slate-200">
-                            <span className="mt-0.5 text-yellow-300">✓</span>
-                            <span><span className="font-semibold text-yellow-100">Locked pricing</span> — your Pro rate is locked for life.</span>
-                        </li>
-                        <li className="flex items-start gap-2 text-slate-200">
-                            <span className="mt-0.5 text-yellow-300">✓</span>
-                            <span><span className="font-semibold text-yellow-100">Early access tools</span> — first invite when new tools ship.</span>
-                        </li>
-                        <li className="flex items-start gap-2 text-slate-200">
-                            <span className="mt-0.5 text-yellow-300">✓</span>
-                            <span><span className="font-semibold text-yellow-100">Priority consideration</span> — your feedback helps steer the roadmap.</span>
-                        </li>
-                        <li className="flex items-start gap-2 text-slate-200">
-                            <span className="mt-0.5 text-yellow-300">✓</span>
-                            <span><span className="font-semibold text-yellow-100">Beta toggles (future)</span> — optional early experiments as they roll out.</span>
-                        </li>
-                    </ul>
-                </div>
-            )}
-
+            
             <div className="space-y-6">
                 {layout.visible.map(widgetId => (
                     <div key={widgetId} data-widget-id={widgetId}>

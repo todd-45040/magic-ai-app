@@ -95,8 +95,6 @@ export interface User {
   emailVerified?: boolean;
 
   // Founding Circle identity layer
-  // Canonical flag (DB: is_founder). Use for future feature gating.
-  is_founder?: boolean;
   foundingCircleMember?: boolean;
   foundingJoinedAt?: string | null;
   foundingSource?: string | null;
