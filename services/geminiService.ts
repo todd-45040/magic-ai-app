@@ -35,8 +35,36 @@ async function getBearerToken(): Promise<string> {
   }
 }
 
-async function postJson<T>(url: string, body: any, currentUser?: User, extraHeaders?: Record<string, string>): Promise<T> {
-  const res = await fetch(url, {
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(input, { ...init, signal: controller.signal });
+    return res;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableStatus(status: number) {
+  return status === 429 || status === 502 || status === 503 || status === 504;
+}
+
+async function postJson<T>(
+  url: string,
+  body: any,
+  currentUser?: User,
+  extraHeaders?: Record<string, string>,
+  options?: { timeoutMs?: number; retries?: number }
+): Promise<T> {
+  const timeoutMs = options?.timeoutMs ?? 28000; // keep under common serverless proxy timeouts
+  const retries = options?.retries ?? 1;
+
+  const init: RequestInit = {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -45,50 +73,86 @@ async function postJson<T>(url: string, body: any, currentUser?: User, extraHead
       ...(extraHeaders || {}),
     },
     body: JSON.stringify(body),
-  });
+  };
 
+  let lastErr: any = null;
 
-  // Emit usage info for the Usage Meter UI (best-effort)
-  try {
-    const remaining = res.headers.get('X-AI-Remaining');
-    const limit = res.headers.get('X-AI-Limit');
-    const membership = res.headers.get('X-AI-Membership');
-    const burstRemaining = res.headers.get('X-AI-Burst-Remaining');
-    const burstLimit = res.headers.get('X-AI-Burst-Limit');
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetchWithTimeout(url, init, timeoutMs);
 
-    if (remaining || limit || membership || burstRemaining || burstLimit) {
-      window.dispatchEvent(
-        new CustomEvent('ai-usage-update', {
-          detail: {
-            remaining: remaining ? Number(remaining) : undefined,
-            limit: limit ? Number(limit) : undefined,
-            membership: membership || undefined,
-            burstRemaining: burstRemaining ? Number(burstRemaining) : undefined,
-            burstLimit: burstLimit ? Number(burstLimit) : undefined,
-            ts: Date.now(),
-          },
-        })
-      );
+      // Emit usage info for the Usage Meter UI (best-effort)
+      try {
+        const remaining = res.headers.get('X-AI-Remaining');
+        const limit = res.headers.get('X-AI-Limit');
+        const membership = res.headers.get('X-AI-Membership');
+        const burstRemaining = res.headers.get('X-AI-Burst-Remaining');
+        const burstLimit = res.headers.get('X-AI-Burst-Limit');
+
+        if (remaining || limit || membership || burstRemaining || burstLimit) {
+          window.dispatchEvent(
+            new CustomEvent('ai-usage-update', {
+              detail: {
+                remaining: remaining ? Number(remaining) : undefined,
+                limit: limit ? Number(limit) : undefined,
+                membership: membership || undefined,
+                burstRemaining: burstRemaining ? Number(burstRemaining) : undefined,
+                burstLimit: burstLimit ? Number(burstLimit) : undefined,
+                ts: Date.now(),
+              },
+            })
+          );
+        }
+      } catch {
+        // ignore
+      }
+
+      const text = await res.text();
+      let json: any;
+      try {
+        json = text ? JSON.parse(text) : {};
+      } catch {
+        json = { raw: text };
+      }
+
+      if (!res.ok) {
+        const message = json?.error || json?.message || `Request failed (${res.status})`;
+
+        // Retry on transient upstream / proxy failures
+        if (attempt < retries && isRetryableStatus(res.status)) {
+          await sleep(800 * (attempt + 1));
+          continue;
+        }
+
+        throw new Error(message);
+      }
+
+      return json as T;
+    } catch (err: any) {
+      lastErr = err;
+
+      // Abort / network errors: one retry helps a lot
+      const isAbort = err?.name === 'AbortError' || /aborted/i.test(String(err?.message || ''));
+      const isNetwork = /network|failed to fetch/i.test(String(err?.message || ''));
+
+      if (attempt < retries && (isAbort || isNetwork)) {
+        await sleep(800 * (attempt + 1));
+        continue;
+      }
+
+      break;
     }
-  } catch {
-    // ignore
   }
 
-  const text = await res.text();
-  let json: any;
-  try {
-    json = text ? JSON.parse(text) : {};
-  } catch {
-    json = { raw: text };
-  }
+  // If we exhausted retries, surface a helpful message
+  const msg = lastErr?.name === 'AbortError'
+    ? `Request timed out (${Math.round((options?.timeoutMs ?? 28000) / 1000)}s)`
+    : (lastErr?.message || 'Request failed');
 
-  if (!res.ok) {
-    const message = json?.error || json?.message || `Request failed (${res.status})`;
-    throw new Error(message);
-  }
-
-  return json as T;
+  throw new Error(msg);
 }
+
+
 
 function extractText(result: any): string {
   // SDK usually exposes `.text` (client-side). Your serverless function returns the raw result.
@@ -127,7 +191,7 @@ export const generateResponse = async (
   };
 
   try {
-    const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders);
+    const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 28000, retries: 1 });
     return extractText(result);
   } catch (error: any) {
     console.error('AI Error:', error);
@@ -155,7 +219,7 @@ export const generateResponseWithParts = async (
   };
 
   try {
-    const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders);
+    const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 28000, retries: 1 });
     return extractText(result);
   } catch (error: any) {
     console.error('AI Error:', error);
@@ -180,7 +244,7 @@ export const generateStructuredResponse = async (
     },
   };
 
-  const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders);
+  const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 28000, retries: 1 });
   const text = extractText(result);
   return JSON.parse(text || '{}');
 };
