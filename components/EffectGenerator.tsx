@@ -79,6 +79,11 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
   const dispatch = useAppDispatch();
   const { showToast } = useToast();
   const [items, setItems] = useState(['', '', '', '']);
+  // Phase 1 (Effectiveness Upgrades): user intent + difficulty for higher-quality generations.
+  const [creativeIntent, setCreativeIntent] = useState<
+    'Visual Miracle' | 'Comedy Bit' | 'Mentalism' | 'Close-Up Practical' | 'Stage Expansion' | 'Social Media Piece' | 'Emotional Story Piece'
+  >('Visual Miracle');
+  const [difficulty, setDifficulty] = useState<'Self-Working' | 'Intermediate' | 'Advanced / Gimmick Allowed'>('Intermediate');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ideas, setIdeas] = useState<string | null>(null);
@@ -120,6 +125,16 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
     setError(null);
   };
 
+  const handleClearAll = () => {
+    setItems(['', '', '', '']);
+    setError(null);
+    setIdeas(null);
+    setDisplayIdeas(null);
+    setRevealReady(false);
+    setSaveStatus('idle');
+    setCopyStatus('idle');
+  };
+
   const handleGenerate = async () => {
     const validItems = items.map(item => item.trim()).filter(item => item !== '');
     if (validItems.length === 0) {
@@ -136,7 +151,13 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
     setCopyStatus('idle');
 
     const itemList = validItems.join(', ');
-    const prompt = `Generate magic effect ideas using the following items: ${itemList}.`;
+    // Phase 1: steer generations with intent + practicality constraints.
+    const prompt = [
+      `Generate magic effect ideas using the following items: ${itemList}.`,
+      `Creative intent: ${creativeIntent}.`,
+      `Difficulty level: ${difficulty}.`,
+      `Make the ideas practical for real performance and clearly structured (Premise, The Experience, Method Overview, Performance Notes, Secret Hint).`,
+    ].join(' ');
     
     try {
       // FIX: pass currentUser as the 3rd argument to generateResponse
@@ -177,7 +198,7 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
   const handleSave = () => {
     if (ideas) {
       const itemList = items.map(item => item.trim()).filter(item => item !== '').join(', ');
-      const fullContent = `## Effect Ideas for: ${itemList}\n\n${ideas}`;
+      const fullContent = `## Effect Ideas for: ${itemList}\n\n**Creative Intent:** ${creativeIntent}\n**Difficulty:** ${difficulty}\n\n${ideas}`;
       saveIdea('text', fullContent);
       onIdeaSaved();
       setSaveStatus('saved');
@@ -188,7 +209,7 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
   const handleCopy = () => {
     if (ideas) {
       const itemList = items.map(item => item.trim()).filter(item => item !== '').join(', ');
-      const fullContent = `Effect Ideas for: ${itemList}\n\n${ideas}`;
+      const fullContent = `Effect Ideas for: ${itemList}\nCreative Intent: ${creativeIntent}\nDifficulty: ${difficulty}\n\n${ideas}`;
       navigator.clipboard.writeText(fullContent);
       setCopyStatus('copied');
       setTimeout(() => setCopyStatus('idle'), 2000);
@@ -286,31 +307,96 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
         <div className="flex flex-col">
             <h2 className="text-xl font-bold text-slate-300 mb-2">The Effect Engine</h2>
             <p className="text-slate-400 mb-4">Combine everyday objects to invent extraordinary magic. Enter up to four items to see what's possible.</p>
-            
-            <div className="space-y-3">
-                {[0, 1, 2, 3].map(index => (
-                    <div key={index}>
-                        <label htmlFor={`item-${index}`} className="block text-sm font-medium text-slate-400 mb-1">Item {index + 1}</label>
-                        <input
-                            id={`item-${index}`}
-                            type="text"
-                            value={items[index]}
-                            onChange={(e) => handleItemChange(index, e.target.value)}
-                            placeholder={index === 0 ? "e.g., A key" : index === 1 ? "e.g., A rubber band" : "..."}
-                            className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
-                        />
-                    </div>
-                ))}
-                
+
+            <div className="space-y-4">
+                {/* Items panel */}
+                <div className="rounded-lg border border-slate-800 bg-slate-900/30 p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="text-sm font-semibold text-slate-300">Items</div>
+                    <button
+                      type="button"
+                      onClick={handleClearAll}
+                      disabled={isLoading || items.every(i => i.trim() === '')}
+                      className="text-xs px-2 py-1 rounded-md border border-slate-700 bg-slate-900/50 text-slate-300 hover:bg-slate-800/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Clear all items"
+                    >
+                      Clear All
+                    </button>
+                  </div>
+
+                  <div className="space-y-3">
+                    {[0, 1, 2, 3].map(index => (
+                        <div key={index}>
+                            <label htmlFor={`item-${index}`} className="block text-sm font-medium text-slate-400 mb-1">Item {index + 1}</label>
+                            <input
+                                id={`item-${index}`}
+                                type="text"
+                                value={items[index]}
+                                onChange={(e) => handleItemChange(index, e.target.value)}
+                                placeholder={index === 0 ? "e.g., A key" : index === 1 ? "e.g., A rubber band" : "..."}
+                                className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
+                            />
+                        </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Creative goal */}
+                <div className="rounded-lg border border-slate-800 bg-slate-900/30 p-4">
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Creative Intent</label>
+                  <select
+                    value={creativeIntent}
+                    onChange={(e) => setCreativeIntent(e.target.value as any)}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500 transition-colors"
+                  >
+                    <option>Visual Miracle</option>
+                    <option>Comedy Bit</option>
+                    <option>Mentalism</option>
+                    <option>Close-Up Practical</option>
+                    <option>Stage Expansion</option>
+                    <option>Social Media Piece</option>
+                    <option>Emotional Story Piece</option>
+                  </select>
+                  <p className="mt-2 text-xs text-slate-400">Steers the engine toward the kind of magic you want to build.</p>
+                </div>
+
+                {/* Difficulty toggle */}
+                <div className="rounded-lg border border-slate-800 bg-slate-900/30 p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-sm font-medium text-slate-300">Difficulty</div>
+                    <div className="text-xs text-slate-400">Choose realism level</div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(['Self-Working', 'Intermediate', 'Advanced / Gimmick Allowed'] as const).map((opt) => {
+                      const active = difficulty === opt;
+                      return (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => setDifficulty(opt)}
+                          className={
+                            `px-2 py-2 rounded-md text-xs font-semibold border transition-colors ` +
+                            (active
+                              ? 'border-purple-500/60 bg-purple-500/20 text-white'
+                              : 'border-slate-700 bg-slate-900/40 text-slate-300 hover:bg-slate-800/60')
+                          }
+                        >
+                          {opt}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 <button
                     onClick={handleGenerate}
                     disabled={isLoading || items.every(item => item.trim() === '')}
-                    className="w-full py-3 mt-4 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
+                    className="w-full py-3 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
                 >
                     <WandIcon className="w-5 h-5" />
                     <span>Generate Ideas</span>
                 </button>
-                {error && <p className="text-red-400 mt-2 text-sm text-center">{error}</p>}
+                {error && <p className="text-red-400 -mt-1 text-sm text-center">{error}</p>}
             </div>
         </div>
 
