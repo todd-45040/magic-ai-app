@@ -20,10 +20,6 @@ type ParsedEffect = {
   secretHint: string;
   ideaStrength: 'Strong Concept' | 'Needs Work' | 'Experimental' | '';
   buildCost: 'Low' | 'Medium' | 'High' | '';
-  visualImpact: string; // "8/10"
-  emotionalHook: string; // "6/10"
-  practicality: string; // "7/10"
-  resetSpeed: string; // "Fast" | "Moderate" | "Slow"
 };
 
 const normalize = (s: string) => String(s ?? '').replace(/\r\n/g, '\n').trim();
@@ -63,11 +59,6 @@ const parseEffectsFromMarkdown = (markdown: string): ParsedEffect[] => {
     const performanceNotes = getSection(block, 'Performance Notes') || getSection(block, 'Notes');
     const secretHint = getSection(block, 'Secret Hint') || getSection(block, 'Secret');
 
-    const visualImpact = getSection(block, 'Visual Impact');
-    const emotionalHook = getSection(block, 'Emotional Hook');
-    const practicality = getSection(block, 'Practicality');
-    const resetSpeed = getSection(block, 'Reset Speed');
-
     const strengthRaw = (getSection(block, 'Idea Strength') || getSection(block, 'Strength')).toLowerCase();
     const costRaw = (getSection(block, 'Estimated Build Cost') || getSection(block, 'Build Cost') || getSection(block, 'Cost')).toLowerCase();
 
@@ -76,7 +67,7 @@ const parseEffectsFromMarkdown = (markdown: string): ParsedEffect[] => {
     const buildCost: ParsedEffect['buildCost'] =
       costRaw.includes('low') ? 'Low' : costRaw.includes('high') ? 'High' : costRaw.includes('medium') ? 'Medium' : '';
 
-    if (name) effects.push({ name, premise, experience, methodOverview, performanceNotes, secretHint, ideaStrength, buildCost, visualImpact, emotionalHook, practicality, resetSpeed });
+    if (name) effects.push({ name, premise, experience, methodOverview, performanceNotes, secretHint, ideaStrength, buildCost });
   }
   return effects;
 };
@@ -109,10 +100,6 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
     'Visual Miracle' | 'Comedy Bit' | 'Mentalism' | 'Close-Up Practical' | 'Stage Expansion' | 'Social Media Piece' | 'Emotional Story Piece'
   >('Visual Miracle');
   const [difficulty, setDifficulty] = useState<'Self-Working' | 'Intermediate' | 'Advanced / Gimmick Allowed'>('Intermediate');
-  // Phase 5 (Pro Enhancements): optional audience context improves relevance.
-  const [audienceContext, setAudienceContext] = useState<'' | 'Kids' | 'Corporate' | 'Wedding' | 'College' | 'Social Media'>('');
-  // Phase 5: power-user setting — auto-save generated ideas to Idea Vault.
-  const [autoSave, setAutoSave] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ideas, setIdeas] = useState<string | null>(null);
@@ -157,8 +144,6 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
       if (typeof parsed?.creativeIntent === 'string') setCreativeIntent(parsed.creativeIntent as any);
       if (typeof parsed?.difficulty === 'string') setDifficulty(parsed.difficulty as any);
       if (typeof parsed?.isStrongIdea === 'boolean') setIsStrongIdea(Boolean(parsed.isStrongIdea));
-      if (typeof parsed?.audienceContext === 'string') setAudienceContext(parsed.audienceContext as any);
-      if (typeof parsed?.autoSave === 'boolean') setAutoSave(Boolean(parsed.autoSave));
     } catch {
       // ignore
     }
@@ -176,8 +161,6 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
             creativeIntent,
             difficulty,
             isStrongIdea,
-            audienceContext,
-            autoSave,
             ts: Date.now(),
           })
         );
@@ -186,7 +169,7 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
       }
     }, 250);
     return () => window.clearTimeout(t);
-  }, [draftKey, items, creativeIntent, difficulty, isStrongIdea, audienceContext, autoSave]);
+  }, [draftKey, items, creativeIntent, difficulty, isStrongIdea]);
 
   useEffect(() => {
     if (!displayIdeas) return;
@@ -246,11 +229,8 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
       `Generate magic effect ideas using the following items: ${itemList}.`,
       `Creative intent: ${creativeIntent}.`,
       `Difficulty level: ${difficulty}.`,
-      audienceContext ? `Target audience: ${audienceContext}.` : '',
-      audienceContext ? `Target audience: ${audienceContext}.` : '',
       `Make the ideas practical for real performance and clearly structured (Premise, The Experience, Method Overview, Performance Notes, Secret Hint).`,
       `Add a short self-assessment at the end of each effect: Idea Strength (Strong Concept / Needs Work / Experimental) and Estimated Build Cost (Low / Medium / High).`,
-      `Add Performance Impact Scores: Visual Impact (1–10), Emotional Hook (1–10), Practicality (1–10), Reset Speed (Fast / Moderate / Slow).`,
     ].join(' ');
     
     try {
@@ -271,15 +251,6 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
           : undefined
       );
       setIdeas(response);
-
-      // Phase 5: optional auto-save to Idea Vault (power users).
-      if (autoSave) {
-        try {
-          await saveIdeaContent(response);
-          setSaveStatus('saved');
-          setTimeout(() => setSaveStatus('idle'), 2000);
-        } catch {}
-      }
 
       // Phase 4: simulated reveal delay in demo mode (800–1200ms) to make recordings feel cinematic.
       if (demoActive) {
@@ -326,12 +297,10 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
       `Generate NEW magic effect ideas using the following items: ${itemList}.`,
       `Creative intent: ${creativeIntent}.`,
       `Difficulty level: ${difficulty}.`,
-      audienceContext ? `Target audience: ${audienceContext}.` : '',
       `IMPORTANT: The previous output is shown below. Your new concept must be meaningfully different (new premise, new structure, new method direction).`,
       `Avoid reusing the same title, premise, beats, or gimmick approach. Do not paraphrase the same idea — create a different one.`,
       `Format the ideas clearly (Premise, The Experience, Method Overview, Performance Notes, Secret Hint).`,
       `Add a short self-assessment at the end of each effect: Idea Strength (Strong Concept / Needs Work / Experimental) and Estimated Build Cost (Low / Medium / High).`,
-      `Add Performance Impact Scores: Visual Impact (1–10), Emotional Hook (1–10), Practicality (1–10), Reset Speed (Fast / Moderate / Slow).`,
       `PREVIOUS OUTPUT (for avoidance):\n${lastOutput}`
     ].join(' ');
 
@@ -354,15 +323,6 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
 
       setIdeas(response);
 
-      // Phase 5: optional auto-save to Idea Vault (power users).
-      if (autoSave) {
-        try {
-          await saveIdeaContent(response);
-          setSaveStatus('saved');
-          setTimeout(() => setSaveStatus('idle'), 2000);
-        } catch {}
-      }
-
       // Demo Mode: keep the same cinematic reveal behavior.
       if (demoActive) {
         const delay = 800 + Math.floor(Math.random() * 401);
@@ -380,23 +340,22 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
     }
   };
   
-
-  // Phase 5: shared save routine (supports auto-save without depending on React state timing).
-  const saveIdeaContent = async (ideaText: string) => {
+  const handleSave = async () => {
+    if (!ideas) return;
     const cleanItems = items.map((item) => item.trim()).filter((item) => item !== '');
+    const itemList = cleanItems.join(', ');
     const modelUsed = 'gemini-3-pro-preview';
     const uid = String((currentUser as any)?.id ?? (currentUser as any)?.userId ?? (currentUser as any)?.uid ?? 'unknown');
 
-    const parsed = ideaText ? parseEffectsFromMarkdown(ideaText) : [];
+    // Prefer a meaningful title when the output includes parsed headings.
     const defaultTitle = cleanItems.length ? `Effect Engine: ${cleanItems.slice(0, 2).join(' + ')}${cleanItems.length > 2 ? '…' : ''}` : 'Effect Engine Idea';
-    const headingTitle = parsed?.[0]?.name?.trim();
+    const headingTitle = parsedEffects?.[0]?.name?.trim();
     const title = headingTitle ? `Effect: ${headingTitle}` : defaultTitle;
 
     const tags = [
       'effect-engine',
       `intent:${String(creativeIntent).toLowerCase().replace(/\s+/g, '-')}`,
       `difficulty:${String(difficulty).toLowerCase().replace(/\s+|\//g, '-')}`,
-      ...(audienceContext ? [`audience:${String(audienceContext).toLowerCase().replace(/\s+/g, '-')}`] : []),
       ...(isStrongIdea ? ['strong-idea'] : []),
     ].slice(0, 8);
 
@@ -410,33 +369,29 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
       `  items: ${cleanItems.length ? cleanItems.join(' | ') : 'N/A'}`,
       `  creativeIntent: ${creativeIntent}`,
       `  difficulty: ${difficulty}`,
-      audienceContext ? `  audienceContext: ${audienceContext}` : `  audienceContext: General`,
       `  strongIdea: ${isStrongIdea ? 'Yes' : 'No'}`,
       '',
-      ideaText,
+      ideas,
     ].join('\n');
 
-    await saveIdea({ type: 'text', content: fullContent, title, tags });
-    onIdeaSaved();
-    // Keep the draft, but mark a successful save moment (best-effort).
-    try { localStorage.setItem(`${draftKey}:lastSavedAt`, String(Date.now())); } catch {}
-  };
-
-  const handleSave = async () => {
-    if (!ideas) return;
     try {
-      await saveIdeaContent(ideas);
+      await saveIdea({ type: 'text', content: fullContent, title, tags });
+      onIdeaSaved();
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
+      // Keep the draft, but mark a successful save moment (best-effort).
+      try {
+        localStorage.setItem(`${draftKey}:lastSavedAt`, String(Date.now()));
+      } catch {}
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save idea.');
     }
   };
 
-  const handleCopy = () => { = () => {
+  const handleCopy = () => {
     if (ideas) {
       const itemList = items.map(item => item.trim()).filter(item => item !== '').join(', ');
-      const fullContent = `Effect Ideas for: ${itemList}\nCreative Intent: ${creativeIntent}\nDifficulty: ${difficulty}\nTarget Audience: ${audienceContext || 'General'}\nStrong Idea: ${isStrongIdea ? 'Yes' : 'No'}\n\n${ideas}`;
+      const fullContent = `Effect Ideas for: ${itemList}\nCreative Intent: ${creativeIntent}\nDifficulty: ${difficulty}\nStrong Idea: ${isStrongIdea ? 'Yes' : 'No'}\n\n${ideas}`;
       navigator.clipboard.writeText(fullContent);
       setCopyStatus('copied');
       setTimeout(() => setCopyStatus('idle'), 2000);
@@ -466,72 +421,11 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
       `Original items: ${itemList || 'N/A'}.`,
       `Creative intent: ${creativeIntent}.`,
       `Difficulty level: ${difficulty}.`,
-      audienceContext ? `Target audience: ${audienceContext}.` : '',
       `Task: ${instructionMap[mode]}`,
       `Rules: Keep the same structured format (Premise, The Experience, Method Overview, Performance Notes, Secret Hint).`,
       `Also include Idea Strength (Strong Concept / Needs Work / Experimental) and Estimated Build Cost (Low / Medium / High).`,
-      `Also include Performance Impact Scores: Visual Impact (1–10), Emotional Hook (1–10), Practicality (1–10), Reset Speed (Fast / Moderate / Slow).`,
       `Do NOT mention that you are an AI. Do NOT add safety disclaimers. Keep it concise and practical.`,
       `\nCURRENT OUTPUT TO REFINE:\n${base}`,
-    ].join(' ');
-
-    setIsLoading(true);
-    setError(null);
-    setSaveStatus('idle');
-    setCopyStatus('idle');
-
-    try {
-      const response = await generateResponse(
-        prompt,
-        EFFECT_GENERATOR_SYSTEM_INSTRUCTION,
-        currentUser || { email: '', membership: 'free', generationCount: 0, lastResetDate: '' },
-        undefined,
-        demoActive
-          ? {
-              extraHeaders: {
-                'X-Demo-Mode': 'true',
-                'X-Demo-Tool': 'effect_engine',
-                'X-Demo-Scenario': demoScenario,
-              },
-            }
-          : undefined
-      );
-
-      setIdeas(response);
-      if (demoActive) {
-        const delay = 800 + Math.floor(Math.random() * 401);
-        await new Promise<void>((resolve) => window.setTimeout(() => resolve(), delay));
-      }
-      setDisplayIdeas(response);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-
-  // Phase 5: rewrite the current output in the user's preferred presentation voice (patter/framing only).
-  const handleRewriteVoice = async (tone: 'Serious' | 'Comedic' | 'Mysterious' | 'Storytelling') => {
-    if (!ideas) return;
-
-    const validItems = items.map(item => item.trim()).filter(item => item !== '');
-    const itemList = validItems.join(', ');
-    const base = String(ideas).slice(0, 4500);
-
-    const prompt = [
-      `Rewrite the following Effect Engine output in a ${tone} performance voice.`,
-      `Do not change the method or secret mechanics — only refine presentation, tone, and patter.`,
-      `Keep it practical for real performance.`,
-      `Original items: ${itemList || 'N/A'}.`,
-      `Creative intent: ${creativeIntent}.`,
-      `Difficulty level: ${difficulty}.`,
-      audienceContext ? `Target audience: ${audienceContext}.` : '',
-      `Keep the same structured format (Premise, The Experience, Method Overview, Performance Notes, Secret Hint).`,
-      `Include Idea Strength and Estimated Build Cost.`,
-      `Include Performance Impact Scores: Visual Impact (1–10), Emotional Hook (1–10), Practicality (1–10), Reset Speed (Fast / Moderate / Slow).`,
-      `Do NOT mention that you are an AI. Do NOT add disclaimers.`,
-      `\nCURRENT OUTPUT TO REWRITE:\n${base}`,
     ].join(' ');
 
     setIsLoading(true);
@@ -806,24 +700,6 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
                   <p className="mt-2 text-xs text-slate-400">Steers the engine toward the kind of magic you want to build.</p>
                 </div>
 
-                {/* Target audience (Phase 5) */}
-                <div className="rounded-lg border border-slate-800 bg-slate-900/30 p-4">
-                  <label className="block text-sm font-medium text-slate-300 mb-2">Target Audience <span className="text-slate-500 font-normal">(optional)</span></label>
-                  <select
-                    value={audienceContext}
-                    onChange={(e) => setAudienceContext(e.target.value as any)}
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500 transition-colors"
-                  >
-                    <option value="">General</option>
-                    <option>Kids</option>
-                    <option>Corporate</option>
-                    <option>Wedding</option>
-                    <option>College</option>
-                    <option>Social Media</option>
-                  </select>
-                  <p className="mt-2 text-xs text-slate-400">Steers tone, pacing, and practicality for the audience you’re performing for.</p>
-                </div>
-
                 {/* Difficulty toggle */}
                 <div className="rounded-lg border border-slate-800 bg-slate-900/30 p-4">
                   <div className="flex items-center justify-between mb-2">
@@ -850,22 +726,6 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
                       );
                     })}
                   </div>
-                </div>
-
-                <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/30 px-4 py-3">
-                  <div>
-                    <div className="text-sm font-medium text-slate-300">Auto-save to Idea Vault</div>
-                    <div className="text-xs text-slate-400">Automatically save every generated result (you can still manually Save anytime).</div>
-                  </div>
-                  <label className="inline-flex items-center gap-2 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={autoSave}
-                      onChange={(e) => setAutoSave(e.target.checked)}
-                      className="h-4 w-4 rounded border-slate-600 bg-slate-800 text-purple-600 focus:ring-purple-500"
-                    />
-                    <span className="text-sm text-slate-200">{autoSave ? 'On' : 'Off'}</span>
-                  </label>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -953,18 +813,6 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
                                         ) : null}
                                       </div>
                                     </div>
-
-                                    {(ef.visualImpact || ef.emotionalHook || ef.practicality || ef.resetSpeed) ? (
-                                      <div className="mt-3 rounded-lg border border-slate-800 bg-slate-900/25 p-3">
-                                        <div className="text-xs font-semibold tracking-wide text-slate-300 mb-2">PERFORMANCE IMPACT</div>
-                                        <div className="flex flex-wrap gap-2 text-xs text-slate-200">
-                                          {ef.visualImpact ? <span className="rounded-full border border-slate-700 bg-slate-950/20 px-2 py-1">🎬 Visual: {ef.visualImpact}</span> : null}
-                                          {ef.emotionalHook ? <span className="rounded-full border border-slate-700 bg-slate-950/20 px-2 py-1">❤️ Emotional: {ef.emotionalHook}</span> : null}
-                                          {ef.practicality ? <span className="rounded-full border border-slate-700 bg-slate-950/20 px-2 py-1">🛠 Practicality: {ef.practicality}</span> : null}
-                                          {ef.resetSpeed ? <span className="rounded-full border border-slate-700 bg-slate-950/20 px-2 py-1">🔄 Reset: {ef.resetSpeed}</span> : null}
-                                        </div>
-                                      </div>
-                                    ) : null}
 
                                     {ef.premise ? (
                                       <div className="mt-3">
@@ -1061,47 +909,6 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
                         >
                           🎬 More Visual
                         </button>
-
-                        {/* Phase 5: Make it Yours — rewrite in presentation voice */}
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-xs font-semibold text-slate-400 mr-1">Rewrite:</span>
-                          <button
-                            type="button"
-                            onClick={() => handleRewriteVoice('Serious')}
-                            disabled={isLoading || !ideas}
-                            className="px-3 py-1.5 text-xs font-semibold rounded-md border border-slate-700 bg-slate-900/40 text-slate-200 hover:bg-slate-800/60 disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Rewrite in a serious, professional voice"
-                          >
-                            🎩 Serious
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleRewriteVoice('Comedic')}
-                            disabled={isLoading || !ideas}
-                            className="px-3 py-1.5 text-xs font-semibold rounded-md border border-slate-700 bg-slate-900/40 text-slate-200 hover:bg-slate-800/60 disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Rewrite with comedic patter"
-                          >
-                            😂 Comedic
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleRewriteVoice('Mysterious')}
-                            disabled={isLoading || !ideas}
-                            className="px-3 py-1.5 text-xs font-semibold rounded-md border border-slate-700 bg-slate-900/40 text-slate-200 hover:bg-slate-800/60 disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Rewrite with mysterious tone"
-                          >
-                            🕯 Mysterious
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleRewriteVoice('Storytelling')}
-                            disabled={isLoading || !ideas}
-                            className="px-3 py-1.5 text-xs font-semibold rounded-md border border-slate-700 bg-slate-900/40 text-slate-200 hover:bg-slate-800/60 disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Rewrite as a storytelling piece"
-                          >
-                            📖 Storytelling
-                          </button>
-                        </div>
 
                         {/* Strong idea toggle (retention lever) */}
                         <div className="ml-auto flex items-center gap-2">
@@ -1252,7 +1059,7 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
                                 onChange={(e) => setSelectedEffectIndex(Number(e.target.value))}
                                 className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500"
                               >
-                                {(parsedEffects.length ? parsedEffects : [{ name: 'Effect 1', premise: '', experience: '', methodOverview: '', performanceNotes: '', secretHint: '', ideaStrength: '', buildCost: '', visualImpact: '', emotionalHook: '', practicality: '', resetSpeed: '' }]).map((ef, idx) => (
+                                {(parsedEffects.length ? parsedEffects : [{ name: 'Effect 1', premise: '', experience: '', methodOverview: '', performanceNotes: '', secretHint: '', ideaStrength: '', buildCost: '' }]).map((ef, idx) => (
                                   <option key={idx} value={idx}>{idx + 1}. {ef.name || `Effect ${idx + 1}`}</option>
                                 ))}
                               </select>
@@ -1314,7 +1121,7 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
                                 onChange={(e) => setTaskEffectIndex(Number(e.target.value))}
                                 className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500"
                               >
-                                {(parsedEffects.length ? parsedEffects : [{ name: 'Effect 1', premise: '', experience: '', methodOverview: '', performanceNotes: '', secretHint: '', ideaStrength: '', buildCost: '', visualImpact: '', emotionalHook: '', practicality: '', resetSpeed: '' }]).map((ef, idx) => (
+                                {(parsedEffects.length ? parsedEffects : [{ name: 'Effect 1', premise: '', experience: '', methodOverview: '', performanceNotes: '', secretHint: '', ideaStrength: '', buildCost: '' }]).map((ef, idx) => (
                                   <option key={idx} value={idx}>{idx + 1}. {ef.name || `Effect ${idx + 1}`}</option>
                                 ))}
                               </select>
