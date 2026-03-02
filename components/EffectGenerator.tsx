@@ -96,6 +96,11 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
   const [selectedShowId, setSelectedShowId] = useState<string>('');
   const [selectedEffectIndex, setSelectedEffectIndex] = useState<number>(0);
   const [importStatus, setImportStatus] = useState<'idle' | 'importing' | 'imported'>('idle');
+  // Phase 3 (Data Integrity): convert a concept into an execution task with subtasks.
+  const [isTaskOpen, setIsTaskOpen] = useState(false);
+  const [taskShowId, setTaskShowId] = useState<string>('');
+  const [taskEffectIndex, setTaskEffectIndex] = useState<number>(0);
+  const [taskStatus, setTaskStatus] = useState<'idle' | 'creating' | 'created'>('idle');
   // Phase 2 (Conversion & Retention): lightweight "favorite" toggle for a generated idea.
   const [isStrongIdea, setIsStrongIdea] = useState(false);
 
@@ -104,6 +109,51 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
   const demoScenario = 'corporate_closeup';
 
   const outputRef = useRef<HTMLDivElement | null>(null);
+
+  // Phase 3A: draft persistence for typed items + settings (reduces frustration on refresh).
+  const draftKey = useMemo(() => {
+    const uid = String((currentUser as any)?.id ?? (currentUser as any)?.userId ?? (currentUser as any)?.uid ?? (currentUser as any)?.email ?? 'guest');
+    return `maw_effect_engine_draft_v1:${uid}`;
+  }, [currentUser]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed?.items)) {
+        const next = [0, 1, 2, 3].map((i) => String(parsed.items?.[i] ?? ''));
+        setItems(next);
+      }
+      if (typeof parsed?.creativeIntent === 'string') setCreativeIntent(parsed.creativeIntent as any);
+      if (typeof parsed?.difficulty === 'string') setDifficulty(parsed.difficulty as any);
+      if (typeof parsed?.isStrongIdea === 'boolean') setIsStrongIdea(Boolean(parsed.isStrongIdea));
+    } catch {
+      // ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKey]);
+
+  useEffect(() => {
+    // Debounced write to keep UI snappy.
+    const t = window.setTimeout(() => {
+      try {
+        localStorage.setItem(
+          draftKey,
+          JSON.stringify({
+            items,
+            creativeIntent,
+            difficulty,
+            isStrongIdea,
+            ts: Date.now(),
+          })
+        );
+      } catch {
+        // ignore
+      }
+    }, 250);
+    return () => window.clearTimeout(t);
+  }, [draftKey, items, creativeIntent, difficulty, isStrongIdea]);
 
   useEffect(() => {
     if (!displayIdeas) return;
@@ -136,6 +186,9 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
     setSaveStatus('idle');
     setCopyStatus('idle');
     setIsStrongIdea(false);
+    try {
+      localStorage.removeItem(draftKey);
+    } catch {}
   };
 
   const handleGenerate = async () => {
@@ -269,14 +322,51 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
     }
   };
   
-  const handleSave = () => {
-    if (ideas) {
-      const itemList = items.map(item => item.trim()).filter(item => item !== '').join(', ');
-      const fullContent = `## Effect Ideas for: ${itemList}\n\n**Creative Intent:** ${creativeIntent}\n**Difficulty:** ${difficulty}\n**Strong Idea:** ${isStrongIdea ? 'Yes' : 'No'}\n\n${ideas}`;
-      saveIdea('text', fullContent);
+  const handleSave = async () => {
+    if (!ideas) return;
+    const cleanItems = items.map((item) => item.trim()).filter((item) => item !== '');
+    const itemList = cleanItems.join(', ');
+    const modelUsed = 'gemini-3-pro-preview';
+    const uid = String((currentUser as any)?.id ?? (currentUser as any)?.userId ?? (currentUser as any)?.uid ?? 'unknown');
+
+    // Prefer a meaningful title when the output includes parsed headings.
+    const defaultTitle = cleanItems.length ? `Effect Engine: ${cleanItems.slice(0, 2).join(' + ')}${cleanItems.length > 2 ? '…' : ''}` : 'Effect Engine Idea';
+    const headingTitle = parsedEffects?.[0]?.name?.trim();
+    const title = headingTitle ? `Effect: ${headingTitle}` : defaultTitle;
+
+    const tags = [
+      'effect-engine',
+      `intent:${String(creativeIntent).toLowerCase().replace(/\s+/g, '-')}`,
+      `difficulty:${String(difficulty).toLowerCase().replace(/\s+|\//g, '-')}`,
+      ...(isStrongIdea ? ['strong-idea'] : []),
+    ].slice(0, 8);
+
+    const fullContent = [
+      `## ${title}`,
+      '',
+      'meta:',
+      `  timestamp: ${new Date().toISOString()}`,
+      `  userId: ${uid}`,
+      `  model: ${modelUsed}`,
+      `  items: ${cleanItems.length ? cleanItems.join(' | ') : 'N/A'}`,
+      `  creativeIntent: ${creativeIntent}`,
+      `  difficulty: ${difficulty}`,
+      `  strongIdea: ${isStrongIdea ? 'Yes' : 'No'}`,
+      '',
+      ideas,
+    ].join('\n');
+
+    try {
+      await saveIdea({ type: 'text', content: fullContent, title, tags });
       onIdeaSaved();
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
+      // Keep the draft, but mark a successful save moment (best-effort).
+      try {
+        localStorage.setItem(`${draftKey}:lastSavedAt`, String(Date.now()));
+      } catch {}
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to save idea.');
     }
   };
 
@@ -379,6 +469,83 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
     setSelectedShowId(firstShowId);
     setSelectedEffectIndex(0);
     setIsImportOpen(true);
+  };
+
+  // Phase 3C: convert to an execution task (with subtasks) inside a Show.
+  const openConvertToTask = () => {
+    if (!ideas) return;
+    setError(null);
+    setTaskStatus('idle');
+    const firstShowId = Array.isArray(shows) && shows.length ? String(shows[0].id) : '';
+    setTaskShowId(firstShowId);
+    setTaskEffectIndex(0);
+    setIsTaskOpen(true);
+  };
+
+  const handleConvertToTask = async () => {
+    if (!ideas) return;
+    if (!taskShowId) {
+      setError('Please create or select a Show in Show Planner first.');
+      setIsTaskOpen(false);
+      return;
+    }
+
+    const effects = parsedEffects;
+    const effect = effects[taskEffectIndex] || effects[0];
+    const cleanItems = items.map((i) => i.trim()).filter(Boolean);
+    const itemList = cleanItems.join(', ');
+    const effectTitle = effect?.name?.trim() || (cleanItems.length ? `Effect Idea (${cleanItems.slice(0, 2).join(' + ')})` : 'Effect Idea');
+    const title = `Build: ${effectTitle}`;
+
+    const notes = [
+      `Creative Intent: ${creativeIntent}`,
+      `Difficulty: ${difficulty}`,
+      cleanItems.length ? `Items: ${itemList}` : '',
+      '',
+      effect?.premise ? `Premise:\n${effect.premise}` : '',
+      effect?.experience ? `Experience:\n${effect.experience}` : '',
+    ].filter(Boolean).join('\n');
+
+    const subtasks = [
+      { title: 'Build prototype', done: false },
+      { title: 'Order / prepare gimmick', done: false },
+      { title: 'Test handling & timing', done: false },
+      { title: 'Write / refine patter', done: false },
+    ];
+
+    setTaskStatus('creating');
+    try {
+      const updatedShows = await addTaskToShow(taskShowId, {
+        title,
+        notes,
+        priority: 'Medium',
+        status: 'To-Do',
+        createdAt: Date.now(),
+        // Optional column; showsService will safely omit if schema doesn't support it.
+        subtasks,
+      } as any);
+      dispatch({ type: 'SET_SHOWS', payload: updatedShows } as any);
+
+      try {
+        const showTitle = (Array.isArray(shows) ? shows : []).find((s: any) => String(s?.id) === String(taskShowId))?.title ?? 'your show';
+        showToast(`Task created in “${showTitle}”`, {
+          label: 'View task',
+          onClick: () => {
+            try {
+              window.dispatchEvent(new CustomEvent('maw:navigate', { detail: { view: 'show-planner', primaryId: String(taskShowId), secondaryId: String(title) } }));
+            } catch {}
+          },
+        });
+      } catch {}
+
+      setTaskStatus('created');
+      setTimeout(() => setTaskStatus('idle'), 1500);
+      setIsTaskOpen(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to convert to task.');
+      setTaskStatus('idle');
+      setIsTaskOpen(false);
+    }
   };
 
   const handleImportToShowPlanner = async () => {
@@ -763,6 +930,25 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
                               </>
                             )}
                         </button>
+
+                        <button
+                            onClick={openConvertToTask}
+                            disabled={taskStatus === 'creating'}
+                            className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-800/70 hover:bg-slate-700 rounded-md text-slate-100 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                            title="Convert this concept into an execution task with subtasks"
+                        >
+                            {taskStatus === 'created' ? (
+                              <>
+                                <CheckIcon className="w-4 h-4 text-green-300" />
+                                <span>Created</span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="text-lg">✓</span>
+                                <span>Convert to Task</span>
+                              </>
+                            )}
+                        </button>
                     </div>
 
                     {isImportOpen && (
@@ -821,6 +1007,78 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
                               className="px-4 py-2 rounded-md bg-purple-600 hover:bg-purple-700 text-white font-bold disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
                             >
                               {importStatus === 'importing' ? 'Adding…' : 'Add Beat'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {isTaskOpen && (
+                      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+                        <div className="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-900 shadow-xl">
+                          <div className="p-4 border-b border-slate-800">
+                            <h3 className="text-slate-100 font-bold text-lg">Convert to Task</h3>
+                            <p className="text-slate-400 text-sm mt-1">Create an execution task with a few practical subtasks (prototype, prep, test, script) inside a Show.</p>
+                          </div>
+
+                          <div className="p-4 space-y-4">
+                            <div>
+                              <label className="block text-sm font-medium text-slate-300 mb-1">Show</label>
+                              <select
+                                value={taskShowId}
+                                onChange={(e) => setTaskShowId(e.target.value)}
+                                className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500"
+                              >
+                                <option value="">Select a show…</option>
+                                {(Array.isArray(shows) ? shows : []).map((s: any) => (
+                                  <option key={s.id} value={s.id}>{s.title}</option>
+                                ))}
+                              </select>
+                              {!Array.isArray(shows) || shows.length === 0 ? (
+                                <p className="text-xs text-slate-500 mt-1">No shows found yet. Create one in Show Planner first.</p>
+                              ) : null}
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-slate-300 mb-1">Effect</label>
+                              <select
+                                value={String(taskEffectIndex)}
+                                onChange={(e) => setTaskEffectIndex(Number(e.target.value))}
+                                className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500"
+                              >
+                                {(parsedEffects.length ? parsedEffects : [{ name: 'Effect 1', premise: '', experience: '' }]).map((ef, idx) => (
+                                  <option key={idx} value={idx}>{idx + 1}. {ef.name || `Effect ${idx + 1}`}</option>
+                                ))}
+                              </select>
+                              {parsedEffects.length === 0 ? (
+                                <p className="text-xs text-slate-500 mt-1">Could not parse effect headings. Task will still use the first effect.</p>
+                              ) : null}
+                            </div>
+
+                            <div className="rounded-lg border border-slate-800 bg-slate-900/30 p-3">
+                              <div className="text-xs font-semibold text-slate-300 mb-2">Subtasks that will be created</div>
+                              <ul className="text-sm text-slate-300 list-disc ml-5 space-y-1">
+                                <li>Build prototype</li>
+                                <li>Order / prepare gimmick</li>
+                                <li>Test handling &amp; timing</li>
+                                <li>Write / refine patter</li>
+                              </ul>
+                            </div>
+                          </div>
+
+                          <div className="p-4 border-t border-slate-800 flex justify-end gap-2">
+                            <button
+                              onClick={() => setIsTaskOpen(false)}
+                              className="px-3 py-2 rounded-md bg-slate-700 hover:bg-slate-600 text-slate-200 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={handleConvertToTask}
+                              disabled={taskStatus === 'creating'}
+                              className="px-4 py-2 rounded-md bg-purple-600 hover:bg-purple-700 text-white font-bold disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                            >
+                              {taskStatus === 'creating' ? 'Creating…' : 'Create Task'}
                             </button>
                           </div>
                         </div>
