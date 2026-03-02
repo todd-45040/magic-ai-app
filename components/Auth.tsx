@@ -139,11 +139,22 @@ const initialMode = (() => {
         <div className="grid w-full grid-cols-1 gap-10 lg:grid-cols-2 lg:items-stretch">
           {/* Brand panel */}
           <div className="hidden lg:flex flex-col justify-center rounded-2xl border border-white/10 bg-white/5 p-10 shadow-[0_20px_60px_rgba(0,0,0,0.55)]">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-purple-600/90 to-yellow-400/70 shadow-[0_0_0_1px_rgba(255,255,255,0.15)]" />
-              <div>
-                <div className="text-white text-xl font-semibold tracking-wide">Magicians’ AI Wizard</div>
-                <div className="text-white/70 text-sm">Your creative & business suite for performers</div>
+            <div className="flex flex-col items-start">
+              <img
+                src={"/assets/branding/wizard-head-wtext.png"}
+                alt="Magicians' AI Wizard"
+                className="w-56 select-none drop-shadow-[0_0_22px_rgba(250,204,21,0.18)]"
+                draggable={false}
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).style.display = 'none';
+                }}
+              />
+              <div className="mt-2 text-white/70 text-sm">
+                Your creative &amp; business suite for performers
+              </div>
+            </div>
+
+<div className="text-white/70 text-sm">Your creative & business suite for performers</div>
               </div>
             </div>
 
@@ -179,16 +190,7 @@ const initialMode = (() => {
               {/* subtle premium edge */}
               <div className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-yellow-400/10" />
               <div className="flex flex-col items-center">
-                <img
-                  src={"/assets/branding/wizard-head-wtext.png"}
-                  alt="Magicians' AI Wizard"
-                  className="h-20 w-auto select-none drop-shadow-[0_14px_32px_rgba(0,0,0,0.70)]"
-                  draggable={false}
-                  onError={(e) => {
-                    (e.currentTarget as HTMLImageElement).style.display = 'none';
-                  }}
-                />
-                <div className="mt-4 text-white text-xl font-semibold">{title}</div>
+<div className="mt-2 text-white text-xl font-semibold">{title}</div>
                 <div className="mt-1 text-white/65 text-sm text-center">{subtitle}</div>
 
                 {mode === 'signup' && (
