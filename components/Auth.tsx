@@ -323,6 +323,19 @@ const initialMode = (() => {
                     : 'Send Reset Link'}
                 </button>
 
+                <div className="mt-4 text-center text-xs text-white/50 flex items-center justify-center gap-2">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="w-3.5 h-3.5 text-yellow-300/80"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 1a5 5 0 00-5 5v3H6a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2v-8a2 2 0 00-2-2h-1V6a5 5 0 00-5-5zm-3 8V6a3 3 0 116 0v3H9z" />
+                  </svg>
+                  <span>Your data is encrypted and never shared.</span>
+                </div>
+
                 <div className="flex items-center justify-between pt-2 text-xs">
                   {mode !== 'reset' ? (
                     <button
