@@ -118,18 +118,19 @@ export default function ResetPassword({ onRecovered, onBack }: ResetPasswordProp
     <div className="min-h-screen w-full bg-[#05060a] relative overflow-hidden text-white">
       {/* Background glow */}
       <div className="pointer-events-none absolute inset-0">
-        <div className="absolute -top-40 -left-40 h-[520px] w-[520px] rounded-full bg-purple-700/20 blur-[120px]" />
-        <div className="absolute -bottom-52 -right-40 h-[560px] w-[560px] rounded-full bg-yellow-500/10 blur-[140px]" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.06),rgba(0,0,0,0.0),rgba(0,0,0,0.0))]" />
+        <div className="absolute -top-40 -left-40 h-[520px] w-[520px] rounded-full bg-purple-700/22 blur-[130px]" />
+        <div className="absolute -bottom-52 -right-40 h-[560px] w-[560px] rounded-full bg-yellow-500/12 blur-[150px]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.08),rgba(0,0,0,0.0),rgba(0,0,0,0.0))]" />
       </div>
 
       <div className="relative z-10 mx-auto flex min-h-screen max-w-xl items-center justify-center px-4 py-10">
-        <div className="w-full rounded-2xl border border-white/10 bg-gradient-to-b from-[#0b1222]/90 to-[#070a12]/90 p-6 shadow-[0_20px_60px_rgba(0,0,0,0.65)] backdrop-blur">
+        <div className="relative w-full rounded-2xl border border-white/10 bg-gradient-to-b from-[#0b1222]/92 to-[#070a12]/92 p-6 shadow-[0_22px_70px_rgba(0,0,0,0.70)] backdrop-blur">
+          <div className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-yellow-400/10" />
           <div className="flex flex-col items-center">
             <img
-              src={"/Wizard_Head_wText.png"}
+              src={"/assets/branding/wizard-head-wtext.png"}
               alt="Magicians' AI Wizard"
-              className="h-20 w-auto select-none drop-shadow-[0_12px_28px_rgba(0,0,0,0.65)]"
+              className="h-20 w-auto select-none drop-shadow-[0_14px_32px_rgba(0,0,0,0.70)]"
               draggable={false}
               onError={(e) => {
                 (e.currentTarget as HTMLImageElement).style.display = 'none';
@@ -175,7 +176,7 @@ export default function ResetPassword({ onRecovered, onBack }: ResetPasswordProp
                     type="password"
                     autoComplete="new-password"
                     placeholder="••••••••"
-                    className="mt-2 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2.5 text-white placeholder:text-white/35 outline-none transition focus:border-purple-500/60 focus:ring-2 focus:ring-purple-500/20"
+                    className="mt-2 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2.5 text-white placeholder:text-white/35 outline-none transition focus:border-yellow-400/45 focus:ring-2 focus:ring-yellow-400/15"
                     required
                   />
                 </div>
@@ -188,7 +189,7 @@ export default function ResetPassword({ onRecovered, onBack }: ResetPasswordProp
                     type="password"
                     autoComplete="new-password"
                     placeholder="••••••••"
-                    className="mt-2 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2.5 text-white placeholder:text-white/35 outline-none transition focus:border-purple-500/60 focus:ring-2 focus:ring-purple-500/20"
+                    className="mt-2 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2.5 text-white placeholder:text-white/35 outline-none transition focus:border-yellow-400/45 focus:ring-2 focus:ring-yellow-400/15"
                     required
                   />
                 </div>
