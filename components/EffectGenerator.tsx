@@ -1023,22 +1023,102 @@ const handleTryExample = () => {
                             )}
                         </button>
                          <button
-                            onClick={handleSave}
-                            disabled={saveStatus === 'saved'}
-                            className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 disabled:cursor-default transition-colors"
-                        >
-                            {saveStatus === 'saved' ? (
-                                <>
-                                    <CheckIcon className="w-4 h-4 text-green-400" />
-                                    <span>Saved!</span>
-                                </>
-                            ) : (
-                                <>
-                                    <SaveIcon className="w-4 h-4" />
-                                    <span>Save Idea</span>
-                                </>
-                            )}
-                        </button>
+                            
+{/* ---------- Bottom Action Stack ---------- */}
+<div className="mt-6 rounded-xl border border-slate-800 bg-slate-900/30 p-4">
+
+  {/* Top utility row */}
+  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="text-sm text-slate-300">
+      {ideas ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-semibold text-slate-200">Next step:</span>
+          <span className="text-slate-400">Save it, then move it into a Show or Task.</span>
+          {saveStatus === 'saved' && (
+            <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-200">
+              <CheckIcon className="h-4 w-4" />
+              Saved
+            </span>
+          )}
+        </div>
+      ) : (
+        <span className="text-slate-400">
+          Generate an idea to unlock save, refine, and workflow actions.
+        </span>
+      )}
+    </div>
+
+    <div className="flex items-center gap-2 justify-start sm:justify-end">
+      <button
+        type="button"
+        onClick={toggleStrongIdea}
+        disabled={!ideas}
+        className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs border-slate-700 bg-slate-900/40 text-slate-300 hover:bg-slate-800/60 transition-colors disabled:opacity-50"
+      >
+        ★ Strong
+      </button>
+
+      <button
+        type="button"
+        onClick={handleCopy}
+        disabled={!ideas}
+        className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs border-slate-700 bg-slate-900/40 text-slate-300 hover:bg-slate-800/60 transition-colors disabled:opacity-50"
+      >
+        <CopyIcon className="h-4 w-4" />
+        Copy
+      </button>
+    </div>
+  </div>
+
+  <div className="my-4 h-px w-full bg-slate-800" />
+
+  {/* Primary Save */}
+  <button
+    type="button"
+    onClick={handleSave}
+    disabled={!ideas || isLoading}
+    className="w-full inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 font-bold bg-purple-600 hover:bg-purple-700 text-white transition-colors disabled:bg-slate-700 disabled:text-slate-300 disabled:cursor-not-allowed"
+  >
+    <SaveIcon className="h-5 w-5" />
+    Save to Idea Vault
+  </button>
+
+  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+    <button
+      type="button"
+      onClick={openImport}
+      disabled={!ideas || isLoading}
+      className="w-full rounded-lg border border-slate-600 bg-slate-900/30 text-slate-200 hover:bg-slate-800/50 px-4 py-3 font-semibold transition-colors disabled:opacity-50"
+    >
+      ➕ Add to Show Planner
+    </button>
+
+    <button
+      type="button"
+      onClick={openConvertToTask}
+      disabled={!ideas || isLoading}
+      className="w-full rounded-lg border border-slate-600 bg-slate-900/30 text-slate-200 hover:bg-slate-800/50 px-4 py-3 font-semibold transition-colors disabled:opacity-50"
+    >
+      ✅ Convert to Task
+    </button>
+  </div>
+
+  <div className="my-4 h-px w-full bg-slate-800" />
+
+  <div>
+    <div className="text-sm font-semibold text-slate-200 mb-2">Refine This Idea</div>
+    <div className="flex flex-wrap gap-2">
+      <button onClick={() => handleRefine('refine')} disabled={!ideas} className="px-3 py-2 text-xs border border-slate-600 rounded-md bg-slate-900/40 text-slate-200 hover:bg-slate-800/50 disabled:opacity-50">✨ Refine</button>
+      <button onClick={() => handleRefine('comedy')} disabled={!ideas} className="px-3 py-2 text-xs border border-slate-600 rounded-md bg-slate-900/40 text-slate-200 hover:bg-slate-800/50 disabled:opacity-50">🎭 Comedy</button>
+      <button onClick={() => handleRefine('psych')} disabled={!ideas} className="px-3 py-2 text-xs border border-slate-600 rounded-md bg-slate-900/40 text-slate-200 hover:bg-slate-800/50 disabled:opacity-50">🧠 Psychology</button>
+      <button onClick={() => handleRefine('impossible')} disabled={!ideas} className="px-3 py-2 text-xs border border-slate-600 rounded-md bg-slate-900/40 text-slate-200 hover:bg-slate-800/50 disabled:opacity-50">💥 More Impossible</button>
+      <button onClick={() => handleRefine('visual')} disabled={!ideas} className="px-3 py-2 text-xs border border-slate-600 rounded-md bg-slate-900/40 text-slate-200 hover:bg-slate-800/50 disabled:opacity-50">🎬 More Visual</button>
+    </div>
+  </div>
+
+</div>
+{/* ---------- /Bottom Action Stack ---------- */}
+
 
                         <button
                             onClick={openImport}
