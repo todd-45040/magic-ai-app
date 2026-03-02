@@ -154,9 +154,6 @@ const initialMode = (() => {
               </div>
             </div>
 
-<div className="text-white/70 text-sm">Your creative & business suite for performers</div>
-              </div>
-            </div>
 
             <div className="mt-10 space-y-4 text-white/85">
               <div className="text-2xl font-semibold leading-snug">
