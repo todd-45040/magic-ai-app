@@ -15,6 +15,11 @@ type ParsedEffect = {
   name: string;
   premise: string;
   experience: string;
+  methodOverview: string;
+  performanceNotes: string;
+  secretHint: string;
+  ideaStrength: 'Strong Concept' | 'Needs Work' | 'Experimental' | '';
+  buildCost: 'Low' | 'Medium' | 'High' | '';
 };
 
 const normalize = (s: string) => String(s ?? '').replace(/\r\n/g, '\n').trim();
@@ -50,8 +55,19 @@ const parseEffectsFromMarkdown = (markdown: string): ParsedEffect[] => {
     const premise = getSection(block, 'Premise');
     // some outputs use "The Experience" exactly
     const experience = getSection(block, 'The Experience') || getSection(block, 'Experience');
+    const methodOverview = getSection(block, 'Method Overview') || getSection(block, 'Method');
+    const performanceNotes = getSection(block, 'Performance Notes') || getSection(block, 'Notes');
+    const secretHint = getSection(block, 'Secret Hint') || getSection(block, 'Secret');
 
-    if (name) effects.push({ name, premise, experience });
+    const strengthRaw = (getSection(block, 'Idea Strength') || getSection(block, 'Strength')).toLowerCase();
+    const costRaw = (getSection(block, 'Estimated Build Cost') || getSection(block, 'Build Cost') || getSection(block, 'Cost')).toLowerCase();
+
+    const ideaStrength: ParsedEffect['ideaStrength'] =
+      strengthRaw.includes('strong') ? 'Strong Concept' : strengthRaw.includes('experimental') ? 'Experimental' : strengthRaw.includes('need') ? 'Needs Work' : '';
+    const buildCost: ParsedEffect['buildCost'] =
+      costRaw.includes('low') ? 'Low' : costRaw.includes('high') ? 'High' : costRaw.includes('medium') ? 'Medium' : '';
+
+    if (name) effects.push({ name, premise, experience, methodOverview, performanceNotes, secretHint, ideaStrength, buildCost });
   }
   return effects;
 };
@@ -193,8 +209,8 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
 
   const handleGenerate = async () => {
     const validItems = items.map(item => item.trim()).filter(item => item !== '');
-    if (validItems.length === 0) {
-      setError("Please enter at least one item.");
+    if (validItems.length < 2) {
+      setError('Please enter at least two items to generate stronger, more usable effects.');
       return;
     }
     
@@ -214,6 +230,7 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
       `Creative intent: ${creativeIntent}.`,
       `Difficulty level: ${difficulty}.`,
       `Make the ideas practical for real performance and clearly structured (Premise, The Experience, Method Overview, Performance Notes, Secret Hint).`,
+      `Add a short self-assessment at the end of each effect: Idea Strength (Strong Concept / Needs Work / Experimental) and Estimated Build Cost (Low / Medium / High).`,
     ].join(' ');
     
     try {
@@ -255,8 +272,8 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
   // Phase 2: generate a fresh concept using the same items, explicitly avoiding the last output.
   const handleGenerateAlternative = async () => {
     const validItems = items.map(item => item.trim()).filter(item => item !== '');
-    if (validItems.length === 0) {
-      setError('Please enter at least one item.');
+    if (validItems.length < 2) {
+      setError('Please enter at least two items to generate a meaningful alternative concept.');
       return;
     }
     if (!ideas) {
@@ -283,6 +300,7 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
       `IMPORTANT: The previous output is shown below. Your new concept must be meaningfully different (new premise, new structure, new method direction).`,
       `Avoid reusing the same title, premise, beats, or gimmick approach. Do not paraphrase the same idea — create a different one.`,
       `Format the ideas clearly (Premise, The Experience, Method Overview, Performance Notes, Secret Hint).`,
+      `Add a short self-assessment at the end of each effect: Idea Strength (Strong Concept / Needs Work / Experimental) and Estimated Build Cost (Low / Medium / High).`,
       `PREVIOUS OUTPUT (for avoidance):\n${lastOutput}`
     ].join(' ');
 
@@ -405,6 +423,7 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
       `Difficulty level: ${difficulty}.`,
       `Task: ${instructionMap[mode]}`,
       `Rules: Keep the same structured format (Premise, The Experience, Method Overview, Performance Notes, Secret Hint).`,
+      `Also include Idea Strength (Strong Concept / Needs Work / Experimental) and Estimated Build Cost (Low / Medium / High).`,
       `Do NOT mention that you are an AI. Do NOT add safety disclaimers. Keep it concise and practical.`,
       `\nCURRENT OUTPUT TO REFINE:\n${base}`,
     ].join(' ');
@@ -712,7 +731,7 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <button
                       onClick={handleGenerate}
-                      disabled={isLoading || items.every(item => item.trim() === '')}
+                      disabled={isLoading || items.map(i=>i.trim()).filter(Boolean).length < 2}
                       className="w-full py-3 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
                   >
                       <WandIcon className="w-5 h-5" />
@@ -721,7 +740,7 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
 
                   <button
                       onClick={handleGenerateAlternative}
-                      disabled={isLoading || items.every(item => item.trim() === '') || !ideas}
+                      disabled={isLoading || items.map(i=>i.trim()).filter(Boolean).length < 2 || !ideas}
                       className="w-full py-3 flex items-center justify-center gap-2 rounded-md border border-slate-700 bg-slate-900/40 text-slate-200 font-bold hover:bg-slate-800/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       title={!ideas ? 'Generate once first, then create an alternative concept.' : 'Generate a different concept using the same items'}
                   >
@@ -748,37 +767,93 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
                           - Demo: show structured cards for the parsed effects (more cinematic and scannable).
                         */}
                         <div className={`transition-opacity duration-700 ${revealReady ? 'opacity-100' : 'opacity-0'}`}>
-                          {demoActive && parsedEffects.length ? (
+                          {parsedEffects.length ? (
                             <div className="space-y-4">
-                              {parsedEffects.map((ef, idx) => (
-                                <div
-                                  key={idx}
-                                  className={`rounded-xl border bg-slate-950/40 p-4 shadow-sm ${idx === 0 ? 'border-yellow-500/30 ring-1 ring-yellow-500/10' : 'border-slate-800'}`}
-                                >
-                                  <div className="flex items-center justify-between gap-3">
-                                    <h3 className="text-slate-100 font-bold text-base">
-                                      <span className="text-yellow-300/90">#{idx + 1}</span> {ef.name}
-                                    </h3>
-                                    {idx === 0 ? (
-                                      <span className="text-xs rounded-full border border-yellow-500/30 bg-yellow-500/10 px-2 py-1 text-yellow-200">Featured</span>
+                              {parsedEffects.map((ef, idx) => {
+                                const strength = ef.ideaStrength;
+                                const cost = ef.buildCost;
+                                const strengthStyle =
+                                  strength === 'Strong Concept'
+                                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                                    : strength === 'Needs Work'
+                                    ? 'border-yellow-500/30 bg-yellow-500/10 text-yellow-200'
+                                    : strength === 'Experimental'
+                                    ? 'border-sky-500/30 bg-sky-500/10 text-sky-200'
+                                    : 'border-slate-700 bg-slate-900/40 text-slate-200';
+
+                                const costStyle =
+                                  cost === 'Low'
+                                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                                    : cost === 'Medium'
+                                    ? 'border-yellow-500/30 bg-yellow-500/10 text-yellow-200'
+                                    : cost === 'High'
+                                    ? 'border-rose-500/30 bg-rose-500/10 text-rose-200'
+                                    : 'border-slate-700 bg-slate-900/40 text-slate-200';
+
+                                return (
+                                  <div
+                                    key={idx}
+                                    className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 shadow-sm"
+                                  >
+                                    <div className="flex items-start justify-between gap-3">
+                                      <h3 className="text-slate-100 font-bold text-base">
+                                        <span className="text-yellow-300/90">#{idx + 1}</span> {ef.name}
+                                      </h3>
+
+                                      <div className="flex flex-col items-end gap-2">
+                                        {strength ? (
+                                          <span className={`text-xs rounded-full border px-2 py-1 ${strengthStyle}`}>
+                                            {strength === 'Strong Concept' ? '🟢' : strength === 'Needs Work' ? '🟡' : '🔵'} {strength}
+                                          </span>
+                                        ) : null}
+                                        {cost ? (
+                                          <span className={`text-xs rounded-full border px-2 py-1 ${costStyle}`}>
+                                            🧰 Build Cost: {cost}
+                                          </span>
+                                        ) : null}
+                                      </div>
+                                    </div>
+
+                                    {ef.premise ? (
+                                      <div className="mt-3">
+                                        <div className="flex items-center gap-2">
+                                          <div className="h-4 w-1 rounded-full bg-yellow-400/70" />
+                                          <div className="text-xs font-semibold tracking-wide text-yellow-200/80">PREMISE</div>
+                                        </div>
+                                        <div className="mt-1 text-sm text-slate-100 font-semibold whitespace-pre-wrap">{ef.premise}</div>
+                                      </div>
+                                    ) : null}
+
+                                    {ef.experience ? (
+                                      <div className="mt-3">
+                                        <div className="text-xs font-semibold tracking-wide text-yellow-200/80">THE EXPERIENCE</div>
+                                        <div className="mt-1 text-base text-slate-200 whitespace-pre-wrap">{ef.experience}</div>
+                                      </div>
+                                    ) : null}
+
+                                    {ef.performanceNotes ? (
+                                      <div className="mt-4 rounded-lg border border-slate-800 bg-slate-900/30 p-3">
+                                        <div className="text-xs font-semibold tracking-wide text-slate-300">PERFORMANCE NOTES</div>
+                                        <div className="mt-1 text-sm text-slate-200 whitespace-pre-wrap">{ef.performanceNotes}</div>
+                                      </div>
+                                    ) : null}
+
+                                    {ef.methodOverview ? (
+                                      <details className="mt-4 rounded-lg border border-slate-800 bg-slate-900/20 p-3">
+                                        <summary className="cursor-pointer select-none text-xs font-semibold tracking-wide text-slate-300">Method Overview (tap to reveal)</summary>
+                                        <div className="mt-2 text-sm text-slate-200 whitespace-pre-wrap">{ef.methodOverview}</div>
+                                      </details>
+                                    ) : null}
+
+                                    {ef.secretHint ? (
+                                      <details className="mt-3 rounded-lg border border-slate-800 bg-slate-900/20 p-3">
+                                        <summary className="cursor-pointer select-none text-xs font-semibold tracking-wide text-slate-300">Secret Hint (tap to reveal)</summary>
+                                        <div className="mt-2 text-sm text-slate-200 whitespace-pre-wrap">{ef.secretHint}</div>
+                                      </details>
                                     ) : null}
                                   </div>
-
-                                  {ef.premise ? (
-                                    <div className="mt-3">
-                                      <div className="text-xs font-semibold tracking-wide text-yellow-200/80">PREMISE</div>
-                                      <div className="mt-1 text-sm text-slate-200 whitespace-pre-wrap">{ef.premise}</div>
-                                    </div>
-                                  ) : null}
-
-                                  {ef.experience ? (
-                                    <div className="mt-3">
-                                      <div className="text-xs font-semibold tracking-wide text-yellow-200/80">THE EXPERIENCE</div>
-                                      <div className="mt-1 text-sm text-slate-200 whitespace-pre-wrap">{ef.experience}</div>
-                                    </div>
-                                  ) : null}
-                                </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           ) : (
                             <pre className="whitespace-pre-wrap break-words text-slate-200 font-sans text-sm">{displayIdeas}</pre>
@@ -984,7 +1059,7 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
                                 onChange={(e) => setSelectedEffectIndex(Number(e.target.value))}
                                 className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500"
                               >
-                                {(parsedEffects.length ? parsedEffects : [{ name: 'Effect 1', premise: '', experience: '' }]).map((ef, idx) => (
+                                {(parsedEffects.length ? parsedEffects : [{ name: 'Effect 1', premise: '', experience: '', methodOverview: '', performanceNotes: '', secretHint: '', ideaStrength: '', buildCost: '' }]).map((ef, idx) => (
                                   <option key={idx} value={idx}>{idx + 1}. {ef.name || `Effect ${idx + 1}`}</option>
                                 ))}
                               </select>
@@ -1046,7 +1121,7 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
                                 onChange={(e) => setTaskEffectIndex(Number(e.target.value))}
                                 className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500"
                               >
-                                {(parsedEffects.length ? parsedEffects : [{ name: 'Effect 1', premise: '', experience: '' }]).map((ef, idx) => (
+                                {(parsedEffects.length ? parsedEffects : [{ name: 'Effect 1', premise: '', experience: '', methodOverview: '', performanceNotes: '', secretHint: '', ideaStrength: '', buildCost: '' }]).map((ef, idx) => (
                                   <option key={idx} value={idx}>{idx + 1}. {ef.name || `Effect ${idx + 1}`}</option>
                                 ))}
                               </select>
