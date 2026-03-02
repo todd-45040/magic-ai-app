@@ -138,7 +138,7 @@ const initialMode = (() => {
       <div className="relative z-10 mx-auto flex min-h-screen max-w-5xl items-center justify-center px-4 py-10">
         <div className="grid w-full grid-cols-1 gap-10 lg:grid-cols-2 lg:items-stretch">
           {/* Brand panel */}
-          <div className="hidden lg:flex flex-col justify-center rounded-2xl border border-white/10 bg-white/5 p-10 shadow-[0_20px_60px_rgba(0,0,0,0.55)]">
+          <div className="hidden lg:flex h-full flex-col justify-center rounded-2xl border border-white/10 bg-white/5 p-10 shadow-[0_20px_60px_rgba(0,0,0,0.55)]">
             <div className="flex flex-col">
               <div className="w-full flex justify-center">
                 <img
@@ -184,8 +184,8 @@ const initialMode = (() => {
           </div>
 
           {/* Auth card */}
-          <div className="flex items-center justify-center">
-            <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-gradient-to-b from-[#0b1222]/92 to-[#070a12]/92 p-6 shadow-[0_22px_70px_rgba(0,0,0,0.70)] backdrop-blur">
+          <div className="flex h-full items-stretch justify-center">
+            <div className="relative w-full max-w-md h-full flex flex-col rounded-2xl border border-white/10 bg-gradient-to-b from-[#0b1222]/92 to-[#070a12]/92 p-6 shadow-[0_22px_70px_rgba(0,0,0,0.70)] backdrop-blur">
               {/* subtle premium edge */}
               <div className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-yellow-400/10" />
               <div className="flex flex-col items-center">
