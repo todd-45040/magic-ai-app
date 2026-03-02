@@ -95,11 +95,36 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
   const dispatch = useAppDispatch();
   const { showToast } = useToast();
   const [items, setItems] = useState(['', '', '', '']);
+  // Quick-start examples (rotates each click)
+  const [exampleIndex, setExampleIndex] = useState(0);
   // Phase 1 (Effectiveness Upgrades): user intent + difficulty for higher-quality generations.
   const [creativeIntent, setCreativeIntent] = useState<
     'Visual Miracle' | 'Comedy Bit' | 'Mentalism' | 'Close-Up Practical' | 'Stage Expansion' | 'Social Media Piece' | 'Emotional Story Piece'
   >('Visual Miracle');
   const [difficulty, setDifficulty] = useState<'Self-Working' | 'Intermediate' | 'Advanced / Gimmick Allowed'>('Intermediate');
+
+const EFFECT_ENGINE_EXAMPLES: Array<{
+  items: [string, string, string, string];
+  creativeIntent: 'Visual Miracle' | 'Comedy Bit' | 'Mentalism' | 'Close-Up Practical' | 'Stage Expansion' | 'Social Media Piece' | 'Emotional Story Piece';
+  difficulty: 'Self-Working' | 'Intermediate' | 'Advanced / Gimmick Allowed';
+}> = [
+  {
+    items: ['cell phone', 'borrowed bill', 'sharpie', 'business card'],
+    creativeIntent: 'Visual Miracle',
+    difficulty: 'Intermediate',
+  },
+  {
+    items: ['ring box', 'photo', 'envelope', 'ribbon'],
+    creativeIntent: 'Emotional Story Piece',
+    difficulty: 'Self-Working',
+  },
+  {
+    items: ['soda can', 'keys', 'receipt', 'coin'],
+    creativeIntent: 'Comedy Bit',
+    difficulty: 'Intermediate',
+  },
+];
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ideas, setIdeas] = useState<string | null>(null);
@@ -192,6 +217,25 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
     setItems(newItems);
     setError(null);
   };
+
+const handleTryExample = () => {
+  const ex = EFFECT_ENGINE_EXAMPLES[exampleIndex % EFFECT_ENGINE_EXAMPLES.length];
+
+  setItems([...ex.items]);
+  setCreativeIntent(ex.creativeIntent);
+  setDifficulty(ex.difficulty);
+
+  // Clear prior output so the next step is obvious
+  setIdeas(null);
+  setDisplayIdeas(null);
+  setError(null);
+  setSaveStatus('idle');
+  setCopyStatus('idle');
+
+  setExampleIndex((i) => i + 1);
+};
+
+
 
   const handleClearAll = () => {
     setItems(['', '', '', '']);
@@ -654,6 +698,15 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
                   <div className="flex items-center justify-between mb-3">
                     <div className="text-sm font-semibold text-slate-300">Items</div>
                     <button
+  type="button"
+  onClick={handleTryExample}
+  disabled={isLoading}
+  className="text-xs px-2 py-1 rounded-md border border-slate-700 bg-slate-900/50 text-slate-300 hover:bg-slate-800/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+  title="Fill sample items so you can generate instantly"
+>
+  Try Example
+</button>
+<button
                       type="button"
                       onClick={handleClearAll}
                       disabled={isLoading || items.every(i => i.trim() === '')}
