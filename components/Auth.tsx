@@ -139,10 +139,11 @@ const initialMode = (() => {
         <div className="grid w-full grid-cols-1 gap-10 lg:grid-cols-2 lg:items-stretch">
           {/* Brand panel */}
           <div className="hidden lg:flex flex-col justify-center rounded-2xl border border-white/10 bg-white/5 p-10 shadow-[0_20px_60px_rgba(0,0,0,0.55)]">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-purple-600/90 to-yellow-400/70 shadow-[0_0_0_1px_rgba(255,255,255,0.15)]" />
-              <div>
-                <div className="text-white text-xl font-semibold tracking-wide">Magicians’ AI Wizard</div>
+            <div className="mt-6 text-center">
+              <div className="text-white text-xl font-semibold tracking-wide">Magicians’ AI Wizard</div>
+              <div className="text-white/70 text-sm">Your creative & business suite for performers</div>
+            </div>
+
                 <div className="text-white/70 text-sm">Your creative & business suite for performers</div>
               </div>
             </div>
