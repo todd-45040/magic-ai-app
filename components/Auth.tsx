@@ -139,14 +139,23 @@ const initialMode = (() => {
         <div className="grid w-full grid-cols-1 gap-10 lg:grid-cols-2 lg:items-stretch">
           {/* Brand panel */}
           <div className="hidden lg:flex flex-col justify-center rounded-2xl border border-white/10 bg-white/5 p-10 shadow-[0_20px_60px_rgba(0,0,0,0.55)]">
-            <div className="mt-6 text-center">
-              <div className="text-white text-xl font-semibold tracking-wide">Magicians’ AI Wizard</div>
-              <div className="text-white/70 text-sm">Your creative & business suite for performers</div>
-            </div>
-
-                <div className="text-white/70 text-sm">Your creative & business suite for performers</div>
+            <div className="flex flex-col">
+              <div className="w-full flex justify-center">
+                <img
+                  src={"/assets/branding/wizard-head-wtext.png"}
+                  alt="Magicians' AI Wizard"
+                  className="w-64 select-none drop-shadow-[0_0_22px_rgba(250,204,21,0.18)]"
+                  draggable={false}
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).style.display = 'none';
+                  }}
+                />
+              </div>
+              <div className="mt-3 text-white/70 text-sm text-center">
+                Your creative &amp; business suite for performers
               </div>
             </div>
+
 
             <div className="mt-10 space-y-4 text-white/85">
               <div className="text-2xl font-semibold leading-snug">
@@ -180,18 +189,7 @@ const initialMode = (() => {
               {/* subtle premium edge */}
               <div className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-yellow-400/10" />
               <div className="flex flex-col items-center">
-                <div className="w-full flex justify-center">
-                  <img
-                    src="/assets/branding/wizard-head-wtext.png"
-                    alt="Magicians' AI Wizard"
-                    className="w-56 select-none drop-shadow-[0_0_22px_rgba(250,204,21,0.18)]"
-                    draggable={false}
-                    onError={(e) => {
-                      (e.currentTarget as HTMLImageElement).style.display = 'none';
-                    }}
-                  />
-                </div>
-                <div className="mt-4 text-white text-xl font-semibold">{title}</div>
+<div className="mt-2 text-white text-xl font-semibold">{title}</div>
                 <div className="mt-1 text-white/65 text-sm text-center">{subtitle}</div>
 
                 {mode === 'signup' && (
@@ -325,6 +323,19 @@ const initialMode = (() => {
                     ? 'Create Account & Start Trial'
                     : 'Send Reset Link'}
                 </button>
+
+                <div className="mt-4 text-center text-xs text-white/50 flex items-center justify-center gap-2">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="w-3.5 h-3.5 text-yellow-300/80"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 1a5 5 0 00-5 5v3H6a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2v-8a2 2 0 00-2-2h-1V6a5 5 0 00-5-5zm-3 8V6a3 3 0 116 0v3H9z" />
+                  </svg>
+                  <span>Your data is encrypted and never shared.</span>
+                </div>
 
                 <div className="flex items-center justify-between pt-2 text-xs">
                   {mode !== 'reset' ? (
