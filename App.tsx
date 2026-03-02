@@ -94,24 +94,6 @@ function App() {
       }
     };
 
-    // Public landing route (no login required)
-    try {
-      const p = window.location.pathname || '';
-      if (p.endsWith('/founding-circle')) {
-        setMode('founding-circle');
-        setAuthLoading(false);
-        window.clearTimeout(loadingTimeout);
-        return;
-      }
-
-      // Post-checkout founder success route.
-      // This page guides activation BEFORE any email sequence begins.
-      if (p.endsWith('/founder-success')) {
-        setMode('founder-success');
-        // Do not early-return: allow auth hydration to run so we can confirm Founder status.
-      }
-    } catch {}
-
     const cleanupAuthCallbackUrl = () => {
       try {
         const base = getAppBasePath();
@@ -153,6 +135,26 @@ function App() {
       window.clearTimeout(loadingTimeout);
       return;
     }
+
+    // Public landing routes (no login required)
+    // NOTE: Demo Mode must take precedence above, otherwise a URL like
+    // /app/founding-circle?demo=1 would never enter Demo Mode.
+    try {
+      const p = window.location.pathname || '';
+      if (p.endsWith('/founding-circle')) {
+        setMode('founding-circle');
+        setAuthLoading(false);
+        window.clearTimeout(loadingTimeout);
+        return;
+      }
+
+      // Post-checkout founder success route.
+      // This page guides activation BEFORE any email sequence begins.
+      if (p.endsWith('/founder-success')) {
+        setMode('founder-success');
+        // Do not early-return: allow auth hydration to run so we can confirm Founder status.
+      }
+    } catch {}
 
     // Ensure recording class is not left on in normal mode.
     try { document.documentElement.classList.remove('maw-record'); } catch {}

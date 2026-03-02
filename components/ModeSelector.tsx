@@ -42,7 +42,11 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({ onSelectMode }) => {
         <button
           onClick={() => {
             try { localStorage.setItem('maw_demo_mode', 'true'); } catch {}
+            const base = window.location.pathname.startsWith('/app') ? '/app' : '';
             const url = new URL(window.location.href);
+            // Always route to the app root so Demo Mode can't be blocked by
+            // other public routes (e.g. /founding-circle).
+            url.pathname = `${base}/`;
             url.searchParams.set('demo', '1');
             window.location.href = url.toString();
           }}
