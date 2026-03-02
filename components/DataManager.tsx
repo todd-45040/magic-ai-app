@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { exportData, importData, clearAllData } from '../services/dataService';
+import { exportData, importData, clearAllData, type ExportSelection } from '../services/dataService';
 import { DatabaseIcon, DownloadIcon, UploadIcon, TrashIcon, CheckIcon } from './icons';
 
 interface DataManagerProps {
@@ -12,6 +12,54 @@ const DataManager: React.FC<DataManagerProps> = ({ onClose, onDataRestored }) =>
     const [errorMessage, setErrorMessage] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    const [selection, setSelection] = useState<ExportSelection>({
+        shows: true,
+        ideas: true,
+        clients: true,
+        feedback: true,
+        questions: true,
+        profile: true,
+        contracts: true,
+        bookingPitches: true,
+        clientProposals: true,
+        showFeedback: true,
+        suggestions: true,
+        dashboardLayout: true,
+        showFeedbackTokens: true,
+    });
+
+    const setAll = (on: boolean) => {
+        setSelection(prev => {
+            const next: ExportSelection = { ...prev };
+            Object.keys(next).forEach(k => { (next as any)[k] = on; });
+            return next;
+        });
+    };
+
+    const setLocalOnly = () => {
+        setSelection({
+            // local stores + UI prefs
+            clients: true,
+            feedback: true,
+            questions: true,
+            dashboardLayout: true,
+            showFeedbackTokens: true,
+            // cloud tables off
+            shows: false,
+            ideas: false,
+            profile: false,
+            contracts: false,
+            bookingPitches: false,
+            clientProposals: false,
+            showFeedback: false,
+            suggestions: false,
+        });
+    };
+
+    const toggle = (key: keyof ExportSelection) => {
+        setSelection(prev => ({ ...prev, [key]: !prev[key] }));
+    };
+
     const handleImportClick = () => {
         fileInputRef.current?.click();
     };
@@ -23,7 +71,7 @@ const DataManager: React.FC<DataManagerProps> = ({ onClose, onDataRestored }) =>
         if (window.confirm("Restoring from backup will replace your current data with the backup file. Are you sure you want to proceed?")) {
             setImportStatus('loading');
             try {
-                await importData(file);
+                await importData(file, selection);
                 setImportStatus('success');
                 setTimeout(() => {
                     onDataRestored();
@@ -70,14 +118,76 @@ const DataManager: React.FC<DataManagerProps> = ({ onClose, onDataRestored }) =>
                             Backup Your Work
                         </h3>
                         <p className="text-sm text-slate-300 mb-4">
-                            Download a full copy of your shows, scripts, ideas, and clients to your computer. Keep this file safe!
+                            Download a backup file to your computer. You can choose what to include below.
                         </p>
+
+                        {/* Selection */}
+                        <div className="mb-4 rounded-md border border-slate-600 bg-slate-900/30 p-3">
+                            <div className="flex items-center justify-between mb-2">
+                                <div className="text-xs uppercase tracking-wide text-slate-400 font-semibold">Backup contents</div>
+                                <div className="flex gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setAll(true)}
+                                        className="text-xs px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-white/90"
+                                    >
+                                        All
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={setLocalOnly}
+                                        className="text-xs px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-white/90"
+                                    >
+                                        Local only
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setAll(false)}
+                                        className="text-xs px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-white/90"
+                                    >
+                                        None
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 text-sm">
+                                {([
+                                    ['shows', 'Shows + tasks'],
+                                    ['ideas', 'Saved ideas + rehearsal history'],
+                                    ['clients', 'Clients (local)'],
+                                    ['feedback', 'Audience feedback (local)'],
+                                    ['questions', 'Audience questions (local)'],
+                                    ['showFeedback', 'Show feedback (shared links)'],
+                                    ['bookingPitches', 'Booking pitches'],
+                                    ['clientProposals', 'Client proposals'],
+                                    ['contracts', 'Contracts'],
+                                    ['suggestions', 'Suggestions sent'],
+                                    ['profile', 'Profile snapshot'],
+                                    ['dashboardLayout', 'Dashboard layout'],
+                                ] as Array<[keyof ExportSelection, string]>).map(([key, label]) => (
+                                    <label key={String(key)} className="flex items-center gap-2 text-slate-200">
+                                        <input
+                                            type="checkbox"
+                                            checked={Boolean(selection[key])}
+                                            onChange={() => toggle(key)}
+                                            className="accent-sky-500"
+                                        />
+                                        <span className="text-xs md:text-sm">{label}</span>
+                                    </label>
+                                ))}
+                            </div>
+
+                            <div className="mt-2 text-xs text-slate-400">
+                                Tip: Cloud-backed items export from the database; local items export from this browser.
+                            </div>
+                        </div>
+
                         <button
-                            onClick={exportData}
+                            onClick={() => exportData(selection)}
                             className="w-full py-2 bg-sky-600 hover:bg-sky-700 rounded-md text-white font-bold transition-colors flex items-center justify-center gap-2"
                         >
                             <DownloadIcon className="w-4 h-4" />
-                            <span>Export Backup File</span>
+                            <span>Export Selected Backup</span>
                         </button>
                     </div>
 

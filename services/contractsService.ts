@@ -57,6 +57,27 @@ export const listContractsForShow = async (showId: string): Promise<ContractRow[
   return (data || []) as any;
 };
 
+// Used by backup export. Safe for users: filtered by authenticated user id.
+export const listAllContractsForUser = async (): Promise<ContractRow[]> => {
+  const uid = await getUserIdOrThrow();
+  const { data, error } = await supabase
+    .from('contracts')
+    .select('*')
+    .eq('user_id', uid)
+    .order('updated_at', { ascending: false, nullsFirst: false })
+    .order('created_at', { ascending: false, nullsFirst: false });
+
+  // If the table doesn't exist in this environment yet, return empty.
+  if (error) {
+    const msg = String((error as any)?.message ?? error ?? '');
+    const isMissingTable = (error as any)?.code === '42P01' || /relation .*contracts.* does not exist/i.test(msg);
+    if (isMissingTable) return [];
+    throw error;
+  }
+
+  return (data || []) as any;
+};
+
 export const getContractsMetaForShows = async (showIds: string[]): Promise<Record<string, ContractMeta>> => {
   const uid = await getUserIdOrThrow();
   const ids = (showIds || []).filter(Boolean);

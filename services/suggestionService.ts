@@ -41,3 +41,32 @@ export async function addSuggestion({ type, content }: AddSuggestionInput): Prom
     throw error;
   }
 }
+
+// Used by backup export. Returns only the current user's suggestions.
+// If the table doesn't exist (or RLS blocks it), returns empty.
+export async function getMySuggestions(): Promise<any[]> {
+  try {
+    const userRes = await supabase.auth.getUser();
+    const user = userRes?.data?.user ?? null;
+    if (!user?.id) return [];
+
+    const { data, error } = await supabase
+      .from('app_suggestions')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('timestamp', { ascending: false });
+
+    if (error) {
+      const msg = String((error as any)?.message ?? error ?? '');
+      const isMissingTable = (error as any)?.code === '42P01' || /relation .*app_suggestions.* does not exist/i.test(msg);
+      if (isMissingTable) return [];
+      // If RLS blocks, don't hard-fail backup.
+      const isRls = /row level security|permission denied/i.test(msg);
+      if (isRls) return [];
+      throw error;
+    }
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
