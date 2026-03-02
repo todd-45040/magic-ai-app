@@ -194,6 +194,75 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
       setIsLoading(false);
     }
   };
+
+  // Phase 2: generate a fresh concept using the same items, explicitly avoiding the last output.
+  const handleGenerateAlternative = async () => {
+    const validItems = items.map(item => item.trim()).filter(item => item !== '');
+    if (validItems.length === 0) {
+      setError('Please enter at least one item.');
+      return;
+    }
+    if (!ideas) {
+      // No prior idea to diverge from; fall back to a normal generation.
+      return handleGenerate();
+    }
+
+    setIsLoading(true);
+    setError(null);
+    setIdeas(null);
+    setDisplayIdeas(null);
+    setRevealReady(false);
+    setSaveStatus('idle');
+    setCopyStatus('idle');
+
+    const itemList = validItems.join(', ');
+    const lastOutput = String(ideas).slice(0, 1500);
+
+    const prompt = [
+      `Generate NEW magic effect ideas using the following items: ${itemList}.`,
+      `Creative intent: ${creativeIntent}.`,
+      `Difficulty level: ${difficulty}.`,
+      `IMPORTANT: The previous output is shown below. Your new concept must be meaningfully different (new premise, new structure, new method direction).`,
+      `Avoid reusing the same title, premise, beats, or gimmick approach. Do not paraphrase the same idea — create a different one.`,
+      `Format the ideas clearly (Premise, The Experience, Method Overview, Performance Notes, Secret Hint).`,
+      `PREVIOUS OUTPUT (for avoidance):\n${lastOutput}`
+    ].join(' ');
+
+    try {
+      const response = await generateResponse(
+        prompt,
+        EFFECT_GENERATOR_SYSTEM_INSTRUCTION,
+        currentUser || { email: '', membership: 'free', generationCount: 0, lastResetDate: '' },
+        undefined,
+        demoActive
+          ? {
+              extraHeaders: {
+                'X-Demo-Mode': 'true',
+                'X-Demo-Tool': 'effect_engine',
+                'X-Demo-Scenario': demoScenario,
+              },
+            }
+          : undefined
+      );
+
+      setIdeas(response);
+
+      // Demo Mode: keep the same cinematic reveal behavior.
+      if (demoActive) {
+        const delay = 800 + Math.floor(Math.random() * 401);
+        await new Promise<void>((resolve) => window.setTimeout(() => resolve(), delay));
+      }
+
+      setDisplayIdeas(response);
+      if (demoActive) {
+        try { markDemoToolCompleted('effect_engine'); } catch {}
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
   
   const handleSave = () => {
     if (ideas) {
@@ -388,14 +457,26 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
                   </div>
                 </div>
 
-                <button
-                    onClick={handleGenerate}
-                    disabled={isLoading || items.every(item => item.trim() === '')}
-                    className="w-full py-3 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
-                >
-                    <WandIcon className="w-5 h-5" />
-                    <span>Generate Ideas</span>
-                </button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                      onClick={handleGenerate}
+                      disabled={isLoading || items.every(item => item.trim() === '')}
+                      className="w-full py-3 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
+                  >
+                      <WandIcon className="w-5 h-5" />
+                      <span>Generate Ideas</span>
+                  </button>
+
+                  <button
+                      onClick={handleGenerateAlternative}
+                      disabled={isLoading || items.every(item => item.trim() === '') || !ideas}
+                      className="w-full py-3 flex items-center justify-center gap-2 rounded-md border border-slate-700 bg-slate-900/40 text-slate-200 font-bold hover:bg-slate-800/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title={!ideas ? 'Generate once first, then create an alternative concept.' : 'Generate a different concept using the same items'}
+                  >
+                      <span aria-hidden="true">🔁</span>
+                      <span>Alternative Concept</span>
+                  </button>
+                </div>
                 {error && <p className="text-red-400 -mt-1 text-sm text-center">{error}</p>}
             </div>
         </div>
