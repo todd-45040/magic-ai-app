@@ -96,6 +96,8 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
   const [selectedShowId, setSelectedShowId] = useState<string>('');
   const [selectedEffectIndex, setSelectedEffectIndex] = useState<number>(0);
   const [importStatus, setImportStatus] = useState<'idle' | 'importing' | 'imported'>('idle');
+  // Phase 2 (Conversion & Retention): lightweight "favorite" toggle for a generated idea.
+  const [isStrongIdea, setIsStrongIdea] = useState(false);
 
   // Demo Mode v2 (Phase 2): deterministic Effect Engine responses when demo mode is active.
   const demoActive = isDemoMode();
@@ -133,6 +135,7 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
     setRevealReady(false);
     setSaveStatus('idle');
     setCopyStatus('idle');
+    setIsStrongIdea(false);
   };
 
   const handleGenerate = async () => {
@@ -149,6 +152,7 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
     setRevealReady(false);
     setSaveStatus('idle');
     setCopyStatus('idle');
+    setIsStrongIdea(false);
 
     const itemList = validItems.join(', ');
     // Phase 1: steer generations with intent + practicality constraints.
@@ -214,6 +218,7 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
     setRevealReady(false);
     setSaveStatus('idle');
     setCopyStatus('idle');
+    setIsStrongIdea(false);
 
     const itemList = validItems.join(', ');
     const lastOutput = String(ideas).slice(0, 1500);
@@ -267,7 +272,7 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
   const handleSave = () => {
     if (ideas) {
       const itemList = items.map(item => item.trim()).filter(item => item !== '').join(', ');
-      const fullContent = `## Effect Ideas for: ${itemList}\n\n**Creative Intent:** ${creativeIntent}\n**Difficulty:** ${difficulty}\n\n${ideas}`;
+      const fullContent = `## Effect Ideas for: ${itemList}\n\n**Creative Intent:** ${creativeIntent}\n**Difficulty:** ${difficulty}\n**Strong Idea:** ${isStrongIdea ? 'Yes' : 'No'}\n\n${ideas}`;
       saveIdea('text', fullContent);
       onIdeaSaved();
       setSaveStatus('saved');
@@ -278,12 +283,92 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
   const handleCopy = () => {
     if (ideas) {
       const itemList = items.map(item => item.trim()).filter(item => item !== '').join(', ');
-      const fullContent = `Effect Ideas for: ${itemList}\nCreative Intent: ${creativeIntent}\nDifficulty: ${difficulty}\n\n${ideas}`;
+      const fullContent = `Effect Ideas for: ${itemList}\nCreative Intent: ${creativeIntent}\nDifficulty: ${difficulty}\nStrong Idea: ${isStrongIdea ? 'Yes' : 'No'}\n\n${ideas}`;
       navigator.clipboard.writeText(fullContent);
       setCopyStatus('copied');
       setTimeout(() => setCopyStatus('idle'), 2000);
     }
   }
+
+  // Phase 2: refinement actions that "layer" direction on top of the current output.
+  const handleRefine = async (
+    mode: 'refine' | 'comedy' | 'psych' | 'impossible' | 'visual'
+  ) => {
+    if (!ideas) return;
+
+    const validItems = items.map(item => item.trim()).filter(item => item !== '');
+    const itemList = validItems.join(', ');
+    const base = String(ideas).slice(0, 4000);
+
+    const instructionMap: Record<typeof mode, string> = {
+      refine: 'Refine and improve clarity, pacing, and practicality. Keep the same core concept unless a small improvement is needed. Make it more performance-ready.',
+      comedy: 'Add a comedy angle: include 2–3 punchy lines, a funny beat, and a playful premise twist while keeping the method practical.',
+      psych: 'Add psychological/mentalism layering: motivations, convincers, subtle audience management, and one strong "why" that makes the effect feel impossible.',
+      impossible: 'Increase the impossible factor: raise the stakes, strengthen the conditions, and add one clean moment that feels like "no way" while keeping it realistic to perform.',
+      visual: 'Make it more visual: strengthen the picture moments, add a clean reveal, and improve the clarity of what the audience sees at each beat.',
+    };
+
+    const prompt = [
+      `You are refining an existing Effect Engine output for Magic AI Wizard.`,
+      `Original items: ${itemList || 'N/A'}.`,
+      `Creative intent: ${creativeIntent}.`,
+      `Difficulty level: ${difficulty}.`,
+      `Task: ${instructionMap[mode]}`,
+      `Rules: Keep the same structured format (Premise, The Experience, Method Overview, Performance Notes, Secret Hint).`,
+      `Do NOT mention that you are an AI. Do NOT add safety disclaimers. Keep it concise and practical.`,
+      `\nCURRENT OUTPUT TO REFINE:\n${base}`,
+    ].join(' ');
+
+    setIsLoading(true);
+    setError(null);
+    setSaveStatus('idle');
+    setCopyStatus('idle');
+
+    try {
+      const response = await generateResponse(
+        prompt,
+        EFFECT_GENERATOR_SYSTEM_INSTRUCTION,
+        currentUser || { email: '', membership: 'free', generationCount: 0, lastResetDate: '' },
+        undefined,
+        demoActive
+          ? {
+              extraHeaders: {
+                'X-Demo-Mode': 'true',
+                'X-Demo-Tool': 'effect_engine',
+                'X-Demo-Scenario': demoScenario,
+              },
+            }
+          : undefined
+      );
+
+      setIdeas(response);
+      if (demoActive) {
+        const delay = 800 + Math.floor(Math.random() * 401);
+        await new Promise<void>((resolve) => window.setTimeout(() => resolve(), delay));
+      }
+      setDisplayIdeas(response);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Phase 2: favorite toggle stored locally (retention hook; safe + non-destructive).
+  const toggleStrongIdea = () => {
+    const next = !isStrongIdea;
+    setIsStrongIdea(next);
+    try {
+      // Store a small local footprint keyed to the current output (best-effort, no backend coupling).
+      const key = 'maw_effect_engine_strong_ideas';
+      const raw = localStorage.getItem(key);
+      const list: string[] = raw ? JSON.parse(raw) : [];
+      const fingerprint = `${creativeIntent}|${difficulty}|${normalize(ideas ?? '')}`.slice(0, 800);
+      const exists = list.includes(fingerprint);
+      const updated = next ? (exists ? list : [fingerprint, ...list].slice(0, 50)) : list.filter(x => x !== fingerprint);
+      localStorage.setItem(key, JSON.stringify(updated));
+    } catch {}
+  };
 
   const openImport = () => {
     if (!ideas) return;
@@ -533,7 +618,90 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
                           )}
                         </div>
                     </div>
+
+                    {/* Phase 2: refinement actions (conversion + engagement). */}
+                    <div className="px-4 pb-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleRefine('refine')}
+                          disabled={isLoading || !ideas}
+                          className="px-3 py-1.5 text-xs font-semibold rounded-md border border-slate-700 bg-slate-900/40 text-slate-200 hover:bg-slate-800/60 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Refine and improve the current idea"
+                        >
+                          ✨ Refine
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRefine('comedy')}
+                          disabled={isLoading || !ideas}
+                          className="px-3 py-1.5 text-xs font-semibold rounded-md border border-slate-700 bg-slate-900/40 text-slate-200 hover:bg-slate-800/60 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Add a comedy angle"
+                        >
+                          🎭 Comedy
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRefine('psych')}
+                          disabled={isLoading || !ideas}
+                          className="px-3 py-1.5 text-xs font-semibold rounded-md border border-slate-700 bg-slate-900/40 text-slate-200 hover:bg-slate-800/60 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Add psychological layering"
+                        >
+                          🧠 Psychology
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRefine('impossible')}
+                          disabled={isLoading || !ideas}
+                          className="px-3 py-1.5 text-xs font-semibold rounded-md border border-slate-700 bg-slate-900/40 text-slate-200 hover:bg-slate-800/60 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Increase the impossible factor"
+                        >
+                          💥 More Impossible
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRefine('visual')}
+                          disabled={isLoading || !ideas}
+                          className="px-3 py-1.5 text-xs font-semibold rounded-md border border-slate-700 bg-slate-900/40 text-slate-200 hover:bg-slate-800/60 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Make the effect more visual"
+                        >
+                          🎬 More Visual
+                        </button>
+
+                        {/* Strong idea toggle (retention lever) */}
+                        <div className="ml-auto flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={toggleStrongIdea}
+                            disabled={!ideas}
+                            className={`px-3 py-1.5 text-xs font-semibold rounded-md border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                              isStrongIdea
+                                ? 'border-yellow-500/40 bg-yellow-500/10 text-yellow-200'
+                                : 'border-slate-700 bg-slate-900/40 text-slate-200 hover:bg-slate-800/60'
+                            }`}
+                            title={isStrongIdea ? 'Marked as a strong idea' : 'Mark as a strong idea'}
+                          >
+                            {isStrongIdea ? '★ Strong Idea' : '☆ Mark Strong'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                     <div className="mt-auto p-2 bg-slate-900/50 flex justify-end gap-2 border-t border-slate-800">
+                        {/* Quick favorite indicator (mirrors the strong-idea toggle above) */}
+                        <button
+                          type="button"
+                          onClick={toggleStrongIdea}
+                          disabled={!ideas}
+                          className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                            isStrongIdea
+                              ? 'bg-yellow-500/10 border border-yellow-500/30 text-yellow-200'
+                              : 'bg-slate-700 hover:bg-slate-600 text-slate-200'
+                          }`}
+                          title={isStrongIdea ? 'This idea is starred' : 'Star this idea'}
+                        >
+                          <span aria-hidden="true">{isStrongIdea ? '★' : '☆'}</span>
+                          <span className="hidden sm:inline">Star</span>
+                        </button>
                         <ShareButton
                             title={`Magic Effect Ideas for: ${items.map(item => item.trim()).filter(item => item !== '').join(', ')}`}
                             text={ideas ?? displayIdeas ?? ''}
