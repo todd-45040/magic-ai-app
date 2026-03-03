@@ -91,13 +91,23 @@ const parseEffectsFromMarkdown = (markdown: string): ParsedEffect[] => {
   }
   if (headings.length === 0) return [];
 
-    const getSection = (block: string, label: string) => {
-    // Capture from either **Label:** OR plain "Label:" to the next section label or next heading.
-    const boldRe = new RegExp(`\\*\\*${label}\\*\\*\\s*:?\\s*([\\s\\S]*?)(?=\\n\\*\\*[^*]+\\*\\*\\s*:|\\n(?:#{1,4}\\s*)?#?\\s*\\d{1,2}\\s*[\\).:\\-]?\\s+|$)`, 'i');
-    const plainRe = new RegExp(`(?:^|\\n)${label}\\s*:\\s*([\\s\\S]*?)(?=\\n[A-Z][A-Za-z \\-/]{2,30}\\s*:|\\n(?:#{1,4}\\s*)?#?\\s*\\d{1,2}\\s*[\\).:\\-]?\\s+|$)`, 'i');
-    const mm = boldRe.exec(block) || plainRe.exec(block);
-    return normalize(mm?.[1] ?? '');
-  };
+const getSection = (block: string, label: string) => {
+  // Capture from either **Label:** (colon may be inside OR outside the bold) OR plain "Label:".
+  // Examples seen from server/model:
+  //   **Premise:** ...
+  //   **Premise**: ...
+  //   Premise: ...
+  const boldRe = new RegExp(
+    `\\*\\*${label}\\s*:?\\s*\\*\\*\\s*:?\\s*([\\s\\S]*?)(?=\\n\\*\\*[^*]+\\*\\*\\s*:|\\n(?:#{1,4}\\s*)?#?\\s*\\d{1,2}\\s*[\\).:\\-]?\\s+|$)`,
+    'i'
+  );
+  const plainRe = new RegExp(
+    `(?:^|\\n)${label}\\s*:\\s*([\\s\\S]*?)(?=\\n[A-Z][A-Za-z \\-/]{2,30}\\s*:|\\n(?:#{1,4}\\s*)?#?\\s*\\d{1,2}\\s*[\\).:\\-]?\\s+|$)`,
+    'i'
+  );
+  const mm = boldRe.exec(block) || plainRe.exec(block);
+  return normalize(mm?.[1] ?? '');
+};
 
   const effects: ParsedEffect[] = [];
   for (let i = 0; i < headings.length; i++) {
@@ -111,7 +121,7 @@ const parseEffectsFromMarkdown = (markdown: string): ParsedEffect[] => {
     const experience = getSection(block, 'The Experience') || getSection(block, 'Experience');
     const methodOverview = getSection(block, 'Method Overview') || getSection(block, 'Method');
     const performanceNotes = getSection(block, 'Performance Notes') || getSection(block, 'Notes');
-    const secretHint = getSection(block, 'Secret Hint') || getSection(block, 'Secret');
+    const secretHint = getSection(block, 'The Secret Hint') || getSection(block, 'Secret Hint') || getSection(block, 'Secret');
 
     const strengthRaw = (getSection(block, 'Idea Strength') || getSection(block, 'Strength')).toLowerCase();
     const costRaw = (getSection(block, 'Estimated Build Cost') || getSection(block, 'Build Cost') || getSection(block, 'Cost')).toLowerCase();
