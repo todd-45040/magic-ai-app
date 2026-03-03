@@ -24,11 +24,64 @@ type ParsedEffect = {
 
 const normalize = (s: string) => String(s ?? '').replace(/\r\n/g, '\n').trim();
 
+// If the model returns JSON (or JSON fenced in ```), parse it and map to ParsedEffect so we can render clean cards.
+const parseEffectsFromJson = (raw: string): ParsedEffect[] => {
+  const text = normalize(raw);
+  if (!text) return [];
+
+  // Strip fenced code blocks if present
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = fenced ? fenced[1].trim() : text;
+
+  // Best-effort: find a JSON object/array within the text
+  let jsonText = candidate;
+  const firstObj = candidate.indexOf('{');
+  const lastObj = candidate.lastIndexOf('}');
+  const firstArr = candidate.indexOf('[');
+  const lastArr = candidate.lastIndexOf(']');
+  if (firstObj !== -1 && lastObj !== -1 && lastObj > firstObj) {
+    jsonText = candidate.slice(firstObj, lastObj + 1);
+  } else if (firstArr !== -1 && lastArr !== -1 && lastArr > firstArr) {
+    jsonText = candidate.slice(firstArr, lastArr + 1);
+  }
+
+  try {
+    const parsed: any = JSON.parse(jsonText);
+    const effects: any[] = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray(parsed?.effects)
+        ? parsed.effects
+        : Array.isArray(parsed?.data?.effects)
+          ? parsed.data.effects
+          : [];
+
+    if (!effects.length) return [];
+
+    return effects.map((e: any) => ({
+      name: normalize(e?.name) || 'Untitled Effect',
+      premise: normalize(e?.premise),
+      experience: normalize(e?.experience),
+      methodOverview: normalize(e?.methodOverview ?? e?.method_overview ?? ''),
+      performanceNotes: normalize(e?.performanceNotes ?? e?.performance_notes ?? ''),
+      secretHint: normalize(e?.secretHint ?? e?.secret_hint ?? ''),
+      ideaStrength: (normalize(e?.ideaStrength ?? e?.idea_strength) as any) || '',
+      buildCost: (normalize(e?.buildCost ?? e?.build_cost) as any) || '',
+    }));
+  } catch {
+    return [];
+  }
+};
+
+
 // Best-effort parser for the Effect Engine markdown output.
 // Supports headings like "### 1. The Safehouse" and sections like **Premise:**, **The Experience:**
 const parseEffectsFromMarkdown = (markdown: string): ParsedEffect[] => {
   const text = normalize(markdown);
   if (!text) return [];
+  // Some providers return structured JSON. If so, render it cleanly instead of showing raw braces.
+  const fromJson = parseEffectsFromJson(text);
+  if (fromJson.length) return fromJson;
+
 
   const headingRe = /^(?:#{1,4}\s*)?#?\s*(\d{1,2})\s*[\).:\-]?\s+(.+)$/gm;
   const headings: Array<{ index: number; name: string }> = [];
@@ -103,9 +156,6 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
     'Visual Miracle' | 'Comedy Bit' | 'Mentalism' | 'Close-Up Practical' | 'Stage Expansion' | 'Social Media Piece' | 'Emotional Story Piece'
   >('Visual Miracle');
   const [difficulty, setDifficulty] = useState<'Self-Working' | 'Intermediate' | 'Advanced / Gimmick Allowed'>('Intermediate');
-
-  // Speed control (Reliability patch): Fast is default to reduce timeouts.
-  const [speedMode, setSpeedMode] = useState<'fast' | 'full'>('fast');
 
 const EFFECT_ENGINE_EXAMPLES: Array<{
   items: [string, string, string, string];
@@ -275,31 +325,18 @@ const handleTryExample = () => {
     setIsStrongIdea(false);
 
     const itemList = validItems.join(', ');
-    const fast = typeof opts?.fast === 'boolean' ? opts.fast : (speedMode === 'fast');
-
-    // NOTE: The /api/generate Effect Engine currently uses a strict JSON contract server-side.
-    // These prompt lines are still useful for other providers/fallbacks, but the true speed
-    // behavior is enforced by the X-Effect-Speed header (fast/full).
-    const prompt = fast
-      ? [
-          `Generate EXACTLY 2 magic effect concepts using: ${itemList}.`,
-          `Creative intent: ${creativeIntent}.`,
-          `Difficulty: ${difficulty}.`,
-          `Keep each section 1–2 sentences max.`,
-          `Use ONLY: Premise, The Experience, Performance Notes.`,
-          `Do NOT include Method Overview or Secret Hint.`,
-        ].join(' ')
-      : [
-          `Generate magic effect ideas using the following items: ${itemList}.`,
-          `Creative intent: ${creativeIntent}.`,
-          `Difficulty level: ${difficulty}.`,
-          `Make the ideas practical for real performance and clearly structured (Premise, The Experience, Method Overview, Performance Notes, Secret Hint).`,
-          `Add a short self-assessment at the end of each effect: Idea Strength (Strong Concept / Needs Work / Experimental) and Estimated Build Cost (Low / Medium / High).`,
-        ].join(' ');
+    // Phase 1: steer generations with intent + practicality constraints.
+    const prompt = [
+      ...(opts?.fast ? [`Return exactly 2 effect concepts (no more, no less).`, `Keep each section to 1–2 sentences max.`, `Skip Method Overview and Secret Hint entirely.`] : []),
+      `Generate magic effect ideas using the following items: ${itemList}.`,
+      `Creative intent: ${creativeIntent}.`,
+      `Difficulty level: ${difficulty}.`,
+      `Make the ideas practical for real performance and clearly structured (Premise, The Experience, Method Overview, Performance Notes, Secret Hint).`,
+      `Add a short self-assessment at the end of each effect: Idea Strength (Strong Concept / Needs Work / Experimental) and Estimated Build Cost (Low / Medium / High).`,
+    ].join(' ');
     
     try {
       // FIX: pass currentUser as the 3rd argument to generateResponse
-      const speedHeaders = { 'X-Effect-Speed': (fast ? 'fast' : 'full') } as Record<string, string>;
       const response = await generateResponse(
         prompt,
         EFFECT_GENERATOR_SYSTEM_INSTRUCTION,
@@ -311,10 +348,9 @@ const handleTryExample = () => {
                 'X-Demo-Mode': 'true',
                 'X-Demo-Tool': 'effect_engine',
                 'X-Demo-Scenario': demoScenario,
-                ...speedHeaders,
               },
             }
-          : { extraHeaders: speedHeaders }
+          : undefined
       );
       setIdeas(response);
 
@@ -371,7 +407,6 @@ const handleTryExample = () => {
     ].join(' ');
 
     try {
-      const speedHeaders = { 'X-Effect-Speed': speedMode } as Record<string, string>;
       const response = await generateResponse(
         prompt,
         EFFECT_GENERATOR_SYSTEM_INSTRUCTION,
@@ -383,10 +418,9 @@ const handleTryExample = () => {
                 'X-Demo-Mode': 'true',
                 'X-Demo-Tool': 'effect_engine',
                 'X-Demo-Scenario': demoScenario,
-                ...speedHeaders,
               },
             }
-          : { extraHeaders: speedHeaders }
+          : undefined
       );
 
       setIdeas(response);
@@ -484,19 +518,16 @@ const handleTryExample = () => {
       visual: 'Make it more visual: strengthen the picture moments, add a clean reveal, and improve the clarity of what the audience sees at each beat.',
     };
 
-    const fast = speedMode === 'fast';
     const prompt = [
       `You are refining an existing Effect Engine output for Magic AI Wizard.`,
       `Original items: ${itemList || 'N/A'}.`,
       `Creative intent: ${creativeIntent}.`,
       `Difficulty level: ${difficulty}.`,
       `Task: ${instructionMap[mode]}`,
-      fast
-        ? `Rules: Use ONLY (Premise, The Experience, Performance Notes). Do NOT include Method Overview or Secret Hint.`
-        : `Rules: Keep the same structured format (Premise, The Experience, Method Overview, Performance Notes, Secret Hint).`,
-      `Return exactly ${fast ? 2 : 3} effect concepts (no more, no less).`,
-      `Keep each section concise: ${fast ? '1–2' : '2–4'} sentences max per section.`,
-      `Avoid long intros. No filler.`,
+      `Rules: Keep the same structured format (Premise, The Experience, Method Overview, Performance Notes, Secret Hint).`,
+      `Return exactly 3 effect concepts (no more, no less).`,
+      `Keep each section concise: 2–4 sentences max per section.`,
+      `Avoid long intros. No filler.`,,
       `Also include Idea Strength (Strong Concept / Needs Work / Experimental) and Estimated Build Cost (Low / Medium / High).`,
       `Do NOT mention that you are an AI. Do NOT add safety disclaimers. Keep it concise and practical.`,
       `\nCURRENT OUTPUT TO REFINE:\n${base}`,
@@ -508,7 +539,6 @@ const handleTryExample = () => {
     setCopyStatus('idle');
 
     try {
-      const speedHeaders = { 'X-Effect-Speed': speedMode } as Record<string, string>;
       const response = await generateResponse(
         prompt,
         EFFECT_GENERATOR_SYSTEM_INSTRUCTION,
@@ -520,10 +550,9 @@ const handleTryExample = () => {
                 'X-Demo-Mode': 'true',
                 'X-Demo-Tool': 'effect_engine',
                 'X-Demo-Scenario': demoScenario,
-                ...speedHeaders,
               },
             }
-          : { extraHeaders: speedHeaders }
+          : undefined
       );
 
       setIdeas(response);
@@ -813,41 +842,9 @@ const handleTryExample = () => {
                   </div>
                 </div>
 
-                {/* Speed toggle */}
-                <div className="rounded-lg border border-slate-800 bg-slate-900/30 p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="text-sm font-medium text-slate-300">Speed</div>
-                    <div className="text-xs text-slate-400">Fast is default</div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {([
-                      { key: 'fast' as const, label: 'Fast', sub: '2 concepts • short' },
-                      { key: 'full' as const, label: 'Full', sub: '4 concepts • deeper' },
-                    ]).map((opt) => {
-                      const active = speedMode === opt.key;
-                      return (
-                        <button
-                          key={opt.key}
-                          type="button"
-                          onClick={() => setSpeedMode(opt.key)}
-                          className={
-                            `px-3 py-2 rounded-md text-left border transition-colors ` +
-                            (active
-                              ? 'border-purple-500/60 bg-purple-500/20 text-white'
-                              : 'border-slate-700 bg-slate-900/40 text-slate-300 hover:bg-slate-800/60')
-                          }
-                        >
-                          <div className="text-xs font-semibold">{opt.label}</div>
-                          <div className="text-[11px] opacity-80">{opt.sub}</div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <button
-                      onClick={() => handleGenerate({ fast: speedMode === 'fast' })}
+                      onClick={handleGenerate}
                       disabled={isLoading || items.map(i=>i.trim()).filter(Boolean).length < 2}
                       className="w-full py-3 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
                   >
@@ -1073,7 +1070,7 @@ const handleTryExample = () => {
       <div className="flex gap-2">
         <button
           type="button"
-          onClick={() => handleGenerate({ fast: speedMode === 'fast' })}
+          onClick={() => handleGenerate()}
           disabled={isLoading}
           className="h-9 px-3 rounded-md bg-slate-800/70 hover:bg-slate-700 text-slate-100 text-xs font-semibold disabled:opacity-60"
         >
