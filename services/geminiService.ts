@@ -62,7 +62,7 @@ async function postJson<T>(
   options?: { timeoutMs?: number; retries?: number }
 ): Promise<T> {
   const timeoutMs = options?.timeoutMs ?? 90000; // keep under common serverless proxy timeouts
-  const retries = options?.retries ?? 1;
+  const retries = options?.retries ?? 2;
 
   const init: RequestInit = {
     method: 'POST',
@@ -191,7 +191,7 @@ export const generateResponse = async (
   };
 
   try {
-    const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 1 });
+    const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 2 });
     return extractText(result);
   } catch (error: any) {
     console.error('AI Error:', error);
@@ -219,7 +219,7 @@ export const generateResponseWithParts = async (
   };
 
   try {
-    const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 1 });
+    const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 2 });
     return extractText(result);
   } catch (error: any) {
     console.error('AI Error:', error);
@@ -244,7 +244,7 @@ export const generateStructuredResponse = async (
     },
   };
 
-  const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 1 });
+  const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 2 });
   const text = extractText(result);
   return JSON.parse(text || '{}');
 };

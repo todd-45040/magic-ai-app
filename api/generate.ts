@@ -420,6 +420,24 @@ export default async function handler(request: any, response: any) {
       return response.status(400).json({ error: 'The request was blocked by safety filters.' });
     }
 
+
+    // Graceful handling: provider overload / high demand (503 UNAVAILABLE)
+    const msg = String(error?.message || '');
+    const msgLower = msg.toLowerCase();
+    const code = (error as any)?.code ?? (error as any)?.status ?? (error as any)?.error?.code ?? (error as any)?.response?.status;
+    if (
+      code === 503 ||
+      msg.includes('"code":503') ||
+      msg.includes('UNAVAILABLE') ||
+      msgLower.includes('high demand') ||
+      msgLower.includes('overloaded')
+    ) {
+      response.setHeader('Retry-After', '2');
+      return response.status(503).json({
+        error: 'AI is temporarily busy (high demand). Please try again in a moment.',
+      });
+    }
+
     return response.status(500).json({
       error: error?.message || 'An internal error occurred while processing your request.',
     });
