@@ -61,7 +61,8 @@ async function postJson<T>(
   extraHeaders?: Record<string, string>,
   options?: { timeoutMs?: number; retries?: number }
 ): Promise<T> {
-  const timeoutMs = options?.timeoutMs ?? 60000; // keep under common serverless proxy timeouts
+  // Keep this <= Vercel function maxDuration (configured in vercel.json).
+  const timeoutMs = options?.timeoutMs ?? 90000;
   const retries = options?.retries ?? 1;
 
   const init: RequestInit = {
@@ -146,7 +147,7 @@ async function postJson<T>(
 
   // If we exhausted retries, surface a helpful message
   const msg = lastErr?.name === 'AbortError'
-    ? `Request timed out (${Math.round((options?.timeoutMs ?? 60000) / 1000)}s)`
+    ? `Request timed out (${Math.round((options?.timeoutMs ?? 90000) / 1000)}s)`
     : (lastErr?.message || 'Request failed');
 
   throw new Error(msg);
@@ -191,7 +192,7 @@ export const generateResponse = async (
   };
 
   try {
-    const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 60000, retries: 1 });
+    const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 1 });
     return extractText(result);
   } catch (error: any) {
     console.error('AI Error:', error);
@@ -219,7 +220,7 @@ export const generateResponseWithParts = async (
   };
 
   try {
-    const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 60000, retries: 1 });
+    const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 1 });
     return extractText(result);
   } catch (error: any) {
     console.error('AI Error:', error);
@@ -244,7 +245,7 @@ export const generateStructuredResponse = async (
     },
   };
 
-  const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 60000, retries: 1 });
+  const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 1 });
   const text = extractText(result);
   return JSON.parse(text || '{}');
 };

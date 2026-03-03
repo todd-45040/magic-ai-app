@@ -23,6 +23,18 @@ type EffectEnginePayload = {
   effects: EffectJson[];
 };
 
+// Fast mode contract: smaller + quicker generations to reduce timeouts.
+type FastEffectJson = {
+  name: string;
+  premise: string;
+  experience: string;
+  performance_notes: string;
+};
+
+type FastEffectEnginePayload = {
+  effects: FastEffectJson[];
+};
+
 const DEFAULT_TIMEOUT_MS = (() => {
   const v = Number(process.env.EFFECT_ENGINE_TIMEOUT_MS);
   // sensible bounds: 10s–85s (deep mode can legitimately take longer)
@@ -36,10 +48,18 @@ function clampInt(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, Math.floor(n)));
 }
 
-function getEffectEngineMaxTokens(configMaybe: any): number {
+function getEffectEngineMaxTokens(configMaybe: any, speed: 'fast' | 'full'): number {
   const env = Number(process.env.EFFECT_ENGINE_MAX_TOKENS);
   const envVal = Number.isFinite(env) ? env : 9000;
   const cfgVal = typeof configMaybe?.maxOutputTokens === 'number' ? configMaybe.maxOutputTokens : envVal;
+
+  // Fast mode defaults much smaller to keep latency down.
+  if (speed === 'fast') {
+    const fastDefault = Number.isFinite(envVal) ? Math.min(envVal, 1400) : 1400;
+    const v = typeof configMaybe?.maxOutputTokens === 'number' ? cfgVal : fastDefault;
+    return clampInt(v, 450, 2500);
+  }
+
   return clampInt(cfgVal, 600, 12_000);
 }
 
@@ -114,6 +134,19 @@ function validateDeepEffectEngineJson(payload: any): payload is EffectEnginePayl
   );
 }
 
+function validateFastEffectEngineJson(payload: any): payload is FastEffectEnginePayload {
+  if (!payload || typeof payload !== 'object') return false;
+  if (!Array.isArray(payload.effects) || payload.effects.length !== 2) return false;
+
+  return payload.effects.every((e: any) =>
+    e &&
+    isNonEmptyStr(e.name, 3) &&
+    isNonEmptyStr(e.premise, 20) &&
+    isNonEmptyStr(e.experience, 50) &&
+    isNonEmptyStr(e.performance_notes, 30)
+  );
+}
+
 function renderEffectsToMarkdown(payload: EffectEnginePayload): string {
   const blocks = payload.effects.map((e, i) => {
     const n = i + 1;
@@ -124,6 +157,19 @@ function renderEffectsToMarkdown(payload: EffectEnginePayload): string {
       `**Method Overview:** ${e.method_overview.trim()}\n\n` +
       `**Performance Notes:** ${e.performance_notes.trim()}\n\n` +
       `**The Secret Hint:** ${e.secret_hint.trim()}`
+    );
+  });
+  return blocks.join('\n\n***\n\n');
+}
+
+function renderFastEffectsToMarkdown(payload: FastEffectEnginePayload): string {
+  const blocks = payload.effects.map((e, i) => {
+    const n = i + 1;
+    return (
+      `### ${n}. ${e.name.trim()}\n\n` +
+      `**Premise:** ${e.premise.trim()}\n\n` +
+      `**The Experience:** ${e.experience.trim()}\n\n` +
+      `**Performance Notes:** ${e.performance_notes.trim()}`
     );
   });
   return blocks.join('\n\n***\n\n');
@@ -194,6 +240,37 @@ function buildDeepEffectEngineJsonPrompt(items: string[]): string {
     `- No extra keys.\n` +
     `- No markdown fences.\n` +
     `- Keep methods non-exposure.\n`
+  );
+}
+
+function buildFastEffectEngineJsonPrompt(items: string[]): string {
+  const itemLine = items.length ? items.join(', ') : 'the provided items';
+
+  return (
+    `Return ONLY valid JSON. No markdown. No commentary.\n` +
+    `You are a world-class magic inventor and director.\n\n` +
+    `Create EXACTLY 2 distinct magic effect concepts using: ${itemLine}.\n\n` +
+    `JSON schema (must match exactly):\n` +
+    `{\n` +
+    `  "effects": [\n` +
+    `    {\n` +
+    `      "name": "",\n` +
+    `      "premise": "",\n` +
+    `      "experience": "",\n` +
+    `      "performance_notes": ""\n` +
+    `    }\n` +
+    `  ]\n` +
+    `}\n\n` +
+    `Field requirements:\n` +
+    `- name: short, punchy title\n` +
+    `- premise: 1–2 sentences (tight hook)\n` +
+    `- experience: 1–2 sentences (audience-facing beats, no filler)\n` +
+    `- performance_notes: 1–2 sentences (reset/angles/timing)\n\n` +
+    `Hard rules:\n` +
+    `- EXACTLY 2 effects in the array.\n` +
+    `- No extra keys.\n` +
+    `- No markdown fences.\n` +
+    `- Keep methods non-exposure (do not explain secrets).\n`
   );
 }
 
@@ -308,7 +385,11 @@ export default async function handler(request: any, response: any) {
     const provider = await resolveProvider(request);
     const { model, contents, config } = request.body || {};
 
-    const maxOutputTokens = getEffectEngineMaxTokens(config);
+    // Speed mode: used to trade quality/length for reliability.
+    const speedHeaderRaw = String(request.headers['x-effect-speed'] || '').trim().toLowerCase();
+    const speedMode: 'fast' | 'full' = speedHeaderRaw === 'fast' ? 'fast' : 'full';
+
+    const maxOutputTokens = getEffectEngineMaxTokens(config, speedMode);
 
     const boundedConfig = {
       ...(config || {}),
@@ -355,7 +436,9 @@ export default async function handler(request: any, response: any) {
 
     // --- Never-cut-off path: Deep JSON contract + validate + retry once ---
     const items = extractItemsFromContents(contents);
-    const jsonPrompt = buildDeepEffectEngineJsonPrompt(items);
+    const jsonPrompt = speedMode === 'fast'
+      ? buildFastEffectEngineJsonPrompt(items)
+      : buildDeepEffectEngineJsonPrompt(items);
 
     const attemptOnce = async (extra?: { strengthen?: boolean; lastText?: string }) => {
       const strengthened = extra?.strengthen
@@ -365,21 +448,32 @@ export default async function handler(request: any, response: any) {
       const contentsOverride = [{ role: 'user', parts: [{ text: strengthened }] }];
       const result = await run({ contentsOverride, hardTimeoutMs: DEFAULT_TIMEOUT_MS });
       const raw = extractText(result);
-      const parsed = safeJsonParse<EffectEnginePayload>(stripCodeFences(raw));
+      const parsed = safeJsonParse<any>(stripCodeFences(raw));
       return { result, raw, parsed };
     };
 
     let finalResult: any;
     let payload: EffectEnginePayload | null = null;
+    let fastPayload: FastEffectEnginePayload | null = null;
 
     const first = await attemptOnce();
-    if (first.parsed && validateDeepEffectEngineJson(first.parsed)) {
-      payload = first.parsed;
+    const firstOk = speedMode === 'fast'
+      ? (first.parsed && validateFastEffectEngineJson(first.parsed))
+      : (first.parsed && validateDeepEffectEngineJson(first.parsed));
+
+    if (firstOk) {
+      if (speedMode === 'fast') fastPayload = first.parsed as FastEffectEnginePayload;
+      else payload = first.parsed as EffectEnginePayload;
       finalResult = first.result;
     } else {
       const second = await attemptOnce({ strengthen: true, lastText: first.raw });
-      if (second.parsed && validateDeepEffectEngineJson(second.parsed)) {
-        payload = second.parsed;
+      const secondOk = speedMode === 'fast'
+        ? (second.parsed && validateFastEffectEngineJson(second.parsed))
+        : (second.parsed && validateDeepEffectEngineJson(second.parsed));
+
+      if (secondOk) {
+        if (speedMode === 'fast') fastPayload = second.parsed as FastEffectEnginePayload;
+        else payload = second.parsed as EffectEnginePayload;
         finalResult = second.result;
       } else {
         // Last resort: return the raw text (still useful for debugging)
@@ -393,6 +487,13 @@ export default async function handler(request: any, response: any) {
         ...(finalResult || {}),
         text: markdown,
         effect_engine_json: payload,
+      };
+    } else if (fastPayload) {
+      const markdown = renderFastEffectsToMarkdown(fastPayload);
+      finalResult = {
+        ...(finalResult || {}),
+        text: markdown,
+        effect_engine_json: fastPayload,
       };
     } else {
       // Ensure text exists for clients
