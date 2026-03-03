@@ -1,12 +1,14 @@
 import React from "react";
 
 /**
- * SaveActionBar (Premium + Backward Compatible)
+ * SaveActionBar (Premium + Backward Compatible + Safe Wiring)
  *
- * Supports the newer "primary/secondary/utilities/refineContent" API,
- * AND the older "onSave/primaryLabel/onAddToShow/onConvertToTask/onCopy/onShare/isStrong/onToggleStrong" API.
+ * Works with BOTH:
+ *  - New API: primary / secondaryLeft / secondaryRight / utilities / refineContent
+ *  - Legacy API: onSave / primaryLabel / onAddToShow / onConvertToTask / onCopy / onShare / isStrong / onToggleStrong
  *
- * This prevents runtime crashes if a page still passes legacy props.
+ * Safety:
+ *  - If required handlers are missing, buttons render disabled (instead of clickable no-ops).
  */
 
 type ButtonTone = "primary" | "secondary" | "ghost";
@@ -184,13 +186,13 @@ export default function SaveActionBar(props: SaveActionBarProps) {
   const safeSecondaryLeft: ActionButton | undefined =
     secondaryLeft ??
     (onAddToShow
-      ? { label: "Add to Show Planner", onClick: onAddToShow, disabled: false, tone: "secondary" }
+      ? { label: "Add to Show Planner", onClick: onAddToShow, disabled: !saved, tone: "secondary" }
       : undefined);
 
   const safeSecondaryRight: ActionButton | undefined =
     secondaryRight ??
     (onConvertToTask
-      ? { label: "Convert to Task", onClick: onConvertToTask, disabled: false, tone: "secondary" }
+      ? { label: "Convert to Task", onClick: onConvertToTask, disabled: !saved, tone: "secondary" }
       : undefined);
 
   // Build utilities from legacy props if not provided.
@@ -198,21 +200,22 @@ export default function SaveActionBar(props: SaveActionBarProps) {
     utilities ??
     (() => {
       const u: UtilityButton[] = [];
-      if (onToggleStrong) u.push({ label: isStrong ? "Strong" : "Mark Strong", onClick: onToggleStrong, active: isStrong });
-      if (onCopy) u.push({ label: "Copy", onClick: onCopy });
-      if (onShare) u.push({ label: "Share", onClick: onShare });
+      if (onToggleStrong) u.push({ label: isStrong ? "Strong" : "Mark Strong", onClick: onToggleStrong, active: isStrong, disabled: !saved && !onSave });
+      if (onCopy) u.push({ label: "Copy", onClick: onCopy, disabled: false });
+      if (onShare) u.push({ label: "Share", onClick: onShare, disabled: false });
       return u.length ? u : undefined;
     })();
 
   // Allow legacy refineNode to populate refineContent
   const safeRefineContent = refineContent ?? refineNode ?? null;
 
-  // Label logic: prefer new API loading, then legacy saving flag, then saved state
+  const primaryIsWired = !!safePrimary?.onClick;
+
+  // Label logic
   const effectivePrimaryLabel = (() => {
-    if (!safePrimary) return primaryLabel;
-    if (safePrimary.loading || saving) return savingLabel;
+    if (safePrimary?.loading || saving) return savingLabel;
     if (saved) return savedLabel;
-    return safePrimary.label;
+    return safePrimary?.label ?? primaryLabel;
   })();
 
   return (
@@ -233,7 +236,7 @@ export default function SaveActionBar(props: SaveActionBarProps) {
 
         {safeUtilities && safeUtilities.length > 0 ? (
           <div className="flex flex-col items-end gap-2">
-            <div className="flex gap-2 flex-wrap justify-end max-w-[320px]">
+            <div className="flex gap-2 flex-wrap justify-end max-w-[340px]">
               {safeUtilities.map((u, idx) => (
                 <UtilityPill key={idx} {...u} />
               ))}
@@ -249,7 +252,7 @@ export default function SaveActionBar(props: SaveActionBarProps) {
           onClick={safePrimary?.onClick ?? (() => {})}
           tone="primary"
           fullWidth
-          disabled={safePrimary?.disabled ?? disabled}
+          disabled={(safePrimary?.disabled ?? disabled) || !primaryIsWired}
           loading={safePrimary?.loading ?? saving}
           icon={safePrimary?.icon}
         />
