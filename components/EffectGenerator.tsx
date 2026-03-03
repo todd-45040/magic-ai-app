@@ -1025,8 +1025,7 @@ const handleTryExample = () => {
                                 </>
                             )}
                         </button>
-                         <button
-                            
+
 {/* ---------- Bottom Action Stack ---------- */}
 <div className="mt-6 rounded-xl border border-slate-800 bg-slate-900/30 p-4">
 
