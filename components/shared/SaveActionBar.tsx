@@ -1,5 +1,14 @@
 import React from "react";
 
+/**
+ * SaveActionBar (Premium + Backward Compatible)
+ *
+ * Supports the newer "primary/secondary/utilities/refineContent" API,
+ * AND the older "onSave/primaryLabel/onAddToShow/onConvertToTask/onCopy/onShare/isStrong/onToggleStrong" API.
+ *
+ * This prevents runtime crashes if a page still passes legacy props.
+ */
+
 type ButtonTone = "primary" | "secondary" | "ghost";
 
 type ActionButton = {
@@ -24,17 +33,17 @@ export interface SaveActionBarProps {
   title?: string;
   subtitle?: string;
 
-  /** Primary save action (big purple CTA) */
-  primary: ActionButton;
+  /** New API: Primary save action (big purple CTA) */
+  primary?: ActionButton;
 
-  /** Two “workflow” actions under the primary button */
+  /** New API: Two “workflow” actions under the primary button */
   secondaryLeft?: ActionButton; // e.g., Add to Show Planner
   secondaryRight?: ActionButton; // e.g., Convert to Task
 
-  /** Utility actions row (Strong / Copy / Share) */
+  /** New API: Utility actions row (Strong / Copy / Share) */
   utilities?: UtilityButton[];
 
-  /** Optional “Refine This Idea” section content (buttons, toggles, etc.) */
+  /** New API: Optional “Refine This Idea” section content */
   refineTitle?: string;
   refineContent?: React.ReactNode;
 
@@ -43,6 +52,26 @@ export interface SaveActionBarProps {
   savingLabel?: string; // default "Saving..."
   savedLabel?: string; // default "Saved"
   className?: string;
+
+  // ------------------------------
+  // Legacy API (older pages)
+  // ------------------------------
+  primaryLabel?: string;
+  onSave?: () => void;
+  saving?: boolean;
+  disabled?: boolean;
+
+  onAddToShow?: () => void;
+  onConvertToTask?: () => void;
+
+  onCopy?: () => void;
+  onShare?: () => void;
+
+  isStrong?: boolean;
+  onToggleStrong?: () => void;
+
+  /** Legacy refine slot (optional convenience) */
+  refineNode?: React.ReactNode;
 }
 
 function cx(...parts: Array<string | false | null | undefined>) {
@@ -59,11 +88,13 @@ function Button({
   fullWidth,
 }: ActionButton & { fullWidth?: boolean }) {
   const base =
-    "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition focus:outline-none focus:ring-2 focus:ring-purple-500/40 disabled:opacity-50 disabled:cursor-not-allowed";
+    "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition " +
+    "focus:outline-none focus:ring-2 focus:ring-purple-500/40 disabled:opacity-50 disabled:cursor-not-allowed";
 
   const tones: Record<ButtonTone, string> = {
     primary:
-      "bg-purple-600 text-white hover:bg-purple-700 shadow-[0_10px_30px_-12px_rgba(168,85,247,0.9)]",
+      "bg-purple-600 text-white hover:bg-purple-700 " +
+      "shadow-[0_10px_30px_-12px_rgba(168,85,247,0.9)]",
     secondary:
       "bg-zinc-900/40 text-zinc-100 border border-zinc-700/70 hover:bg-zinc-900/60",
     ghost:
@@ -104,21 +135,85 @@ function UtilityPill({ label, onClick, active, disabled, icon }: UtilityButton) 
   );
 }
 
-export default function SaveActionBar({
-  title = "Next step:",
-  subtitle = "Save it, then move it into a Show or Task.",
-  primary,
-  secondaryLeft,
-  secondaryRight,
-  utilities,
-  refineTitle = "Refine This Idea",
-  refineContent,
-  saved = false,
-  savingLabel = "Saving...",
-  savedLabel = "Saved",
-  className,
-}: SaveActionBarProps) {
-  const primaryLabel = primary.loading ? savingLabel : saved ? savedLabel : primary.label;
+export default function SaveActionBar(props: SaveActionBarProps) {
+  const {
+    title = "Next step:",
+    subtitle = "Save it, then move it into a Show or Task.",
+    className,
+
+    // New API
+    primary,
+    secondaryLeft,
+    secondaryRight,
+    utilities,
+    refineTitle = "Refine This Idea",
+    refineContent,
+
+    // Shared visual state
+    saved = false,
+    savingLabel = "Saving...",
+    savedLabel = "Saved",
+
+    // Legacy API
+    primaryLabel = "Save to Idea Vault",
+    onSave,
+    saving = false,
+    disabled = false,
+    onAddToShow,
+    onConvertToTask,
+    onCopy,
+    onShare,
+    isStrong = false,
+    onToggleStrong,
+    refineNode,
+  } = props;
+
+  // Build a safe "primary" button even if callers still use legacy props.
+  const safePrimary: ActionButton | null =
+    primary ??
+    (onSave
+      ? {
+          label: primaryLabel,
+          onClick: onSave,
+          loading: saving,
+          disabled,
+        }
+      : null);
+
+  // Build secondary buttons from legacy props if not provided.
+  const safeSecondaryLeft: ActionButton | undefined =
+    secondaryLeft ??
+    (onAddToShow
+      ? { label: "Add to Show Planner", onClick: onAddToShow, disabled: false, tone: "secondary" }
+      : undefined);
+
+  const safeSecondaryRight: ActionButton | undefined =
+    secondaryRight ??
+    (onConvertToTask
+      ? { label: "Convert to Task", onClick: onConvertToTask, disabled: false, tone: "secondary" }
+      : undefined);
+
+  // Build utilities from legacy props if not provided.
+  const safeUtilities: UtilityButton[] | undefined =
+    utilities ??
+    (() => {
+      const u: UtilityButton[] = [];
+      if (onToggleStrong) u.push({ label: isStrong ? "Strong" : "Mark Strong", onClick: onToggleStrong, active: isStrong });
+      if (onCopy) u.push({ label: "Copy", onClick: onCopy });
+      if (onShare) u.push({ label: "Share", onClick: onShare });
+      return u.length ? u : undefined;
+    })();
+
+  // Allow legacy refineNode to populate refineContent
+  const safeRefineContent = refineContent ?? refineNode ?? null;
+
+  // Label logic: prefer new API loading, then legacy saving flag, then saved state
+  const effectivePrimaryLabel = (() => {
+    if (!safePrimary) return primaryLabel;
+    if (safePrimary.loading || saving) return savingLabel;
+    if (saved) return savedLabel;
+    return safePrimary.label;
+  })();
 
   return (
     <div
@@ -136,11 +231,10 @@ export default function SaveActionBar({
           <div className="mt-1 text-sm text-zinc-400">{subtitle}</div>
         </div>
 
-        {utilities && utilities.length > 0 ? (
+        {safeUtilities && safeUtilities.length > 0 ? (
           <div className="flex flex-col items-end gap-2">
-            {/* keep the “corner” feel */}
-            <div className="flex gap-2 flex-wrap justify-end max-w-[260px]">
-              {utilities.map((u, idx) => (
+            <div className="flex gap-2 flex-wrap justify-end max-w-[320px]">
+              {safeUtilities.map((u, idx) => (
                 <UtilityPill key={idx} {...u} />
               ))}
             </div>
@@ -151,38 +245,27 @@ export default function SaveActionBar({
       {/* Primary CTA */}
       <div className="mt-4">
         <Button
-          {...primary}
-          label={primaryLabel}
+          label={effectivePrimaryLabel}
+          onClick={safePrimary?.onClick ?? (() => {})}
           tone="primary"
           fullWidth
-          disabled={primary.disabled}
-          loading={primary.loading}
+          disabled={safePrimary?.disabled ?? disabled}
+          loading={safePrimary?.loading ?? saving}
+          icon={safePrimary?.icon}
         />
       </div>
 
       {/* Secondary actions row */}
-      {(secondaryLeft || secondaryRight) && (
+      {(safeSecondaryLeft || safeSecondaryRight) && (
         <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {secondaryLeft ? (
-            <Button
-              {...secondaryLeft}
-              tone={secondaryLeft.tone ?? "secondary"}
-              fullWidth
-              disabled={secondaryLeft.disabled}
-              loading={secondaryLeft.loading}
-            />
+          {safeSecondaryLeft ? (
+            <Button {...safeSecondaryLeft} tone={safeSecondaryLeft.tone ?? "secondary"} fullWidth />
           ) : (
             <div />
           )}
 
-          {secondaryRight ? (
-            <Button
-              {...secondaryRight}
-              tone={secondaryRight.tone ?? "secondary"}
-              fullWidth
-              disabled={secondaryRight.disabled}
-              loading={secondaryRight.loading}
-            />
+          {safeSecondaryRight ? (
+            <Button {...safeSecondaryRight} tone={safeSecondaryRight.tone ?? "secondary"} fullWidth />
           ) : (
             <div />
           )}
@@ -190,12 +273,12 @@ export default function SaveActionBar({
       )}
 
       {/* Divider + Refine section */}
-      {refineContent ? (
+      {safeRefineContent ? (
         <>
           <div className="mt-5 border-t border-zinc-700/50" />
           <div className="mt-4">
             <div className="text-sm font-semibold text-zinc-200">{refineTitle}</div>
-            <div className="mt-3">{refineContent}</div>
+            <div className="mt-3">{safeRefineContent}</div>
           </div>
         </>
       ) : null}
