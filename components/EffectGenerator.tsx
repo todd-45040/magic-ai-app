@@ -1238,13 +1238,6 @@ const handleTryExample = () => {
                               {parsedEffects.length === 0 ? (
                                 <p className="text-xs text-slate-500 mt-1">Could not parse effect headings. Task will still use the first effect.</p>
                               ) : null}
-                                      </>
-                                    ) : (
-                                      <div className="mt-3 text-sm text-slate-400">
-                                        <span className="font-semibold text-slate-300">Premise:</span>{' '}
-                                        <span>{(ef.premise || ef.experience || '').slice(0, 160)}{(ef.premise || ef.experience || '').length > 160 ? '…' : ''}</span>
-                                      </div>
-                                    )}
 
                             </div>
 
