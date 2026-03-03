@@ -881,45 +881,53 @@ const handleTryExample = () => {
                                       </div>
                                     </div>
 
-                                    {expandedEffectIndex === idx ? (
-                                      <>
-                                        {ef.premise ? (
-                                      <div className="mt-3">
-                                        <div className="flex items-center gap-2">
-                                          <div className="h-4 w-1 rounded-full bg-yellow-400/70" />
-                                          <div className="text-xs font-semibold tracking-wide text-yellow-200/80">PREMISE</div>
-                                        </div>
-                                        <div className="mt-1 text-sm text-slate-100 font-semibold whitespace-pre-wrap">{ef.premise}</div>
-                                      </div>
-                                    ) : null}
 
-                                    {ef.experience ? (
-                                      <div className="mt-3">
-                                        <div className="text-xs font-semibold tracking-wide text-yellow-200/80">THE EXPERIENCE</div>
-                                        <div className="mt-1 text-base text-slate-200 whitespace-pre-wrap">{ef.experience}</div>
-                                      </div>
-                                    ) : null}
+{expandedEffectIndex === idx ? (
+  <>
+    {ef.premise ? (
+      <div className="mt-3">
+        <div className="flex items-center gap-2">
+          <div className="h-4 w-1 rounded-full bg-yellow-400/70" />
+          <div className="text-xs font-semibold tracking-wide text-yellow-200/80">PREMISE</div>
+        </div>
+        <div className="mt-1 text-sm text-slate-100 font-semibold whitespace-pre-wrap">{ef.premise}</div>
+      </div>
+    ) : null}
 
-                                    {ef.performanceNotes ? (
-                                      <div className="mt-4 rounded-lg border border-slate-800 bg-slate-900/30 p-3">
-                                        <div className="text-xs font-semibold tracking-wide text-slate-300">PERFORMANCE NOTES</div>
-                                        <div className="mt-1 text-sm text-slate-200 whitespace-pre-wrap">{ef.performanceNotes}</div>
-                                      </div>
-                                    ) : null}
+    {ef.experience ? (
+      <div className="mt-3">
+        <div className="text-xs font-semibold tracking-wide text-yellow-200/80">THE EXPERIENCE</div>
+        <div className="mt-1 text-base text-slate-200 whitespace-pre-wrap">{ef.experience}</div>
+      </div>
+    ) : null}
 
-                                    {ef.methodOverview ? (
-                                      <details className="mt-4 rounded-lg border border-slate-800 bg-slate-900/20 p-3">
-                                        <summary className="cursor-pointer select-none text-xs font-semibold tracking-wide text-slate-300">Method Overview (tap to reveal)</summary>
-                                        <div className="mt-2 text-sm text-slate-200 whitespace-pre-wrap">{ef.methodOverview}</div>
-                                      </details>
-                                    ) : null}
+    {ef.performanceNotes ? (
+      <div className="mt-4 rounded-lg border border-slate-800 bg-slate-900/30 p-3">
+        <div className="text-xs font-semibold tracking-wide text-slate-300">PERFORMANCE NOTES</div>
+        <div className="mt-1 text-sm text-slate-200 whitespace-pre-wrap">{ef.performanceNotes}</div>
+      </div>
+    ) : null}
 
-                                    {ef.secretHint ? (
-                                      <details className="mt-3 rounded-lg border border-slate-800 bg-slate-900/20 p-3">
-                                        <summary className="cursor-pointer select-none text-xs font-semibold tracking-wide text-slate-300">Secret Hint (tap to reveal)</summary>
-                                        <div className="mt-2 text-sm text-slate-200 whitespace-pre-wrap">{ef.secretHint}</div>
-                                      </details>
-                                    ) : null}
+    {ef.methodOverview ? (
+      <details className="mt-4 rounded-lg border border-slate-800 bg-slate-900/20 p-3">
+        <summary className="cursor-pointer select-none text-xs font-semibold tracking-wide text-slate-300">Method Overview (tap to reveal)</summary>
+        <div className="mt-2 text-sm text-slate-200 whitespace-pre-wrap">{ef.methodOverview}</div>
+      </details>
+    ) : null}
+
+    {ef.secretHint ? (
+      <details className="mt-3 rounded-lg border border-slate-800 bg-slate-900/20 p-3">
+        <summary className="cursor-pointer select-none text-xs font-semibold tracking-wide text-slate-300">Secret Hint (tap to reveal)</summary>
+        <div className="mt-2 text-sm text-slate-200 whitespace-pre-wrap">{ef.secretHint}</div>
+      </details>
+    ) : null}
+  </>
+) : (
+  <div className="mt-3 text-sm text-slate-400">
+    <span className="font-semibold text-slate-300">Premise:</span>{' '}
+    <span>{(ef.premise || ef.experience || '').slice(0, 160)}{(ef.premise || ef.experience || '').length > 160 ? '…' : ''}</span>
+  </div>
+)}
                                   </div>
                                 );
                               })}
