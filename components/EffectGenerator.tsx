@@ -30,18 +30,19 @@ const parseEffectsFromMarkdown = (markdown: string): ParsedEffect[] => {
   const text = normalize(markdown);
   if (!text) return [];
 
-  const headingRe = /^#{3,4}\s*\d+\.?\s*(.+)$/gm;
+  const headingRe = /^(?:#{1,4}\s*)?#?\s*(\d{1,2})\s*[\).:\-]?\s+(.+)$/gm;
   const headings: Array<{ index: number; name: string }> = [];
   let m: RegExpExecArray | null;
   while ((m = headingRe.exec(text))) {
-    headings.push({ index: m.index, name: String(m[1] ?? '').trim() });
+    headings.push({ index: m.index, name: String(m[2] ?? '').trim() });
   }
   if (headings.length === 0) return [];
 
-  const getSection = (block: string, label: string) => {
-    // Capture from **Label:** to the next **Something:** or next heading.
-    const re = new RegExp(`\\*\\*${label}\\*\\*\\s*:?\\s*([\\s\\S]*?)(?=\\n\\*\\*[^*]+\\*\\*\\s*:|\\n#{3,4}\\s*\\d+\\.?\\s+|$)`, 'i');
-    const mm = re.exec(block);
+    const getSection = (block: string, label: string) => {
+    // Capture from either **Label:** OR plain "Label:" to the next section label or next heading.
+    const boldRe = new RegExp(`\\*\\*${label}\\*\\*\\s*:?\\s*([\\s\\S]*?)(?=\\n\\*\\*[^*]+\\*\\*\\s*:|\\n(?:#{1,4}\\s*)?#?\\s*\\d{1,2}\\s*[\\).:\\-]?\\s+|$)`, 'i');
+    const plainRe = new RegExp(`(?:^|\\n)${label}\\s*:\\s*([\\s\\S]*?)(?=\\n[A-Z][A-Za-z \\-/]{2,30}\\s*:|\\n(?:#{1,4}\\s*)?#?\\s*\\d{1,2}\\s*[\\).:\\-]?\\s+|$)`, 'i');
+    const mm = boldRe.exec(block) || plainRe.exec(block);
     return normalize(mm?.[1] ?? '');
   };
 
@@ -151,6 +152,8 @@ const EFFECT_ENGINE_EXAMPLES: Array<{
 
   const outputRef = useRef<HTMLDivElement | null>(null);
 
+  const [expandedEffectIndex, setExpandedEffectIndex] = useState<number | null>(0);
+
   // Phase 3A: draft persistence for typed items + settings (reduces frustration on refresh).
   const draftKey = useMemo(() => {
     const uid = String((currentUser as any)?.id ?? (currentUser as any)?.userId ?? (currentUser as any)?.uid ?? (currentUser as any)?.email ?? 'guest');
@@ -246,6 +249,7 @@ const handleTryExample = () => {
     setSaveStatus('idle');
     setCopyStatus('idle');
     setIsStrongIdea(false);
+    setExpandedEffectIndex(0);
     try {
       localStorage.removeItem(draftKey);
     } catch {}
@@ -853,9 +857,15 @@ const handleTryExample = () => {
                                     className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 shadow-sm"
                                   >
                                     <div className="flex items-start justify-between gap-3">
-                                      <h3 className="text-slate-100 font-bold text-base">
+                                      <button
+                                        type="button"
+                                        onClick={() => setExpandedEffectIndex(expandedEffectIndex === idx ? null : idx)}
+                                        className="text-left text-slate-100 font-bold text-base hover:text-white transition-colors"
+                                        aria-expanded={expandedEffectIndex === idx}
+                                      >
                                         <span className="text-yellow-300/90">#{idx + 1}</span> {ef.name}
-                                      </h3>
+                                        <span className="ml-2 text-xs text-slate-400">{expandedEffectIndex === idx ? "Hide details" : "Show details"}</span>
+                                      </button>
 
                                       <div className="flex flex-col items-end gap-2">
                                         {strength ? (
@@ -871,7 +881,9 @@ const handleTryExample = () => {
                                       </div>
                                     </div>
 
-                                    {ef.premise ? (
+                                    {expandedEffectIndex === idx ? (
+                                      <>
+                                        {ef.premise ? (
                                       <div className="mt-3">
                                         <div className="flex items-center gap-2">
                                           <div className="h-4 w-1 rounded-full bg-yellow-400/70" />
@@ -1218,6 +1230,14 @@ const handleTryExample = () => {
                               {parsedEffects.length === 0 ? (
                                 <p className="text-xs text-slate-500 mt-1">Could not parse effect headings. Task will still use the first effect.</p>
                               ) : null}
+                                      </>
+                                    ) : (
+                                      <div className="mt-3 text-sm text-slate-400">
+                                        <span className="font-semibold text-slate-300">Premise:</span>{' '}
+                                        <span>{(ef.premise || ef.experience || '').slice(0, 160)}{(ef.premise || ef.experience || '').length > 160 ? '…' : ''}</span>
+                                      </div>
+                                    )}
+
                             </div>
 
                             <div className="rounded-lg border border-slate-800 bg-slate-900/30 p-3">
