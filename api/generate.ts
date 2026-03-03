@@ -25,10 +25,10 @@ type EffectEnginePayload = {
 
 const DEFAULT_TIMEOUT_MS = (() => {
   const v = Number(process.env.EFFECT_ENGINE_TIMEOUT_MS);
-  // sensible bounds: 10s–85s (deep mode can legitimately take longer)
+  // sensible bounds: 10s–90s (deep mode can legitimately take longer)
   // Keep this under Vercel maxDuration so we can return a controlled error instead of a 504.
-  if (Number.isFinite(v) && v >= 10_000 && v <= 85_000) return Math.floor(v);
-  return 75_000;
+  if (Number.isFinite(v) && v >= 10_000 && v <= 90_000) return Math.floor(v);
+  return 90_000;
 })();
 
 function clampInt(n: number, min: number, max: number): number {
@@ -101,7 +101,7 @@ function isNonEmptyStr(v: any, minLen: number): v is string {
 
 function validateDeepEffectEngineJson(payload: any): payload is EffectEnginePayload {
   if (!payload || typeof payload !== 'object') return false;
-  if (!Array.isArray(payload.effects) || payload.effects.length !== 4) return false;
+  if (!Array.isArray(payload.effects) || payload.effects.length !== 3) return false;
 
   return payload.effects.every((e: any) =>
     e &&
@@ -168,7 +168,7 @@ function buildDeepEffectEngineJsonPrompt(items: string[]): string {
   return (
     `Return ONLY valid JSON. No markdown. No commentary.\n` +
     `You are a world-class magic inventor and director.\n\n` +
-    `Create EXACTLY 4 distinct magic effect concepts using: ${itemLine}.\n\n` +
+    `Create EXACTLY 3 distinct magic effect concepts using: ${itemLine}.\n\n` +
     `JSON schema (must match exactly):\n` +
     `{\n` +
     `  "effects": [\n` +
@@ -190,7 +190,7 @@ function buildDeepEffectEngineJsonPrompt(items: string[]): string {
     `- performance_notes: angles, reset, timing, volunteer handling, outs/contingencies\n` +
     `- secret_hint: concise non-exposure hint + convincer framing\n\n` +
     `Hard rules:\n` +
-    `- EXACTLY 4 effects in the array.\n` +
+    `- EXACTLY 3 effects in the array.\n` +
     `- No extra keys.\n` +
     `- No markdown fences.\n` +
     `- Keep methods non-exposure.\n`
@@ -205,7 +205,7 @@ function getDemoEffectEnginePayload(scenario: string | undefined): EffectEngineP
   // Default: corporate close-up journey (safe, universal, great for onboarding recordings)
   if (!s || s === 'corporate_closeup' || s === 'corporate-closeup' || s === 'corporate') {
     return {
-      effects: [
+      effects: ([
         {
           name: "The CEO's Promise",
           premise:
@@ -258,7 +258,7 @@ function getDemoEffectEnginePayload(scenario: string | undefined): EffectEngineP
           secret_hint:
             "Say less, show more. The cleaner the sentence, the louder the magic.",
         },
-      ],
+      ]).slice(0, 3),
     };
   }
 
