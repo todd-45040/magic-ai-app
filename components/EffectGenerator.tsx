@@ -3,8 +3,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { generateResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
 import { EFFECT_GENERATOR_SYSTEM_INSTRUCTION } from '../constants';
-import { LightbulbIcon, WandIcon } from './icons';
-import SaveActionBar from './shared/SaveActionBar';
+import { LightbulbIcon, WandIcon, SaveIcon, CheckIcon, CopyIcon, ShareIcon } from './icons';
+import ShareButton from './ShareButton';
 import { useToast } from './ToastProvider';
 import { useAppDispatch, useAppState } from '../store';
 import { addTaskToShow } from '../services/showsService';
@@ -1003,7 +1003,7 @@ const handleTryExample = () => {
 
                     {/* Phase 2: refinement actions (conversion + engagement). */}
                     
-<div className="mt-6">
+<div className="mt-6 rounded-xl border border-slate-800 bg-slate-900/30 p-4">
   {/* Error banner (premium recovery) */}
   {error ? (
     <div className="mb-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -1032,41 +1032,105 @@ const handleTryExample = () => {
     </div>
   ) : null}
 
-  <SaveActionBar
-    enabled={!!ideas}
-    isLoading={isLoading}
-    saved={saveStatus === 'saved'}
-    onPrimary={handleSave}
-    showStrong
-    isStrong={isStrongIdea}
-    onToggleStrong={toggleStrongIdea}
-    showCopy
-    onCopy={handleCopy}
-    showShare
-    shareTitle={`Magic Effect Ideas for: ${items.map(item => item.trim()).filter(item => item !== '').join(', ')}`}
-    shareText={ideas ?? displayIdeas ?? ''}
-    secondaryActions={[
-      {
-        label: '➕ Add to Show Planner',
-        onClick: openImport,
-      },
-      {
-        label: '✅ Convert to Task',
-        onClick: openConvertToTask,
-      },
-    ]}
-  >
-    <div>
-      <div className="text-sm font-semibold text-slate-200 mb-2">Refine This Idea</div>
-      <div className="flex flex-wrap gap-2">
-        <button onClick={() => handleRefine('refine')} disabled={!ideas || isLoading} className="h-9 px-3 text-xs border border-slate-600 rounded-md bg-slate-900/40 text-slate-200 hover:bg-slate-800/50 disabled:opacity-50">✨ Refine</button>
-        <button onClick={() => handleRefine('comedy')} disabled={!ideas || isLoading} className="h-9 px-3 text-xs border border-slate-600 rounded-md bg-slate-900/40 text-slate-200 hover:bg-slate-800/50 disabled:opacity-50">🎭 Comedy</button>
-        <button onClick={() => handleRefine('psych')} disabled={!ideas || isLoading} className="h-9 px-3 text-xs border border-slate-600 rounded-md bg-slate-900/40 text-slate-200 hover:bg-slate-800/50 disabled:opacity-50">🧠 Psychology</button>
-        <button onClick={() => handleRefine('impossible')} disabled={!ideas || isLoading} className="h-9 px-3 text-xs border border-slate-600 rounded-md bg-slate-900/40 text-slate-200 hover:bg-slate-800/50 disabled:opacity-50">💥 More Impossible</button>
-        <button onClick={() => handleRefine('visual')} disabled={!ideas || isLoading} className="h-9 px-3 text-xs border border-slate-600 rounded-md bg-slate-900/40 text-slate-200 hover:bg-slate-800/50 disabled:opacity-50">🎬 More Visual</button>
-      </div>
+  {/* Top utility row */}
+  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="text-sm text-slate-300">
+      {ideas ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-semibold text-slate-200">Next step:</span>
+          <span className="text-slate-400">Save it, then move it into a Show or Task.</span>
+          {saveStatus === 'saved' && (
+            <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-200">
+              <CheckIcon className="h-4 w-4" />
+              Saved
+            </span>
+          )}
+        </div>
+      ) : (
+        <span className="text-slate-400">Generate an idea to unlock actions.</span>
+      )}
     </div>
-  </SaveActionBar>
+
+    <div className="flex flex-wrap items-center gap-2 justify-start sm:justify-end">
+      <button
+        type="button"
+        onClick={toggleStrongIdea}
+        disabled={!ideas}
+        className="h-9 inline-flex items-center gap-1 rounded-md border px-3 text-xs border-slate-700 bg-slate-900/40 text-slate-300 hover:bg-slate-800/60 transition-colors disabled:opacity-50"
+        title="Mark as a strong idea"
+      >
+        {isStrongIdea ? '★ Strong' : '☆ Strong'}
+      </button>
+
+      <button
+        type="button"
+        onClick={handleCopy}
+        disabled={!ideas}
+        className="h-9 inline-flex items-center gap-1 rounded-md border px-3 text-xs border-slate-700 bg-slate-900/40 text-slate-300 hover:bg-slate-800/60 transition-colors disabled:opacity-50"
+        title="Copy the full output"
+      >
+        <CopyIcon className="h-4 w-4" />
+        Copy
+      </button>
+
+      <ShareButton
+        title={`Magic Effect Ideas for: ${items.map(item => item.trim()).filter(item => item !== '').join(', ')}`}
+        text={ideas ?? displayIdeas ?? ''}
+        className="h-9 inline-flex items-center gap-1 rounded-md border border-slate-700 bg-slate-900/40 px-3 text-xs text-slate-300 hover:bg-slate-800/60 transition-colors"
+      >
+        <ShareIcon className="h-4 w-4" />
+        Share
+      </ShareButton>
+    </div>
+  </div>
+
+  <div className="my-4 h-px w-full bg-slate-800" />
+
+  {/* Primary Save */}
+  <button
+    type="button"
+    onClick={handleSave}
+    disabled={!ideas || isLoading}
+    className="w-full h-12 inline-flex items-center justify-center gap-2 rounded-lg px-4 font-bold bg-purple-600 hover:bg-purple-700 text-white transition-colors disabled:bg-slate-700 disabled:text-slate-300 disabled:cursor-not-allowed"
+  >
+    <SaveIcon className="h-5 w-5" />
+    Save to Idea Vault
+  </button>
+
+  {/* Workflow continuation */}
+  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+    <button
+      type="button"
+      onClick={openImport}
+      disabled={!ideas || isLoading}
+      className="w-full h-11 rounded-lg border border-slate-600 bg-slate-900/30 text-slate-200 hover:bg-slate-800/50 px-4 font-semibold transition-colors disabled:opacity-50"
+    >
+      ➕ Add to Show Planner
+    </button>
+
+    <button
+      type="button"
+      onClick={openConvertToTask}
+      disabled={!ideas || isLoading}
+      className="w-full h-11 rounded-lg border border-slate-600 bg-slate-900/30 text-slate-200 hover:bg-slate-800/50 px-4 font-semibold transition-colors disabled:opacity-50"
+    >
+      ✅ Convert to Task
+    </button>
+  </div>
+
+  <div className="my-4 h-px w-full bg-slate-800" />
+
+  {/* Refine cluster */}
+  <div>
+    <div className="text-sm font-semibold text-slate-200 mb-2">Refine This Idea</div>
+    <div className="flex flex-wrap gap-2">
+      <button onClick={() => handleRefine('refine')} disabled={!ideas || isLoading} className="h-9 px-3 text-xs border border-slate-600 rounded-md bg-slate-900/40 text-slate-200 hover:bg-slate-800/50 disabled:opacity-50">✨ Refine</button>
+      <button onClick={() => handleRefine('comedy')} disabled={!ideas || isLoading} className="h-9 px-3 text-xs border border-slate-600 rounded-md bg-slate-900/40 text-slate-200 hover:bg-slate-800/50 disabled:opacity-50">🎭 Comedy</button>
+      <button onClick={() => handleRefine('psych')} disabled={!ideas || isLoading} className="h-9 px-3 text-xs border border-slate-600 rounded-md bg-slate-900/40 text-slate-200 hover:bg-slate-800/50 disabled:opacity-50">🧠 Psychology</button>
+      <button onClick={() => handleRefine('impossible')} disabled={!ideas || isLoading} className="h-9 px-3 text-xs border border-slate-600 rounded-md bg-slate-900/40 text-slate-200 hover:bg-slate-800/50 disabled:opacity-50">💥 More Impossible</button>
+      <button onClick={() => handleRefine('visual')} disabled={!ideas || isLoading} className="h-9 px-3 text-xs border border-slate-600 rounded-md bg-slate-900/40 text-slate-200 hover:bg-slate-800/50 disabled:opacity-50">🎬 More Visual</button>
+    </div>
+  </div>
 </div>
 
 {isImportOpen && (
