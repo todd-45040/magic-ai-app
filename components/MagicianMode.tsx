@@ -24,6 +24,7 @@ import MagicArchives from './MagicArchives';
 import GospelMagicAssistant from './GospelMagicAssistant';
 import MentalismAssistant from './MentalismAssistant';
 import ShareButton from './ShareButton';
+import SaveActionBar from './shared/SaveActionBar';
 import FormattedText from './FormattedText';
 import AccountMenu from './AccountMenu';
 import UsageMeter from './UsageMeter';
@@ -771,7 +772,49 @@ const IdentifyTab: React.FC<{
     handleImageUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
     handleIdentifyClick: () => void;
     onRequestUpgrade: () => void;
-}> = ({ imagePreview, identificationResult, isIdentifying, identificationError, identificationBlocked, fileInputRef, handleImageUpload, handleIdentifyClick, onRequestUpgrade }) => (
+}> = ({ imagePreview, identificationResult, isIdentifying, identificationError, identificationBlocked, fileInputRef, handleImageUpload, handleIdentifyClick, onRequestUpgrade }) => {
+    const canAct = !!identificationResult;
+
+    const saveIdentifyResult = async () => {
+        if (!identificationResult) return;
+
+        const title = `Identify Trick: ${identificationResult.trickName}`;
+        const links = (identificationResult.videoExamples ?? [])
+          .map((v) => `- ${v.title}: ${v.url}`)
+          .join('\n');
+
+        const content = [
+          `## ${title}`,
+          '',
+          'meta:',
+          `  timestamp: ${new Date().toISOString()}`,
+          '  tool: identify-trick',
+          '',
+          '### Identified Effect',
+          identificationResult.trickName,
+          '',
+          '### Example Performances',
+          links || '(No video links returned)',
+        ].join('\n');
+
+        await saveIdea({
+          type: 'text',
+          title,
+          content,
+          tags: ['identify-trick'].slice(0, 8),
+        });
+    };
+
+    const copyIdentifyResult = () => {
+        if (!identificationResult) return;
+        const links = (identificationResult.videoExamples ?? [])
+          .map((v) => `${v.title} — ${v.url}`)
+          .join('\n');
+        const text = `Identify Trick Result\n\nTrick: ${identificationResult.trickName}\n\nExamples:\n${links || '(No links)'}`;
+        navigator.clipboard.writeText(text);
+    };
+
+    return (
     <div className="flex-1 overflow-y-auto p-4 md:p-5">
         <div className="animate-fade-in space-y-4 max-w-2xl mx-auto">
             <h2 className="text-2xl font-bold text-slate-200 font-cinzel">Identify a Trick</h2>
@@ -833,21 +876,26 @@ const IdentifyTab: React.FC<{
                         </div>
                      </div>
                    )}
-                    <div className="pt-2 flex justify-end">
-                        <ShareButton
-                            title={`Magic Trick: ${identificationResult.trickName}`}
-                            text={`I identified a magic trick using the Magicians' AI Wizard! It's called "${identificationResult.trickName}". Check out a performance: ${identificationResult.videoExamples?.[0]?.url || '(No video link available)'}`}
-                            className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 transition-colors"
-                        >
-                            <ShareIcon className="w-4 h-4" />
-                            <span>Share Result</span>
-                        </ShareButton>
+                    <div className="pt-2">
+                      <SaveActionBar
+                        enabled={canAct}
+                        primaryLabel="Save to Idea Vault"
+                        onPrimary={saveIdentifyResult}
+                        showCopy
+                        onCopy={copyIdentifyResult}
+                        showShare
+                        shareTitle={`Magic Trick: ${identificationResult.trickName}`}
+                        shareText={`I identified a magic trick using the Magicians' AI Wizard! It's called "${identificationResult.trickName}". Example: ${identificationResult.videoExamples?.[0]?.url || '(No video link available)'}`}
+                        title="Next step:"
+                        subtitle="Save this result for later reference."
+                      />
                     </div>
                 </div>
             )}
         </div>
     </div>
-);
+    );
+};
 
 const PublicationsTab: React.FC = () => (
     <div className="flex-1 overflow-y-auto p-4 md:p-5">
