@@ -1,0 +1,42 @@
+// services/telemetryClient.ts
+// Lightweight, best-effort client telemetry to server-side ai_usage_events.
+// No schema changes: we log into ai_usage_events with endpoint="client:<action>".
+
+import { supabase } from '../supabase';
+
+export type ClientTelemetryAction =
+  | 'identify_upload_selected'
+  | 'identify_request_start'
+  | 'identify_request_success'
+  | 'identify_request_error'
+  | 'identify_retry_click'
+  | 'identify_refine_click'
+  | 'identify_save_click'
+  | 'identify_save_success';
+
+export async function trackClientEvent(input: {
+  tool: string;
+  action: ClientTelemetryAction | string;
+  metadata?: any;
+  outcome?: 'SUCCESS_NOT_CHARGED' | 'ERROR_UPSTREAM' | 'ALLOWED' | 'SUCCESS_CHARGED';
+  http_status?: number;
+  error_code?: string;
+  retryable?: boolean;
+  units?: number;
+}): Promise<void> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    const token = data?.session?.access_token;
+
+    await fetch('/api/telemetry/event', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: token ? `Bearer ${token}` : 'Bearer guest',
+      },
+      body: JSON.stringify(input),
+    });
+  } catch {
+    // Never break UX for telemetry
+  }
+}

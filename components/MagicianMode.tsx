@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import type { ChatMessage, PredefinedPrompt, TrickIdentificationResult, User, Transcription, MagicianView, MagicianTab, Client, Show, Feedback, SavedIdea, TaskPriority, AiSparkAction } from '../types';
 import { generateResponse } from '../services/geminiService';
 import { identifyTrickFromImageServer, refineIdentifyResult } from '../services/identifyService';
+import { trackClientEvent } from '../services/telemetryClient';
 import { supabase } from '../supabase';
 import { saveIdea, updateIdea } from '../services/ideasService';
 import { exportData } from '../services/dataService';
@@ -1999,6 +2000,16 @@ useEffect(() => {
       );
       setMessages(prev => [...prev, createChatMessage('model', normalizeAiReply(replyText))]);
     } catch (err) {
+        const anyErr: any = err as any;
+        void trackClientEvent({
+          tool: 'IdentifyTrick',
+          action: 'identify_request_error',
+          outcome: 'ERROR_UPSTREAM',
+          http_status: Number(anyErr?.status || 0) || undefined,
+          error_code: String(anyErr?.code || anyErr?.error_code || ''),
+          retryable: Boolean(anyErr?.retryable),
+        });
+
       console.error('Error in handleSendWithHistory:', err);
       setMessages(prev => [...prev, createChatMessage('model', friendlyAiError)]);
     } finally {
@@ -2235,6 +2246,7 @@ useEffect(() => {
         setIdentificationBlocked(null);
         setIdentifySavedIdeaId(null);
         setIdentifyIsStrong(false);
+        void trackClientEvent({ tool: 'IdentifyTrick', action: 'identify_upload_selected', units: 1, metadata: { name: file.name, type: file.type, size: file.size } });
     }
   };
 
@@ -2351,6 +2363,7 @@ useEffect(() => {
 
   const handleIdentifySave = async () => {
     if (!identificationResult) return;
+    void trackClientEvent({ tool: 'IdentifyTrick', action: 'identify_save_click' });
     try {
       setIdentifySaving(true);
       const { title, content } = formatIdentifySnapshot(identificationResult, imageFile);
@@ -2362,6 +2375,7 @@ useEffect(() => {
       });
       setIdentifySavedIdeaId(saved.id);
       setIdentifyIsStrong(saved.tags?.includes('strong') ?? false);
+      void trackClientEvent({ tool: 'IdentifyTrick', action: 'identify_save_success', outcome: 'SUCCESS_NOT_CHARGED' });
       handleIdeaSaved('Idea saved!');
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to save idea.';
@@ -2475,6 +2489,10 @@ useEffect(() => {
   const handleIdentifyClick = async () => {
     if (!imagePreview || !imageFile) return;
 
+    if (identificationBlocked?.retryable) {
+      void trackClientEvent({ tool: 'IdentifyTrick', action: 'identify_retry_click' });
+    }
+
     const base64Data = imagePreview.split(',')[1];
     const mimeType = imageFile.type;
 
@@ -2483,9 +2501,12 @@ useEffect(() => {
     setIdentificationResult(null);
     setIdentificationBlocked(null);
 
+    void trackClientEvent({ tool: 'IdentifyTrick', action: 'identify_request_start', units: 1, metadata: { mimeType } });
+
     try {
         const result = await identifyTrickFromImageServer(base64Data, mimeType, user);
         setIdentificationResult(result);
+        void trackClientEvent({ tool: 'IdentifyTrick', action: 'identify_request_success', outcome: 'SUCCESS_NOT_CHARGED' });
         setIdentifySavedIdeaId(null);
         setIdentifyIsStrong(false);
     } catch (err) {
@@ -2513,6 +2534,8 @@ useEffect(() => {
       practical: 'More Practical',
       safer_angles: 'Safer for Angles',
     };
+
+    void trackClientEvent({ tool: 'IdentifyTrick', action: 'identify_refine_click', metadata: { intent } });
 
     setIdentifyRefining(true);
     setIdentifyLastRefine(labelMap[intent] ?? intent);
