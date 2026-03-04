@@ -1373,7 +1373,7 @@ const activeSession = useMemo(() => {
                 <button
                     onClick={handleSubmit}
                     disabled={isLoading || !finalPrompt.trim()}
-                    className="w-full py-3 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
+                    className="w-full py-3 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-all disabled:bg-slate-600 disabled:cursor-not-allowed hover:shadow-[0_0_18px_rgba(168,85,247,0.55)] hover:scale-[1.02] transition-all duration-200"
                 >
                     {isLoading ? (
                       <>
