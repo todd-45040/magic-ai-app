@@ -67,8 +67,16 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
     const [audienceType, setAudienceType] = useState(''); // custom audience text
     const [audienceChips, setAudienceChips] = useState<string[]>([]);
 
-    // Theme/Style
+    // Phase 1 — Inputs / Constraints
+    const [venueType, setVenueType] = useState('');
     const [theme, setTheme] = useState('');
+    const [tone, setTone] = useState('');
+    const [performerPersona, setPerformerPersona] = useState('');
+
+    // Constraints (explicit)
+    const [skillLevel, setSkillLevel] = useState<'Beginner' | 'Intermediate' | 'Advanced' | 'Pro' | ''>('');
+    const [resetTime, setResetTime] = useState<'Instant' | 'Under 30s' | 'Under 2 min' | 'Under 5 min' | 'Not important' | ''>('');
+    const [propsOwned, setPropsOwned] = useState('');
 
     // Advanced Options (optional)
     const [showAdvanced, setShowAdvanced] = useState(false);
@@ -170,7 +178,17 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
     }, [showPlan, dictionaryTermSet]);
 
     // Show Title is optional: AI can generate a strong title if the user leaves it blank.
-    const isFormValid = Boolean(showLength && computedAudience && theme.trim());
+    // Phase 1 required: length, audience, venue, theme, tone, persona, skill, reset.
+    const isFormValid = Boolean(
+        showLength &&
+            computedAudience &&
+            venueType &&
+            theme.trim() &&
+            tone &&
+            performerPersona.trim() &&
+            skillLevel &&
+            resetTime
+    );
 
     const showLengthPresets = [30, 45, 60, 90];
     const audiencePresets = [
@@ -181,6 +199,23 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
         'Seniors',
         'College',
         'School Assembly',
+    ];
+
+    const venuePresets = [
+        'Close-up / Walk-around',
+        'Parlor (small stage)',
+        'Stage (theater)',
+        'Virtual / Zoom',
+        'Street / Busking',
+    ];
+
+    const tonePresets = [
+        'Comedy / Light',
+        'Mysterious',
+        'Elegant',
+        'Dramatic',
+        'High-energy',
+        'Warm / Inspirational',
     ];
 
     const toggleAudienceChip = (label: string) => {
@@ -306,7 +341,13 @@ Details:
 ${titleLine}
 - Desired Length (minutes): ${showLength}
 - Target Audience: ${computedAudience}
-- Overall Theme/Style: ${theme}
+- Venue Type: ${venueType}
+- Overall Theme: ${theme}
+- Tone: ${tone}
+- Performer Persona: ${performerPersona}
+- Skill Level: ${skillLevel}
+- Reset Time: ${resetTime}
+${propsOwned.trim() ? `- Props Owned / Available: ${propsOwned.trim()}` : ''}
 ${pacing ? `- Pacing: ${pacing}` : ''}
 ${comedyLevel ? `- Comedy Level: ${comedyLevel}` : ''}
 ${participation ? `- Audience Participation Level: ${participation}` : ''}
@@ -810,18 +851,129 @@ ${prettyJson}
                     </div>
 
                     <div>
-                        <label htmlFor="theme" className="block text-sm font-medium text-slate-300 mb-1">Overall Theme / Style</label>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">Venue Type</label>
+                        <select
+                            value={venueType}
+                            onChange={(e) => setVenueType(e.target.value)}
+                            className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
+                        >
+                            <option value="">Select…</option>
+                            {venuePresets.map((v) => (
+                                <option key={v} value={v}>
+                                    {v}
+                                </option>
+                            ))}
+                        </select>
+                        <p className="mt-1 text-xs text-slate-400">Helps with pacing, blocking, and interaction style.</p>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">Tone</label>
+                        <select
+                            value={tone}
+                            onChange={(e) => setTone(e.target.value)}
+                            className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
+                        >
+                            <option value="">Select…</option>
+                            {tonePresets.map((t) => (
+                                <option key={t} value={t}>
+                                    {t}
+                                </option>
+                            ))}
+                        </select>
+                        <p className="mt-1 text-xs text-slate-400">This becomes the emotional “feel” of the show.</p>
+                    </div>
+
+                    <div>
+                        <label htmlFor="performer-persona" className="block text-sm font-medium text-slate-300 mb-1">Performer Persona</label>
+                        <input
+                            id="performer-persona"
+                            type="text"
+                            value={performerPersona}
+                            onChange={(e) => setPerformerPersona(e.target.value)}
+                            placeholder="e.g., charming comedy magician • mysterious mind reader • elegant classic conjuror"
+                            className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
+                        />
+                        <p className="mt-1 text-xs text-slate-400">The AI will keep the voice consistent across segments.</p>
+                    </div>
+
+                    <div>
+                        <label htmlFor="theme" className="block text-sm font-medium text-slate-300 mb-1">Theme / Throughline</label>
                         <input
                             id="theme"
                             type="text"
                             value={theme}
                             onChange={(e) => setTheme(e.target.value)}
-                            placeholder="e.g., elegant & mysterious • high-energy comedy • mind reading with audience participation"
+                            placeholder="e.g., time travel mysteries • modern elegance • carnival of impossibility"
                             className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
                         />
                         <p className="mt-1 text-xs text-slate-400">
-                            Describe tone, pacing, and your performing persona. The AI will keep the structure consistent.
+                            A simple narrative thread that ties the set together.
                         </p>
+                    </div>
+
+                    <div className="pt-2">
+                        <div className="px-3 py-2 rounded-md bg-slate-900/40 border border-slate-700">
+                            <p className="text-sm font-semibold text-slate-200">Constraints</p>
+                            <p className="text-xs text-slate-400 mt-1">These help the AI recommend effects that fit your reality (props, reset, and skill).</p>
+                        </div>
+
+                        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-1">Skill Level</label>
+                                <select
+                                    value={skillLevel}
+                                    onChange={(e) => setSkillLevel(e.target.value as any)}
+                                    className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
+                                >
+                                    <option value="">Select…</option>
+                                    <option value="Beginner">Beginner</option>
+                                    <option value="Intermediate">Intermediate</option>
+                                    <option value="Advanced">Advanced</option>
+                                    <option value="Pro">Pro</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-1">Reset Time</label>
+                                <select
+                                    value={resetTime}
+                                    onChange={(e) => setResetTime(e.target.value as any)}
+                                    className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
+                                >
+                                    <option value="">Select…</option>
+                                    <option value="Instant">Instant</option>
+                                    <option value="Under 30s">Under 30s</option>
+                                    <option value="Under 2 min">Under 2 min</option>
+                                    <option value="Under 5 min">Under 5 min</option>
+                                    <option value="Not important">Not important</option>
+                                </select>
+                            </div>
+
+                            <div className="sm:col-span-2">
+                                <label htmlFor="props-owned" className="block text-sm font-medium text-slate-300 mb-1">Props Owned (optional)</label>
+                                <input
+                                    id="props-owned"
+                                    type="text"
+                                    value={propsOwned}
+                                    onChange={(e) => setPropsOwned(e.target.value)}
+                                    placeholder="e.g., linking rings, rope, cards, coins, sponge balls, iPad, invisible deck"
+                                    className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
+                                />
+                                <p className="mt-1 text-xs text-slate-400">List props you want to include (or avoid).</p>
+                            </div>
+
+                            <div className="sm:col-span-2">
+                                <label className="block text-sm font-medium text-slate-300 mb-1">Extra Constraints / Notes (optional)</label>
+                                <textarea
+                                    value={constraints}
+                                    onChange={(e) => setConstraints(e.target.value)}
+                                    rows={3}
+                                    placeholder="Optional: family-friendly only, no fire, limited pockets, tight stage, no table, etc."
+                                    className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
+                                />
+                            </div>
+                        </div>
                     </div>
 
                     <div className="pt-2">
@@ -886,16 +1038,6 @@ ${prettyJson}
                                         <option value="Yes">Yes</option>
                                         <option value="No">No</option>
                                     </select>
-                                </div>
-                                <div className="sm:col-span-2">
-                                    <label className="block text-sm font-medium text-slate-300 mb-1">Constraints / Notes</label>
-                                    <textarea
-                                        value={constraints}
-                                        onChange={(e) => setConstraints(e.target.value)}
-                                        rows={3}
-                                        placeholder="Optional: stage size, no fire, limited props, family-friendly only, etc."
-                                        className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
-                                    />
                                 </div>
                             </div>
                         )}
