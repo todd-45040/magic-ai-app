@@ -31,7 +31,14 @@ const ImageLoadingIndicator: React.FC = () => (
 
 
 const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, onRequestUpgrade }) => {
-  const [prompt, setPrompt] = useState('');
+  const [editPrompt, setEditPrompt] = useState('');
+  // Phase 1: Structured inputs for text-to-image
+  const [objectProp, setObjectProp] = useState('');
+  const [sceneSetting, setSceneSetting] = useState('');
+  const [style, setStyle] = useState('');
+  const [context, setContext] = useState('');
+  const [advancedPrompt, setAdvancedPrompt] = useState(false);
+  const [promptOverride, setPromptOverride] = useState('');
   const [aspectRatio, setAspectRatio] = useState<'1:1' | '16:9' | '9:16'>('1:1');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -84,9 +91,31 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
     }
   };
 
-  const handleSubmit = async () => {
-    if (!prompt.trim()) {
-        setError("Please enter a description or instruction.");
+  
+
+  const buildPrompt = () => {
+    const parts: string[] = [];
+
+    // Order matters: style + setting first tends to steer composition.
+    if (style.trim()) parts.push(style.trim());
+    if (sceneSetting.trim()) parts.push(sceneSetting.trim());
+    if (objectProp.trim()) parts.push(`magic concept using ${objectProp.trim()}`);
+    if (context.trim()) parts.push(context.trim());
+
+    // A gentle anchor so outputs stay “magic concept art” rather than generic product shots.
+    parts.push('professional magic performance concept art');
+
+    return parts.join(', ');
+  };
+
+  const isEditing = Boolean(inputImagePreview);
+  const finalPrompt = isEditing
+    ? editPrompt.trim()
+    : (advancedPrompt && promptOverride.trim() ? promptOverride.trim() : buildPrompt());
+
+const handleSubmit = async () => {
+    if (!finalPrompt.trim()) {
+        setError(isEditing ? "Please enter editing instructions." : "Please provide at least an Object/Prop, Scene/Setting, or Style.");
         return;
     }
 
@@ -108,11 +137,11 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
             // Image editing flow
             const base64Data = inputImagePreview.split(',')[1];
             // FIX: Pass user object as the 4th argument to editImageWithPrompt
-            imageUrl = await editImageWithPrompt(base64Data, inputImageFile.type, prompt, user);
+            imageUrl = await editImageWithPrompt(base64Data, inputImageFile.type, finalPrompt, user);
         } else {
             // Text-to-image flow
             // FIX: Pass user object as the 3rd argument to generateImage
-            imageUrl = await generateImage(prompt, aspectRatio, user);
+            imageUrl = await generateImage(finalPrompt, aspectRatio, user);
         }
         setGeneratedImage(imageUrl);
     } catch (err) {
@@ -150,26 +179,104 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
             <div className="space-y-4">
                 <div>
                     <div className="flex justify-between items-baseline mb-1">
-                        <label htmlFor="image-prompt" className="block text-sm font-medium text-slate-300">{inputImagePreview ? 'Editing Instructions' : 'Prompt'}</label>
-                        {prompt && (
+                        <label className="block text-sm font-medium text-slate-300">
+                          {isEditing ? 'Editing Instructions' : 'Visual Prompt Builder'}
+                        </label>
+                        {(isEditing ? editPrompt : (objectProp || sceneSetting || style || context || promptOverride)) && (
                              <button
                                 type="button"
-                                onClick={() => setPrompt('')}
+                                onClick={() => (isEditing ? setEditPrompt('') : (setObjectProp(''), setSceneSetting(''), setStyle(''), setContext(''), setPromptOverride(''), setAdvancedPrompt(false)))}
                                 className="px-2 py-0.5 text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-700 rounded-md transition-colors"
                             >
                                 Clear
                             </button>
                         )}
                     </div>
-                    <textarea
+
+                    {isEditing ? (
+                      <textarea
                         id="image-prompt"
                         rows={6}
-                        value={prompt}
-                        onChange={(e) => { setPrompt(e.target.value); setError(null); }}
+                        value={editPrompt}
+                        onChange={(e) => { setEditPrompt(e.target.value); setError(null); }}
                         placeholder={placeholderText}
                         className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
-                    />
-                </div>
+                      />
+                    ) : (
+                      <div className="space-y-3">
+                        {/* Object / Prop */}
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-400 mb-1">Object / Prop</label>
+                          <input
+                            value={objectProp}
+                            onChange={(e) => { setObjectProp(e.target.value); setError(null); }}
+                            placeholder="coin, rope, deck of cards..."
+                            className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
+                          />
+                        </div>
+
+                        {/* Scene / Setting */}
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-400 mb-1">Scene / Setting</label>
+                          <input
+                            value={sceneSetting}
+                            onChange={(e) => { setSceneSetting(e.target.value); setError(null); }}
+                            placeholder="close-up table, stage illusion, street magic..."
+                            className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
+                          />
+                        </div>
+
+                        {/* Style */}
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-400 mb-1">Style</label>
+                          <input
+                            value={style}
+                            onChange={(e) => { setStyle(e.target.value); setError(null); }}
+                            placeholder="mysterious, steampunk, dark magic, comedy..."
+                            className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
+                          />
+                        </div>
+
+                        {/* Optional Context */}
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-400 mb-1">Optional Context</label>
+                          <textarea
+                            rows={3}
+                            value={context}
+                            onChange={(e) => { setContext(e.target.value); setError(null); }}
+                            placeholder="Audience size, lighting conditions, show theme..."
+                            className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
+                          />
+                        </div>
+
+                        {/* Prompt preview + advanced override */}
+                        <div className="rounded-md border border-slate-700 bg-slate-900/40 p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-semibold text-slate-400">Assembled Prompt</span>
+                            <button
+                              type="button"
+                              onClick={() => setAdvancedPrompt(v => !v)}
+                              className="text-xs font-semibold text-slate-300 hover:text-white"
+                            >
+                              {advancedPrompt ? 'Hide Advanced' : 'Advanced'}
+                            </button>
+                          </div>
+
+                          {!advancedPrompt ? (
+                            <p className="text-sm text-slate-200 break-words">{buildPrompt()}</p>
+                          ) : (
+                            <textarea
+                              rows={4}
+                              value={promptOverride}
+                              onChange={(e) => { setPromptOverride(e.target.value); setError(null); }}
+                              placeholder="Optional: override the full prompt (advanced)"
+                              className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
+                            />
+                          )}
+                        </div>
+                      </div>
+                    )}
+                </div></div>
                  <input
                     type="file"
                     accept="image/jpeg,image/png,image/webp"
@@ -213,7 +320,7 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
                 )}
                 <button
                     onClick={handleSubmit}
-                    disabled={isLoading || !prompt.trim()}
+                    disabled={isLoading || !finalPrompt.trim()}
                     className="w-full py-3 mt-4 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
                 >
                     <WandIcon className="w-5 h-5" />
@@ -233,7 +340,7 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
                     <div className="absolute top-2 right-2 flex gap-2 transition-opacity">
                         <CohesionActions
                             content={generatedImage}
-                            defaultTitle={`Visual Brainstorm: ${prompt || 'Concept Art'}`}
+                            defaultTitle={`Visual Brainstorm: ${finalPrompt || 'Concept Art'}`}
                             defaultTags={["visual", "concept"]}
                             ideaType="image"
                             compact
@@ -241,7 +348,7 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
                         {shareFile && (
                             <ShareButton
                                 title="Magic Visual Idea"
-                                text={`Check out this visual idea I generated with the Magician's AI Wizard: ${prompt}`}
+                                text={`Check out this visual idea I generated with the Magician's AI Wizard: ${finalPrompt}`}
                                 file={shareFile}
                                 className="flex items-center gap-2 px-3 py-2 text-sm bg-slate-800/70 hover:bg-slate-700 rounded-md text-slate-200"
                                 aria-label="Share image"
