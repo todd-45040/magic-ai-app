@@ -170,9 +170,7 @@ export default async function handler(req: any, res: any) {
 
   const prompt =
     String(body.prompt || "").trim() ||
-    "You are a helpful magic performance assistant. Identify the likely effect/plot (performance-level, not method) based on the image.\n" +
-    "Non-negotiable rules: DO NOT reveal secret methods, gimmicks, sleights, stacks, or construction details. If the user requests exposure or method reconstruction, refuse and provide performance-safe alternatives (presentation, structure, staging, angles, misdirection principles).\n" +
-    "Return a practical, non-exposure analysis suitable for performers.";
+    "You are a helpful magic assistant. Identify the likely prop/effect in the image and suggest 3 possible routines or uses. Keep it practical and non-exposure.";
 
   const model = String(body.model || process.env.GEMINI_VISION_MODEL || "gemini-2.5-flash");
 
@@ -192,7 +190,7 @@ export default async function handler(req: any, res: any) {
           },
         ],
       }),
-      90000
+      20000
     );
 
     const text = String(result?.text || "").trim();
@@ -217,11 +215,6 @@ export default async function handler(req: any, res: any) {
 
     if (msg === "TIMEOUT") {
       return err(res, 504, "TIMEOUT", "Vision request timed out. Please retry.", true, { requestId, ...(details ? { details } : {}) });
-    }
-    // Upstream overload / transient failures
-    if (/overload|overloaded|service unavailable|unavailable|503/i.test(msg)) {
-      res.setHeader("Retry-After", "5");
-      return err(res, 503, "AI_OVERLOADED", "The AI service is temporarily busy. Please try again in a few seconds.", true, { requestId, retryAfterSeconds: 5, ...(details ? { details } : {}) });
     }
     if (/quota|resource|429/i.test(msg)) {
       return err(res, 429, "QUOTA_EXCEEDED", "AI quota reached. Try again later.", false, { requestId, ...(details ? { details } : {}) });

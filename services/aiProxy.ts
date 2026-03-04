@@ -44,29 +44,6 @@ type ErrResponse = {
 };
 
 
-const DEFAULT_TIMEOUT_MS = 90_000;
-const DEFAULT_RETRIES = 2;
-
-function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
-function isRetryableStatus(status: number) {
-  return status === 502 || status === 503 || status === 504;
-}
-
-async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number) {
-  const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, { ...init, signal: controller.signal });
-    return res;
-  } finally {
-    clearTimeout(t);
-  }
-}
-
-
 async function getBearerToken(): Promise<string> {
   try {
     const { data } = await supabase.auth.getSession();
@@ -94,75 +71,38 @@ async function safeFetchJson<T>(
     ...init,
     headers: await withAuthHeaders((init.headers as Record<string, string>) || {}),
   };
+  const r = await fetch(url, initWithAuth);
+  const text = await r.text();
 
-  let lastErr: any = null;
-
-  for (let attempt = 0; attempt <= DEFAULT_RETRIES; attempt++) {
-    try {
-      const r = await fetchWithTimeout(url, initWithAuth, DEFAULT_TIMEOUT_MS);
-      const text = await r.text();
-
-      let parsed: any = null;
-      try {
-        parsed = text ? JSON.parse(text) : null;
-      } catch {
-        const e: AiError = new Error(
-          `Non-JSON response (${r.status}). First 200 chars: ${text.slice(0, 200)}`
-        );
-        e.code = "UNKNOWN_ERROR";
-        e.status = r.status;
-        throw e;
-      }
-
-      if (parsed && typeof parsed.ok === "boolean") {
-        if (parsed.ok) return parsed as OkResponse<T>;
-
-        const err = parsed as ErrResponse;
-        const e: AiError = new Error(err.message || "AI request failed");
-        e.code = err.error_code || "UNKNOWN_ERROR";
-        e.retryable = Boolean(err.retryable);
-        e.status = r.status;
-        e.requestId = err.requestId;
-
-        if (attempt < DEFAULT_RETRIES && e.retryable && isRetryableStatus(r.status)) {
-          await sleep(800 * (attempt + 1));
-          continue;
-        }
-
-        throw e;
-      }
-
-      const e: AiError = new Error(
-        `Unexpected server response shape (${r.status}).`
-      );
-      e.code = "UNKNOWN_ERROR";
-      e.status = r.status;
-      throw e;
-    } catch (err: any) {
-      lastErr = err;
-
-      const isAbort = err?.name === "AbortError" || /aborted/i.test(String(err?.message || ""));
-      const isNetwork = /network|failed to fetch/i.test(String(err?.message || ""));
-
-      if (attempt < DEFAULT_RETRIES && (isAbort || isNetwork)) {
-        await sleep(800 * (attempt + 1));
-        continue;
-      }
-
-      break;
-    }
+  let parsed: any = null;
+  try {
+    parsed = text ? JSON.parse(text) : null;
+  } catch {
+    const e: AiError = new Error(
+      `Non-JSON response (${r.status}). First 200 chars: ${text.slice(0, 200)}`
+    );
+    e.code = "UNKNOWN_ERROR";
+    e.status = r.status;
+    throw e;
   }
 
-  const msg =
-    lastErr?.name === "AbortError"
-      ? `Request timed out (${Math.round(DEFAULT_TIMEOUT_MS / 1000)}s)`
-      : String(lastErr?.message || "AI request failed");
+  if (parsed && typeof parsed.ok === "boolean") {
+    if (parsed.ok) return parsed as OkResponse<T>;
 
-  const e: AiError = new Error(msg);
-  if (lastErr?.code) e.code = lastErr.code;
-  if (typeof lastErr?.status === "number") e.status = lastErr.status;
-  if (typeof lastErr?.retryable === "boolean") e.retryable = lastErr.retryable;
-  if (lastErr?.requestId) e.requestId = lastErr.requestId;
+    const err = parsed as ErrResponse;
+    const e: AiError = new Error(err.message || "AI request failed");
+    e.code = err.error_code || "UNKNOWN_ERROR";
+    e.retryable = Boolean(err.retryable);
+    e.status = r.status;
+    e.requestId = err.requestId;
+    throw e;
+  }
+
+  const e: AiError = new Error(
+    `Unexpected server response shape (${r.status}).`
+  );
+  e.code = "UNKNOWN_ERROR";
+  e.status = r.status;
   throw e;
 }
 

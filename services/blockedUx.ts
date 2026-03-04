@@ -71,7 +71,7 @@ export function normalizeBlockedUx(err: unknown, opts?: { toolName?: string; pla
     rawCode.includes('PRO') ? 'PRO_ONLY' :
     rawCode.includes('TIER') ? 'TIER_RESTRICTED' :
     rawCode.includes('TIMEOUT') ? 'TIMEOUT' :
-    rawCode.includes('SERVICE_UNAVAILABLE') || rawCode.includes('OVERLOAD') || rawCode === '503' ? 'SERVICE_UNAVAILABLE' :
+    rawCode.includes('SERVICE_UNAVAILABLE') ? 'SERVICE_UNAVAILABLE' :
     'UNKNOWN';
 
   // Heuristic fallback if no code:
@@ -84,14 +84,10 @@ export function normalizeBlockedUx(err: unknown, opts?: { toolName?: string; pla
   const heurIsTimeout =
     msg.includes('timeout') || msg.includes('timed out');
 
-  const heurIsService =
-    msg.includes('temporarily unavailable') || msg.includes('service unavailable') || msg.includes('temporarily busy') || msg.includes('overload') || msg.includes('overloaded');
-
   const inferred =
     code !== 'UNKNOWN' ? code :
     heurIsAuth ? 'UNAUTHORIZED' :
     heurIsTimeout ? 'TIMEOUT' :
-    heurIsService ? 'SERVICE_UNAVAILABLE' :
     heurIsRate ? 'RATE_LIMITED' :
     heurIsQuota ? 'USAGE_LIMIT_REACHED' :
     'UNKNOWN';
