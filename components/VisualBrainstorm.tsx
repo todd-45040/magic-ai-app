@@ -251,7 +251,7 @@ useEffect(() => {
       sceneSetting: 'minimalist close-up table',
       style: 'minimalist, modern, clean',
       context: 'soft lighting, crisp composition, mystery tension',
-    },,
+    },
     {
       title: 'Poster Prop Concept: Mystic Top Hat',
       objectProp: 'magician top hat and wand',
@@ -266,6 +266,8 @@ useEffect(() => {
       style: 'dreamy, cosmic, vibrant',
       context: 'purple/blue galaxy haze, soft volumetric beams, magical sparkles',
     },
+  ];
+
   const demoPresetPages = Math.max(1, Math.ceil(demoPresets.length / PRESETS_PER_PAGE));
   const safePresetPage = ((demoPresetPage % demoPresetPages) + demoPresetPages) % demoPresetPages;
   const visibleDemoPresets = demoPresets.slice(safePresetPage * PRESETS_PER_PAGE, safePresetPage * PRESETS_PER_PAGE + PRESETS_PER_PAGE);
