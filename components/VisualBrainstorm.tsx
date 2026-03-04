@@ -1021,9 +1021,9 @@ const activeSession = useMemo(() => {
                       </button>
                     )}
                   </div>
+                )}
 
-
-{/* Phase 10: Creative Session History Panel */}
+                {/* Phase 10: Creative Session History Panel */}
 <div className="mt-6 rounded-xl border border-slate-800 bg-slate-950/35 p-4">
   <div className="flex items-center justify-between gap-3">
     <div>
