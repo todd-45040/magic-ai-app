@@ -120,6 +120,7 @@ const STORAGE_KEY = useMemo(() => `maw_visual_sessions_v1:${user?.id || 'anon'}`
   // Phase 12: Booth Demo Optimization
   const DEMO_MODE_KEY = useMemo(() => `maw_visual_demo_mode_v1:${user?.id || 'anon'}`, [user?.id]);
   const [demoMode, setDemoMode] = useState<boolean>(false);
+  const [demoDrawerOpen, setDemoDrawerOpen] = useState<boolean>(false);
 
 const [sessions, setSessions] = useState<VisualSession[]>([]);
 const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -1107,11 +1108,19 @@ const activeSession = useMemo(() => {
               }
             </p>
 
-            {/* Phase 12: Booth Demo Optimization */}
+            {/* Phase 12: Booth Demo Optimization (collapsible) */}
             <div className="rounded-2xl border border-slate-800 bg-slate-950/25 p-4 mb-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                  <div className="text-base font-semibold text-slate-100">Booth Demo Tools</div>
+                  <div
+                    className="flex items-center justify-between cursor-pointer"
+                    onClick={() => setDemoDrawerOpen(v=>!v)}
+                  >
+                    <div className="text-base font-semibold text-slate-100">Booth Demo Tools</div>
+                    <div className="text-xs text-slate-400">{demoDrawerOpen ? "▲" : "▼"}</div>
+                  </div>
+                  {demoDrawerOpen && (
+
                   <div className="text-sm text-slate-400 mt-0.5">
                     Fast demos with rotating presets + instant reset.
                   </div>
@@ -1206,6 +1215,7 @@ const activeSession = useMemo(() => {
                 <div className="mt-4 text-sm text-amber-100 flex flex-col sm:flex-row sm:items-center gap-2">
                   <span className="inline-flex items-center px-2.5 py-1 rounded-full border border-amber-400/40 bg-amber-500/15">
                     Demo Mode Active
+                  )
                   </span>
                   <span className="text-amber-200/80">
                     Curated sample images are used so your booth demo never times out.
