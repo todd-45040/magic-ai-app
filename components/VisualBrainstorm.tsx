@@ -117,6 +117,10 @@ type VisualSession = {
 
 const STORAGE_KEY = useMemo(() => `maw_visual_sessions_v1:${user?.id || 'anon'}`, [user?.id]);
 
+  // Phase 12: Booth Demo Optimization
+  const DEMO_MODE_KEY = useMemo(() => `maw_visual_demo_mode_v1:${user?.id || 'anon'}`, [user?.id]);
+  const [demoMode, setDemoMode] = useState<boolean>(false);
+
 const [sessions, setSessions] = useState<VisualSession[]>([]);
 const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
 
@@ -193,6 +197,161 @@ useEffect(() => {
   }
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, []);
+
+  // Phase 12: Load Demo Mode flag
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(DEMO_MODE_KEY);
+      if (raw === '1') setDemoMode(true);
+    } catch {
+      // ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(DEMO_MODE_KEY, demoMode ? '1' : '0');
+    } catch {
+      // ignore
+    }
+  }, [demoMode, DEMO_MODE_KEY]);
+
+  const demoPresets: Array<{ title: string; objectProp: string; sceneSetting: string; style: string; context?: string }> = [
+    {
+      title: 'The Phantom Rope Illusion',
+      objectProp: 'rope and brass rings',
+      sceneSetting: 'Victorian theater stage illusion',
+      style: 'steampunk, mysterious',
+      context: 'dramatic lighting, subtle fog, magical particles',
+    },
+    {
+      title: 'The Floating Deck Spectacle',
+      objectProp: 'deck of cards',
+      sceneSetting: 'parlor show with audience close to the stage',
+      style: 'cinematic, elegant, high contrast',
+      context: 'strong spotlight, audience reactions visible',
+    },
+    {
+      title: 'Street Sorcery Coin Miracle',
+      objectProp: 'coin',
+      sceneSetting: 'street magic circle at night',
+      style: 'bold, energetic, vibrant',
+      context: 'neon highlights, handheld camera vibe, smiling spectators',
+    },
+    {
+      title: 'Mind Reading Envelope Reveal',
+      objectProp: 'sealed envelope and marker',
+      sceneSetting: 'minimalist close-up table',
+      style: 'minimalist, modern, clean',
+      context: 'soft lighting, crisp composition, mystery tension',
+    },
+  ];
+
+  const applyPreset = (p: (typeof demoPresets)[number]) => {
+    setObjectProp(p.objectProp);
+    setSceneSetting(p.sceneSetting);
+    setStyle(p.style);
+    setContext(p.context || '');
+    setAdvancedPrompt(false);
+    setPromptOverride('');
+    setConceptTitle(p.title);
+    // Clear any edit image state (demo presets are text-to-image)
+    setInputImageFile(null);
+    setInputImagePreview(null);
+    setEditPrompt('');
+  };
+
+  const runPreset = async (p: (typeof demoPresets)[number]) => {
+    applyPreset(p);
+    const prompt = buildPromptFrom({
+      style: p.style,
+      sceneSetting: p.sceneSetting,
+      objectProp: p.objectProp,
+      context: p.context,
+    }).trim();
+    if (!prompt) return;
+    await runAction({ kind: 'generate', prompt, aspectRatio, units: 4 } as any);
+  };
+
+  const resetDemoSession = () => {
+    // Clears local history + selections (booth reset)
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+    setSessions([]);
+    setActiveSessionId(null);
+    setHistory([]);
+    setActiveHistoryId(null);
+    setGeneratedImage(null);
+    setVariationImages([]);
+    setVariationHistoryIds([]);
+    setPromptUsed('');
+    setConceptTitle('');
+    setSaveImageStatus('idle');
+    setSavedIdeaId(null);
+    setIsStrong(false);
+    setError(null);
+    setLastFailedAction(null);
+    setLastFailedMessage(null);
+    // Also clear edit image state
+    setInputImageFile(null);
+    setInputImagePreview(null);
+    setEditPrompt('');
+    // Telemetry (best-effort)
+    try {
+      trackClientEvent({
+        tool: 'visual_brainstorm',
+        action: 'visual_demo_reset',
+        outcome: 'ALLOWED',
+      });
+    } catch {
+      // ignore
+    }
+  };
+
+  const makeDemoSvgDataUrl = (label: string, subtitle: string) => {
+    const safeLabel = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const safeSub = subtitle.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0b1220"/>
+      <stop offset="45%" stop-color="#2b1157"/>
+      <stop offset="100%" stop-color="#0b1220"/>
+    </linearGradient>
+    <radialGradient id="r" cx="65%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#a78bfa" stop-opacity="0.65"/>
+      <stop offset="100%" stop-color="#000" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#g)"/>
+  <rect width="1024" height="1024" fill="url(#r)"/>
+  <g fill="#e2e8f0" font-family="ui-sans-serif, system-ui, -apple-system" text-anchor="middle">
+    <text x="512" y="470" font-size="44" font-weight="700">${safeLabel}</text>
+    <text x="512" y="535" font-size="22" fill="#cbd5e1">${safeSub}</text>
+    <text x="512" y="610" font-size="16" fill="#94a3b8">Demo Mode • Curated Sample Output</text>
+  </g>
+  <g opacity="0.22">
+    <circle cx="180" cy="180" r="110" fill="#a78bfa"/>
+    <circle cx="820" cy="260" r="140" fill="#f59e0b"/>
+    <circle cx="720" cy="820" r="180" fill="#38bdf8"/>
+  </g>
+</svg>`;
+    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+  };
+
+  const generateDemoImages = (baseTitle: string, prompt: string, count: number) => {
+    const shortPrompt = prompt.length > 70 ? `${prompt.slice(0, 70)}…` : prompt;
+    const imgs: string[] = [];
+    for (let i = 0; i < count; i++) {
+      imgs.push(makeDemoSvgDataUrl(baseTitle || 'Magic Visual Concept', `Variation ${i + 1} • ${shortPrompt}`));
+    }
+    return imgs;
+  };
 
 // Phase 10: Persist sessions (cap size to avoid localStorage overflow)
 useEffect(() => {
@@ -285,6 +444,20 @@ useEffect(() => {
     // A gentle anchor so outputs stay “magic concept art” rather than generic product shots.
     parts.push('professional magic performance concept art');
 
+    return parts.join(', ');
+  };
+
+  const buildPromptFrom = (vals: { style?: string; sceneSetting?: string; objectProp?: string; context?: string }) => {
+    const parts: string[] = [];
+    const s = (vals.style ?? '').trim();
+    const sc = (vals.sceneSetting ?? '').trim();
+    const o = (vals.objectProp ?? '').trim();
+    const c = (vals.context ?? '').trim();
+    if (s) parts.push(s);
+    if (sc) parts.push(sc);
+    if (o) parts.push(`magic concept using ${o}`);
+    if (c) parts.push(c);
+    parts.push('professional magic performance concept art');
     return parts.join(', ');
   };
 
@@ -418,7 +591,7 @@ const addToHistory = (
 
   // Phase 8 — Centralized request runner (supports retry UX)
   const runAction = async (action: LastVisualAction, opts?: { skipConsume?: boolean; isRetry?: boolean }) => {
-    const skipConsume = Boolean(opts?.skipConsume);
+    const skipConsume = Boolean(opts?.skipConsume) || demoMode;
     const units = action.units;
 
     if (opts?.isRetry) {
@@ -478,19 +651,35 @@ const addToHistory = (
       let imageUrl: string;
       let batchImages: string[] | null = null;
 
-      if (action.kind === 'edit') {
-        imageUrl = await editImageWithPrompt(action.base64, action.mimeType, action.prompt, user);
-      } else if (action.kind === 'generate') {
-        const imgs = await generateImages(action.prompt, action.aspectRatio, 4, user);
+      // Phase 12: Optional Demo Mode (curated sample outputs, no upstream dependency)
+      if (demoMode) {
+        // Small delay so it still feels like “generation” at the booth.
+        await new Promise((r) => setTimeout(r, 350));
+        const baseTitle = (conceptTitle?.trim() ? conceptTitle.trim() : buildConceptTitle());
+        const count = action.kind === 'generate' ? 4 : 1;
+        const imgs = generateDemoImages(baseTitle, action.prompt, count);
         batchImages = imgs;
-        setVariationImages(imgs);
-        setLastGeneratePrompt(action.prompt);
-        setLastGenerateAspect(action.aspectRatio ?? aspectRatio);
+        if (action.kind === 'generate') {
+          setVariationImages(imgs);
+          setLastGeneratePrompt(action.prompt);
+          setLastGenerateAspect((action as any).aspectRatio ?? aspectRatio);
+        }
         imageUrl = imgs[0];
       } else {
-        const imgs = await generateImages(action.prompt, action.aspectRatio, 1, user);
-        batchImages = imgs;
-        imageUrl = imgs[0];
+        if (action.kind === 'edit') {
+          imageUrl = await editImageWithPrompt(action.base64, action.mimeType, action.prompt, user);
+        } else if (action.kind === 'generate') {
+          const imgs = await generateImages(action.prompt, action.aspectRatio, 4, user);
+          batchImages = imgs;
+          setVariationImages(imgs);
+          setLastGeneratePrompt(action.prompt);
+          setLastGenerateAspect(action.aspectRatio ?? aspectRatio);
+          imageUrl = imgs[0];
+        } else {
+          const imgs = await generateImages(action.prompt, action.aspectRatio, 1, user);
+          batchImages = imgs;
+          imageUrl = imgs[0];
+        }
       }
 
       setGeneratedImage(imageUrl);
@@ -549,6 +738,7 @@ const addToHistory = (
           variations: action.kind === 'generate' ? 4 : 1,
           label: (action as any).label,
           retry: Boolean(opts?.isRetry),
+          demoMode: demoMode,
         },
         outcome: skipConsume ? 'SUCCESS_NOT_CHARGED' : 'SUCCESS_CHARGED',
         units,
@@ -892,6 +1082,71 @@ const activeSession = useMemo(() => {
                 : "Generate concept art for props, costumes, or posters from scratch."
               }
             </p>
+
+            {/* Phase 12: Booth Demo Optimization */}
+            <div className="rounded-xl border border-slate-800 bg-slate-950/35 p-4 mb-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-slate-200">Booth Demo Tools</div>
+                  <div className="text-xs text-slate-400">One-click presets + instant reset for the next person.</div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={resetDemoSession}
+                    className="px-3 py-1.5 rounded-md text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700"
+                    title="Clear local session history + selections"
+                  >
+                    Reset Session
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setDemoMode(v => !v)}
+                    className={`px-3 py-1.5 rounded-md text-xs font-semibold border transition-colors ${demoMode ? 'bg-amber-500/20 border-amber-400/40 text-amber-200 hover:bg-amber-500/25' : 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'}`}
+                    title="Use curated sample outputs (no upstream dependency)"
+                  >
+                    {demoMode ? 'Demo Mode: ON' : 'Demo Mode: OFF'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {demoPresets.map((p) => (
+                  <div key={p.title} className="rounded-lg border border-slate-800 bg-slate-900/35 p-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-slate-200 truncate">{p.title}</div>
+                      <div className="text-xs text-slate-400 truncate">{p.objectProp} • {p.sceneSetting}</div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => applyPreset(p)}
+                        className="px-2.5 py-1.5 rounded-md text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700"
+                      >
+                        Load
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void runPreset(p)}
+                        disabled={isLoading}
+                        className="px-2.5 py-1.5 rounded-md text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white disabled:bg-slate-600 disabled:cursor-not-allowed"
+                      >
+                        Load + Generate
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {demoMode && (
+                <div className="mt-3 text-xs text-amber-200/90 flex items-center gap-2">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-amber-400/40 bg-amber-500/15">Demo Mode Active</span>
+                  <span className="text-amber-200/80">Curated sample images are used so your booth demo never times out.</span>
+                </div>
+              )}
+            </div>
             
             <div className="space-y-4">
                 <div>
