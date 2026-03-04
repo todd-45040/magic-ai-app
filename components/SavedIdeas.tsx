@@ -30,6 +30,15 @@ function tryParseMawIdeaV2(content: string): MawIdeaV2 | null {
     }
 }
 
+function getImageUrlForIdea(idea: SavedIdea): string {
+    if (idea.type !== 'image') return idea.content;
+    const v2 = tryParseMawIdeaV2(idea.content);
+    const url = (v2 as any)?.meta?.imageUrl || (v2 as any)?.structured?.imageUrl || (v2 as any)?.imageUrl;
+    if (typeof url === 'string' && url.trim()) return url.trim();
+    // Backward compatibility: older image ideas store a direct URL in content.
+    return idea.content;
+}
+
 function getIdeaDisplay(idea: SavedIdea): { title: string; body: string } {
     // Images and rehearsals keep existing behavior
     if (idea.type === 'image') return { title: idea.title || 'Saved Image', body: '' };
@@ -58,7 +67,7 @@ const IdeaShareWrapper: React.FC<{ idea: SavedIdea }> = ({ idea }) => {
         if (idea.type === 'image') {
             const convertDataUrlToFile = async () => {
                 try {
-                    const res = await fetch(idea.content);
+                    const res = await fetch(getImageUrlForIdea(idea));
                     const blob = await res.blob();
                     const file = new File([blob], `magic-idea.jpg`, { type: 'image/jpeg' });
                     setShareFile(file);
@@ -509,7 +518,7 @@ const bulkDuplicateToClipboard = async () => {
         const openIdeaView = (idea: SavedIdea) => {
         markOpenedNow(idea.id);
         if (idea.type === 'image' && idea.content) {
-            setLightboxImg(idea.content);
+            setLightboxImg(getImageUrlForIdea(idea));
             return;
         }
         setOpenIdea(idea);
@@ -543,7 +552,7 @@ const sendToPlanner = (idea: SavedIdea) => {
                     contentToPrint = idea.content.replace(/\n/g, '<br/>');
                 }
             } else if (idea.type === 'image') {
-                 contentToPrint = `<img src="${idea.content}" style="max-width: 100%;" />`;
+                 contentToPrint = `<img src="${getImageUrlForIdea(idea)}" style="max-width: 100%;" />`;
             }
             else {
                 const d = getIdeaDisplay(idea);
@@ -1082,7 +1091,7 @@ const sendToPlanner = (idea: SavedIdea) => {
                                                                         onClick={() => openIdeaView(idea)}
                                                                         className="group relative bg-slate-900 border border-slate-700 rounded-lg flex flex-col justify-between overflow-hidden aspect-square transition-all hover:border-purple-500"
                                                                     >
-                                                                        <img src={idea.content} alt={idea.title || 'Saved visual idea'} className="w-full h-full object-cover absolute inset-0 transition-transform duration-300 group-hover:scale-105"/>
+                                                                        <img src={getImageUrlForIdea(idea)} alt={idea.title || 'Saved visual idea'} className="w-full h-full object-cover absolute inset-0 transition-transform duration-300 group-hover:scale-105"/>
                                                                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent"></div>
                                                                         <div className="relative z-10 p-3 flex flex-col justify-end h-full">
                                                                             <div className="flex items-center gap-2">
@@ -1178,7 +1187,7 @@ const sendToPlanner = (idea: SavedIdea) => {
                                                                 <span className={`text-xs ${selectedIds.includes(idea.id) ? 'text-purple-200' : 'text-slate-400'}`}>{selectedIds.includes(idea.id) ? '✓' : ''}</span>
                                                             </button>
 
-                                                            <img src={idea.content} alt={idea.title || 'Saved visual idea'} className="w-full h-full object-cover absolute inset-0 transition-transform duration-300 group-hover:scale-105"/>
+                                                            <img src={getImageUrlForIdea(idea)} alt={idea.title || 'Saved visual idea'} className="w-full h-full object-cover absolute inset-0 transition-transform duration-300 group-hover:scale-105"/>
                                                             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent"></div>
                                                             <div className="relative z-10 p-3 flex flex-col justify-end h-full">
                                                                 <div className="flex items-center gap-2">
@@ -1376,7 +1385,7 @@ const sendToPlanner = (idea: SavedIdea) => {
 
                         <div className="p-5 max-h-[70vh] overflow-y-auto">
                             {openIdea.type === 'image' ? (
-                                <img src={openIdea.content} alt={openIdea.title || 'Saved image'} className="w-full rounded-xl border border-slate-800" />
+                                <img src={getImageUrlForIdea(openIdea)} alt={openIdea.title || 'Saved image'} className="w-full rounded-xl border border-slate-800" />
                             ) : openIdea.type === 'rehearsal' ? (
                                 <div className="text-sm text-slate-200 whitespace-pre-wrap">{openIdea.content}</div>
                             ) : (

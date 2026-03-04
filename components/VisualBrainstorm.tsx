@@ -96,6 +96,7 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
     createdAt: number;
     kind: 'generate' | 'edit' | 'refine';
     sessionId: string;
+    parentHistoryId?: string;
     refineLabel?: string;
   };
   const [history, setHistory] = useState<VisualHistoryItem[]>([]);
@@ -522,7 +523,14 @@ const addToHistory = (
         if (ids[0]) setActiveHistoryId(ids[0]);
       } else {
         addToHistory(
-          { imageUrl, promptUsed: action.prompt, title: resolvedTitle, kind: 'refine', refineLabel: action.label, },
+          {
+            imageUrl,
+            promptUsed: action.prompt,
+            title: resolvedTitle,
+            kind: 'refine',
+            refineLabel: action.label,
+            parentHistoryId: activeHistoryId || undefined,
+          },
           { sessionId: activeSessionId || undefined }
         );
       }
@@ -743,9 +751,57 @@ const activeSession = useMemo(() => {
     });
 
     try {
+      const now = Date.now();
+      const activeItem = history.find((h) => h.id === activeHistoryId) || null;
+      const mode = (activeItem?.kind || (loadingKind !== 'none' ? loadingKind : 'generate')) as any;
+      const variations = Array.isArray(variationImages) && variationImages.length ? variationImages.length : 1;
+
+      // Phase 11 — Save to Idea Vault Enhancement:
+      // Store a rich, v2-ish payload inside `content` (still saved as type='image')
+      // so the Idea Vault can render beautifully later.
+      const richPayload = {
+        format: 'maw.idea.visual.v1',
+        tool: 'visual_brainstorm',
+        timestamp: now,
+        title: conceptTitle?.trim() || buildConceptTitle(),
+        // Keep a short human-friendly display (useful for exports / clipboard views)
+        display: `Prompt:\n${String(promptUsed || finalPrompt || '').trim()}`,
+        structured: {
+          imageUrl: generatedImage,
+          promptUsed: String(promptUsed || finalPrompt || '').trim(),
+          inputs: {
+            objectProp: objectProp?.trim() || '',
+            sceneSetting: sceneSetting?.trim() || '',
+            style: style?.trim() || '',
+            context: context?.trim() || '',
+          },
+          settings: {
+            aspectRatio,
+            mode,
+            variations,
+          },
+          lineage: {
+            historyId: activeHistoryId,
+            parentHistoryId: activeItem?.parentHistoryId || null,
+            sessionId: activeItem?.sessionId || activeSessionId || null,
+          },
+        },
+        meta: {
+          imageUrl: generatedImage,
+          promptUsed: String(promptUsed || finalPrompt || '').trim(),
+          aspectRatio,
+          mode,
+          variations,
+          historyId: activeHistoryId,
+          parentHistoryId: activeItem?.parentHistoryId || null,
+          sessionId: activeItem?.sessionId || activeSessionId || null,
+          createdAt: now,
+        },
+      };
+
       const saved = await saveIdea({
         type: 'image',
-        content: generatedImage,
+        content: JSON.stringify(richPayload),
         title: conceptTitle?.trim() || buildConceptTitle(),
         tags: ['visual', 'concept'],
       });
