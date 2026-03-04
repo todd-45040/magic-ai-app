@@ -71,6 +71,7 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
   const [promptOverride, setPromptOverride] = useState('');
   const [aspectRatio, setAspectRatio] = useState<'1:1' | '16:9' | '9:16'>('1:1');
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingLabel, setLoadingLabel] = useState<string>('Generating concept art…');
   const [error, setError] = useState<string | null>(null);
   const [blockedUi, setBlockedUi] = useState<ReturnType<typeof normalizeBlockedUx> | null>(null);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
@@ -78,6 +79,22 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
   const [saveImageStatus, setSaveImageStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [savedIdeaId, setSavedIdeaId] = useState<string | null>(null);
   const [isStrong, setIsStrong] = useState(false);
+
+  // Phase 4: Image refinement pipeline + history
+  type VisualHistoryItem = {
+    id: string;
+    imageUrl: string;
+    promptUsed: string;
+    title: string;
+    createdAt: number;
+    kind: 'generate' | 'edit' | 'refine';
+    refineLabel?: string;
+  };
+  const [history, setHistory] = useState<VisualHistoryItem[]>([]);
+  const [activeHistoryId, setActiveHistoryId] = useState<string | null>(null);
+  const [promptUsed, setPromptUsed] = useState<string>('');
+  const [savedByHistory, setSavedByHistory] = useState<Record<string, string>>({});
+  const [strongByHistory, setStrongByHistory] = useState<Record<string, boolean>>({});
 
   const [showModalOpen, setShowModalOpen] = useState(false);
   const [showModalMode, setShowModalMode] = useState<'add' | 'task'>('add');
@@ -181,10 +198,33 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
     ? editPrompt.trim()
     : (advancedPrompt && promptOverride.trim() ? promptOverride.trim() : buildPrompt());
 
-const handleSubmit = async () => {
+  const activeItem = useMemo(() => {
+    if (!activeHistoryId) return null;
+    return history.find((h) => h.id === activeHistoryId) ?? null;
+  }, [history, activeHistoryId]);
+
+  // Keep the render states in sync with active history (switching thumbnails).
+  useEffect(() => {
+    if (!activeItem) return;
+    setGeneratedImage(activeItem.imageUrl);
+    setPromptUsed(activeItem.promptUsed);
+    setConceptTitle(activeItem.title);
+    setSavedIdeaId(savedByHistory[activeItem.id] ?? null);
+    setIsStrong(Boolean(strongByHistory[activeItem.id]));
+  }, [activeItem, savedByHistory, strongByHistory]);
+
+  const addToHistory = (item: Omit<VisualHistoryItem, 'id' | 'createdAt'>) => {
+    const id = `vb_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    const entry: VisualHistoryItem = { ...item, id, createdAt: Date.now() };
+    setHistory((prev) => [entry, ...prev].slice(0, 12));
+    setActiveHistoryId(id);
+    return id;
+  };
+
+  const handleSubmit = async () => {
     if (!finalPrompt.trim()) {
-        setError(isEditing ? "Please enter editing instructions." : "Please provide at least an Object/Prop, Scene/Setting, or Style.");
-        return;
+      setError(isEditing ? 'Please enter editing instructions.' : 'Please provide at least an Object/Prop, Scene/Setting, or Style.');
+      return;
     }
 
     // Daily cap: images generated
@@ -194,6 +234,7 @@ const handleSubmit = async () => {
         return;
     }
     consume(user, 'image', 1);
+    setLoadingLabel(isEditing ? 'Applying your edit…' : 'Generating concept art…');
     setIsLoading(true);
     setError(null);
     setGeneratedImage(null);
@@ -203,19 +244,30 @@ const handleSubmit = async () => {
 
     try {
         let imageUrl: string;
+        const promptToUse = finalPrompt.trim();
         if (inputImageFile && inputImagePreview) {
             // Image editing flow
             const base64Data = inputImagePreview.split(',')[1];
             // FIX: Pass user object as the 4th argument to editImageWithPrompt
-            imageUrl = await editImageWithPrompt(base64Data, inputImageFile.type, finalPrompt, user);
+            imageUrl = await editImageWithPrompt(base64Data, inputImageFile.type, promptToUse, user);
         } else {
             // Text-to-image flow
             // FIX: Pass user object as the 3rd argument to generateImage
-            imageUrl = await generateImage(finalPrompt, aspectRatio, user);
+            imageUrl = await generateImage(promptToUse, aspectRatio, user);
         }
         setGeneratedImage(imageUrl);
+        setPromptUsed(promptToUse);
+
         // Give the card a decent default title if the user hasn't set one.
-        setConceptTitle((prev) => (prev.trim() ? prev : buildConceptTitle()));
+        const resolvedTitle = (conceptTitle?.trim() ? conceptTitle.trim() : buildConceptTitle());
+        setConceptTitle(resolvedTitle);
+
+        addToHistory({
+          imageUrl,
+          promptUsed: promptToUse,
+          title: resolvedTitle,
+          kind: isEditing ? 'edit' : 'generate',
+        });
     } catch (err) {
         setError(err instanceof Error ? err.message : "An unknown error occurred.");
     } finally {
@@ -223,11 +275,76 @@ const handleSubmit = async () => {
     }
   };
 
+  const refinementPresets: Array<{ label: string; instruction: string }> = [
+    { label: 'More Dramatic', instruction: 'make it more dramatic, cinematic lighting, high contrast' },
+    { label: 'More Minimalist', instruction: 'make it more minimalist, clean composition, fewer elements' },
+    { label: 'More Comedy', instruction: 'make it more playful and comedic, whimsical visual details' },
+    { label: 'More Stage Lighting', instruction: 'add strong stage lighting, spotlights, theatrical atmosphere' },
+    { label: 'More Audience Interaction', instruction: 'show audience interaction, spectators reacting, participatory feel' },
+    { label: 'More Mysterious', instruction: 'make it more mysterious, subtle fog, magical glow, intrigue' },
+    { label: 'Add Fog & Atmosphere', instruction: 'add fog, haze, and atmospheric depth with magical particles' },
+    { label: 'Audience Perspective', instruction: 'shift to an audience perspective viewpoint, stage in the distance' },
+  ];
+
+  const handleRefine = async (presetLabel: string, instruction: string) => {
+    // Must have an existing image/prompt to refine.
+    const base = (promptUsed || finalPrompt || '').trim();
+    if (!base) {
+      setError('Generate an image first, then refine it.');
+      return;
+    }
+
+    const refinedPrompt = `${base}, ${instruction}`;
+
+    // Daily cap: images generated
+    const chk = canConsume(user, 'image', 1);
+    if (!chk.ok) {
+      setError(`Daily image limit reached (${chk.used}/${chk.limit}). Upgrade to continue.`);
+      return;
+    }
+    consume(user, 'image', 1);
+
+    setLoadingLabel(`Refining: ${presetLabel}…`);
+    setIsLoading(true);
+    setError(null);
+    setSaveImageStatus('idle');
+    setSavedIdeaId(null);
+
+    try {
+      let imageUrl: string;
+      if (inputImageFile && inputImagePreview) {
+        const base64Data = inputImagePreview.split(',')[1];
+        imageUrl = await editImageWithPrompt(base64Data, inputImageFile.type, refinedPrompt, user);
+      } else {
+        imageUrl = await generateImage(refinedPrompt, aspectRatio, user);
+      }
+
+      setGeneratedImage(imageUrl);
+      setPromptUsed(refinedPrompt);
+
+      // Keep the title stable unless user hasn't set one.
+      const resolvedTitle = (conceptTitle?.trim() ? conceptTitle.trim() : buildConceptTitle());
+      setConceptTitle(resolvedTitle);
+
+      addToHistory({
+        imageUrl,
+        promptUsed: refinedPrompt,
+        title: resolvedTitle,
+        kind: 'refine',
+        refineLabel: presetLabel,
+      });
+    } catch (e: any) {
+      setError(e?.message ?? 'Refinement failed.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const promptSummary = useMemo(() => {
-    const p = String(finalPrompt ?? '').trim();
+    const p = String(promptUsed || finalPrompt || '').trim();
     if (!p) return '';
     return p.length > 220 ? `${p.slice(0, 220)}…` : p;
-  }, [finalPrompt]);
+  }, [promptUsed, finalPrompt]);
 
   const safeCopy = async (text: string) => {
     try {
@@ -239,14 +356,14 @@ const handleSubmit = async () => {
   };
 
   const handleCopyPrompt = async () => {
-    const ok = await safeCopy(String(finalPrompt ?? ''));
+    const ok = await safeCopy(String(promptUsed || finalPrompt || ''));
     if (!ok) setError('Copy failed. Your browser blocked clipboard access.');
   };
 
   const handleShare = async () => {
     try {
       const title = conceptTitle?.trim() || 'Magic Visual Idea';
-      const text = String(finalPrompt ?? '').trim();
+      const text = String(promptUsed || finalPrompt || '').trim();
 
       // Prefer native share if available (best on mobile for ADMC booth).
       if ((navigator as any).share) {
@@ -270,6 +387,7 @@ const handleSubmit = async () => {
 
   const handleSaveImage = async () => {
     if (!generatedImage) return;
+    if (!activeHistoryId) return;
     if (saveImageStatus === 'saving') return;
     setSaveImageStatus('saving');
     setError(null);
@@ -282,6 +400,7 @@ const handleSubmit = async () => {
         tags: ['visual', 'concept'],
       });
       setSavedIdeaId(saved.id);
+      setSavedByHistory((prev) => ({ ...prev, [activeHistoryId]: saved.id }));
       setSaveImageStatus('saved');
       onIdeaSaved();
       await refreshIdeas(dispatch);
@@ -517,7 +636,7 @@ const handleSubmit = async () => {
         {/* Result Card Area */}
         <div className="flex items-center justify-center bg-slate-900/50 rounded-lg border border-slate-800 p-4 min-h-[300px]">
           {isLoading ? (
-            <ImageLoadingIndicator label={inputImagePreview ? 'Applying your edit…' : 'Generating concept art…'} />
+            <ImageLoadingIndicator label={loadingLabel} />
           ) : generatedImage ? (
             <div className="w-full max-w-2xl">
               <div className="rounded-2xl border border-slate-800 bg-slate-950/35 shadow-[0_18px_70px_-40px_rgba(0,0,0,0.9)] overflow-hidden">
@@ -559,6 +678,60 @@ const handleSubmit = async () => {
                     />
                   </div>
 
+                  {/* Phase 4: Refinement pipeline */}
+                  <div className="mt-4">
+                    <div className="text-xs uppercase tracking-wider text-slate-400 mb-2">Refine</div>
+                    <div className="flex flex-wrap gap-2">
+                      {refinementPresets.map((p) => (
+                        <button
+                          key={p.label}
+                          type="button"
+                          onClick={() => void handleRefine(p.label, p.instruction)}
+                          disabled={isLoading || !generatedImage}
+                          className="px-3 py-1.5 rounded-full text-sm font-semibold border border-slate-700/60 bg-slate-900/40 text-slate-200 hover:bg-slate-800/60 hover:border-purple-500/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {history.length > 1 && (
+                      <div className="mt-4">
+                        <div className="flex items-center justify-between">
+                          <div className="text-xs uppercase tracking-wider text-slate-400">History</div>
+                          <div className="text-xs text-slate-500">Click a thumbnail to revisit</div>
+                        </div>
+                        <div className="mt-2 flex gap-2 overflow-x-auto pb-2">
+                          {history.map((h) => {
+                            const isActive = h.id === activeHistoryId;
+                            const label = h.kind === 'refine' ? `Refine: ${h.refineLabel ?? ''}` : (h.kind === 'edit' ? 'Edit' : 'Generate');
+                            return (
+                              <button
+                                key={h.id}
+                                type="button"
+                                onClick={() => setActiveHistoryId(h.id)}
+                                title={label}
+                                className={
+                                  `relative shrink-0 rounded-lg overflow-hidden border transition-colors ` +
+                                  (isActive ? 'border-purple-500/70' : 'border-slate-800 hover:border-slate-700')
+                                }
+                              >
+                                <img
+                                  src={h.imageUrl}
+                                  alt={label}
+                                  className="h-16 w-20 object-cover"
+                                />
+                                <div className="absolute bottom-0 left-0 right-0 bg-black/55 text-[10px] text-slate-100 px-1 py-0.5 truncate">
+                                  {h.kind === 'refine' ? (h.refineLabel ?? 'Refine') : (h.kind === 'edit' ? 'Edit' : 'Gen')}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="mt-4">
                     <SaveActionBar
                       title="Next step:"
@@ -588,7 +761,11 @@ const handleSubmit = async () => {
                       utilities={[
                         {
                           label: isStrong ? 'Strong' : 'Mark Strong',
-                          onClick: () => setIsStrong((v) => !v),
+                          onClick: () => {
+                            if (!activeHistoryId) return;
+                            setStrongByHistory((prev) => ({ ...prev, [activeHistoryId]: !Boolean(prev[activeHistoryId]) }));
+                            setIsStrong((v) => !v);
+                          },
                           active: isStrong,
                           disabled: !savedIdeaId,
                         },
