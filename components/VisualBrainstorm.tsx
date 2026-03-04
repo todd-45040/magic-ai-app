@@ -217,6 +217,11 @@ useEffect(() => {
     }
   }, [demoMode, DEMO_MODE_KEY]);
 
+  // Phase 12: Booth Demo Optimization (compact rotating presets)
+  const PRESETS_PER_PAGE = 2;
+  const [demoPresetPage, setDemoPresetPage] = useState(0);
+
+
   const demoPresets: Array<{ title: string; objectProp: string; sceneSetting: string; style: string; context?: string }> = [
     {
       title: 'The Phantom Rope Illusion',
@@ -245,8 +250,27 @@ useEffect(() => {
       sceneSetting: 'minimalist close-up table',
       style: 'minimalist, modern, clean',
       context: 'soft lighting, crisp composition, mystery tension',
+    },,
+    {
+      title: 'Poster Prop Concept: Mystic Top Hat',
+      objectProp: 'magician top hat and wand',
+      sceneSetting: 'clean studio product shot on velvet',
+      style: 'luxury, dramatic, photoreal',
+      context: 'rim lighting, deep shadows, premium feel, high detail',
     },
-  ];
+    {
+      title: 'Stage Set Mood Board: Galaxy Backdrop',
+      objectProp: 'starry backdrop and floating props',
+      sceneSetting: 'large theater stage with galaxy gradient lighting',
+      style: 'dreamy, cosmic, vibrant',
+      context: 'purple/blue galaxy haze, soft volumetric beams, magical sparkles',
+    },
+  const demoPresetPages = Math.max(1, Math.ceil(demoPresets.length / PRESETS_PER_PAGE));
+  const safePresetPage = ((demoPresetPage % demoPresetPages) + demoPresetPages) % demoPresetPages;
+  const visibleDemoPresets = demoPresets.slice(safePresetPage * PRESETS_PER_PAGE, safePresetPage * PRESETS_PER_PAGE + PRESETS_PER_PAGE);
+
+  const goPrevPresetPage = () => setDemoPresetPage(p => (p - 1 + demoPresetPages) % demoPresetPages);
+  const goNextPresetPage = () => setDemoPresetPage(p => (p + 1) % demoPresetPages);
 
   const applyPreset = (p: (typeof demoPresets)[number]) => {
     setObjectProp(p.objectProp);
@@ -1084,12 +1108,12 @@ const activeSession = useMemo(() => {
             </p>
 
             {/* Phase 12: Booth Demo Optimization */}
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/35 p-5 mb-4">
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/25 p-4 mb-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
                   <div className="text-base font-semibold text-slate-100">Booth Demo Tools</div>
                   <div className="text-sm text-slate-400 mt-0.5">
-                    One-click presets for fast demos + instant reset for the next person.
+                    Fast demos with rotating presets + instant reset.
                   </div>
                 </div>
 
@@ -1118,48 +1142,61 @@ const activeSession = useMemo(() => {
                 </div>
               </div>
 
-              <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-3">
-                {demoPresets.map((p) => (
+              <div className="mt-3 flex items-center justify-between">
+                <div className="text-xs text-slate-500">Presets · Showing {safePresetPage * PRESETS_PER_PAGE + 1}–{Math.min((safePresetPage + 1) * PRESETS_PER_PAGE, demoPresets.length)} of {demoPresets.length}</div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={goPrevPresetPage}
+                    className="px-2 py-1 rounded-md text-xs font-semibold bg-slate-900/50 hover:bg-slate-900/70 text-slate-200 border border-slate-800"
+                    title="Previous presets"
+                  >
+                    Prev
+                  </button>
+                  <button
+                    type="button"
+                    onClick={goNextPresetPage}
+                    className="px-2 py-1 rounded-md text-xs font-semibold bg-slate-900/50 hover:bg-slate-900/70 text-slate-200 border border-slate-800"
+                    title="Next presets"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-3 space-y-2">
+                {visibleDemoPresets.map((p) => (
                   <div
                     key={p.title}
-                    className="rounded-xl border border-slate-800 bg-slate-900/35 p-4 hover:bg-slate-900/45 transition-colors"
+                    className="rounded-xl border border-slate-800 bg-slate-900/25 px-3 py-2 hover:bg-slate-900/35 transition-colors"
                   >
-                    <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="text-sm sm:text-base font-semibold text-slate-100 leading-snug">
-                          {p.title}
-                        </div>
-                        <div className="mt-1 text-sm text-slate-400 leading-snug">
+                        <div className="text-sm font-semibold text-slate-100 leading-snug truncate">{p.title}</div>
+                        <div className="mt-0.5 text-xs text-slate-400 truncate">
                           <span className="text-slate-300">{p.objectProp}</span>
                           <span className="mx-2 text-slate-600">•</span>
                           <span>{p.sceneSetting}</span>
                         </div>
-                        {p.style ? (
-                          <div className="mt-2 inline-flex items-center gap-2 text-xs">
-                            <span className="px-2 py-0.5 rounded-full border border-slate-700 bg-slate-950/40 text-slate-200">
-                              Style: {p.style}
-                            </span>
-                          </div>
-                        ) : null}
                       </div>
-                    </div>
 
-                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => applyPreset(p)}
-                        className="w-full px-3 py-2 rounded-lg text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700"
-                      >
-                        Load Preset
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void runPreset(p)}
-                        disabled={isLoading}
-                        className="w-full px-3 py-2 rounded-lg text-sm font-bold bg-purple-600 hover:bg-purple-700 text-white disabled:bg-slate-600 disabled:cursor-not-allowed"
-                      >
-                        Load + Generate
-                      </button>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => applyPreset(p)}
+                          className="px-2.5 py-1.5 rounded-md text-xs font-semibold bg-slate-900/60 hover:bg-slate-900/80 text-slate-100 border border-slate-800"
+                        >
+                          Load
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void runPreset(p)}
+                          disabled={isLoading}
+                          className="px-2.5 py-1.5 rounded-md text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white disabled:bg-slate-600 disabled:cursor-not-allowed"
+                        >
+                          Generate
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
