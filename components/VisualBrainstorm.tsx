@@ -106,6 +106,11 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
 
   const [shareFile, setShareFile] = useState<File | null>(null);
 
+  // Phase 6: Image detail panel
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailHistoryId, setDetailHistoryId] = useState<string | null>(null);
+  const [customRefine, setCustomRefine] = useState('');
+
   // New state for input image
   const [inputImageFile, setInputImageFile] = useState<File | null>(null);
   const [inputImagePreview, setInputImagePreview] = useState<string | null>(null);
@@ -205,6 +210,23 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
     if (!activeHistoryId) return null;
     return history.find((h) => h.id === activeHistoryId) ?? null;
   }, [history, activeHistoryId]);
+
+  const openDetail = (opts?: { historyId?: string }) => {
+    if (opts?.historyId) setDetailHistoryId(opts.historyId);
+    else setDetailHistoryId(activeHistoryId);
+    setCustomRefine('');
+    setDetailOpen(true);
+  };
+
+  const closeDetail = () => {
+    setDetailOpen(false);
+  };
+
+  const detailItem = useMemo(() => {
+    const hid = detailHistoryId || activeHistoryId;
+    if (!hid) return null;
+    return history.find((h) => h.id === hid) ?? null;
+  }, [detailHistoryId, activeHistoryId, history]);
 
   // Keep the render states in sync with active history (switching thumbnails).
   useEffect(() => {
@@ -318,9 +340,9 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
     { label: 'Audience Perspective', instruction: 'shift to an audience perspective viewpoint, stage in the distance' },
   ];
 
-  const handleRefine = async (presetLabel: string, instruction: string) => {
-    // Must have an existing image/prompt to refine.
-    const base = (promptUsed || finalPrompt || '').trim();
+  const handleRefine = async (presetLabel: string, instruction: string, baseOverride?: string) => {
+    // Must have an existing prompt to refine.
+    const base = (baseOverride ?? (promptUsed || finalPrompt || '')).trim();
     if (!base) {
       setError('Generate an image first, then refine it.');
       return;
@@ -716,8 +738,13 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
                             type="button"
                             onClick={() => {
                               const hid = variationHistoryIds[idx];
-                              if (hid) setActiveHistoryId(hid);
-                              else setGeneratedImage(url);
+                              if (hid) {
+                                setActiveHistoryId(hid);
+                                openDetail({ historyId: hid });
+                              } else {
+                                setGeneratedImage(url);
+                                openDetail();
+                              }
                             }}
                             className={
                               `relative rounded-xl overflow-hidden border shadow-lg transition-colors ` +
@@ -739,11 +766,18 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
                     </div>
                   ) : (
                     <div className="w-full flex items-center justify-center">
-                      <img
-                        src={generatedImage}
-                        alt="Generated concept art"
-                        className="max-w-full max-h-[520px] object-contain rounded-xl border border-slate-800/70 shadow-lg"
-                      />
+                      <button
+                        type="button"
+                        onClick={() => openDetail()}
+                        className="rounded-xl overflow-hidden border border-slate-800/70 shadow-lg hover:border-slate-700 transition-colors"
+                        title="View details"
+                      >
+                        <img
+                          src={generatedImage}
+                          alt="Generated concept art"
+                          className="max-w-full max-h-[520px] object-contain"
+                        />
+                      </button>
                     </div>
                   )}
 
@@ -861,6 +895,148 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
             </div>
           )}
         </div>
+
+        {/* Phase 6: Image detail panel (click image to open) */}
+        {detailOpen && detailItem ? (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+            onMouseDown={(e) => {
+              // Close when clicking the backdrop.
+              if (e.target === e.currentTarget) closeDetail();
+            }}
+          >
+            <div className="w-full max-w-4xl rounded-2xl border border-slate-800 bg-slate-950/90 shadow-2xl overflow-hidden">
+              <div className="flex items-start justify-between gap-4 p-4 border-b border-slate-800/80">
+                <div className="min-w-0">
+                  <div className="text-xs uppercase tracking-wider text-slate-400">Image Detail</div>
+                  <div className="mt-1 text-lg font-bold text-white truncate">
+                    {detailItem.title || 'Visual Concept'}
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-300">
+                    <span className="px-2 py-1 rounded-md border border-slate-700/60 bg-slate-900/40">
+                      {detailItem.kind === 'refine' ? `Refine${detailItem.refineLabel ? `: ${detailItem.refineLabel}` : ''}` : (detailItem.kind === 'edit' ? 'Edit' : 'Generate')}
+                    </span>
+                    <span className="px-2 py-1 rounded-md border border-slate-700/60 bg-slate-900/40">{aspectRatio}</span>
+                    <span className="px-2 py-1 rounded-md border border-slate-700/60 bg-slate-900/40">
+                      {new Date(detailItem.createdAt).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeDetail}
+                  className="text-slate-300 hover:text-white px-2 py-1"
+                  aria-label="Close"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-0">
+                <div className="p-4 border-b lg:border-b-0 lg:border-r border-slate-800/80">
+                  <div className="rounded-xl border border-slate-800/70 bg-black/20 overflow-hidden">
+                    <img
+                      src={detailItem.imageUrl}
+                      alt="Visual concept art full"
+                      className="w-full max-h-[70vh] object-contain"
+                    />
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <a
+                      href={detailItem.imageUrl}
+                      download={`visual-brainstorm-${detailItem.id}.png`}
+                      className="px-3 py-2 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-100 font-semibold"
+                    >
+                      Download
+                    </a>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const ok = await safeCopy(String(detailItem.promptUsed || ''));
+                        if (!ok) setError('Copy failed. Your browser blocked clipboard access.');
+                      }}
+                      className="px-3 py-2 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-100 font-semibold"
+                    >
+                      Copy Prompt
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-4">
+                  <div className="maw-card-flat">
+                    <div className="text-sm font-semibold text-slate-200 mb-2">Prompt</div>
+                    <div className="text-sm text-slate-200 whitespace-pre-wrap break-words">
+                      {detailItem.promptUsed || '—'}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="maw-card-flat">
+                      <div className="text-sm font-semibold text-slate-200 mb-2">Style</div>
+                      <div className="text-sm text-slate-300 break-words">{style?.trim() || '—'}</div>
+                    </div>
+                    <div className="maw-card-flat">
+                      <div className="text-sm font-semibold text-slate-200 mb-2">Generation Settings</div>
+                      <div className="text-sm text-slate-300">
+                        <div>Aspect: <span className="text-slate-100">{aspectRatio}</span></div>
+                        <div>Mode: <span className="text-slate-100">{isEditing ? 'Edit' : 'Generate'}</span></div>
+                        {!isEditing && variationImages.length > 1 ? (
+                          <div>Variations: <span className="text-slate-100">{Math.min(4, variationImages.length)}</span></div>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <div className="text-xs uppercase tracking-wider text-slate-400 mb-2">Refine Again</div>
+                    <div className="flex flex-wrap gap-2">
+                      {refinementPresets.map((p) => (
+                        <button
+                          key={`detail_${p.label}`}
+                          type="button"
+                          onClick={() => {
+                            closeDetail();
+                            void handleRefine(p.label, p.instruction, detailItem.promptUsed);
+                          }}
+                          disabled={isLoading}
+                          className="px-3 py-1.5 rounded-full text-sm font-semibold border border-slate-700/60 bg-slate-900/40 text-slate-200 hover:bg-slate-800/60 hover:border-purple-500/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="mt-3 maw-card-flat">
+                      <div className="text-sm font-semibold text-slate-200 mb-2">Custom refine</div>
+                      <textarea
+                        value={customRefine}
+                        onChange={(e) => setCustomRefine(e.target.value)}
+                        placeholder="e.g., add golden rim lighting, keep background dark, include subtle magical particles"
+                        className="w-full min-h-[90px] px-3 py-2 bg-slate-900 border border-white/10 rounded-md text-white"
+                      />
+                      <div className="mt-2 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const instr = customRefine.trim();
+                            if (!instr) return;
+                            closeDetail();
+                            void handleRefine('Custom', instr, detailItem.promptUsed);
+                          }}
+                          disabled={isLoading || !customRefine.trim()}
+                          className="px-4 py-2 rounded-md bg-purple-600 hover:bg-purple-700 text-white font-semibold disabled:bg-slate-700 disabled:cursor-not-allowed"
+                        >
+                          Refine
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {/* Add to Show / Convert modal */}
         {showModalOpen ? (
