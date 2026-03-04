@@ -1113,7 +1113,6 @@ const activeSession = useMemo(() => {
     </div>
   )}
 </div>
-                )}
             </div>
         </div>
 
