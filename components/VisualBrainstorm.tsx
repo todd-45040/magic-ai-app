@@ -1115,11 +1115,11 @@ const activeSession = useMemo(() => {
   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
     <button
       type="button"
-      className="flex items-center justify-between w-full sm:w-auto text-left"
+      className="flex items-center justify-between w-full sm:w-auto text-left px-2 py-1.5 rounded-lg hover:bg-slate-900/30 transition-colors"
       onClick={() => setDemoDrawerOpen((v) => !v)}
       aria-expanded={demoDrawerOpen}
     >
-      <div className="text-base font-semibold text-slate-100">Booth Demo Tools</div>
+      <div className="text-sm font-semibold text-purple-300">Booth Demo Tools</div>
       <div className="text-xs text-slate-400 ml-3">{demoDrawerOpen ? "▲" : "▼"}</div>
     </button>
 
@@ -1201,14 +1201,14 @@ const activeSession = useMemo(() => {
               <div className="flex items-center gap-2 shrink-0">
                 <button
                   type="button"
-                  onClick={() => applyPreset(pp)}
+                  onClick={() => { applyPreset(pp); setDemoDrawerOpen(false); }}
                   className="px-2.5 py-1.5 rounded-md text-xs font-semibold bg-slate-900/60 hover:bg-slate-900/80 text-slate-100 border border-slate-800"
                 >
                   Load
                 </button>
                 <button
                   type="button"
-                  onClick={() => void runPreset(pp)}
+                  onClick={() => { void runPreset(pp); setDemoDrawerOpen(false); }}
                   className="px-2.5 py-1.5 rounded-md text-xs font-semibold bg-amber-500/20 hover:bg-amber-500/25 text-amber-100 border border-amber-400/30"
                 >
                   Generate
