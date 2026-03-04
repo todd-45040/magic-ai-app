@@ -276,7 +276,7 @@ const handleSubmit = async () => {
                         </div>
                       </div>
                     )}
-                </div></div>
+                </div>
                  <input
                     type="file"
                     accept="image/jpeg,image/png,image/webp"
