@@ -1127,7 +1127,7 @@ const activeSession = useMemo(() => {
       <button
         type="button"
         onClick={resetDemoSession}
-        className="px-3 py-2 rounded-lg text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700"
+        className="px-2.5 py-1.5 text-xs rounded-lg text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700"
         title="Clear local session history + selections"
       >
         Reset Session
@@ -1136,7 +1136,7 @@ const activeSession = useMemo(() => {
       <button
         type="button"
         onClick={() => setDemoMode((v) => !v)}
-        className={`px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${
+        className={`px-2.5 py-1.5 text-xs rounded-lg text-sm font-semibold border transition-colors ${
           demoMode
             ? "bg-amber-500/20 border-amber-400/40 text-amber-100 hover:bg-amber-500/25"
             : "bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700"
@@ -1184,7 +1184,7 @@ const activeSession = useMemo(() => {
         {visibleDemoPresets.map((pp) => (
           <div
             key={pp.title}
-            className="rounded-xl border border-slate-800 bg-slate-900/25 px-3 py-2 hover:bg-slate-900/35 transition-colors"
+            className="rounded-xl border border-slate-800 bg-slate-900/25 px-2.5 py-1.5 text-xs hover:bg-slate-900/35 transition-colors"
           >
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
@@ -1220,7 +1220,7 @@ const activeSession = useMemo(() => {
       </div>
 
       {demoMode && (
-        <div className="mt-3 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-200/90">
+        <div className="mt-3 rounded-xl border border-amber-400/20 bg-amber-500/10 px-2.5 py-1.5 text-xs text-xs text-amber-200/90">
           Demo Mode Active — curated sample images are used so your booth demo never times out.
         </div>
       )}
@@ -1251,7 +1251,7 @@ const activeSession = useMemo(() => {
                         value={editPrompt}
                         onChange={(e) => { setEditPrompt(e.target.value); setError(null); }}
                         placeholder={placeholderText}
-                        className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
+                        className="w-full px-2.5 py-1.5 text-xs bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
                       />
                     ) : (
                       <div className="space-y-3">
@@ -1262,7 +1262,7 @@ const activeSession = useMemo(() => {
                             value={objectProp}
                             onChange={(e) => { setObjectProp(e.target.value); setError(null); }}
                             placeholder="coin, rope, deck of cards..."
-                            className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
+                            className="w-full px-2.5 py-1.5 text-xs bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
                           />
                         </div>
 
@@ -1273,7 +1273,7 @@ const activeSession = useMemo(() => {
                             value={sceneSetting}
                             onChange={(e) => { setSceneSetting(e.target.value); setError(null); }}
                             placeholder="close-up table, stage illusion, street magic..."
-                            className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
+                            className="w-full px-2.5 py-1.5 text-xs bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
                           />
                         </div>
 
@@ -1284,7 +1284,7 @@ const activeSession = useMemo(() => {
                             value={style}
                             onChange={(e) => { setStyle(e.target.value); setError(null); }}
                             placeholder="mysterious, steampunk, dark magic, comedy..."
-                            className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
+                            className="w-full px-2.5 py-1.5 text-xs bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
                           />
                         </div>
 
@@ -1296,7 +1296,7 @@ const activeSession = useMemo(() => {
                             value={context}
                             onChange={(e) => { setContext(e.target.value); setError(null); }}
                             placeholder="Audience size, lighting conditions, show theme..."
-                            className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
+                            className="w-full px-2.5 py-1.5 text-xs bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
                           />
                         </div>
 
@@ -1321,7 +1321,7 @@ const activeSession = useMemo(() => {
                               value={promptOverride}
                               onChange={(e) => { setPromptOverride(e.target.value); setError(null); }}
                               placeholder="Optional: override the full prompt (advanced)"
-                              className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
+                              className="w-full px-2.5 py-1.5 text-xs bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
                             />
                           )}
                         </div>
@@ -1793,7 +1793,7 @@ const activeSession = useMemo(() => {
                     <a
                       href={detailItem.imageUrl}
                       download={`visual-brainstorm-${detailItem.id}.png`}
-                      className="px-3 py-2 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-100 font-semibold"
+                      className="px-2.5 py-1.5 text-xs rounded-md bg-slate-800 hover:bg-slate-700 text-slate-100 font-semibold"
                     >
                       Download
                     </a>
@@ -1803,7 +1803,7 @@ const activeSession = useMemo(() => {
                         const ok = await safeCopy(String(detailItem.promptUsed || ''));
                         if (!ok) setError('Copy failed. Your browser blocked clipboard access.');
                       }}
-                      className="px-3 py-2 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-100 font-semibold"
+                      className="px-2.5 py-1.5 text-xs rounded-md bg-slate-800 hover:bg-slate-700 text-slate-100 font-semibold"
                     >
                       Copy Prompt
                     </button>
@@ -1860,7 +1860,7 @@ const activeSession = useMemo(() => {
                         value={customRefine}
                         onChange={(e) => setCustomRefine(e.target.value)}
                         placeholder="e.g., add golden rim lighting, keep background dark, include subtle magical particles"
-                        className="w-full min-h-[90px] px-3 py-2 bg-slate-900 border border-white/10 rounded-md text-white"
+                        className="w-full min-h-[90px] px-2.5 py-1.5 text-xs bg-slate-900 border border-white/10 rounded-md text-white"
                       />
                       <div className="mt-2 flex justify-end">
                         <button
@@ -1915,7 +1915,7 @@ const activeSession = useMemo(() => {
                   <select
                     value={showId}
                     onChange={(e) => setShowId(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-900 border border-white/10 rounded-md text-white"
+                    className="w-full px-2.5 py-1.5 text-xs bg-slate-900 border border-white/10 rounded-md text-white"
                   >
                     <option value="">Select…</option>
                     {showsSorted.map((s: any) => (
@@ -1931,7 +1931,7 @@ const activeSession = useMemo(() => {
                       value={createNewShowTitle}
                       onChange={(e) => setCreateNewShowTitle(e.target.value)}
                       placeholder="e.g., ADMC Visual Concepts"
-                      className="w-full px-3 py-2 bg-slate-900 border border-white/10 rounded-md text-white"
+                      className="w-full px-2.5 py-1.5 text-xs bg-slate-900 border border-white/10 rounded-md text-white"
                     />
                   </div>
                 </div>
