@@ -32,15 +32,29 @@ async function postJson<T>(url: string, body: any): Promise<T> {
 export async function identifyTrickFromImageServer(
   base64ImageData: string,
   mimeType: string,
-  currentUser?: User
+  currentUser?: User,
+  opts?: { context?: string; imageCount?: number; fileNames?: string[] }
 ): Promise<TrickIdentificationResult> {
   const dataUrl = base64ImageData.startsWith("data:")
     ? base64ImageData
     : `data:${mimeType || "image/jpeg"};base64,${base64ImageData}`;
 
+  const contextLine = opts?.context?.trim()
+    ? `\nPerformance context: ${opts.context.trim()}`
+    : '';
+
+  const imagesLine =
+    opts?.imageCount && opts.imageCount > 1
+      ? `\nAdditional note: User provided ${opts.imageCount} images (${(opts.fileNames || [])
+          .slice(0, 5)
+          .join(', ')}${(opts.fileNames || []).length > 5 ? '…' : ''}). Use the first image plus this note to improve identification.`
+      : '';
+
   const prompt =
-    "Identify this magic trick based on the image provided. " +
-    "Return ONLY valid JSON with keys:\n" +
+    "Identify this magic trick based on the image provided." +
+    contextLine +
+    imagesLine +
+    "\n\nReturn ONLY valid JSON with keys:\n" +
     "- trickName (string)\n" +
     "- confidence (string: High|Medium|Low)\n" +
     "- summary (string, 1-2 sentences)\n" +
