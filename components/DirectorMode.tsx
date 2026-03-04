@@ -1,18 +1,18 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { Type } from "@google/genai";
 import { saveIdea } from '../services/ideasService';
-import { CohesionActions } from './CohesionActions';
 import { createShow, addTasksToShow } from '../services/showsService';
 import { saveDirectorBlueprint } from '../services/directorBlueprintsService';
-import { DIRECTOR_MODE_SYSTEM_INSTRUCTION, MAGIC_DICTIONARY_TERMS } from '../constants';
+import { DIRECTOR_MODE_SYSTEM_INSTRUCTION } from '../constants';
 import type { DirectorModeBlueprint } from '../types';
-import { StageCurtainsIcon, WandIcon, SaveIcon, CheckIcon, ChecklistIcon } from './icons';
+import { StageCurtainsIcon, WandIcon } from './icons';
 import { generateStructuredResponse } from '../services/geminiService';
 
 
 interface DirectorModeProps {
     onIdeaSaved: () => void;
+    hasProfessionalAccess?: boolean;
 }
 
 const LoadingIndicator: React.FC = () => (
@@ -36,29 +36,8 @@ const slugify = (s: string) =>
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/(^-|-$)/g, '');
 
-const extractDictionaryTerms = (textBlocks: string[]): string[] => {
-    const dictTerms = (MAGIC_DICTIONARY_TERMS as any[])
-        .map((t) => String(t?.term || '').trim())
-        .filter(Boolean);
-    const lower = dictTerms.map((t) => t.toLowerCase());
 
-    const hay = textBlocks.join(' \n ').toLowerCase();
-    const found = new Set<string>();
-
-    // Try exact name matches first; keep list small enough to be fast.
-    lower.forEach((t, i) => {
-        if (!t) return;
-        // Simple contains check; avoids regex complexity and is adequate for our short strings.
-        if (hay.includes(t)) found.add(dictTerms[i]);
-    });
-
-    // Add a few “high value” theory terms even if not in dictionary yet (safe no-op if missing)
-    ['Framing', 'Beat', 'Offbeat', 'Conviction', 'Clarity', 'Misdirection', 'Audience Control'].forEach((t) => {
-        if (hay.includes(t.toLowerCase())) found.add(t);
-    });
-
-    return Array.from(found).sort((a, b) => a.localeCompare(b));
-};
+// (Dictionary extraction removed from Director Mode — Phase 3 focuses on blueprint readability + actions.)
 
 const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
     // Form State
@@ -100,6 +79,14 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
     const [isSavedToIdeas, setIsSavedToIdeas] = useState(false);
     const [plannerNotice, setPlannerNotice] = useState<string | null>(null);
     const [ideaNotice, setIdeaNotice] = useState<string | null>(null);
+
+    // Phase 3 — Results UI
+    const [expandedSegmentKeys, setExpandedSegmentKeys] = useState<Record<string, boolean>>({});
+    const [copyNotice, setCopyNotice] = useState<string | null>(null);
+    const [blueprintNotice, setBlueprintNotice] = useState<string | null>(null);
+    const [isSavingBlueprint, setIsSavingBlueprint] = useState(false);
+    const [proPolish, setProPolish] = useState<any | null>(null);
+    const [isGeneratingPolish, setIsGeneratingPolish] = useState(false);
     
     const computedAudience = (() => {
         const picked = audienceChips.join(', ');
@@ -108,80 +95,6 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
         return picked || custom;
     })();
 
-    const directorsNotesBlock = useMemo(() => {
-        if (!showPlan) return '';
-        const parts: string[] = [];
-        parts.push(`Constraints:`);
-        parts.push(`- Skill level: ${showPlan.constraints?.skill_level || ''}`);
-        parts.push(`- Reset time: ${showPlan.constraints?.reset_time || ''}`);
-        if (Array.isArray(showPlan.constraints?.props_owned) && showPlan.constraints.props_owned.length) {
-            parts.push(`- Props owned: ${showPlan.constraints.props_owned.join(', ')}`);
-        }
-        if (showPlan.constraints?.notes?.trim()) {
-            parts.push(`- Notes: ${showPlan.constraints.notes.trim()}`);
-        }
-        parts.push('');
-        parts.push('Segments:');
-        (showPlan.segments || []).forEach((s) => {
-            const props = Array.isArray(s.props_required) && s.props_required.length ? ` | props: ${s.props_required.join(', ')}` : '';
-            parts.push(`- ${s.purpose}: ${s.title} (${s.duration_estimate_minutes} min, ${s.audience_interaction_level}${props})`);
-            if (s.transition_notes?.trim()) parts.push(`  transition: ${s.transition_notes.trim()}`);
-        });
-        return parts.join('\n');
-    }, [showPlan]);
-
-const dictionaryLinks = useMemo(() => {
-        if (!showPlan) return [] as string[];
-        const blocks: string[] = [];
-        blocks.push(showPlan.show_title || '');
-        blocks.push(showPlan.tone || '');
-        blocks.push(showPlan.performer_persona || '');
-        (showPlan.constraints?.notes ? [showPlan.constraints.notes] : []).forEach((x) => blocks.push(x));
-        (showPlan.segments || []).forEach((s) => {
-            blocks.push(s.title || '');
-            blocks.push(s.transition_notes || '');
-        });
-        return extractDictionaryTerms(blocks);
-    }, [showPlan]);
-
-// Tier 3: Director Mode -> Magic Dictionary integration
-    const dictionaryTermSet = useMemo(() => {
-        const set = new Set<string>();
-        (MAGIC_DICTIONARY_TERMS as any[]).forEach((t) => {
-            const name = String(t?.term || '').trim();
-            if (name) set.add(name);
-        });
-        return set;
-    }, []);
-
-    const extractDictionaryMentions = useMemo(() => {
-        if (!showPlan) return [] as string[];
-        const blobs: string[] = [];
-
-        const pushText = (x?: string) => {
-            if (!x) return;
-            const s = String(x || '').trim();
-            if (s) blobs.push(s);
-        };
-
-        pushText(showPlan.tone);
-        pushText(showPlan.performer_persona);
-        pushText(showPlan.constraints?.notes);
-        (showPlan.segments || []).forEach((s) => {
-            pushText(s.title);
-            pushText(s.transition_notes);
-        });
-
-        const text = blobs.join(' \n ').toLowerCase();
-        const matches: string[] = [];
-        Array.from(dictionaryTermSet).forEach((term) => {
-            const t = term.toLowerCase();
-            if (!t || t.length < 3) return;
-            const re = new RegExp(`(^|[^a-z0-9])${t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z0-9]|$)`, 'i');
-            if (re.test(text)) matches.push(term);
-        });
-        return matches.sort((a, b) => a.localeCompare(b));
-    }, [showPlan, dictionaryTermSet]);
 
 // Show Title is optional: AI can generate a strong title if the user leaves it blank.
     const isFormValid = Boolean(
@@ -474,123 +387,257 @@ try {
     if (isLoading) {
         return <div className="flex-1 flex items-center justify-center"><LoadingIndicator /></div>;
     }
-    
     if (showPlan) {
-        const opener = (showPlan.segments || []).find((s) => s.purpose === 'opener');
-        const closer = (showPlan.segments || []).find((s) => s.purpose === 'closer');
-        const middles = (showPlan.segments || []).filter((s) => s.purpose === 'middle');
+        const orderedSegments = (() => {
+            const segs = Array.isArray(showPlan.segments) ? [...showPlan.segments] : [];
+            const rank = (p: string) => (p === 'opener' ? 0 : p === 'middle' ? 1 : p === 'closer' ? 2 : 9);
+            return segs.sort((a: any, b: any) => rank(a?.purpose) - rank(b?.purpose));
+        })();
+
+        const keyChips = [
+            showPlan.constraints?.skill_level ? `Skill: ${showPlan.constraints.skill_level}` : null,
+            showPlan.constraints?.reset_time ? `Reset: ${showPlan.constraints.reset_time}` : null,
+            showPlan.venue_type ? `Venue: ${showPlan.venue_type}` : null,
+        ].filter(Boolean) as string[];
+
+        const buildOutlineFromPlan = (plan: DirectorModeBlueprint) => {
+            const lines: string[] = [];
+            lines.push(`${plan.show_title}`);
+            lines.push(`${plan.show_length_minutes} min • ${plan.audience_type} • ${plan.venue_type}`);
+            lines.push(`Tone: ${plan.tone} • Persona: ${plan.performer_persona}`);
+            lines.push('');
+            lines.push('Constraints');
+            lines.push(`- Skill level: ${plan.constraints?.skill_level || ''}`);
+            lines.push(`- Reset time: ${plan.constraints?.reset_time || ''}`);
+            if (Array.isArray(plan.constraints?.props_owned) && plan.constraints.props_owned.length) {
+                lines.push(`- Props owned: ${plan.constraints.props_owned.join(', ')}`);
+            }
+            if (plan.constraints?.notes?.trim()) lines.push(`- Notes: ${plan.constraints.notes.trim()}`);
+            lines.push('');
+            lines.push('Run of Show');
+            (plan.segments || []).forEach((s, idx) => {
+                const props = Array.isArray(s.props_required) && s.props_required.length ? ` (Props: ${s.props_required.join(', ')})` : '';
+                lines.push(`${idx + 1}. ${String(s.purpose || '').toUpperCase()} — ${s.title} (${s.duration_estimate_minutes} min, ${s.audience_interaction_level})${props}`);
+                if (s.transition_notes?.trim()) lines.push(`   Transition: ${s.transition_notes.trim()}`);
+            });
+            return lines.join('\\n');
+        };
+
+        const copyToClipboard = async (content: string, label: string) => {
+            try {
+                await navigator.clipboard.writeText(content);
+                setCopyNotice(`${label} copied to clipboard.`);
+                window.setTimeout(() => setCopyNotice(null), 4000);
+            } catch (e) {
+                console.error('Clipboard copy failed:', e);
+                setCopyNotice('Copy failed — your browser blocked clipboard access.');
+                window.setTimeout(() => setCopyNotice(null), 6000);
+            }
+        };
+
+        const handleSaveBlueprint = async () => {
+            if (isSavingBlueprint) return;
+            try {
+                setIsSavingBlueprint(true);
+                setBlueprintNotice(null);
+                await saveDirectorBlueprint(
+                    {
+                        showTitle: showTitle.trim() || null,
+                        showLengthMinutes: Number(showPlan.show_length_minutes || showLength || 0),
+                        audience_type: showPlan.audience_type,
+                        venue_type: showPlan.venue_type,
+                        tone: showPlan.tone,
+                        performer_persona: showPlan.performer_persona,
+                        constraints: {
+                            props_owned: showPlan.constraints?.props_owned || [],
+                            reset_time: showPlan.constraints?.reset_time || '',
+                            skill_level: showPlan.constraints?.skill_level || '',
+                            notes: showPlan.constraints?.notes || '',
+                        },
+                    } as any,
+                    showPlan
+                );
+                setBlueprintNotice('Blueprint saved.');
+                window.setTimeout(() => setBlueprintNotice(null), 5000);
+            } catch (e: any) {
+                console.error('Save blueprint failed:', e);
+                setBlueprintNotice(e?.message || 'Unable to save blueprint.');
+                window.setTimeout(() => setBlueprintNotice(null), 7000);
+            } finally {
+                setIsSavingBlueprint(false);
+            }
+        };
+
+        const toggleSegment = (key: string) => {
+            setExpandedSegmentKeys((prev) => ({ ...prev, [key]: !prev[key] }));
+        };
+
+        const generateProPolish = async () => {
+            if (isGeneratingPolish) return;
+            if (!hasProfessionalAccess) {
+                setBlueprintNotice('Pro Polish is a Professional feature.');
+                window.setTimeout(() => setBlueprintNotice(null), 6000);
+                return;
+            }
+            try {
+                setIsGeneratingPolish(true);
+                setProPolish(null);
+                const polishSchema = {
+                    type: Type.OBJECT,
+                    properties: {
+                        alt_opener_titles: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        alt_closer_titles: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        stronger_transitions: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        audience_participation_beats: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    },
+                    required: ['alt_opener_titles', 'alt_closer_titles', 'stronger_transitions', 'audience_participation_beats'],
+                };
+                const prompt = `You are a director for a stage magic show. Based on the show blueprint JSON below, provide PRO-ONLY polish suggestions.
+
+Rules:
+- Do NOT reveal secrets or methods.
+- Keep suggestions short and stage-ready.
+- Provide 2 alternative opener titles, 2 alternative closer titles.
+- Provide 4 stronger transitions (one per segment boundary where possible).
+- Provide 4 optional audience participation beats that can be inserted without changing the core effects.
+
+Blueprint JSON:
+${JSON.stringify(showPlan, null, 2)}
+`;
+                const result = await generateStructuredResponse(
+                    prompt,
+                    'Return JSON ONLY matching the schema. No markdown. No extra keys.',
+                    polishSchema
+                );
+                setProPolish(result);
+            } catch (e: any) {
+                console.error('Pro polish failed:', e);
+                setBlueprintNotice(e?.message || 'Unable to generate Pro Polish.');
+                window.setTimeout(() => setBlueprintNotice(null), 7000);
+            } finally {
+                setIsGeneratingPolish(false);
+            }
+        };
 
         return (
             <div className="flex-1 flex flex-col overflow-y-auto p-4 md:p-6 animate-fade-in">
-                <div className="flex items-start justify-between gap-4 flex-wrap">
-                    <div>
-                        <h2 className="text-3xl font-bold text-white font-cinzel">{showPlan.show_title}</h2>
-                        <p className="text-slate-400 mt-2">
-                            {showPlan.show_length_minutes} min • {showPlan.audience_type} • {showPlan.venue_type}
-                        </p>
-                        <p className="text-slate-400 mt-1">
-                            Tone: <span className="text-slate-200">{showPlan.tone}</span> • Persona: <span className="text-slate-200">{showPlan.performer_persona}</span>
-                        </p>
-                    </div>
+                <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-5">
+                    <div className="flex items-start justify-between gap-4 flex-wrap">
+                        <div className="min-w-[280px]">
+                            <div className="text-xs uppercase tracking-wider text-purple-300">Director Blueprint</div>
+                            <h2 className="text-3xl font-bold text-white font-cinzel mt-1">{showPlan.show_title}</h2>
+                            <p className="text-slate-300 mt-2"><span className="text-slate-200 font-semibold">{showPlan.show_length_minutes} min</span> • {showPlan.audience_type} • {showPlan.venue_type}</p>
+                            <p className="text-slate-400 mt-1">Vibe: <span className="text-slate-200">{showPlan.tone}</span> • Persona: <span className="text-slate-200">{showPlan.performer_persona}</span></p>
+                            {keyChips.length ? (
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                    {keyChips.map((c) => (
+                                        <span key={c} className="px-2.5 py-1 rounded-full text-xs border border-slate-600/70 bg-slate-950/30 text-slate-200">{c}</span>
+                                    ))}
+                                </div>
+                            ) : null}
+                        </div>
 
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={handleBackToForm}
-                            className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700"
-                        >
-                            Back
-                        </button>
-
-                        <button
-                            onClick={handleSaveToIdeas}
-                            disabled={isSavingIdea || isSavedToIdeas}
-                            className={`px-4 py-2 rounded-lg border ${
-                                isSavedToIdeas ? 'bg-emerald-600/20 border-emerald-400 text-emerald-200' : 'bg-purple-600 hover:bg-purple-500 border-purple-400 text-white'
-                            }`}
-                        >
-                            {isSavedToIdeas ? (
-                                <span className="inline-flex items-center gap-2"><CheckIcon className="w-5 h-5" /> Saved</span>
-                            ) : (
-                                <span className="inline-flex items-center gap-2"><SaveIcon className="w-5 h-5" /> Save</span>
-                            )}
-                        </button>
-
-                        <button
-                            onClick={handleSendToPlanner}
-                            disabled={isAddingToPlanner || isAddedToPlanner}
-                            className={`px-4 py-2 rounded-lg border ${
-                                isAddedToPlanner ? 'bg-emerald-600/20 border-emerald-400 text-emerald-200' : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
-                            }`}
-                        >
-                            {isAddedToPlanner ? (
-                                <span className="inline-flex items-center gap-2"><ChecklistIcon className="w-5 h-5" /> Sent</span>
-                            ) : (
-                                <span className="inline-flex items-center gap-2"><ChecklistIcon className="w-5 h-5" /> Send to Show Planner</span>
-                            )}
-                        </button>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <button onClick={() => copyToClipboard(JSON.stringify(showPlan, null, 2), 'Blueprint JSON')} className="px-3 py-2 rounded-lg bg-slate-900/40 hover:bg-slate-900/60 text-slate-200 border border-slate-700 text-sm">Copy JSON</button>
+                            <button onClick={() => copyToClipboard(buildOutlineFromPlan(showPlan), 'Outline')} className="px-3 py-2 rounded-lg bg-slate-900/40 hover:bg-slate-900/60 text-slate-200 border border-slate-700 text-sm">Copy Outline</button>
+                            <button onClick={handleSaveBlueprint} disabled={isSavingBlueprint} className="px-3 py-2 rounded-lg bg-slate-900/40 hover:bg-slate-900/60 text-slate-200 border border-slate-700 text-sm">Save Blueprint</button>
+                            <button onClick={handleSendToPlanner} disabled={isAddingToPlanner || isAddedToPlanner} className="px-3 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 border border-purple-400 text-white text-sm">{isAddedToPlanner ? 'Tasks Created' : 'Convert to Tasks'}</button>
+                            <button onClick={handleSaveToIdeas} disabled={isSavingIdea || isSavedToIdeas} className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-sm">{isSavedToIdeas ? 'Saved to Vault' : 'Save to Idea Vault'}</button>
+                            <button onClick={handleBackToForm} className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-sm">Back</button>
+                        </div>
                     </div>
                 </div>
 
-                {plannerNotice ? (
-                    <div className="mt-4 bg-emerald-900/20 border border-emerald-700 text-emerald-200 rounded-lg p-3 text-sm">
-                        {plannerNotice}
-                    </div>
-                ) : null}
-
-                {error ? (
-                    <div className="mt-4 bg-rose-900/20 border border-rose-700 text-rose-200 rounded-lg p-3 text-sm">
-                        {error}
-                    </div>
-                ) : null}
+                {copyNotice ? (<div className="mt-4 bg-slate-900/40 border border-slate-700 text-slate-200 rounded-lg p-3 text-sm">{copyNotice}</div>) : null}
+                {blueprintNotice ? (<div className="mt-4 bg-slate-900/40 border border-slate-700 text-slate-200 rounded-lg p-3 text-sm">{blueprintNotice}</div>) : null}
+                {plannerNotice ? (<div className="mt-4 bg-emerald-900/20 border border-emerald-700 text-emerald-200 rounded-lg p-3 text-sm">{plannerNotice}</div>) : null}
+                {error ? (<div className="mt-4 bg-rose-900/20 border border-rose-700 text-rose-200 rounded-lg p-3 text-sm">{error}</div>) : null}
 
                 <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
-                        <h3 className="text-xl font-bold text-[#E6C77A] font-cinzel">Constraints</h3>
-                        <div className="mt-3 space-y-2 text-sm text-slate-300">
-                            <p><span className="text-slate-400">Skill level:</span> {showPlan.constraints?.skill_level || ''}</p>
-                            <p><span className="text-slate-400">Reset time:</span> {showPlan.constraints?.reset_time || ''}</p>
-                            <p><span className="text-slate-400">Props owned:</span> {(showPlan.constraints?.props_owned || []).join(', ') || '—'}</p>
-                            {showPlan.constraints?.notes?.trim() ? (
-                                <p><span className="text-slate-400">Notes:</span> {showPlan.constraints.notes}</p>
-                            ) : null}
+                    <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-700">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-xl font-bold text-[#E6C77A] font-cinzel">Segments</h3>
+                            <div className="text-xs text-slate-400">Expand details</div>
+                        </div>
+                        <div className="mt-3 space-y-3">
+                            {orderedSegments.map((seg: any, idx: number) => {
+                                const key = `${idx}-${slugify(seg?.purpose)}-${slugify(seg?.title)}`;
+                                const open = Boolean(expandedSegmentKeys[key]);
+                                const badge = String(seg?.purpose || '').toUpperCase();
+                                return (
+                                    <div key={key} className="rounded-xl border border-slate-700/70 bg-slate-950/25">
+                                        <button type="button" onClick={() => toggleSegment(key)} className="w-full text-left p-3 flex items-center justify-between gap-3 hover:bg-slate-950/40 rounded-xl">
+                                            <div className="min-w-0">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <span className="text-[11px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-purple-500/15 border border-purple-400/30 text-purple-200">{badge}</span>
+                                                    <span className="text-white font-semibold truncate">{seg.title}</span>
+                                                </div>
+                                                <div className="mt-1 text-sm text-slate-300">{seg.duration_estimate_minutes} min • {seg.audience_interaction_level}</div>
+                                            </div>
+                                            <div className="shrink-0 text-slate-300 text-sm">{open ? '−' : '+'}</div>
+                                        </button>
+                                        {open ? (
+                                            <div className="px-3 pb-3 text-sm text-slate-300">
+                                                <div className="mt-2 grid grid-cols-1 gap-2">
+                                                    <div><span className="text-slate-400">Interaction:</span> {seg.audience_interaction_level}</div>
+                                                    <div><span className="text-slate-400">Props required:</span> {Array.isArray(seg.props_required) && seg.props_required.length ? seg.props_required.join(', ') : '—'}</div>
+                                                    <div><span className="text-slate-400">Transition notes:</span> {seg.transition_notes?.trim() ? seg.transition_notes.trim() : '—'}</div>
+                                                </div>
+                                            </div>
+                                        ) : null}
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
 
-                    <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
-                        <h3 className="text-xl font-bold text-[#E6C77A] font-cinzel">Structure</h3>
-                        <div className="mt-3 space-y-3 text-sm text-slate-300">
-                            {opener ? (
-                                <div className="bg-slate-900/40 rounded-md p-3 border border-slate-700/60">
-                                    <p className="font-semibold text-white">Opener</p>
-                                    <p className="text-slate-300">{opener.title} • {opener.duration_estimate_minutes} min • {opener.audience_interaction_level}</p>
-                                    {opener.transition_notes?.trim() ? <p className="text-slate-400 mt-1">Transition: {opener.transition_notes}</p> : null}
-                                </div>
-                            ) : null}
-
-                            {middles.map((m, idx) => (
-                                <div key={idx} className="bg-slate-900/40 rounded-md p-3 border border-slate-700/60">
-                                    <p className="font-semibold text-white">Middle</p>
-                                    <p className="text-slate-300">{m.title} • {m.duration_estimate_minutes} min • {m.audience_interaction_level}</p>
-                                    {Array.isArray(m.props_required) && m.props_required.length ? (
-                                        <p className="text-slate-400 mt-1">Props: {m.props_required.join(', ')}</p>
-                                    ) : null}
-                                    {m.transition_notes?.trim() ? <p className="text-slate-400 mt-1">Transition: {m.transition_notes}</p> : null}
-                                </div>
-                            ))}
-
-                            {closer ? (
-                                <div className="bg-slate-900/40 rounded-md p-3 border border-slate-700/60">
-                                    <p className="font-semibold text-white">Closer</p>
-                                    <p className="text-slate-300">{closer.title} • {closer.duration_estimate_minutes} min • {closer.audience_interaction_level}</p>
-                                    {closer.transition_notes?.trim() ? <p className="text-slate-400 mt-1">Transition: {closer.transition_notes}</p> : null}
-                                </div>
-                            ) : null}
+                    <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-700 relative overflow-hidden">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-xl font-bold text-[#E6C77A] font-cinzel">Pro Polish</h3>
+                            <span className="text-xs px-2 py-1 rounded-full border border-yellow-500/30 bg-yellow-500/10 text-yellow-200">Professional</span>
                         </div>
+                        <p className="mt-2 text-sm text-slate-300">Alt opener/closer options, stronger transitions, and optional participation beats.</p>
+                        <div className="mt-3">
+                            <button type="button" onClick={generateProPolish} disabled={isGeneratingPolish || !hasProfessionalAccess} className="w-full px-3 py-2 rounded-lg border text-sm bg-purple-600 hover:bg-purple-500 border-purple-400 text-white disabled:bg-slate-900/30 disabled:border-slate-700 disabled:text-slate-400">
+                                {isGeneratingPolish ? 'Generating Pro Polish…' : 'Generate Pro Polish'}
+                            </button>
+                        </div>
+                        {proPolish ? (
+                            <div className="mt-4 space-y-3 text-sm text-slate-300">
+                                <div className="bg-slate-950/25 border border-slate-700/70 rounded-xl p-3">
+                                    <div className="text-xs uppercase tracking-wider text-purple-300">Alt Opener Titles</div>
+                                    <ul className="mt-2 list-disc ml-5">{(proPolish.alt_opener_titles || []).slice(0, 3).map((x: string, i: number) => (<li key={i}>{x}</li>))}</ul>
+                                </div>
+                                <div className="bg-slate-950/25 border border-slate-700/70 rounded-xl p-3">
+                                    <div className="text-xs uppercase tracking-wider text-purple-300">Alt Closer Titles</div>
+                                    <ul className="mt-2 list-disc ml-5">{(proPolish.alt_closer_titles || []).slice(0, 3).map((x: string, i: number) => (<li key={i}>{x}</li>))}</ul>
+                                </div>
+                                <div className="bg-slate-950/25 border border-slate-700/70 rounded-xl p-3">
+                                    <div className="text-xs uppercase tracking-wider text-purple-300">Stronger Transitions</div>
+                                    <ul className="mt-2 list-disc ml-5">{(proPolish.stronger_transitions || []).slice(0, 6).map((x: string, i: number) => (<li key={i}>{x}</li>))}</ul>
+                                </div>
+                                <div className="bg-slate-950/25 border border-slate-700/70 rounded-xl p-3">
+                                    <div className="text-xs uppercase tracking-wider text-purple-300">Participation Beats</div>
+                                    <ul className="mt-2 list-disc ml-5">{(proPolish.audience_participation_beats || []).slice(0, 6).map((x: string, i: number) => (<li key={i}>{x}</li>))}</ul>
+                                </div>
+                            </div>
+                        ) : (<div className="mt-4 text-sm text-slate-400">Tip: Generate polish after the structure feels right.</div>)}
+                        {!hasProfessionalAccess ? (
+                            <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-[1px] flex items-center justify-center">
+                                <div className="text-center p-6">
+                                    <div className="text-sm font-semibold text-yellow-200">Professional feature</div>
+                                    <div className="text-xs text-slate-300 mt-1">Upgrade to generate Pro Polish overlays.</div>
+                                </div>
+                            </div>
+                        ) : null}
                     </div>
 
-                    <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700 lg:col-span-2">
-                        <h3 className="text-xl font-bold text-[#E6C77A] font-cinzel">Blueprint JSON</h3>
-                        <pre className="mt-3 text-xs text-slate-200 bg-slate-950/40 border border-slate-700/60 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap">
+                    <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-700 lg:col-span-2">
+                        <div className="flex items-center justify-between gap-3">
+                            <h3 className="text-xl font-bold text-[#E6C77A] font-cinzel">Blueprint JSON</h3>
+                            <button type="button" onClick={() => copyToClipboard(JSON.stringify(showPlan, null, 2), 'Blueprint JSON')} className="px-3 py-2 rounded-lg bg-slate-900/40 hover:bg-slate-900/60 text-slate-200 border border-slate-700 text-sm">Copy</button>
+                        </div>
+                        <pre className="mt-3 text-xs text-slate-200 bg-slate-950/40 border border-slate-700/60 rounded-xl p-3 overflow-x-auto whitespace-pre-wrap">
 {JSON.stringify(showPlan, null, 2)}
                         </pre>
                     </div>

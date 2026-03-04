@@ -2940,7 +2940,7 @@ ${action.payload.content}`;
             />
           );
         case 'assistant-studio': return <AssistantStudio onIdeaSaved={() => handleIdeaSaved('Assistant idea saved!')} user={user} />;
-        case 'director-mode': return <DirectorMode onIdeaSaved={() => handleIdeaSaved('Show Plan saved!')} />;
+        case 'director-mode': return <DirectorMode onIdeaSaved={() => handleIdeaSaved('Show Plan saved!')} hasProfessionalAccess={hasProfessionalAccess} />;
         case 'illusion-blueprint': return <IllusionBlueprint onIdeaSaved={() => handleIdeaSaved('Illusion Blueprint saved!')} user={user} />;
         case 'magic-theory-tutor': return <MagicTheoryTutor user={user} />;
         case 'magic-dictionary':
