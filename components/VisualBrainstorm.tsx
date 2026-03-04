@@ -1693,7 +1693,9 @@ const activeSession = useMemo(() => {
         {/* Phase 6: Image detail panel (click image to open) */}
         {detailOpen && detailItem ? (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+            // Align to top (not vertically centered) so the Image Detail GUI appears toward the top of the page.
+            // Allow scrolling if modal content exceeds the viewport height.
+            className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 p-4 pt-10 overflow-y-auto"
             onMouseDown={(e) => {
               // Close when clicking the backdrop.
               if (e.target === e.currentTarget) closeDetail();
