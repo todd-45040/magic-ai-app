@@ -853,7 +853,20 @@ const IdentifyTab: React.FC<{
                     onRetry={identificationBlocked.retryable ? handleIdentifyClick : undefined}
                 />
             )}
-            {identificationError && <p className="text-red-400 text-center bg-red-900/20 p-3 rounded-lg">{identificationError}</p>}
+            {identificationError && (
+              <div className="bg-red-900/20 border border-red-500/20 rounded-lg p-3">
+                <p className="text-red-300 text-center">{identificationError}</p>
+                <div className="mt-2 flex justify-center">
+                  <button
+                    onClick={handleIdentifyClick}
+                    disabled={isIdentifying}
+                    className="px-3 py-1.5 rounded-md bg-slate-700/60 hover:bg-slate-700 text-slate-100 text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Try again
+                  </button>
+                </div>
+              </div>
+            )}
             {identificationResult && (
                 <div className="animate-fade-in bg-slate-800/50 border border-slate-700 rounded-2xl p-5 space-y-4">
                     <div className="flex items-start justify-between gap-3">
@@ -899,9 +912,9 @@ const IdentifyTab: React.FC<{
                       identificationResult.performanceStructure?.length ||
                       identificationResult.presentationIdeas?.length ||
                       identificationResult.angleRiskNotes?.length ||
-                      identificationResult.variations?.length) && (
+                      identificationResult.variations?.length) ? (
                       <div className="space-y-2">
-                        {identificationResult.likelyEffectPlot && (
+                        {identificationResult.likelyEffectPlot ? (
                           <details className="rounded-lg border border-slate-700/60 bg-slate-900/20 p-3">
                             <summary className="cursor-pointer select-none text-xs font-semibold tracking-wide text-slate-200">
                               Likely Effect / Plot
@@ -911,9 +924,9 @@ const IdentifyTab: React.FC<{
                               <ExpandableText text={identificationResult.likelyEffectPlot} limit={420} />
                             </div>
                           </details>
-                        )}
+                        ) : null}
 
-                        {!!identificationResult.performanceStructure?.length && (
+                        {identificationResult.performanceStructure?.length ? (
                           <details className="rounded-lg border border-slate-700/60 bg-slate-900/20 p-3">
                             <summary className="cursor-pointer select-none text-xs font-semibold tracking-wide text-slate-200">
                               Performance Structure
@@ -925,9 +938,9 @@ const IdentifyTab: React.FC<{
                               ))}
                             </ul>
                           </details>
-                        )}
+                        ) : null}
 
-                        {!!identificationResult.presentationIdeas?.length && (
+                        {identificationResult.presentationIdeas?.length ? (
                           <details className="rounded-lg border border-slate-700/60 bg-slate-900/20 p-3">
                             <summary className="cursor-pointer select-none text-xs font-semibold tracking-wide text-slate-200">
                               Presentation Ideas
@@ -939,9 +952,9 @@ const IdentifyTab: React.FC<{
                               ))}
                             </ul>
                           </details>
-                        )}
+                        ) : null}
 
-                        {!!identificationResult.angleRiskNotes?.length && (
+                        {identificationResult.angleRiskNotes?.length ? (
                           <details className="rounded-lg border border-slate-700/60 bg-slate-900/20 p-3">
                             <summary className="cursor-pointer select-none text-xs font-semibold tracking-wide text-slate-200">
                               Angle / Risk Notes
@@ -953,9 +966,9 @@ const IdentifyTab: React.FC<{
                               ))}
                             </ul>
                           </details>
-                        )}
+                        ) : null}
 
-                        {!!identificationResult.variations?.length && (
+                        {identificationResult.variations?.length ? (
                           <details className="rounded-lg border border-slate-700/60 bg-slate-900/20 p-3">
                             <summary className="cursor-pointer select-none text-xs font-semibold tracking-wide text-slate-200">
                               Variations / Alternatives
@@ -967,9 +980,9 @@ const IdentifyTab: React.FC<{
                               ))}
                             </ul>
                           </details>
-                        )}
+                        ) : null}
                       </div>
-                    )}
+                    ) : null}
 
                    {identificationResult.videoExamples?.length > 0 && (
                      <div>
