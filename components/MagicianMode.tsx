@@ -761,6 +761,33 @@ const ChatView: React.FC<{
   );
 };
 
+const ExpandableText: React.FC<{ text: string; limit?: number; className?: string }> = ({
+  text,
+  limit = 280,
+  className = '',
+}) => {
+  const [expanded, setExpanded] = useState(false);
+  const t = (text || '').trim();
+  if (!t) return null;
+  const isLong = t.length > limit;
+  const visible = !isLong || expanded ? t : t.slice(0, limit).trimEnd() + '…';
+
+  return (
+    <div className={className}>
+      <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-200">{visible}</div>
+      {isLong ? (
+        <button
+          type="button"
+          className="mt-2 text-xs font-semibold text-purple-300 hover:text-purple-200 transition"
+          onClick={() => setExpanded((v) => !v)}
+        >
+          {expanded ? 'Show less' : 'Show more'}
+        </button>
+      ) : null}
+    </div>
+  );
+};
+
 const IdentifyTab: React.FC<{
     imageFile: File | null;
     imagePreview: string | null;
@@ -849,7 +876,7 @@ const IdentifyTab: React.FC<{
                     {identificationResult.summary ? (
                       <div className="text-slate-200">
                         <div className="text-xs uppercase tracking-wider text-slate-400">Quick summary</div>
-                        <div className="mt-1 text-sm leading-relaxed text-slate-200">{identificationResult.summary}</div>
+                        <ExpandableText text={identificationResult.summary} limit={260} className="mt-1" />
                       </div>
                     ) : null}
 
@@ -861,6 +888,83 @@ const IdentifyTab: React.FC<{
                             <li key={idx} className="text-slate-200">{o}</li>
                           ))}
                         </ul>
+                      </div>
+                    ) : null}
+
+                    {/* Phase 2 — Expandable sections (accordion style) */}
+                    {(identificationResult.likelyEffectPlot ||
+                      identificationResult.performanceStructure?.length ||
+                      identificationResult.presentationIdeas?.length ||
+                      identificationResult.angleRiskNotes?.length ||
+                      identificationResult.variations?.length) ? (
+                      <div className="space-y-2">
+                        {identificationResult.likelyEffectPlot ? (
+                          <details className="rounded-lg border border-slate-700/60 bg-slate-900/20 p-3">
+                            <summary className="cursor-pointer select-none text-xs font-semibold tracking-wide text-slate-200">
+                              Likely Effect / Plot
+                              <span className="ml-2 text-[11px] font-normal text-slate-400">tap to expand</span>
+                            </summary>
+                            <div className="mt-2">
+                              <ExpandableText text={identificationResult.likelyEffectPlot} limit={420} />
+                            </div>
+                          </details>
+                        ) : null}
+
+                        {identificationResult.performanceStructure?.length ? (
+                          <details className="rounded-lg border border-slate-700/60 bg-slate-900/20 p-3">
+                            <summary className="cursor-pointer select-none text-xs font-semibold tracking-wide text-slate-200">
+                              Performance Structure
+                              <span className="ml-2 text-[11px] font-normal text-slate-400">tap to expand</span>
+                            </summary>
+                            <ul className="mt-2 list-disc list-inside space-y-1 text-sm text-slate-200">
+                              {identificationResult.performanceStructure.slice(0, 10).map((x, i) => (
+                                <li key={i}>{x}</li>
+                              ))}
+                            </ul>
+                          </details>
+                        ) : null}
+
+                        {identificationResult.presentationIdeas?.length ? (
+                          <details className="rounded-lg border border-slate-700/60 bg-slate-900/20 p-3">
+                            <summary className="cursor-pointer select-none text-xs font-semibold tracking-wide text-slate-200">
+                              Presentation Ideas
+                              <span className="ml-2 text-[11px] font-normal text-slate-400">tap to expand</span>
+                            </summary>
+                            <ul className="mt-2 list-disc list-inside space-y-1 text-sm text-slate-200">
+                              {identificationResult.presentationIdeas.slice(0, 12).map((x, i) => (
+                                <li key={i}>{x}</li>
+                              ))}
+                            </ul>
+                          </details>
+                        ) : null}
+
+                        {identificationResult.angleRiskNotes?.length ? (
+                          <details className="rounded-lg border border-slate-700/60 bg-slate-900/20 p-3">
+                            <summary className="cursor-pointer select-none text-xs font-semibold tracking-wide text-slate-200">
+                              Angle / Risk Notes
+                              <span className="ml-2 text-[11px] font-normal text-slate-400">non-exposure</span>
+                            </summary>
+                            <ul className="mt-2 list-disc list-inside space-y-1 text-sm text-slate-200">
+                              {identificationResult.angleRiskNotes.slice(0, 12).map((x, i) => (
+                                <li key={i}>{x}</li>
+                              ))}
+                            </ul>
+                          </details>
+                        ) : null}
+
+                        {identificationResult.variations?.length ? (
+                          <details className="rounded-lg border border-slate-700/60 bg-slate-900/20 p-3">
+                            <summary className="cursor-pointer select-none text-xs font-semibold tracking-wide text-slate-200">
+                              Variations / Alternatives
+                              <span className="ml-2 text-[11px] font-normal text-slate-400">tap to expand</span>
+                            </summary>
+                            <ul className="mt-2 list-disc list-inside space-y-1 text-sm text-slate-200">
+                              {identificationResult.variations.slice(0, 12).map((x, i) => (
+                                <li key={i}>{x}</li>
+                              ))}
+                            </ul>
+                          </details>
+                        ) : null}
                       </div>
                     ) : null}
 
@@ -2073,6 +2177,11 @@ useEffect(() => {
     const confidence = result?.confidence || 'Medium';
     const summary = (result?.summary || '').trim();
     const observations = Array.isArray(result?.observations) ? result.observations : [];
+    const likelyEffectPlot = String(result?.likelyEffectPlot || '').trim();
+    const performanceStructure = Array.isArray(result?.performanceStructure) ? result.performanceStructure : [];
+    const presentationIdeas = Array.isArray(result?.presentationIdeas) ? result.presentationIdeas : [];
+    const angleRiskNotes = Array.isArray(result?.angleRiskNotes) ? result.angleRiskNotes : [];
+    const variations = Array.isArray(result?.variations) ? result.variations : [];
 
     const inputSummary = file
       ? `${file.name} (${Math.round(file.size / 1024)} KB, ${file.type || 'image'})`
@@ -2084,6 +2193,36 @@ useEffect(() => {
       ? `\n\n**What I'm seeing:**\n${observations
           .slice(0, 8)
           .map((o) => `- ${o}`)
+          .join('\n')}`
+      : '';
+
+    const plotBlock = likelyEffectPlot ? `\n\n**Likely Effect / Plot:**\n${likelyEffectPlot}` : '';
+
+    const structureBlock = performanceStructure.length
+      ? `\n\n**Performance Structure:**\n${performanceStructure
+          .slice(0, 10)
+          .map((x) => `- ${x}`)
+          .join('\n')}`
+      : '';
+
+    const ideasBlock = presentationIdeas.length
+      ? `\n\n**Presentation Ideas:**\n${presentationIdeas
+          .slice(0, 12)
+          .map((x) => `- ${x}`)
+          .join('\n')}`
+      : '';
+
+    const anglesBlock = angleRiskNotes.length
+      ? `\n\n**Angle / Risk Notes (non-exposure):**\n${angleRiskNotes
+          .slice(0, 12)
+          .map((x) => `- ${x}`)
+          .join('\n')}`
+      : '';
+
+    const varsBlock = variations.length
+      ? `\n\n**Variations / Alternatives:**\n${variations
+          .slice(0, 12)
+          .map((x) => `- ${x}`)
           .join('\n')}`
       : '';
 
@@ -2103,9 +2242,9 @@ useEffect(() => {
       confidence,
     };
 
-    const content = `${header}${sumBlock}${obsBlock}${vidsBlock}\n\n---\n**Meta:** ${JSON.stringify(meta)}\n\n\`\`\`json\n${JSON.stringify(result?.raw ?? result, null, 2)}\n\`\`\``;
+    const content = `${header}${sumBlock}${obsBlock}${plotBlock}${structureBlock}${ideasBlock}${anglesBlock}${varsBlock}${vidsBlock}\n\n---\n**Meta:** ${JSON.stringify(meta)}\n\n\`\`\`json\n${JSON.stringify(result?.raw ?? result, null, 2)}\n\`\`\``;
 
-    const copyText = `${header}${sumBlock}${obsBlock}${vidsBlock}`;
+    const copyText = `${header}${sumBlock}${obsBlock}${plotBlock}${structureBlock}${ideasBlock}${anglesBlock}${varsBlock}${vidsBlock}`;
 
     const title = `Identify Trick: ${trickName}`;
     return { title, content, copyText };

@@ -68,6 +68,11 @@ export interface TrickIdentificationResult {
   confidence?: 'High' | 'Medium' | 'Low';
   summary?: string;
   observations?: string[];
+  likelyEffectPlot?: string;
+  performanceStructure?: string[];
+  presentationIdeas?: string[];
+  angleRiskNotes?: string[];
+  variations?: string[];
   /** Best-effort raw JSON returned by the model (for saving/audit/debug). */
   raw?: any;
   videoExamples: {

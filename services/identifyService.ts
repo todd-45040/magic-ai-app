@@ -45,6 +45,11 @@ export async function identifyTrickFromImageServer(
     "- confidence (string: High|Medium|Low)\n" +
     "- summary (string, 1-2 sentences)\n" +
     "- observations (array of 3-6 short bullets describing what you see: props, staging, tells; NO exposure)\n" +
+    "- likelyEffectPlot (string, 2-4 sentences; performance-safe; NO exposure)\n" +
+    "- performanceStructure (array of 3-6 bullets; beats/flow; performance-safe)\n" +
+    "- presentationIdeas (array of 3-6 bullets; performance-safe)\n" +
+    "- angleRiskNotes (array of 3-6 bullets; sightlines/reset/handling cautions; NO exposure)\n" +
+    "- variations (array of 3-6 bullets; alternate plots/presentations; performance-safe)\n" +
     "- videoQueries (array of 3 concise YouTube search queries, NO URLs).";
 
   // Optional: pass user id for rate limiting (best effort)
@@ -77,6 +82,37 @@ export async function identifyTrickFromImageServer(
         .map((x: any) => String(x || '').trim())
         .filter(Boolean)
         .slice(0, 8)
+    : undefined;
+
+  const likelyEffectPlot: string | undefined =
+    String(parsed?.likelyEffectPlot || '').trim() || undefined;
+
+  const performanceStructure: string[] | undefined = Array.isArray(parsed?.performanceStructure)
+    ? parsed.performanceStructure
+        .map((x: any) => String(x || '').trim())
+        .filter(Boolean)
+        .slice(0, 10)
+    : undefined;
+
+  const presentationIdeas: string[] | undefined = Array.isArray(parsed?.presentationIdeas)
+    ? parsed.presentationIdeas
+        .map((x: any) => String(x || '').trim())
+        .filter(Boolean)
+        .slice(0, 12)
+    : undefined;
+
+  const angleRiskNotes: string[] | undefined = Array.isArray(parsed?.angleRiskNotes)
+    ? parsed.angleRiskNotes
+        .map((x: any) => String(x || '').trim())
+        .filter(Boolean)
+        .slice(0, 12)
+    : undefined;
+
+  const variations: string[] | undefined = Array.isArray(parsed?.variations)
+    ? parsed.variations
+        .map((x: any) => String(x || '').trim())
+        .filter(Boolean)
+        .slice(0, 12)
     : undefined;
   const queries: string[] = Array.isArray(parsed?.videoQueries)
     ? parsed.videoQueries.map((q: any) => String(q || "").trim()).filter(Boolean).slice(0, 3)
@@ -115,6 +151,11 @@ export async function identifyTrickFromImageServer(
     confidence,
     summary,
     observations,
+    likelyEffectPlot,
+    performanceStructure,
+    presentationIdeas,
+    angleRiskNotes,
+    variations,
     raw: parsed,
     videoExamples: videos,
   } as TrickIdentificationResult;
