@@ -13,8 +13,12 @@ export default async function handler(request: any, response: any) {
     return response.status(401).json({ error: 'Unauthorized.' });
   }
 
+  const { count: rawCount } = (request.body || {}) as any;
+  const requestedCount = Math.max(1, Math.min(4, Math.floor(Number(rawCount) || 1)));
+
   // AI cost protection (daily caps + per-minute burst limits)
-  const usage = await enforceAiUsage(request, 1, { tool: 'image_generation' });
+  // Charge 1 unit per generated image.
+  const usage = await enforceAiUsage(request, requestedCount, { tool: 'image_generation' });
   if (!usage.ok) {
     return response
       .status(usage.status || 429)
@@ -51,6 +55,7 @@ export default async function handler(request: any, response: any) {
           // size mapping: OpenAI uses fixed sizes; keep default
           size: '1024x1024',
           response_format: 'b64_json',
+          n: requestedCount,
         }),
       });
 
@@ -74,7 +79,7 @@ export default async function handler(request: any, response: any) {
         model: 'imagen-4.0-generate-001',
         prompt,
         config: {
-          numberOfImages: 1,
+          numberOfImages: requestedCount,
           outputMimeType: 'image/jpeg',
           aspectRatio,
         },

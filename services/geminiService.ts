@@ -440,6 +440,49 @@ export const generateImage = async (
 };
 
 /**
+ * Generate multiple images (variations) using the serverless Imagen endpoint.
+ * Returns an array of data URLs you can drop directly into an <img src="..." />.
+ */
+export const generateImages = async (
+  prompt: string,
+  aspectRatio: "1:1" | "3:4" | "4:3" | "9:16" | "16:9" = "1:1",
+  count: number = 4,
+  currentUser?: User
+): Promise<string[]> => {
+  const safeCount = Math.max(1, Math.min(4, Math.floor(Number(count) || 1)));
+
+  const result = await postJson<any>(
+    '/api/generate-images',
+    { prompt, aspectRatio, count: safeCount },
+    currentUser
+  );
+
+  const imgs = result?.generatedImages || result?.images || result?.data;
+  if (!Array.isArray(imgs) || imgs.length === 0) {
+    throw new Error('No image data returned from /api/generate-images.');
+  }
+
+  const out: string[] = [];
+  for (const img of imgs.slice(0, safeCount)) {
+    const base64 =
+      img?.image?.imageBytes ||
+      img?.imageBytes ||
+      img?.b64_json ||
+      img?.base64;
+    const mime = img?.mimeType || img?.mime || 'image/jpeg';
+    if (typeof base64 === 'string' && base64.length > 0) {
+      out.push(`data:${mime};base64,${base64}`);
+    }
+  }
+
+  if (out.length === 0) {
+    throw new Error('No image data returned from /api/generate-images.');
+  }
+
+  return out;
+};
+
+/**
  * Image editing is not wired through a serverless route yet.
  * Keep the API surface so the app compiles, but fail gracefully.
  */

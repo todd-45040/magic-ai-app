@@ -1,6 +1,6 @@
 
 import React, { useMemo, useState, useEffect, useRef } from 'react';
-import { generateImage, editImageWithPrompt } from '../services/geminiService';
+import { generateImage, generateImages, editImageWithPrompt } from '../services/geminiService';
 import BlockedPanel from './BlockedPanel';
 import { normalizeBlockedUx } from '../services/blockedUx';
 import { saveIdea } from '../services/ideasService';
@@ -75,6 +75,9 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
   const [error, setError] = useState<string | null>(null);
   const [blockedUi, setBlockedUi] = useState<ReturnType<typeof normalizeBlockedUx> | null>(null);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+  // Phase 5: Multi-image generation (variations)
+  const [variationImages, setVariationImages] = useState<string[]>([]);
+  const [variationHistoryIds, setVariationHistoryIds] = useState<string[]>([]);
   const [conceptTitle, setConceptTitle] = useState<string>('');
   const [saveImageStatus, setSaveImageStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [savedIdeaId, setSavedIdeaId] = useState<string | null>(null);
@@ -213,11 +216,11 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
     setIsStrong(Boolean(strongByHistory[activeItem.id]));
   }, [activeItem, savedByHistory, strongByHistory]);
 
-  const addToHistory = (item: Omit<VisualHistoryItem, 'id' | 'createdAt'>) => {
+  const addToHistory = (item: Omit<VisualHistoryItem, 'id' | 'createdAt'>, opts?: { setActive?: boolean }) => {
     const id = `vb_${Date.now()}_${Math.random().toString(16).slice(2)}`;
     const entry: VisualHistoryItem = { ...item, id, createdAt: Date.now() };
     setHistory((prev) => [entry, ...prev].slice(0, 12));
-    setActiveHistoryId(id);
+    if (opts?.setActive !== false) setActiveHistoryId(id);
     return id;
   };
 
@@ -228,22 +231,27 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
     }
 
     // Daily cap: images generated
-    const chk = canConsume(user, 'image', 1);
+    // Phase 5: generating variations consumes 4 image credits.
+    const units = isEditing ? 1 : 4;
+    const chk = canConsume(user, 'image', units);
     if (!chk.ok) {
         setError(`Daily image limit reached (${chk.used}/${chk.limit}). Upgrade to continue.`);
         return;
     }
-    consume(user, 'image', 1);
+    consume(user, 'image', units);
     setLoadingLabel(isEditing ? 'Applying your edit…' : 'Generating concept art…');
     setIsLoading(true);
     setError(null);
     setGeneratedImage(null);
+    setVariationImages([]);
+    setVariationHistoryIds([]);
     setSaveImageStatus('idle');
     setSavedIdeaId(null);
     setIsStrong(false);
 
     try {
         let imageUrl: string;
+        let batchImages: string[] | null = null;
         const promptToUse = finalPrompt.trim();
         if (inputImageFile && inputImagePreview) {
             // Image editing flow
@@ -252,8 +260,11 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
             imageUrl = await editImageWithPrompt(base64Data, inputImageFile.type, promptToUse, user);
         } else {
             // Text-to-image flow
-            // FIX: Pass user object as the 3rd argument to generateImage
-            imageUrl = await generateImage(promptToUse, aspectRatio, user);
+            // Phase 5: Multi-image generation (variations)
+            const imgs = await generateImages(promptToUse, aspectRatio, 4, user);
+            batchImages = imgs;
+            setVariationImages(imgs);
+            imageUrl = imgs[0];
         }
         setGeneratedImage(imageUrl);
         setPromptUsed(promptToUse);
@@ -262,12 +273,33 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
         const resolvedTitle = (conceptTitle?.trim() ? conceptTitle.trim() : buildConceptTitle());
         setConceptTitle(resolvedTitle);
 
-        addToHistory({
-          imageUrl,
-          promptUsed: promptToUse,
-          title: resolvedTitle,
-          kind: isEditing ? 'edit' : 'generate',
-        });
+        if (isEditing) {
+          addToHistory({
+            imageUrl,
+            promptUsed: promptToUse,
+            title: resolvedTitle,
+            kind: 'edit',
+          });
+        } else {
+          const imgs = (batchImages?.length ? batchImages : [imageUrl]).slice(0, 4);
+          const ids: string[] = [];
+          // Add all variations to history without stealing focus each time.
+          for (let i = imgs.length - 1; i >= 0; i--) {
+            const url = imgs[i];
+            const id = addToHistory(
+              {
+                imageUrl: url,
+                promptUsed: promptToUse,
+                title: resolvedTitle,
+                kind: 'generate',
+              },
+              { setActive: false }
+            );
+            ids.unshift(id);
+          }
+          setVariationHistoryIds(ids);
+          if (ids[0]) setActiveHistoryId(ids[0]);
+        }
     } catch (err) {
         setError(err instanceof Error ? err.message : "An unknown error occurred.");
     } finally {
@@ -307,6 +339,9 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
     setLoadingLabel(`Refining: ${presetLabel}…`);
     setIsLoading(true);
     setError(null);
+    // Refinements generate a single new image; clear the variations grid.
+    setVariationImages([]);
+    setVariationHistoryIds([]);
     setSaveImageStatus('idle');
     setSavedIdeaId(null);
 
@@ -670,13 +705,47 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
                 </div>
 
                 <div className="p-4">
-                  <div className="w-full flex items-center justify-center">
-                    <img
-                      src={generatedImage}
-                      alt="Generated concept art"
-                      className="max-w-full max-h-[520px] object-contain rounded-xl border border-slate-800/70 shadow-lg"
-                    />
-                  </div>
+                  {/* Phase 5: Multi-image variations grid (2x2). */}
+                  {(!isEditing && variationImages.length > 1) ? (
+                    <div className="grid grid-cols-2 gap-3">
+                      {variationImages.slice(0, 4).map((url, idx) => {
+                        const isSel = url === generatedImage;
+                        return (
+                          <button
+                            key={`${url.slice(0, 24)}_${idx}`}
+                            type="button"
+                            onClick={() => {
+                              const hid = variationHistoryIds[idx];
+                              if (hid) setActiveHistoryId(hid);
+                              else setGeneratedImage(url);
+                            }}
+                            className={
+                              `relative rounded-xl overflow-hidden border shadow-lg transition-colors ` +
+                              (isSel ? 'border-purple-500/80' : 'border-slate-800/70 hover:border-slate-700')
+                            }
+                            title={`Variation ${idx + 1}`}
+                          >
+                            <img
+                              src={url}
+                              alt={`Generated concept art variation ${idx + 1}`}
+                              className="w-full h-[250px] object-cover"
+                            />
+                            <div className="absolute top-2 left-2 text-[11px] px-2 py-1 rounded-md bg-black/55 text-slate-100 border border-white/10">
+                              V{idx + 1}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="w-full flex items-center justify-center">
+                      <img
+                        src={generatedImage}
+                        alt="Generated concept art"
+                        className="max-w-full max-h-[520px] object-contain rounded-xl border border-slate-800/70 shadow-lg"
+                      />
+                    </div>
+                  )}
 
                   {/* Phase 4: Refinement pipeline */}
                   <div className="mt-4">
