@@ -40,7 +40,12 @@ export async function identifyTrickFromImageServer(
 
   const prompt =
     "Identify this magic trick based on the image provided. " +
-    "Return ONLY valid JSON with keys: trickName (string) and videoQueries (array of 3 concise YouTube search queries, NO URLs).";
+    "Return ONLY valid JSON with keys:\n" +
+    "- trickName (string)\n" +
+    "- confidence (string: High|Medium|Low)\n" +
+    "- summary (string, 1-2 sentences)\n" +
+    "- observations (array of 3-6 short bullets describing what you see: props, staging, tells; NO exposure)\n" +
+    "- videoQueries (array of 3 concise YouTube search queries, NO URLs).";
 
   // Optional: pass user id for rate limiting (best effort)
   const result = await aiIdentify<{ text: string }>(dataUrl, prompt);
@@ -58,6 +63,21 @@ export async function identifyTrickFromImageServer(
   }
 
   const trickName: string = String(parsed?.trickName || "").trim() || "Unknown Trick";
+  const confidenceRaw = String(parsed?.confidence || '').trim();
+  const confidence: 'High' | 'Medium' | 'Low' | undefined =
+    confidenceRaw === 'High' || confidenceRaw === 'Medium' || confidenceRaw === 'Low'
+      ? (confidenceRaw as any)
+      : undefined;
+
+  const summary: string | undefined =
+    String(parsed?.summary || '').trim() || undefined;
+
+  const observations: string[] | undefined = Array.isArray(parsed?.observations)
+    ? parsed.observations
+        .map((x: any) => String(x || '').trim())
+        .filter(Boolean)
+        .slice(0, 8)
+    : undefined;
   const queries: string[] = Array.isArray(parsed?.videoQueries)
     ? parsed.videoQueries.map((q: any) => String(q || "").trim()).filter(Boolean).slice(0, 3)
     : [];
@@ -90,5 +110,12 @@ export async function identifyTrickFromImageServer(
     }));
   }
 
-  return { trickName, videoExamples: videos } as TrickIdentificationResult;
+  return {
+    trickName,
+    confidence,
+    summary,
+    observations,
+    raw: parsed,
+    videoExamples: videos,
+  } as TrickIdentificationResult;
 }

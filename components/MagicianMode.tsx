@@ -4,9 +4,9 @@ import type { ChatMessage, PredefinedPrompt, TrickIdentificationResult, User, Tr
 import { generateResponse } from '../services/geminiService';
 import { identifyTrickFromImageServer } from '../services/identifyService';
 import { supabase } from '../supabase';
-import { saveIdea } from '../services/ideasService';
+import { saveIdea, updateIdea } from '../services/ideasService';
 import { exportData } from '../services/dataService';
-import { findShowByTitle, addTaskToShow, addTasksToShow } from '../services/showsService';
+import { findShowByTitle, createShow, addTaskToShow, addTasksToShow } from '../services/showsService';
 import { clearDemoData, seedDemoData } from '../services/demoSeedService';
 import { MAGICIAN_SYSTEM_INSTRUCTION, MAGICIAN_PROMPTS, publications, clubs, conventions, AMATEUR_FEATURES, SEMI_PRO_FEATURES, PROFESSIONAL_FEATURES, MAGICIAN_CHAT_TOOLS } from '../constants';
 // FIX: Added missing ShareIcon to the icon imports list.
@@ -24,6 +24,7 @@ import MagicArchives from './MagicArchives';
 import GospelMagicAssistant from './GospelMagicAssistant';
 import MentalismAssistant from './MentalismAssistant';
 import ShareButton from './ShareButton';
+import SaveActionBar from './shared/SaveActionBar';
 import FormattedText from './FormattedText';
 import AccountMenu from './AccountMenu';
 import UsageMeter from './UsageMeter';
@@ -767,11 +768,20 @@ const IdentifyTab: React.FC<{
     isIdentifying: boolean;
     identificationError: string | null;
     identificationBlocked: BlockedUx | null;
+    identifySaved: boolean;
+    identifySaving: boolean;
+    identifyIsStrong: boolean;
     fileInputRef: React.RefObject<HTMLInputElement>;
     handleImageUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
     handleIdentifyClick: () => void;
+    onSave: () => void;
+    onAddToShow: () => void;
+    onConvertToTask: () => void;
+    onCopy: () => void;
+    onShare: () => void;
+    onToggleStrong: () => void;
     onRequestUpgrade: () => void;
-}> = ({ imagePreview, identificationResult, isIdentifying, identificationError, identificationBlocked, fileInputRef, handleImageUpload, handleIdentifyClick, onRequestUpgrade }) => (
+}> = ({ imagePreview, identificationResult, isIdentifying, identificationError, identificationBlocked, identifySaved, identifySaving, identifyIsStrong, fileInputRef, handleImageUpload, handleIdentifyClick, onSave, onAddToShow, onConvertToTask, onCopy, onShare, onToggleStrong, onRequestUpgrade }) => (
     <div className="flex-1 overflow-y-auto p-4 md:p-5">
         <div className="animate-fade-in space-y-4 max-w-2xl mx-auto">
             <h2 className="text-2xl font-bold text-slate-200 font-cinzel">Identify a Trick</h2>
@@ -815,14 +825,48 @@ const IdentifyTab: React.FC<{
             )}
             {identificationError && <p className="text-red-400 text-center bg-red-900/20 p-3 rounded-lg">{identificationError}</p>}
             {identificationResult && (
-                <div className="animate-fade-in bg-slate-800/50 border border-slate-700 rounded-lg p-4 space-y-3">
-                    <div>
-                        <h3 className="font-cinzel text-lg text-slate-300">Identified Effect</h3>
-                        <p className="text-2xl font-bold text-white">{identificationResult.trickName}</p>
+                <div className="animate-fade-in bg-slate-800/50 border border-slate-700 rounded-2xl p-5 space-y-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-xs uppercase tracking-wider text-slate-400">Most likely trick</div>
+                        <div className="mt-1 text-2xl font-bold text-white">{identificationResult.trickName}</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`text-xs px-2.5 py-1 rounded-full border ${
+                            (identificationResult.confidence || 'Medium') === 'High'
+                              ? 'bg-green-500/10 text-green-200 border-green-500/30'
+                              : (identificationResult.confidence || 'Medium') === 'Low'
+                              ? 'bg-amber-500/10 text-amber-200 border-amber-500/30'
+                              : 'bg-sky-500/10 text-sky-200 border-sky-500/30'
+                          }`}
+                        >
+                          Confidence: {identificationResult.confidence || 'Medium'}
+                        </span>
+                      </div>
                     </div>
+
+                    {identificationResult.summary ? (
+                      <div className="text-slate-200">
+                        <div className="text-xs uppercase tracking-wider text-slate-400">Quick summary</div>
+                        <div className="mt-1 text-sm leading-relaxed text-slate-200">{identificationResult.summary}</div>
+                      </div>
+                    ) : null}
+
+                    {identificationResult.observations?.length ? (
+                      <div>
+                        <div className="text-xs uppercase tracking-wider text-slate-400">What I'm seeing</div>
+                        <ul className="mt-2 list-disc list-inside space-y-1 text-sm text-slate-200">
+                          {identificationResult.observations.slice(0, 8).map((o, idx) => (
+                            <li key={idx} className="text-slate-200">{o}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+
                    {identificationResult.videoExamples?.length > 0 && (
                      <div>
-                        <h3 className="font-cinzel text-lg text-slate-300 mb-2">Example Performances</h3>
+                        <div className="text-xs uppercase tracking-wider text-slate-400 mb-2">Example performances</div>
                         <div className="space-y-2">
                             {identificationResult.videoExamples.map((video, index) => (
                                 <a key={index} href={video.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-2 bg-slate-700/50 hover:bg-purple-900/50 rounded-md transition-colors">
@@ -833,16 +877,20 @@ const IdentifyTab: React.FC<{
                         </div>
                      </div>
                    )}
-                    <div className="pt-2 flex justify-end">
-                        <ShareButton
-                            title={`Magic Trick: ${identificationResult.trickName}`}
-                            text={`I identified a magic trick using the Magicians' AI Wizard! It's called "${identificationResult.trickName}". Check out a performance: ${identificationResult.videoExamples?.[0]?.url || '(No video link available)'}`}
-                            className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 transition-colors"
-                        >
-                            <ShareIcon className="w-4 h-4" />
-                            <span>Share Result</span>
-                        </ShareButton>
-                    </div>
+
+                   <SaveActionBar
+                      title="Next step:"
+                      subtitle="Save this research, then move it into a Show or Task."
+                      onSave={onSave}
+                      saving={identifySaving}
+                      saved={identifySaved}
+                      onAddToShow={onAddToShow}
+                      onConvertToTask={onConvertToTask}
+                      onCopy={onCopy}
+                      onShare={onShare}
+                      isStrong={identifyIsStrong}
+                      onToggleStrong={onToggleStrong}
+                    />
                 </div>
             )}
         </div>
@@ -1360,6 +1408,9 @@ useEffect(() => {
   const [isIdentifying, setIsIdentifying] = useState(false);
   const [identificationError, setIdentificationError] = useState<string | null>(null);
   const [identificationBlocked, setIdentificationBlocked] = useState<BlockedUx | null>(null);
+  const [identifySavedIdeaId, setIdentifySavedIdeaId] = useState<string | null>(null);
+  const [identifySaving, setIdentifySaving] = useState(false);
+  const [identifyIsStrong, setIdentifyIsStrong] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -2012,6 +2063,184 @@ useEffect(() => {
         setIdentificationResult(null);
         setIdentificationError(null);
         setIdentificationBlocked(null);
+        setIdentifySavedIdeaId(null);
+        setIdentifyIsStrong(false);
+    }
+  };
+
+  const formatIdentifySnapshot = (result: TrickIdentificationResult, file?: File | null) => {
+    const trickName = result?.trickName || 'Unknown Trick';
+    const confidence = result?.confidence || 'Medium';
+    const summary = (result?.summary || '').trim();
+    const observations = Array.isArray(result?.observations) ? result.observations : [];
+
+    const inputSummary = file
+      ? `${file.name} (${Math.round(file.size / 1024)} KB, ${file.type || 'image'})`
+      : 'Image upload';
+
+    const header = `# Identify a Trick\n\n**Most likely trick:** ${trickName}\n**Confidence:** ${confidence}`;
+    const sumBlock = summary ? `\n\n**Quick summary:** ${summary}` : '';
+    const obsBlock = observations.length
+      ? `\n\n**What I'm seeing:**\n${observations
+          .slice(0, 8)
+          .map((o) => `- ${o}`)
+          .join('\n')}`
+      : '';
+
+    const videos = Array.isArray(result?.videoExamples) ? result.videoExamples : [];
+    const vidsBlock = videos.length
+      ? `\n\n**Example performances:**\n${videos
+          .slice(0, 5)
+          .map((v) => `- ${v.title}${v.url ? ` — ${v.url}` : ''}`)
+          .join('\n')}`
+      : '';
+
+    const meta = {
+      tool: 'IdentifyTrick',
+      timestamp: Date.now(),
+      input: inputSummary,
+      trickName,
+      confidence,
+    };
+
+    const content = `${header}${sumBlock}${obsBlock}${vidsBlock}\n\n---\n**Meta:** ${JSON.stringify(meta)}\n\n\`\`\`json\n${JSON.stringify(result?.raw ?? result, null, 2)}\n\`\`\``;
+
+    const copyText = `${header}${sumBlock}${obsBlock}${vidsBlock}`;
+
+    const title = `Identify Trick: ${trickName}`;
+    return { title, content, copyText };
+  };
+
+  const stripMarkdown = (s: string) =>
+    String(s || '')
+      .replace(/```[\s\S]*?```/g, '')
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/\*(.*?)\*/g, '$1')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/^#+\s+/gm, '')
+      .replace(/^>\s?/gm, '')
+      .trim();
+
+  const handleIdentifySave = async () => {
+    if (!identificationResult) return;
+    try {
+      setIdentifySaving(true);
+      const { title, content } = formatIdentifySnapshot(identificationResult, imageFile);
+      const saved = await saveIdea({
+        type: 'text',
+        title,
+        content,
+        tags: ['identify-trick'],
+      });
+      setIdentifySavedIdeaId(saved.id);
+      setIdentifyIsStrong(saved.tags?.includes('strong') ?? false);
+      handleIdeaSaved('Idea saved!');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Failed to save idea.';
+      showToast(msg);
+    } finally {
+      setIdentifySaving(false);
+    }
+  };
+
+  const handleIdentifyToggleStrong = async () => {
+    if (!identifySavedIdeaId) return;
+    try {
+      const next = !identifyIsStrong;
+      setIdentifyIsStrong(next);
+      // Persist via tags
+      const baseTags = ['identify-trick'];
+      const tags = next ? [...baseTags, 'strong'] : baseTags;
+      await updateIdea(identifySavedIdeaId, { tags });
+      await refreshIdeas(dispatch);
+    } catch {
+      // revert if persistence fails
+      setIdentifyIsStrong((prev) => !prev);
+    }
+  };
+
+  const handleIdentifyCopy = async () => {
+    if (!identificationResult) return;
+    const { copyText } = formatIdentifySnapshot(identificationResult, imageFile);
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(copyText);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = copyText;
+        ta.style.position = 'fixed';
+        ta.style.top = '-9999px';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      showToast('Copied.');
+    } catch {
+      showToast('Copy failed.');
+    }
+  };
+
+  const handleIdentifyShare = async () => {
+    if (!identificationResult) return;
+    const { title, copyText } = formatIdentifySnapshot(identificationResult, imageFile);
+    try {
+      if ((navigator as any).share) {
+        await (navigator as any).share({ title, text: copyText });
+      } else {
+        await handleIdentifyCopy();
+      }
+    } catch {
+      // ignore cancellations
+    }
+  };
+
+  const handleIdentifyAddToShow = async () => {
+    if (!identificationResult || !identifySavedIdeaId) return;
+    try {
+      const { title, content } = formatIdentifySnapshot(identificationResult, imageFile);
+      const showTitle = (identificationResult.trickName ? `Trick Research: ${identificationResult.trickName}` : 'Trick Research').slice(0, 80);
+      const show = await createShow(showTitle, 'Auto-created from Identify a Trick');
+      await addTasksToShow(show.id, [
+        {
+          title: title.slice(0, 120),
+          notes: stripMarkdown(content),
+          status: 'To-Do',
+          priority: 'Medium',
+          tags: ['identify-trick'],
+        } as any,
+      ]);
+      await refreshShows(dispatch);
+      setInitialShowId(show.id);
+      setActiveView('show-planner');
+      showToast('Added to Show Planner.');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Failed to add to Show Planner.';
+      showToast(msg);
+    }
+  };
+
+  const handleIdentifyConvertToTask = async () => {
+    if (!identificationResult || !identifySavedIdeaId) return;
+    try {
+      const { title, content } = formatIdentifySnapshot(identificationResult, imageFile);
+      const inboxTitle = 'Quick Tasks';
+      const show = (await findShowByTitle(inboxTitle)) ?? (await createShow(inboxTitle, 'Auto-created task inbox'));
+      await addTaskToShow(show.id, {
+        title: title.slice(0, 120),
+        notes: stripMarkdown(content),
+        status: 'To-Do',
+        priority: 'Medium',
+        tags: ['identify-trick'],
+      } as any);
+      await refreshShows(dispatch);
+      setInitialShowId(show.id);
+      setActiveView('show-planner');
+      showToast('Task created.');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Failed to convert to task.';
+      showToast(msg);
     }
   };
 
@@ -2029,6 +2258,8 @@ useEffect(() => {
     try {
         const result = await identifyTrickFromImageServer(base64Data, mimeType, user);
         setIdentificationResult(result);
+        setIdentifySavedIdeaId(null);
+        setIdentifyIsStrong(false);
     } catch (err) {
         const blocked = normalizeBlockedUx(err, { toolName: 'Identify a Trick' });
         if (blocked.showUpgrade || blocked.retryable) {
@@ -2461,9 +2692,18 @@ ${action.payload.content}`;
               isIdentifying={isIdentifying}
               identificationError={identificationError}
               identificationBlocked={identificationBlocked}
+              identifySaved={!!identifySavedIdeaId}
+              identifySaving={identifySaving}
+              identifyIsStrong={identifyIsStrong}
               fileInputRef={fileInputRef}
               handleImageUpload={handleImageUpload}
               handleIdentifyClick={handleIdentifyClick}
+              onSave={handleIdentifySave}
+              onAddToShow={handleIdentifyAddToShow}
+              onConvertToTask={handleIdentifyConvertToTask}
+              onCopy={handleIdentifyCopy}
+              onShare={handleIdentifyShare}
+              onToggleStrong={handleIdentifyToggleStrong}
               onRequestUpgrade={() => setIsUpgradeModalOpen(true)}
             />
           );
