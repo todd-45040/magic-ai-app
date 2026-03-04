@@ -1110,121 +1110,123 @@ const activeSession = useMemo(() => {
               }
             </p>
 
-            {/* Phase 12: Booth Demo Optimization (collapsible) */}
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/25 p-4 mb-4">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                  <div
-                    className="flex items-center justify-between cursor-pointer"
-                    onClick={() => setDemoDrawerOpen(v=>!v)}
-                  >
-                    <div className="text-base font-semibold text-slate-100">Booth Demo Tools</div>
-                    <div className="text-xs text-slate-400">{demoDrawerOpen ? "▲" : "▼"}</div>
-                  </div>
-                  {demoDrawerOpen && (
+{/* Phase 12: Booth Demo Optimization (collapsible) */}
+<div className="rounded-2xl border border-slate-800 bg-slate-950/25 p-4 mb-4">
+  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <button
+      type="button"
+      className="flex items-center justify-between w-full sm:w-auto text-left"
+      onClick={() => setDemoDrawerOpen((v) => !v)}
+      aria-expanded={demoDrawerOpen}
+    >
+      <div className="text-base font-semibold text-slate-100">Booth Demo Tools</div>
+      <div className="text-xs text-slate-400 ml-3">{demoDrawerOpen ? "▲" : "▼"}</div>
+    </button>
 
-                  <div className="text-sm text-slate-400 mt-0.5">
-                    Fast demos with rotating presets + instant reset.
-                  </div>
+    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+      <button
+        type="button"
+        onClick={resetDemoSession}
+        className="px-3 py-2 rounded-lg text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700"
+        title="Clear local session history + selections"
+      >
+        Reset Session
+      </button>
+
+      <button
+        type="button"
+        onClick={() => setDemoMode((v) => !v)}
+        className={`px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${
+          demoMode
+            ? "bg-amber-500/20 border-amber-400/40 text-amber-100 hover:bg-amber-500/25"
+            : "bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700"
+        }`}
+        title="Use curated sample outputs (no upstream dependency)"
+      >
+        {demoMode ? "Demo Mode: ON" : "Demo Mode: OFF"}
+      </button>
+    </div>
+  </div>
+
+  {demoDrawerOpen && (
+    <>
+      <div className="text-sm text-slate-400 mt-2">
+        Fast demos with rotating presets + instant reset.
+      </div>
+
+      <div className="mt-3 flex items-center justify-between">
+        <div className="text-xs text-slate-500">
+          Presets · Showing {safePresetPage * PRESETS_PER_PAGE + 1}–
+          {Math.min((safePresetPage + 1) * PRESETS_PER_PAGE, demoPresets.length)} of{" "}
+          {demoPresets.length}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={goPrevPresetPage}
+            className="px-2 py-1 rounded-md text-xs font-semibold bg-slate-900/50 hover:bg-slate-900/70 text-slate-200 border border-slate-800"
+            title="Previous presets"
+          >
+            Prev
+          </button>
+          <button
+            type="button"
+            onClick={goNextPresetPage}
+            className="px-2 py-1 rounded-md text-xs font-semibold bg-slate-900/50 hover:bg-slate-900/70 text-slate-200 border border-slate-800"
+            title="Next presets"
+          >
+            Next
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-3 space-y-2">
+        {visibleDemoPresets.map((pp) => (
+          <div
+            key={pp.title}
+            className="rounded-xl border border-slate-800 bg-slate-900/25 px-3 py-2 hover:bg-slate-900/35 transition-colors"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-slate-100 leading-snug truncate">
+                  {pp.title}
                 </div>
-
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={resetDemoSession}
-                    className="px-3 py-2 rounded-lg text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700"
-                    title="Clear local session history + selections"
-                  >
-                    Reset Session
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setDemoMode(v => !v)}
-                    className={`px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${
-                      demoMode
-                        ? "bg-amber-500/20 border-amber-400/40 text-amber-100 hover:bg-amber-500/25"
-                        : "bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700"
-                    }`}
-                    title="Use curated sample outputs (no upstream dependency)"
-                  >
-                    {demoMode ? "Demo Mode: ON" : "Demo Mode: OFF"}
-                  </button>
+                <div className="mt-0.5 text-xs text-slate-400 truncate">
+                  <span className="text-slate-300">{pp.objectProp}</span>
+                  <span className="mx-2 text-slate-600">•</span>
+                  <span>{pp.sceneSetting}</span>
                 </div>
               </div>
 
-              <div className="mt-3 flex items-center justify-between">
-                <div className="text-xs text-slate-500">Presets · Showing {safePresetPage * PRESETS_PER_PAGE + 1}–{Math.min((safePresetPage + 1) * PRESETS_PER_PAGE, demoPresets.length)} of {demoPresets.length}</div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={goPrevPresetPage}
-                    className="px-2 py-1 rounded-md text-xs font-semibold bg-slate-900/50 hover:bg-slate-900/70 text-slate-200 border border-slate-800"
-                    title="Previous presets"
-                  >
-                    Prev
-                  </button>
-                  <button
-                    type="button"
-                    onClick={goNextPresetPage}
-                    className="px-2 py-1 rounded-md text-xs font-semibold bg-slate-900/50 hover:bg-slate-900/70 text-slate-200 border border-slate-800"
-                    title="Next presets"
-                  >
-                    Next
-                  </button>
-                </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => applyPreset(pp)}
+                  className="px-2.5 py-1.5 rounded-md text-xs font-semibold bg-slate-900/60 hover:bg-slate-900/80 text-slate-100 border border-slate-800"
+                >
+                  Load
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void runPreset(pp)}
+                  className="px-2.5 py-1.5 rounded-md text-xs font-semibold bg-amber-500/20 hover:bg-amber-500/25 text-amber-100 border border-amber-400/30"
+                >
+                  Generate
+                </button>
               </div>
-
-              <div className="mt-3 space-y-2">
-                {visibleDemoPresets.map((p) => (
-                  <div
-                    key={p.title}
-                    className="rounded-xl border border-slate-800 bg-slate-900/25 px-3 py-2 hover:bg-slate-900/35 transition-colors"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold text-slate-100 leading-snug truncate">{p.title}</div>
-                        <div className="mt-0.5 text-xs text-slate-400 truncate">
-                          <span className="text-slate-300">{p.objectProp}</span>
-                          <span className="mx-2 text-slate-600">•</span>
-                          <span>{p.sceneSetting}</span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => applyPreset(p)}
-                          className="px-2.5 py-1.5 rounded-md text-xs font-semibold bg-slate-900/60 hover:bg-slate-900/80 text-slate-100 border border-slate-800"
-                        >
-                          Load
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void runPreset(p)}
-                          disabled={isLoading}
-                          className="px-2.5 py-1.5 rounded-md text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white disabled:bg-slate-600 disabled:cursor-not-allowed"
-                        >
-                          Generate
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {demoMode && (
-                <div className="mt-4 text-sm text-amber-100 flex flex-col sm:flex-row sm:items-center gap-2">
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-full border border-amber-400/40 bg-amber-500/15">
-                    Demo Mode Active
-                  )
-                  </span>
-                  <span className="text-amber-200/80">
-                    Curated sample images are used so your booth demo never times out.
-                  </span>
-                </div>
-              )}
             </div>
+          </div>
+        ))}
+      </div>
+
+      {demoMode && (
+        <div className="mt-3 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-200/90">
+          Demo Mode Active — curated sample images are used so your booth demo never times out.
+        </div>
+      )}
+    </>
+  )}
+</div>
 <div className="space-y-4">
                 <div>
                     <div className="flex justify-between items-baseline mb-1">
