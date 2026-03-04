@@ -1456,7 +1456,7 @@ const activeSession = useMemo(() => {
         </div>
 
         {/* Result Card Area */}
-        <div className="flex items-center justify-center bg-slate-900/50 rounded-lg border border-slate-800 p-4 min-h-[300px]">
+        <div className="flex items-start justify-center bg-slate-900/50 rounded-lg border border-slate-800 p-4 min-h-[300px]">
           {isLoading ? (
             <div className="w-full max-w-2xl">
               <div className="rounded-2xl border border-slate-800 bg-slate-950/35 shadow-[0_18px_70px_-40px_rgba(0,0,0,0.9)] overflow-hidden">
