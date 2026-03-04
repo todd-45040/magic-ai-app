@@ -95,11 +95,30 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
     title: string;
     createdAt: number;
     kind: 'generate' | 'edit' | 'refine';
+    sessionId: string;
     refineLabel?: string;
   };
   const [history, setHistory] = useState<VisualHistoryItem[]>([]);
   const [activeHistoryId, setActiveHistoryId] = useState<string | null>(null);
   const [promptUsed, setPromptUsed] = useState<string>('');
+
+// Phase 10: Creative Session History Panel (persistent, grouped by session prompt)
+type VisualSession = {
+  id: string;
+  basePrompt: string;
+  createdAt: number;
+  updatedAt: number;
+  pinned?: boolean;
+  coverImageUrl?: string;
+  lastBatchImages?: string[];
+  history: VisualHistoryItem[];
+};
+
+const STORAGE_KEY = useMemo(() => `maw_visual_sessions_v1:${user?.id || 'anon'}`, [user?.id]);
+
+const [sessions, setSessions] = useState<VisualSession[]>([]);
+const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+
   const [savedByHistory, setSavedByHistory] = useState<Record<string, string>>({});
   const [strongByHistory, setStrongByHistory] = useState<Record<string, boolean>>({});
 
@@ -141,6 +160,61 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
         setShareFile(null);
     }
   }, [generatedImage]);
+
+
+// Phase 10: Load persisted sessions on mount
+useEffect(() => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw) as VisualSession[];
+    if (Array.isArray(parsed)) {
+      // Defensive: ensure required fields exist.
+      const cleaned = parsed
+        .filter((s) => s && typeof s.id === 'string')
+        .map((s) => ({
+          id: s.id,
+          basePrompt: String((s as any).basePrompt || ''),
+          createdAt: Number((s as any).createdAt || Date.now()),
+          updatedAt: Number((s as any).updatedAt || Date.now()),
+          pinned: Boolean((s as any).pinned),
+          coverImageUrl: (s as any).coverImageUrl ? String((s as any).coverImageUrl) : undefined,
+          lastBatchImages: Array.isArray((s as any).lastBatchImages) ? (s as any).lastBatchImages.map(String) : undefined,
+          history: Array.isArray((s as any).history) ? (s as any).history : [],
+        })) as VisualSession[];
+
+      setSessions(cleaned.slice(0, 12));
+      // Re-open most recent session automatically.
+      if (cleaned[0]?.id) setActiveSessionId(cleaned[0].id);
+    }
+  } catch {
+    // ignore
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
+
+// Phase 10: Persist sessions (cap size to avoid localStorage overflow)
+useEffect(() => {
+  try {
+    // Keep pinned sessions first, then newest.
+    const sorted = [...sessions].sort((a, b) => {
+      const ap = a.pinned ? 1 : 0;
+      const bp = b.pinned ? 1 : 0;
+      if (ap !== bp) return bp - ap;
+      return (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
+    });
+
+    const capped = sorted.slice(0, 12).map((s) => ({
+      ...s,
+      history: (s.history || []).slice(0, 24), // cap per-session history
+      lastBatchImages: (s.lastBatchImages || []).slice(0, 4),
+    }));
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(capped));
+  } catch {
+    // ignore quota errors
+  }
+}, [sessions, STORAGE_KEY]);
 
   const showsSorted = useMemo(() => {
     const arr = Array.isArray(shows) ? [...shows] : [];
@@ -250,13 +324,96 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
     setIsStrong(Boolean(strongByHistory[activeItem.id]));
   }, [activeItem, savedByHistory, strongByHistory]);
 
-  const addToHistory = (item: Omit<VisualHistoryItem, 'id' | 'createdAt'>, opts?: { setActive?: boolean }) => {
-    const id = `vb_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-    const entry: VisualHistoryItem = { ...item, id, createdAt: Date.now() };
-    setHistory((prev) => [entry, ...prev].slice(0, 12));
-    if (opts?.setActive !== false) setActiveHistoryId(id);
-    return id;
+
+const newId = () => `vb_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
+const ensureSession = (basePrompt: string, coverImageUrl?: string, batchImages?: string[]) => {
+  const sid = newId();
+  const now = Date.now();
+  const session: VisualSession = {
+    id: sid,
+    basePrompt: basePrompt.trim(),
+    createdAt: now,
+    updatedAt: now,
+    pinned: false,
+    coverImageUrl,
+    lastBatchImages: batchImages?.slice(0, 4),
+    history: [],
   };
+  setSessions((prev) => [session, ...prev]);
+  setActiveSessionId(sid);
+  return sid;
+};
+
+  const openSession = (sid: string) => {
+    const session = sessions.find((s) => s.id === sid);
+    if (!session) return;
+
+    setActiveSessionId(sid);
+
+    const sessionHistory = Array.isArray(session.history) ? session.history : [];
+    setHistory(sessionHistory);
+
+    const top = sessionHistory[0];
+    if (top?.id) setActiveHistoryId(top.id);
+
+    const genItems = sessionHistory.filter((h) => h.kind === 'generate').slice(0, 4);
+    const batch = (session.lastBatchImages?.length ? session.lastBatchImages : genItems.map((g) => g.imageUrl)) || [];
+    setVariationImages(batch.slice(0, 4));
+    setVariationHistoryIds(genItems.map((g) => g.id));
+
+    // Sync top-of-card values
+    if (top) {
+      setGeneratedImage(top.imageUrl);
+      setPromptUsed(top.promptUsed);
+      setConceptTitle(top.title);
+    }
+  };
+
+const togglePinSession = (sid: string) => {
+  setSessions((prev) =>
+    prev.map((s) => (s.id === sid ? { ...s, pinned: !s.pinned, updatedAt: Date.now() } : s))
+  );
+};
+
+const addToHistory = (
+  item: Omit<VisualHistoryItem, 'id' | 'createdAt' | 'sessionId'>,
+  opts?: { setActive?: boolean; sessionId?: string; coverImageUrl?: string; batchImages?: string[]; createNewSession?: boolean }
+) => {
+  const id = newId();
+  const now = Date.now();
+
+  const sessionId =
+    opts?.sessionId ||
+    (opts?.createNewSession ? ensureSession(item.promptUsed, opts?.coverImageUrl, opts?.batchImages) : activeSessionId) ||
+    ensureSession(item.promptUsed, opts?.coverImageUrl, opts?.batchImages);
+
+  const entry: VisualHistoryItem = { ...item, id, createdAt: now, sessionId };
+
+  // Update in-memory current session history view
+  setHistory((prev) => [entry, ...prev].slice(0, 24));
+  if (opts?.setActive !== false) setActiveHistoryId(id);
+
+  // Update persistent sessions store
+  setSessions((prev) => {
+    const next = [...prev];
+    const idx = next.findIndex((s) => s.id === sessionId);
+    if (idx >= 0) {
+      const s = next[idx];
+      const updated: VisualSession = {
+        ...s,
+        updatedAt: now,
+        coverImageUrl: s.coverImageUrl || opts?.coverImageUrl || entry.imageUrl,
+        lastBatchImages: opts?.batchImages?.slice(0, 4) || s.lastBatchImages,
+        history: [entry, ...(s.history || [])].slice(0, 24),
+      };
+      next[idx] = updated;
+    }
+    return next;
+  });
+
+  return id;
+};
 
   // Phase 8 — Centralized request runner (supports retry UX)
   const runAction = async (action: LastVisualAction, opts?: { skipConsume?: boolean; isRetry?: boolean }) => {
@@ -342,23 +499,32 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
       setConceptTitle(resolvedTitle);
 
       if (action.kind === 'edit') {
-        addToHistory({ imageUrl, promptUsed: action.prompt, title: resolvedTitle, kind: 'edit' });
+        // New session for each edit workflow
+        addToHistory({ imageUrl, promptUsed: action.prompt, title: resolvedTitle, kind: 'edit', refineLabel: undefined }, { createNewSession: true, coverImageUrl: imageUrl, batchImages: [imageUrl] });
       } else if (action.kind === 'generate') {
         const imgs = (batchImages?.length ? batchImages : [imageUrl]).slice(0, 4);
+
+        // Phase 10: start a new session for each fresh generation request (groups variations)
+        const sid = ensureSession(action.prompt, imgs[0], imgs);
+        setHistory([]); // reset current session view
         const ids: string[] = [];
+
         // Add variations to history without stealing focus each time.
         for (let i = imgs.length - 1; i >= 0; i--) {
           const url = imgs[i];
           const id = addToHistory(
             { imageUrl: url, promptUsed: action.prompt, title: resolvedTitle, kind: 'generate' },
-            { setActive: false }
+            { setActive: false, sessionId: sid, coverImageUrl: imgs[0], batchImages: imgs }
           );
           ids.unshift(id);
         }
         setVariationHistoryIds(ids);
         if (ids[0]) setActiveHistoryId(ids[0]);
       } else {
-        addToHistory({ imageUrl, promptUsed: action.prompt, title: resolvedTitle, kind: 'refine', refineLabel: action.label });
+        addToHistory(
+          { imageUrl, promptUsed: action.prompt, title: resolvedTitle, kind: 'refine', refineLabel: action.label, },
+          { sessionId: activeSessionId || undefined }
+        );
       }
 
       setLastFailedAction(null);
@@ -505,6 +671,22 @@ const refinementPresets: Array<{ label: string; instruction: string }> = [
     if (!p) return '';
     return p.length > 220 ? `${p.slice(0, 220)}…` : p;
   }, [promptUsed, finalPrompt]);
+
+
+const sessionsSorted = useMemo(() => {
+  const arr = Array.isArray(sessions) ? [...sessions] : [];
+  return arr.sort((a, b) => {
+    const ap = a.pinned ? 1 : 0;
+    const bp = b.pinned ? 1 : 0;
+    if (ap !== bp) return bp - ap;
+    return (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
+  });
+}, [sessions]);
+
+const activeSession = useMemo(() => {
+  if (!activeSessionId) return null;
+  return sessions.find((s) => s.id === activeSessionId) ?? null;
+}, [sessions, activeSessionId]);
 
   const safeCopy = async (text: string) => {
     try {
@@ -839,6 +1021,98 @@ const refinementPresets: Array<{ label: string; instruction: string }> = [
                       </button>
                     )}
                   </div>
+
+
+{/* Phase 10: Creative Session History Panel */}
+<div className="mt-6 rounded-xl border border-slate-800 bg-slate-950/35 p-4">
+  <div className="flex items-center justify-between gap-3">
+    <div>
+      <div className="text-xs uppercase tracking-wider text-slate-400">Creative Sessions</div>
+      <div className="text-sm text-slate-200 font-semibold mt-0.5">Re-open past brainstorms</div>
+    </div>
+    <button
+      type="button"
+      onClick={() => {
+        setHistory([]);
+        setActiveHistoryId(null);
+        setGeneratedImage(null);
+        setVariationImages([]);
+        setVariationHistoryIds([]);
+        setPromptUsed('');
+        setConceptTitle('');
+        setActiveSessionId(null);
+      }}
+      className="text-xs font-semibold px-2 py-1 rounded-md border border-slate-700 bg-slate-900/40 hover:bg-slate-900/70 text-slate-200"
+      title="Start fresh (does not delete saved sessions)"
+    >
+      New
+    </button>
+  </div>
+
+  {sessionsSorted.length === 0 ? (
+    <div className="mt-3 text-sm text-slate-400">
+      Your brainstorm sessions will appear here after you generate images.
+    </div>
+  ) : (
+    <div className="mt-3 space-y-2 max-h-[320px] overflow-y-auto pr-1">
+      {sessionsSorted.map((s) => {
+        const isActive = s.id === activeSessionId;
+        const prompt = (s.basePrompt || '').trim();
+        const promptShort = prompt.length > 90 ? `${prompt.slice(0, 90)}…` : prompt;
+        return (
+          <div
+            key={s.id}
+            className={
+              "flex items-start gap-3 rounded-lg border p-2 transition-colors " +
+              (isActive ? "border-purple-500/60 bg-purple-900/10" : "border-slate-800 bg-slate-900/20 hover:bg-slate-900/35")
+            }
+          >
+            <button
+              type="button"
+              onClick={() => openSession(s.id)}
+              className="shrink-0 rounded-md overflow-hidden border border-slate-800 hover:border-slate-700 transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+              title="Open session"
+            >
+              {s.coverImageUrl ? (
+                <img src={s.coverImageUrl} alt="Session cover" className="h-12 w-16 object-cover" />
+              ) : (
+                <div className="h-12 w-16 bg-slate-800/50 flex items-center justify-center text-slate-500 text-xs">—</div>
+              )}
+            </button>
+
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <div className="text-sm font-semibold text-slate-100 truncate">
+                  {promptShort || "Untitled session"}
+                </div>
+                {s.pinned && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-amber-500/40 text-amber-200 bg-amber-900/10">
+                    Pinned
+                  </span>
+                )}
+              </div>
+              <div className="text-xs text-slate-500 mt-0.5">
+                {(s.history?.length ?? 0)} image{(s.history?.length ?? 0) === 1 ? "" : "s"} •{" "}
+                {new Date(s.updatedAt || s.createdAt).toLocaleString()}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => togglePinSession(s.id)}
+                className="text-xs font-semibold px-2 py-1 rounded-md border border-slate-700 bg-slate-900/40 hover:bg-slate-900/70 text-slate-200"
+                title={s.pinned ? "Unpin" : "Pin (favorite)"}
+              >
+                {s.pinned ? "★" : "☆"}
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  )}
+</div>
                 )}
             </div>
         </div>
