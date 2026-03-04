@@ -1084,18 +1084,20 @@ const activeSession = useMemo(() => {
             </p>
 
             {/* Phase 12: Booth Demo Optimization */}
-            <div className="rounded-xl border border-slate-800 bg-slate-950/35 p-4 mb-4">
-              <div className="flex items-center justify-between gap-3">
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/35 p-5 mb-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                  <div className="text-sm font-semibold text-slate-200">Booth Demo Tools</div>
-                  <div className="text-xs text-slate-400">One-click presets + instant reset for the next person.</div>
+                  <div className="text-base font-semibold text-slate-100">Booth Demo Tools</div>
+                  <div className="text-sm text-slate-400 mt-0.5">
+                    One-click presets for fast demos + instant reset for the next person.
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                   <button
                     type="button"
                     onClick={resetDemoSession}
-                    className="px-3 py-1.5 rounded-md text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700"
+                    className="px-3 py-2 rounded-lg text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700"
                     title="Clear local session history + selections"
                   >
                     Reset Session
@@ -1104,34 +1106,57 @@ const activeSession = useMemo(() => {
                   <button
                     type="button"
                     onClick={() => setDemoMode(v => !v)}
-                    className={`px-3 py-1.5 rounded-md text-xs font-semibold border transition-colors ${demoMode ? 'bg-amber-500/20 border-amber-400/40 text-amber-200 hover:bg-amber-500/25' : 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'}`}
+                    className={`px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${
+                      demoMode
+                        ? "bg-amber-500/20 border-amber-400/40 text-amber-100 hover:bg-amber-500/25"
+                        : "bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700"
+                    }`}
                     title="Use curated sample outputs (no upstream dependency)"
                   >
-                    {demoMode ? 'Demo Mode: ON' : 'Demo Mode: OFF'}
+                    {demoMode ? "Demo Mode: ON" : "Demo Mode: OFF"}
                   </button>
                 </div>
               </div>
 
-              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-3">
                 {demoPresets.map((p) => (
-                  <div key={p.title} className="rounded-lg border border-slate-800 bg-slate-900/35 p-3 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-slate-200 truncate">{p.title}</div>
-                      <div className="text-xs text-slate-400 truncate">{p.objectProp} • {p.sceneSetting}</div>
+                  <div
+                    key={p.title}
+                    className="rounded-xl border border-slate-800 bg-slate-900/35 p-4 hover:bg-slate-900/45 transition-colors"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <div className="text-sm sm:text-base font-semibold text-slate-100 leading-snug">
+                          {p.title}
+                        </div>
+                        <div className="mt-1 text-sm text-slate-400 leading-snug">
+                          <span className="text-slate-300">{p.objectProp}</span>
+                          <span className="mx-2 text-slate-600">•</span>
+                          <span>{p.sceneSetting}</span>
+                        </div>
+                        {p.style ? (
+                          <div className="mt-2 inline-flex items-center gap-2 text-xs">
+                            <span className="px-2 py-0.5 rounded-full border border-slate-700 bg-slate-950/40 text-slate-200">
+                              Style: {p.style}
+                            </span>
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+
+                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <button
                         type="button"
                         onClick={() => applyPreset(p)}
-                        className="px-2.5 py-1.5 rounded-md text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700"
+                        className="w-full px-3 py-2 rounded-lg text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700"
                       >
-                        Load
+                        Load Preset
                       </button>
                       <button
                         type="button"
                         onClick={() => void runPreset(p)}
                         disabled={isLoading}
-                        className="px-2.5 py-1.5 rounded-md text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white disabled:bg-slate-600 disabled:cursor-not-allowed"
+                        className="w-full px-3 py-2 rounded-lg text-sm font-bold bg-purple-600 hover:bg-purple-700 text-white disabled:bg-slate-600 disabled:cursor-not-allowed"
                       >
                         Load + Generate
                       </button>
@@ -1141,14 +1166,17 @@ const activeSession = useMemo(() => {
               </div>
 
               {demoMode && (
-                <div className="mt-3 text-xs text-amber-200/90 flex items-center gap-2">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-amber-400/40 bg-amber-500/15">Demo Mode Active</span>
-                  <span className="text-amber-200/80">Curated sample images are used so your booth demo never times out.</span>
+                <div className="mt-4 text-sm text-amber-100 flex flex-col sm:flex-row sm:items-center gap-2">
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-full border border-amber-400/40 bg-amber-500/15">
+                    Demo Mode Active
+                  </span>
+                  <span className="text-amber-200/80">
+                    Curated sample images are used so your booth demo never times out.
+                  </span>
                 </div>
               )}
             </div>
-            
-            <div className="space-y-4">
+<div className="space-y-4">
                 <div>
                     <div className="flex justify-between items-baseline mb-1">
                         <label className="block text-sm font-medium text-slate-300">
