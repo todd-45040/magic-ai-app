@@ -4,8 +4,9 @@ import { Type } from "@google/genai";
 import { saveIdea } from '../services/ideasService';
 import { CohesionActions } from './CohesionActions';
 import { createShow, addTasksToShow } from '../services/showsService';
+import { saveDirectorBlueprint } from '../services/directorBlueprintsService';
 import { DIRECTOR_MODE_SYSTEM_INSTRUCTION, MAGIC_DICTIONARY_TERMS } from '../constants';
-import type { DirectorModeResponse } from '../types';
+import type { DirectorModeBlueprint } from '../types';
 import { StageCurtainsIcon, WandIcon, SaveIcon, CheckIcon, ChecklistIcon } from './icons';
 import { generateStructuredResponse } from '../services/geminiService';
 
@@ -67,16 +68,18 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
     const [audienceType, setAudienceType] = useState(''); // custom audience text
     const [audienceChips, setAudienceChips] = useState<string[]>([]);
 
-    // Phase 1 — Inputs / Constraints
-    const [venueType, setVenueType] = useState('');
+    // Theme/Style
     const [theme, setTheme] = useState('');
+
+    // Venue / Tone / Persona (Phase 1+)
+    const [venueType, setVenueType] = useState('');
     const [tone, setTone] = useState('');
     const [performerPersona, setPerformerPersona] = useState('');
+    const [skillLevel, setSkillLevel] = useState<'Beginner' | 'Intermediate' | 'Advanced' | ''>('');
+    const [resetTime, setResetTime] = useState<'Instant' | '30s' | '1 min' | '2 min' | '5+ min' | ''>('');
+    const [propsOwned, setPropsOwned] = useState(''); // comma / newline separated
+    const [constraintNotes, setConstraintNotes] = useState('');
 
-    // Constraints (explicit)
-    const [skillLevel, setSkillLevel] = useState<'Beginner' | 'Intermediate' | 'Advanced' | 'Pro' | ''>('');
-    const [resetTime, setResetTime] = useState<'Instant' | 'Under 30s' | 'Under 2 min' | 'Under 5 min' | 'Not important' | ''>('');
-    const [propsOwned, setPropsOwned] = useState('');
 
     // Advanced Options (optional)
     const [showAdvanced, setShowAdvanced] = useState(false);
@@ -84,12 +87,13 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
     const [comedyLevel, setComedyLevel] = useState<'Low' | 'Medium' | 'High' | ''>('');
     const [participation, setParticipation] = useState<'Low' | 'Medium' | 'High' | ''>('');
     const [volunteersOk, setVolunteersOk] = useState<'Yes' | 'No' | ''>('');
-    const [constraints, setConstraints] = useState('');
+    // Legacy constraints textarea replaced by constraintNotes
+    // const [constraints, setConstraints] = useState('');
 
     // Control State
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [showPlan, setShowPlan] = useState<DirectorModeResponse | null>(null);
+    const [showPlan, setShowPlan] = useState<DirectorModeBlueprint | null>(null);
     const [isAddedToPlanner, setIsAddedToPlanner] = useState(false);
     const [isAddingToPlanner, setIsAddingToPlanner] = useState(false);
     const [isSavingIdea, setIsSavingIdea] = useState(false);
@@ -107,41 +111,40 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
     const directorsNotesBlock = useMemo(() => {
         if (!showPlan) return '';
         const parts: string[] = [];
-        parts.push(`Effect Types (non-exposure):`);
-        parts.push(`- Visual opener: ${showPlan.effect_types.visual_opener}`);
-        parts.push(`- Interactive centerpiece: ${showPlan.effect_types.interactive_centerpiece}`);
-        parts.push(`- Emotional closer: ${showPlan.effect_types.emotional_closer}`);
+        parts.push(`Constraints:`);
+        parts.push(`- Skill level: ${showPlan.constraints?.skill_level || ''}`);
+        parts.push(`- Reset time: ${showPlan.constraints?.reset_time || ''}`);
+        if (Array.isArray(showPlan.constraints?.props_owned) && showPlan.constraints.props_owned.length) {
+            parts.push(`- Props owned: ${showPlan.constraints.props_owned.join(', ')}`);
+        }
+        if (showPlan.constraints?.notes?.trim()) {
+            parts.push(`- Notes: ${showPlan.constraints.notes.trim()}`);
+        }
         parts.push('');
-        parts.push('Pacing:');
-        parts.push(`- Energy flow: ${showPlan.pacing_notes.energy_flow}`);
-        if (showPlan.pacing_notes.reset_moments?.length) parts.push(`- Reset moments: ${showPlan.pacing_notes.reset_moments.join('; ')}`);
-        if (showPlan.pacing_notes.volunteer_moments?.length) parts.push(`- Volunteer moments: ${showPlan.pacing_notes.volunteer_moments.join('; ')}`);
-        if (showPlan.directors_notes.risk_points?.length) {
-            parts.push('');
-            parts.push('Risk points:');
-            showPlan.directors_notes.risk_points.forEach((x) => parts.push(`- ${x}`));
-        }
-        if (showPlan.directors_notes.adaptation_suggestions?.length) {
-            parts.push('');
-            parts.push('Adaptation suggestions:');
-            showPlan.directors_notes.adaptation_suggestions.forEach((x) => parts.push(`- ${x}`));
-        }
+        parts.push('Segments:');
+        (showPlan.segments || []).forEach((s) => {
+            const props = Array.isArray(s.props_required) && s.props_required.length ? ` | props: ${s.props_required.join(', ')}` : '';
+            parts.push(`- ${s.purpose}: ${s.title} (${s.duration_estimate_minutes} min, ${s.audience_interaction_level}${props})`);
+            if (s.transition_notes?.trim()) parts.push(`  transition: ${s.transition_notes.trim()}`);
+        });
         return parts.join('\n');
     }, [showPlan]);
 
-    const dictionaryLinks = useMemo(() => {
+const dictionaryLinks = useMemo(() => {
         if (!showPlan) return [] as string[];
         const blocks: string[] = [];
-        blocks.push(showPlan.show_description || '');
-        blocks.push(showPlan.pacing_notes?.energy_flow || '');
-        (showPlan.pacing_notes?.reset_moments || []).forEach((x) => blocks.push(x));
-        (showPlan.pacing_notes?.volunteer_moments || []).forEach((x) => blocks.push(x));
-        (showPlan.directors_notes?.risk_points || []).forEach((x) => blocks.push(x));
-        (showPlan.directors_notes?.adaptation_suggestions || []).forEach((x) => blocks.push(x));
+        blocks.push(showPlan.show_title || '');
+        blocks.push(showPlan.tone || '');
+        blocks.push(showPlan.performer_persona || '');
+        (showPlan.constraints?.notes ? [showPlan.constraints.notes] : []).forEach((x) => blocks.push(x));
+        (showPlan.segments || []).forEach((s) => {
+            blocks.push(s.title || '');
+            blocks.push(s.transition_notes || '');
+        });
         return extractDictionaryTerms(blocks);
     }, [showPlan]);
 
-    // Tier 3: Director Mode -> Magic Dictionary integration
+// Tier 3: Director Mode -> Magic Dictionary integration
     const dictionaryTermSet = useMemo(() => {
         const set = new Set<string>();
         (MAGIC_DICTIONARY_TERMS as any[]).forEach((t) => {
@@ -154,40 +157,41 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
     const extractDictionaryMentions = useMemo(() => {
         if (!showPlan) return [] as string[];
         const blobs: string[] = [];
-        const push = (arr?: string[]) => {
-            if (!arr?.length) return;
-            arr.forEach((x) => blobs.push(String(x || '')));
+
+        const pushText = (x?: string) => {
+            if (!x) return;
+            const s = String(x || '').trim();
+            if (s) blobs.push(s);
         };
-        push(showPlan.pacing_notes?.reset_moments);
-        push(showPlan.pacing_notes?.volunteer_moments);
-        push(showPlan.directors_notes?.risk_points);
-        push(showPlan.directors_notes?.adaptation_suggestions);
+
+        pushText(showPlan.tone);
+        pushText(showPlan.performer_persona);
+        pushText(showPlan.constraints?.notes);
+        (showPlan.segments || []).forEach((s) => {
+            pushText(s.title);
+            pushText(s.transition_notes);
+        });
 
         const text = blobs.join(' \n ').toLowerCase();
         const matches: string[] = [];
         Array.from(dictionaryTermSet).forEach((term) => {
             const t = term.toLowerCase();
             if (!t || t.length < 3) return;
-            // Word-ish boundary match to reduce false positives
-            const re = new RegExp(`(^|[^a-z0-9])${t.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}([^a-z0-9]|$)`, 'i');
+            const re = new RegExp(`(^|[^a-z0-9])${t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z0-9]|$)`, 'i');
             if (re.test(text)) matches.push(term);
         });
-        return matches
-            .sort((a, b) => a.localeCompare(b))
-            .slice(0, 12);
+        return matches.sort((a, b) => a.localeCompare(b));
     }, [showPlan, dictionaryTermSet]);
 
-    // Show Title is optional: AI can generate a strong title if the user leaves it blank.
-    // Phase 1 required: length, audience, venue, theme, tone, persona, skill, reset.
+// Show Title is optional: AI can generate a strong title if the user leaves it blank.
     const isFormValid = Boolean(
         showLength &&
-            computedAudience &&
-            venueType &&
-            theme.trim() &&
-            tone &&
-            performerPersona.trim() &&
-            skillLevel &&
-            resetTime
+        computedAudience &&
+        venueType.trim() &&
+        (tone.trim() || theme.trim()) &&
+        performerPersona.trim() &&
+        skillLevel &&
+        resetTime
     );
 
     const showLengthPresets = [30, 45, 60, 90];
@@ -199,23 +203,6 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
         'Seniors',
         'College',
         'School Assembly',
-    ];
-
-    const venuePresets = [
-        'Close-up / Walk-around',
-        'Parlor (small stage)',
-        'Stage (theater)',
-        'Virtual / Zoom',
-        'Street / Busking',
-    ];
-
-    const tonePresets = [
-        'Comedy / Light',
-        'Mysterious',
-        'Elegant',
-        'Dramatic',
-        'High-energy',
-        'Warm / Inspirational',
     ];
 
     const toggleAudienceChip = (label: string) => {
@@ -239,83 +226,39 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
         type: Type.OBJECT,
         properties: {
             show_title: { type: Type.STRING },
-            show_description: { type: Type.STRING },
-            show_overview: {
+            show_length_minutes: { type: Type.NUMBER },
+            audience_type: { type: Type.STRING },
+            venue_type: { type: Type.STRING },
+            tone: { type: Type.STRING },
+            performer_persona: { type: Type.STRING },
+            constraints: {
                 type: Type.OBJECT,
                 properties: {
-                    theme: { type: Type.STRING },
-                    audience: { type: Type.STRING },
-                    tone: { type: Type.STRING },
-                    runtime_minutes: { type: Type.NUMBER },
+                    props_owned: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    reset_time: { type: Type.STRING },
+                    skill_level: { type: Type.STRING },
+                    notes: { type: Type.STRING },
                 },
-                required: ['theme', 'audience', 'tone', 'runtime_minutes'],
+                required: ['props_owned', 'reset_time', 'skill_level', 'notes'],
             },
-            act_structure: {
-                type: Type.OBJECT,
-                properties: {
-                    opener: {
-                        type: Type.OBJECT,
-                        properties: {
-                            title: { type: Type.STRING },
-                            minutes: { type: Type.NUMBER },
-                            objective: { type: Type.STRING },
-                        },
-                        required: ['title', 'minutes', 'objective'],
+            segments: {
+                type: Type.ARRAY,
+                items: {
+                    type: Type.OBJECT,
+                    properties: {
+                        title: { type: Type.STRING },
+                        purpose: { type: Type.STRING, enum: ['opener', 'middle', 'closer'] },
+                        duration_estimate_minutes: { type: Type.NUMBER },
+                        audience_interaction_level: { type: Type.STRING, enum: ['low', 'medium', 'high'] },
+                        props_required: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        transition_notes: { type: Type.STRING },
                     },
-                    middle: {
-                        type: Type.ARRAY,
-                        items: {
-                            type: Type.OBJECT,
-                            properties: {
-                                title: { type: Type.STRING },
-                                minutes: { type: Type.NUMBER },
-                                objective: { type: Type.STRING },
-                            },
-                            required: ['title', 'minutes', 'objective'],
-                        },
-                    },
-                    closer: {
-                        type: Type.OBJECT,
-                        properties: {
-                            title: { type: Type.STRING },
-                            minutes: { type: Type.NUMBER },
-                            objective: { type: Type.STRING },
-                        },
-                        required: ['title', 'minutes', 'objective'],
-                    },
+                    required: ['title', 'purpose', 'duration_estimate_minutes', 'audience_interaction_level', 'props_required', 'transition_notes'],
                 },
-                required: ['opener', 'middle', 'closer'],
-            },
-            effect_types: {
-                type: Type.OBJECT,
-                properties: {
-                    visual_opener: { type: Type.STRING },
-                    interactive_centerpiece: { type: Type.STRING },
-                    emotional_closer: { type: Type.STRING },
-                },
-                required: ['visual_opener', 'interactive_centerpiece', 'emotional_closer'],
-            },
-            pacing_notes: {
-                type: Type.OBJECT,
-                properties: {
-                    energy_flow: { type: Type.STRING },
-                    reset_moments: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    volunteer_moments: { type: Type.ARRAY, items: { type: Type.STRING } },
-                },
-                required: ['energy_flow', 'reset_moments', 'volunteer_moments'],
-            },
-            directors_notes: {
-                type: Type.OBJECT,
-                properties: {
-                    risk_points: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    adaptation_suggestions: { type: Type.ARRAY, items: { type: Type.STRING } },
-                },
-                required: ['risk_points', 'adaptation_suggestions'],
             },
         },
-        required: ['show_title', 'show_overview', 'act_structure', 'effect_types', 'pacing_notes', 'directors_notes'],
+        required: ['show_title', 'show_length_minutes', 'audience_type', 'venue_type', 'tone', 'performer_persona', 'constraints', 'segments'],
     };
-
     const handleGenerate = async () => {
         if (!isFormValid) {
             setError("Please fill in all required fields.");
@@ -332,43 +275,65 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
             ? `- Show Title: ${showTitle.trim()}`
             : `- Show Title: (not provided) Please invent a strong, marketable show title that fits the audience and theme.`;
 
+        const propsOwnedList = propsOwned
+            .split(/\n|,/g)
+            .map((s) => s.trim())
+            .filter(Boolean);
+
         const prompt = `
-Please generate a show plan in STRICT JSON matching the provided schema.
+Please generate a show blueprint in STRICT JSON matching the provided schema.
 
-Create a director-style plan (not a long narrative). Keep it practical and stage-ready.
+The blueprint must be practical, stage-ready, and non-exposure (no secrets).
+Keep it structured and concise.
 
-Details:
+Inputs:
 ${titleLine}
-- Desired Length (minutes): ${showLength}
-- Target Audience: ${computedAudience}
-- Venue Type: ${venueType}
-- Overall Theme: ${theme}
-- Tone: ${tone}
-- Performer Persona: ${performerPersona}
-- Skill Level: ${skillLevel}
-- Reset Time: ${resetTime}
-${propsOwned.trim() ? `- Props Owned / Available: ${propsOwned.trim()}` : ''}
-${pacing ? `- Pacing: ${pacing}` : ''}
-${comedyLevel ? `- Comedy Level: ${comedyLevel}` : ''}
-${participation ? `- Audience Participation Level: ${participation}` : ''}
-${volunteersOk ? `- Volunteers OK: ${volunteersOk}` : ''}
-${constraints.trim() ? `- Constraints / Special Notes: ${constraints.trim()}` : ''}
+- show_length_minutes: ${showLength}
+- audience_type: ${computedAudience}
+- venue_type: ${venueType}
+- tone: ${tone || theme || 'Balanced'}
+- performer_persona: ${performerPersona}
+- constraints.reset_time: ${resetTime}
+- constraints.skill_level: ${skillLevel}
+- constraints.props_owned: ${propsOwnedList.length ? propsOwnedList.join(', ') : '(not provided)'}
+- constraints.notes: ${constraintNotes.trim() ? constraintNotes.trim() : '(none)'}
+${pacing ? `- pacing_hint: ${pacing}` : ''}
+${comedyLevel ? `- comedy_hint: ${comedyLevel}` : ''}
+${participation ? `- participation_hint: ${participation}` : ''}
+${volunteersOk ? `- volunteers_ok: ${volunteersOk}` : ''}
 
-Output requirements:
-- show_overview should summarize theme/audience/tone/runtime.
-- act_structure: opener (5–7 min), middle (2–5 segments sized to fit), closer.
-- effect_types must stay NON-EXPOSURE (high-level categories only).
-- pacing_notes: energy flow + when to reset + when to engage volunteers.
-- directors_notes: risk points + adaptation suggestions.
+Hard requirements:
+- segments must include exactly 1 opener and 1 closer, and at least 1 middle.
+- Sum of duration_estimate_minutes across segments MUST equal show_length_minutes exactly.
+- Use audience_interaction_level: low/medium/high.
+- props_required should be a list of props needed for that segment (can be empty).
+- transition_notes should be short, actionable cues between segments.
 `;
-        
-        try {
+try {
           const resultJson = await generateStructuredResponse(
             prompt,
             DIRECTOR_MODE_SYSTEM_INSTRUCTION,
             directorResponseSchema
           );
-          setShowPlan(resultJson as DirectorModeResponse);
+          setShowPlan(resultJson as DirectorModeBlueprint);
+          // Persist blueprint JSON (non-fatal if table not installed yet)
+          await saveDirectorBlueprint(
+            {
+              showTitle: showTitle.trim() || null,
+              showLengthMinutes: Number(showLength),
+              audience_type: computedAudience,
+              venue_type: venueType,
+              tone: tone || theme || '',
+              performer_persona: performerPersona,
+              constraints: {
+                props_owned: propsOwnedList,
+                reset_time: resetTime,
+                skill_level: skillLevel,
+                notes: constraintNotes.trim(),
+              },
+            },
+            resultJson as DirectorModeBlueprint
+          );
         } catch (err) {
           console.error(err);
           setError(err instanceof Error ? err.message : "An unknown error occurred while generating the plan. The AI may have returned an invalid structure. Please try again.");
@@ -379,65 +344,46 @@ Output requirements:
   
     // Phase C: Send structured blueprint into Show Planner as a NEW show + 4 core tasks.
     
-    const buildIdeaFromShowPlan = (plan: DirectorModeResponse) => {
+    const buildIdeaFromShowPlan = (plan: DirectorModeBlueprint) => {
         const lines: string[] = [];
+
         lines.push(`Show Title: ${plan.show_title}`);
-        if (plan.show_description?.trim()) lines.push(`Show Description: ${plan.show_description.trim()}`);
+        lines.push(`Length: ${plan.show_length_minutes} min`);
+        lines.push(`Audience: ${plan.audience_type}`);
+        lines.push(`Venue: ${plan.venue_type}`);
+        lines.push(`Tone: ${plan.tone}`);
+        lines.push(`Performer Persona: ${plan.performer_persona}`);
         lines.push('');
-        lines.push('Show Overview:');
-        lines.push(`  • Theme: ${plan.show_overview?.theme ?? ''}`);
-        lines.push(`  • Audience: ${plan.show_overview?.audience ?? ''}`);
-        lines.push(`  • Tone: ${plan.show_overview?.tone ?? ''}`);
-        lines.push(`  • Runtime: ${plan.show_overview?.runtime_minutes ?? ''} min`);
+
+        const c = plan.constraints;
+        lines.push('Constraints:');
+        lines.push(`  • Skill Level: ${c?.skill_level || ''}`);
+        lines.push(`  • Reset Time: ${c?.reset_time || ''}`);
+        if (Array.isArray(c?.props_owned) && c.props_owned.length) {
+            lines.push(`  • Props Owned: ${c.props_owned.join(', ')}`);
+        }
+        if (c?.notes?.trim()) {
+            lines.push(`  • Notes: ${c.notes.trim()}`);
+        }
         lines.push('');
-        lines.push('Act Structure:');
-        lines.push(`  1) Opener (${plan.act_structure.opener.minutes} min): ${plan.act_structure.opener.title}`);
-        lines.push(`     - Objective: ${plan.act_structure.opener.objective}`);
-        plan.act_structure.middle.forEach((m, i) => {
-            lines.push(`  ${i + 2}) Middle (${m.minutes} min): ${m.title}`);
-            lines.push(`     - Objective: ${m.objective}`);
+
+        lines.push('Segments:');
+        (plan.segments || []).forEach((seg, i) => {
+            lines.push(`  ${i + 1}) ${seg.purpose.toUpperCase()} (${seg.duration_estimate_minutes} min): ${seg.title}`);
+            lines.push(`     - Interaction: ${seg.audience_interaction_level}`);
+            if (Array.isArray(seg.props_required) && seg.props_required.length) {
+                lines.push(`     - Props: ${seg.props_required.join(', ')}`);
+            }
+            if (seg.transition_notes?.trim()) {
+                lines.push(`     - Transition: ${seg.transition_notes.trim()}`);
+            }
         });
-        lines.push(`  ${plan.act_structure.middle.length + 2}) Closer (${plan.act_structure.closer.minutes} min): ${plan.act_structure.closer.title}`);
-        lines.push(`     - Objective: ${plan.act_structure.closer.objective}`);
-        lines.push('');
-        lines.push('Effect Types (Non-Exposure):');
-        lines.push(`  • Visual opener: ${plan.effect_types.visual_opener}`);
-        lines.push(`  • Interactive centerpiece: ${plan.effect_types.interactive_centerpiece}`);
-        lines.push(`  • Emotional closer: ${plan.effect_types.emotional_closer}`);
-        lines.push('');
-        lines.push('Pacing Notes:');
-        lines.push(`  • Energy flow: ${plan.pacing_notes.energy_flow}`);
-        if (plan.pacing_notes.reset_moments?.length) {
-            lines.push('  • Reset moments:');
-            plan.pacing_notes.reset_moments.forEach((x) => lines.push(`     - ${x}`));
-        }
-        if (plan.pacing_notes.volunteer_moments?.length) {
-            lines.push('  • Volunteer moments:');
-            plan.pacing_notes.volunteer_moments.forEach((x) => lines.push(`     - ${x}`));
-        }
-        lines.push('');
-        lines.push("Director's Notes:");
-        if (plan.directors_notes.risk_points?.length) {
-            lines.push('  • Risk points:');
-            plan.directors_notes.risk_points.forEach((x) => lines.push(`     - ${x}`));
-        }
-        if (plan.directors_notes.adaptation_suggestions?.length) {
-            lines.push('  • Adaptation suggestions:');
-            plan.directors_notes.adaptation_suggestions.forEach((x) => lines.push(`     - ${x}`));
-        }
 
-        const prettyJson = JSON.stringify(plan, null, 2);
-
-        const content =
-`${lines.join('\n')}
-
---- JSON (for reuse / export) ---
-${prettyJson}
-`;
-        const title = `Director Mode — ${plan.show_title}`;
-        const tags = ['director-mode', 'show-blueprint'];
-        return { title, content, tags };
-    };
+        return {
+            title: plan.show_title,
+            content: lines.join('\n'),
+        };
+    };;
 
     const handleSaveToIdeas = async () => {
         if (!showPlan || isSavingIdea || isSavedToIdeas) return;
@@ -476,60 +422,46 @@ ${prettyJson}
             setError(null);
             setPlannerNotice(null);
 
-            // Create a NEW show in Show Planner (Director Mode is intentionally additive)
-            const created = await createShow(showPlan.show_title, showPlan.show_description ?? null);
+            const description = `Director Blueprint — ${showPlan.show_length_minutes} min • ${showPlan.audience_type} • ${showPlan.venue_type}`;
+            const created = await createShow(showPlan.show_title, description);
             const showId = created?.id;
             if (!showId) throw new Error('Could not create the show in Show Planner.');
 
-            // Build 4 tasks: Opener, Segment 1, Segment 2, Closer.
-            // If there are more than 2 middle segments, we fold extras into Segment 2 notes.
-            const opener = showPlan.act_structure.opener;
-            const closer = showPlan.act_structure.closer;
-            const middle = Array.isArray(showPlan.act_structure.middle) ? showPlan.act_structure.middle : [];
-            const seg1 = middle[0];
-            const seg2 = middle[1];
-            const extras = middle.slice(2);
+            const tasks = (showPlan.segments || []).map((seg) => {
+                const propsLine = Array.isArray(seg.props_required) && seg.props_required.length
+                    ? `Props: ${seg.props_required.join(', ')}\n`
+                    : '';
+                const notes =
+                    `Purpose: ${seg.purpose}\n` +
+                    `Estimated: ${seg.duration_estimate_minutes} min\n` +
+                    `Interaction: ${seg.audience_interaction_level}\n` +
+                    propsLine +
+                    `Transition: ${seg.transition_notes || ''}`;
 
-            const directorNotesForTasks = directorsNotesBlock ? `\n\n--- Director Notes ---\n${directorsNotesBlock}` : '';
+                return {
+                    title: `${seg.purpose.toUpperCase()} — ${seg.title}`,
+                    notes,
+                    priority: 'Medium' as const,
+                    dueDate: null,
+                    durationMinutes: Math.max(1, Math.round(Number(seg.duration_estimate_minutes) || 1)),
+                    tags: ['director-mode', seg.purpose],
+                };
+            });
 
-            const taskPayloads = [
-                {
-                    title: `Opener — ${opener.title}`,
-                    notes: `Objective: ${opener.objective}\nEstimated: ${opener.minutes} min${directorNotesForTasks}`,
-                },
-                {
-                    title: `Segment 1 — ${seg1?.title ?? 'Core Feature'}`,
-                    notes: `Objective: ${seg1?.objective ?? 'Develop the central throughline and build audience buy-in.'}` +
-                        `\nEstimated: ${seg1?.minutes ?? Math.max(5, Math.round(Number(showPlan.show_overview.runtime_minutes) / 4))} min` +
-                        `${extras.length ? `\n\nAdditional middle beats to consider:\n- ${extras.map((x) => x.title).join('\n- ')}` : ''}` +
-                        `${directorNotesForTasks}`,
-                },
-                {
-                    title: `Segment 2 — ${seg2?.title ?? 'Interactive Centerpiece'}`,
-                    notes: `Objective: ${seg2?.objective ?? 'Raise stakes, increase interaction, and set up the closer.'}` +
-                        `\nEstimated: ${seg2?.minutes ?? Math.max(5, Math.round(Number(showPlan.show_overview.runtime_minutes) / 4))} min` +
-                        `${directorNotesForTasks}`,
-                },
-                {
-                    title: `Closer — ${closer.title}`,
-                    notes: `Objective: ${closer.objective}\nEstimated: ${closer.minutes} min${directorNotesForTasks}`,
-                },
-            ];
+            if (!tasks.length) throw new Error('No segments were returned to create planner tasks.');
 
-            await addTasksToShow(showId, taskPayloads as any);
+            await addTasksToShow(showId, tasks as any);
 
             setIsAddedToPlanner(true);
-            setPlannerNotice('Saved — open Show Planner to see the new show and tasks.');
-
-            // Auto-clear the notice after a short time
-            window.setTimeout(() => setPlannerNotice(null), 7000);
-        } catch (e: any) {
-            console.error('Send to Show Planner failed:', e);
-            setError(e?.message ?? 'Unable to send the blueprint to Show Planner.');
+            setIsAddingToPlanner(false);
+            setPlannerNotice('Added to Show Planner — a show and tasks were created from your blueprint.');
+        } catch (err) {
+            console.error(err);
+            setError(err instanceof Error ? err.message : 'Failed to send to Show Planner.');
         } finally {
             setIsAddingToPlanner(false);
         }
-    };
+    };;
 
     const handleBackToForm = () => {
         // Phase B: keep inputs editable; do not clear the form.
@@ -544,212 +476,125 @@ ${prettyJson}
     }
     
     if (showPlan) {
+        const opener = (showPlan.segments || []).find((s) => s.purpose === 'opener');
+        const closer = (showPlan.segments || []).find((s) => s.purpose === 'closer');
+        const middles = (showPlan.segments || []).filter((s) => s.purpose === 'middle');
+
         return (
             <div className="flex-1 flex flex-col overflow-y-auto p-4 md:p-6 animate-fade-in">
-                <h2 className="text-3xl font-bold text-white font-cinzel">{showPlan.show_title}</h2>
-                {showPlan.show_description ? (
-                    <p className="text-slate-400 mt-2">{showPlan.show_description}</p>
-                ) : null}
+                <div className="flex items-start justify-between gap-4 flex-wrap">
+                    <div>
+                        <h2 className="text-3xl font-bold text-white font-cinzel">{showPlan.show_title}</h2>
+                        <p className="text-slate-400 mt-2">
+                            {showPlan.show_length_minutes} min • {showPlan.audience_type} • {showPlan.venue_type}
+                        </p>
+                        <p className="text-slate-400 mt-1">
+                            Tone: <span className="text-slate-200">{showPlan.tone}</span> • Persona: <span className="text-slate-200">{showPlan.performer_persona}</span>
+                        </p>
+                    </div>
 
-                {/* Phase B: results actions (keep inputs editable + frictionless reruns) */}
-                <div className="mt-5 mb-6 flex flex-wrap gap-2">
-                    <button
-                        onClick={handleGenerate}
-                        className="px-4 py-2 rounded-md bg-slate-700/60 hover:bg-slate-700 border border-slate-600 text-white font-bold transition-colors"
-                        title="Regenerate this blueprint using your current inputs"
-                    >
-                        Revise Blueprint
-                    </button>
-                    <button
-                        onClick={handleBackToForm}
-                        className="px-4 py-2 rounded-md bg-slate-700/40 hover:bg-slate-700 border border-slate-600 text-white font-bold transition-colors"
-                        title="Go back to adjust audience (inputs are kept)"
-                    >
-                        Change Audience
-                    </button>
-                    <button
-                        onClick={handleBackToForm}
-                        className="px-4 py-2 rounded-md bg-slate-600 hover:bg-slate-700 text-white font-bold transition-colors"
-                        title="Hide results (inputs kept)"
-                    >
-                        Hide Results
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={handleBackToForm}
+                            className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700"
+                        >
+                            Back
+                        </button>
+
+                        <button
+                            onClick={handleSaveToIdeas}
+                            disabled={isSavingIdea || isSavedToIdeas}
+                            className={`px-4 py-2 rounded-lg border ${
+                                isSavedToIdeas ? 'bg-emerald-600/20 border-emerald-400 text-emerald-200' : 'bg-purple-600 hover:bg-purple-500 border-purple-400 text-white'
+                            }`}
+                        >
+                            {isSavedToIdeas ? (
+                                <span className="inline-flex items-center gap-2"><CheckIcon className="w-5 h-5" /> Saved</span>
+                            ) : (
+                                <span className="inline-flex items-center gap-2"><SaveIcon className="w-5 h-5" /> Save</span>
+                            )}
+                        </button>
+
+                        <button
+                            onClick={handleSendToPlanner}
+                            disabled={isAddingToPlanner || isAddedToPlanner}
+                            className={`px-4 py-2 rounded-lg border ${
+                                isAddedToPlanner ? 'bg-emerald-600/20 border-emerald-400 text-emerald-200' : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
+                            }`}
+                        >
+                            {isAddedToPlanner ? (
+                                <span className="inline-flex items-center gap-2"><ChecklistIcon className="w-5 h-5" /> Sent</span>
+                            ) : (
+                                <span className="inline-flex items-center gap-2"><ChecklistIcon className="w-5 h-5" /> Send to Show Planner</span>
+                            )}
+                        </button>
+                    </div>
                 </div>
 
-                {/* Phase B: structured sections */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {plannerNotice ? (
+                    <div className="mt-4 bg-emerald-900/20 border border-emerald-700 text-emerald-200 rounded-lg p-3 text-sm">
+                        {plannerNotice}
+                    </div>
+                ) : null}
+
+                {error ? (
+                    <div className="mt-4 bg-rose-900/20 border border-rose-700 text-rose-200 rounded-lg p-3 text-sm">
+                        {error}
+                    </div>
+                ) : null}
+
+                <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
-                        <h3 className="text-xl font-bold text-[#E6C77A] font-cinzel">Show Overview</h3>
+                        <h3 className="text-xl font-bold text-[#E6C77A] font-cinzel">Constraints</h3>
                         <div className="mt-3 space-y-2 text-sm text-slate-300">
-                            <p><span className="text-slate-400">Theme:</span> {showPlan.show_overview.theme}</p>
-                            <p><span className="text-slate-400">Audience:</span> {showPlan.show_overview.audience}</p>
-                            <p><span className="text-slate-400">Tone:</span> {showPlan.show_overview.tone}</p>
-                            <p><span className="text-slate-400">Runtime:</span> {showPlan.show_overview.runtime_minutes} min</p>
+                            <p><span className="text-slate-400">Skill level:</span> {showPlan.constraints?.skill_level || ''}</p>
+                            <p><span className="text-slate-400">Reset time:</span> {showPlan.constraints?.reset_time || ''}</p>
+                            <p><span className="text-slate-400">Props owned:</span> {(showPlan.constraints?.props_owned || []).join(', ') || '—'}</p>
+                            {showPlan.constraints?.notes?.trim() ? (
+                                <p><span className="text-slate-400">Notes:</span> {showPlan.constraints.notes}</p>
+                            ) : null}
                         </div>
                     </div>
 
                     <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
-                        <h3 className="text-xl font-bold text-[#E6C77A] font-cinzel">Effect Types (No Exposure)</h3>
+                        <h3 className="text-xl font-bold text-[#E6C77A] font-cinzel">Structure</h3>
                         <div className="mt-3 space-y-3 text-sm text-slate-300">
-                            <div className="bg-slate-900/40 rounded-md p-3 border border-slate-700/60">
-                                <p className="font-semibold text-white">Visual opener</p>
-                                <p className="text-slate-300">{showPlan.effect_types.visual_opener}</p>
-                            </div>
-                            <div className="bg-slate-900/40 rounded-md p-3 border border-slate-700/60">
-                                <p className="font-semibold text-white">Interactive centerpiece</p>
-                                <p className="text-slate-300">{showPlan.effect_types.interactive_centerpiece}</p>
-                            </div>
-                            <div className="bg-slate-900/40 rounded-md p-3 border border-slate-700/60">
-                                <p className="font-semibold text-white">Emotional closer</p>
-                                <p className="text-slate-300">{showPlan.effect_types.emotional_closer}</p>
-                            </div>
+                            {opener ? (
+                                <div className="bg-slate-900/40 rounded-md p-3 border border-slate-700/60">
+                                    <p className="font-semibold text-white">Opener</p>
+                                    <p className="text-slate-300">{opener.title} • {opener.duration_estimate_minutes} min • {opener.audience_interaction_level}</p>
+                                    {opener.transition_notes?.trim() ? <p className="text-slate-400 mt-1">Transition: {opener.transition_notes}</p> : null}
+                                </div>
+                            ) : null}
+
+                            {middles.map((m, idx) => (
+                                <div key={idx} className="bg-slate-900/40 rounded-md p-3 border border-slate-700/60">
+                                    <p className="font-semibold text-white">Middle</p>
+                                    <p className="text-slate-300">{m.title} • {m.duration_estimate_minutes} min • {m.audience_interaction_level}</p>
+                                    {Array.isArray(m.props_required) && m.props_required.length ? (
+                                        <p className="text-slate-400 mt-1">Props: {m.props_required.join(', ')}</p>
+                                    ) : null}
+                                    {m.transition_notes?.trim() ? <p className="text-slate-400 mt-1">Transition: {m.transition_notes}</p> : null}
+                                </div>
+                            ))}
+
+                            {closer ? (
+                                <div className="bg-slate-900/40 rounded-md p-3 border border-slate-700/60">
+                                    <p className="font-semibold text-white">Closer</p>
+                                    <p className="text-slate-300">{closer.title} • {closer.duration_estimate_minutes} min • {closer.audience_interaction_level}</p>
+                                    {closer.transition_notes?.trim() ? <p className="text-slate-400 mt-1">Transition: {closer.transition_notes}</p> : null}
+                                </div>
+                            ) : null}
                         </div>
                     </div>
 
                     <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700 lg:col-span-2">
-                        <h3 className="text-xl font-bold text-[#E6C77A] font-cinzel">Act Structure</h3>
-                        <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
-                            <div className="bg-slate-900/40 rounded-md p-3 border border-slate-700/60">
-                                <p className="text-xs text-slate-400">Opener ({showPlan.act_structure.opener.minutes} min)</p>
-                                <p className="font-semibold text-white">{showPlan.act_structure.opener.title}</p>
-                                <p className="text-sm text-slate-300 mt-1">{showPlan.act_structure.opener.objective}</p>
-                            </div>
-                            <div className="bg-slate-900/40 rounded-md p-3 border border-slate-700/60 md:col-span-1">
-                                <p className="text-xs text-slate-400">Middle (segments)</p>
-                                <div className="mt-2 space-y-2">
-                                    {showPlan.act_structure.middle.map((m, i) => (
-                                        <div key={i} className="border border-slate-700/60 rounded-md p-2 bg-slate-950/20">
-                                            <p className="text-xs text-slate-400">{m.minutes} min</p>
-                                            <p className="font-semibold text-white">{m.title}</p>
-                                            <p className="text-sm text-slate-300 mt-1">{m.objective}</p>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                            <div className="bg-slate-900/40 rounded-md p-3 border border-slate-700/60">
-                                <p className="text-xs text-slate-400">Closer ({showPlan.act_structure.closer.minutes} min)</p>
-                                <p className="font-semibold text-white">{showPlan.act_structure.closer.title}</p>
-                                <p className="text-sm text-slate-300 mt-1">{showPlan.act_structure.closer.objective}</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
-                        <h3 className="text-xl font-bold text-[#E6C77A] font-cinzel">Pacing Notes</h3>
-                        <div className="mt-3 text-sm text-slate-300 space-y-3">
-                            <div>
-                                <p className="text-slate-400">Energy rises/falls</p>
-                                <p>{showPlan.pacing_notes.energy_flow}</p>
-                            </div>
-                            {showPlan.pacing_notes.reset_moments?.length ? (
-                                <div>
-                                    <p className="text-slate-400">When to reset</p>
-                                    <ul className="list-disc list-inside">
-                                        {showPlan.pacing_notes.reset_moments.map((x, i) => <li key={i}>{x}</li>)}
-                                    </ul>
-                                </div>
-                            ) : null}
-                            {showPlan.pacing_notes.volunteer_moments?.length ? (
-                                <div>
-                                    <p className="text-slate-400">When to engage volunteers</p>
-                                    <ul className="list-disc list-inside">
-                                        {showPlan.pacing_notes.volunteer_moments.map((x, i) => <li key={i}>{x}</li>)}
-                                    </ul>
-                                </div>
-                            ) : null}
-                        </div>
-                    </div>
-
-                    <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
-                        <h3 className="text-xl font-bold text-[#E6C77A] font-cinzel">Director’s Notes</h3>
-                        <div className="mt-3 text-sm text-slate-300 space-y-3">
-                            {showPlan.directors_notes.risk_points?.length ? (
-                                <div>
-                                    <p className="text-slate-400">Risk points</p>
-                                    <ul className="list-disc list-inside">
-                                        {showPlan.directors_notes.risk_points.map((x, i) => <li key={i}>{x}</li>)}
-                                    </ul>
-                                </div>
-                            ) : null}
-                            {showPlan.directors_notes.adaptation_suggestions?.length ? (
-                                <div>
-                                    <p className="text-slate-400">Adaptation suggestions</p>
-                                    <ul className="list-disc list-inside">
-                                        {showPlan.directors_notes.adaptation_suggestions.map((x, i) => <li key={i}>{x}</li>)}
-                                    </ul>
-                                </div>
-                            ) : null}
-
-                            {dictionaryLinks.length ? (
-                                <div className="pt-2">
-                                    <p className="text-slate-400">Dictionary references</p>
-                                    <div className="mt-2 flex flex-wrap gap-2">
-                                        {dictionaryLinks.map((t) => (
-                                            <button
-                                                key={t}
-                                                type="button"
-                                                onClick={() => {
-                                                    if (typeof window === 'undefined') return;
-                                                    window.dispatchEvent(
-                                                        new CustomEvent('maw:navigate', {
-                                                            detail: { view: 'magic-dictionary', hash: slugify(t) },
-                                                        })
-                                                    );
-                                                }}
-                                                className="text-xs px-2 py-1 rounded-full bg-slate-900/50 border border-slate-700 text-purple-200 hover:text-white hover:border-purple-500/40 transition-colors"
-                                                title="Open this term in Magic Dictionary"
-                                            >
-                                                Dictionary → {t}
-                                            </button>
-                                        ))}
-                                    </div>
-                                    <p className="text-xs text-slate-500 mt-2">Tip: these are the theory concepts the AI referenced in your plan.</p>
-                                </div>
-                            ) : null}
-                        </div>
+                        <h3 className="text-xl font-bold text-[#E6C77A] font-cinzel">Blueprint JSON</h3>
+                        <pre className="mt-3 text-xs text-slate-200 bg-slate-950/40 border border-slate-700/60 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap">
+{JSON.stringify(showPlan, null, 2)}
+                        </pre>
                     </div>
                 </div>
-
-                <div className="mt-6 flex flex-wrap items-center justify-center gap-4">
-                    {/* Cohesion: save to existing show / convert to tasks / tag to project */}
-                    <CohesionActions
-                        content={buildIdeaFromShowPlan(showPlan).content}
-                        defaultTitle={buildIdeaFromShowPlan(showPlan).title}
-                        defaultTags={buildIdeaFromShowPlan(showPlan).tags}
-                        compact
-                    />
-                    <button
-                        onClick={handleSaveToIdeas}
-                        disabled={isSavingIdea || isSavedToIdeas}
-                        className="px-4 py-2 rounded-md bg-slate-700/60 hover:bg-slate-700 border border-slate-600 text-white font-bold transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
-                        title="Save a snapshot of this plan to your Saved Ideas"
-                    >
-                        {isSavedToIdeas ? <CheckIcon className="w-5 h-5" /> : <SaveIcon className="w-5 h-5" />}
-                        <span>
-                            {isSavedToIdeas ? 'Saved to Ideas!' : (isSavingIdea ? 'Saving…' : 'Save to Ideas')}
-                        </span>
-                    </button>
-
-                    <button onClick={handleSendToPlanner} disabled={isAddedToPlanner || isAddingToPlanner} className="px-6 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-green-700 disabled:cursor-not-allowed flex items-center gap-2">
-                        {isAddedToPlanner ? <CheckIcon className="w-5 h-5" /> : <ChecklistIcon className="w-5 h-5" />}
-                        <span>{isAddedToPlanner ? 'Sent to Show Planner!' : (isAddingToPlanner ? 'Sending…' : 'Send Blueprint to Show Planner')}</span>
-                    </button>
-                </div>
-
-                {(plannerNotice || ideaNotice) ? (
-                    <div className="mt-4 flex flex-col items-center gap-2">
-                        {plannerNotice ? (
-                            <div className="px-4 py-2 rounded-md bg-green-900/30 border border-green-700/40 text-green-200 text-sm">
-                                {plannerNotice}
-                            </div>
-                        ) : null}
-                        {ideaNotice ? (
-                            <div className="px-4 py-2 rounded-md bg-green-900/30 border border-green-700/40 text-green-200 text-sm">
-                                {ideaNotice}
-                            </div>
-                        ) : null}
-                    </div>
-                ) : null}
             </div>
         );
     }
@@ -851,132 +696,114 @@ ${prettyJson}
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-1">Venue Type</label>
-                        <select
-                            value={venueType}
-                            onChange={(e) => setVenueType(e.target.value)}
-                            className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
-                        >
-                            <option value="">Select…</option>
-                            {venuePresets.map((v) => (
-                                <option key={v} value={v}>
-                                    {v}
-                                </option>
-                            ))}
-                        </select>
-                        <p className="mt-1 text-xs text-slate-400">Helps with pacing, blocking, and interaction style.</p>
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-1">Tone</label>
-                        <select
-                            value={tone}
-                            onChange={(e) => setTone(e.target.value)}
-                            className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
-                        >
-                            <option value="">Select…</option>
-                            {tonePresets.map((t) => (
-                                <option key={t} value={t}>
-                                    {t}
-                                </option>
-                            ))}
-                        </select>
-                        <p className="mt-1 text-xs text-slate-400">This becomes the emotional “feel” of the show.</p>
-                    </div>
-
-                    <div>
-                        <label htmlFor="performer-persona" className="block text-sm font-medium text-slate-300 mb-1">Performer Persona</label>
-                        <input
-                            id="performer-persona"
-                            type="text"
-                            value={performerPersona}
-                            onChange={(e) => setPerformerPersona(e.target.value)}
-                            placeholder="e.g., charming comedy magician • mysterious mind reader • elegant classic conjuror"
-                            className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
-                        />
-                        <p className="mt-1 text-xs text-slate-400">The AI will keep the voice consistent across segments.</p>
-                    </div>
-
-                    <div>
-                        <label htmlFor="theme" className="block text-sm font-medium text-slate-300 mb-1">Theme / Throughline</label>
+                        <label htmlFor="theme" className="block text-sm font-medium text-slate-300 mb-1">Overall Theme / Style</label>
                         <input
                             id="theme"
                             type="text"
                             value={theme}
                             onChange={(e) => setTheme(e.target.value)}
-                            placeholder="e.g., time travel mysteries • modern elegance • carnival of impossibility"
+                            placeholder="e.g., elegant & mysterious • high-energy comedy • mind reading with audience participation"
                             className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
                         />
                         <p className="mt-1 text-xs text-slate-400">
-                            A simple narrative thread that ties the set together.
+                            Describe the overall vibe and style. Tone/persona/constraints are captured below. The AI will keep the structure consistent.
                         </p>
                     </div>
 
-                    <div className="pt-2">
-                        <div className="px-3 py-2 rounded-md bg-slate-900/40 border border-slate-700">
-                            <p className="text-sm font-semibold text-slate-200">Constraints</p>
-                            <p className="text-xs text-slate-400 mt-1">These help the AI recommend effects that fit your reality (props, reset, and skill).</p>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label htmlFor="venue-type" className="block text-sm font-medium text-slate-300 mb-1">Venue Type</label>
+                            <input
+                                id="venue-type"
+                                type="text"
+                                value={venueType}
+                                onChange={(e) => setVenueType(e.target.value)}
+                                placeholder="e.g., banquet hall • theater • close-up strolling • school assembly"
+                                className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
+                            />
                         </div>
 
-                        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-slate-300 mb-1">Skill Level</label>
-                                <select
-                                    value={skillLevel}
-                                    onChange={(e) => setSkillLevel(e.target.value as any)}
-                                    className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
-                                >
-                                    <option value="">Select…</option>
-                                    <option value="Beginner">Beginner</option>
-                                    <option value="Intermediate">Intermediate</option>
-                                    <option value="Advanced">Advanced</option>
-                                    <option value="Pro">Pro</option>
-                                </select>
-                            </div>
+                        <div>
+                            <label htmlFor="tone" className="block text-sm font-medium text-slate-300 mb-1">Tone</label>
+                            <input
+                                id="tone"
+                                type="text"
+                                value={tone}
+                                onChange={(e) => setTone(e.target.value)}
+                                placeholder="e.g., funny • dramatic • mysterious • family-friendly"
+                                className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
+                            />
+                        </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-slate-300 mb-1">Reset Time</label>
-                                <select
-                                    value={resetTime}
-                                    onChange={(e) => setResetTime(e.target.value as any)}
-                                    className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
-                                >
-                                    <option value="">Select…</option>
-                                    <option value="Instant">Instant</option>
-                                    <option value="Under 30s">Under 30s</option>
-                                    <option value="Under 2 min">Under 2 min</option>
-                                    <option value="Under 5 min">Under 5 min</option>
-                                    <option value="Not important">Not important</option>
-                                </select>
-                            </div>
+                        <div className="sm:col-span-2">
+                            <label htmlFor="persona" className="block text-sm font-medium text-slate-300 mb-1">Performer Persona</label>
+                            <input
+                                id="persona"
+                                type="text"
+                                value={performerPersona}
+                                onChange={(e) => setPerformerPersona(e.target.value)}
+                                placeholder="e.g., charming storyteller • high-energy comedy magician • mysterious mind reader"
+                                className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
+                            />
+                        </div>
 
-                            <div className="sm:col-span-2">
-                                <label htmlFor="props-owned" className="block text-sm font-medium text-slate-300 mb-1">Props Owned (optional)</label>
-                                <input
-                                    id="props-owned"
-                                    type="text"
-                                    value={propsOwned}
-                                    onChange={(e) => setPropsOwned(e.target.value)}
-                                    placeholder="e.g., linking rings, rope, cards, coins, sponge balls, iPad, invisible deck"
-                                    className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
-                                />
-                                <p className="mt-1 text-xs text-slate-400">List props you want to include (or avoid).</p>
-                            </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-300 mb-1">Skill Level</label>
+                            <select
+                                value={skillLevel}
+                                onChange={(e) => setSkillLevel(e.target.value as any)}
+                                className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
+                            >
+                                <option value="">Select…</option>
+                                <option value="Beginner">Beginner</option>
+                                <option value="Intermediate">Intermediate</option>
+                                <option value="Advanced">Advanced</option>
+                            </select>
+                        </div>
 
-                            <div className="sm:col-span-2">
-                                <label className="block text-sm font-medium text-slate-300 mb-1">Extra Constraints / Notes (optional)</label>
-                                <textarea
-                                    value={constraints}
-                                    onChange={(e) => setConstraints(e.target.value)}
-                                    rows={3}
-                                    placeholder="Optional: family-friendly only, no fire, limited pockets, tight stage, no table, etc."
-                                    className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
-                                />
-                            </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-300 mb-1">Reset Time</label>
+                            <select
+                                value={resetTime}
+                                onChange={(e) => setResetTime(e.target.value as any)}
+                                className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
+                            >
+                                <option value="">Select…</option>
+                                <option value="Instant">Instant</option>
+                                <option value="30s">~30 seconds</option>
+                                <option value="1 min">~1 minute</option>
+                                <option value="2 min">~2 minutes</option>
+                                <option value="5+ min">5+ minutes</option>
+                            </select>
+                        </div>
+
+                        <div className="sm:col-span-2">
+                            <label htmlFor="props-owned" className="block text-sm font-medium text-slate-300 mb-1">Props Owned (optional)</label>
+                            <textarea
+                                id="props-owned"
+                                value={propsOwned}
+                                onChange={(e) => setPropsOwned(e.target.value)}
+                                placeholder="List props you already have (comma or newline separated)"
+                                rows={3}
+                                className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
+                            />
+                        </div>
+
+                        <div className="sm:col-span-2">
+                            <label htmlFor="constraints-notes" className="block text-sm font-medium text-slate-300 mb-1">Constraints / Notes (optional)</label>
+                            <textarea
+                                id="constraints-notes"
+                                value={constraintNotes}
+                                onChange={(e) => setConstraintNotes(e.target.value)}
+                                placeholder="Any constraints: kid-safe, no fire, limited pocket space, no table, etc."
+                                rows={3}
+                                className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
+                            />
                         </div>
                     </div>
 
-                    <div className="pt-2">
+<div className="pt-2">
                         <button
                             type="button"
                             onClick={() => setShowAdvanced((v) => !v)}
@@ -1038,6 +865,16 @@ ${prettyJson}
                                         <option value="Yes">Yes</option>
                                         <option value="No">No</option>
                                     </select>
+                                </div>
+                                <div className="sm:col-span-2">
+                                    <label className="block text-sm font-medium text-slate-300 mb-1">Constraints / Notes</label>
+                                    <textarea
+                                        value={constraintNotes}
+                                        onChange={(e) => setConstraintNotes(e.target.value)}
+                                        rows={3}
+                                        placeholder="Optional: stage size, no fire, limited props, family-friendly only, etc."
+                                        className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
+                                    />
                                 </div>
                             </div>
                         )}

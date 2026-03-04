@@ -242,46 +242,35 @@ export interface ShowSegment {
     suggested_effects: SuggestedEffect[];
 }
 
-export interface DirectorModeResponse {
-    show_title: string;
-    show_description?: string;
-    show_overview: {
-        theme: string;
-        audience: string;
-        tone: string;
-        runtime_minutes: number;
-    };
-    act_structure: {
-        opener: {
-            title: string;
-            minutes: number;
-            objective: string;
-        };
-        middle: Array<{
-            title: string;
-            minutes: number;
-            objective: string;
-        }>;
-        closer: {
-            title: string;
-            minutes: number;
-            objective: string;
-        };
-    };
-    effect_types: {
-        visual_opener: string;
-        interactive_centerpiece: string;
-        emotional_closer: string;
-    };
-    pacing_notes: {
-        energy_flow: string;
-        reset_moments: string[];
-        volunteer_moments: string[];
-    };
-    directors_notes: {
-        risk_points: string[];
-        adaptation_suggestions: string[];
-    };
+export type DirectorSegmentPurpose = 'opener' | 'middle' | 'closer';
+export type DirectorInteractionLevel = 'low' | 'medium' | 'high';
+
+export interface DirectorModeConstraints {
+  props_owned: string[];
+  reset_time: string; // e.g. "instant", "30s", "2 min"
+  skill_level: string; // e.g. "beginner", "intermediate", "advanced"
+  notes: string;
+}
+
+export interface DirectorModeSegment {
+  title: string;
+  purpose: DirectorSegmentPurpose;
+  duration_estimate_minutes: number;
+  audience_interaction_level: DirectorInteractionLevel;
+  props_required: string[];
+  transition_notes: string;
+}
+
+export interface DirectorModeBlueprint {
+  show_title: string;
+  show_length_minutes: number;
+  audience_type: string;
+  venue_type: string;
+  tone: string;
+  performer_persona: string;
+  constraints: DirectorModeConstraints;
+  segments: DirectorModeSegment[];
+  created_at?: string;
 }
 
 export interface Persona {
