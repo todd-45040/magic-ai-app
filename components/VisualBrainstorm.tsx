@@ -10,6 +10,7 @@ import SaveActionBar from './shared/SaveActionBar';
 import { BackIcon, ImageIcon, WandIcon, TrashIcon, CameraIcon } from './icons';
 import type { User } from '../types';
 import { canConsume, consume } from '../services/usageTracker';
+import { trackClientEvent } from "../services/telemetryClient";
 
 interface VisualBrainstormProps {
     onIdeaSaved: () => void;
@@ -261,6 +262,15 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
         return;
     }
     consume(user, 'image', units);
+
+    // Telemetry (Phase 7)
+    trackClientEvent({
+      tool: 'visual_brainstorm',
+      action: 'visual_request_start',
+      metadata: { mode: isEditing ? 'edit' : 'generate', aspectRatio, variations: isEditing ? 1 : 4 },
+      units,
+    });
+
     setLoadingLabel(isEditing ? 'Applying your edit…' : 'Generating concept art…');
     setIsLoading(true);
     setError(null);
@@ -302,6 +312,15 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
             title: resolvedTitle,
             kind: 'edit',
           });
+
+          // Telemetry (Phase 7)
+          trackClientEvent({
+            tool: 'visual_brainstorm',
+            action: 'visual_request_success',
+            metadata: { mode: 'edit', aspectRatio, imagesGenerated: 1, variations: 1 },
+            outcome: 'SUCCESS_CHARGED',
+            units,
+          });
         } else {
           const imgs = (batchImages?.length ? batchImages : [imageUrl]).slice(0, 4);
           const ids: string[] = [];
@@ -321,9 +340,27 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
           }
           setVariationHistoryIds(ids);
           if (ids[0]) setActiveHistoryId(ids[0]);
+
+        // Telemetry (Phase 7)
+        trackClientEvent({
+          tool: 'visual_brainstorm',
+          action: 'visual_request_success',
+          metadata: { mode: isEditing ? 'edit' : 'generate', aspectRatio, imagesGenerated: (batchImages?.length ? batchImages.length : 1), variations: isEditing ? 1 : 4 },
+          outcome: "SUCCESS_CHARGED",
+          units,
+        });
         }
     } catch (err) {
-        setError(err instanceof Error ? err.message : "An unknown error occurred.");
+        const msg = err instanceof Error ? err.message : 'An unknown error occurred.';
+        // Telemetry (Phase 7)
+        trackClientEvent({
+          tool: 'visual_brainstorm',
+          action: 'visual_request_error',
+          metadata: { mode: isEditing ? 'edit' : 'generate', aspectRatio, variations: isEditing ? 1 : 4, message: msg },
+          outcome: 'ERROR_UPSTREAM',
+          units,
+        });
+        setError(msg);
     } finally {
         setIsLoading(false);
     }
@@ -350,6 +387,14 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
 
     const refinedPrompt = `${base}, ${instruction}`;
 
+    // Telemetry (Phase 7)
+    trackClientEvent({
+      tool: 'visual_brainstorm',
+      action: 'visual_refine_click',
+      metadata: { label: presetLabel },
+      outcome: "ALLOWED",
+    });
+
     // Daily cap: images generated
     const chk = canConsume(user, 'image', 1);
     if (!chk.ok) {
@@ -357,6 +402,14 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
       return;
     }
     consume(user, 'image', 1);
+
+    // Telemetry (Phase 7)
+    trackClientEvent({
+      tool: 'visual_brainstorm',
+      action: 'visual_request_start',
+      metadata: { mode: 'refine', label: presetLabel, aspectRatio, variations: 1 },
+      units: 1,
+    });
 
     setLoadingLabel(`Refining: ${presetLabel}…`);
     setIsLoading(true);
@@ -390,8 +443,26 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
         kind: 'refine',
         refineLabel: presetLabel,
       });
+
+      // Telemetry (Phase 7)
+      trackClientEvent({
+        tool: 'visual_brainstorm',
+        action: 'visual_request_success',
+        metadata: { mode: 'refine', label: presetLabel, aspectRatio, imagesGenerated: 1, variations: 1 },
+        outcome: 'SUCCESS_CHARGED',
+        units: 1,
+      });
     } catch (e: any) {
-      setError(e?.message ?? 'Refinement failed.');
+      const msg = e?.message ?? 'Refinement failed.';
+      // Telemetry (Phase 7)
+      trackClientEvent({
+        tool: 'visual_brainstorm',
+        action: 'visual_request_error',
+        metadata: { mode: 'refine', label: presetLabel, aspectRatio, variations: 1, message: msg },
+        outcome: 'ERROR_UPSTREAM',
+        units: 1,
+      });
+      setError(msg);
     } finally {
       setIsLoading(false);
     }
@@ -449,6 +520,14 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
     setSaveImageStatus('saving');
     setError(null);
 
+    // Telemetry (Phase 7)
+    trackClientEvent({
+      tool: 'visual_brainstorm',
+      action: 'visual_save_click',
+      metadata: { historyId: activeHistoryId, aspectRatio, title: conceptTitle?.trim() || '' },
+      outcome: 'ALLOWED',
+    });
+
     try {
       const saved = await saveIdea({
         type: 'image',
@@ -458,12 +537,29 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
       });
       setSavedIdeaId(saved.id);
       setSavedByHistory((prev) => ({ ...prev, [activeHistoryId]: saved.id }));
+
+      // Telemetry (Phase 7)
+      trackClientEvent({
+        tool: 'visual_brainstorm',
+        action: 'visual_save_success',
+        metadata: { historyId: activeHistoryId, ideaId: saved.id, aspectRatio },
+        outcome: 'SUCCESS_NOT_CHARGED',
+      });
+
       setSaveImageStatus('saved');
       onIdeaSaved();
       await refreshIdeas(dispatch);
       window.setTimeout(() => setSaveImageStatus('idle'), 2000);
     } catch (e: any) {
-      setError(e?.message ?? 'Failed to save idea.');
+      const msg = e?.message ?? 'Failed to save idea.';
+      // Telemetry (Phase 7)
+      trackClientEvent({
+        tool: 'visual_brainstorm',
+        action: 'visual_request_error',
+        metadata: { mode: 'save', historyId: activeHistoryId, aspectRatio, message: msg },
+        outcome: 'ERROR_UPSTREAM',
+      });
+      setError(msg);
       setSaveImageStatus('idle');
     }
   };

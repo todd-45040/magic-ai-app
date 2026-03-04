@@ -12,7 +12,14 @@ export type ClientTelemetryAction =
   | 'identify_retry_click'
   | 'identify_refine_click'
   | 'identify_save_click'
-  | 'identify_save_success';
+  | 'identify_save_success'
+  | 'visual_request_start'
+  | 'visual_request_success'
+  | 'visual_request_error'
+  | 'visual_refine_click'
+  | 'visual_save_click'
+  | 'visual_save_success'
+;
 
 export async function trackClientEvent(input: {
   tool: string;
