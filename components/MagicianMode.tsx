@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import type { ChatMessage, PredefinedPrompt, TrickIdentificationResult, User, Transcription, MagicianView, MagicianTab, Client, Show, Feedback, SavedIdea, TaskPriority, AiSparkAction } from '../types';
 import { generateResponse } from '../services/geminiService';
 import { identifyTrickFromImageServer, refineIdentifyResult } from '../services/identifyService';
@@ -789,13 +789,8 @@ const ExpandableText: React.FC<{ text: string; limit?: number; className?: strin
 };
 
 const IdentifyTab: React.FC<{
-    identifyImages: File[];
-    identifyPreviews: string[];
-    identifyContext: string;
-    setIdentifyContext: (v: string) => void;
-    removeIdentifyImage: (index: number) => void;
-    clearIdentifyImages: () => void;
-    addIdentifyImages: (files: File[]) => void;
+    imageFile: File | null;
+    imagePreview: string | null;
     identificationResult: TrickIdentificationResult | null;
     isIdentifying: boolean;
     identificationError: string | null;
@@ -804,7 +799,7 @@ const IdentifyTab: React.FC<{
     identifySaving: boolean;
     identifyIsStrong: boolean;
     fileInputRef: React.RefObject<HTMLInputElement>;
-    handleImageUpload: (e: React.ChangeEvent<HTMLInputElement>) => void | Promise<void>;
+    handleImageUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
     handleIdentifyClick: () => void;
     onSave: () => void;
     onAddToShow: () => void;
@@ -816,115 +811,32 @@ const IdentifyTab: React.FC<{
     refining: boolean;
     lastRefine: string | null;
     onRequestUpgrade: () => void;
-}> = ({ identifyImages, identifyPreviews, identifyContext, setIdentifyContext, removeIdentifyImage, clearIdentifyImages, addIdentifyImages, identificationResult, isIdentifying, identificationError, identificationBlocked, identifySaved, identifySaving, identifyIsStrong, fileInputRef, handleImageUpload, handleIdentifyClick, onSave, onAddToShow, onConvertToTask, onCopy, onShare, onToggleStrong, onRefine, refining, lastRefine, onRequestUpgrade }) => (
+}> = ({ imagePreview, identificationResult, isIdentifying, identificationError, identificationBlocked, identifySaved, identifySaving, identifyIsStrong, fileInputRef, handleImageUpload, handleIdentifyClick, onSave, onAddToShow, onConvertToTask, onCopy, onShare, onToggleStrong, onRefine, refining, lastRefine, onRequestUpgrade }) => (
     <div className="flex-1 overflow-y-auto p-4 md:p-5">
         <div className="animate-fade-in space-y-4 max-w-2xl mx-auto">
             <h2 className="text-2xl font-bold text-slate-200 font-cinzel">Identify a Trick</h2>
             <p className="text-slate-400">Research an effect you've seen. Upload a picture, and the AI will try to identify it and find performance examples.</p>
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              ref={fileInputRef}
-              onChange={handleImageUpload}
-              className="hidden"
-            />
-
-            <div
-              className="w-full flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-600 rounded-lg hover:bg-slate-800/50 hover:border-purple-500 transition-colors cursor-pointer"
-              onClick={() => fileInputRef.current?.click()}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault();
-                const files = Array.from(e.dataTransfer.files || []);
-                addIdentifyImages(files);
-              }}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') fileInputRef.current?.click();
-              }}
-            >
-              <ImageIcon className="w-12 h-12 text-slate-500 mb-2" />
-              <span className="font-semibold text-slate-300">
-                Drag & drop images here (or click to upload)
-              </span>
-              <span className="text-sm text-slate-400 mt-1">
-                PNG, JPG/JPEG, or WEBP • Up to 8 images
-              </span>
-            </div>
-
-            {identifyPreviews.length > 0 && (
-              <div className="mt-4 space-y-3">
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {identifyPreviews.slice(0, 8).map((src, idx) => (
-                    <div key={idx} className="relative rounded-lg overflow-hidden border border-slate-700 bg-slate-900/30">
-                      <img
-                        src={src}
-                        alt={`Upload ${idx + 1}`}
-                        className="h-28 w-full object-cover"
-                      />
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeIdentifyImage(idx);
-                        }}
-                        className="absolute top-1 right-1 bg-black/70 hover:bg-black/80 text-white text-xs px-2 py-1 rounded"
-                        aria-label="Remove image"
-                      >
-                        ✕
-                      </button>
+            <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" />
+            {!imagePreview ? (
+                 <button onClick={() => fileInputRef.current?.click()} className="w-full flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-600 rounded-lg hover:bg-slate-800/50 hover:border-purple-500 transition-colors">
+                    <ImageIcon className="w-12 h-12 text-slate-500 mb-2"/>
+                    <span className="font-semibold text-slate-300">Click to upload an image</span>
+                    <span className="text-sm text-slate-400">PNG, JPG, or WEBP</span>
+                </button>
+            ) : (
+                <div className="space-y-4">
+                    <div className="w-full h-64 bg-slate-800 rounded-lg flex items-center justify-center overflow-hidden">
+                        <img src={imagePreview} alt="Magic trick preview" className="max-w-full max-h-full object-contain" />
                     </div>
-                  ))}
+                    <div className="flex gap-4">
+                        <button onClick={() => fileInputRef.current?.click()} className="flex-1 w-full py-2 px-4 bg-slate-600/50 hover:bg-slate-700 rounded-md text-slate-300 font-bold transition-colors">
+                            Change Image
+                        </button>
+                        <button onClick={handleIdentifyClick} disabled={isIdentifying} className="flex-1 w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed">
+                            {isIdentifying ? 'Analyzing...' : 'Identify Trick'}
+                        </button>
+                    </div>
                 </div>
-
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="px-3 py-2 bg-slate-600/50 hover:bg-slate-700 rounded-md text-slate-200 text-sm font-semibold transition-colors"
-                  >
-                    {identifyPreviews.length ? 'Add / Replace Images' : 'Choose Images'}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={clearIdentifyImages}
-                    className="px-3 py-2 bg-red-600/20 hover:bg-red-600/30 rounded-md text-red-200 text-sm font-semibold transition-colors"
-                  >
-                    Clear
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleIdentifyClick}
-                    disabled={isIdentifying || identifyPreviews.length === 0}
-                    className="ml-auto px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white text-sm font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
-                  >
-                    {isIdentifying ? 'Analyzing...' : 'Identify Trick'}
-                  </button>
-                </div>
-
-                <textarea
-                  value={identifyContext}
-                  onChange={(e) => setIdentifyContext(e.target.value)}
-                  placeholder="Optional performance context (helps accuracy): close-up at a table, stage, surrounded, lighting, props shown, etc."
-                  className="w-full mt-2 p-3 rounded-lg bg-black/20 border border-slate-700 focus:border-purple-500 outline-none text-slate-200 placeholder:text-slate-500"
-                  rows={3}
-                />
-
-                <div className="bg-purple-900/15 border border-purple-700/40 rounded-xl p-4 text-sm text-slate-200">
-                  <div className="font-semibold text-purple-200">Tips for best results</div>
-                  <ul className="list-disc ml-5 mt-2 space-y-1 text-slate-300">
-                    <li>Use good lighting</li>
-                    <li>Include props in frame</li>
-                    <li>Avoid motion blur</li>
-                    <li>Add context if you can (venue, distance, angle)</li>
-                  </ul>
-                </div>
-              </div>
-            )}</div>
             )}
             {isIdentifying && (
                 <div className="flex items-center justify-center p-5 bg-slate-800/50 rounded-lg">
@@ -987,9 +899,9 @@ const IdentifyTab: React.FC<{
                       identificationResult.performanceStructure?.length ||
                       identificationResult.presentationIdeas?.length ||
                       identificationResult.angleRiskNotes?.length ||
-                      identificationResult.variations?.length) ? (
+                      identificationResult.variations?.length) && (
                       <div className="space-y-2">
-                        {identificationResult.likelyEffectPlot ? (
+                        {identificationResult.likelyEffectPlot && (
                           <details className="rounded-lg border border-slate-700/60 bg-slate-900/20 p-3">
                             <summary className="cursor-pointer select-none text-xs font-semibold tracking-wide text-slate-200">
                               Likely Effect / Plot
@@ -999,9 +911,9 @@ const IdentifyTab: React.FC<{
                               <ExpandableText text={identificationResult.likelyEffectPlot} limit={420} />
                             </div>
                           </details>
-                        ) : null}
+                        )}
 
-                        {identificationResult.performanceStructure?.length ? (
+                        {!!identificationResult.performanceStructure?.length && (
                           <details className="rounded-lg border border-slate-700/60 bg-slate-900/20 p-3">
                             <summary className="cursor-pointer select-none text-xs font-semibold tracking-wide text-slate-200">
                               Performance Structure
@@ -1013,9 +925,9 @@ const IdentifyTab: React.FC<{
                               ))}
                             </ul>
                           </details>
-                        ) : null}
+                        )}
 
-                        {identificationResult.presentationIdeas?.length ? (
+                        {!!identificationResult.presentationIdeas?.length && (
                           <details className="rounded-lg border border-slate-700/60 bg-slate-900/20 p-3">
                             <summary className="cursor-pointer select-none text-xs font-semibold tracking-wide text-slate-200">
                               Presentation Ideas
@@ -1027,9 +939,9 @@ const IdentifyTab: React.FC<{
                               ))}
                             </ul>
                           </details>
-                        ) : null}
+                        )}
 
-                        {identificationResult.angleRiskNotes?.length ? (
+                        {!!identificationResult.angleRiskNotes?.length && (
                           <details className="rounded-lg border border-slate-700/60 bg-slate-900/20 p-3">
                             <summary className="cursor-pointer select-none text-xs font-semibold tracking-wide text-slate-200">
                               Angle / Risk Notes
@@ -1041,9 +953,9 @@ const IdentifyTab: React.FC<{
                               ))}
                             </ul>
                           </details>
-                        ) : null}
+                        )}
 
-                        {identificationResult.variations?.length ? (
+                        {!!identificationResult.variations?.length && (
                           <details className="rounded-lg border border-slate-700/60 bg-slate-900/20 p-3">
                             <summary className="cursor-pointer select-none text-xs font-semibold tracking-wide text-slate-200">
                               Variations / Alternatives
@@ -1055,9 +967,9 @@ const IdentifyTab: React.FC<{
                               ))}
                             </ul>
                           </details>
-                        ) : null}
+                        )}
                       </div>
-                    ) : null}
+                    )}
 
                    {identificationResult.videoExamples?.length > 0 && (
                      <div>
@@ -1658,9 +1570,8 @@ useEffect(() => {
   const [showInnovationEngineForm, setShowInnovationEngineForm] = useState(false);
   const [effectToInnovate, setEffectToInnovate] = useState('');
 
-  const [identifyImages, setIdentifyImages] = useState<File[]>([]);
-  const [identifyPreviews, setIdentifyPreviews] = useState<string[]>([]);
-  const [identifyContext, setIdentifyContext] = useState('');
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [identificationResult, setIdentificationResult] = useState<TrickIdentificationResult | null>(null);
   const [isIdentifying, setIsIdentifying] = useState(false);
   const [identificationError, setIdentificationError] = useState<string | null>(null);
@@ -2312,68 +2223,19 @@ useEffect(() => {
     }, 2000);
   }
 
-  const readAsDataUrl = (file: File): Promise<string> =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(String(reader.result || ''));
-      reader.onerror = () => reject(new Error('Failed to read file.'));
-      reader.readAsDataURL(file);
-    });
-
-  const addIdentifyImages = useCallback(async (files: File[]) => {
-    const incoming = (files || [])
-      .filter((f) => f && f.type && f.type.startsWith('image/'))
-      .slice(0, 8);
-
-    if (!incoming.length) return;
-
-    // Prevent weird state: selecting new images clears prior result + saved state.
-    setIdentificationResult(null);
-    setIdentificationError(null);
-    setIdentificationBlocked(null);
-    setIdentifySavedIdeaId(null);
-    setIdentifyIsStrong(false);
-
-    // Merge with existing (cap total)
-    const merged = [...identifyImages, ...incoming].slice(0, 8);
-
-    // Generate dataURL previews for all (cap 8)
-    const previews = await Promise.all(merged.map((f) => readAsDataUrl(f)));
-
-    setIdentifyImages(merged);
-    setIdentifyPreviews(previews);
-  }, [identifyImages]);
-
-  const removeIdentifyImage = useCallback((index: number) => {
-    setIdentifyImages((prev) => {
-      const next = prev.filter((_, i) => i !== index);
-      return next;
-    });
-    setIdentifyPreviews((prev) => prev.filter((_, i) => i !== index));
-
-    // If removing impacts current result, clear result/saved state to avoid mismatch.
-    setIdentificationResult(null);
-    setIdentificationError(null);
-    setIdentificationBlocked(null);
-    setIdentifySavedIdeaId(null);
-    setIdentifyIsStrong(false);
-  }, []);
-
-  const clearIdentifyImages = useCallback(() => {
-    setIdentifyImages([]);
-    setIdentifyPreviews([]);
-    setIdentificationResult(null);
-    setIdentificationError(null);
-    setIdentificationBlocked(null);
-    setIdentifySavedIdeaId(null);
-    setIdentifyIsStrong(false);
-  }, []);
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files ? Array.from(e.target.files) : [];
-    // Reset input so selecting the same file again still triggers onChange
-    e.target.value = '';
-    await addIdentifyImages(files);
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+        setImageFile(file);
+        const reader = new FileReader();
+        reader.onloadend = () => { setImagePreview(reader.result as string); };
+        reader.readAsDataURL(file);
+        setIdentificationResult(null);
+        setIdentificationError(null);
+        setIdentificationBlocked(null);
+        setIdentifySavedIdeaId(null);
+        setIdentifyIsStrong(false);
+    }
   };
 
   const formatIdentifySnapshot = (result: TrickIdentificationResult, file?: File | null) => {
@@ -2387,13 +2249,9 @@ useEffect(() => {
     const angleRiskNotes = Array.isArray(result?.angleRiskNotes) ? result.angleRiskNotes : [];
     const variations = Array.isArray(result?.variations) ? result.variations : [];
 
-    const inputSummary = files?.length
-      ? `${files.length} image(s): ${files.map((f) => f.name).slice(0, 5).join(', ')}${files.length > 5 ? '…' : ''}`
+    const inputSummary = file
+      ? `${file.name} (${Math.round(file.size / 1024)} KB, ${file.type || 'image'})`
       : 'Image upload';
-
-    const contextLine = context?.trim() ? `
-
-**Context:** ${context.trim()}` : '';
 
     const header = `# Identify a Trick\n\n**Most likely trick:** ${trickName}\n**Confidence:** ${confidence}`;
     const sumBlock = summary ? `\n\n**Quick summary:** ${summary}` : '';
@@ -2450,9 +2308,9 @@ useEffect(() => {
       confidence,
     };
 
-    const content = `${header}${contextLine}${sumBlock}${obsBlock}${plotBlock}${structureBlock}${ideasBlock}${anglesBlock}${varsBlock}${vidsBlock}\n\n---\n**Meta:** ${JSON.stringify(meta)}\n\n\`\`\`json\n${JSON.stringify(result?.raw ?? result, null, 2)}\n\`\`\``;
+    const content = `${header}${sumBlock}${obsBlock}${plotBlock}${structureBlock}${ideasBlock}${anglesBlock}${varsBlock}${vidsBlock}\n\n---\n**Meta:** ${JSON.stringify(meta)}\n\n\`\`\`json\n${JSON.stringify(result?.raw ?? result, null, 2)}\n\`\`\``;
 
-    const copyText = `${header}${contextLine}${sumBlock}${obsBlock}${plotBlock}${structureBlock}${ideasBlock}${anglesBlock}${varsBlock}${vidsBlock}`;
+    const copyText = `${header}${sumBlock}${obsBlock}${plotBlock}${structureBlock}${ideasBlock}${anglesBlock}${varsBlock}${vidsBlock}`;
 
     const title = `Identify Trick: ${trickName}`;
     return { title, content, copyText };
@@ -2472,7 +2330,7 @@ useEffect(() => {
     if (!identificationResult) return;
     try {
       setIdentifySaving(true);
-      const { title, content } = formatIdentifySnapshot(identificationResult, identifyImages, identifyContext);
+      const { title, content } = formatIdentifySnapshot(identificationResult, imageFile);
       const saved = await saveIdea({
         type: 'text',
         title,
@@ -2508,7 +2366,7 @@ useEffect(() => {
 
   const handleIdentifyCopy = async () => {
     if (!identificationResult) return;
-    const { copyText } = formatIdentifySnapshot(identificationResult, identifyImages, identifyContext);
+    const { copyText } = formatIdentifySnapshot(identificationResult, imageFile);
     try {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(copyText);
@@ -2531,7 +2389,7 @@ useEffect(() => {
 
   const handleIdentifyShare = async () => {
     if (!identificationResult) return;
-    const { title, copyText } = formatIdentifySnapshot(identificationResult, identifyImages, identifyContext);
+    const { title, copyText } = formatIdentifySnapshot(identificationResult, imageFile);
     try {
       if ((navigator as any).share) {
         await (navigator as any).share({ title, text: copyText });
@@ -2546,7 +2404,7 @@ useEffect(() => {
   const handleIdentifyAddToShow = async () => {
     if (!identificationResult || !identifySavedIdeaId) return;
     try {
-      const { title, content } = formatIdentifySnapshot(identificationResult, identifyImages, identifyContext);
+      const { title, content } = formatIdentifySnapshot(identificationResult, imageFile);
       const showTitle = (identificationResult.trickName ? `Trick Research: ${identificationResult.trickName}` : 'Trick Research').slice(0, 80);
       const show = await createShow(showTitle, 'Auto-created from Identify a Trick');
       await addTasksToShow(show.id, [
@@ -2571,7 +2429,7 @@ useEffect(() => {
   const handleIdentifyConvertToTask = async () => {
     if (!identificationResult || !identifySavedIdeaId) return;
     try {
-      const { title, content } = formatIdentifySnapshot(identificationResult, identifyImages, identifyContext);
+      const { title, content } = formatIdentifySnapshot(identificationResult, imageFile);
       const inboxTitle = 'Quick Tasks';
       const show = (await findShowByTitle(inboxTitle)) ?? (await createShow(inboxTitle, 'Auto-created task inbox'));
       await addTaskToShow(show.id, {
@@ -2592,12 +2450,10 @@ useEffect(() => {
   };
 
   const handleIdentifyClick = async () => {
-    const firstPreview = identifyPreviews?.[0];
-    const firstFile = identifyImages?.[0];
-    if (!firstPreview || !firstFile) return;
+    if (!imagePreview || !imageFile) return;
 
-    const base64Data = firstPreview.includes(',') ? firstPreview.split(',')[1] : firstPreview;
-    const mimeType = firstFile.type || 'image/jpeg';
+    const base64Data = imagePreview.split(',')[1];
+    const mimeType = imageFile.type;
 
     setIsIdentifying(true);
     setIdentificationError(null);
@@ -2605,24 +2461,18 @@ useEffect(() => {
     setIdentificationBlocked(null);
 
     try {
-        // NOTE: server-side identify supports a single image; we use the first image
-        // and pass context + count so the model can reason with the extra info.
-        const result = await identifyTrickFromImageServer(
-          base64Data,
-          mimeType,
-          currentUser,
-          {
-            context: identifyContext,
-            imageCount: identifyImages.length,
-            fileNames: identifyImages.map((f) => f.name).slice(0, 8),
-          }
-        );
+        const result = await identifyTrickFromImageServer(base64Data, mimeType, user);
         setIdentificationResult(result);
         setIdentifySavedIdeaId(null);
         setIdentifyIsStrong(false);
-    } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Failed to identify trick.';
-        setIdentificationError(msg);
+    } catch (err) {
+        const blocked = normalizeBlockedUx(err, { toolName: 'Identify a Trick' });
+        if (blocked.showUpgrade || blocked.retryable) {
+          setIdentificationBlocked(blocked);
+        } else {
+          const msg = err instanceof Error ? err.message : 'An unknown error occurred.';
+          setIdentificationError(msg);
+        }
     } finally {
         setIsIdentifying(false);
     }
@@ -3082,13 +2932,8 @@ ${action.payload.content}`;
         case 'identify':
           return (
             <IdentifyTab
-              identifyImages={identifyImages}
-              identifyPreviews={identifyPreviews}
-              identifyContext={identifyContext}
-              setIdentifyContext={setIdentifyContext}
-              removeIdentifyImage={removeIdentifyImage}
-              clearIdentifyImages={clearIdentifyImages}
-              addIdentifyImages={addIdentifyImages}
+              imageFile={imageFile}
+              imagePreview={imagePreview}
               identificationResult={identificationResult}
               isIdentifying={isIdentifying}
               identificationError={identificationError}
