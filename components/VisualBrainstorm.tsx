@@ -16,18 +16,44 @@ interface VisualBrainstormProps {
     onRequestUpgrade?: () => void;
 }
 
-const ImageLoadingIndicator: React.FC = () => (
-    <div className="flex flex-col items-center justify-center text-center p-8">
-        <div className="relative">
-            <WandIcon className="w-16 h-16 text-purple-400 animate-pulse" />
-            <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center">
-                 <div className="w-24 h-24 border-t-2 border-purple-300 rounded-full animate-spin"></div>
-            </div>
+const ImageLoadingIndicator: React.FC<{ label?: string }> = ({ label }) => {
+  const [progress, setProgress] = useState(8);
+
+  useEffect(() => {
+    // Lightweight “perceived progress” indicator.
+    // We cap at 92% until completion so it never looks stuck at 100%.
+    setProgress(8);
+    const interval = window.setInterval(() => {
+      setProgress((p) => {
+        const next = p + Math.max(1, Math.round((92 - p) * 0.08));
+        return Math.min(92, next);
+      });
+    }, 650);
+
+    return () => window.clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="flex flex-col items-center justify-center text-center p-8 w-full max-w-md">
+      <div className="relative">
+        <WandIcon className="w-16 h-16 text-purple-400 animate-pulse" />
+        <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center">
+          <div className="w-24 h-24 border-t-2 border-purple-300 rounded-full animate-spin" />
         </div>
-        <p className="text-slate-300 mt-4 text-lg">Conjuring visual ideas...</p>
-        <p className="text-slate-400 text-sm">This can take a moment.</p>
+      </div>
+
+      <p className="text-slate-200 mt-5 text-lg font-semibold">{label || 'Generating concept art…'}</p>
+      <p className="text-slate-400 text-sm mt-1">Hang tight — this can take a moment.</p>
+
+      <div className="w-full mt-5">
+        <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden border border-slate-700">
+          <div className="h-full bg-purple-500/80 transition-all" style={{ width: `${progress}%` }} aria-hidden="true" />
+        </div>
+        <div className="mt-2 text-xs text-slate-500">{progress}%</div>
+      </div>
     </div>
-);
+  );
+};
 
 
 const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, onRequestUpgrade }) => {
@@ -323,8 +349,17 @@ const handleSubmit = async () => {
                     disabled={isLoading || !finalPrompt.trim()}
                     className="w-full py-3 mt-4 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
                 >
-                    <WandIcon className="w-5 h-5" />
-                    <span>Generate Image</span>
+                    {isLoading ? (
+                      <>
+                        <div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                        <span>Generating concept art…</span>
+                      </>
+                    ) : (
+                      <>
+                        <WandIcon className="w-5 h-5" />
+                        <span>Generate Image</span>
+                      </>
+                    )}
                 </button>
                 {error && <p className="text-red-400 mt-2 text-sm text-center">{error}</p>}
             </div>
@@ -333,7 +368,7 @@ const handleSubmit = async () => {
         {/* Image Display Area */}
         <div className="flex items-center justify-center bg-slate-900/50 rounded-lg border border-slate-800 p-4 min-h-[300px]">
             {isLoading ? (
-                <ImageLoadingIndicator />
+                <ImageLoadingIndicator label={inputImagePreview ? 'Applying your edit…' : 'Generating concept art…'} />
             ) : generatedImage ? (
                  <div className="relative group w-full h-full flex items-center justify-center">
                     <img src={generatedImage} alt="Generated concept art" className="max-w-full max-h-full object-contain rounded-md shadow-lg" />
