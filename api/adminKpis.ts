@@ -72,7 +72,67 @@ export default async function handler(req: any, res: any) {
 
     const days = asDays(req?.query?.days ?? 7, 7);
     const sinceIso = isoDaysAgo(days);
+    const sinceIso7 = isoDaysAgo(7);
     const warnings: string[] = [];
+
+    // Phase VB — Visual Brainstorm KPIs (fixed 7d window)
+    // Client telemetry is stored in ai_usage_events with tool='visual_brainstorm' and endpoint='client:<action>'
+    // (optionally suffixed with :<intent> for refine clicks).
+    let visualBrainstormKpis: any = {
+      window_days: 7,
+      requests: 0,
+      successes: 0,
+      errors: 0,
+      retries: 0,
+      refine_clicks: 0,
+      save_clicks: 0,
+      save_successes: 0,
+      images_generated: null as number | null,
+      avg_images_per_success: null as number | null,
+      success_rate: null as number | null,
+      refine_rate: null as number | null,
+      save_rate: null as number | null,
+    };
+
+    try {
+      const { data: vbEvents, error: vbErr } = await admin
+        .from('ai_usage_events')
+        .select('endpoint, units')
+        .eq('tool', 'visual_brainstorm')
+        .gte('created_at', sinceIso7)
+        .limit(50000);
+
+      if (!vbErr) {
+        let imagesTotal = 0;
+        let imagesTotalHasAny = false;
+        for (const ev of (vbEvents || []) as any[]) {
+          const ep = String(ev?.endpoint || '');
+          if (ep === 'client:visual_request_start') visualBrainstormKpis.requests += 1;
+          else if (ep === 'client:visual_request_success') {
+            visualBrainstormKpis.successes += 1;
+            const u = Number(ev?.units);
+            if (Number.isFinite(u)) {
+              imagesTotal += u;
+              imagesTotalHasAny = true;
+            }
+          } else if (ep === 'client:visual_request_error') visualBrainstormKpis.errors += 1;
+          else if (ep === 'client:visual_retry_click') visualBrainstormKpis.retries += 1;
+          else if (ep.startsWith('client:visual_refine_click')) visualBrainstormKpis.refine_clicks += 1;
+          else if (ep === 'client:visual_save_click') visualBrainstormKpis.save_clicks += 1;
+          else if (ep === 'client:visual_save_success') visualBrainstormKpis.save_successes += 1;
+        }
+
+        const req = visualBrainstormKpis.requests || 0;
+        const ok = visualBrainstormKpis.successes || 0;
+        visualBrainstormKpis.success_rate = req ? ok / req : null;
+        visualBrainstormKpis.refine_rate = ok ? visualBrainstormKpis.refine_clicks / ok : null;
+        visualBrainstormKpis.save_rate = ok ? visualBrainstormKpis.save_successes / ok : null;
+        visualBrainstormKpis.images_generated = imagesTotalHasAny ? imagesTotal : null;
+        visualBrainstormKpis.avg_images_per_success = ok && imagesTotalHasAny ? imagesTotal / ok : null;
+      }
+    } catch {
+      // Do not fail dashboard
+    }
 
     // --- New users (created in window)
     // Prefer an exact count() for new-user total, but fall back to scan length if count fails
@@ -1772,6 +1832,7 @@ const provider_breakdown = Object.entries(providerReliability)
         top_by_usage: topToolsByUsage,
         top_by_cost: topToolsByCost,
       },
+      visual_brainstorm_kpis: visualBrainstormKpis,
     });
   } catch (e: any) {
     return res.status(500).json({ ok: false, error: e?.message || 'Server error' });

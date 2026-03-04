@@ -1004,6 +1004,52 @@ const kUsers = data?.users || {};
         </div>
       </div>
 
+      {/* Visual Brainstorm — Booth KPIs (fixed 7d) */}
+      <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-sm opacity-80">Visual Brainstorm KPIs</div>
+          <div className="text-[11px] text-white/50">Last 7 days</div>
+        </div>
+
+        {(() => {
+          const vb = (data as any)?.visual_brainstorm_kpis;
+          if (!vb) return <div className="mt-2 text-sm text-white/60">—</div>;
+          return (
+            <div className="mt-3 grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                <div className="text-xs text-white/60">Requests</div>
+                <div className="text-xl font-bold text-white">{Number(vb.requests || 0)}</div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                <div className="text-xs text-white/60">Success rate</div>
+                <div className="text-xl font-bold text-white">{pct(vb.success_rate, 0)}</div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                <div className="text-xs text-white/60">Refine rate</div>
+                <div className="text-xl font-bold text-white">{pct(vb.refine_rate, 0)}</div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                <div className="text-xs text-white/60">Save rate</div>
+                <div className="text-xl font-bold text-white">{pct(vb.save_rate, 0)}</div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                <div className="text-xs text-white/60">Avg images / success</div>
+                <div className="text-xl font-bold text-white">
+                  {vb.avg_images_per_success != null ? Number(vb.avg_images_per_success).toFixed(1) : '—'}
+                </div>
+              </div>
+              <div className="md:col-span-5 text-[11px] text-white/50 flex flex-wrap gap-x-4 gap-y-1">
+                <span>Success: <span className="text-white/70">{Number(vb.successes || 0)}</span></span>
+                <span>Errors: <span className="text-white/70">{Number(vb.errors || 0)}</span></span>
+                <span>Retries: <span className="text-white/70">{Number(vb.retries || 0)}</span></span>
+                <span>Refines: <span className="text-white/70">{Number(vb.refine_clicks || 0)}</span></span>
+                <span>Saves: <span className="text-white/70">{Number(vb.save_successes || 0)}</span></span>
+              </div>
+            </div>
+          );
+        })()}
+      </div>
+
       {/* Phase 2 — Growth + Activation Funnel */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div className="p-3 rounded-xl bg-white/5 border border-white/10">
