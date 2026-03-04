@@ -73,6 +73,9 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
   const [aspectRatio, setAspectRatio] = useState<'1:1' | '16:9' | '9:16'>('1:1');
   const [isLoading, setIsLoading] = useState(false);
   const [loadingLabel, setLoadingLabel] = useState<string>('Generating concept art…');
+  const [loadingKind, setLoadingKind] = useState<'generate' | 'edit' | 'refine' | 'none'>('none');
+  const [lastGeneratePrompt, setLastGeneratePrompt] = useState<string>('');
+  const [lastGenerateAspect, setLastGenerateAspect] = useState<'1:1' | '16:9' | '9:16'>('1:1');
   const [error, setError] = useState<string | null>(null);
   const [blockedUi, setBlockedUi] = useState<ReturnType<typeof normalizeBlockedUx> | null>(null);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
@@ -303,6 +306,7 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
           ? `Refining: ${(action as any).label || 'Update'}…`
           : 'Generating concept art…'
     );
+    setLoadingKind(action.kind as any);
     setIsLoading(true);
     setError(null);
     setGeneratedImage(null);
@@ -322,6 +326,8 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
         const imgs = await generateImages(action.prompt, action.aspectRatio, 4, user);
         batchImages = imgs;
         setVariationImages(imgs);
+        setLastGeneratePrompt(action.prompt);
+        setLastGenerateAspect(action.aspectRatio ?? aspectRatio);
         imageUrl = imgs[0];
       } else {
         const imgs = await generateImages(action.prompt, action.aspectRatio, 1, user);
@@ -407,6 +413,7 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
       setError(friendly);
     } finally {
       setIsLoading(false);
+      setLoadingKind('none');
     }
   };
 
@@ -438,7 +445,22 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
     }
   };
 
-  const refinementPresets: Array<{ label: string; instruction: string }> = [
+  
+  const handleGenerateVariations = async () => {
+    if (isLoading) return;
+    if (isEditing) return;
+    const p = (lastGeneratePrompt || finalPrompt || '').trim();
+    if (!p) return;
+    const action: LastVisualAction = {
+      kind: 'generate',
+      prompt: p,
+      aspectRatio: lastGenerateAspect || aspectRatio,
+      units: 4,
+    };
+    await runAction(action);
+  };
+
+const refinementPresets: Array<{ label: string; instruction: string }> = [
     { label: 'More Dramatic', instruction: 'make it more dramatic, cinematic lighting, high contrast' },
     { label: 'More Minimalist', instruction: 'make it more minimalist, clean composition, fewer elements' },
     { label: 'More Comedy', instruction: 'make it more playful and comedic, whimsical visual details' },
@@ -775,15 +797,16 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
                         </div>
                     </div>
                 )}
+                <div className="mt-4 flex flex-col gap-2">
                 <button
                     onClick={handleSubmit}
                     disabled={isLoading || !finalPrompt.trim()}
-                    className="w-full py-3 mt-4 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
+                    className="w-full py-3 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
                 >
                     {isLoading ? (
                       <>
                         <div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                        <span>Generating concept art…</span>
+                        <span>{loadingKind === 'edit' ? 'Applying your edit…' : loadingKind === 'refine' ? 'Refining…' : 'Generating concept art…'}</span>
                       </>
                     ) : (
                       <>
@@ -792,6 +815,17 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
                       </>
                     )}
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => void handleGenerateVariations()}
+                  disabled={isLoading || isEditing || !(lastGeneratePrompt || '').trim()}
+                  className="w-full py-2.5 flex items-center justify-center gap-2 rounded-md border border-slate-700 bg-slate-900/40 hover:bg-slate-900/70 text-slate-100 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Re-run the last prompt to generate a fresh set of variations"
+                >
+                  <span>Generate Variations</span>
+                </button>
+              </div>
                 {error && (
                   <div className="mt-2 text-center">
                     <p className="text-red-400 text-sm">{lastFailedMessage || error}</p>
@@ -812,7 +846,36 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
         {/* Result Card Area */}
         <div className="flex items-center justify-center bg-slate-900/50 rounded-lg border border-slate-800 p-4 min-h-[300px]">
           {isLoading ? (
-            <ImageLoadingIndicator label={loadingLabel} />
+            <div className="w-full max-w-2xl">
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/35 shadow-[0_18px_70px_-40px_rgba(0,0,0,0.9)] overflow-hidden">
+                <div className="p-4 border-b border-slate-800/80">
+                  <ImageLoadingIndicator label={loadingLabel} />
+                </div>
+
+                <div className="p-4">
+                  {/* Phase 9: Skeleton placeholders for the 2×2 variations grid while generating. */}
+                  {loadingKind === 'generate' ? (
+                    <div className="grid grid-cols-2 gap-3">
+                      {[0,1,2,3].map((i) => (
+                        <div
+                          key={`sk_${i}`}
+                          className="rounded-xl overflow-hidden border border-slate-800/70 bg-slate-900/30 animate-pulse"
+                        >
+                          <div className="w-full h-[250px] bg-slate-800/40" />
+                          <div className="p-2">
+                            <div className="h-3 w-16 bg-slate-800/40 rounded" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl overflow-hidden border border-slate-800/70 bg-slate-900/30 animate-pulse">
+                      <div className="w-full h-[380px] bg-slate-800/40" />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           ) : generatedImage ? (
             <div className="w-full max-w-2xl">
               <div className="rounded-2xl border border-slate-800 bg-slate-950/35 shadow-[0_18px_70px_-40px_rgba(0,0,0,0.9)] overflow-hidden">
@@ -866,7 +929,7 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
                               }
                             }}
                             className={
-                              `relative rounded-xl overflow-hidden border shadow-lg transition-colors ` +
+                              `relative rounded-xl overflow-hidden border shadow-lg transition-all duration-200 hover:scale-[1.01] focus:outline-none focus:ring-2 focus:ring-purple-500/40 ` +
                               (isSel ? 'border-purple-500/80' : 'border-slate-800/70 hover:border-slate-700')
                             }
                             title={`Variation ${idx + 1}`}
@@ -888,7 +951,7 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
                       <button
                         type="button"
                         onClick={() => openDetail()}
-                        className="rounded-xl overflow-hidden border border-slate-800/70 shadow-lg hover:border-slate-700 transition-colors"
+                        className="rounded-xl overflow-hidden border border-slate-800/70 shadow-lg hover:border-slate-700 transition-all duration-200 hover:scale-[1.01] focus:outline-none focus:ring-2 focus:ring-purple-500/40"
                         title="View details"
                       >
                         <img
@@ -954,7 +1017,7 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
                     )}
                   </div>
 
-                  <div className="mt-4">
+                  <div className="mt-5 pt-4 border-t border-slate-800/70">
                     <SaveActionBar
                       title="Next step:"
                       subtitle="Save this visual, then move it into a Show or Task."
