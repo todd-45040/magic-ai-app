@@ -5,6 +5,47 @@ import type { SavedIdea, Transcription, IdeaType, AiSparkAction } from '../types
 import { BookmarkIcon, TrashIcon, ShareIcon, MicrophoneIcon, PrintIcon, FileTextIcon, ImageIcon, PencilIcon, WandIcon, CrossIcon } from './icons';
 import ShareButton from './ShareButton';
 
+type MawIdeaV2 = {
+    format: string;
+    tool?: string;
+    timestamp?: number;
+    title?: string;
+    display?: string;
+    structured?: any;
+    meta?: any;
+    raw?: any;
+};
+
+function tryParseMawIdeaV2(content: string): MawIdeaV2 | null {
+    const t = (content ?? '').toString().trim();
+    if (!t || t[0] !== '{') return null;
+    try {
+        const parsed = JSON.parse(t);
+        if (!parsed || typeof parsed !== 'object') return null;
+        if (typeof (parsed as any).format !== 'string') return null;
+        if (!(parsed as any).format.startsWith('maw.idea.')) return null;
+        return parsed as MawIdeaV2;
+    } catch {
+        return null;
+    }
+}
+
+function getIdeaDisplay(idea: SavedIdea): { title: string; body: string } {
+    // Images and rehearsals keep existing behavior
+    if (idea.type === 'image') return { title: idea.title || 'Saved Image', body: '' };
+    if (idea.type === 'rehearsal') return { title: idea.title || 'Saved Rehearsal', body: idea.content || '' };
+
+    const v2 = tryParseMawIdeaV2(idea.content);
+    if (v2 && (v2.display || v2.title)) {
+        const title = (idea.title || v2.title || 'Saved Idea').toString();
+        const body = (v2.display || '').toString();
+        return { title, body };
+    }
+
+    // Default: legacy text
+    return { title: idea.title || splitLeadingHeading(idea.content).heading || 'Saved Note', body: idea.content || '' };
+}
+
 interface SavedIdeasProps {
     initialIdeaId?: string;
     onAiSpark: (action: AiSparkAction) => void;
@@ -32,7 +73,7 @@ const IdeaShareWrapper: React.FC<{ idea: SavedIdea }> = ({ idea }) => {
     return (
         <ShareButton
             title={idea.type === 'image' ? 'Shared Magic Idea (Image)' : 'Shared Magic Idea'}
-            text={idea.type === 'text' ? idea.content : "Check out this visual idea I saved!"}
+            text={idea.type === 'text' ? getIdeaDisplay(idea).body : "Check out this visual idea I saved!"}
             file={shareFile ?? undefined}
             className="flex items-center gap-1.5 px-2.5 py-1 text-xs bg-slate-800/70 hover:bg-purple-900/50 rounded-full text-slate-300 hover:text-purple-300 transition-colors backdrop-blur-sm"
             aria-label="Share idea"
@@ -448,13 +489,19 @@ const [lastOpenedMap, setLastOpenedMap] = useState<Record<string, number>>(() =>
     };
 
         const copyIdeaToClipboard = async (idea: SavedIdea) => {
-        const text = `# ${idea.title || 'Untitled'}\n${idea.content || ''}`;
+        const d = getIdeaDisplay(idea);
+        const text = `# ${d.title || 'Untitled'}\n${d.body || ''}`.trim();
         try { await navigator.clipboard.writeText(text); } catch {}
     };
 
 const bulkDuplicateToClipboard = async () => {
         const targets = ideas.filter((i) => selectedIds.includes(i.id));
-        const text = targets.map((i) => `# ${i.title || 'Untitled'}\n${i.content || ''}`).join('\n\n---\n\n');
+        const text = targets
+            .map((i) => {
+                const d = getIdeaDisplay(i);
+                return `# ${d.title || 'Untitled'}\n${d.body || ''}`.trim();
+            })
+            .join('\n\n---\n\n');
         try { await navigator.clipboard.writeText(text); } catch {}
         clearSelection();
     };
@@ -499,7 +546,8 @@ const sendToPlanner = (idea: SavedIdea) => {
                  contentToPrint = `<img src="${idea.content}" style="max-width: 100%;" />`;
             }
             else {
-                contentToPrint = idea.content.replace(/\n/g, '<br/>');
+                const d = getIdeaDisplay(idea);
+                contentToPrint = (d.body || '').replace(/\n/g, '<br/>');
             }
             
             printWindow.document.write(`
@@ -597,10 +645,11 @@ const sendToPlanner = (idea: SavedIdea) => {
                 true;
 
             const tagMatch = !tagFilter || (idea.tags || []).includes(tagFilter);
+            const display = getIdeaDisplay(idea);
             const searchMatch =
                 !q ||
-                (idea.title || '').toLowerCase().includes(q) ||
-                (idea.content || '').toLowerCase().includes(q) ||
+                (display.title || '').toLowerCase().includes(q) ||
+                (display.body || '').toLowerCase().includes(q) ||
                 (idea.tags || []).some((t) => t.toLowerCase().includes(q));
             return typeMatch && tabMatch && tagMatch && searchMatch;
         });
@@ -1063,12 +1112,12 @@ const sendToPlanner = (idea: SavedIdea) => {
                                                                             <div className="flex items-center gap-3 min-w-0">
                                                                                 <div className="w-10 h-10 bg-slate-900 rounded-lg flex items-center justify-center flex-shrink-0"><FileTextIcon className="w-6 h-6 text-purple-400" /></div>
                                                                                 <div className="min-w-0">
-                                                                                    <h3 className="font-bold text-yellow-300 pr-20 overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">{idea.title || splitLeadingHeading(idea.content).heading || 'Saved Note'}</h3>
+                                                                                    <h3 className="font-bold text-yellow-300 pr-20 overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">{getIdeaDisplay(idea).title}</h3>
                                                                                     <p className="text-xs text-slate-400">Used in {getUsedInShowsCount(idea)} shows • Last opened {lastOpenedMap[idea.id] ? formatRelative(lastOpenedMap[idea.id]) : "—"} • Created {formatSavedOn(idea)}</p>
                                                                                 </div>
                                                                             </div>
                                                                         </div>
-                                                                        <div className="text-sm text-slate-300 overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:4]">{(idea.content || '').trim()}</div>
+                                                                        <div className="text-sm text-slate-300 overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:4]">{(getIdeaDisplay(idea).body || '').trim()}</div>
                                                                     </div>
                                                                 </div>
                                                             );
@@ -1290,7 +1339,7 @@ const sendToPlanner = (idea: SavedIdea) => {
                         <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-slate-800">
                             <div className="min-w-0">
                                 <div className="flex items-center gap-2">
-                                    <h3 className="text-lg font-bold text-yellow-300 truncate">{openIdea.title || 'Saved Idea'}</h3>
+                                    <h3 className="text-lg font-bold text-yellow-300 truncate">{getIdeaDisplay(openIdea).title || 'Saved Idea'}</h3>
                                     {isPinned(openIdea.id) ? (
                                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-600/20 border border-purple-500/30 text-purple-200">Pinned</span>
                                     ) : null}
@@ -1331,7 +1380,7 @@ const sendToPlanner = (idea: SavedIdea) => {
                             ) : openIdea.type === 'rehearsal' ? (
                                 <div className="text-sm text-slate-200 whitespace-pre-wrap">{openIdea.content}</div>
                             ) : (
-                                <div className="text-sm text-slate-200 whitespace-pre-wrap break-words">{openIdea.content}</div>
+                                <div className="text-sm text-slate-200 whitespace-pre-wrap break-words">{getIdeaDisplay(openIdea).body}</div>
                             )}
                         </div>
                     </div>
