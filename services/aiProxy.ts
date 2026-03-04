@@ -166,11 +166,6 @@ async function safeFetchJson<T>(
   throw e;
 }
 
-/** aiChat(prompt, system?) → plain text response */OR";
-  e.status = r.status;
-  throw e;
-}
-
 /** aiChat(prompt, system?) → plain text response */
 export async function aiChat(prompt: string, system?: string) {
   const res = await safeFetchJson<{ text: string }>("/api/ai/chat", {
