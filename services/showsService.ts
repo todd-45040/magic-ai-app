@@ -444,12 +444,3 @@ export const toggleSubtask = async (showId: string, taskId: string, subtaskId: s
 
   return getShows();
 };
-
-// Convenience helper used by a few UX flows (e.g., SaveActionBar “Add to Show” shortcuts)
-// to find an existing show by title without requiring callers to re-fetch + filter.
-export const findShowByTitle = async (title: string): Promise<Show | undefined> => {
-  const needle = String(title ?? '').trim().toLowerCase();
-  if (!needle) return undefined;
-  const shows = await getShows();
-  return shows.find((s) => String((s as any)?.title ?? '').trim().toLowerCase() === needle);
-};
