@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { ChatMessage, PredefinedPrompt, TrickIdentificationResult, User, Transcription, MagicianView, MagicianTab, Client, Show, Feedback, SavedIdea, TaskPriority, AiSparkAction } from '../types';
 import { generateResponse } from '../services/geminiService';
-import { identifyTrickFromImageServer } from '../services/identifyService';
+import { identifyTrickFromImageServer, refineIdentifyResult } from '../services/identifyService';
 import { supabase } from '../supabase';
 import { saveIdea, updateIdea } from '../services/ideasService';
 import { exportData } from '../services/dataService';
@@ -807,8 +807,11 @@ const IdentifyTab: React.FC<{
     onCopy: () => void;
     onShare: () => void;
     onToggleStrong: () => void;
+    onRefine: (intent: 'clarify' | 'visual' | 'comedy' | 'mentalism' | 'practical' | 'safer_angles') => void;
+    refining: boolean;
+    lastRefine: string | null;
     onRequestUpgrade: () => void;
-}> = ({ imagePreview, identificationResult, isIdentifying, identificationError, identificationBlocked, identifySaved, identifySaving, identifyIsStrong, fileInputRef, handleImageUpload, handleIdentifyClick, onSave, onAddToShow, onConvertToTask, onCopy, onShare, onToggleStrong, onRequestUpgrade }) => (
+}> = ({ imagePreview, identificationResult, isIdentifying, identificationError, identificationBlocked, identifySaved, identifySaving, identifyIsStrong, fileInputRef, handleImageUpload, handleIdentifyClick, onSave, onAddToShow, onConvertToTask, onCopy, onShare, onToggleStrong, onRefine, refining, lastRefine, onRequestUpgrade }) => (
     <div className="flex-1 overflow-y-auto p-4 md:p-5">
         <div className="animate-fade-in space-y-4 max-w-2xl mx-auto">
             <h2 className="text-2xl font-bold text-slate-200 font-cinzel">Identify a Trick</h2>
@@ -994,6 +997,67 @@ const IdentifyTab: React.FC<{
                       onShare={onShare}
                       isStrong={identifyIsStrong}
                       onToggleStrong={onToggleStrong}
+                      refineNode={
+                        <div>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => onRefine('clarify')}
+                              disabled={!identificationResult || isIdentifying || refining}
+                              className="h-9 px-3 text-xs border border-slate-600 rounded-md bg-slate-900/40 text-slate-200 hover:bg-slate-800/50 disabled:opacity-50"
+                            >
+                              ✨ Clarify
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onRefine('visual')}
+                              disabled={!identificationResult || isIdentifying || refining}
+                              className="h-9 px-3 text-xs border border-slate-600 rounded-md bg-slate-900/40 text-slate-200 hover:bg-slate-800/50 disabled:opacity-50"
+                            >
+                              🎬 More Visual
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onRefine('comedy')}
+                              disabled={!identificationResult || isIdentifying || refining}
+                              className="h-9 px-3 text-xs border border-slate-600 rounded-md bg-slate-900/40 text-slate-200 hover:bg-slate-800/50 disabled:opacity-50"
+                            >
+                              🎭 Comedy
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onRefine('mentalism')}
+                              disabled={!identificationResult || isIdentifying || refining}
+                              className="h-9 px-3 text-xs border border-slate-600 rounded-md bg-slate-900/40 text-slate-200 hover:bg-slate-800/50 disabled:opacity-50"
+                            >
+                              🧠 Mentalism
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onRefine('practical')}
+                              disabled={!identificationResult || isIdentifying || refining}
+                              className="h-9 px-3 text-xs border border-slate-600 rounded-md bg-slate-900/40 text-slate-200 hover:bg-slate-800/50 disabled:opacity-50"
+                            >
+                              🧰 Practical
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onRefine('safer_angles')}
+                              disabled={!identificationResult || isIdentifying || refining}
+                              className="h-9 px-3 text-xs border border-slate-600 rounded-md bg-slate-900/40 text-slate-200 hover:bg-slate-800/50 disabled:opacity-50"
+                            >
+                              🛡️ Safer Angles
+                            </button>
+                          </div>
+
+                          {refining ? (
+                            <div className="mt-2 text-xs text-slate-400 flex items-center gap-2">
+                              <span className="inline-block h-2 w-2 rounded-full bg-purple-400 animate-pulse" />
+                              Refining{lastRefine ? `: ${lastRefine}` : ''}…
+                            </div>
+                          ) : null}
+                        </div>
+                      }
                     />
                 </div>
             )}
@@ -1514,6 +1578,8 @@ useEffect(() => {
   const [identificationBlocked, setIdentificationBlocked] = useState<BlockedUx | null>(null);
   const [identifySavedIdeaId, setIdentifySavedIdeaId] = useState<string | null>(null);
   const [identifySaving, setIdentifySaving] = useState(false);
+  const [identifyRefining, setIdentifyRefining] = useState(false);
+  const [identifyLastRefine, setIdentifyLastRefine] = useState<string | null>(null);
   const [identifyIsStrong, setIdentifyIsStrong] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -2412,6 +2478,47 @@ useEffect(() => {
     }
   };
 
+  const handleIdentifyRefine = async (intent: 'clarify' | 'visual' | 'comedy' | 'mentalism' | 'practical' | 'safer_angles') => {
+    if (!identificationResult) return;
+    if (identifyRefining) return;
+
+    const labelMap: Record<string, string> = {
+      clarify: 'Clarify the Effect',
+      visual: 'More Visual',
+      comedy: 'More Comedy',
+      mentalism: 'More Mentalism',
+      practical: 'More Practical',
+      safer_angles: 'Safer for Angles',
+    };
+
+    setIdentifyRefining(true);
+    setIdentifyLastRefine(labelMap[intent] ?? intent);
+    setIdentificationError(null);
+    setIdentificationBlocked(null);
+
+    try {
+      const refined = await refineIdentifyResult(identificationResult, intent);
+      setIdentificationResult(refined);
+
+      // Content changed — require an explicit re-save so the Idea Vault snapshot matches.
+      setIdentifySavedIdeaId(null);
+      setIdentifyIsStrong(false);
+
+      showToast('Refined.');
+    } catch (err) {
+      const blocked = normalizeBlockedUx(err, { toolName: 'Identify a Trick' });
+      if (blocked.showUpgrade || blocked.retryable) {
+        setIdentificationBlocked(blocked);
+      } else {
+        const msg = err instanceof Error ? err.message : 'Refine failed.';
+        setIdentificationError(msg);
+      }
+    } finally {
+      setIdentifyRefining(false);
+      setIdentifyLastRefine(null);
+    }
+  };
+
   const handleTabClick = (tab: MagicianTab) => {
     if (tab === 'show-planner' && !hasAmateurAccess) {
         setIsUpgradeModalOpen(true);
@@ -2843,6 +2950,9 @@ ${action.payload.content}`;
               onCopy={handleIdentifyCopy}
               onShare={handleIdentifyShare}
               onToggleStrong={handleIdentifyToggleStrong}
+              onRefine={handleIdentifyRefine}
+              refining={identifyRefining}
+              lastRefine={identifyLastRefine}
               onRequestUpgrade={() => setIsUpgradeModalOpen(true)}
             />
           );

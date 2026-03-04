@@ -5,7 +5,7 @@
 // UI components should call this (or still call geminiService.identifyTrickFromImage if you prefer).
 
 import type { User, TrickIdentificationResult } from "../types";
-import { aiIdentify } from "./aiProxy";
+import { aiIdentify, aiJson } from "./aiProxy";
 
 type Video = { title: string; url: string };
 
@@ -158,5 +158,127 @@ export async function identifyTrickFromImageServer(
     variations,
     raw: parsed,
     videoExamples: videos,
+  } as TrickIdentificationResult;
+}
+
+type IdentifyRefineIntent =
+  | 'clarify'
+  | 'visual'
+  | 'comedy'
+  | 'mentalism'
+  | 'practical'
+  | 'safer_angles';
+
+function refineInstruction(intent: IdentifyRefineIntent): string {
+  switch (intent) {
+    case 'clarify':
+      return 'Tighten the description. Reduce ambiguity. Make the plot and effect clearer in performance-safe language.';
+    case 'visual':
+      return 'Make the presentation more visual and clear for the audience. Add vivid staging/visual beats without exposing methods.';
+    case 'comedy':
+      return 'Add tasteful comedic framing, lines, and audience interaction beats while keeping the core effect the same.';
+    case 'mentalism':
+      return 'Shift framing toward mentalism-style presentation (psychological/reading/intuition) while keeping it performance-safe and non-exposure.';
+    case 'practical':
+      return 'Improve practicality: reset, pocket management, venue suitability, clarity of instructions for the performer (NO methods).';
+    case 'safer_angles':
+      return 'Focus on making it safer for angles/sightlines and real-world performance conditions. Provide risk notes and blocking tips (NO exposure).';
+    default:
+      return 'Refine the output while keeping the same core effect.';
+  }
+}
+
+/**
+ * Refine an Identify-a-Trick result WITHOUT re-identifying the trick.
+ * We pass the original result JSON and apply controlled mutation per intent.
+ * Output must remain performance-safe and non-exposure.
+ */
+export async function refineIdentifyResult(
+  original: TrickIdentificationResult,
+  intent: IdentifyRefineIntent
+): Promise<TrickIdentificationResult> {
+  const originalJson = original?.raw ?? {
+    trickName: original.trickName,
+    confidence: original.confidence,
+    summary: original.summary,
+    observations: original.observations,
+    likelyEffectPlot: original.likelyEffectPlot,
+    performanceStructure: original.performanceStructure,
+    presentationIdeas: original.presentationIdeas,
+    angleRiskNotes: original.angleRiskNotes,
+    variations: original.variations,
+  };
+
+  const instruction = refineInstruction(intent);
+
+  const prompt =
+    'You are refining an existing Identify-a-Trick analysis. DO NOT re-identify a new trick.\n' +
+    'Non-negotiable rules:\n' +
+    '- NO exposure: do not explain secret methods, gimmicks, sleights, stacks, or construction.\n' +
+    '- Keep the same core effect/trick name unless the original is clearly "Unknown Trick".\n' +
+    '- Preserve the overall structure and improve/extend the content per the refine intent.\n\n' +
+    'REFINE INTENT:\n' +
+    instruction +
+    '\n\n' +
+    'ORIGINAL RESULT JSON:\n' +
+    JSON.stringify(originalJson, null, 2) +
+    '\n\n' +
+    'Return ONLY valid JSON with keys:\n' +
+    '- trickName (string)\n' +
+    '- confidence (string: High|Medium|Low)\n' +
+    '- summary (string, 1-2 sentences)\n' +
+    '- observations (array of 3-8 short bullets; what you see; NO exposure)\n' +
+    '- likelyEffectPlot (string, 2-6 sentences; performance-safe; NO exposure)\n' +
+    '- performanceStructure (array of 3-10 bullets; beats/flow)\n' +
+    '- presentationIdeas (array of 3-12 bullets)\n' +
+    '- angleRiskNotes (array of 3-12 bullets; sightlines/reset/handling cautions; NO exposure)\n' +
+    '- variations (array of 3-12 bullets; alternate plots/presentations; performance-safe)';
+
+  const json = await aiJson<any>(prompt);
+
+  const trickName: string = String(json?.trickName || original.trickName || '').trim() || 'Unknown Trick';
+  const confidenceRaw = String(json?.confidence || original.confidence || '').trim();
+  const confidence: 'High' | 'Medium' | 'Low' | undefined =
+    confidenceRaw === 'High' || confidenceRaw === 'Medium' || confidenceRaw === 'Low'
+      ? (confidenceRaw as any)
+      : original.confidence;
+
+  const summary: string | undefined = String(json?.summary || '').trim() || original.summary;
+
+  const observations: string[] | undefined = Array.isArray(json?.observations)
+    ? json.observations.map((x: any) => String(x || '').trim()).filter(Boolean).slice(0, 8)
+    : original.observations;
+
+  const likelyEffectPlot: string | undefined = String(json?.likelyEffectPlot || '').trim() || original.likelyEffectPlot;
+
+  const performanceStructure: string[] | undefined = Array.isArray(json?.performanceStructure)
+    ? json.performanceStructure.map((x: any) => String(x || '').trim()).filter(Boolean).slice(0, 10)
+    : original.performanceStructure;
+
+  const presentationIdeas: string[] | undefined = Array.isArray(json?.presentationIdeas)
+    ? json.presentationIdeas.map((x: any) => String(x || '').trim()).filter(Boolean).slice(0, 12)
+    : original.presentationIdeas;
+
+  const angleRiskNotes: string[] | undefined = Array.isArray(json?.angleRiskNotes)
+    ? json.angleRiskNotes.map((x: any) => String(x || '').trim()).filter(Boolean).slice(0, 12)
+    : original.angleRiskNotes;
+
+  const variations: string[] | undefined = Array.isArray(json?.variations)
+    ? json.variations.map((x: any) => String(x || '').trim()).filter(Boolean).slice(0, 12)
+    : original.variations;
+
+  // Preserve videoExamples from original so refinement is fast and stable.
+  return {
+    trickName,
+    confidence,
+    summary,
+    observations,
+    likelyEffectPlot,
+    performanceStructure,
+    presentationIdeas,
+    angleRiskNotes,
+    variations,
+    raw: json,
+    videoExamples: original.videoExamples,
   } as TrickIdentificationResult;
 }
