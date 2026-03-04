@@ -1,6 +1,6 @@
 
 import React, { useMemo, useState, useEffect, useRef } from 'react';
-import { generateImage, generateImages, editImageWithPrompt } from '../services/geminiService';
+import { generateImages, editImageWithPrompt } from '../services/geminiService';
 import BlockedPanel from './BlockedPanel';
 import { normalizeBlockedUx } from '../services/blockedUx';
 import { saveIdea } from '../services/ideasService';
@@ -104,6 +104,14 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
   const [showModalMode, setShowModalMode] = useState<'add' | 'task'>('add');
   const [showId, setShowId] = useState<string>('');
   const [createNewShowTitle, setCreateNewShowTitle] = useState('');
+
+  // Phase 8 — Performance Improvements (Retry UX)
+  type LastVisualAction =
+    | { kind: 'generate'; prompt: string; aspectRatio: typeof aspectRatio; units: number }
+    | { kind: 'edit'; prompt: string; base64: string; mimeType: string; units: number }
+    | { kind: 'refine'; prompt: string; aspectRatio: typeof aspectRatio; label: string; instruction: string; units: number };
+  const [lastFailedAction, setLastFailedAction] = useState<LastVisualAction | null>(null);
+  const [lastFailedMessage, setLastFailedMessage] = useState<string | null>(null);
 
   const [shareFile, setShareFile] = useState<File | null>(null);
 
@@ -247,31 +255,54 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
     return id;
   };
 
-  const handleSubmit = async () => {
-    if (!finalPrompt.trim()) {
-      setError(isEditing ? 'Please enter editing instructions.' : 'Please provide at least an Object/Prop, Scene/Setting, or Style.');
-      return;
+  // Phase 8 — Centralized request runner (supports retry UX)
+  const runAction = async (action: LastVisualAction, opts?: { skipConsume?: boolean; isRetry?: boolean }) => {
+    const skipConsume = Boolean(opts?.skipConsume);
+    const units = action.units;
+
+    if (opts?.isRetry) {
+      // Best-effort retry telemetry (parity with Identify)
+      try {
+        trackClientEvent({
+          tool: 'visual_brainstorm',
+          action: 'visual_retry_click',
+          metadata: { kind: action.kind, aspectRatio: (action as any).aspectRatio ?? aspectRatio },
+          outcome: 'ALLOWED',
+        });
+      } catch {
+        // ignore
+      }
     }
 
-    // Daily cap: images generated
-    // Phase 5: generating variations consumes 4 image credits.
-    const units = isEditing ? 1 : 4;
-    const chk = canConsume(user, 'image', units);
-    if (!chk.ok) {
+    if (!skipConsume) {
+      const chk = canConsume(user, 'image', units);
+      if (!chk.ok) {
         setError(`Daily image limit reached (${chk.used}/${chk.limit}). Upgrade to continue.`);
         return;
+      }
+      consume(user, 'image', units);
     }
-    consume(user, 'image', units);
 
     // Telemetry (Phase 7)
     trackClientEvent({
       tool: 'visual_brainstorm',
       action: 'visual_request_start',
-      metadata: { mode: isEditing ? 'edit' : 'generate', aspectRatio, variations: isEditing ? 1 : 4 },
+      metadata: {
+        mode: action.kind,
+        aspectRatio: (action as any).aspectRatio ?? aspectRatio,
+        variations: action.kind === 'generate' ? 4 : 1,
+        label: (action as any).label,
+      },
       units,
     });
 
-    setLoadingLabel(isEditing ? 'Applying your edit…' : 'Generating concept art…');
+    setLoadingLabel(
+      action.kind === 'edit'
+        ? 'Applying your edit…'
+        : action.kind === 'refine'
+          ? `Refining: ${(action as any).label || 'Update'}…`
+          : 'Generating concept art…'
+    );
     setIsLoading(true);
     setError(null);
     setGeneratedImage(null);
@@ -282,87 +313,128 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
     setIsStrong(false);
 
     try {
-        let imageUrl: string;
-        let batchImages: string[] | null = null;
-        const promptToUse = finalPrompt.trim();
-        if (inputImageFile && inputImagePreview) {
-            // Image editing flow
-            const base64Data = inputImagePreview.split(',')[1];
-            // FIX: Pass user object as the 4th argument to editImageWithPrompt
-            imageUrl = await editImageWithPrompt(base64Data, inputImageFile.type, promptToUse, user);
-        } else {
-            // Text-to-image flow
-            // Phase 5: Multi-image generation (variations)
-            const imgs = await generateImages(promptToUse, aspectRatio, 4, user);
-            batchImages = imgs;
-            setVariationImages(imgs);
-            imageUrl = imgs[0];
+      let imageUrl: string;
+      let batchImages: string[] | null = null;
+
+      if (action.kind === 'edit') {
+        imageUrl = await editImageWithPrompt(action.base64, action.mimeType, action.prompt, user);
+      } else if (action.kind === 'generate') {
+        const imgs = await generateImages(action.prompt, action.aspectRatio, 4, user);
+        batchImages = imgs;
+        setVariationImages(imgs);
+        imageUrl = imgs[0];
+      } else {
+        const imgs = await generateImages(action.prompt, action.aspectRatio, 1, user);
+        batchImages = imgs;
+        imageUrl = imgs[0];
+      }
+
+      setGeneratedImage(imageUrl);
+      setPromptUsed(action.prompt);
+
+      const resolvedTitle = (conceptTitle?.trim() ? conceptTitle.trim() : buildConceptTitle());
+      setConceptTitle(resolvedTitle);
+
+      if (action.kind === 'edit') {
+        addToHistory({ imageUrl, promptUsed: action.prompt, title: resolvedTitle, kind: 'edit' });
+      } else if (action.kind === 'generate') {
+        const imgs = (batchImages?.length ? batchImages : [imageUrl]).slice(0, 4);
+        const ids: string[] = [];
+        // Add variations to history without stealing focus each time.
+        for (let i = imgs.length - 1; i >= 0; i--) {
+          const url = imgs[i];
+          const id = addToHistory(
+            { imageUrl: url, promptUsed: action.prompt, title: resolvedTitle, kind: 'generate' },
+            { setActive: false }
+          );
+          ids.unshift(id);
         }
-        setGeneratedImage(imageUrl);
-        setPromptUsed(promptToUse);
+        setVariationHistoryIds(ids);
+        if (ids[0]) setActiveHistoryId(ids[0]);
+      } else {
+        addToHistory({ imageUrl, promptUsed: action.prompt, title: resolvedTitle, kind: 'refine', refineLabel: action.label });
+      }
 
-        // Give the card a decent default title if the user hasn't set one.
-        const resolvedTitle = (conceptTitle?.trim() ? conceptTitle.trim() : buildConceptTitle());
-        setConceptTitle(resolvedTitle);
+      setLastFailedAction(null);
+      setLastFailedMessage(null);
 
-        if (isEditing) {
-          addToHistory({
-            imageUrl,
-            promptUsed: promptToUse,
-            title: resolvedTitle,
-            kind: 'edit',
-          });
-
-          // Telemetry (Phase 7)
-          trackClientEvent({
-            tool: 'visual_brainstorm',
-            action: 'visual_request_success',
-            metadata: { mode: 'edit', aspectRatio, imagesGenerated: 1, variations: 1 },
-            outcome: 'SUCCESS_CHARGED',
-            units,
-          });
-        } else {
-          const imgs = (batchImages?.length ? batchImages : [imageUrl]).slice(0, 4);
-          const ids: string[] = [];
-          // Add all variations to history without stealing focus each time.
-          for (let i = imgs.length - 1; i >= 0; i--) {
-            const url = imgs[i];
-            const id = addToHistory(
-              {
-                imageUrl: url,
-                promptUsed: promptToUse,
-                title: resolvedTitle,
-                kind: 'generate',
-              },
-              { setActive: false }
-            );
-            ids.unshift(id);
-          }
-          setVariationHistoryIds(ids);
-          if (ids[0]) setActiveHistoryId(ids[0]);
-
-        // Telemetry (Phase 7)
-        trackClientEvent({
-          tool: 'visual_brainstorm',
-          action: 'visual_request_success',
-          metadata: { mode: isEditing ? 'edit' : 'generate', aspectRatio, imagesGenerated: (batchImages?.length ? batchImages.length : 1), variations: isEditing ? 1 : 4 },
-          outcome: "SUCCESS_CHARGED",
-          units,
-        });
-        }
+      // Telemetry success
+      trackClientEvent({
+        tool: 'visual_brainstorm',
+        action: 'visual_request_success',
+        metadata: {
+          mode: action.kind,
+          aspectRatio: (action as any).aspectRatio ?? aspectRatio,
+          imagesGenerated: action.kind === 'generate' ? 4 : 1,
+          variations: action.kind === 'generate' ? 4 : 1,
+          label: (action as any).label,
+          retry: Boolean(opts?.isRetry),
+        },
+        outcome: skipConsume ? 'SUCCESS_NOT_CHARGED' : 'SUCCESS_CHARGED',
+        units,
+      });
     } catch (err) {
-        const msg = err instanceof Error ? err.message : 'An unknown error occurred.';
-        // Telemetry (Phase 7)
-        trackClientEvent({
-          tool: 'visual_brainstorm',
-          action: 'visual_request_error',
-          metadata: { mode: isEditing ? 'edit' : 'generate', aspectRatio, variations: isEditing ? 1 : 4, message: msg },
-          outcome: 'ERROR_UPSTREAM',
-          units,
-        });
-        setError(msg);
+      const raw = err instanceof Error ? err.message : 'An unknown error occurred.';
+      const isTimeout = /timed out/i.test(raw);
+      const is503 = /\b503\b/.test(raw);
+      const friendly = isTimeout
+        ? 'Request timed out (90s). The image generator can be slow sometimes — please try again.'
+        : is503
+          ? 'The image generator is temporarily overloaded (503). Please try again.'
+          : raw;
+
+      setLastFailedAction(action);
+      setLastFailedMessage(friendly);
+
+      // Telemetry error
+      trackClientEvent({
+        tool: 'visual_brainstorm',
+        action: 'visual_request_error',
+        metadata: {
+          mode: action.kind,
+          aspectRatio: (action as any).aspectRatio ?? aspectRatio,
+          variations: action.kind === 'generate' ? 4 : 1,
+          label: (action as any).label,
+          message: raw,
+          timeout: isTimeout,
+          status503: is503,
+          retry: Boolean(opts?.isRetry),
+        },
+        outcome: 'ERROR_UPSTREAM',
+        units,
+      });
+
+      setError(friendly);
     } finally {
-        setIsLoading(false);
+      setIsLoading(false);
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!finalPrompt.trim()) {
+      setError(isEditing ? 'Please enter editing instructions.' : 'Please provide at least an Object/Prop, Scene/Setting, or Style.');
+      return;
+    }
+
+    const promptToUse = finalPrompt.trim();
+    if (inputImageFile && inputImagePreview) {
+      const base64Data = inputImagePreview.split(',')[1];
+      const action: LastVisualAction = {
+        kind: 'edit',
+        prompt: promptToUse,
+        base64: base64Data,
+        mimeType: inputImageFile.type,
+        units: 1,
+      };
+      await runAction(action);
+    } else {
+      const action: LastVisualAction = {
+        kind: 'generate',
+        prompt: promptToUse,
+        aspectRatio,
+        units: 4,
+      };
+      await runAction(action);
     }
   };
 
@@ -395,77 +467,15 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
       outcome: "ALLOWED",
     });
 
-    // Daily cap: images generated
-    const chk = canConsume(user, 'image', 1);
-    if (!chk.ok) {
-      setError(`Daily image limit reached (${chk.used}/${chk.limit}). Upgrade to continue.`);
-      return;
-    }
-    consume(user, 'image', 1);
-
-    // Telemetry (Phase 7)
-    trackClientEvent({
-      tool: 'visual_brainstorm',
-      action: 'visual_request_start',
-      metadata: { mode: 'refine', label: presetLabel, aspectRatio, variations: 1 },
+    const action: LastVisualAction = {
+      kind: 'refine',
+      prompt: refinedPrompt,
+      aspectRatio,
+      label: presetLabel,
+      instruction,
       units: 1,
-    });
-
-    setLoadingLabel(`Refining: ${presetLabel}…`);
-    setIsLoading(true);
-    setError(null);
-    // Refinements generate a single new image; clear the variations grid.
-    setVariationImages([]);
-    setVariationHistoryIds([]);
-    setSaveImageStatus('idle');
-    setSavedIdeaId(null);
-
-    try {
-      let imageUrl: string;
-      if (inputImageFile && inputImagePreview) {
-        const base64Data = inputImagePreview.split(',')[1];
-        imageUrl = await editImageWithPrompt(base64Data, inputImageFile.type, refinedPrompt, user);
-      } else {
-        imageUrl = await generateImage(refinedPrompt, aspectRatio, user);
-      }
-
-      setGeneratedImage(imageUrl);
-      setPromptUsed(refinedPrompt);
-
-      // Keep the title stable unless user hasn't set one.
-      const resolvedTitle = (conceptTitle?.trim() ? conceptTitle.trim() : buildConceptTitle());
-      setConceptTitle(resolvedTitle);
-
-      addToHistory({
-        imageUrl,
-        promptUsed: refinedPrompt,
-        title: resolvedTitle,
-        kind: 'refine',
-        refineLabel: presetLabel,
-      });
-
-      // Telemetry (Phase 7)
-      trackClientEvent({
-        tool: 'visual_brainstorm',
-        action: 'visual_request_success',
-        metadata: { mode: 'refine', label: presetLabel, aspectRatio, imagesGenerated: 1, variations: 1 },
-        outcome: 'SUCCESS_CHARGED',
-        units: 1,
-      });
-    } catch (e: any) {
-      const msg = e?.message ?? 'Refinement failed.';
-      // Telemetry (Phase 7)
-      trackClientEvent({
-        tool: 'visual_brainstorm',
-        action: 'visual_request_error',
-        metadata: { mode: 'refine', label: presetLabel, aspectRatio, variations: 1, message: msg },
-        outcome: 'ERROR_UPSTREAM',
-        units: 1,
-      });
-      setError(msg);
-    } finally {
-      setIsLoading(false);
-    }
+    };
+    await runAction(action);
   };
 
   const promptSummary = useMemo(() => {
@@ -782,7 +792,20 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
                       </>
                     )}
                 </button>
-                {error && <p className="text-red-400 mt-2 text-sm text-center">{error}</p>}
+                {error && (
+                  <div className="mt-2 text-center">
+                    <p className="text-red-400 text-sm">{lastFailedMessage || error}</p>
+                    {lastFailedAction && !isLoading && (
+                      <button
+                        type="button"
+                        onClick={() => runAction(lastFailedAction, { skipConsume: true, isRetry: true })}
+                        className="mt-2 inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-100 text-sm font-semibold border border-slate-700"
+                      >
+                        Try Again
+                      </button>
+                    )}
+                  </div>
+                )}
             </div>
         </div>
 
