@@ -1,12 +1,13 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { generateImage, editImageWithPrompt } from '../services/geminiService';
 import BlockedPanel from './BlockedPanel';
 import { normalizeBlockedUx } from '../services/blockedUx';
 import { saveIdea } from '../services/ideasService';
-import { BackIcon, ImageIcon, WandIcon, SaveIcon, CheckIcon, ShareIcon, TrashIcon, CameraIcon } from './icons';
-import ShareButton from './ShareButton';
-import { CohesionActions } from './CohesionActions';
+import * as showsService from '../services/showsService';
+import { useAppDispatch, useAppState, refreshShows, refreshIdeas } from '../store';
+import SaveActionBar from './shared/SaveActionBar';
+import { BackIcon, ImageIcon, WandIcon, TrashIcon, CameraIcon } from './icons';
 import type { User } from '../types';
 import { canConsume, consume } from '../services/usageTracker';
 
@@ -57,6 +58,9 @@ const ImageLoadingIndicator: React.FC<{ label?: string }> = ({ label }) => {
 
 
 const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, onRequestUpgrade }) => {
+  const { shows } = useAppState();
+  const dispatch = useAppDispatch();
+
   const [editPrompt, setEditPrompt] = useState('');
   // Phase 1: Structured inputs for text-to-image
   const [objectProp, setObjectProp] = useState('');
@@ -70,7 +74,16 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
   const [error, setError] = useState<string | null>(null);
   const [blockedUi, setBlockedUi] = useState<ReturnType<typeof normalizeBlockedUx> | null>(null);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
-  const [saveImageStatus, setSaveImageStatus] = useState<'idle' | 'saved'>('idle');
+  const [conceptTitle, setConceptTitle] = useState<string>('');
+  const [saveImageStatus, setSaveImageStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [savedIdeaId, setSavedIdeaId] = useState<string | null>(null);
+  const [isStrong, setIsStrong] = useState(false);
+
+  const [showModalOpen, setShowModalOpen] = useState(false);
+  const [showModalMode, setShowModalMode] = useState<'add' | 'task'>('add');
+  const [showId, setShowId] = useState<string>('');
+  const [createNewShowTitle, setCreateNewShowTitle] = useState('');
+
   const [shareFile, setShareFile] = useState<File | null>(null);
 
   // New state for input image
@@ -91,6 +104,35 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
         setShareFile(null);
     }
   }, [generatedImage]);
+
+  const showsSorted = useMemo(() => {
+    const arr = Array.isArray(shows) ? [...shows] : [];
+    return arr.sort((a: any, b: any) => (b?.updatedAt ?? 0) - (a?.updatedAt ?? 0));
+  }, [shows]);
+
+  // Default show selection for “Add to Show” flows.
+  useEffect(() => {
+    const firstId = showsSorted?.[0]?.id ? String((showsSorted as any)[0].id) : '';
+    if (!showId && firstId) setShowId(firstId);
+  }, [showsSorted, showId]);
+
+  const toTitleCase = (s: string) =>
+    s
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 6)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
+
+  const buildConceptTitle = () => {
+    if (isEditing) return 'Edited Visual Concept';
+    const obj = objectProp.trim();
+    const st = style.trim();
+    if (obj && st) return `The ${toTitleCase(st)} ${toTitleCase(obj)} Concept`;
+    if (obj) return `Visual Concept: ${toTitleCase(obj)}`;
+    if (sceneSetting.trim()) return `Visual Concept: ${toTitleCase(sceneSetting.trim())}`;
+    return 'Visual Concept';
+  };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -156,6 +198,8 @@ const handleSubmit = async () => {
     setError(null);
     setGeneratedImage(null);
     setSaveImageStatus('idle');
+    setSavedIdeaId(null);
+    setIsStrong(false);
 
     try {
         let imageUrl: string;
@@ -170,6 +214,8 @@ const handleSubmit = async () => {
             imageUrl = await generateImage(finalPrompt, aspectRatio, user);
         }
         setGeneratedImage(imageUrl);
+        // Give the card a decent default title if the user hasn't set one.
+        setConceptTitle((prev) => (prev.trim() ? prev : buildConceptTitle()));
     } catch (err) {
         setError(err instanceof Error ? err.message : "An unknown error occurred.");
     } finally {
@@ -177,14 +223,117 @@ const handleSubmit = async () => {
     }
   };
 
-  const handleSaveImage = () => {
-    if (generatedImage) {
-        saveIdea('image', generatedImage);
-        onIdeaSaved();
-        setSaveImageStatus('saved');
-        setTimeout(() => setSaveImageStatus('idle'), 2000);
+  const promptSummary = useMemo(() => {
+    const p = String(finalPrompt ?? '').trim();
+    if (!p) return '';
+    return p.length > 220 ? `${p.slice(0, 220)}…` : p;
+  }, [finalPrompt]);
+
+  const safeCopy = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      return false;
     }
-  }
+  };
+
+  const handleCopyPrompt = async () => {
+    const ok = await safeCopy(String(finalPrompt ?? ''));
+    if (!ok) setError('Copy failed. Your browser blocked clipboard access.');
+  };
+
+  const handleShare = async () => {
+    try {
+      const title = conceptTitle?.trim() || 'Magic Visual Idea';
+      const text = String(finalPrompt ?? '').trim();
+
+      // Prefer native share if available (best on mobile for ADMC booth).
+      if ((navigator as any).share) {
+        const payload: any = { title, text };
+        if (shareFile) payload.files = [shareFile];
+        else if (generatedImage) payload.url = generatedImage;
+        await (navigator as any).share(payload);
+        return;
+      }
+
+      // Fallback: copy a clean share snippet.
+      const snippet = `${title}\n\nPrompt:\n${text}${generatedImage ? `\n\nImage:\n${generatedImage}` : ''}`;
+      const ok = await safeCopy(snippet);
+      if (!ok) setError('Share not supported. Copy failed due to browser clipboard restrictions.');
+    } catch (e: any) {
+      // User canceled share — no need to show an error.
+      const msg = String(e?.message ?? '');
+      if (!/abort|cancel/i.test(msg)) setError('Share failed.');
+    }
+  };
+
+  const handleSaveImage = async () => {
+    if (!generatedImage) return;
+    if (saveImageStatus === 'saving') return;
+    setSaveImageStatus('saving');
+    setError(null);
+
+    try {
+      const saved = await saveIdea({
+        type: 'image',
+        content: generatedImage,
+        title: conceptTitle?.trim() || buildConceptTitle(),
+        tags: ['visual', 'concept'],
+      });
+      setSavedIdeaId(saved.id);
+      setSaveImageStatus('saved');
+      onIdeaSaved();
+      await refreshIdeas(dispatch);
+      window.setTimeout(() => setSaveImageStatus('idle'), 2000);
+    } catch (e: any) {
+      setError(e?.message ?? 'Failed to save idea.');
+      setSaveImageStatus('idle');
+    }
+  };
+
+  const openShowModal = (mode: 'add' | 'task') => {
+    setShowModalMode(mode);
+    setCreateNewShowTitle('');
+    setShowModalOpen(true);
+  };
+
+  const ensureShowId = async (): Promise<string> => {
+    if (createNewShowTitle.trim()) {
+      const created = await showsService.createShow(createNewShowTitle.trim(), null as any, null as any);
+      await refreshShows(dispatch);
+      return String((created as any).id);
+    }
+    if (!showId) throw new Error('Please select a Show (or create a new one).');
+    return String(showId);
+  };
+
+  const addToShowOrTask = async () => {
+    if (!generatedImage) return;
+    setError(null);
+    try {
+      const sid = await ensureShowId();
+      const titleBase = conceptTitle?.trim() || buildConceptTitle();
+      const title = showModalMode === 'task' ? `Build: ${titleBase}` : titleBase;
+      const notes = `Prompt:\n${String(finalPrompt ?? '').trim()}\n\nImage:\n${generatedImage}`;
+
+      await showsService.addTaskToShow(sid, {
+        title,
+        notes,
+        priority: 'Medium',
+        status: 'To-Do',
+        createdAt: Date.now(),
+        tags: ['visual', 'concept'],
+      } as any);
+      await refreshShows(dispatch);
+      setShowModalOpen(false);
+      try {
+        localStorage.setItem('maw_showplanner_focus', JSON.stringify({ showId: sid, taskTitle: title, ts: Date.now() }));
+      } catch {}
+    } catch (e: any) {
+      setError(e?.message ?? 'Failed to add to Show.');
+    }
+  };
   
   const placeholderText = inputImagePreview
     ? "e.g., Add a wizard hat to the person in the image. Make the background a mystical forest."
@@ -365,59 +514,194 @@ const handleSubmit = async () => {
             </div>
         </div>
 
-        {/* Image Display Area */}
+        {/* Result Card Area */}
         <div className="flex items-center justify-center bg-slate-900/50 rounded-lg border border-slate-800 p-4 min-h-[300px]">
-            {isLoading ? (
-                <ImageLoadingIndicator label={inputImagePreview ? 'Applying your edit…' : 'Generating concept art…'} />
-            ) : generatedImage ? (
-                 <div className="relative group w-full h-full flex items-center justify-center">
-                    <img src={generatedImage} alt="Generated concept art" className="max-w-full max-h-full object-contain rounded-md shadow-lg" />
-                    <div className="absolute top-2 right-2 flex gap-2 transition-opacity">
-                        <CohesionActions
-                            content={generatedImage}
-                            defaultTitle={`Visual Brainstorm: ${finalPrompt || 'Concept Art'}`}
-                            defaultTags={["visual", "concept"]}
-                            ideaType="image"
-                            compact
-                        />
-                        {shareFile && (
-                            <ShareButton
-                                title="Magic Visual Idea"
-                                text={`Check out this visual idea I generated with the Magician's AI Wizard: ${finalPrompt}`}
-                                file={shareFile}
-                                className="flex items-center gap-2 px-3 py-2 text-sm bg-slate-800/70 hover:bg-slate-700 rounded-md text-slate-200"
-                                aria-label="Share image"
-                            >
-                                <ShareIcon className="w-4 h-4" />
-                                <span>Share</span>
-                            </ShareButton>
-                        )}
-                        <button
-                            onClick={handleSaveImage}
-                            disabled={saveImageStatus === 'saved'}
-                            className="flex items-center gap-2 px-3 py-2 text-sm bg-slate-800/70 hover:bg-slate-700 rounded-md text-slate-200 disabled:opacity-100 disabled:cursor-default transition-opacity"
-                        >
-                            {saveImageStatus === 'saved' ? (
-                                <>
-                                    <CheckIcon className="w-4 h-4 text-green-400" />
-                                    <span>Saved!</span>
-                                </>
-                            ) : (
-                                <>
-                                    <SaveIcon className="w-4 h-4" />
-                                    <span>Save Idea</span>
-                                </>
-                            )}
-                        </button>
+          {isLoading ? (
+            <ImageLoadingIndicator label={inputImagePreview ? 'Applying your edit…' : 'Generating concept art…'} />
+          ) : generatedImage ? (
+            <div className="w-full max-w-2xl">
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/35 shadow-[0_18px_70px_-40px_rgba(0,0,0,0.9)] overflow-hidden">
+                <div className="p-4 border-b border-slate-800/80">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-xs uppercase tracking-wider text-slate-400">Concept Title</div>
+                      <input
+                        value={conceptTitle}
+                        onChange={(e) => setConceptTitle(e.target.value)}
+                        className="mt-1 w-full bg-transparent text-slate-100 text-lg font-semibold outline-none border-b border-transparent focus:border-purple-500/50"
+                        placeholder={buildConceptTitle()}
+                      />
                     </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] px-2 py-1 rounded-md border border-slate-700/60 bg-slate-900/40 text-slate-300">
+                        {isEditing ? 'Edit' : 'Generate'}
+                      </span>
+                      <span className="text-[11px] px-2 py-1 rounded-md border border-slate-700/60 bg-slate-900/40 text-slate-300">
+                        {aspectRatio}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="mt-3">
+                    <div className="text-xs uppercase tracking-wider text-slate-400">Prompt Summary</div>
+                    <div className="mt-1 text-sm text-slate-200 break-words">
+                      {promptSummary || '—'}
+                    </div>
+                  </div>
                 </div>
-            ) : (
-                <div className="text-center text-slate-500">
-                    <ImageIcon className="w-24 h-24 mx-auto mb-4" />
-                    <p>Your generated image will appear here.</p>
+
+                <div className="p-4">
+                  <div className="w-full flex items-center justify-center">
+                    <img
+                      src={generatedImage}
+                      alt="Generated concept art"
+                      className="max-w-full max-h-[520px] object-contain rounded-xl border border-slate-800/70 shadow-lg"
+                    />
+                  </div>
+
+                  <div className="mt-4">
+                    <SaveActionBar
+                      title="Next step:"
+                      subtitle="Save this visual, then move it into a Show or Task."
+                      saved={!!savedIdeaId}
+                      savingLabel="Saving…"
+                      savedLabel="Saved"
+                      primary={{
+                        label: 'Save Idea',
+                        onClick: () => void handleSaveImage(),
+                        disabled: !generatedImage || saveImageStatus === 'saving',
+                        loading: saveImageStatus === 'saving',
+                        tone: 'primary',
+                      }}
+                      secondaryLeft={{
+                        label: 'Add to Show',
+                        onClick: () => openShowModal('add'),
+                        disabled: !savedIdeaId,
+                        tone: 'secondary',
+                      }}
+                      secondaryRight={{
+                        label: 'Convert to Task',
+                        onClick: () => openShowModal('task'),
+                        disabled: !savedIdeaId,
+                        tone: 'secondary',
+                      }}
+                      utilities={[
+                        {
+                          label: isStrong ? 'Strong' : 'Mark Strong',
+                          onClick: () => setIsStrong((v) => !v),
+                          active: isStrong,
+                          disabled: !savedIdeaId,
+                        },
+                        {
+                          label: 'Copy Prompt',
+                          onClick: () => void handleCopyPrompt(),
+                          disabled: !finalPrompt?.trim(),
+                        },
+                        {
+                          label: 'Share',
+                          onClick: () => void handleShare(),
+                          disabled: !generatedImage,
+                        },
+                      ]}
+                    />
+                  </div>
                 </div>
-            )}
+              </div>
+            </div>
+          ) : (
+            <div className="text-center text-slate-500">
+              <ImageIcon className="w-24 h-24 mx-auto mb-4" />
+              <p>Your generated image will appear here.</p>
+            </div>
+          )}
         </div>
+
+        {/* Add to Show / Convert modal */}
+        {showModalOpen ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+            <div className="maw-card w-full max-w-2xl">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-bold text-white">
+                    {showModalMode === 'task' ? 'Convert to Task' : 'Add to Show'}
+                  </h3>
+                  <p className="text-sm text-slate-300 mt-1">
+                    Choose a Show, then we’ll add this visual as a planning task with the prompt + image link.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowModalOpen(false)}
+                  className="text-slate-300 hover:text-white px-2 py-1"
+                  aria-label="Close"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="maw-card-flat">
+                  <div className="text-sm font-semibold text-slate-200 mb-2">Choose a Show</div>
+
+                  <label className="block text-xs text-slate-400 mb-1">Existing show</label>
+                  <select
+                    value={showId}
+                    onChange={(e) => setShowId(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-900 border border-white/10 rounded-md text-white"
+                  >
+                    <option value="">Select…</option>
+                    {showsSorted.map((s: any) => (
+                      <option key={String(s.id)} value={String(s.id)}>
+                        {s.title}
+                      </option>
+                    ))}
+                  </select>
+
+                  <div className="mt-3">
+                    <label className="block text-xs text-slate-400 mb-1">Or create new show</label>
+                    <input
+                      value={createNewShowTitle}
+                      onChange={(e) => setCreateNewShowTitle(e.target.value)}
+                      placeholder="e.g., ADMC Visual Concepts"
+                      className="w-full px-3 py-2 bg-slate-900 border border-white/10 rounded-md text-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="maw-card-flat">
+                  <div className="text-sm font-semibold text-slate-200 mb-2">Task Preview</div>
+                  <div className="text-xs text-slate-400">Title</div>
+                  <div className="mt-1 text-sm text-white break-words">
+                    {showModalMode === 'task'
+                      ? `Build: ${conceptTitle?.trim() || buildConceptTitle()}`
+                      : conceptTitle?.trim() || buildConceptTitle()}
+                  </div>
+
+                  <div className="mt-3 text-xs text-slate-400">Notes</div>
+                  <div className="mt-1 text-sm text-slate-200 whitespace-pre-wrap break-words max-h-[160px] overflow-auto rounded-md border border-slate-800/60 bg-slate-950/40 p-2">
+                    {`Prompt:\n${String(finalPrompt ?? '').trim()}\n\nImage:\n${generatedImage}`}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowModalOpen(false)}
+                  className="px-4 py-2 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void addToShowOrTask()}
+                  className="px-4 py-2 rounded-md bg-purple-600 hover:bg-purple-700 text-white font-semibold"
+                >
+                  {showModalMode === 'task' ? 'Create Task' : 'Add to Show'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
     </div>
   );
 };
