@@ -615,7 +615,7 @@ try {
             DIRECTOR_MODE_SYSTEM_INSTRUCTION,
             directorResponseSchema,
             undefined,
-            { maxOutputTokens: speedMode === 'fast' ? 1800 : 6500 }
+            { maxOutputTokens: speedMode === 'fast' ? 1800 : 8192 }
           );
           const blueprint = resultJson as DirectorModeBlueprint;
           const vId = makeId();
@@ -857,7 +857,7 @@ ${speedConstraints}
                 DIRECTOR_MODE_SYSTEM_INSTRUCTION,
                 directorResponseSchema,
                 undefined,
-                { maxOutputTokens: speedMode === 'fast' ? 1800 : 6500 }
+                { maxOutputTokens: speedMode === 'fast' ? 1800 : 8192 }
             );
             const next = resultJson as DirectorModeBlueprint;
             const vId = makeId();

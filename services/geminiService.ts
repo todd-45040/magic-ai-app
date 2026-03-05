@@ -69,6 +69,8 @@ function safeJsonParse(text: string): any {
     return JSON.parse(candidate || '{}');
   } catch {
     const repaired = escapeNewlinesInsideStrings(candidate);
+    // If the second parse still fails (common with malformed model output),
+    // allow callers to catch and perform a "re-emit valid JSON" retry.
     return JSON.parse(repaired || '{}');
   }
 }
@@ -313,7 +315,43 @@ export const generateStructuredResponse = async (
 
   const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 2 });
   const text = extractText(result);
-  return safeJsonParse(text || '{}');
+
+  // First attempt: best-effort local repair (escape newlines in strings, extract JSON block)
+  try {
+    return safeJsonParse(text || '{}');
+  } catch (err: any) {
+    // Second attempt: ask the model to re-emit ONLY valid JSON (booth-proofing).
+    // This is the most reliable fix for "unterminated string" and truncation errors.
+    const msg = String(err?.message || err || 'Invalid JSON');
+    const retryPrompt =
+      `The previous response was INVALID JSON and failed to parse (error: ${msg}).\n\n` +
+      `Re-emit ONLY valid JSON that conforms EXACTLY to the provided schema.\n` +
+      `Rules:\n` +
+      `- Output ONLY JSON (no markdown fences, no prose).\n` +
+      `- Do NOT include trailing comments.\n` +
+      `- Do NOT include raw newlines inside string values; use \\n if needed.\n` +
+      `- Ensure all quotes inside strings are properly escaped.\n\n` +
+      `Here is the invalid output to fix:\n` +
+      `${text || ''}\n\n` +
+      `Now output the corrected JSON only.`;
+
+    const retryBody: GeminiGenerateBody = {
+      model: 'gemini-3-flash-preview',
+      contents: [{ role: 'user', parts: [{ text: retryPrompt }] }],
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json",
+        responseSchema,
+        ...(typeof options?.maxOutputTokens === 'number'
+          ? { maxOutputTokens: Math.max(options.maxOutputTokens, 2200) }
+          : {}),
+      },
+    };
+
+    const retryResult = await postJson<any>('/api/generate', retryBody, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 1 });
+    const retryText = extractText(retryResult);
+    return safeJsonParse(retryText || '{}');
+  }
 };
 
 export const identifyTrickFromImage = async (
