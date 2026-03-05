@@ -533,7 +533,8 @@ const dictionaryLinks = useMemo(() => {
     };
 
     const buildOutlineFromBlueprint = (plan: AnyDirectorBlueprint) => {
-        return blueprintToOutline(plan, { fullDetail });
+        // Only Full mode supports the richer outline details.
+        return blueprintToOutline(plan, { fullDetail: speedMode === 'full' && outlineFullDetail });
     };
 
     const getActiveBlueprint = () => {
