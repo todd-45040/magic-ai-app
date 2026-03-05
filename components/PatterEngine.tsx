@@ -1,6 +1,8 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { saveIdea } from "../services/ideasService";
+import { supabase } from "../lib/supabaseClient";
 import { CohesionActions } from "./CohesionActions";
+import { SaveActionBar } from "./SaveActionBar";
 import { BookIcon, WandIcon, CheckIcon, CopyIcon } from "./icons";
 import type { User } from "../types";
 
@@ -87,8 +89,8 @@ const PatterEngine: React.FC<PatterEngineProps> = ({ user: _user, onIdeaSaved })
 
     try {
       // Critical: /api/generatePatter requires an auth header (Bearer token)
-      const { data } = await supabase.auth.getSession();
-      const token = data?.session?.access_token;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
       if (!token) {
         setError("Please log in to generate patter.");
         return;
@@ -103,15 +105,15 @@ const PatterEngine: React.FC<PatterEngineProps> = ({ user: _user, onIdeaSaved })
         body: JSON.stringify({ prompt: buildPrompt(desc, tones) }),
       });
 
-      const data = await res.json().catch(async () => {
+      const payload = await res.json().catch(async () => {
         const t = await res.text();
         throw new Error(t || `Request failed (${res.status})`);
       });
 
-      const text = extractGeminiText(data);
+      const text = extractGeminiText(payload);
 
       if (!res.ok) {
-        throw new Error(text || data?.error || `Request failed (${res.status})`);
+        throw new Error(text || payload?.error || `Request failed (${res.status})`);
       }
 
       if (!text) {
