@@ -165,26 +165,46 @@ const CollapsibleSection: React.FC<{
   title: string;
   isOpen: boolean;
   onToggle: () => void;
+  onCopy?: () => void;
+  copyLabel?: string;
+  copied?: boolean;
   children: React.ReactNode;
-}> = ({ id, title, isOpen, onToggle, children }) => (
+}> = ({ id, title, isOpen, onToggle, onCopy, copyLabel, copied, children }) => (
   <section id={id} className="scroll-mt-24">
-    <div className="flex items-center justify-between">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="w-full flex items-center justify-between gap-3 text-left cursor-pointer select-none"
-        aria-expanded={isOpen}
-        aria-controls={`${id}-panel`}
-      >
-        <h3 className="text-lg font-bold text-white font-cinzel">{title}</h3>
-        <span className={`text-slate-400 text-sm transition-transform ${isOpen ? 'rotate-180' : ''}`}>▾</span>
-      </button>
-    </div>
-    {isOpen ? (
-      <div id={`${id}-panel`} className="mt-3">
-        {children}
+    <div className="rounded-2xl border border-slate-800 bg-slate-900/20 overflow-hidden">
+      <div className="px-4 py-3 flex items-center gap-3 border-b border-slate-800">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex-1 flex items-center justify-between gap-3 text-left cursor-pointer select-none"
+          aria-expanded={isOpen}
+          aria-controls={`${id}-panel`}
+        >
+          <h3 className="text-lg font-bold text-white font-cinzel">{title}</h3>
+          <span className={`text-slate-400 text-sm transition-transform ${isOpen ? 'rotate-180' : ''}`}>▾</span>
+        </button>
+
+        {onCopy ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onCopy();
+            }}
+            className="shrink-0 px-3 py-1.5 rounded-md text-xs font-semibold border border-slate-700 bg-slate-900/60 text-slate-200 hover:bg-slate-900"
+            title="Copy this section"
+          >
+            {copied ? 'Copied!' : copyLabel || 'Copy'}
+          </button>
+        ) : null}
       </div>
-    ) : null}
+
+      {isOpen ? (
+        <div id={`${id}-panel`} className="p-4">
+          {children}
+        </div>
+      ) : null}
+    </div>
   </section>
 );
 
@@ -264,6 +284,19 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
   });
 
   const [jsonCopyStatus, setJsonCopyStatus] = useState<'idle' | 'copied'>('idle');
+  const [copyAllStatus, setCopyAllStatus] = useState<'idle' | 'copied'>('idle');
+  const [sectionCopyStatus, setSectionCopyStatus] = useState<Record<SectionId, 'idle' | 'copied'>>({
+    engineering: 'idle',
+    concept: 'idle',
+    blueprint: 'idle',
+    principles: 'idle',
+    staging: 'idle',
+    buildpack: 'idle',
+    cutlist: 'idle',
+    assembly: 'idle',
+    safety: 'idle',
+    json: 'idle',
+  });
 
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -747,8 +780,93 @@ const handleRegenerateConceptArt = async () => {
       const fullContent = buildFullContent();
       if (!fullContent) return;
       await navigator.clipboard.writeText(fullContent);
+      setCopyAllStatus('copied');
+      setTimeout(() => setCopyAllStatus('idle'), 1500);
     } catch {
       // Clipboard can be blocked by browser permissions; user can still copy manually.
+    }
+  };
+
+  const buildSectionContent = (id: SectionId) => {
+    if (!engineeringSummary || !stagingBlueprint || !buildPack) return '';
+    const header = `## Illusion Blueprint: ${prompt || buildPack.title}\n`;
+    const meta = `Effect Type: ${effectType}\nVenue: ${venueSize}\nStyle: ${performerStyle}${constraints.trim() ? `\nConstraints: ${constraints.trim()}` : ''}\n\n`;
+
+    switch (id) {
+      case 'engineering': {
+        return (
+          header +
+          meta +
+          `### Engineering Summary\n\n` +
+          `Title: ${engineeringSummary.title}\n\n` +
+          `Audience Experience: ${engineeringSummary.audience_experience}\n\n` +
+          `Method Possibilities (non-exposure):\n- A: ${engineeringSummary.secret_method_possibilities.method_a}\n- B: ${engineeringSummary.secret_method_possibilities.method_b}\n- C: ${engineeringSummary.secret_method_possibilities.method_c}\n\n` +
+          `Stage Staging:\n- Lighting: ${engineeringSummary.stage_staging.lighting}\n- Blocking: ${engineeringSummary.stage_staging.blocking}\n- Angles: ${engineeringSummary.stage_staging.angles}\n\n` +
+          `Technical Requirements:\n- Assistants: ${engineeringSummary.technical_requirements.assistants}\n- Props: ${engineeringSummary.technical_requirements.props.join(', ')}\n- Mechanics: ${engineeringSummary.technical_requirements.mechanics.join(', ')}\n\n` +
+          `Safety Notes:\n${engineeringSummary.safety_notes.map((s) => `- ${s}`).join('\n')}\n\n` +
+          `Reset Time: ${engineeringSummary.reset_time}\n\n` +
+          `Build Complexity (1–5): ${engineeringSummary.build_complexity.rating_1_to_5} — ${engineeringSummary.build_complexity.rationale}\n\n` +
+          `Reality Checks:\n- Weight/Transport: ${engineeringSummary.reality_checks.weight_transport}\n- Crew: ${engineeringSummary.reality_checks.crew}\n- Setup Time: ${engineeringSummary.reality_checks.setup_time}\n\n` +
+          `Angle Risk Summary:\n- Front: ${engineeringSummary.angle_risk_summary.front}\n- Sides: ${engineeringSummary.angle_risk_summary.sides}\n- Balcony: ${engineeringSummary.angle_risk_summary.balcony}\n\n` +
+          `Feasibility Verdict: ${engineeringSummary.feasibility_verdict.level} — ${engineeringSummary.feasibility_verdict.why}\n`
+        );
+      }
+      case 'concept': {
+        return (
+          header +
+          meta +
+          `### Concept Art\n\n` +
+          (lastArtPrompt ? `Prompt used: ${lastArtPrompt}\n\n` : '') +
+          (conceptArt ? `Image URL: ${conceptArt}\n` : 'No concept art generated.')
+        );
+      }
+      case 'blueprint': {
+        return header + meta + `### Blueprint Sheet\n\n` + (blueprintSheet ? `Image URL: ${blueprintSheet}\n` : 'No blueprint sheet generated.');
+      }
+      case 'principles': {
+        return (
+          header +
+          meta +
+          `### Potential Principles\n\n` +
+          stagingBlueprint.potential_principles.map((p) => `- ${p.name}: ${p.description}`).join('\n') +
+          `\n`
+        );
+      }
+      case 'staging': {
+        return header + meta + `### Staging Blueprint\n\n${stagingBlueprint.blueprint_description}\n`;
+      }
+      case 'buildpack': {
+        return header + meta + `### Build Blueprint Pack (JSON)\n\n${JSON.stringify(buildPack, null, 2)}\n`;
+      }
+      case 'cutlist': {
+        const lines = filteredCutList.map((c) => `- ${c.part} (${c.material}, ${c.thickness}) x${c.qty} — ${c.size_in} / ${c.size_mm}${c.notes ? ` — ${c.notes}` : ''}`);
+        return header + meta + `### Cut List\n\n${lines.join('\n')}\n`;
+      }
+      case 'assembly': {
+        const steps = filteredSteps.map((s) => `${s.step}. ${s.text}`);
+        return header + meta + `### Assembly Steps\n\n${steps.join('\n')}\n`;
+      }
+      case 'safety': {
+        const merged = Array.from(new Set([...(engineeringSummary.safety_notes || []), ...(buildPack.safety_notes || [])]));
+        return header + meta + `### Safety Notes\n\n${merged.map((s) => `- ${s}`).join('\n')}\n`;
+      }
+      case 'json': {
+        return header + meta + `### Raw JSON\n\n${rawJson}\n`;
+      }
+      default:
+        return '';
+    }
+  };
+
+  const handleCopySection = async (id: SectionId) => {
+    try {
+      const text = buildSectionContent(id);
+      if (!text) return;
+      await navigator.clipboard.writeText(text);
+      setSectionCopyStatus((prev) => ({ ...prev, [id]: 'copied' }));
+      setTimeout(() => setSectionCopyStatus((prev) => ({ ...prev, [id]: 'idle' })), 1200);
+    } catch {
+      // ignore
     }
   };
 
@@ -779,6 +897,19 @@ const handleRegenerateConceptArt = async () => {
       json: false,
     });
     setJsonCopyStatus('idle');
+    setCopyAllStatus('idle');
+    setSectionCopyStatus({
+      engineering: 'idle',
+      concept: 'idle',
+      blueprint: 'idle',
+      principles: 'idle',
+      staging: 'idle',
+      buildpack: 'idle',
+      cutlist: 'idle',
+      assembly: 'idle',
+      safety: 'idle',
+      json: 'idle',
+    });
     setSaveStatus('idle');
   };
 
@@ -992,7 +1123,18 @@ const handleRegenerateConceptArt = async () => {
               <div className="text-sm font-semibold text-slate-200">Blueprint Output</div>
               <div className="text-xs text-slate-500">Concept art, staging, build pack, and safety notes.</div>
             </div>
-            <div className="text-[11px] text-slate-500">Version: {APP_VERSION}</div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void handleCopyAll()}
+                disabled={!engineeringSummary || !stagingBlueprint || !buildPack}
+                className="px-3 py-1.5 rounded-md text-[11px] font-semibold border border-slate-700 bg-slate-900/60 text-slate-200 hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Copy the full blueprint"
+              >
+                {copyAllStatus === 'copied' ? 'Copied!' : 'Copy Blueprint'}
+              </button>
+              <div className="text-[11px] text-slate-500">Version: {APP_VERSION}</div>
+            </div>
           </div>
 
           <div ref={containerRef} className="flex-1 overflow-y-auto p-4 md:p-5">
@@ -1085,6 +1227,8 @@ const handleRegenerateConceptArt = async () => {
             title="Engineering Summary"
             isOpen={openSections.engineering}
             onToggle={() => toggleSection('engineering')}
+            onCopy={() => void handleCopySection('engineering')}
+            copied={sectionCopyStatus.engineering === 'copied'}
           >
             <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-4 space-y-4">
               <div>
@@ -1197,6 +1341,8 @@ const handleRegenerateConceptArt = async () => {
               title="Concept Art"
               isOpen={openSections.concept}
               onToggle={() => toggleSection('concept')}
+              onCopy={() => void handleCopySection('concept')}
+              copied={sectionCopyStatus.concept === 'copied'}
             >
               <img
                 src={conceptArt}
@@ -1227,6 +1373,8 @@ const handleRegenerateConceptArt = async () => {
     title="Blueprint Sheet"
     isOpen={openSections.blueprint}
     onToggle={() => toggleSection('blueprint')}
+    onCopy={() => void handleCopySection('blueprint')}
+    copied={sectionCopyStatus.blueprint === 'copied'}
   >
     {!blueprintSheet ? (
       <div className="rounded-md border border-slate-700/60 bg-slate-900/40 p-4">
@@ -1273,6 +1421,8 @@ const handleRegenerateConceptArt = async () => {
             title="Potential Principles"
             isOpen={openSections.principles}
             onToggle={() => toggleSection('principles')}
+            onCopy={() => void handleCopySection('principles')}
+            copied={sectionCopyStatus.principles === 'copied'}
           >
             <div className="space-y-3">
                 {stagingBlueprint.potential_principles.map((principle, i) => (
@@ -1285,14 +1435,28 @@ const handleRegenerateConceptArt = async () => {
           </CollapsibleSection>
 
           {/* Staging */}
-          <CollapsibleSection id="staging" title="Staging Blueprint" isOpen={openSections.staging} onToggle={() => toggleSection('staging')}>
+          <CollapsibleSection
+            id="staging"
+            title="Staging Blueprint"
+            isOpen={openSections.staging}
+            onToggle={() => toggleSection('staging')}
+            onCopy={() => void handleCopySection('staging')}
+            copied={sectionCopyStatus.staging === 'copied'}
+          >
             <div className="bg-slate-800/50 p-3 rounded-md border border-slate-700/50">
               <pre className="whitespace-pre-wrap break-words text-slate-300 font-sans text-sm">{stagingBlueprint.blueprint_description}</pre>
             </div>
           </CollapsibleSection>
 
           {/* Build Pack */}
-          <CollapsibleSection id="buildpack" title="Build Blueprint Pack" isOpen={openSections.buildpack} onToggle={() => toggleSection('buildpack')}>
+          <CollapsibleSection
+            id="buildpack"
+            title="Build Blueprint Pack"
+            isOpen={openSections.buildpack}
+            onToggle={() => toggleSection('buildpack')}
+            onCopy={() => void handleCopySection('buildpack')}
+            copied={sectionCopyStatus.buildpack === 'copied'}
+          >
             <div className="space-y-4">
                 <div className="bg-slate-800/50 p-4 rounded-md border border-slate-700/50">
                   <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
@@ -1431,7 +1595,14 @@ const handleRegenerateConceptArt = async () => {
           </CollapsibleSection>
 
           {/* Cut list */}
-          <CollapsibleSection id="cutlist" title="Cut List" isOpen={openSections.cutlist} onToggle={() => toggleSection('cutlist')}>
+          <CollapsibleSection
+            id="cutlist"
+            title="Cut List"
+            isOpen={openSections.cutlist}
+            onToggle={() => toggleSection('cutlist')}
+            onCopy={() => void handleCopySection('cutlist')}
+            copied={sectionCopyStatus.cutlist === 'copied'}
+          >
             <div className="overflow-x-auto bg-slate-800/40 border border-slate-700/50 rounded-md">
                 <table className="min-w-full text-left text-sm">
                   <thead className="bg-slate-900/60 text-slate-200">
@@ -1467,7 +1638,14 @@ const handleRegenerateConceptArt = async () => {
           </CollapsibleSection>
 
           {/* Assembly */}
-          <CollapsibleSection id="assembly" title="Assembly Steps" isOpen={openSections.assembly} onToggle={() => toggleSection('assembly')}>
+          <CollapsibleSection
+            id="assembly"
+            title="Assembly Steps"
+            isOpen={openSections.assembly}
+            onToggle={() => toggleSection('assembly')}
+            onCopy={() => void handleCopySection('assembly')}
+            copied={sectionCopyStatus.assembly === 'copied'}
+          >
             <div className="bg-slate-800/50 p-4 rounded-md border border-slate-700/50">
                 <ol className="list-decimal list-inside space-y-2 text-slate-300">
                   {filteredSteps
@@ -1494,7 +1672,14 @@ const handleRegenerateConceptArt = async () => {
           </CollapsibleSection>
 
           {/* Safety */}
-          <CollapsibleSection id="safety" title="Safety & Stability" isOpen={openSections.safety} onToggle={() => toggleSection('safety')}>
+          <CollapsibleSection
+            id="safety"
+            title="Safety & Stability"
+            isOpen={openSections.safety}
+            onToggle={() => toggleSection('safety')}
+            onCopy={() => void handleCopySection('safety')}
+            copied={sectionCopyStatus.safety === 'copied'}
+          >
             <div className="bg-slate-800/50 p-4 rounded-md border border-slate-700/50">
                 <ul className="list-disc list-inside text-sm text-slate-300 space-y-1">
                   {buildPack.safety_notes.map((n, idx) => (
@@ -1514,7 +1699,15 @@ const handleRegenerateConceptArt = async () => {
 </div>
 
 {/* Raw JSON */}
-          <CollapsibleSection id="json" title="Raw JSON" isOpen={openSections.json} onToggle={() => toggleSection('json')}>
+          <CollapsibleSection
+            id="json"
+            title="Raw JSON"
+            isOpen={openSections.json}
+            onToggle={() => toggleSection('json')}
+            onCopy={() => void handleCopySection('json')}
+            copied={sectionCopyStatus.json === 'copied'}
+            copyLabel="Copy section"
+          >
                 <div className="flex items-center gap-2 mb-2">
                   <button
                     onClick={handleCopyJson}
@@ -1538,39 +1731,43 @@ const handleRegenerateConceptArt = async () => {
                 </pre>
           </CollapsibleSection>
 
-          {/* Premium SaveActionBar + workflow parity */}
-          <div className="pt-4 border-t border-slate-800">
-            <SaveActionBar
-              title="Next step:"
-              subtitle="Save it, then move it into a Show or Task."
-              onSave={handleSave}
-              onCopy={() => void handleCopyAll()}
-              saved={saveStatus === 'saved'}
-              saving={false}
-              primaryLabel="Save Blueprint to Idea Vault"
-            />
-
-            <div className="mt-2 flex flex-col sm:flex-row items-center justify-between gap-2">
-              <CohesionActions
-                content={buildFullContent()}
-                defaultTitle={`Illusion Blueprint: ${prompt || 'Untitled'}`}
-                defaultTags={["illusion-blueprint", "build"]}
-                compact
-              />
-
-              <button
-                type="button"
-                onClick={handleStartOver}
-                className="px-5 py-2 rounded-lg border border-slate-700 bg-slate-900/40 text-slate-100 font-semibold hover:bg-slate-900/60"
-              >
-                Start Over
-              </button>
-            </div>
-          </div>
-
               </div>
             )}
           </div>
+
+          {/* Pinned SaveActionBar + workflow parity (outside scroll area) */}
+          {engineeringSummary && stagingBlueprint && buildPack ? (
+            <div className="border-t border-slate-800 bg-slate-950/70 backdrop-blur p-4">
+              <div className="flex flex-col gap-3">
+                <SaveActionBar
+                  title="Next step:"
+                  subtitle="Save it, then move it into a Show or Task."
+                  onSave={handleSave}
+                  onCopy={() => void handleCopyAll()}
+                  saved={saveStatus === 'saved'}
+                  saving={false}
+                  primaryLabel="Save Blueprint to Idea Vault"
+                />
+
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
+                  <CohesionActions
+                    content={buildFullContent()}
+                    defaultTitle={`Illusion Blueprint: ${prompt || 'Untitled'}`}
+                    defaultTags={["illusion-blueprint", "build"]}
+                    compact
+                  />
+
+                  <button
+                    type="button"
+                    onClick={handleStartOver}
+                    className="px-5 py-2 rounded-lg border border-slate-700 bg-slate-900/40 text-slate-100 font-semibold hover:bg-slate-900/60"
+                  >
+                    Start Over
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
