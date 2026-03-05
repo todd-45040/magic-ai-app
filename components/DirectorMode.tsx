@@ -7,7 +7,7 @@ import { createShow, addTasksToShow } from '../services/showsService';
 import { saveDirectorBlueprint } from '../services/directorBlueprintsService';
 import { trackClientEvent } from '../services/telemetryClient';
 import { DIRECTOR_MODE_SYSTEM_INSTRUCTION, MAGIC_DICTIONARY_TERMS } from '../constants';
-import type { DirectorModeBlueprint, DirectorModeBlueprintFast, DirectorModeSegment, DirectorModeSegmentFast, DirectorSegmentPurpose } from '../types';
+import type { DirectorModeBlueprint } from '../types';
 import { WandIcon, SaveIcon, CheckIcon, ChecklistIcon } from './icons';
 import { generateStructuredResponse } from '../services/geminiService';
 
@@ -113,24 +113,15 @@ const parseTransitionExtras = (raw: string) => {
     return { base: base || '—', beats, volunteer, patter, audienceMoment };
 };
 
-type AnyDirectorBlueprint = DirectorModeBlueprint | DirectorModeBlueprintFast;
-type AnyDirectorSegment = DirectorModeSegment | DirectorModeSegmentFast;
-
-const derivePurpose = (idx: number, total: number): DirectorSegmentPurpose => {
-    if (idx === 0) return 'opener';
-    if (idx === total - 1) return 'closer';
-    return 'middle';
-};
-
-const blueprintToOutline = (bp: AnyDirectorBlueprint, opts?: { fullDetail?: boolean }): string => {
+const blueprintToOutline = (bp: DirectorModeBlueprint, opts?: { fullDetail?: boolean }): string => {
     if (!bp) return '';
     const fullDetail = Boolean(opts?.fullDetail);
 
     const lines: string[] = [];
     const title = (bp.show_title || 'Untitled Show').trim();
     const len = bp.show_length_minutes ? `${bp.show_length_minutes} Minute` : '';
-    const venue = ((bp as any).venue_type || '').trim();
-    const tone = ((bp as any).tone || '').trim();
+    const venue = (bp.venue_type || '').trim();
+    const tone = (bp.tone || '').trim();
 
     lines.push(title.toUpperCase());
     const headerBits = [len, venue ? `${venue} Show` : 'Show'].filter(Boolean).join(' ');
@@ -138,18 +129,12 @@ const blueprintToOutline = (bp: AnyDirectorBlueprint, opts?: { fullDetail?: bool
     if (tone) lines.push(`Tone: ${tone}`);
     lines.push('');
 
-    const segments = (bp.segments || []) as AnyDirectorSegment[];
-    segments.forEach((seg, idx) => {
-        const purposeRaw = (seg as any).purpose || derivePurpose(idx, segments.length);
-        const purpose = String(purposeRaw || '').toUpperCase();
+    (bp.segments || []).forEach((seg) => {
+        const purpose = (seg.purpose || '').toUpperCase();
         const dur = Number.isFinite(Number(seg.duration_estimate_minutes)) ? `${seg.duration_estimate_minutes} min` : '';
         lines.push(`${purpose} — ${seg.title}${dur ? ` (${dur})` : ''}`);
         lines.push('');
-
-        const interaction = (seg as any).audience_interaction_level;
-        if (interaction) {
-            lines.push(`Audience Interaction: ${String(interaction).replace(/^./, (c) => c.toUpperCase())}`);
-        }
+        lines.push(`Audience Interaction: ${(seg.audience_interaction_level || '').toString().replace(/^./, (c) => c.toUpperCase())}`);
 
         const props = Array.isArray(seg.props_required) ? seg.props_required.filter(Boolean) : [];
         lines.push(`Props: ${props.length ? props.join(', ') : '—'}`);
@@ -403,9 +388,9 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
     // Control State
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [showPlan, setShowPlan] = useState<AnyDirectorBlueprint | null>(null);
+    const [showPlan, setShowPlan] = useState<DirectorModeBlueprint | null>(null);
     // Phase 5: Refinement versions
-    const [blueprintVersions, setBlueprintVersions] = useState<Array<{ id: string; createdAt: number; blueprint: AnyDirectorBlueprint; diffHint?: string }>>([]);
+    const [blueprintVersions, setBlueprintVersions] = useState<Array<{ id: string; createdAt: number; blueprint: DirectorModeBlueprint; diffHint?: string }>>([]);
     const [activeBlueprintId, setActiveBlueprintId] = useState<string | null>(null);
     const [isRefining, setIsRefining] = useState(false);
     const [refineNotice, setRefineNotice] = useState<string | null>(null);
@@ -434,37 +419,34 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
         if (!showPlan) return '';
         const parts: string[] = [];
         parts.push(`Constraints:`);
-        const c = (showPlan as any).constraints;
-        parts.push(`- Skill level: ${c?.skill_level || skillLevel || ''}`);
-        parts.push(`- Reset time: ${c?.reset_time || resetTime || ''}`);
-        if (Array.isArray(c?.props_owned) && c.props_owned.length) {
-            parts.push(`- Props owned: ${c.props_owned.join(', ')}`);
+        parts.push(`- Skill level: ${showPlan.constraints?.skill_level || ''}`);
+        parts.push(`- Reset time: ${showPlan.constraints?.reset_time || ''}`);
+        if (Array.isArray(showPlan.constraints?.props_owned) && showPlan.constraints.props_owned.length) {
+            parts.push(`- Props owned: ${showPlan.constraints.props_owned.join(', ')}`);
         }
-        if (c?.notes?.trim()) {
-            parts.push(`- Notes: ${c.notes.trim()}`);
+        if (showPlan.constraints?.notes?.trim()) {
+            parts.push(`- Notes: ${showPlan.constraints.notes.trim()}`);
         }
         parts.push('');
         parts.push('Segments:');
-        const segs = ((showPlan as any).segments || []) as AnyDirectorSegment[];
-        segs.forEach((s, idx) => {
+        (showPlan.segments || []).forEach((s) => {
             const props = Array.isArray(s.props_required) && s.props_required.length ? ` | props: ${s.props_required.join(', ')}` : '';
-            const purpose: DirectorSegmentPurpose = (s as any).purpose || derivePurpose(idx, segs.length);
-            const interaction = (s as any).audience_interaction_level;
-            parts.push(`- ${purpose}: ${s.title} (${s.duration_estimate_minutes} min${interaction ? `, ${interaction}` : ''}${props})`);
+            const ai = (s as any).audience_interaction_level ? `, ${(s as any).audience_interaction_level}` : '';
+            const purpose = (s as any).purpose ? (s as any).purpose : 'segment';
+            parts.push(`- ${purpose}: ${s.title} (${s.duration_estimate_minutes} min${ai}${props})`);
             if (s.transition_notes?.trim()) parts.push(`  transition: ${s.transition_notes.trim()}`);
         });
         return parts.join('\n');
-    }, [showPlan, skillLevel, resetTime]);
+    }, [showPlan]);
 
 const dictionaryLinks = useMemo(() => {
         if (!showPlan) return [] as string[];
         const blocks: string[] = [];
         blocks.push(showPlan.show_title || '');
-        blocks.push((showPlan as any).tone || '');
-        blocks.push((showPlan as any).performer_persona || '');
-        const notes = (showPlan as any).constraints?.notes;
-        (notes ? [notes] : []).forEach((x) => blocks.push(x));
-        (((showPlan as any).segments || []) as AnyDirectorSegment[]).forEach((s) => {
+        blocks.push(showPlan.tone || '');
+        blocks.push(showPlan.performer_persona || '');
+        (showPlan.constraints?.notes ? [showPlan.constraints.notes] : []).forEach((x) => blocks.push(x));
+        (showPlan.segments || []).forEach((s) => {
             blocks.push(s.title || '');
             blocks.push(s.transition_notes || '');
         });
@@ -532,9 +514,36 @@ const dictionaryLinks = useMemo(() => {
         }
     };
 
-    const buildOutlineFromBlueprint = (plan: AnyDirectorBlueprint) => {
-        // Only Full mode supports the richer outline details.
-        return blueprintToOutline(plan, { fullDetail: speedMode === 'full' && outlineFullDetail });
+    const buildOutlineFromBlueprint = (plan: DirectorModeBlueprint) => {
+        const lines: string[] = [];
+        lines.push(`${plan.show_title} (${plan.show_length_minutes} min)`);
+        lines.push(`Audience: ${plan.audience_type}`);
+        lines.push(`Venue: ${plan.venue_type}`);
+        lines.push(`Tone: ${plan.tone}`);
+        lines.push(`Persona: ${plan.performer_persona}`);
+        lines.push('');
+        lines.push('Constraints:');
+        lines.push(`- Skill: ${plan.constraints?.skill_level || ''}`);
+        lines.push(`- Reset: ${plan.constraints?.reset_time || ''}`);
+        if (Array.isArray(plan.constraints?.props_owned) && plan.constraints.props_owned.length) {
+            lines.push(`- Props owned: ${plan.constraints.props_owned.join(', ')}`);
+        }
+        if (plan.constraints?.notes?.trim()) {
+            lines.push(`- Notes: ${plan.constraints.notes.trim()}`);
+        }
+        lines.push('');
+        lines.push('Segments:');
+        (plan.segments || []).forEach((seg, i) => {
+            lines.push(`${i + 1}. ${seg.purpose.toUpperCase()} — ${seg.title} (${seg.duration_estimate_minutes} min, ${seg.audience_interaction_level})`);
+            if (Array.isArray(seg.props_required) && seg.props_required.length) lines.push(`   Props: ${seg.props_required.join(', ')}`);
+            if (seg.transition_notes?.trim()) lines.push(`   Transition: ${seg.transition_notes.trim()}`);
+            if (Array.isArray((seg as any).beats) && (seg as any).beats.length) lines.push(`   Beats: ${(seg as any).beats.join(' | ')}`);
+            if ((seg as any).patter_hook?.trim()) lines.push(`   Patter hook: ${(seg as any).patter_hook.trim()}`);
+            if ((seg as any).blocking_notes?.trim()) lines.push(`   Blocking: ${(seg as any).blocking_notes.trim()}`);
+            if ((seg as any).volunteer_management?.trim()) lines.push(`   Volunteer: ${(seg as any).volunteer_management.trim()}`);
+            if ((seg as any).music_lighting?.trim()) lines.push(`   Music/lighting: ${(seg as any).music_lighting.trim()}`);
+        });
+        return lines.join('\n');
     };
 
     const getActiveBlueprint = () => {
@@ -543,25 +552,15 @@ const dictionaryLinks = useMemo(() => {
         return active?.blueprint ?? blueprintVersions[blueprintVersions.length - 1].blueprint;
     };
 
-    const computeDiffHint = (prev: AnyDirectorBlueprint, next: AnyDirectorBlueprint, instruction: string) => {
+    const computeDiffHint = (prev: DirectorModeBlueprint, next: DirectorModeBlueprint, instruction: string) => {
         const hints: string[] = [];
-        const getTitle = (p: 'opener' | 'middle' | 'closer', plan: AnyDirectorBlueprint) => {
-            const segs = ((plan as any).segments || []) as any[];
-            const found = segs.find((s) => (s?.purpose || '') === p);
-            if (found?.title) return String(found.title);
-            // FAST mode fallback: derive by position
-            if (p === 'opener' && segs[0]?.title) return String(segs[0].title);
-            if (p === 'closer' && segs[segs.length - 1]?.title) return String(segs[segs.length - 1].title);
-            if (p === 'middle' && segs[1]?.title) return String(segs[1].title);
-            return '';
-        };
+        const getTitle = (p: 'opener' | 'middle' | 'closer', plan: DirectorModeBlueprint) =>
+            (plan.segments || []).find((s) => s.purpose === p)?.title || '';
 
         if (prev.show_length_minutes !== next.show_length_minutes) hints.push('Updated length');
         if (getTitle('closer', prev) && getTitle('closer', prev) !== getTitle('closer', next)) hints.push('Changed closer');
         if (getTitle('opener', prev) && getTitle('opener', prev) !== getTitle('opener', next)) hints.push('Changed opener');
-        if ((prev as any).constraints?.reset_time && (next as any).constraints?.reset_time && (prev as any).constraints?.reset_time !== (next as any).constraints?.reset_time) {
-            hints.push('Adjusted resets');
-        }
+        if (prev.constraints?.reset_time !== next.constraints?.reset_time) hints.push('Adjusted resets');
 
         const normalized = instruction.toLowerCase();
         if (normalized.includes('audience interaction')) hints.push('More interaction');
@@ -602,19 +601,9 @@ const dictionaryLinks = useMemo(() => {
             .join(' ');
     };
 
-    // Phase C: FAST schema is intentionally tiny for speed.
-    // FULL schema remains rich (beats, patter, blocking, volunteer, lighting).
-    const fastSegmentSchema = {
-        type: Type.OBJECT,
-        properties: {
-            title: { type: Type.STRING },
-            duration_estimate_minutes: { type: Type.NUMBER },
-            props_required: { type: Type.ARRAY, items: { type: Type.STRING } },
-            transition_notes: { type: Type.STRING },
-        },
-        required: ['title', 'duration_estimate_minutes', 'props_required', 'transition_notes'],
-    };
-
+    // Phase B: Structured output schema.
+    // FAST schema is minimal for speed.
+    // FULL schema adds richer fields per segment (beats, patter, blocking, etc.).
     const baseSegmentSchema = {
         type: Type.OBJECT,
         properties: {
@@ -683,22 +672,7 @@ const dictionaryLinks = useMemo(() => {
         required: ['show_title', 'show_length_minutes', 'audience_type', 'venue_type', 'tone', 'performer_persona', 'constraints', 'segments'],
     };
 
-    const directorResponseSchemaFast = {
-        type: Type.OBJECT,
-        properties: {
-            show_title: { type: Type.STRING },
-            show_length_minutes: { type: Type.NUMBER },
-            segments: {
-                type: Type.ARRAY,
-                minItems: 3,
-                maxItems: 3,
-                items: {
-                    ...(fastSegmentSchema as any),
-                },
-            },
-        },
-        required: ['show_title', 'show_length_minutes', 'segments'],
-    };
+    const directorResponseSchemaFast = baseBlueprintSchema;
     const directorResponseSchemaFull = {
         ...(baseBlueprintSchema as any),
         properties: {
@@ -763,7 +737,7 @@ const dictionaryLinks = useMemo(() => {
               : 6;
 
         const speedConstraints = speedMode === 'fast'
-          ? `\nSpeed mode: FAST\n- Generate EXACTLY 3 segments, in order: opener, middle, closer.\n- Each segment must include ONLY: title, duration_estimate_minutes, props_required, transition_notes.\n- transition_notes MUST be ONE sentence.\n- Keep titles short (<= 6 words).\n- Do NOT include: purpose, beats, patter_hook, blocking_notes, volunteer_management, music_lighting, audience_interaction_level, or any extra commentary/fields.`
+          ? `\nSpeed mode: FAST (demo-optimized)\n- Return EXACTLY 3 segments total: opener, middle, closer (one each).\n- transition_notes: MAX 1 sentence per segment.\n- props_required: MAX 3 items per segment.\n- Keep titles short (<= 6 words).\n- Keep text tight and punchy.\n- IMPORTANT: Do NOT include any extra fields beyond the FAST schema (no beats, patter_hook, blocking_notes, volunteer_management, music_lighting).`
           : `\nSpeed mode: FULL (richer)\n- Return EXACTLY ${fullSegmentsTarget} segments total (not fewer).\n- Must include exactly 1 opener and 1 closer.\n- All remaining segments must be purpose: middle.\n- Each segment MUST include these FULL-only fields (schema-required):\n  - beats: array of 2–4 short "moments" (strings)\n  - patter_hook: 1–2 sentences\n  - blocking_notes: 1–2 sentences (stage movement / handling)\n  - volunteer_management: short line (or empty string if not needed)\n  - music_lighting: short line (or empty string if not needed)\n- Make purpose STRONGER and more specific (an actionable intent, not generic).\n- transition_notes: 2 sentences (when possible), practical and non-exposure.\n- props_required: keep practical (up to ~6 items when needed).`;
 
         const prompt = `
@@ -790,13 +764,11 @@ ${participation ? `- participation_hint: ${participation}` : ''}
 ${volunteersOk ? `- volunteers_ok: ${volunteersOk}` : ''}
 
 Hard requirements:
+- segments must include exactly 1 opener and 1 closer, and at least 1 middle.
 - Sum of duration_estimate_minutes across segments MUST equal show_length_minutes exactly.
+- Use audience_interaction_level: low/medium/high.
 - props_required should be a list of props needed for that segment (can be empty).
 - transition_notes should be short, actionable cues between segments.
-${speedMode === 'fast'
-  ? `- FAST mode: segments must be EXACTLY 3, ordered opener → middle → closer.`
-  : `- FULL mode: segments must include exactly 1 opener and 1 closer, and all remaining segments must be purpose: middle.\n- Use audience_interaction_level: low/medium/high.`
-}
 ${speedConstraints}
 `;
 try {
@@ -805,9 +777,9 @@ try {
             DIRECTOR_MODE_SYSTEM_INSTRUCTION,
             speedMode === 'fast' ? directorResponseSchemaFast : directorResponseSchemaFull,
             undefined,
-            { maxOutputTokens: speedMode === 'fast' ? 900 : 8192, speedMode }
+            { maxOutputTokens: speedMode === 'fast' ? 2600 : 8192 }
           );
-          const blueprint = resultJson as AnyDirectorBlueprint;
+          const blueprint = resultJson as DirectorModeBlueprint;
           const vId = makeId();
           setShowPlan(blueprint);
           setBlueprintVersions([{ id: vId, createdAt: Date.now(), blueprint, diffHint: 'Initial blueprint' }]);
@@ -859,12 +831,46 @@ try {
   
     // Phase C: Send structured blueprint into Show Planner as a NEW show + 4 core tasks.
     
-    const buildIdeaFromShowPlan = (plan: AnyDirectorBlueprint) => {
+    const buildIdeaFromShowPlan = (plan: DirectorModeBlueprint) => {
+        const lines: string[] = [];
+
+        lines.push(`Show Title: ${plan.show_title}`);
+        lines.push(`Length: ${plan.show_length_minutes} min`);
+        lines.push(`Audience: ${plan.audience_type}`);
+        lines.push(`Venue: ${plan.venue_type}`);
+        lines.push(`Tone: ${plan.tone}`);
+        lines.push(`Performer Persona: ${plan.performer_persona}`);
+        lines.push('');
+
+        const c = plan.constraints;
+        lines.push('Constraints:');
+        lines.push(`  • Skill Level: ${c?.skill_level || ''}`);
+        lines.push(`  • Reset Time: ${c?.reset_time || ''}`);
+        if (Array.isArray(c?.props_owned) && c.props_owned.length) {
+            lines.push(`  • Props Owned: ${c.props_owned.join(', ')}`);
+        }
+        if (c?.notes?.trim()) {
+            lines.push(`  • Notes: ${c.notes.trim()}`);
+        }
+        lines.push('');
+
+        lines.push('Segments:');
+        (plan.segments || []).forEach((seg, i) => {
+            lines.push(`  ${i + 1}) ${seg.purpose.toUpperCase()} (${seg.duration_estimate_minutes} min): ${seg.title}`);
+            lines.push(`     - Interaction: ${seg.audience_interaction_level}`);
+            if (Array.isArray(seg.props_required) && seg.props_required.length) {
+                lines.push(`     - Props: ${seg.props_required.join(', ')}`);
+            }
+            if (seg.transition_notes?.trim()) {
+                lines.push(`     - Transition: ${seg.transition_notes.trim()}`);
+            }
+        });
+
         return {
             title: plan.show_title,
-            content: buildOutlineFromBlueprint(plan),
+            content: lines.join('\n'),
         };
-    };
+    };;
 
     const handleSaveToIdeas = async () => {
         const active = getActiveBlueprint() ?? showPlan;
@@ -994,7 +1000,7 @@ try {
               : 6;
 
         const speedConstraints = speedMode === 'fast'
-          ? `\nSpeed mode: FAST\n- Generate EXACTLY 3 segments, in order: opener, middle, closer.\n- Each segment must include ONLY: title, duration_estimate_minutes, props_required, transition_notes.\n- transition_notes MUST be ONE sentence.\n- Keep titles short (<= 6 words).\n- Do NOT include: purpose, beats, patter_hook, blocking_notes, volunteer_management, music_lighting, audience_interaction_level, or any extra commentary/fields.`
+          ? `\nSpeed mode: FAST (demo-optimized)\n- Return EXACTLY 3 segments total: opener, middle, closer (one each).\n- transition_notes: MAX 1 sentence per segment.\n- props_required: MAX 3 items per segment.\n- Keep titles short (<= 6 words).\n- Keep text tight and punchy.\n- IMPORTANT: Do NOT include any extra fields beyond the FAST schema (no beats, patter_hook, blocking_notes, volunteer_management, music_lighting).`
           : `\nSpeed mode: FULL (richer)\n- Return EXACTLY ${fullSegmentsTarget} segments total (not fewer).\n- Must include exactly 1 opener and 1 closer.\n- All remaining segments must be purpose: middle.\n- Each segment MUST include these FULL-only fields (schema-required):\n  - beats: array of 2–4 short "moments" (strings)\n  - patter_hook: 1–2 sentences\n  - blocking_notes: 1–2 sentences (stage movement / handling)\n  - volunteer_management: short line (or empty string if not needed)\n  - music_lighting: short line (or empty string if not needed)\n- Make purpose STRONGER and more specific (an actionable intent, not generic).\n- transition_notes: 2 sentences (when possible), practical and non-exposure.\n- props_required: keep practical (up to ~6 items when needed).`;
 
         const refinePrompt = `
@@ -1011,10 +1017,7 @@ Refinement instruction:\n- ${instruction}
 Hard requirements:
 - The returned JSON MUST match the schema.
 - Sum of duration_estimate_minutes across segments MUST equal show_length_minutes exactly.
-- ${speedMode === 'fast'
-  ? 'FAST mode: segments must be EXACTLY 3, ordered opener → middle → closer.'
-  : 'FULL mode: must include exactly 1 opener and 1 closer, and at least 1 middle.'
-}
+- Must include exactly 1 opener and 1 closer, and at least 1 middle.
 - Keep it practical and non-exposure.
 ${speedConstraints}
 `;
@@ -1025,9 +1028,9 @@ ${speedConstraints}
                 DIRECTOR_MODE_SYSTEM_INSTRUCTION,
                 speedMode === 'fast' ? directorResponseSchemaFast : directorResponseSchemaFull,
                 undefined,
-                { maxOutputTokens: speedMode === 'fast' ? 900 : 8192, speedMode }
+                { maxOutputTokens: speedMode === 'fast' ? 2600 : 8192 }
             );
-            const next = resultJson as AnyDirectorBlueprint;
+            const next = resultJson as DirectorModeBlueprint;
             const vId = makeId();
             const diffHint = computeDiffHint(active, next, instruction);
 
@@ -1079,17 +1082,14 @@ ${speedConstraints}
             if (!showId) throw new Error('Could not create the show in Show Planner.');
             setCreatedShowId(showId);
 
-            const segs = ((active as any).segments || []) as AnyDirectorSegment[];
-            const tasks = segs.map((seg, idx) => {
-                const purpose: DirectorSegmentPurpose = (seg as any).purpose || derivePurpose(idx, segs.length);
-                const interaction = (seg as any).audience_interaction_level;
+            const tasks = (active.segments || []).map((seg) => {
                 const propsLine = Array.isArray(seg.props_required) && seg.props_required.length
                     ? `Props: ${seg.props_required.join(', ')}\n`
                     : '';
                 const notes =
-                    `Purpose: ${purpose}\n` +
+                    `Purpose: ${seg.purpose}\n` +
                     `Estimated: ${seg.duration_estimate_minutes} min\n` +
-                    (interaction ? `Interaction: ${interaction}\n` : '') +
+                    `Interaction: ${seg.audience_interaction_level}\n` +
                     propsLine +
                     `Transition: ${seg.transition_notes || ''}` +
                     (Array.isArray((seg as any).beats) && (seg as any).beats.length ? `\nBeats: ${(seg as any).beats.join(' | ')}` : '') +
@@ -1104,9 +1104,9 @@ ${speedConstraints}
                     priority: 'Medium' as const,
                     dueDate: null,
                     durationMinutes: Math.max(1, Math.round(Number(seg.duration_estimate_minutes) || 1)),
-                    tags: ['director-mode', 'show-builder', purpose],
+                    tags: ['director-mode', 'show-builder', seg.purpose],
                     subtasks: [
-                        `Rehearse ${purpose}`,
+                        `Rehearse ${seg.purpose}`,
                         'Source props',
                         'Write patter',
                         'Block staging / beats',
@@ -1161,21 +1161,62 @@ ${speedConstraints}
     }
     
     if (showPlan) {
-        const active = getActiveBlueprint() ?? showPlan;
-        const segs = ((active as any).segments || []) as AnyDirectorSegment[];
-        const opener = segs.find((s: any) => s.purpose === 'opener') || segs[0];
-        const closer = segs.find((s: any) => s.purpose === 'closer') || segs[segs.length - 1];
-        const middles = segs.filter((s: any) => s.purpose === 'middle');
-        const middleFallback = middles.length ? middles : (segs[1] ? [segs[1]] : []);
+                const active = getActiveBlueprint() ?? showPlan;
+        const segments = (active.segments || []) as any[];
 
-        const metaAudience = (active as any).audience_type || computedAudience || '—';
-        const metaVenue = (active as any).venue_type || venueType || '—';
-        const metaTone = (active as any).tone || tone || theme || '—';
-        const metaPersona = (active as any).performer_persona || performerPersona || '—';
-        const metaConstraints = (active as any).constraints || {
-            skill_level: skillLevel,
-            reset_time: resetTime,
+        // Support both Full (purpose field present) and Fast (no purpose; infer by index)
+        const opener = segments.find((s) => s?.purpose === 'opener') ?? segments[0];
+        const closer = segments.find((s) => s?.purpose === 'closer') ?? segments[segments.length - 1];
+        const middles = segments.filter((s, idx) => {
+            if (!s) return false;
+            if (s === opener || s === closer) return false;
+            // Prefer explicit purpose when available; otherwise treat as middle bucket.
+            if (s?.purpose) return s.purpose === 'middle';
+            return true;
+        });
+
+        const getTimelineRole = (idx: number, total: number, seg: any) => {
+            const p = String(seg?.purpose || '').toLowerCase();
+            if (p.includes('open')) return 'Opener';
+            if (p.includes('close')) return 'Closer';
+            if (p.includes('middle')) return 'Middle';
+            if (p.includes('audience')) return 'Audience Piece';
+            if (p.includes('feature')) return 'Feature';
+
+            if (idx === 0) return 'Opener';
+            if (idx === total - 1) return 'Closer';
+
+            const middleCount = Math.max(0, total - 2);
+            const pos = idx - 1; // 0..middleCount-1
+
+            if (middleCount <= 1) return 'Middle';
+            if (middleCount === 2) return pos === 0 ? 'Middle' : 'Feature';
+            if (middleCount === 3) return ['Middle', 'Feature', 'Audience Piece'][pos] || 'Feature';
+
+            // 4+ middle items: Middle, Feature, Audience Piece, then remaining as Feature(s)
+            if (pos === 0) return 'Middle';
+            if (pos === 1) return 'Feature';
+            if (pos === 2) return 'Audience Piece';
+            return 'Feature';
         };
+
+        const timelineItems = (() => {
+            const total = segments.length || 0;
+            const sum = segments.reduce((acc, s) => acc + (Number(s?.duration_estimate_minutes) || 0), 0) || 1;
+
+            return segments.map((s, idx) => {
+                const minutes = Number(s?.duration_estimate_minutes) || 0;
+                const pct = Math.max(6, Math.round((minutes / sum) * 100)); // minimum visual width
+                return {
+                    idx,
+                    role: getTimelineRole(idx, total, s),
+                    title: String(s?.title || ''),
+                    minutes,
+                    pct,
+                };
+            });
+        })();
+
 
         return (
 
@@ -1192,18 +1233,18 @@ ${speedConstraints}
                             <div className="bg-slate-800/50 p-5 rounded-lg border border-slate-700">
                                 <h3 className="text-xl font-bold text-white font-cinzel">{active.show_title}</h3>
                                 <p className="text-slate-400 mt-2 text-sm">
-                                    {active.show_length_minutes} min • {metaAudience} • {metaVenue}
+                                    {active.show_length_minutes} min • {active.audience_type} • {active.venue_type}
                                 </p>
                                 <p className="text-slate-400 mt-1 text-sm">
-                                    Tone: <span className="text-slate-200">{metaTone}</span> • Persona: <span className="text-slate-200">{metaPersona}</span>
+                                    Tone: <span className="text-slate-200">{active.tone}</span> • Persona: <span className="text-slate-200">{active.performer_persona}</span>
                                 </p>
 
                                 <div className="mt-4 flex flex-wrap gap-2">
                                     <span className="px-2.5 py-1 rounded-full border text-xs bg-slate-900/60 border-slate-600/60 text-slate-200">
-                                        Skill: {metaConstraints?.skill_level || '—'}
+                                        Skill: {active.constraints?.skill_level || '—'}
                                     </span>
                                     <span className="px-2.5 py-1 rounded-full border text-xs bg-slate-900/60 border-slate-600/60 text-slate-200">
-                                        Reset: {metaConstraints?.reset_time || '—'}
+                                        Reset: {active.constraints?.reset_time || '—'}
                                     </span>
                                     <span className="px-2.5 py-1 rounded-full border text-xs bg-slate-900/60 border-slate-600/60 text-slate-200">
                                         Venue: {active.venue_type || '—'}
@@ -1422,12 +1463,37 @@ ${speedConstraints}
                                     </div>
                                 </div>
 
+                                {timelineItems.length ? (
+                                    <div className="mt-3">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <p className="text-xs text-slate-400">Show Timeline</p>
+                                            <p className="text-xs text-slate-500">{segments.reduce((acc, s) => acc + (Number(s?.duration_estimate_minutes) || 0), 0)} min total</p>
+                                        </div>
+
+                                        <div className="flex w-full gap-2">
+                                            {timelineItems.map((it) => (
+                                                <div
+                                                    key={it.idx}
+                                                    className="flex flex-col justify-between bg-slate-900/40 border border-slate-700/60 rounded-lg p-2 min-w-[88px]"
+                                                    style={{ width: `${it.pct}%` }}
+                                                    title={`${it.role} — ${it.title} (${it.minutes} min)`}
+                                                >
+                                                    <p className="text-[10px] uppercase tracking-wide text-slate-400">{it.role}</p>
+                                                    <p className="text-xs text-slate-100 font-semibold leading-snug line-clamp-2">{it.title || '—'}</p>
+                                                    <p className="text-[11px] text-slate-300 mt-1">{it.minutes}m</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ) : null}
+
+
                                 {blueprintView === 'segments' ? (
                                     <div className="mt-3 space-y-3 text-sm text-slate-300">
                                         {opener ? (
                                             <div className="bg-slate-900/40 rounded-md p-3 border border-slate-700/60">
                                                 <p className="font-semibold text-white">Opener</p>
-                                                <p className="text-slate-300">{opener.title} • {opener.duration_estimate_minutes} min • {opener.audience_interaction_level}</p>
+                                                <p className="text-slate-300">{opener.title} • {opener.duration_estimate_minutes} min{opener.audience_interaction_level ? ` • ${opener.audience_interaction_level}` : ''}</p>
                                                 <p className="text-slate-400 mt-1">Props: {(opener.props_required || []).join(', ') || '—'}</p>
                                                 {opener.transition_notes ? <p className="text-slate-400 mt-1">Transition: {opener.transition_notes}</p> : null}
                                                 {speedMode === 'full' ? (
@@ -1444,10 +1510,10 @@ ${speedConstraints}
                                             </div>
                                         ) : null}
 
-                                        {middleFallback.map((mSeg, i) => (
+                                        {middles.map((mSeg, i) => (
                                             <div key={i} className="bg-slate-900/40 rounded-md p-3 border border-slate-700/60">
                                                 <p className="font-semibold text-white">Middle</p>
-                                                <p className="text-slate-300">{mSeg.title} • {mSeg.duration_estimate_minutes} min • {mSeg.audience_interaction_level}</p>
+                                                <p className="text-slate-300">{mSeg.title} • {mSeg.duration_estimate_minutes} min{mSeg.audience_interaction_level ? ` • ${mSeg.audience_interaction_level}` : ''}</p>
                                                 <p className="text-slate-400 mt-1">Props: {(mSeg.props_required || []).join(', ') || '—'}</p>
                                                 {mSeg.transition_notes ? <p className="text-slate-400 mt-1">Transition: {mSeg.transition_notes}</p> : null}
                                                 {speedMode === 'full' ? (
@@ -1467,7 +1533,7 @@ ${speedConstraints}
                                         {closer ? (
                                             <div className="bg-slate-900/40 rounded-md p-3 border border-slate-700/60">
                                                 <p className="font-semibold text-white">Closer</p>
-                                                <p className="text-slate-300">{closer.title} • {closer.duration_estimate_minutes} min • {closer.audience_interaction_level}</p>
+                                                <p className="text-slate-300">{closer.title} • {closer.duration_estimate_minutes} min{closer.audience_interaction_level ? ` • ${closer.audience_interaction_level}` : ''}</p>
                                                 <p className="text-slate-400 mt-1">Props: {(closer.props_required || []).join(', ') || '—'}</p>
                                                 {closer.transition_notes ? <p className="text-slate-400 mt-1">Transition: {closer.transition_notes}</p> : null}
                                                 {speedMode === 'full' ? (
@@ -1520,9 +1586,45 @@ ${speedConstraints}
                                                 Copy Show Outline
                                             </button>
                                         </div>
-                                        <pre className="text-xs text-slate-200 bg-slate-950/40 border border-slate-700/60 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap">
-{blueprintToOutline(active, { fullDetail: speedMode === 'full' && outlineFullDetail })}
-                                        </pre>
+                                        <div className="space-y-3">
+                                            {(segments || []).map((seg: any, idx: number) => {
+                                                const role = getTimelineRole(idx, (segments || []).length, seg);
+                                                const isFullDetail = speedMode === 'full' && outlineFullDetail;
+
+                                                return (
+                                                    <div key={idx} className="bg-slate-900/40 rounded-md p-3 border border-slate-700/60">
+                                                        <div className="flex items-start justify-between gap-3">
+                                                            <div>
+                                                                <p className="font-semibold text-white">{role}</p>
+                                                                <p className="text-slate-300">{seg.title} • {seg.duration_estimate_minutes} min</p>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <p className="text-xs text-slate-400">Props</p>
+                                                                <p className="text-xs text-slate-300">{(seg.props_required || []).join(', ') || '—'}</p>
+                                                            </div>
+                                                        </div>
+
+                                                        {seg.transition_notes ? (
+                                                            <p className="text-slate-400 mt-2 text-sm">
+                                                                <span className="text-slate-500">Transition:</span> {seg.transition_notes}
+                                                            </p>
+                                                        ) : null}
+
+                                                        {isFullDetail ? (
+                                                            <div className="text-slate-400 mt-2 space-y-1 text-sm">
+                                                                {Array.isArray(seg.beats) && seg.beats.length ? (
+                                                                    <p><span className="text-slate-500">Beats:</span> {seg.beats.join(' • ')}</p>
+                                                                ) : null}
+                                                                {seg.patter_hook ? <p><span className="text-slate-500">Patter hook:</span> {seg.patter_hook}</p> : null}
+                                                                {seg.blocking_notes ? <p><span className="text-slate-500">Blocking:</span> {seg.blocking_notes}</p> : null}
+                                                                {seg.volunteer_management ? <p><span className="text-slate-500">Volunteer:</span> {seg.volunteer_management}</p> : null}
+                                                                {seg.music_lighting ? <p><span className="text-slate-500">Music/lighting:</span> {seg.music_lighting}</p> : null}
+                                                            </div>
+                                                        ) : null}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
                                 ) : null}
 
