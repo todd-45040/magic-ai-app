@@ -88,164 +88,6 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
     const [comedyLevel, setComedyLevel] = useState<'Low' | 'Medium' | 'High' | ''>('');
     const [participation, setParticipation] = useState<'Low' | 'Medium' | 'High' | ''>('');
     const [volunteersOk, setVolunteersOk] = useState<'Yes' | 'No' | ''>('');
-    // Demo / onboarding examples (rotating)
-    type DirectorExample = {
-        label: string;
-        showTitle: string;
-        showLength: string;
-        audienceChips: string[];
-        audienceType?: string;
-        theme: string;
-        venueType: string;
-        tone: string;
-        performerPersona: string;
-        skillLevel: 'Beginner' | 'Intermediate' | 'Advanced' | '';
-        resetTime: 'Instant' | '30s' | '1 min' | '2 min' | '5+ min' | '';
-        propsOwned: string;
-        constraintNotes: string;
-        // Optional advanced (if you later surface these on the UI)
-        pacing?: 'Relaxed' | 'Balanced' | 'High-energy' | '';
-        comedyLevel?: 'Low' | 'Medium' | 'High' | '';
-        participation?: 'Low' | 'Medium' | 'High' | '';
-        volunteersOk?: 'Yes' | 'No' | '';
-    };
-
-    const DIRECTOR_EXAMPLES_A: DirectorExample[] = [
-        {
-            label: 'Corporate 45 (Comedy + Mind)',
-            showTitle: 'The Corporate Mind-Reader',
-            showLength: '45',
-            audienceChips: ['Corporate', 'Adults'],
-            audienceType: '150 people • banquet room • after-dinner',
-            theme: 'polished, funny, modern mentalism with a clean “wow” ending',
-            venueType: 'banquet hall / hotel ballroom',
-            tone: 'funny + intelligent + high-energy',
-            performerPersona: 'charming storyteller • confident • playful • professional',
-            skillLevel: 'Intermediate',
-            resetTime: '1 min',
-            propsOwned: 'deck of cards, billets, Sharpies, coin set, pad, invisible thread',
-            constraintNotes: 'No fire. Minimal table space. Keep it clean for corporate audience.',
-        },
-        {
-            label: 'School 30 (Fast + Visual)',
-            showTitle: 'Mystery at the Assembly',
-            showLength: '30',
-            audienceChips: ['School Assembly', 'Kids'],
-            audienceType: 'ages 8–12 • big group',
-            theme: 'high-clarity, visual magic with quick laughs and volunteer moments',
-            venueType: 'school gym / auditorium stage',
-            tone: 'funny + upbeat + wholesome',
-            performerPersona: 'friendly “cool teacher” energy • big gestures • clear instructions',
-            skillLevel: 'Beginner',
-            resetTime: '30s',
-            propsOwned: 'sponge balls, rope, silks, thumb tip, deck of cards',
-            constraintNotes: 'Keep volunteers safe and easy. Big visibility. No complex reset.',
-        },
-        {
-            label: 'Close-up 60 (Interactive)',
-            showTitle: 'Impossible at Your Table',
-            showLength: '60',
-            audienceChips: ['Adults'],
-            audienceType: 'walk-around / table-hopping',
-            theme: 'sleek close-up miracles with escalating impossibility',
-            venueType: 'restaurant / cocktail hour',
-            tone: 'mysterious + charming + witty',
-            performerPersona: 'smooth close-up specialist • friendly • confident',
-            skillLevel: 'Advanced',
-            resetTime: 'Instant',
-            propsOwned: 'cards, coins, rubber bands, ring, marker, small pad',
-            constraintNotes: 'No loud music cues. Quick resets. Keep props pocket-friendly.',
-        },
-    ];
-
-    const DIRECTOR_EXAMPLES_B: DirectorExample[] = [
-        {
-            label: 'Theater 90 (Dramatic)',
-            showTitle: 'The Alchemist’s Secret',
-            showLength: '90',
-            audienceChips: ['Adults', 'Seniors'],
-            audienceType: 'seated theater • attentive crowd',
-            theme: 'dramatic, story-driven mystery with strong emotional beats',
-            venueType: 'small theater / stage',
-            tone: 'dramatic + mysterious + cinematic',
-            performerPersona: 'mysterious narrator • deliberate pacing • strong presence',
-            skillLevel: 'Advanced',
-            resetTime: '2 min',
-            propsOwned: 'rings, rope, book test, prediction envelopes, sound cue device',
-            constraintNotes: 'Minimize dead time between segments. Strong transitions. Limited backstage.',
-        },
-        {
-            label: 'Family 45 (Comedy)',
-            showTitle: 'Laughs & Wonders',
-            showLength: '45',
-            audienceChips: ['Families', 'Kids'],
-            audienceType: 'mixed ages • community event',
-            theme: 'big laughs, simple plots, highly visual magic',
-            venueType: 'community center / park pavilion',
-            tone: 'funny + energetic + warm',
-            performerPersona: 'silly but in-control • friendly • high audience rapport',
-            skillLevel: 'Intermediate',
-            resetTime: '1 min',
-            propsOwned: 'silks, sponge balls, rope, linking rings, comedy wand',
-            constraintNotes: 'Wind/noise possible. Keep it visual and loud-friendly.',
-        },
-        {
-            label: 'Mystery 60 (Minimal Props)',
-            showTitle: 'One Pocket Wonders',
-            showLength: '60',
-            audienceChips: ['Adults', 'Corporate'],
-            audienceType: 'small group • close seating',
-            theme: 'minimal-prop mentalism + strong audience interaction',
-            venueType: 'conference room',
-            tone: 'mysterious + smart + dry humor',
-            performerPersona: 'calm psychological entertainer • confident • precise',
-            skillLevel: 'Intermediate',
-            resetTime: '30s',
-            propsOwned: 'billets, Sharpies, index cards, small notebook',
-            constraintNotes: 'No bulky props. Limited reset. Focus on participation and clarity.',
-        },
-    ];
-
-    const [exampleIndexA, setExampleIndexA] = useState(0);
-    const [exampleIndexB, setExampleIndexB] = useState(0);
-
-    const applyExample = (ex: DirectorExample) => {
-        setShowTitle(ex.showTitle);
-        setShowLength(ex.showLength);
-        setAudienceChips(ex.audienceChips);
-        setAudienceType(ex.audienceType || '');
-        setTheme(ex.theme);
-
-        setVenueType(ex.venueType);
-        setTone(ex.tone);
-        setPerformerPersona(ex.performerPersona);
-        setSkillLevel(ex.skillLevel);
-        setResetTime(ex.resetTime);
-        setPropsOwned(ex.propsOwned);
-        setConstraintNotes(ex.constraintNotes);
-
-        // Keep Advanced collapsed by default for clean onboarding
-        setShowAdvanced(false);
-
-        // If you later expose these controls in Advanced, keep the state synced:
-        if (ex.pacing !== undefined) setPacing(ex.pacing);
-        if (ex.comedyLevel !== undefined) setComedyLevel(ex.comedyLevel);
-        if (ex.participation !== undefined) setParticipation(ex.participation);
-        if (ex.volunteersOk !== undefined) setVolunteersOk(ex.volunteersOk);
-    };
-
-    const onExampleA = () => {
-        const ex = DIRECTOR_EXAMPLES_A[exampleIndexA % DIRECTOR_EXAMPLES_A.length];
-        applyExample(ex);
-        setExampleIndexA((i) => (i + 1) % DIRECTOR_EXAMPLES_A.length);
-    };
-
-    const onExampleB = () => {
-        const ex = DIRECTOR_EXAMPLES_B[exampleIndexB % DIRECTOR_EXAMPLES_B.length];
-        applyExample(ex);
-        setExampleIndexB((i) => (i + 1) % DIRECTOR_EXAMPLES_B.length);
-    };
-
     // Legacy constraints textarea replaced by constraintNotes
     // const [constraints, setConstraints] = useState('');
 
@@ -267,6 +109,9 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
     const [isSavedToIdeas, setIsSavedToIdeas] = useState(false);
     const [plannerNotice, setPlannerNotice] = useState<string | null>(null);
     const [ideaNotice, setIdeaNotice] = useState<string | null>(null);
+
+    // Blueprint viewer tabs (Segments | Show Outline | JSON)
+    const [blueprintView, setBlueprintView] = useState<'segments' | 'outline' | 'json'>('outline');
     
     const computedAudience = (() => {
         const picked = audienceChips.join(', ');
@@ -370,6 +215,47 @@ const dictionaryLinks = useMemo(() => {
         } catch {
             return false;
         }
+    };
+
+    // Human-friendly outline (derived from blueprint JSON; no new AI call)
+    const blueprintToShowOutline = (plan: DirectorModeBlueprint) => {
+        const lines: string[] = [];
+
+        const title = (plan.show_title || 'Untitled Show').trim();
+        lines.push(title.toUpperCase());
+        const venueLine = (plan.venue_type || 'Show').trim();
+        lines.push(`${plan.show_length_minutes} Minute ${venueLine}`);
+        if (plan.tone?.trim()) lines.push(`Tone: ${plan.tone.trim()}`);
+        lines.push('');
+
+        const segs = Array.isArray(plan.segments) ? plan.segments : [];
+        const order: Record<string, number> = { opener: 0, middle: 1, closer: 2 };
+        const sorted = [...segs].sort((a, b) => (order[a.purpose] ?? 9) - (order[b.purpose] ?? 9));
+
+        sorted.forEach((seg) => {
+            const purpose = (seg.purpose || 'segment');
+            const purposeLabel = purpose.slice(0, 1).toUpperCase() + purpose.slice(1);
+
+            lines.push(`${purposeLabel} — ${seg.title} (${seg.duration_estimate_minutes} min)`);
+            lines.push('');
+
+            const interaction = (seg.audience_interaction_level || '—');
+            const interactionLabel = interaction === '—'
+                ? '—'
+                : interaction.slice(0, 1).toUpperCase() + interaction.slice(1);
+            lines.push(`Audience Interaction: ${interactionLabel}`);
+
+            const props = Array.isArray(seg.props_required) && seg.props_required.length
+                ? seg.props_required.join(', ')
+                : '—';
+            lines.push(`Props: ${props}`);
+            lines.push('');
+            lines.push('Transition:');
+            lines.push(seg.transition_notes?.trim() ? seg.transition_notes.trim() : '—');
+            lines.push('');
+        });
+
+        return lines.join('\n');
     };
 
     const buildOutlineFromBlueprint = (plan: DirectorModeBlueprint) => {
@@ -504,6 +390,8 @@ const dictionaryLinks = useMemo(() => {
         setBlueprintVersions([]);
         setActiveBlueprintId(null);
         setRefineNotice(null);
+        setBlueprintView('outline');
+        setBlueprintView('outline');
 
         // Telemetry: refine clicked (best-effort)
         trackClientEvent({
@@ -572,6 +460,7 @@ try {
           setShowPlan(blueprint);
           setBlueprintVersions([{ id: vId, createdAt: Date.now(), blueprint, diffHint: 'Initial blueprint' }]);
           setActiveBlueprintId(vId);
+          setBlueprintView('outline');
 
           // Telemetry: request success (units = segment count for KPI averages)
           trackClientEvent({
@@ -739,6 +628,7 @@ try {
         setIsRefining(true);
         setError(null);
         setRefineNotice(null);
+        setBlueprintView('outline');
 
         const propsOwnedList = propsOwned
             .split(/\n|,/g)
@@ -913,267 +803,300 @@ Hard requirements:
         const middles = (active.segments || []).filter((s) => s.purpose === 'middle');
 
         return (
-
-            <main className="flex-1 overflow-y-auto p-4 md:p-6 animate-fade-in">
-                <div className="w-full max-w-7xl mx-auto">
-                    <div className="mb-4 md:mb-5 text-left">
-                        <h2 className="text-xl md:text-2xl font-bold text-slate-300 font-cinzel">Director Mode</h2>
-                        <p className="text-slate-400 mt-1 text-sm">Your show blueprint is ready. Refine it, save it, or send it to the Show Planner.</p>
+            <div className="flex-1 flex flex-col overflow-y-auto p-4 md:p-6 animate-fade-in">
+                <div className="flex items-start justify-between gap-4 flex-wrap">
+                    <div>
+                        <h2 className="text-3xl font-bold text-white font-cinzel">{active.show_title}</h2>
+                        <p className="text-slate-400 mt-2">
+                            {active.show_length_minutes} min • {active.audience_type} • {active.venue_type}
+                        </p>
+                        <p className="text-slate-400 mt-1">
+                            Tone: <span className="text-slate-200">{active.tone}</span> • Persona: <span className="text-slate-200">{active.performer_persona}</span>
+                        </p>
                     </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {/* LEFT PANEL — Controls */}
-                        <div className="space-y-4">
-                            <div className="bg-slate-800/50 p-5 rounded-lg border border-slate-700">
-                                <h3 className="text-xl font-bold text-white font-cinzel">{active.show_title}</h3>
-                                <p className="text-slate-400 mt-2 text-sm">
-                                    {active.show_length_minutes} min • {active.audience_type} • {active.venue_type}
-                                </p>
-                                <p className="text-slate-400 mt-1 text-sm">
-                                    Tone: <span className="text-slate-200">{active.tone}</span> • Persona: <span className="text-slate-200">{active.performer_persona}</span>
-                                </p>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={handleBackToForm}
+                            className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700"
+                        >
+                            Back
+                        </button>
 
-                                <div className="mt-4 flex flex-wrap gap-2">
-                                    <span className="px-2.5 py-1 rounded-full border text-xs bg-slate-900/60 border-slate-600/60 text-slate-200">
-                                        Skill: {active.constraints?.skill_level || '—'}
-                                    </span>
-                                    <span className="px-2.5 py-1 rounded-full border text-xs bg-slate-900/60 border-slate-600/60 text-slate-200">
-                                        Reset: {active.constraints?.reset_time || '—'}
-                                    </span>
-                                    <span className="px-2.5 py-1 rounded-full border text-xs bg-slate-900/60 border-slate-600/60 text-slate-200">
-                                        Venue: {active.venue_type || '—'}
-                                    </span>
-                                </div>
+                        <button
+                            onClick={handleSaveToIdeas}
+                            disabled={isSavingIdea || isSavedToIdeas}
+                            className={`px-4 py-2 rounded-lg border ${
+                                isSavedToIdeas ? 'bg-emerald-600/20 border-emerald-400 text-emerald-200' : 'bg-purple-600 hover:bg-purple-500 border-purple-400 text-white'
+                            }`}
+                        >
+                            {isSavedToIdeas ? (
+                                <span className="inline-flex items-center gap-2"><CheckIcon className="w-5 h-5" /> Saved</span>
+                            ) : (
+                                <span className="inline-flex items-center gap-2"><SaveIcon className="w-5 h-5" /> Save</span>
+                            )}
+                        </button>
 
-                                <div className="mt-4 flex flex-wrap gap-2">
+                        <button
+                            onClick={handleCopyOutline}
+                            className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700"
+                        >
+                            Copy Outline
+                        </button>
+
+                        <button
+                            onClick={handleCopyJson}
+                            className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700"
+                        >
+                            Copy JSON
+                        </button>
+
+                        <button
+                            onClick={handleCreateShow}
+                            disabled={isAddingToPlanner || Boolean(createdShowId)}
+                            className={`px-4 py-2 rounded-lg border ${
+                                createdShowId ? 'bg-emerald-600/20 border-emerald-400 text-emerald-200' : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
+                            }`}
+                        >
+                            {createdShowId ? 'Show Created' : 'Create Show'}
+                        </button>
+
+                        <button
+                            onClick={handleSendToPlanner}
+                            disabled={isAddingToPlanner || isAddedToPlanner}
+                            className={`px-4 py-2 rounded-lg border ${
+                                isAddedToPlanner ? 'bg-emerald-600/20 border-emerald-400 text-emerald-200' : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
+                            }`}
+                        >
+                            {isAddedToPlanner ? (
+                                <span className="inline-flex items-center gap-2"><ChecklistIcon className="w-5 h-5" /> Sent</span>
+                            ) : (
+                                <span className="inline-flex items-center gap-2"><ChecklistIcon className="w-5 h-5" /> Send to Show Planner</span>
+                            )}
+                        </button>
+                    </div>
+                </div>
+
+                <div className="mt-4 bg-slate-800/30 border border-slate-700 rounded-lg p-3">
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <div>
+                            <p className="text-sm font-semibold text-slate-200">Refine Blueprint</p>
+                            <p className="text-xs text-slate-400">One-click refinements create a new version (v1, v2, v3…).</p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {[
+                                'More audience interaction',
+                                'More comedy',
+                                'More dramatic',
+                                'Shorten show by 5 minutes',
+                                'Swap closer',
+                                'Reduce prop resets',
+                            ].map((label) => (
+                                <button
+                                    key={label}
+                                    type="button"
+                                    onClick={() => handleRefine(label)}
+                                    disabled={isRefining}
+                                    className={(isRefining ? 'opacity-60 cursor-not-allowed ' : '') + 'px-3 py-1 rounded-full border text-xs transition-colors bg-slate-900/60 border-slate-600/60 text-slate-200 hover:bg-slate-900'}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {blueprintVersions.length ? (
+                        <div className="mt-3 flex items-center gap-2 flex-wrap">
+                            <span className="text-xs text-slate-400 mr-1">Versions:</span>
+                            {blueprintVersions.map((v, idx) => {
+                                const activeV = v.id === activeBlueprintId;
+                                return (
                                     <button
-                                        onClick={handleBackToForm}
-                                        className="px-4 py-2 rounded-lg bg-slate-900/40 hover:bg-slate-900/60 text-slate-200 border border-slate-700"
+                                        key={v.id}
+                                        type="button"
+                                        onClick={() => setActiveBlueprintId(v.id)}
+                                        className={
+                                            (activeV
+                                                ? 'bg-yellow-500/20 border-yellow-500/40 text-yellow-200'
+                                                : 'bg-slate-900/60 border-slate-600/60 text-slate-300 hover:bg-slate-900') +
+                                            ' px-2.5 py-1 rounded-full border text-xs transition-colors'
+                                        }
+                                        title={v.diffHint || ''}
                                     >
-                                        Back
+                                        v{idx + 1}
                                     </button>
+                                );
+                            })}
+                            {blueprintVersions.length >= 2 && blueprintVersions[blueprintVersions.length - 1]?.diffHint ? (
+                                <span className="text-xs text-slate-400">Latest: {blueprintVersions[blueprintVersions.length - 1].diffHint}</span>
+                            ) : null}
+                        </div>
+                    ) : null}
+                </div>
 
-                                    <button
-                                        onClick={handleSaveToIdeas}
-                                        disabled={isSavingIdea || isSavedToIdeas}
-                                        className={`px-4 py-2 rounded-lg border ${
-                                            isSavedToIdeas ? 'bg-emerald-600/20 border-emerald-400 text-emerald-200' : 'bg-purple-600 hover:bg-purple-500 border-purple-400 text-white'
-                                        }`}
-                                    >
-                                        {isSavedToIdeas ? (
-                                            <span className="inline-flex items-center gap-2"><CheckIcon className="w-5 h-5" /> Saved</span>
-                                        ) : (
-                                            <span className="inline-flex items-center gap-2"><SaveIcon className="w-5 h-5" /> Save Blueprint</span>
-                                        )}
-                                    </button>
+                {plannerNotice ? (
+                    <div className="mt-4 bg-emerald-900/20 border border-emerald-700 text-emerald-200 rounded-lg p-3 text-sm">
+                        {plannerNotice}
+                    </div>
+                ) : null}
 
-                                    <button
-                                        onClick={handleCreateShow}
-                                        disabled={isAddingToPlanner || Boolean(createdShowId)}
-                                        className={`px-4 py-2 rounded-lg border ${
-                                            createdShowId ? 'bg-emerald-600/20 border-emerald-400 text-emerald-200' : 'bg-slate-900/40 hover:bg-slate-900/60 border-slate-700 text-slate-200'
-                                        }`}
-                                    >
-                                        {createdShowId ? 'Show Created' : 'Create Show'}
-                                    </button>
+                {createShowNotice ? (
+                    <div className="mt-4 bg-emerald-900/10 border border-emerald-700 text-emerald-200 rounded-lg p-3 text-sm">
+                        {createShowNotice}
+                    </div>
+                ) : null}
 
-                                    <button
-                                        onClick={handleSendToPlanner}
-                                        disabled={isAddingToPlanner || isAddedToPlanner}
-                                        className={`px-4 py-2 rounded-lg border ${
-                                            isAddedToPlanner ? 'bg-emerald-600/20 border-emerald-400 text-emerald-200' : 'bg-slate-900/40 hover:bg-slate-900/60 border-slate-700 text-slate-200'
-                                        }`}
-                                    >
-                                        {isAddedToPlanner ? (
-                                            <span className="inline-flex items-center gap-2"><ChecklistIcon className="w-5 h-5" /> Sent</span>
-                                        ) : (
-                                            <span className="inline-flex items-center gap-2"><ChecklistIcon className="w-5 h-5" /> Send to Show Planner</span>
-                                        )}
-                                    </button>
+                {ideaNotice ? (
+                    <div className="mt-4 bg-emerald-900/10 border border-emerald-700 text-emerald-200 rounded-lg p-3 text-sm">
+                        {ideaNotice}
+                    </div>
+                ) : null}
 
-                                    <button
-                                        onClick={handleCopyOutline}
-                                        className="px-4 py-2 rounded-lg bg-slate-900/40 hover:bg-slate-900/60 text-slate-200 border border-slate-700"
-                                    >
-                                        Copy Outline
-                                    </button>
+                {refineNotice ? (
+                    <div className="mt-4 bg-slate-900/40 border border-slate-700 text-slate-200 rounded-lg p-3 text-sm">
+                        {refineNotice}
+                    </div>
+                ) : null}
 
-                                    <button
-                                        onClick={handleCopyJson}
-                                        className="px-4 py-2 rounded-lg bg-slate-900/40 hover:bg-slate-900/60 text-slate-200 border border-slate-700"
-                                    >
-                                        Copy JSON
-                                    </button>
-                                </div>
+                {error ? (
+                    <div className="mt-4 bg-rose-900/20 border border-rose-700 text-rose-200 rounded-lg p-3 text-sm">
+                        {error}
+                    </div>
+                ) : null}
+
+                <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {/* Left: constraints summary */}
+                    <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+                        <h3 className="text-xl font-bold text-[#E6C77A] font-cinzel">Constraints</h3>
+                        <div className="mt-3 space-y-2 text-sm text-slate-300">
+                            <p><span className="text-slate-400">Skill level:</span> {active.constraints?.skill_level || ''}</p>
+                            <p><span className="text-slate-400">Reset time:</span> {active.constraints?.reset_time || ''}</p>
+                            <p><span className="text-slate-400">Props owned:</span> {(active.constraints?.props_owned || []).join(', ') || '—'}</p>
+                            {active.constraints?.notes?.trim() ? (
+                                <p><span className="text-slate-400">Notes:</span> {active.constraints.notes}</p>
+                            ) : null}
+                        </div>
+                    </div>
+
+                    {/* Right: tabbed blueprint viewer */}
+                    <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+                        <div className="flex items-center justify-between gap-3 flex-wrap">
+                            <h3 className="text-xl font-bold text-[#E6C77A] font-cinzel">
+                                {blueprintView === 'segments' ? 'Segments' : blueprintView === 'outline' ? 'Show Outline' : 'Blueprint JSON'}
+                            </h3>
+
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setBlueprintView('segments')}
+                                    className={(blueprintView === 'segments'
+                                        ? 'bg-yellow-500/20 border-yellow-500/40 text-yellow-200'
+                                        : 'bg-slate-900/60 border-slate-600/60 text-slate-300 hover:bg-slate-900') +
+                                        ' px-2.5 py-1 rounded-full border text-xs transition-colors'}
+                                >
+                                    Segments
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setBlueprintView('outline')}
+                                    className={(blueprintView === 'outline'
+                                        ? 'bg-yellow-500/20 border-yellow-500/40 text-yellow-200'
+                                        : 'bg-slate-900/60 border-slate-600/60 text-slate-300 hover:bg-slate-900') +
+                                        ' px-2.5 py-1 rounded-full border text-xs transition-colors'}
+                                >
+                                    Show Outline
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setBlueprintView('json')}
+                                    className={(blueprintView === 'json'
+                                        ? 'bg-yellow-500/20 border-yellow-500/40 text-yellow-200'
+                                        : 'bg-slate-900/60 border-slate-600/60 text-slate-300 hover:bg-slate-900') +
+                                        ' px-2.5 py-1 rounded-full border text-xs transition-colors'}
+                                >
+                                    JSON
+                                </button>
                             </div>
+                        </div>
 
-                            {/* Refinement controls */}
-                            <div className="bg-slate-800/30 border border-slate-700 rounded-lg p-4">
-                                <div>
-                                    <p className="text-sm font-semibold text-slate-200">Refine Blueprint</p>
-                                    <p className="text-xs text-slate-400">One-click refinements create a new version (v1, v2, v3…).</p>
-                                </div>
-
-                                <div className="mt-3 flex flex-wrap gap-2">
-                                    {[
-                                        'More audience interaction',
-                                        'More comedy',
-                                        'More dramatic',
-                                        'Shorten show by 5 minutes',
-                                        'Swap closer',
-                                        'Reduce prop resets',
-                                    ].map((label) => (
-                                        <button
-                                            key={label}
-                                            type="button"
-                                            onClick={() => handleRefine(label)}
-                                            disabled={isRefining}
-                                            className={(isRefining ? 'opacity-60 cursor-not-allowed ' : '') + 'px-3 py-1 rounded-full border text-xs transition-colors bg-slate-900/60 border-slate-600/60 text-slate-200 hover:bg-slate-900'}
-                                        >
-                                            {label}
-                                        </button>
-                                    ))}
-                                </div>
-
-                                {blueprintVersions.length ? (
-                                    <div className="mt-3 flex items-center gap-2 flex-wrap">
-                                        <span className="text-xs text-slate-400 mr-1">Versions:</span>
-                                        {blueprintVersions.map((v, idx) => {
-                                            const activeV = v.id === activeBlueprintId;
-                                            return (
-                                                <button
-                                                    key={v.id}
-                                                    type="button"
-                                                    onClick={() => setActiveBlueprintId(v.id)}
-                                                    className={
-                                                        (activeV
-                                                            ? 'bg-yellow-500/20 border-yellow-500/40 text-yellow-200'
-                                                            : 'bg-slate-900/60 border-slate-600/60 text-slate-300 hover:bg-slate-900') +
-                                                        ' px-2.5 py-1 rounded-full border text-xs transition-colors'
-                                                    }
-                                                    title={v.diffHint || ''}
-                                                >
-                                                    v{idx + 1}
-                                                </button>
-                                            );
-                                        })}
-                                        {blueprintVersions.length >= 2 && blueprintVersions[blueprintVersions.length - 1]?.diffHint ? (
-                                            <span className="text-xs text-slate-400">Latest: {blueprintVersions[blueprintVersions.length - 1].diffHint}</span>
+                        {blueprintView === 'segments' ? (
+                            <div className="mt-3 space-y-3 text-sm text-slate-300">
+                                {opener ? (
+                                    <div className="bg-slate-900/40 rounded-md p-3 border border-slate-700/60">
+                                        <p className="font-semibold text-white">Opener</p>
+                                        <p className="text-slate-300">{opener.title} • {opener.duration_estimate_minutes} min • {opener.audience_interaction_level}</p>
+                                        {Array.isArray(opener.props_required) && opener.props_required.length ? (
+                                            <p className="text-slate-400 mt-1">Props: {opener.props_required.join(', ')}</p>
                                         ) : null}
+                                        {opener.transition_notes?.trim() ? <p className="text-slate-400 mt-1">Transition: {opener.transition_notes}</p> : null}
+                                    </div>
+                                ) : null}
+
+                                {middles.map((m, idx) => (
+                                    <div key={idx} className="bg-slate-900/40 rounded-md p-3 border border-slate-700/60">
+                                        <p className="font-semibold text-white">Middle</p>
+                                        <p className="text-slate-300">{m.title} • {m.duration_estimate_minutes} min • {m.audience_interaction_level}</p>
+                                        {Array.isArray(m.props_required) && m.props_required.length ? (
+                                            <p className="text-slate-400 mt-1">Props: {m.props_required.join(', ')}</p>
+                                        ) : null}
+                                        {m.transition_notes?.trim() ? <p className="text-slate-400 mt-1">Transition: {m.transition_notes}</p> : null}
+                                    </div>
+                                ))}
+
+                                {closer ? (
+                                    <div className="bg-slate-900/40 rounded-md p-3 border border-slate-700/60">
+                                        <p className="font-semibold text-white">Closer</p>
+                                        <p className="text-slate-300">{closer.title} • {closer.duration_estimate_minutes} min • {closer.audience_interaction_level}</p>
+                                        {Array.isArray(closer.props_required) && closer.props_required.length ? (
+                                            <p className="text-slate-400 mt-1">Props: {closer.props_required.join(', ')}</p>
+                                        ) : null}
+                                        {closer.transition_notes?.trim() ? <p className="text-slate-400 mt-1">Transition: {closer.transition_notes}</p> : null}
                                     </div>
                                 ) : null}
                             </div>
-
-                            {/* Notices */}
-                            {plannerNotice ? (
-                                <div className="bg-emerald-900/20 border border-emerald-700 text-emerald-200 rounded-lg p-3 text-sm">
-                                    {plannerNotice}
+                        ) : blueprintView === 'outline' ? (
+                            <div className="mt-3">
+                                <div className="flex items-center justify-end">
+                                    <button
+                                        type="button"
+                                        onClick={async () => {
+                                            const ok = await copyToClipboard(blueprintToShowOutline(active));
+                                            setRefineNotice(ok ? 'Show Outline copied.' : 'Unable to copy.');
+                                            window.setTimeout(() => setRefineNotice(null), 2000);
+                                        }}
+                                        className="px-3 py-1.5 text-xs rounded-md border border-slate-600/60 bg-slate-900/60 hover:bg-slate-900 text-slate-200 transition"
+                                    >
+                                        Copy Show Outline
+                                    </button>
                                 </div>
-                            ) : null}
-
-                            {createShowNotice ? (
-                                <div className="bg-emerald-900/10 border border-emerald-700 text-emerald-200 rounded-lg p-3 text-sm">
-                                    {createShowNotice}
-                                </div>
-                            ) : null}
-
-                            {ideaNotice ? (
-                                <div className="bg-emerald-900/10 border border-emerald-700 text-emerald-200 rounded-lg p-3 text-sm">
-                                    {ideaNotice}
-                                </div>
-                            ) : null}
-
-                            {refineNotice ? (
-                                <div className="bg-slate-900/40 border border-slate-700 text-slate-200 rounded-lg p-3 text-sm">
-                                    {refineNotice}
-                                </div>
-                            ) : null}
-
-                            {error ? (
-                                <div className="bg-rose-900/20 border border-rose-700 text-rose-200 rounded-lg p-3 text-sm">
-                                    {error}
-                                </div>
-                            ) : null}
-
-                            {/* Constraints detail */}
-                            <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
-                                <h3 className="text-lg font-bold text-[#E6C77A] font-cinzel">Constraints</h3>
-                                <div className="mt-3 space-y-2 text-sm text-slate-300">
-                                    <p><span className="text-slate-400">Skill level:</span> {active.constraints?.skill_level || ''}</p>
-                                    <p><span className="text-slate-400">Reset time:</span> {active.constraints?.reset_time || ''}</p>
-                                    <p><span className="text-slate-400">Props owned:</span> {(active.constraints?.props_owned || []).join(', ') || '—'}</p>
-                                    {active.constraints?.notes?.trim() ? (
-                                        <p><span className="text-slate-400">Notes:</span> {active.constraints.notes}</p>
-                                    ) : null}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* RIGHT PANEL — Output */}
-                        <div className="space-y-4">
-                            <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
-                                <h3 className="text-xl font-bold text-[#E6C77A] font-cinzel">Segments</h3>
-                                <div className="mt-3 space-y-3 text-sm text-slate-300">
-                                    {opener ? (
-                                        <div className="bg-slate-900/40 rounded-md p-3 border border-slate-700/60">
-                                            <p className="font-semibold text-white">Opener</p>
-                                            <p className="text-slate-300">{opener.title} • {opener.duration_estimate_minutes} min • {opener.audience_interaction_level}</p>
-                                            {Array.isArray(opener.props_required) && opener.props_required.length ? (
-                                                <p className="text-slate-400 mt-1">Props: {opener.props_required.join(', ')}</p>
-                                            ) : null}
-                                            {opener.transition_notes?.trim() ? <p className="text-slate-400 mt-1">Transition: {opener.transition_notes}</p> : null}
-                                        </div>
-                                    ) : null}
-
-                                    {middles.map((m, idx) => (
-                                        <div key={idx} className="bg-slate-900/40 rounded-md p-3 border border-slate-700/60">
-                                            <p className="font-semibold text-white">Middle</p>
-                                            <p className="text-slate-300">{m.title} • {m.duration_estimate_minutes} min • {m.audience_interaction_level}</p>
-                                            {Array.isArray(m.props_required) && m.props_required.length ? (
-                                                <p className="text-slate-400 mt-1">Props: {m.props_required.join(', ')}</p>
-                                            ) : null}
-                                            {m.transition_notes?.trim() ? <p className="text-slate-400 mt-1">Transition: {m.transition_notes}</p> : null}
-                                        </div>
-                                    ))}
-
-                                    {closer ? (
-                                        <div className="bg-slate-900/40 rounded-md p-3 border border-slate-700/60">
-                                            <p className="font-semibold text-white">Closer</p>
-                                            <p className="text-slate-300">{closer.title} • {closer.duration_estimate_minutes} min • {closer.audience_interaction_level}</p>
-                                            {Array.isArray(closer.props_required) && closer.props_required.length ? (
-                                                <p className="text-slate-400 mt-1">Props: {closer.props_required.join(', ')}</p>
-                                            ) : null}
-                                            {closer.transition_notes?.trim() ? <p className="text-slate-400 mt-1">Transition: {closer.transition_notes}</p> : null}
-                                        </div>
-                                    ) : null}
-                                </div>
-                            </div>
-
-                            <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
-                                <h3 className="text-xl font-bold text-[#E6C77A] font-cinzel">Blueprint JSON</h3>
-                                <pre className="mt-3 text-xs text-slate-200 bg-slate-950/40 border border-slate-700/60 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap">
-{JSON.stringify(active, null, 2)}
+                                <pre className="mt-2 text-xs text-slate-200 bg-slate-950/40 border border-slate-700/60 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap">
+{blueprintToShowOutline(active)}
                                 </pre>
                             </div>
-                        </div>
+                        ) : (
+                            <pre className="mt-3 text-xs text-slate-200 bg-slate-950/40 border border-slate-700/60 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap">
+{JSON.stringify(active, null, 2)}
+                            </pre>
+                        )}
                     </div>
                 </div>
-            </main>
-);
+            </div>
+        );
     }
-    return (
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 animate-fade-in">
-            <div className="w-full max-w-7xl mx-auto">
-                <div className="mb-4 md:mb-5 text-left">
-                    <h2 className="text-xl md:text-2xl font-bold text-slate-300 font-cinzel">Director Mode</h2>
-                    <p className="text-slate-400 mt-1 text-sm">Let's design your next show. Provide the core details, and the AI will architect a complete show structure for you.</p>
-                </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* LEFT PANEL — Inputs */}
-                    <div className="space-y-4">
-                        <div className="bg-slate-800/50 p-6 rounded-lg border border-slate-700">
-                            <div className="flex items-center justify-between mb-3"><h3 className="text-sm font-semibold text-slate-200">Core Inputs</h3><div className="flex items-center gap-2"><button type="button" onClick={onExampleA} className="px-2.5 py-1 text-xs rounded-md border border-slate-600 bg-slate-900/40 text-slate-200 hover:bg-slate-900/70">Try Example</button><button type="button" onClick={onExampleB} className="px-2.5 py-1 text-xs rounded-md border border-slate-600 bg-slate-900/40 text-slate-200 hover:bg-slate-900/70">Try Another</button></div></div>
+    return (
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 flex items-center justify-center animate-fade-in">
+            <div className="w-full max-w-5xl">
+                <div className="text-center">
+                    <StageCurtainsIcon className="w-16 h-16 text-purple-400 mx-auto mb-4" />
+                    <h2 className="text-2xl font-bold text-slate-300 mb-2 font-cinzel">Director Mode</h2>
+                    <p className="text-slate-400 mb-6">Let's design your next show. Provide the core details, and the AI will architect a complete show structure for you.</p>
+                </div>
+                
+                <div className="bg-slate-800/50 p-6 rounded-lg border border-slate-700">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <div className="bg-slate-900/25 border border-slate-700 rounded-lg p-4">
+                            <h3 className="text-sm font-semibold text-slate-200 mb-3">Core Inputs</h3>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
@@ -1267,11 +1190,11 @@ Hard requirements:
                                     placeholder="e.g., elegant & mysterious • high-energy comedy • mind reading with audience participation"
                                     className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
                                 />
-                                <p className="mt-1 text-xs text-slate-400">Describe the overall vibe and style. Tone/persona/constraints are captured below.</p>
+                                <p className="mt-1 text-xs text-slate-400">Describe the overall vibe and style. Tone/persona/constraints are captured on the right.</p>
                             </div>
                         </div>
 
-                        <div className="bg-slate-800/50 p-6 rounded-lg border border-slate-700">
+                        <div className="bg-slate-900/25 border border-slate-700 rounded-lg p-4">
                             <h3 className="text-sm font-semibold text-slate-200 mb-3">Constraints</h3>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1433,33 +1356,19 @@ Hard requirements:
                                 )}
                             </div>
                         </div>
-
-                        <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
-                            <button
-                                onClick={handleGenerate}
-                                disabled={!isFormValid}
-                                className="w-full py-3 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
-                            >
-                                <WandIcon className="w-5 h-5" />
-                                <span>🎭 Direct My Show Blueprint</span>
-                            </button>
-                            <p className="text-center text-xs text-slate-400 mt-2">Typically takes 10–15 seconds.</p>
-
-                            {error && <p className="text-red-400 mt-2 text-sm text-center">{error}</p>}
-                        </div>
                     </div>
 
-                    {/* RIGHT PANEL — Results placeholder */}
-                    <div className="bg-slate-800/30 border border-slate-700 rounded-lg p-6 flex flex-col items-center justify-center text-center min-h-[520px]">
-                        <div className="w-14 h-14 rounded-xl bg-slate-900/40 border border-slate-700 flex items-center justify-center mb-4">
-                            <StageCurtainsIcon className="w-7 h-7 text-slate-300" />
-                        </div>
-                        <p className="text-slate-200 font-semibold">Your show blueprint will appear here.</p>
-                        <p className="text-slate-400 text-sm mt-2 max-w-sm">
-                            Fill in the inputs on the left, then click <span className="text-slate-200">Direct My Show Blueprint</span>.
-                            You’ll get a segment-by-segment plan with transitions, props, and workflow actions.
-                        </p>
-                    </div>
+                    <button
+                        onClick={handleGenerate}
+                        disabled={!isFormValid}
+                        className="w-full py-3 mt-4 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
+                    >
+                        <WandIcon className="w-5 h-5" />
+                        <span>🎭 Direct My Show Blueprint</span>
+                    </button>
+                    <p className="text-center text-xs text-slate-400 -mt-2">Typically takes 10–15 seconds.</p>
+
+                    {error && <p className="text-red-400 mt-2 text-sm text-center">{error}</p>}
                 </div>
             </div>
         </main>
