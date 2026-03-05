@@ -3122,23 +3122,23 @@ ${action.payload.content}`;
 
     if (activeIntent === 'create') {
       return (
-        <div className="flex items-center gap-2 px-2 md:px-4 py-2 border-b border-slate-800/70 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex flex-wrap items-center gap-2 px-2 md:px-4 py-2 border-b border-slate-800/70">
           {subBtn('Effect Generator', () => handleNavigate('effect-generator'), activeTab === 'effect-generator')}
           {subBtn('Identify Trick', () => handleNavigate('identify'), activeTab === 'identify')}
           {subBtn('Visual Brainstorm', () => handleNavigate('visual-brainstorm'), activeView === 'visual-brainstorm', !hasProfessionalAccess)}
           {subBtn('Director Mode', () => handleNavigate('director-mode'), activeView === 'director-mode', !hasProfessionalAccess)}
           {subBtn('Patter Engine', () => handleNavigate('patter-engine'), activeView === 'patter-engine')}
           {subBtn('Illusion Blueprint', () => handleNavigate('illusion-blueprint'), activeView === 'illusion-blueprint', !hasProfessionalAccess)}
-          {subBtn('Gospel Magic', () => handleNavigate('gospel-magic-assistant'), activeView === 'gospel-magic-assistant', !hasProfessionalAccess)}
-          {subBtn('Mentalism', () => handleNavigate('mentalism-assistant'), activeView === 'mentalism-assistant', !hasProfessionalAccess)}
           {subBtn("Assistant's Studio", () => handleNavigate('assistant-studio'), activeView === 'assistant-studio', !hasProfessionalAccess)}
+          {subBtn('Mentalism', () => handleNavigate('mentalism-assistant'), activeView === 'mentalism-assistant', !hasProfessionalAccess)}
+          {subBtn('Gospel Magic', () => handleNavigate('gospel-magic-assistant'), activeView === 'gospel-magic-assistant', !hasProfessionalAccess)}
         </div>
       );
     }
 
     if (activeIntent === 'rehearse') {
       return (
-        <div className="flex items-center gap-2 px-2 md:px-4 py-2 border-b border-slate-800/70 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex flex-wrap items-center gap-2 px-2 md:px-4 py-2 border-b border-slate-800/70">
           {subBtn('Angle & Risk', () => handleNavigate('angle-risk'), activeView === 'angle-risk')}
           {subBtn('Live Rehearsal', () => handleNavigate('live-rehearsal'), activeView === 'live-rehearsal', !hasProfessionalAccess)}
           {subBtn('Video Rehearsal', () => handleNavigate('video-rehearsal'), activeView === 'video-rehearsal', !hasProfessionalAccess)}
@@ -3149,7 +3149,7 @@ ${action.payload.content}`;
 
     // manage
     return (
-      <div className="flex items-center gap-2 px-2 md:px-4 py-2 border-b border-slate-800/70 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex flex-wrap items-center gap-2 px-2 md:px-4 py-2 border-b border-slate-800/70">
         {subBtn('Show Planner', () => handleNavigate('show-planner'), activeTab === 'show-planner', !hasAmateurAccess)}
         {subBtn('Saved Ideas', () => handleNavigate('saved-ideas'), activeView === 'saved-ideas', !hasAmateurAccess)}
         {subBtn('Show Feedback', () => handleNavigate('show-feedback'), activeView === 'show-feedback', !hasProfessionalAccess)}
