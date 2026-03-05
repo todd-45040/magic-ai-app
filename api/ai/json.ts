@@ -187,13 +187,89 @@ export default async function handler(req: any, res: any) {
     try {
       parsed = JSON.parse(rawText);
     } catch {
-      return jsonError(res, 422, {
-        ok: false,
-        error_code: 'BAD_JSON',
-        message: 'The AI response was not valid JSON. Please try again.',
-        retryable: true,
-        ...(isPreviewEnv() ? { details: { rawText: rawText?.slice(0, 4000) } } : {}),
-      });
+      // --- Robust JSON recovery (booth reliability)
+      // Providers occasionally return "JSON" with:
+      // - extra wrapper text
+      // - fenced code blocks
+      // - raw newlines/tabs inside quoted strings (invalid JSON)
+      // We attempt a best-effort repair before failing.
+
+      const stripFences = (s: string) => {
+        const t = (s || '').trim();
+        if (t.startsWith('```')) {
+          return t
+            .replace(/^```[a-zA-Z]*\s*/m, '')
+            .replace(/```\s*$/m, '')
+            .trim();
+        }
+        return t;
+      };
+
+      const extractJsonBlock = (input: string) => {
+        const text = (input || '').trim();
+        if (!text) return '';
+        const firstObj = text.indexOf('{');
+        const firstArr = text.indexOf('[');
+        let start = -1;
+        if (firstObj === -1) start = firstArr;
+        else if (firstArr === -1) start = firstObj;
+        else start = Math.min(firstObj, firstArr);
+        if (start === -1) return text;
+        const endObj = text.lastIndexOf('}');
+        const endArr = text.lastIndexOf(']');
+        const end = Math.max(endObj, endArr);
+        if (end === -1 || end <= start) return text.slice(start);
+        return text.slice(start, end + 1);
+      };
+
+      const escapeNewlinesInsideStrings = (jsonLike: string) => {
+        let out = '';
+        let inStr = false;
+        let esc = false;
+        for (let i = 0; i < jsonLike.length; i++) {
+          const ch = jsonLike[i];
+          if (esc) {
+            out += ch;
+            esc = false;
+            continue;
+          }
+          if (ch === '\\') {
+            out += ch;
+            esc = true;
+            continue;
+          }
+          if (ch === '"') {
+            inStr = !inStr;
+            out += ch;
+            continue;
+          }
+          if (inStr && (ch === '\n' || ch === '\r')) {
+            out += '\\n';
+            if (ch === '\r' && jsonLike[i + 1] === '\n') i++;
+            continue;
+          }
+          if (inStr && ch === '\t') {
+            out += '\\t';
+            continue;
+          }
+          out += ch;
+        }
+        return out;
+      };
+
+      try {
+        const candidate = extractJsonBlock(stripFences(rawText));
+        const repaired = escapeNewlinesInsideStrings(candidate);
+        parsed = JSON.parse(repaired);
+      } catch {
+        return jsonError(res, 422, {
+          ok: false,
+          error_code: 'BAD_JSON',
+          message: 'The AI response was not valid JSON. Please try again.',
+          retryable: true,
+          ...(isPreviewEnv() ? { details: { rawText: rawText?.slice(0, 4000) } } : {}),
+        });
+      }
     }
 
     // Best-effort increment AFTER success
