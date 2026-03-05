@@ -193,7 +193,7 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
     const [showLength, setShowLength] = useState('');
 
     // Speed / Reliability
-    const \[speedMode, setSpeedMode\] = useState<'fast' \| 'full'>\('fast'\);
+    const [speedMode, setSpeedMode] = useState<'fast' | 'full'>('fast');
     const [genTimingMs, setGenTimingMs] = useState<{ fast?: number; full?: number }>({});
     const [timelineReady, setTimelineReady] = useState(false);
     // Show Outline detail (FULL mode only)
@@ -390,7 +390,7 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
     // Control State
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const \[showPlan, setShowPlan\] = useState<DirectorModeBlueprint \| null>\(null\);
+    const [showPlan, setShowPlan] = useState<DirectorModeBlueprint | null>(null);
     useEffect(() => {
         if (showPlan?.segments?.length) {
             setTimelineReady(false);
@@ -495,7 +495,7 @@ const dictionaryLinks = useMemo(() => {
         Array.from(dictionaryTermSet).forEach((term) => {
             const t = term.toLowerCase();
             if (!t || t.length < 3) return;
-            const re = new RegExp(`(^|[^a-z0-9])${t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z0-9]|$)`, 'i');
+            const re = new RegExp(`(^|[^a-z0-9])${t.replace(/[.*+?^${}()|[]\]/g, '\\$&')}([^a-z0-9]|$)`, 'i');
             if (re.test(text)) matches.push(term);
         });
         return matches.sort((a, b) => a.localeCompare(b));
