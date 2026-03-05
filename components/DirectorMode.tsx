@@ -1040,6 +1040,38 @@ try {
         }
     };
 
+    const handleReset = () => {
+        // Booth demo reset: clear generated output, reset versions, and scroll to top
+        setIsLoading(false);
+        setIsRefining(false);
+        setError(null);
+
+        setShowPlan(null);
+        setBlueprintVersions([]);
+        setActiveBlueprintId(null);
+
+        setRefineNotice(null);
+        setPlannerNotice(null);
+        setIdeaNotice(null);
+        setSaveStatus('idle');
+
+        setCreatedShowId(null);
+        setCreateShowNotice(null);
+        setIsAddedToPlanner(false);
+        setIsSavedToIdeas(false);
+
+        setBlueprintView('outline');
+        setTimelineReady(false);
+
+        // Optional: clear timing badges so each booth run is clean
+        setGenTimingMs({});
+
+        if (typeof window !== 'undefined' && window.scrollTo) {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    };
+
+
     const handleRefine = async (instruction: string) => {
         const active = getActiveBlueprint() ?? showPlan;
         if (!active || isRefining) return;
@@ -1601,7 +1633,7 @@ ${speedConstraints}
                                                 <p className="text-slate-300">{opener.title} • {opener.duration_estimate_minutes} min{opener.audience_interaction_level ? ` • ${opener.audience_interaction_level}` : ''}</p>
                                                 <p className="text-slate-400 mt-1">Props: {(opener.props_required || []).join(', ') || '—'}</p>
                                                 {opener.transition_notes ? <p className="text-slate-400 mt-1">Transition: {opener.transition_notes}</p> : null}
-                                                {speedMode === 'full' ? (
+                                                {speedMode === 'full' && outlineFullDetail ? (
                                                     <div className="text-slate-400 mt-2 space-y-1">
                                                         {Array.isArray((opener as any).beats) && (opener as any).beats.length ? (
                                                             <p>Beats: {(opener as any).beats.join(' • ')}</p>
@@ -1621,7 +1653,7 @@ ${speedConstraints}
                                                 <p className="text-slate-300">{mSeg.title} • {mSeg.duration_estimate_minutes} min{mSeg.audience_interaction_level ? ` • ${mSeg.audience_interaction_level}` : ''}</p>
                                                 <p className="text-slate-400 mt-1">Props: {(mSeg.props_required || []).join(', ') || '—'}</p>
                                                 {mSeg.transition_notes ? <p className="text-slate-400 mt-1">Transition: {mSeg.transition_notes}</p> : null}
-                                                {speedMode === 'full' ? (
+                                                {speedMode === 'full' && outlineFullDetail ? (
                                                     <div className="text-slate-400 mt-2 space-y-1">
                                                         {Array.isArray((mSeg as any).beats) && (mSeg as any).beats.length ? (
                                                             <p>Beats: {(mSeg as any).beats.join(' • ')}</p>
@@ -1641,7 +1673,7 @@ ${speedConstraints}
                                                 <p className="text-slate-300">{closer.title} • {closer.duration_estimate_minutes} min{closer.audience_interaction_level ? ` • ${closer.audience_interaction_level}` : ''}</p>
                                                 <p className="text-slate-400 mt-1">Props: {(closer.props_required || []).join(', ') || '—'}</p>
                                                 {closer.transition_notes ? <p className="text-slate-400 mt-1">Transition: {closer.transition_notes}</p> : null}
-                                                {speedMode === 'full' ? (
+                                                {speedMode === 'full' && outlineFullDetail ? (
                                                     <div className="text-slate-400 mt-2 space-y-1">
                                                         {Array.isArray((closer as any).beats) && (closer as any).beats.length ? (
                                                             <p>Beats: {(closer as any).beats.join(' • ')}</p>
@@ -1677,6 +1709,40 @@ ${speedConstraints}
                                                 >
                                                     {outlineFullDetail ? 'Full Detail: On' : 'Full Detail: Off'}
                                                 </button>
+                                                {speedMode === 'full' ? (
+                                                    <div className="flex items-center gap-1">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setOutlineFullDetail(true)}
+                                                            disabled={outlineFullDetail}
+                                                            className={
+                                                                (outlineFullDetail
+                                                                    ? 'opacity-60 cursor-not-allowed bg-slate-900/30 border-slate-800 text-slate-400'
+                                                                    : 'bg-slate-900/40 border-slate-700 text-slate-200 hover:bg-slate-900/60') +
+                                                                ' px-2.5 py-1.5 rounded-full border text-xs transition-colors'
+                                                            }
+                                                            title="Expand all director notes"
+                                                        >
+                                                            Expand all
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setOutlineFullDetail(false)}
+                                                            disabled={!outlineFullDetail}
+                                                            className={
+                                                                (!outlineFullDetail
+                                                                    ? 'opacity-60 cursor-not-allowed bg-slate-900/30 border-slate-800 text-slate-400'
+                                                                    : 'bg-slate-900/40 border-slate-700 text-slate-200 hover:bg-slate-900/60') +
+                                                                ' px-2.5 py-1.5 rounded-full border text-xs transition-colors'
+                                                            }
+                                                            title="Collapse director notes"
+                                                        >
+                                                            Collapse all
+                                                        </button>
+                                                    </div>
+                                                ) : null}
+
+
 
                                                 <span className="text-xs text-slate-400 hidden sm:inline">
                                                     {speedMode === 'fast'
@@ -2059,14 +2125,26 @@ ${speedConstraints}
                                     ) : null}
                                 </div>
                             ) : null}
+                            <div className="flex gap-2">
                             <button
                                 onClick={handleGenerate}
                                 disabled={!isFormValid}
-                                className="w-full py-3 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
+                                className="flex-1 py-3 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
                             >
                                 <WandIcon className="w-5 h-5" />
                                 <span>🎭 Direct My Show Blueprint</span>
                             </button>
+
+                            <button
+                                type="button"
+                                onClick={handleReset}
+                                disabled={isLoading || isRefining}
+                                className="px-3 py-3 rounded-md border border-slate-700 bg-slate-900/50 hover:bg-slate-900/70 text-slate-200 text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Reset output (booth demo)"
+                            >
+                                Reset
+                            </button>
+                        </div>
                             <p className="text-center text-xs text-slate-400 mt-2">Fast is usually quicker and more reliable for booth demos.</p>
 
                             {error && <p className="text-red-400 mt-2 text-sm text-center">{error}</p>}
