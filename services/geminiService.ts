@@ -313,7 +313,7 @@ export const generateStructuredResponse = async (
 
   const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 2 });
   const text = extractText(result);
-  return JSON.parse(text || '{}');
+  return safeJsonParse(text || '{}');
 };
 
 export const identifyTrickFromImage = async (
