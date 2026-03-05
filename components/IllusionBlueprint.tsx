@@ -62,6 +62,46 @@ type BuildBlueprintPack = {
   build_notes: string[];
 };
 
+type EngineeringSummary = {
+  title: string;
+  audience_experience: string;
+  secret_method_possibilities: {
+    method_a: string;
+    method_b: string;
+    method_c: string;
+  };
+  stage_staging: {
+    lighting: string;
+    blocking: string;
+    angles: string;
+  };
+  technical_requirements: {
+    props: string[];
+    mechanics: string[];
+    assistants: string;
+  };
+  safety_notes: string[];
+  reset_time: string;
+  build_complexity: {
+    rating_1_to_5: number;
+    rationale: string;
+  };
+  reality_checks: {
+    weight_transport: string;
+    crew: string;
+    setup_time: string;
+  };
+  angle_risk_summary: {
+    front: string;
+    sides: string;
+    balcony: string;
+  };
+  feasibility_verdict: {
+    level: 'Easy' | 'Medium' | 'Hard';
+    why: string;
+  };
+};
+
 const DEMO_PRESETS: Array<{ label: string; concept: string; effectType: EffectType; venue: VenueSize; style: PerformerStyle; constraints?: string }> = [
   {
     label: 'Assistant Sawing',
@@ -106,6 +146,7 @@ const LoadingIndicator: React.FC = () => (
 );
 
 const SECTION_IDS = [
+  { id: 'engineering', label: 'Summary' },
   { id: 'concept', label: 'Concept Art' },
   { id: 'blueprint', label: 'Blueprint Sheet' },
   { id: 'principles', label: 'Principles' },
@@ -202,13 +243,15 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
 
   const [stagingBlueprint, setStagingBlueprint] = useState<StagingBlueprint | null>(null);
   const [buildPack, setBuildPack] = useState<BuildBlueprintPack | null>(null);
+  const [engineeringSummary, setEngineeringSummary] = useState<EngineeringSummary | null>(null);
 
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
 
-  const [activeSection, setActiveSection] = useState<string>('concept');
+  const [activeSection, setActiveSection] = useState<string>('engineering');
   const [selectedMechanismId, setSelectedMechanismId] = useState<string>('all');
 
   const [openSections, setOpenSections] = useState<Record<SectionId, boolean>>({
+    engineering: true,
     concept: true,
     blueprint: true,
     principles: true,
@@ -242,6 +285,93 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
         blueprint_description: { type: Type.STRING },
       },
       required: ['potential_principles', 'blueprint_description'],
+    }),
+    []
+  );
+
+  const engineeringSchema = useMemo(
+    () => ({
+      type: Type.OBJECT,
+      properties: {
+        title: { type: Type.STRING },
+        audience_experience: { type: Type.STRING },
+        secret_method_possibilities: {
+          type: Type.OBJECT,
+          properties: {
+            method_a: { type: Type.STRING },
+            method_b: { type: Type.STRING },
+            method_c: { type: Type.STRING },
+          },
+          required: ['method_a', 'method_b', 'method_c'],
+        },
+        stage_staging: {
+          type: Type.OBJECT,
+          properties: {
+            lighting: { type: Type.STRING },
+            blocking: { type: Type.STRING },
+            angles: { type: Type.STRING },
+          },
+          required: ['lighting', 'blocking', 'angles'],
+        },
+        technical_requirements: {
+          type: Type.OBJECT,
+          properties: {
+            props: { type: Type.ARRAY, items: { type: Type.STRING } },
+            mechanics: { type: Type.ARRAY, items: { type: Type.STRING } },
+            assistants: { type: Type.STRING },
+          },
+          required: ['props', 'mechanics', 'assistants'],
+        },
+        safety_notes: { type: Type.ARRAY, items: { type: Type.STRING } },
+        reset_time: { type: Type.STRING },
+        build_complexity: {
+          type: Type.OBJECT,
+          properties: {
+            rating_1_to_5: { type: Type.NUMBER },
+            rationale: { type: Type.STRING },
+          },
+          required: ['rating_1_to_5', 'rationale'],
+        },
+        reality_checks: {
+          type: Type.OBJECT,
+          properties: {
+            weight_transport: { type: Type.STRING },
+            crew: { type: Type.STRING },
+            setup_time: { type: Type.STRING },
+          },
+          required: ['weight_transport', 'crew', 'setup_time'],
+        },
+        angle_risk_summary: {
+          type: Type.OBJECT,
+          properties: {
+            front: { type: Type.STRING },
+            sides: { type: Type.STRING },
+            balcony: { type: Type.STRING },
+          },
+          required: ['front', 'sides', 'balcony'],
+        },
+        feasibility_verdict: {
+          type: Type.OBJECT,
+          properties: {
+            level: { type: Type.STRING },
+            why: { type: Type.STRING },
+          },
+          required: ['level', 'why'],
+        },
+      },
+      required: [
+        'title',
+        'audience_experience',
+        'secret_method_possibilities',
+        'stage_staging',
+        'technical_requirements',
+        'safety_notes',
+        'reset_time',
+        'build_complexity',
+        'reality_checks',
+        'angle_risk_summary',
+        'feasibility_verdict',
+      ],
     }),
     []
   );
@@ -377,7 +507,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
 
   // Sticky mini-nav: update active section using IntersectionObserver
   useEffect(() => {
-    if (!conceptArt && !stagingBlueprint && !buildPack) return;
+    if (!engineeringSummary && !conceptArt && !stagingBlueprint && !buildPack) return;
 
     const root = containerRef.current;
     const targets = SECTION_IDS.map((s) => document.getElementById(s.id)).filter(Boolean) as HTMLElement[];
@@ -400,7 +530,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
 
     targets.forEach((t) => obs.observe(t));
     return () => obs.disconnect();
-  }, [conceptArt, stagingBlueprint, buildPack]);
+  }, [engineeringSummary, conceptArt, stagingBlueprint, buildPack]);
 
   const handleGenerate = async () => {
     if (!prompt.trim()) {
@@ -420,12 +550,14 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     setError(null);
     setConceptArt(null);
     setBlueprintSheet(null);
+    setEngineeringSummary(null);
     setStagingBlueprint(null);
     setBuildPack(null);
     setSelectedMechanismId('all');
-    setActiveSection('concept');
+    setActiveSection('engineering');
     setOpenSections((prev) => ({
       ...prev,
+      engineering: true,
       concept: true,
       blueprint: true,
       principles: true,
@@ -443,12 +575,20 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
 
     setLastArtPrompt(artPrompt);
 
+    const engineeringPrompt = `Create an ENGINEERING-MINDED SUMMARY for this stage illusion request.\n\n${context}\n\n${REALISM_GUARDRAILS}\n\nSTRICT: non-exposure. Provide high-level principles and tradeoffs only. No step-by-step secrets.\n\nReturn JSON matching the schema exactly.`;
+
     const stagingPrompt = `Generate a STAGING blueprint for this illusion request.\n\n${context}\n\n${REALISM_GUARDRAILS}\n\nProvide performance-facing principles and a clear staging description.`;
 
     const buildPrompt = `Create a BUILD BLUEPRINT PACK for this illusion request.\n\n${context}\n\n${REALISM_GUARDRAILS}\n\nProvide realistic dimensions and a cut list. Include 3 mechanism options (manual, assisted, motorized) with mechanism ids and tag parts/steps that differ by option.`;
 
     try {
       const artPromise = generateImage(artPrompt, '16:9', user);
+      const engineeringPromise = generateStructuredResponse(
+        engineeringPrompt,
+        'You are a master illusion designer and technical director. Produce practical, build-realistic, non-exposure engineering summaries for stage illusions. Output only JSON.',
+        engineeringSchema,
+        user
+      );
       const stagingPromise = generateStructuredResponse(stagingPrompt, 'You are an expert stage illusion designer.', stagingSchema, user);
       const buildPromise = generateStructuredResponse(
         buildPrompt,
@@ -457,9 +597,15 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
         user
       );
 
-      const [artResult, stagingResult, buildResult] = await Promise.all([artPromise, stagingPromise, buildPromise]);
+      const [artResult, engineeringResult, stagingResult, buildResult] = await Promise.all([
+        artPromise,
+        engineeringPromise,
+        stagingPromise,
+        buildPromise,
+      ]);
 
       setConceptArt(artResult);
+      setEngineeringSummary(engineeringResult as EngineeringSummary);
       setStagingBlueprint(stagingResult as StagingBlueprint);
       setBuildPack(buildResult as BuildBlueprintPack);
     } catch (err) {
@@ -561,12 +707,20 @@ const handleRegenerateConceptArt = async () => {
   const filteredSteps = useMemo(() => (buildPack ? toFiltered(buildPack.assembly_steps) : []), [buildPack, selectedMechanismId]);
 
   const buildFullContent = () => {
-    if (!stagingBlueprint || !buildPack) return '';
+    if (!engineeringSummary || !stagingBlueprint || !buildPack) return '';
     let fullContent = `## Illusion Blueprint: ${prompt}\n\n`;
     fullContent += `**Effect Type:** ${effectType}\n\n`;
     fullContent += `**Venue Size:** ${venueSize}\n\n`;
     fullContent += `**Performer Style:** ${performerStyle}\n\n`;
     if (constraints.trim()) fullContent += `**Constraints:** ${constraints.trim()}\n\n`;
+    fullContent += `### Engineering Summary\n\n`;
+    fullContent += `**Title:** ${engineeringSummary.title}\n\n`;
+    fullContent += `**Audience Experience:** ${engineeringSummary.audience_experience}\n\n`;
+    fullContent += `**Build Complexity (1–5):** ${engineeringSummary.build_complexity.rating_1_to_5} — ${engineeringSummary.build_complexity.rationale}\n\n`;
+    fullContent += `**Reset Time:** ${engineeringSummary.reset_time}\n\n`;
+    fullContent += `**Angle Risk Summary:**\n- Front: ${engineeringSummary.angle_risk_summary.front}\n- Sides: ${engineeringSummary.angle_risk_summary.sides}\n- Balcony: ${engineeringSummary.angle_risk_summary.balcony}\n\n`;
+    fullContent += `**Reality Checks:**\n- Weight/Transport: ${engineeringSummary.reality_checks.weight_transport}\n- Crew: ${engineeringSummary.reality_checks.crew}\n- Setup Time: ${engineeringSummary.reality_checks.setup_time}\n\n`;
+    fullContent += `**Feasibility Verdict:** ${engineeringSummary.feasibility_verdict.level} — ${engineeringSummary.feasibility_verdict.why}\n\n`;
     if (conceptArt) fullContent += `![Concept Art](${conceptArt})\n\n`;
     fullContent += `### Potential Principles\n\n`;
     stagingBlueprint.potential_principles.forEach((p) => {
@@ -579,7 +733,7 @@ const handleRegenerateConceptArt = async () => {
   };
 
   const handleSave = () => {
-    if (!stagingBlueprint || !buildPack) return;
+    if (!engineeringSummary || !stagingBlueprint || !buildPack) return;
     const fullContent = buildFullContent();
     const titleBase = prompt.trim() ? prompt.trim() : buildPack.title;
     saveIdea('text', fullContent, `Illusion Blueprint (${effectType}) — ${titleBase}`);
@@ -606,12 +760,14 @@ const handleRegenerateConceptArt = async () => {
     setConstraints('');
     setConceptArt(null);
     setBlueprintSheet(null);
+    setEngineeringSummary(null);
     setStagingBlueprint(null);
     setBuildPack(null);
     setError(null);
     setSelectedMechanismId('all');
-    setActiveSection('concept');
+    setActiveSection('engineering');
     setOpenSections({
+      engineering: true,
       concept: true,
       blueprint: true,
       principles: true,
@@ -669,6 +825,7 @@ const handleRegenerateConceptArt = async () => {
 
   const setAllSections = (open: boolean) => {
     setOpenSections({
+      engineering: open,
       concept: open,
       blueprint: open,
       principles: open,
@@ -839,7 +996,7 @@ const handleRegenerateConceptArt = async () => {
           </div>
 
           <div ref={containerRef} className="flex-1 overflow-y-auto p-4 md:p-5">
-            {!stagingBlueprint || !buildPack ? (
+            {!engineeringSummary || !stagingBlueprint || !buildPack ? (
               <div className="h-full flex items-center justify-center">
                 {isLoading ? (
                   <LoadingIndicator />
@@ -921,6 +1078,117 @@ const handleRegenerateConceptArt = async () => {
               <div className="ml-auto text-[11px] text-slate-400">{APP_VERSION}</div>
             </div>
           </div>
+
+          {/* Engineering Summary */}
+          <CollapsibleSection
+            id="engineering"
+            title="Engineering Summary"
+            isOpen={openSections.engineering}
+            onToggle={() => toggleSection('engineering')}
+          >
+            <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-4 space-y-4">
+              <div>
+                <div className="text-xs text-slate-400">Title</div>
+                <div className="text-lg font-bold text-white font-cinzel">{engineeringSummary.title}</div>
+              </div>
+
+              <div>
+                <div className="text-xs text-slate-400">Audience Experience</div>
+                <div className="text-sm text-slate-200 leading-relaxed">{engineeringSummary.audience_experience}</div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
+                  <div className="text-xs text-slate-400">Build Complexity (1–5)</div>
+                  <div className="text-sm text-slate-200 font-semibold">
+                    {engineeringSummary.build_complexity.rating_1_to_5} / 5
+                  </div>
+                  <div className="text-xs text-slate-400 mt-1">{engineeringSummary.build_complexity.rationale}</div>
+                </div>
+                <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
+                  <div className="text-xs text-slate-400">Reset Time</div>
+                  <div className="text-sm text-slate-200 font-semibold">{engineeringSummary.reset_time}</div>
+                  <div className="text-xs text-slate-400 mt-1">
+                    Feasibility: <span className="text-slate-200 font-semibold">{engineeringSummary.feasibility_verdict.level}</span> —
+                    <span className="text-slate-400"> {engineeringSummary.feasibility_verdict.why}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
+                  <div className="text-xs text-slate-400">Angle Risk Summary</div>
+                  <ul className="mt-2 text-xs text-slate-300 space-y-1">
+                    <li><span className="text-slate-400">Front:</span> {engineeringSummary.angle_risk_summary.front}</li>
+                    <li><span className="text-slate-400">Sides:</span> {engineeringSummary.angle_risk_summary.sides}</li>
+                    <li><span className="text-slate-400">Balcony:</span> {engineeringSummary.angle_risk_summary.balcony}</li>
+                  </ul>
+                </div>
+                <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
+                  <div className="text-xs text-slate-400">Reality Checks</div>
+                  <ul className="mt-2 text-xs text-slate-300 space-y-1">
+                    <li><span className="text-slate-400">Weight/Transport:</span> {engineeringSummary.reality_checks.weight_transport}</li>
+                    <li><span className="text-slate-400">Crew:</span> {engineeringSummary.reality_checks.crew}</li>
+                    <li><span className="text-slate-400">Setup Time:</span> {engineeringSummary.reality_checks.setup_time}</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
+                  <div className="text-xs text-slate-400 mb-2">Secret Method Possibilities (non-exposure)</div>
+                  <div className="text-xs text-slate-300 space-y-2">
+                    <div><span className="text-slate-400 font-semibold">A:</span> {engineeringSummary.secret_method_possibilities.method_a}</div>
+                    <div><span className="text-slate-400 font-semibold">B:</span> {engineeringSummary.secret_method_possibilities.method_b}</div>
+                    <div><span className="text-slate-400 font-semibold">C:</span> {engineeringSummary.secret_method_possibilities.method_c}</div>
+                  </div>
+                </div>
+                <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
+                  <div className="text-xs text-slate-400 mb-2">Stage Staging</div>
+                  <div className="text-xs text-slate-300 space-y-2">
+                    <div><span className="text-slate-400 font-semibold">Lighting:</span> {engineeringSummary.stage_staging.lighting}</div>
+                    <div><span className="text-slate-400 font-semibold">Blocking:</span> {engineeringSummary.stage_staging.blocking}</div>
+                    <div><span className="text-slate-400 font-semibold">Angles:</span> {engineeringSummary.stage_staging.angles}</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
+                  <div className="text-xs text-slate-400 mb-2">Technical Requirements</div>
+                  <div className="text-xs text-slate-300">
+                    <div className="mb-2"><span className="text-slate-400 font-semibold">Assistants:</span> {engineeringSummary.technical_requirements.assistants}</div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <div className="text-[11px] text-slate-400 font-semibold">Props</div>
+                        <ul className="mt-1 list-disc pl-5 space-y-1">
+                          {engineeringSummary.technical_requirements.props.map((p, i) => (
+                            <li key={i}>{p}</li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div>
+                        <div className="text-[11px] text-slate-400 font-semibold">Mechanics</div>
+                        <ul className="mt-1 list-disc pl-5 space-y-1">
+                          {engineeringSummary.technical_requirements.mechanics.map((m, i) => (
+                            <li key={i}>{m}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
+                  <div className="text-xs text-slate-400 mb-2">Safety Notes</div>
+                  <ul className="text-xs text-slate-300 list-disc pl-5 space-y-1">
+                    {engineeringSummary.safety_notes.map((s, i) => (
+                      <li key={i}>{s}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </CollapsibleSection>
 
           {/* Concept Art */}
           {conceptArt ? (
