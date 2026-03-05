@@ -585,7 +585,7 @@ const dictionaryLinks = useMemo(() => {
 
         const speedConstraints = speedMode === 'fast'
           ? `\nSpeed mode: FAST (demo-optimized)\n- Return EXACTLY 3 segments total: opener, middle, closer (one each).\n- transition_notes: MAX 1 sentence per segment.\n- props_required: MAX 3 items per segment.\n- Keep titles short (<= 6 words).\n- Keep text tight and punchy.`
-          : `\nSpeed mode: FULL (richer)\n- Return EXACTLY ${fullSegmentsTarget} segments total (not fewer).\n- Must include exactly 1 opener and 1 closer.\n- All remaining segments must be purpose: middle.\n- transition_notes: 1–3 sentences when helpful (still concise).\n- props_required: keep practical (up to ~6 items when needed).`;
+          : `\nSpeed mode: FULL (richer)\n- Return EXACTLY ${fullSegmentsTarget} segments total (not fewer).\n- Must include exactly 1 opener and 1 closer.\n- All remaining segments must be purpose: middle.\n- Make purpose STRONGER and more specific (an actionable intent, not generic).\n- transition_notes must be richer than FAST and still SINGLE-LINE:\n  - Include 2 sentences (when possible), then add: Beats: • beat1 • beat2 • beat3 (2–4 beats)\n  - Optionally add: Audience moment: <short note>\n  - Keep everything on ONE LINE using separators like " | " if needed.\n- props_required: keep practical (up to ~6 items when needed).`;
 
         const prompt = `
 Please generate a show blueprint in STRICT JSON matching the provided schema.
@@ -848,7 +848,7 @@ try {
 
         const speedConstraints = speedMode === 'fast'
           ? `\nSpeed mode: FAST (demo-optimized)\n- Return EXACTLY 3 segments total: opener, middle, closer (one each).\n- transition_notes: MAX 1 sentence per segment.\n- props_required: MAX 3 items per segment.\n- Keep titles short (<= 6 words).\n- Keep text tight and punchy.`
-          : `\nSpeed mode: FULL (richer)\n- Return EXACTLY ${fullSegmentsTarget} segments total (not fewer).\n- Must include exactly 1 opener and 1 closer.\n- All remaining segments must be purpose: middle.\n- transition_notes: 1–3 sentences when helpful (still concise).\n- props_required: keep practical (up to ~6 items when needed).`;
+          : `\nSpeed mode: FULL (richer)\n- Return EXACTLY ${fullSegmentsTarget} segments total (not fewer).\n- Must include exactly 1 opener and 1 closer.\n- All remaining segments must be purpose: middle.\n- Make purpose STRONGER and more specific (an actionable intent, not generic).\n- transition_notes must be richer than FAST and still SINGLE-LINE:\n  - Include 2 sentences (when possible), then add: Beats: • beat1 • beat2 • beat3 (2–4 beats)\n  - Optionally add: Audience moment: <short note>\n  - Keep everything on ONE LINE using separators like " | " if needed.\n- props_required: keep practical (up to ~6 items when needed).`;
 
         const refinePrompt = `
 You are refining an EXISTING show blueprint.
