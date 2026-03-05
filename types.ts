@@ -259,6 +259,12 @@ export interface DirectorModeSegment {
   audience_interaction_level: DirectorInteractionLevel;
   props_required: string[];
   transition_notes: string;
+  // FULL mode richness (optional in types; required by FULL schema only)
+  beats?: string[]; // 2–4 short bullet beats
+  patter_hook?: string; // 1–2 sentences
+  blocking_notes?: string; // 1–2 sentences
+  volunteer_management?: string; // optional
+  music_lighting?: string; // optional
 }
 
 export interface DirectorModeBlueprint {

@@ -146,21 +146,38 @@ const blueprintToOutline = (bp: DirectorModeBlueprint, opts?: { fullDetail?: boo
         lines.push('');
 
         if (fullDetail) {
-            if (t.beats.length) {
+            const beats = Array.isArray((seg as any).beats) && (seg as any).beats.length
+                ? ((seg as any).beats as string[]).filter(Boolean)
+                : t.beats;
+            const audienceMoment = (seg as any).audience_moment || t.audienceMoment;
+            const volunteer = (seg as any).volunteer_management || t.volunteer;
+            const patter = (seg as any).patter_hook || t.patter;
+            const blocking = (seg as any).blocking_notes;
+            const music = (seg as any).music_lighting;
+
+            if (beats.length) {
                 lines.push('Beats:');
-                t.beats.slice(0, 6).forEach((b) => lines.push(`• ${b}`));
+                beats.slice(0, 6).forEach((b) => lines.push(`• ${b}`));
                 lines.push('');
             }
-            if (t.audienceMoment) {
-                lines.push(`Audience moment: ${t.audienceMoment}`);
+            if (audienceMoment) {
+                lines.push(`Audience moment: ${audienceMoment}`);
                 lines.push('');
             }
-            if (t.volunteer) {
-                lines.push(`Volunteer moment: ${t.volunteer}`);
+            if (volunteer) {
+                lines.push(`Volunteer management: ${volunteer}`);
                 lines.push('');
             }
-            if (t.patter) {
-                lines.push(`Patter hook: ${t.patter}`);
+            if (patter) {
+                lines.push(`Patter hook: ${patter}`);
+                lines.push('');
+            }
+            if (blocking) {
+                lines.push(`Blocking notes: ${blocking}`);
+                lines.push('');
+            }
+            if (music) {
+                lines.push(`Music/lighting: ${music}`);
                 lines.push('');
             }
         }
@@ -518,6 +535,11 @@ const dictionaryLinks = useMemo(() => {
             lines.push(`${i + 1}. ${seg.purpose.toUpperCase()} — ${seg.title} (${seg.duration_estimate_minutes} min, ${seg.audience_interaction_level})`);
             if (Array.isArray(seg.props_required) && seg.props_required.length) lines.push(`   Props: ${seg.props_required.join(', ')}`);
             if (seg.transition_notes?.trim()) lines.push(`   Transition: ${seg.transition_notes.trim()}`);
+            if (Array.isArray((seg as any).beats) && (seg as any).beats.length) lines.push(`   Beats: ${(seg as any).beats.join(' | ')}`);
+            if ((seg as any).patter_hook?.trim()) lines.push(`   Patter hook: ${(seg as any).patter_hook.trim()}`);
+            if ((seg as any).blocking_notes?.trim()) lines.push(`   Blocking: ${(seg as any).blocking_notes.trim()}`);
+            if ((seg as any).volunteer_management?.trim()) lines.push(`   Volunteer: ${(seg as any).volunteer_management.trim()}`);
+            if ((seg as any).music_lighting?.trim()) lines.push(`   Music/lighting: ${(seg as any).music_lighting.trim()}`);
         });
         return lines.join('\n');
     };
@@ -577,8 +599,49 @@ const dictionaryLinks = useMemo(() => {
             .join(' ');
     };
 
-    // Phase B: Structure output like a director's plan (overview, act structure, pacing, etc.)
-    const directorResponseSchema = {
+    // Phase B: Structured output schema.
+    // FAST schema is minimal for speed.
+    // FULL schema adds richer fields per segment (beats, patter, blocking, etc.).
+    const baseSegmentSchema = {
+        type: Type.OBJECT,
+        properties: {
+            title: { type: Type.STRING },
+            purpose: { type: Type.STRING, enum: ['opener', 'middle', 'closer'] },
+            duration_estimate_minutes: { type: Type.NUMBER },
+            audience_interaction_level: { type: Type.STRING, enum: ['low', 'medium', 'high'] },
+            props_required: { type: Type.ARRAY, items: { type: Type.STRING } },
+            transition_notes: { type: Type.STRING },
+        },
+        required: ['title', 'purpose', 'duration_estimate_minutes', 'audience_interaction_level', 'props_required', 'transition_notes'],
+    };
+
+    const richSegmentSchema = {
+        ...baseSegmentSchema,
+        properties: {
+            ...(baseSegmentSchema as any).properties,
+            beats: { type: Type.ARRAY, items: { type: Type.STRING } },
+            patter_hook: { type: Type.STRING },
+            blocking_notes: { type: Type.STRING },
+            volunteer_management: { type: Type.STRING },
+            music_lighting: { type: Type.STRING },
+        },
+        // FULL requires the rich fields (volunteer/music can be empty strings if not applicable)
+        required: [
+            'title',
+            'purpose',
+            'duration_estimate_minutes',
+            'audience_interaction_level',
+            'props_required',
+            'transition_notes',
+            'beats',
+            'patter_hook',
+            'blocking_notes',
+            'volunteer_management',
+            'music_lighting',
+        ],
+    };
+
+    const baseBlueprintSchema = {
         type: Type.OBJECT,
         properties: {
             show_title: { type: Type.STRING },
@@ -600,20 +663,25 @@ const dictionaryLinks = useMemo(() => {
             segments: {
                 type: Type.ARRAY,
                 items: {
-                    type: Type.OBJECT,
-                    properties: {
-                        title: { type: Type.STRING },
-                        purpose: { type: Type.STRING, enum: ['opener', 'middle', 'closer'] },
-                        duration_estimate_minutes: { type: Type.NUMBER },
-                        audience_interaction_level: { type: Type.STRING, enum: ['low', 'medium', 'high'] },
-                        props_required: { type: Type.ARRAY, items: { type: Type.STRING } },
-                        transition_notes: { type: Type.STRING },
-                    },
-                    required: ['title', 'purpose', 'duration_estimate_minutes', 'audience_interaction_level', 'props_required', 'transition_notes'],
+                    ...(baseSegmentSchema as any),
                 },
             },
         },
         required: ['show_title', 'show_length_minutes', 'audience_type', 'venue_type', 'tone', 'performer_persona', 'constraints', 'segments'],
+    };
+
+    const directorResponseSchemaFast = baseBlueprintSchema;
+    const directorResponseSchemaFull = {
+        ...(baseBlueprintSchema as any),
+        properties: {
+            ...(baseBlueprintSchema as any).properties,
+            segments: {
+                type: Type.ARRAY,
+                items: {
+                    ...(richSegmentSchema as any),
+                },
+            },
+        },
     };
     const handleGenerate = async () => {
         if (!isFormValid) {
@@ -667,8 +735,8 @@ const dictionaryLinks = useMemo(() => {
               : 6;
 
         const speedConstraints = speedMode === 'fast'
-          ? `\nSpeed mode: FAST (demo-optimized)\n- Return EXACTLY 3 segments total: opener, middle, closer (one each).\n- transition_notes: MAX 1 sentence per segment.\n- props_required: MAX 3 items per segment.\n- Keep titles short (<= 6 words).\n- Keep text tight and punchy.`
-          : `\nSpeed mode: FULL (richer)\n- Return EXACTLY ${fullSegmentsTarget} segments total (not fewer).\n- Must include exactly 1 opener and 1 closer.\n- All remaining segments must be purpose: middle.\n- Make purpose STRONGER and more specific (an actionable intent, not generic).\n- transition_notes must be richer than FAST and still SINGLE-LINE:\n  - Include 2 sentences (when possible), then add: Beats: • beat1 • beat2 • beat3 (2–4 beats)\n  - Optionally add: Audience moment: <short note>\n  - Keep everything on ONE LINE using separators like " | " if needed.\n- props_required: keep practical (up to ~6 items when needed).`;
+          ? `\nSpeed mode: FAST (demo-optimized)\n- Return EXACTLY 3 segments total: opener, middle, closer (one each).\n- transition_notes: MAX 1 sentence per segment.\n- props_required: MAX 3 items per segment.\n- Keep titles short (<= 6 words).\n- Keep text tight and punchy.\n- IMPORTANT: Do NOT include any extra fields beyond the FAST schema (no beats, patter_hook, blocking_notes, volunteer_management, music_lighting).`
+          : `\nSpeed mode: FULL (richer)\n- Return EXACTLY ${fullSegmentsTarget} segments total (not fewer).\n- Must include exactly 1 opener and 1 closer.\n- All remaining segments must be purpose: middle.\n- Each segment MUST include these FULL-only fields (schema-required):\n  - beats: array of 2–4 short "moments" (strings)\n  - patter_hook: 1–2 sentences\n  - blocking_notes: 1–2 sentences (stage movement / handling)\n  - volunteer_management: short line (or empty string if not needed)\n  - music_lighting: short line (or empty string if not needed)\n- Make purpose STRONGER and more specific (an actionable intent, not generic).\n- transition_notes: 2 sentences (when possible), practical and non-exposure.\n- props_required: keep practical (up to ~6 items when needed).`;
 
         const prompt = `
 Please generate a show blueprint in STRICT JSON matching the provided schema.
@@ -705,7 +773,7 @@ try {
           const resultJson = await generateStructuredResponse(
             prompt,
             DIRECTOR_MODE_SYSTEM_INSTRUCTION,
-            directorResponseSchema,
+            speedMode === 'fast' ? directorResponseSchemaFast : directorResponseSchemaFull,
             undefined,
             { maxOutputTokens: speedMode === 'fast' ? 2600 : 8192 }
           );
@@ -930,8 +998,8 @@ try {
               : 6;
 
         const speedConstraints = speedMode === 'fast'
-          ? `\nSpeed mode: FAST (demo-optimized)\n- Return EXACTLY 3 segments total: opener, middle, closer (one each).\n- transition_notes: MAX 1 sentence per segment.\n- props_required: MAX 3 items per segment.\n- Keep titles short (<= 6 words).\n- Keep text tight and punchy.`
-          : `\nSpeed mode: FULL (richer)\n- Return EXACTLY ${fullSegmentsTarget} segments total (not fewer).\n- Must include exactly 1 opener and 1 closer.\n- All remaining segments must be purpose: middle.\n- Make purpose STRONGER and more specific (an actionable intent, not generic).\n- transition_notes must be richer than FAST and still SINGLE-LINE:\n  - Include 2 sentences (when possible), then add: Beats: • beat1 • beat2 • beat3 (2–4 beats)\n  - Optionally add: Audience moment: <short note>\n  - Keep everything on ONE LINE using separators like " | " if needed.\n- props_required: keep practical (up to ~6 items when needed).`;
+          ? `\nSpeed mode: FAST (demo-optimized)\n- Return EXACTLY 3 segments total: opener, middle, closer (one each).\n- transition_notes: MAX 1 sentence per segment.\n- props_required: MAX 3 items per segment.\n- Keep titles short (<= 6 words).\n- Keep text tight and punchy.\n- IMPORTANT: Do NOT include any extra fields beyond the FAST schema (no beats, patter_hook, blocking_notes, volunteer_management, music_lighting).`
+          : `\nSpeed mode: FULL (richer)\n- Return EXACTLY ${fullSegmentsTarget} segments total (not fewer).\n- Must include exactly 1 opener and 1 closer.\n- All remaining segments must be purpose: middle.\n- Each segment MUST include these FULL-only fields (schema-required):\n  - beats: array of 2–4 short "moments" (strings)\n  - patter_hook: 1–2 sentences\n  - blocking_notes: 1–2 sentences (stage movement / handling)\n  - volunteer_management: short line (or empty string if not needed)\n  - music_lighting: short line (or empty string if not needed)\n- Make purpose STRONGER and more specific (an actionable intent, not generic).\n- transition_notes: 2 sentences (when possible), practical and non-exposure.\n- props_required: keep practical (up to ~6 items when needed).`;
 
         const refinePrompt = `
 You are refining an EXISTING show blueprint.
@@ -956,7 +1024,7 @@ ${speedConstraints}
             const resultJson = await generateStructuredResponse(
                 refinePrompt,
                 DIRECTOR_MODE_SYSTEM_INSTRUCTION,
-                directorResponseSchema,
+                speedMode === 'fast' ? directorResponseSchemaFast : directorResponseSchemaFull,
                 undefined,
                 { maxOutputTokens: speedMode === 'fast' ? 2600 : 8192 }
             );
@@ -1021,7 +1089,12 @@ ${speedConstraints}
                     `Estimated: ${seg.duration_estimate_minutes} min\n` +
                     `Interaction: ${seg.audience_interaction_level}\n` +
                     propsLine +
-                    `Transition: ${seg.transition_notes || ''}`;
+                    `Transition: ${seg.transition_notes || ''}` +
+                    (Array.isArray((seg as any).beats) && (seg as any).beats.length ? `\nBeats: ${(seg as any).beats.join(' | ')}` : '') +
+                    ((seg as any).patter_hook ? `\nPatter hook: ${(seg as any).patter_hook}` : '') +
+                    ((seg as any).blocking_notes ? `\nBlocking notes: ${(seg as any).blocking_notes}` : '') +
+                    ((seg as any).volunteer_management ? `\nVolunteer management: ${(seg as any).volunteer_management}` : '') +
+                    ((seg as any).music_lighting ? `\nMusic/lighting: ${(seg as any).music_lighting}` : '');
 
                 return {
                     title: `Build: ${seg.title}`,
@@ -1344,6 +1417,17 @@ ${speedConstraints}
                                                 <p className="text-slate-300">{opener.title} • {opener.duration_estimate_minutes} min • {opener.audience_interaction_level}</p>
                                                 <p className="text-slate-400 mt-1">Props: {(opener.props_required || []).join(', ') || '—'}</p>
                                                 {opener.transition_notes ? <p className="text-slate-400 mt-1">Transition: {opener.transition_notes}</p> : null}
+                                                {speedMode === 'full' ? (
+                                                    <div className="text-slate-400 mt-2 space-y-1">
+                                                        {Array.isArray((opener as any).beats) && (opener as any).beats.length ? (
+                                                            <p>Beats: {(opener as any).beats.join(' • ')}</p>
+                                                        ) : null}
+                                                        {(opener as any).patter_hook ? <p>Patter hook: {(opener as any).patter_hook}</p> : null}
+                                                        {(opener as any).blocking_notes ? <p>Blocking: {(opener as any).blocking_notes}</p> : null}
+                                                        {(opener as any).volunteer_management ? <p>Volunteer: {(opener as any).volunteer_management}</p> : null}
+                                                        {(opener as any).music_lighting ? <p>Music/lighting: {(opener as any).music_lighting}</p> : null}
+                                                    </div>
+                                                ) : null}
                                             </div>
                                         ) : null}
 
@@ -1353,6 +1437,17 @@ ${speedConstraints}
                                                 <p className="text-slate-300">{mSeg.title} • {mSeg.duration_estimate_minutes} min • {mSeg.audience_interaction_level}</p>
                                                 <p className="text-slate-400 mt-1">Props: {(mSeg.props_required || []).join(', ') || '—'}</p>
                                                 {mSeg.transition_notes ? <p className="text-slate-400 mt-1">Transition: {mSeg.transition_notes}</p> : null}
+                                                {speedMode === 'full' ? (
+                                                    <div className="text-slate-400 mt-2 space-y-1">
+                                                        {Array.isArray((mSeg as any).beats) && (mSeg as any).beats.length ? (
+                                                            <p>Beats: {(mSeg as any).beats.join(' • ')}</p>
+                                                        ) : null}
+                                                        {(mSeg as any).patter_hook ? <p>Patter hook: {(mSeg as any).patter_hook}</p> : null}
+                                                        {(mSeg as any).blocking_notes ? <p>Blocking: {(mSeg as any).blocking_notes}</p> : null}
+                                                        {(mSeg as any).volunteer_management ? <p>Volunteer: {(mSeg as any).volunteer_management}</p> : null}
+                                                        {(mSeg as any).music_lighting ? <p>Music/lighting: {(mSeg as any).music_lighting}</p> : null}
+                                                    </div>
+                                                ) : null}
                                             </div>
                                         ))}
 
@@ -1362,6 +1457,17 @@ ${speedConstraints}
                                                 <p className="text-slate-300">{closer.title} • {closer.duration_estimate_minutes} min • {closer.audience_interaction_level}</p>
                                                 <p className="text-slate-400 mt-1">Props: {(closer.props_required || []).join(', ') || '—'}</p>
                                                 {closer.transition_notes ? <p className="text-slate-400 mt-1">Transition: {closer.transition_notes}</p> : null}
+                                                {speedMode === 'full' ? (
+                                                    <div className="text-slate-400 mt-2 space-y-1">
+                                                        {Array.isArray((closer as any).beats) && (closer as any).beats.length ? (
+                                                            <p>Beats: {(closer as any).beats.join(' • ')}</p>
+                                                        ) : null}
+                                                        {(closer as any).patter_hook ? <p>Patter hook: {(closer as any).patter_hook}</p> : null}
+                                                        {(closer as any).blocking_notes ? <p>Blocking: {(closer as any).blocking_notes}</p> : null}
+                                                        {(closer as any).volunteer_management ? <p>Volunteer: {(closer as any).volunteer_management}</p> : null}
+                                                        {(closer as any).music_lighting ? <p>Music/lighting: {(closer as any).music_lighting}</p> : null}
+                                                    </div>
+                                                ) : null}
                                             </div>
                                         ) : null}
                                     </div>
