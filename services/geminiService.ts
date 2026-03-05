@@ -259,7 +259,7 @@ export const generateResponse = async (
   };
 
   try {
-    const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: speedMode === 'fast' ? 1 : 2 });
+    const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 2 });
     return extractText(result);
   } catch (error: any) {
     console.error('AI Error:', error);
@@ -287,7 +287,7 @@ export const generateResponseWithParts = async (
   };
 
   try {
-    const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: speedMode === 'fast' ? 1 : 2 });
+    const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 2 });
     return extractText(result);
   } catch (error: any) {
     console.error('AI Error:', error);
@@ -302,8 +302,10 @@ export const generateStructuredResponse = async (
   currentUser?: User,
   options?: { extraHeaders?: Record<string, string>; maxOutputTokens?: number; speedMode?: 'fast' | 'full' }
 ): Promise<any> => {
+  const speedMode = options?.speedMode ?? 'full';
+  const model = speedMode === 'fast' ? 'gemini-2.0-flash' : 'gemini-3-pro-preview';
   const body: GeminiGenerateBody = {
-    model: 'gemini-3-flash-preview',
+    model,
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
     config: {
       systemInstruction,
@@ -313,7 +315,7 @@ export const generateStructuredResponse = async (
     },
   };
 
-  const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: speedMode === 'fast' ? 1 : 2 });
+  const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 2 });
   const text = extractText(result);
 
   const looksTruncated = (raw: string, errMsg: string) => {
@@ -441,7 +443,7 @@ export const identifyTrickFromImage = async (
   };
 
   const body: GeminiGenerateBody = {
-    model: 'gemini-3-flash-preview',
+    model,
     contents: {
       parts: [
         { text: prompt },
