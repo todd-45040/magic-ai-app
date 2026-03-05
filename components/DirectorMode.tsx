@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Type } from "@google/genai";
 import { saveIdea } from '../services/ideasService';
 import { CohesionActions } from './CohesionActions';
@@ -62,8 +62,61 @@ const extractDictionaryTerms = (textBlocks: string[]): string[] => {
 };
 
 
-const blueprintToOutline = (bp: DirectorModeBlueprint): string => {
+const parseTransitionExtras = (raw: string) => {
+    const text = (raw || '').trim();
+    // Extras are encoded schema-safe inside transition_notes separated by " | "
+    // Example:
+    // "Transition sentence one. Transition sentence two. | Beats: • beat1 • beat2 • beat3 | Volunteer moment: ... | Patter hook: ..."
+    const parts = text.split('|').map((p) => p.trim()).filter(Boolean);
+
+    let base = '';
+    const beats: string[] = [];
+    let volunteer = '';
+    let patter = '';
+    let audienceMoment = '';
+
+    for (const p of parts) {
+        const lower = p.toLowerCase();
+
+        if (lower.startsWith('beats:')) {
+            const after = p.slice(p.indexOf(':') + 1).trim();
+            const rawBeats = after
+                .split('•')
+                .map((b) => b.trim())
+                .filter(Boolean);
+            if (rawBeats.length) beats.push(...rawBeats);
+            continue;
+        }
+
+        if (lower.startsWith('volunteer moment:') || lower.startsWith('volunteer:')) {
+            volunteer = p.slice(p.indexOf(':') + 1).trim();
+            continue;
+        }
+
+        if (lower.startsWith('patter hook:') || lower.startsWith('patter:')) {
+            patter = p.slice(p.indexOf(':') + 1).trim();
+            continue;
+        }
+
+        if (lower.startsWith('audience moment:')) {
+            audienceMoment = p.slice(p.indexOf(':') + 1).trim();
+            continue;
+        }
+
+        // Unlabeled portion: treat as base transition (first one wins)
+        if (!base) base = p;
+    }
+
+    // If no pipes/labels, whole string is base
+    if (!base && !beats.length && !volunteer && !patter && !audienceMoment) base = text;
+
+    return { base: base || '—', beats, volunteer, patter, audienceMoment };
+};
+
+const blueprintToOutline = (bp: DirectorModeBlueprint, opts?: { fullDetail?: boolean }): string => {
     if (!bp) return '';
+    const fullDetail = Boolean(opts?.fullDetail);
+
     const lines: string[] = [];
     const title = (bp.show_title || 'Untitled Show').trim();
     const len = bp.show_length_minutes ? `${bp.show_length_minutes} Minute` : '';
@@ -82,12 +135,35 @@ const blueprintToOutline = (bp: DirectorModeBlueprint): string => {
         lines.push(`${purpose} — ${seg.title}${dur ? ` (${dur})` : ''}`);
         lines.push('');
         lines.push(`Audience Interaction: ${(seg.audience_interaction_level || '').toString().replace(/^./, (c) => c.toUpperCase())}`);
+
         const props = Array.isArray(seg.props_required) ? seg.props_required.filter(Boolean) : [];
         lines.push(`Props: ${props.length ? props.join(', ') : '—'}`);
         lines.push('');
+
+        const t = parseTransitionExtras(seg.transition_notes || '');
         lines.push('Transition:');
-        lines.push((seg.transition_notes || '—').trim() || '—');
+        lines.push(t.base);
         lines.push('');
+
+        if (fullDetail) {
+            if (t.beats.length) {
+                lines.push('Beats:');
+                t.beats.slice(0, 6).forEach((b) => lines.push(`• ${b}`));
+                lines.push('');
+            }
+            if (t.audienceMoment) {
+                lines.push(`Audience moment: ${t.audienceMoment}`);
+                lines.push('');
+            }
+            if (t.volunteer) {
+                lines.push(`Volunteer moment: ${t.volunteer}`);
+                lines.push('');
+            }
+            if (t.patter) {
+                lines.push(`Patter hook: ${t.patter}`);
+                lines.push('');
+            }
+        }
     });
 
     return lines.join('\n');
@@ -101,6 +177,13 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
 
     // Speed / Reliability
     const [speedMode, setSpeedMode] = useState<'fast' | 'full'>('fast');
+    // Show Outline detail (FULL mode only)
+    const [outlineFullDetail, setOutlineFullDetail] = useState<boolean>(false);
+
+    useEffect(() => {
+        // Default: ON for Full, OFF for Fast
+        setOutlineFullDetail(speedMode === 'full');
+    }, [speedMode]);
     // Audience: quick-select chips + optional custom text
     const [audienceType, setAudienceType] = useState(''); // custom audience text
     const [audienceChips, setAudienceChips] = useState<string[]>([]);
@@ -772,7 +855,7 @@ try {
     const handleCopyShowOutline = async () => {
         const active = getActiveBlueprint() ?? showPlan;
         if (!active) return;
-        const ok = await copyToClipboard(blueprintToOutline(active));
+        const ok = await copyToClipboard(blueprintToOutline(active, { fullDetail: speedMode === 'full' && outlineFullDetail }));
         setRefineNotice(ok ? 'Copied show outline to clipboard.' : 'Copy failed — your browser blocked clipboard access.');
         window.setTimeout(() => setRefineNotice(null), 2500);
     };
@@ -1286,7 +1369,30 @@ ${speedConstraints}
 
                                 {blueprintView === 'outline' ? (
                                     <div className="mt-3">
-                                        <div className="flex justify-end mb-2">
+                                        <div className="flex items-center justify-between mb-2 gap-3">
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setOutlineFullDetail((v) => !v)}
+                                                    disabled={speedMode !== 'full'}
+                                                    className={
+                                                        (speedMode === 'full'
+                                                            ? outlineFullDetail
+                                                                ? 'bg-purple-600/30 border-purple-400 text-purple-100'
+                                                                : 'bg-slate-900/40 border-slate-700 text-slate-200 hover:bg-slate-900/60'
+                                                            : 'opacity-50 cursor-not-allowed bg-slate-900/30 border-slate-800 text-slate-400') +
+                                                        ' px-3 py-1.5 rounded-full border text-xs transition-colors'
+                                                    }
+                                                    title={speedMode === 'full' ? 'Toggle full-detail outline formatting' : 'Full Detail is available in Full mode'}
+                                                >
+                                                    {outlineFullDetail ? 'Full Detail: On' : 'Full Detail: Off'}
+                                                </button>
+
+                                                <span className="text-xs text-slate-400 hidden sm:inline">
+                                                    {speedMode === 'full' ? 'Shows beats, volunteer moment, patter hook' : 'Switch to Full to enable'}
+                                                </span>
+                                            </div>
+
                                             <button
                                                 type="button"
                                                 onClick={handleCopyShowOutline}
@@ -1296,7 +1402,7 @@ ${speedConstraints}
                                             </button>
                                         </div>
                                         <pre className="text-xs text-slate-200 bg-slate-950/40 border border-slate-700/60 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap">
-{blueprintToOutline(active)}
+{blueprintToOutline(active, { fullDetail: speedMode === 'full' && outlineFullDetail })}
                                         </pre>
                                     </div>
                                 ) : null}
