@@ -3296,7 +3296,7 @@ ${action.payload.content}`;
       )}
 
 
-      <nav className="flex items-center gap-1 border-b border-slate-800 px-2 md:px-4 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+      <nav className="flex items-center gap-1 border-b border-slate-800 px-2 md:px-4 flex-wrap [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         {/* Phase 2 (Navigation Tightening): Intent-based primary navigation */}
         <TabButton
           label="Home"
