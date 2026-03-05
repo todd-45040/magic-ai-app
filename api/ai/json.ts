@@ -184,92 +184,156 @@ export default async function handler(req: any, res: any) {
     const rawText = extractText(result);
 
     let parsed: any;
-    try {
-      parsed = JSON.parse(rawText);
-    } catch {
-      // --- Robust JSON recovery (booth reliability)
-      // Providers occasionally return "JSON" with:
-      // - extra wrapper text
-      // - fenced code blocks
-      // - raw newlines/tabs inside quoted strings (invalid JSON)
-      // We attempt a best-effort repair before failing.
+    // --- Robust JSON recovery (booth reliability)
+    // Providers occasionally return "JSON" with:
+    // - extra wrapper text
+    // - fenced code blocks
+    // - raw newlines/tabs inside quoted strings (invalid JSON)
+    // - occasional stray text before/after the JSON
+    // We'll do:
+    //   1) strict parse
+    //   2) best-effort repair + parse
+    //   3) ONE automatic "repair" retry to the model (re-emit ONLY valid JSON)
 
-      const stripFences = (s: string) => {
-        const t = (s || '').trim();
-        if (t.startsWith('```')) {
-          return t
-            .replace(/^```[a-zA-Z]*\s*/m, '')
-            .replace(/```\s*$/m, '')
-            .trim();
+    const stripFences = (s: string) => {
+      const t = (s || '').trim();
+      if (t.startsWith('```')) {
+        return t
+          .replace(/^```[a-zA-Z]*\s*/m, '')
+          .replace(/```\s*$/m, '')
+          .trim();
+      }
+      return t;
+    };
+
+    const extractJsonBlock = (input: string) => {
+      const text = (input || '').trim();
+      if (!text) return '';
+      const firstObj = text.indexOf('{');
+      const firstArr = text.indexOf('[');
+      let start = -1;
+      if (firstObj === -1) start = firstArr;
+      else if (firstArr === -1) start = firstObj;
+      else start = Math.min(firstObj, firstArr);
+      if (start === -1) return text;
+      const endObj = text.lastIndexOf('}');
+      const endArr = text.lastIndexOf(']');
+      const end = Math.max(endObj, endArr);
+      if (end === -1 || end <= start) return text.slice(start);
+      return text.slice(start, end + 1);
+    };
+
+    const escapeControlCharsInsideStrings = (jsonLike: string) => {
+      let out = '';
+      let inStr = false;
+      let esc = false;
+      for (let i = 0; i < jsonLike.length; i++) {
+        const ch = jsonLike[i];
+        if (esc) {
+          out += ch;
+          esc = false;
+          continue;
         }
-        return t;
-      };
-
-      const extractJsonBlock = (input: string) => {
-        const text = (input || '').trim();
-        if (!text) return '';
-        const firstObj = text.indexOf('{');
-        const firstArr = text.indexOf('[');
-        let start = -1;
-        if (firstObj === -1) start = firstArr;
-        else if (firstArr === -1) start = firstObj;
-        else start = Math.min(firstObj, firstArr);
-        if (start === -1) return text;
-        const endObj = text.lastIndexOf('}');
-        const endArr = text.lastIndexOf(']');
-        const end = Math.max(endObj, endArr);
-        if (end === -1 || end <= start) return text.slice(start);
-        return text.slice(start, end + 1);
-      };
-
-      const escapeNewlinesInsideStrings = (jsonLike: string) => {
-        let out = '';
-        let inStr = false;
-        let esc = false;
-        for (let i = 0; i < jsonLike.length; i++) {
-          const ch = jsonLike[i];
-          if (esc) {
-            out += ch;
-            esc = false;
-            continue;
-          }
-          if (ch === '\\') {
-            out += ch;
-            esc = true;
-            continue;
-          }
-          if (ch === '"') {
-            inStr = !inStr;
-            out += ch;
-            continue;
-          }
-          if (inStr && (ch === '\n' || ch === '\r')) {
+        if (ch === '\\') {
+          out += ch;
+          esc = true;
+          continue;
+        }
+        if (ch === '"') {
+          inStr = !inStr;
+          out += ch;
+          continue;
+        }
+        if (inStr) {
+          if (ch === '\n' || ch === '\r') {
             out += '\\n';
             if (ch === '\r' && jsonLike[i + 1] === '\n') i++;
             continue;
           }
-          if (inStr && ch === '\t') {
+          if (ch === '\t') {
             out += '\\t';
             continue;
           }
-          out += ch;
+          if (ch === '\b') {
+            out += '\\b';
+            continue;
+          }
+          if (ch === '\f') {
+            out += '\\f';
+            continue;
+          }
         }
-        return out;
+        out += ch;
+      }
+      return out;
+    };
+
+    const tryParse = (text: string): any | null => {
+      if (!text || typeof text !== 'string') return null;
+      try {
+        return JSON.parse(text);
+      } catch {
+        // ignore
+      }
+      try {
+        const candidate = extractJsonBlock(stripFences(text));
+        const repaired = escapeControlCharsInsideStrings(candidate);
+        return JSON.parse(repaired);
+      } catch {
+        return null;
+      }
+    };
+
+    parsed = tryParse(rawText);
+
+    if (parsed == null) {
+      // One automatic repair retry (rare, but dramatically improves booth reliability)
+      const repairPrompt =
+        'You returned invalid JSON. Re-emit ONLY valid JSON for the SAME schema. ' +
+        'Do not add commentary, markdown fences, or extra keys. ' +
+        'All string values must be single-line; if you need line breaks, use \\n.\n\n' +
+        'INVALID JSON (fix this):\n' +
+        rawText;
+
+      const repairContents = [{ role: 'user', parts: [{ text: repairPrompt }] }];
+
+      const runRepair = async () => {
+        if (provider === 'openai') {
+          return callOpenAI({ model, contents: repairContents, config: { ...config, maxOutputTokens: 1400 } });
+        }
+        if (provider === 'anthropic') {
+          return callAnthropic({ model, contents: repairContents, config: { ...config, maxOutputTokens: 1400 } });
+        }
+        const apiKey = getGoogleAiApiKey();
+        if (!apiKey) {
+          throw new Error('Google AI API key is not configured. Set GOOGLE_AI_API_KEY in Vercel environment variables.');
+        }
+        const { GoogleGenAI } = await import('@google/genai');
+        const ai = new GoogleGenAI({ apiKey });
+        return ai.models.generateContent({
+          model: model || 'gemini-3-pro-preview',
+          contents: repairContents,
+          config: { ...config, responseMimeType: 'application/json', maxOutputTokens: 1400 },
+        });
       };
 
       try {
-        const candidate = extractJsonBlock(stripFences(rawText));
-        const repaired = escapeNewlinesInsideStrings(candidate);
-        parsed = JSON.parse(repaired);
+        const repairResult = await withTimeout(runRepair(), TIMEOUT_MS, 'TIMEOUT');
+        const repairText = extractText(repairResult);
+        parsed = tryParse(repairText);
       } catch {
-        return jsonError(res, 422, {
-          ok: false,
-          error_code: 'BAD_JSON',
-          message: 'The AI response was not valid JSON. Please try again.',
-          retryable: true,
-          ...(isPreviewEnv() ? { details: { rawText: rawText?.slice(0, 4000) } } : {}),
-        });
+        // ignore; will fail below
       }
+    }
+
+    if (parsed == null) {
+      return jsonError(res, 422, {
+        ok: false,
+        error_code: 'BAD_JSON',
+        message: 'The AI response was not valid JSON. Please try again.',
+        retryable: true,
+        ...(isPreviewEnv() ? { details: { rawText: rawText?.slice(0, 4000) } } : {}),
+      });
     }
 
     // Best-effort increment AFTER success
