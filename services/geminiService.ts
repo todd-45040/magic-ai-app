@@ -330,17 +330,11 @@ export const generateStructuredResponse = async (
       `- Output ONLY JSON (no markdown fences, no prose).\n` +
       `- Do NOT include trailing comments.\n` +
       `- Do NOT include raw newlines inside string values; use \\n if needed.\n` +
-      `- Ensure all quotes inside strings are properly escaped.\n\n` +
-      `- Ensure the JSON is COMPLETE (must end with a closing } or ]). Do not truncate.\n\n` +
+      `- Ensure all quotes inside strings are properly escaped.\n` +
+      `- The JSON MUST be complete and must end with a closing } or ].\n\n` +
       `Here is the invalid output to fix:\n` +
       `${text || ''}\n\n` +
       `Now output the corrected JSON only.`;
-
-    // Give the retry enough budget even when callers request a small cap (Fast mode).
-    // Truncation is a common cause of "end of data" JSON.parse errors.
-    const retryMaxTokens = typeof options?.maxOutputTokens === 'number'
-      ? Math.max(options.maxOutputTokens, 3000)
-      : 3000;
 
     const retryBody: GeminiGenerateBody = {
       model: 'gemini-3-flash-preview',
@@ -349,18 +343,15 @@ export const generateStructuredResponse = async (
         systemInstruction,
         responseMimeType: "application/json",
         responseSchema,
-        maxOutputTokens: retryMaxTokens,
+        ...(typeof options?.maxOutputTokens === 'number'
+          ? { maxOutputTokens: Math.max(options.maxOutputTokens, 4200) }
+          : { maxOutputTokens: 4200 }),
       },
     };
 
     const retryResult = await postJson<any>('/api/generate', retryBody, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 1 });
     const retryText = extractText(retryResult);
-    try {
-      return safeJsonParse(retryText || '{}');
-    } catch (err2: any) {
-      const msg2 = String(err2?.message || err2 || 'Invalid JSON');
-      throw new Error(`AI returned invalid JSON even after repair retry: ${msg2}`);
-    }
+    return safeJsonParse(retryText || '{}');
   }
 };
 
