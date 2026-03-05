@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { saveIdea } from "../services/ideasService";
 import { supabase } from "../supabase";
 import { CohesionActions } from "./CohesionActions";
-import { SaveActionBar } from "./shared/SaveActionBar";
+import SaveActionBar from "./shared/SaveActionBar";
 import { BookIcon, WandIcon, CheckIcon, CopyIcon } from "./icons";
 import type { User } from "../types";
 
