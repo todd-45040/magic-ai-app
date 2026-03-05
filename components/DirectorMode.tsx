@@ -1487,7 +1487,26 @@ ${speedConstraints}
                                             {timelineItems.map((it) => (
                                                 <div
                                                     key={it.idx}
-                                                    className="flex flex-col justify-between bg-slate-900/40 border border-slate-700/60 rounded-lg p-2 min-w-[88px] transition-transform duration-500 ease-out"
+                                                    role="button"
+                                                    tabIndex={0}
+                                                    onClick={() => {
+                                                        setBlueprintView('segments');
+                                                        requestAnimationFrame(() => {
+                                                            const el = document.getElementById(`segment-card-${it.idx}`);
+                                                            el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                                        });
+                                                    }}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter' || e.key === ' ') {
+                                                            e.preventDefault();
+                                                            setBlueprintView('segments');
+                                                            requestAnimationFrame(() => {
+                                                                const el = document.getElementById(`segment-card-${it.idx}`);
+                                                                el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                                            });
+                                                        }
+                                                    }}
+                                                    className="flex flex-col justify-between bg-slate-900/40 border border-slate-700/60 rounded-lg p-2 min-w-[88px] transition-transform duration-500 ease-out cursor-pointer hover:bg-slate-900/60 hover:border-purple-400/60"
                                                     style={{ width: `${it.pct}%`, transform: timelineReady ? 'scaleX(1)' : 'scaleX(0.02)', transformOrigin: 'left' }}
                                                     title={`${it.role} — ${it.title} (${it.minutes} min)`}
                                                 >
@@ -1504,7 +1523,7 @@ ${speedConstraints}
                                 {blueprintView === 'segments' ? (
                                     <div className="mt-3 space-y-3 text-sm text-slate-300">
                                         {opener ? (
-                                            <div className="bg-slate-900/40 rounded-md p-3 border border-slate-700/60">
+                                            <div id={`segment-card-${segments.indexOf(opener)}`} className="bg-slate-900/40 rounded-md p-3 border border-slate-700/60">
                                                 <p className="font-semibold text-white">Opener</p>
                                                 <p className="text-slate-300">{opener.title} • {opener.duration_estimate_minutes} min{opener.audience_interaction_level ? ` • ${opener.audience_interaction_level}` : ''}</p>
                                                 <p className="text-slate-400 mt-1">Props: {(opener.props_required || []).join(', ') || '—'}</p>
@@ -1524,7 +1543,7 @@ ${speedConstraints}
                                         ) : null}
 
                                         {middles.map((mSeg, i) => (
-                                            <div key={i} className="bg-slate-900/40 rounded-md p-3 border border-slate-700/60">
+                                            <div key={i} id={`segment-card-${segments.indexOf(mSeg)}`} className="bg-slate-900/40 rounded-md p-3 border border-slate-700/60">
                                                 <p className="font-semibold text-white">Middle</p>
                                                 <p className="text-slate-300">{mSeg.title} • {mSeg.duration_estimate_minutes} min{mSeg.audience_interaction_level ? ` • ${mSeg.audience_interaction_level}` : ''}</p>
                                                 <p className="text-slate-400 mt-1">Props: {(mSeg.props_required || []).join(', ') || '—'}</p>
@@ -1544,7 +1563,7 @@ ${speedConstraints}
                                         ))}
 
                                         {closer ? (
-                                            <div className="bg-slate-900/40 rounded-md p-3 border border-slate-700/60">
+                                            <div id={`segment-card-${segments.indexOf(closer)}`} className="bg-slate-900/40 rounded-md p-3 border border-slate-700/60">
                                                 <p className="font-semibold text-white">Closer</p>
                                                 <p className="text-slate-300">{closer.title} • {closer.duration_estimate_minutes} min{closer.audience_interaction_level ? ` • ${closer.audience_interaction_level}` : ''}</p>
                                                 <p className="text-slate-400 mt-1">Props: {(closer.props_required || []).join(', ') || '—'}</p>
@@ -1587,7 +1606,11 @@ ${speedConstraints}
                                                 </button>
 
                                                 <span className="text-xs text-slate-400 hidden sm:inline">
-                                                    {speedMode === 'full' ? 'Shows beats, volunteer moment, patter hook' : 'Switch to Full to enable'}
+                                                    {speedMode === 'fast'
+                                                        ? 'Fast mode uses a simplified outline. Switch to Full for director notes.'
+                                                        : outlineFullDetail
+                                                          ? 'Director notes enabled.'
+                                                          : 'Enable Full Detail to view director notes.'}
                                                 </span>
                                             </div>
 
