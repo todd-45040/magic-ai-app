@@ -88,6 +88,164 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
     const [comedyLevel, setComedyLevel] = useState<'Low' | 'Medium' | 'High' | ''>('');
     const [participation, setParticipation] = useState<'Low' | 'Medium' | 'High' | ''>('');
     const [volunteersOk, setVolunteersOk] = useState<'Yes' | 'No' | ''>('');
+    // Demo / onboarding examples (rotating)
+    type DirectorExample = {
+        label: string;
+        showTitle: string;
+        showLength: string;
+        audienceChips: string[];
+        audienceType?: string;
+        theme: string;
+        venueType: string;
+        tone: string;
+        performerPersona: string;
+        skillLevel: 'Beginner' | 'Intermediate' | 'Advanced' | '';
+        resetTime: 'Instant' | '30s' | '1 min' | '2 min' | '5+ min' | '';
+        propsOwned: string;
+        constraintNotes: string;
+        // Optional advanced (if you later surface these on the UI)
+        pacing?: 'Relaxed' | 'Balanced' | 'High-energy' | '';
+        comedyLevel?: 'Low' | 'Medium' | 'High' | '';
+        participation?: 'Low' | 'Medium' | 'High' | '';
+        volunteersOk?: 'Yes' | 'No' | '';
+    };
+
+    const DIRECTOR_EXAMPLES_A: DirectorExample[] = [
+        {
+            label: 'Corporate 45 (Comedy + Mind)',
+            showTitle: 'The Corporate Mind-Reader',
+            showLength: '45',
+            audienceChips: ['Corporate', 'Adults'],
+            audienceType: '150 people • banquet room • after-dinner',
+            theme: 'polished, funny, modern mentalism with a clean “wow” ending',
+            venueType: 'banquet hall / hotel ballroom',
+            tone: 'funny + intelligent + high-energy',
+            performerPersona: 'charming storyteller • confident • playful • professional',
+            skillLevel: 'Intermediate',
+            resetTime: '1 min',
+            propsOwned: 'deck of cards, billets, Sharpies, coin set, pad, invisible thread',
+            constraintNotes: 'No fire. Minimal table space. Keep it clean for corporate audience.',
+        },
+        {
+            label: 'School 30 (Fast + Visual)',
+            showTitle: 'Mystery at the Assembly',
+            showLength: '30',
+            audienceChips: ['School Assembly', 'Kids'],
+            audienceType: 'ages 8–12 • big group',
+            theme: 'high-clarity, visual magic with quick laughs and volunteer moments',
+            venueType: 'school gym / auditorium stage',
+            tone: 'funny + upbeat + wholesome',
+            performerPersona: 'friendly “cool teacher” energy • big gestures • clear instructions',
+            skillLevel: 'Beginner',
+            resetTime: '30s',
+            propsOwned: 'sponge balls, rope, silks, thumb tip, deck of cards',
+            constraintNotes: 'Keep volunteers safe and easy. Big visibility. No complex reset.',
+        },
+        {
+            label: 'Close-up 60 (Interactive)',
+            showTitle: 'Impossible at Your Table',
+            showLength: '60',
+            audienceChips: ['Adults'],
+            audienceType: 'walk-around / table-hopping',
+            theme: 'sleek close-up miracles with escalating impossibility',
+            venueType: 'restaurant / cocktail hour',
+            tone: 'mysterious + charming + witty',
+            performerPersona: 'smooth close-up specialist • friendly • confident',
+            skillLevel: 'Advanced',
+            resetTime: 'Instant',
+            propsOwned: 'cards, coins, rubber bands, ring, marker, small pad',
+            constraintNotes: 'No loud music cues. Quick resets. Keep props pocket-friendly.',
+        },
+    ];
+
+    const DIRECTOR_EXAMPLES_B: DirectorExample[] = [
+        {
+            label: 'Theater 90 (Dramatic)',
+            showTitle: 'The Alchemist’s Secret',
+            showLength: '90',
+            audienceChips: ['Adults', 'Seniors'],
+            audienceType: 'seated theater • attentive crowd',
+            theme: 'dramatic, story-driven mystery with strong emotional beats',
+            venueType: 'small theater / stage',
+            tone: 'dramatic + mysterious + cinematic',
+            performerPersona: 'mysterious narrator • deliberate pacing • strong presence',
+            skillLevel: 'Advanced',
+            resetTime: '2 min',
+            propsOwned: 'rings, rope, book test, prediction envelopes, sound cue device',
+            constraintNotes: 'Minimize dead time between segments. Strong transitions. Limited backstage.',
+        },
+        {
+            label: 'Family 45 (Comedy)',
+            showTitle: 'Laughs & Wonders',
+            showLength: '45',
+            audienceChips: ['Families', 'Kids'],
+            audienceType: 'mixed ages • community event',
+            theme: 'big laughs, simple plots, highly visual magic',
+            venueType: 'community center / park pavilion',
+            tone: 'funny + energetic + warm',
+            performerPersona: 'silly but in-control • friendly • high audience rapport',
+            skillLevel: 'Intermediate',
+            resetTime: '1 min',
+            propsOwned: 'silks, sponge balls, rope, linking rings, comedy wand',
+            constraintNotes: 'Wind/noise possible. Keep it visual and loud-friendly.',
+        },
+        {
+            label: 'Mystery 60 (Minimal Props)',
+            showTitle: 'One Pocket Wonders',
+            showLength: '60',
+            audienceChips: ['Adults', 'Corporate'],
+            audienceType: 'small group • close seating',
+            theme: 'minimal-prop mentalism + strong audience interaction',
+            venueType: 'conference room',
+            tone: 'mysterious + smart + dry humor',
+            performerPersona: 'calm psychological entertainer • confident • precise',
+            skillLevel: 'Intermediate',
+            resetTime: '30s',
+            propsOwned: 'billets, Sharpies, index cards, small notebook',
+            constraintNotes: 'No bulky props. Limited reset. Focus on participation and clarity.',
+        },
+    ];
+
+    const [exampleIndexA, setExampleIndexA] = useState(0);
+    const [exampleIndexB, setExampleIndexB] = useState(0);
+
+    const applyExample = (ex: DirectorExample) => {
+        setShowTitle(ex.showTitle);
+        setShowLength(ex.showLength);
+        setAudienceChips(ex.audienceChips);
+        setAudienceType(ex.audienceType || '');
+        setTheme(ex.theme);
+
+        setVenueType(ex.venueType);
+        setTone(ex.tone);
+        setPerformerPersona(ex.performerPersona);
+        setSkillLevel(ex.skillLevel);
+        setResetTime(ex.resetTime);
+        setPropsOwned(ex.propsOwned);
+        setConstraintNotes(ex.constraintNotes);
+
+        // Keep Advanced collapsed by default for clean onboarding
+        setShowAdvanced(false);
+
+        // If you later expose these controls in Advanced, keep the state synced:
+        if (ex.pacing !== undefined) setPacing(ex.pacing);
+        if (ex.comedyLevel !== undefined) setComedyLevel(ex.comedyLevel);
+        if (ex.participation !== undefined) setParticipation(ex.participation);
+        if (ex.volunteersOk !== undefined) setVolunteersOk(ex.volunteersOk);
+    };
+
+    const onExampleA = () => {
+        const ex = DIRECTOR_EXAMPLES_A[exampleIndexA % DIRECTOR_EXAMPLES_A.length];
+        applyExample(ex);
+        setExampleIndexA((i) => (i + 1) % DIRECTOR_EXAMPLES_A.length);
+    };
+
+    const onExampleB = () => {
+        const ex = DIRECTOR_EXAMPLES_B[exampleIndexB % DIRECTOR_EXAMPLES_B.length];
+        applyExample(ex);
+        setExampleIndexB((i) => (i + 1) % DIRECTOR_EXAMPLES_B.length);
+    };
+
     // Legacy constraints textarea replaced by constraintNotes
     // const [constraints, setConstraints] = useState('');
 
@@ -1015,7 +1173,7 @@ Hard requirements:
                     {/* LEFT PANEL — Inputs */}
                     <div className="space-y-4">
                         <div className="bg-slate-800/50 p-6 rounded-lg border border-slate-700">
-                            <h3 className="text-sm font-semibold text-slate-200 mb-3">Core Inputs</h3>
+                            <div className="flex items-center justify-between mb-3"><h3 className="text-sm font-semibold text-slate-200">Core Inputs</h3><div className="flex items-center gap-2"><button type="button" onClick={onExampleA} className="px-2.5 py-1 text-xs rounded-md border border-slate-600 bg-slate-900/40 text-slate-200 hover:bg-slate-900/70">Try Example</button><button type="button" onClick={onExampleB} className="px-2.5 py-1 text-xs rounded-md border border-slate-600 bg-slate-900/40 text-slate-200 hover:bg-slate-900/70">Try Another</button></div></div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
