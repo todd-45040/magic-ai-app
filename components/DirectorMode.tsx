@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Type } from "@google/genai";
 import { saveIdea } from '../services/ideasService';
-import { createShow, addTasksToShow } from '../services/showsService';
+import { createShow, addTasksToShow, updateShow } from '../services/showsService';
 import { saveDirectorBlueprint } from '../services/directorBlueprintsService';
 import { DIRECTOR_MODE_SYSTEM_INSTRUCTION } from '../constants';
 import type { DirectorModeBlueprint } from '../types';
@@ -39,7 +39,7 @@ const slugify = (s: string) =>
 
 // (Dictionary extraction removed from Director Mode — Phase 3 focuses on blueprint readability + actions.)
 
-const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
+const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved, hasProfessionalAccess }) => {
     // Form State
     const [showTitle, setShowTitle] = useState('');
     const [showLength, setShowLength] = useState('');
@@ -87,6 +87,11 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
     const [isSavingBlueprint, setIsSavingBlueprint] = useState(false);
     const [proPolish, setProPolish] = useState<any | null>(null);
     const [isGeneratingPolish, setIsGeneratingPolish] = useState(false);
+
+    // Phase 4 — Workflow Wiring
+    const [createdShowId, setCreatedShowId] = useState<string | null>(null);
+    const [isCreatingShow, setIsCreatingShow] = useState(false);
+    const [showNotice, setShowNotice] = useState<string | null>(null);
     
     const computedAudience = (() => {
         const picked = audienceChips.join(', ');
@@ -183,6 +188,7 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
         setShowPlan(null);
         setIsAddedToPlanner(false);
         setIsSavedToIdeas(false);
+        setCreatedShowId(null);
 
         const titleLine = showTitle.trim()
             ? `- Show Title: ${showTitle.trim()}`
@@ -292,9 +298,26 @@ try {
             }
         });
 
+        const display = lines.join('\n');
+        const v2 = {
+            format: 'maw.idea.blueprint.v1',
+            tool: 'director-mode',
+            timestamp: Date.now(),
+            title: plan.show_title,
+            display,
+            structured: plan,
+            meta: {
+                show_length_minutes: plan.show_length_minutes,
+                audience_type: plan.audience_type,
+                venue_type: plan.venue_type,
+                tone: plan.tone,
+            }
+        };
+
         return {
             title: plan.show_title,
-            content: lines.join('\n'),
+            content: JSON.stringify(v2),
+            tags: ['director-mode', 'show-builder', 'blueprint'],
         };
     };;
 
@@ -308,7 +331,7 @@ try {
             const { title, content, tags } = buildIdeaFromShowPlan(showPlan);
 
             await saveIdea({
-                type: 'text',
+                type: 'blueprint',
                 title,
                 content,
                 tags,
@@ -326,6 +349,64 @@ try {
         }
     };
 
+    const uid = () => {
+        try {
+            return (globalThis.crypto as any)?.randomUUID?.() || `id_${Math.random().toString(36).slice(2)}_${Date.now()}`;
+        } catch {
+            return `id_${Math.random().toString(36).slice(2)}_${Date.now()}`;
+        }
+    };
+
+    const buildShowDescriptionWithBlueprint = (plan: DirectorModeBlueprint) => {
+        const header = `Director Blueprint — ${plan.show_length_minutes} min • ${plan.audience_type} • ${plan.venue_type}`;
+        const outline = `\n\n[Director Blueprint Summary]\nTone: ${plan.tone}\nPersona: ${plan.performer_persona}\nSegments: ${(plan.segments || []).map(s => `${s.purpose}:${s.title}(${s.duration_estimate_minutes}m)`).join(' | ')}`;
+        // Keep JSON embedded but lightweight (still useful for recovery)
+        const embedded = `\n\n[Director Blueprint JSON]\n${JSON.stringify(plan, null, 2)}`;
+        return header + outline + embedded;
+    };
+
+    const ensureShowCreated = async (): Promise<string> => {
+        if (!showPlan) throw new Error('No blueprint loaded.');
+        if (createdShowId) return createdShowId;
+
+        const description = buildShowDescriptionWithBlueprint(showPlan);
+        const created = await createShow(showPlan.show_title, description);
+        const showId = created?.id;
+        if (!showId) throw new Error('Could not create the show.');
+
+        // Best-effort: attach JSON into a dedicated column if it exists in some envs.
+        // This will silently no-op if the column doesn't exist (schema drift safe).
+        try {
+            await updateShow(showId, {
+                ...({ director_blueprint_json: showPlan } as any),
+                ...({ director_blueprint_version: 'v1' } as any),
+            } as any);
+        } catch (e) {
+            // Non-fatal. Description already contains the embedded blueprint.
+            console.warn('Attach blueprint to show (optional columns) failed:', e);
+        }
+
+        setCreatedShowId(showId);
+        return showId;
+    };
+
+    const handleCreateShow = async () => {
+        if (!showPlan || isCreatingShow) return;
+        try {
+            setIsCreatingShow(true);
+            setError(null);
+            setShowNotice(null);
+            const showId = await ensureShowCreated();
+            setShowNotice(`Show created in Show Planner (ID: ${showId.slice(0, 8)}...).`);
+            window.setTimeout(() => setShowNotice(null), 6000);
+        } catch (e: any) {
+            console.error('Create show failed:', e);
+            setError(e?.message || 'Failed to create show.');
+        } finally {
+            setIsCreatingShow(false);
+        }
+    };
+
     const handleSendToPlanner = async () => {
         if (!showPlan) return;
         if (isAddedToPlanner || isAddingToPlanner) return;
@@ -335,29 +416,33 @@ try {
             setError(null);
             setPlannerNotice(null);
 
-            const description = `Director Blueprint — ${showPlan.show_length_minutes} min • ${showPlan.audience_type} • ${showPlan.venue_type}`;
-            const created = await createShow(showPlan.show_title, description);
-            const showId = created?.id;
-            if (!showId) throw new Error('Could not create the show in Show Planner.');
+            const showId = await ensureShowCreated();
 
             const tasks = (showPlan.segments || []).map((seg) => {
                 const propsLine = Array.isArray(seg.props_required) && seg.props_required.length
-                    ? `Props: ${seg.props_required.join(', ')}\n`
-                    : '';
+                    ? `Props: ${seg.props_required.join(', ')}`
+                    : 'Props: (none listed)';
+
                 const notes =
                     `Purpose: ${seg.purpose}\n` +
                     `Estimated: ${seg.duration_estimate_minutes} min\n` +
                     `Interaction: ${seg.audience_interaction_level}\n` +
-                    propsLine +
+                    `${propsLine}\n` +
                     `Transition: ${seg.transition_notes || ''}`;
 
                 return {
-                    title: `${seg.purpose.toUpperCase()} — ${seg.title}`,
+                    title: `Build: ${seg.title}`,
                     notes,
                     priority: 'Medium' as const,
                     dueDate: null,
                     durationMinutes: Math.max(1, Math.round(Number(seg.duration_estimate_minutes) || 1)),
-                    tags: ['director-mode', seg.purpose],
+                    tags: ['director-mode', 'show-builder', seg.purpose],
+                    subtasks: [
+                        { id: uid(), text: `Rehearse ${seg.purpose}: ${seg.title}`, completed: false },
+                        { id: uid(), text: 'Source props', completed: false },
+                        { id: uid(), text: 'Write patter', completed: false },
+                        { id: uid(), text: 'Block staging / beats', completed: false },
+                    ],
                 };
             });
 
@@ -366,8 +451,8 @@ try {
             await addTasksToShow(showId, tasks as any);
 
             setIsAddedToPlanner(true);
-            setIsAddingToPlanner(false);
-            setPlannerNotice('Added to Show Planner — a show and tasks were created from your blueprint.');
+            setPlannerNotice('Tasks created — each segment is now a “Build:” task with rehearsal subtasks.');
+            window.setTimeout(() => setPlannerNotice(null), 8000);
         } catch (err) {
             console.error(err);
             setError(err instanceof Error ? err.message : 'Failed to send to Show Planner.');
@@ -381,6 +466,7 @@ try {
         setShowPlan(null);
         setIsAddedToPlanner(false);
         setIsSavedToIdeas(false);
+        setCreatedShowId(null);
         setError(null);
     };
 
@@ -541,7 +627,10 @@ ${JSON.stringify(showPlan, null, 2)}
                             <button onClick={() => copyToClipboard(JSON.stringify(showPlan, null, 2), 'Blueprint JSON')} className="px-3 py-2 rounded-lg bg-slate-900/40 hover:bg-slate-900/60 text-slate-200 border border-slate-700 text-sm">Copy JSON</button>
                             <button onClick={() => copyToClipboard(buildOutlineFromPlan(showPlan), 'Outline')} className="px-3 py-2 rounded-lg bg-slate-900/40 hover:bg-slate-900/60 text-slate-200 border border-slate-700 text-sm">Copy Outline</button>
                             <button onClick={handleSaveBlueprint} disabled={isSavingBlueprint} className="px-3 py-2 rounded-lg bg-slate-900/40 hover:bg-slate-900/60 text-slate-200 border border-slate-700 text-sm">Save Blueprint</button>
-                            <button onClick={handleSendToPlanner} disabled={isAddingToPlanner || isAddedToPlanner} className="px-3 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 border border-purple-400 text-white text-sm">{isAddedToPlanner ? 'Tasks Created' : 'Convert to Tasks'}</button>
+                            <button onClick={handleCreateShow} disabled={isCreatingShow || Boolean(createdShowId)} className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-sm disabled:opacity-60">
+                                {createdShowId ? 'Show Created' : (isCreatingShow ? 'Creating…' : 'Create Show')}
+                            </button>
+                            <button onClick={handleSendToPlanner} disabled={isAddingToPlanner || isAddedToPlanner} className="px-3 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 border border-purple-400 text-white text-sm">{isAddedToPlanner ? 'Tasks Created' : 'Send to Show Planner'}</button>
                             <button onClick={handleSaveToIdeas} disabled={isSavingIdea || isSavedToIdeas} className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-sm">{isSavedToIdeas ? 'Saved to Vault' : 'Save to Idea Vault'}</button>
                             <button onClick={handleBackToForm} className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-sm">Back</button>
                         </div>
@@ -550,6 +639,7 @@ ${JSON.stringify(showPlan, null, 2)}
 
                 {copyNotice ? (<div className="mt-4 bg-slate-900/40 border border-slate-700 text-slate-200 rounded-lg p-3 text-sm">{copyNotice}</div>) : null}
                 {blueprintNotice ? (<div className="mt-4 bg-slate-900/40 border border-slate-700 text-slate-200 rounded-lg p-3 text-sm">{blueprintNotice}</div>) : null}
+                {showNotice ? (<div className="mt-4 bg-slate-900/40 border border-slate-700 text-slate-200 rounded-lg p-3 text-sm">{showNotice}</div>) : null}
                 {plannerNotice ? (<div className="mt-4 bg-emerald-900/20 border border-emerald-700 text-emerald-200 rounded-lg p-3 text-sm">{plannerNotice}</div>) : null}
                 {error ? (<div className="mt-4 bg-rose-900/20 border border-rose-700 text-rose-200 rounded-lg p-3 text-sm">{error}</div>) : null}
 
@@ -647,297 +737,290 @@ ${JSON.stringify(showPlan, null, 2)}
     }
 
     return (
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 flex items-center justify-center animate-fade-in">
-            <div className="w-full max-w-lg">
-                <div className="text-center">
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 animate-fade-in">
+            <div className="w-full max-w-6xl mx-auto">
+                <div className="text-center mb-6">
                     <StageCurtainsIcon className="w-16 h-16 text-purple-400 mx-auto mb-4" />
                     <h2 className="text-2xl font-bold text-slate-300 mb-2 font-cinzel">Director Mode</h2>
-                    <p className="text-slate-400 mb-6">Let's design your next show. Provide the core details, and the AI will architect a complete show structure for you.</p>
+                    <p className="text-slate-400">Design your next show. Fill in the core details, and the AI will architect a complete, stage-ready blueprint.</p>
                 </div>
-                
-                <div className="space-y-4 bg-slate-800/50 p-6 rounded-lg border border-slate-700">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label htmlFor="show-title" className="block text-sm font-medium text-slate-300 mb-1">Show Title</label>
-                            <input
-                                id="show-title"
-                                type="text"
-                                value={showTitle}
-                                onChange={(e) => setShowTitle(e.target.value)}
-                                onBlur={() => setShowTitle((v) => normalizeTitle(v))}
-                                placeholder="e.g., Mysteries of the Mind"
-                                className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
-                            />
-                            <p className="mt-1 text-xs text-slate-400">
-                                Optional — the AI can generate a title for you.
-                            </p>
-                        </div>
 
-                        <div>
-                            <label htmlFor="show-length" className="block text-sm font-medium text-slate-300 mb-1">Show Length (min)</label>
-                            <input
-                                id="show-length"
-                                type="number"
-                                inputMode="numeric"
-                                min={5}
-                                max={240}
-                                value={showLength}
-                                onChange={(e) => setShowLength(e.target.value)}
-                                placeholder="e.g., 45"
-                                className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
-                            />
-                            <div className="mt-2 flex flex-wrap gap-2">
-                                {showLengthPresets.map((m) => (
-                                    <button
-                                        key={m}
-                                        type="button"
-                                        onClick={() => setShowLength(String(m))}
-                                        className={
-                                            (showLength === String(m)
-                                                ? 'bg-yellow-500/20 border-yellow-500/40 text-yellow-200'
-                                                : 'bg-slate-900/60 border-slate-600/60 text-slate-300 hover:bg-slate-900') +
-                                            ' px-2.5 py-1 rounded-full border text-xs transition-colors'
-                                        }
-                                    >
-                                        {m}
-                                    </button>
-                                ))}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+                    {/* Left: Core Inputs */}
+                    <div className="bg-slate-800/50 p-6 rounded-2xl border border-slate-700 space-y-4">
+                        <h3 className="text-lg font-semibold text-slate-200">Core Inputs</h3>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label htmlFor="show-title" className="block text-sm font-medium text-slate-300 mb-1">Show Title</label>
+                                <input
+                                    id="show-title"
+                                    type="text"
+                                    value={showTitle}
+                                    onChange={(e) => setShowTitle(e.target.value)}
+                                    onBlur={() => setShowTitle((v) => normalizeTitle(v))}
+                                    placeholder="e.g., Mysteries of the Mind"
+                                    className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
+                                />
+                                <p className="mt-1 text-xs text-slate-400">Optional — the AI can generate a title for you.</p>
+                            </div>
+
+                            <div>
+                                <label htmlFor="show-length" className="block text-sm font-medium text-slate-300 mb-1">Show Length (min)</label>
+                                <input
+                                    id="show-length"
+                                    type="number"
+                                    inputMode="numeric"
+                                    min={5}
+                                    max={240}
+                                    value={showLength}
+                                    onChange={(e) => setShowLength(e.target.value)}
+                                    placeholder="e.g., 45"
+                                    className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
+                                />
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                    {showLengthPresets.map((m) => (
+                                        <button
+                                            key={m}
+                                            type="button"
+                                            onClick={() => setShowLength(String(m))}
+                                            className={
+                                                (showLength === String(m)
+                                                    ? 'bg-yellow-500/20 border-yellow-500/40 text-yellow-200'
+                                                    : 'bg-slate-900/60 border-slate-600/60 text-slate-300 hover:bg-slate-900') +
+                                                ' px-2.5 py-1 rounded-full border text-xs transition-colors'
+                                            }
+                                        >
+                                            {m}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
                         </div>
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-1">Target Audience</label>
-                        <div className="flex flex-wrap gap-2">
-                            {audiencePresets.map((label) => {
-                                const selected = audienceChips.includes(label);
-                                return (
-                                    <button
-                                        key={label}
-                                        type="button"
-                                        onClick={() => toggleAudienceChip(label)}
-                                        className={
-                                            (selected
-                                                ? 'bg-yellow-500/20 border-yellow-500/40 text-yellow-200'
-                                                : 'bg-slate-900/60 border-slate-600/60 text-slate-300 hover:bg-slate-900') +
-                                            ' px-3 py-1 rounded-full border text-xs transition-colors'
-                                        }
-                                    >
-                                        {label}
-                                    </button>
-                                );
-                            })}
-                        </div>
-
-                        <input
-                            id="audience-type"
-                            type="text"
-                            value={audienceType}
-                            onChange={(e) => setAudienceType(e.target.value)}
-                            placeholder="Optional: add specifics (e.g., ages 8–12, 150 people, corporate holiday party)"
-                            className="mt-3 w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
-                        />
-                        <p className="mt-1 text-xs text-slate-400">
-                            Tip: pick one or more chips, then add a short note if needed.
-                        </p>
-                    </div>
-
-                    <div>
-                        <label htmlFor="theme" className="block text-sm font-medium text-slate-300 mb-1">Overall Theme / Style</label>
-                        <input
-                            id="theme"
-                            type="text"
-                            value={theme}
-                            onChange={(e) => setTheme(e.target.value)}
-                            placeholder="e.g., elegant & mysterious • high-energy comedy • mind reading with audience participation"
-                            className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
-                        />
-                        <p className="mt-1 text-xs text-slate-400">
-                            Describe the overall vibe and style. Tone/persona/constraints are captured below. The AI will keep the structure consistent.
-                        </p>
-                    </div>
-
-                    
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label htmlFor="venue-type" className="block text-sm font-medium text-slate-300 mb-1">Venue Type</label>
-                            <input
-                                id="venue-type"
-                                type="text"
-                                value={venueType}
-                                onChange={(e) => setVenueType(e.target.value)}
-                                placeholder="e.g., banquet hall • theater • close-up strolling • school assembly"
-                                className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
-                            />
-                        </div>
 
                         <div>
-                            <label htmlFor="tone" className="block text-sm font-medium text-slate-300 mb-1">Tone</label>
-                            <input
-                                id="tone"
-                                type="text"
-                                value={tone}
-                                onChange={(e) => setTone(e.target.value)}
-                                placeholder="e.g., funny • dramatic • mysterious • family-friendly"
-                                className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
-                            />
-                        </div>
-
-                        <div className="sm:col-span-2">
-                            <label htmlFor="persona" className="block text-sm font-medium text-slate-300 mb-1">Performer Persona</label>
-                            <input
-                                id="persona"
-                                type="text"
-                                value={performerPersona}
-                                onChange={(e) => setPerformerPersona(e.target.value)}
-                                placeholder="e.g., charming storyteller • high-energy comedy magician • mysterious mind reader"
-                                className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-slate-300 mb-1">Skill Level</label>
-                            <select
-                                value={skillLevel}
-                                onChange={(e) => setSkillLevel(e.target.value as any)}
-                                className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
-                            >
-                                <option value="">Select…</option>
-                                <option value="Beginner">Beginner</option>
-                                <option value="Intermediate">Intermediate</option>
-                                <option value="Advanced">Advanced</option>
-                            </select>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-slate-300 mb-1">Reset Time</label>
-                            <select
-                                value={resetTime}
-                                onChange={(e) => setResetTime(e.target.value as any)}
-                                className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
-                            >
-                                <option value="">Select…</option>
-                                <option value="Instant">Instant</option>
-                                <option value="30s">~30 seconds</option>
-                                <option value="1 min">~1 minute</option>
-                                <option value="2 min">~2 minutes</option>
-                                <option value="5+ min">5+ minutes</option>
-                            </select>
-                        </div>
-
-                        <div className="sm:col-span-2">
-                            <label htmlFor="props-owned" className="block text-sm font-medium text-slate-300 mb-1">Props Owned (optional)</label>
-                            <textarea
-                                id="props-owned"
-                                value={propsOwned}
-                                onChange={(e) => setPropsOwned(e.target.value)}
-                                placeholder="List props you already have (comma or newline separated)"
-                                rows={3}
-                                className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
-                            />
-                        </div>
-
-                        <div className="sm:col-span-2">
-                            <label htmlFor="constraints-notes" className="block text-sm font-medium text-slate-300 mb-1">Constraints / Notes (optional)</label>
-                            <textarea
-                                id="constraints-notes"
-                                value={constraintNotes}
-                                onChange={(e) => setConstraintNotes(e.target.value)}
-                                placeholder="Any constraints: kid-safe, no fire, limited pocket space, no table, etc."
-                                rows={3}
-                                className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
-                            />
-                        </div>
-                    </div>
-
-<div className="pt-2">
-                        <button
-                            type="button"
-                            onClick={() => setShowAdvanced((v) => !v)}
-                            className="w-full flex items-center justify-between px-3 py-2 rounded-md bg-slate-900/40 border border-slate-700 text-slate-200 hover:bg-slate-900/60 transition-colors"
-                        >
-                            <span className="text-sm font-semibold">Advanced Options (optional)</span>
-                            <span className="text-xs text-slate-400">{showAdvanced ? 'Hide' : 'Show'}</span>
-                        </button>
-
-                        {showAdvanced && (
-                            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-300 mb-1">Pacing</label>
-                                    <select
-                                        value={pacing}
-                                        onChange={(e) => setPacing(e.target.value as any)}
-                                        className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
-                                    >
-                                        <option value="">Select…</option>
-                                        <option value="Relaxed">Relaxed</option>
-                                        <option value="Balanced">Balanced</option>
-                                        <option value="High-energy">High-energy</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-300 mb-1">Comedy Level</label>
-                                    <select
-                                        value={comedyLevel}
-                                        onChange={(e) => setComedyLevel(e.target.value as any)}
-                                        className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
-                                    >
-                                        <option value="">Select…</option>
-                                        <option value="Low">Low</option>
-                                        <option value="Medium">Medium</option>
-                                        <option value="High">High</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-300 mb-1">Audience Participation</label>
-                                    <select
-                                        value={participation}
-                                        onChange={(e) => setParticipation(e.target.value as any)}
-                                        className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
-                                    >
-                                        <option value="">Select…</option>
-                                        <option value="Low">Low</option>
-                                        <option value="Medium">Medium</option>
-                                        <option value="High">High</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-300 mb-1">Volunteers OK?</label>
-                                    <select
-                                        value={volunteersOk}
-                                        onChange={(e) => setVolunteersOk(e.target.value as any)}
-                                        className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
-                                    >
-                                        <option value="">Select…</option>
-                                        <option value="Yes">Yes</option>
-                                        <option value="No">No</option>
-                                    </select>
-                                </div>
-                                <div className="sm:col-span-2">
-                                    <label className="block text-sm font-medium text-slate-300 mb-1">Constraints / Notes</label>
-                                    <textarea
-                                        value={constraintNotes}
-                                        onChange={(e) => setConstraintNotes(e.target.value)}
-                                        rows={3}
-                                        placeholder="Optional: stage size, no fire, limited props, family-friendly only, etc."
-                                        className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
-                                    />
-                                </div>
+                            <label className="block text-sm font-medium text-slate-300 mb-1">Target Audience</label>
+                            <div className="flex flex-wrap gap-2">
+                                {audiencePresets.map((label) => {
+                                    const selected = audienceChips.includes(label);
+                                    return (
+                                        <button
+                                            key={label}
+                                            type="button"
+                                            onClick={() => toggleAudienceChip(label)}
+                                            className={
+                                                (selected
+                                                    ? 'bg-yellow-500/20 border-yellow-500/40 text-yellow-200'
+                                                    : 'bg-slate-900/60 border-slate-600/60 text-slate-300 hover:bg-slate-900') +
+                                                ' px-3 py-1 rounded-full border text-xs transition-colors'
+                                            }
+                                        >
+                                            {label}
+                                        </button>
+                                    );
+                                })}
                             </div>
-                        )}
+                            <input
+                                id="audience-type"
+                                type="text"
+                                value={audienceType}
+                                onChange={(e) => setAudienceType(e.target.value)}
+                                placeholder="Optional: add specifics (e.g., ages 8–12, 150 people, corporate holiday party)"
+                                className="mt-3 w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
+                            />
+                            <p className="mt-1 text-xs text-slate-400">Tip: pick one or more chips, then add a short note if needed.</p>
+                        </div>
+
+                        <div>
+                            <label htmlFor="theme" className="block text-sm font-medium text-slate-300 mb-1">Overall Theme / Style</label>
+                            <input
+                                id="theme"
+                                type="text"
+                                value={theme}
+                                onChange={(e) => setTheme(e.target.value)}
+                                placeholder="e.g., elegant & mysterious • high-energy comedy • mind reading with audience participation"
+                                className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
+                            />
+                            <p className="mt-1 text-xs text-slate-400">Describe the overall vibe. The AI will keep the structure consistent.</p>
+                        </div>
                     </div>
 
+                    {/* Right: Constraints */}
+                    <div className="bg-slate-800/50 p-6 rounded-2xl border border-slate-700 space-y-4">
+                        <h3 className="text-lg font-semibold text-slate-200">Constraints</h3>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label htmlFor="venue-type" className="block text-sm font-medium text-slate-300 mb-1">Venue Type</label>
+                                <input
+                                    id="venue-type"
+                                    type="text"
+                                    value={venueType}
+                                    onChange={(e) => setVenueType(e.target.value)}
+                                    placeholder="e.g., banquet hall • theater • strolling"
+                                    className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
+                                />
+                            </div>
+
+                            <div>
+                                <label htmlFor="tone" className="block text-sm font-medium text-slate-300 mb-1">Tone</label>
+                                <input
+                                    id="tone"
+                                    type="text"
+                                    value={tone}
+                                    onChange={(e) => setTone(e.target.value)}
+                                    placeholder="e.g., funny • dramatic • mysterious"
+                                    className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
+                                />
+                            </div>
+
+                            <div className="sm:col-span-2">
+                                <label htmlFor="persona" className="block text-sm font-medium text-slate-300 mb-1">Performer Persona</label>
+                                <input
+                                    id="persona"
+                                    type="text"
+                                    value={performerPersona}
+                                    onChange={(e) => setPerformerPersona(e.target.value)}
+                                    placeholder="e.g., charming storyteller • comedy magician"
+                                    className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-1">Skill Level</label>
+                                <select
+                                    value={skillLevel}
+                                    onChange={(e) => setSkillLevel(e.target.value as any)}
+                                    className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
+                                >
+                                    <option value="">Select…</option>
+                                    <option value="Beginner">Beginner</option>
+                                    <option value="Intermediate">Intermediate</option>
+                                    <option value="Advanced">Advanced</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-1">Reset Time</label>
+                                <select
+                                    value={resetTime}
+                                    onChange={(e) => setResetTime(e.target.value as any)}
+                                    className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
+                                >
+                                    <option value="">Select…</option>
+                                    <option value="Instant">Instant</option>
+                                    <option value="30s">~30 seconds</option>
+                                    <option value="1 min">~1 minute</option>
+                                    <option value="2 min">~2 minutes</option>
+                                    <option value="5+ min">5+ minutes</option>
+                                </select>
+                            </div>
+
+                            <div className="sm:col-span-2">
+                                <label htmlFor="props-owned" className="block text-sm font-medium text-slate-300 mb-1">Props Owned (optional)</label>
+                                <textarea
+                                    id="props-owned"
+                                    value={propsOwned}
+                                    onChange={(e) => setPropsOwned(e.target.value)}
+                                    placeholder="List props you already have (comma or newline separated)"
+                                    rows={3}
+                                    className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
+                                />
+                            </div>
+
+                            <div className="sm:col-span-2">
+                                <label htmlFor="constraints-notes" className="block text-sm font-medium text-slate-300 mb-1">Constraints / Notes (optional)</label>
+                                <textarea
+                                    id="constraints-notes"
+                                    value={constraintNotes}
+                                    onChange={(e) => setConstraintNotes(e.target.value)}
+                                    placeholder="Any constraints: kid-safe, no fire, limited pocket space, etc."
+                                    rows={3}
+                                    className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="pt-2">
+                            <button
+                                type="button"
+                                onClick={() => setShowAdvanced((v) => !v)}
+                                className="w-full flex items-center justify-between px-3 py-2 rounded-md bg-slate-900/40 border border-slate-700 text-slate-200 hover:bg-slate-900/60 transition-colors"
+                            >
+                                <span className="text-sm font-semibold">Advanced Options (optional)</span>
+                                <span className="text-xs text-slate-400">{showAdvanced ? 'Hide' : 'Show'}</span>
+                            </button>
+
+                            {showAdvanced && (
+                                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-300 mb-1">Pacing</label>
+                                        <select
+                                            value={pacing}
+                                            onChange={(e) => setPacing(e.target.value as any)}
+                                            className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
+                                        >
+                                            <option value="">Select…</option>
+                                            <option value="Relaxed">Relaxed</option>
+                                            <option value="Balanced">Balanced</option>
+                                            <option value="High-energy">High-energy</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-300 mb-1">Comedy Level</label>
+                                        <select
+                                            value={comedyLevel}
+                                            onChange={(e) => setComedyLevel(e.target.value as any)}
+                                            className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
+                                        >
+                                            <option value="">Select…</option>
+                                            <option value="Low">Low</option>
+                                            <option value="Medium">Medium</option>
+                                            <option value="High">High</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-300 mb-1">Audience Participation</label>
+                                        <select
+                                            value={participation}
+                                            onChange={(e) => setParticipation(e.target.value as any)}
+                                            className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
+                                        >
+                                            <option value="">Select…</option>
+                                            <option value="Low">Low</option>
+                                            <option value="Medium">Medium</option>
+                                            <option value="High">High</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-300 mb-1">Volunteers OK?</label>
+                                        <select
+                                            value={volunteersOk}
+                                            onChange={(e) => setVolunteersOk(e.target.value as any)}
+                                            className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40"
+                                        >
+                                            <option value="">Select…</option>
+                                            <option value="Yes">Yes</option>
+                                            <option value="No">No</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="mt-5 bg-slate-800/50 p-4 rounded-2xl border border-slate-700">
                     <button
                         onClick={handleGenerate}
                         disabled={!isFormValid}
-                        className="w-full py-3 mt-4 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
+                        className="w-full py-3 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
                     >
                         <WandIcon className="w-5 h-5" />
                         <span>🎭 Direct My Show Blueprint</span>
                     </button>
-                    <p className="text-center text-xs text-slate-400 -mt-2">Typically takes 10–15 seconds.</p>
-
-                    {error && <p className="text-red-400 mt-2 text-sm text-center">{error}</p>}
+                    <p className="text-center text-xs text-slate-400 mt-2">Typically takes 10–15 seconds.</p>
+                    {error && <p className="text-red-400 mt-3 text-sm text-center">{error}</p>}
                 </div>
             </div>
         </main>
