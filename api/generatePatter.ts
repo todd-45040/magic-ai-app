@@ -1,7 +1,9 @@
 import { enforceAiUsage } from '../server/usage.js';
 import { getGoogleAiApiKey } from '../server/gemini.js';
 
-const DEFAULT_TIMEOUT_MS = 20_000;
+// Booth reliability: allow enough time for Gemini to return while still keeping a hard cap.
+// Vercel function maxDuration is configured separately (see vercel.json).
+const DEFAULT_TIMEOUT_MS = 55_000;
 
 async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   let t: any;
@@ -53,8 +55,14 @@ export default async function handler(req: any, res: any) {
 
     const finalResult = await withTimeout(
       ai.models.generateContent({
+        // Patter Engine should be fast/reliable for demos.
         model: process.env.AI_MODEL || "gemini-2.0-flash",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
+        // Hard caps to reduce slow/huge outputs (prevents timeouts)
+        config: {
+          maxOutputTokens: 1200,
+          temperature: 0.7,
+        },
       }),
       DEFAULT_TIMEOUT_MS
     );

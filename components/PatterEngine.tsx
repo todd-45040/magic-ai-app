@@ -56,7 +56,19 @@ const PatterEngine: React.FC<PatterEngineProps> = ({ user: _user, onIdeaSaved })
 
   const buildPrompt = (desc: string, tonesList: string[]) => {
     const tones = tonesList.join(", ");
-    return `Generate performance-ready patter for the effect below. Provide multiple variations and beat-by-beat suggestions. Keep it practical for live performance.\n\nEffect: ${desc}\n\nTones: ${tones}`;
+    // Hard caps for speed/reliability (prevents ADMC booth timeouts)
+    return `Generate performance-ready patter for the effect below.
+
+Constraints:
+- Provide EXACTLY 2 variations (Variation A and Variation B)
+- Each variation: 6–10 beats (concise, stage-ready lines)
+- Include quick volunteer/audience management notes (1–2 lines) if applicable
+- Keep total output under ~900 words
+- No preamble or explanation — jump straight into Variation A
+
+Effect: ${desc}
+
+Tones: ${tones}`;
   };
 
   const handleToneToggle = (tone: string) => {
@@ -96,14 +108,24 @@ const PatterEngine: React.FC<PatterEngineProps> = ({ user: _user, onIdeaSaved })
         return;
       }
 
-      const res = await fetch(`/api/generatePatter?ts=${Date.now()}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ prompt: buildPrompt(desc, tones) }),
-      });
+      // Client-side safety timeout (keeps demos snappy even if the network stalls)
+      const controller = new AbortController();
+      const abortTimer = window.setTimeout(() => controller.abort(), 55_000);
+
+      let res: Response;
+      try {
+        res = await fetch(`/api/generatePatter?ts=${Date.now()}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          signal: controller.signal,
+          body: JSON.stringify({ prompt: buildPrompt(desc, tones) }),
+        });
+      } finally {
+        window.clearTimeout(abortTimer);
+      }
 
       const payload = await res.json().catch(async () => {
         const t = await res.text();
@@ -123,7 +145,11 @@ const PatterEngine: React.FC<PatterEngineProps> = ({ user: _user, onIdeaSaved })
       setResult(text);
     } catch (err: any) {
       console.error("Patter generation failed:", err);
-      setError(err?.message || "Failed to generate patter.");
+      if (err?.name === "AbortError") {
+        setError("Request timed out. Please try again.");
+      } else {
+        setError(err?.message || "Failed to generate patter.");
+      }
     } finally {
       setIsLoading(false);
     }
