@@ -8,6 +8,72 @@ import { getAiProvider } from './aiProviderService';
 // they require an ephemeral-token broker to avoid exposing secrets in the frontend.
 export type LiveSession = any;
 
+
+function extractJsonBlock(input: string): string {
+  const text = (input || '').trim();
+  if (!text) return '';
+  const firstObj = text.indexOf('{');
+  const firstArr = text.indexOf('[');
+  let start = -1;
+  if (firstObj === -1) start = firstArr;
+  else if (firstArr === -1) start = firstObj;
+  else start = Math.min(firstObj, firstArr);
+  if (start === -1) return text;
+  // Try to find the matching last brace/bracket (best-effort)
+  const endObj = text.lastIndexOf('}');
+  const endArr = text.lastIndexOf(']');
+  const end = Math.max(endObj, endArr);
+  if (end === -1 || end <= start) return text.slice(start);
+  return text.slice(start, end + 1);
+}
+
+function escapeNewlinesInsideStrings(jsonLike: string): string {
+  let out = '';
+  let inStr = false;
+  let esc = false;
+  for (let i = 0; i < jsonLike.length; i++) {
+    const ch = jsonLike[i];
+    if (esc) {
+      out += ch;
+      esc = false;
+      continue;
+    }
+    if (ch === '\\') {
+      out += ch;
+      esc = true;
+      continue;
+    }
+    if (ch === '"') {
+      inStr = !inStr;
+      out += ch;
+      continue;
+    }
+    if (inStr && (ch === '\n' || ch === '\r')) {
+      out += '\\n';
+      // swallow paired \r\n
+      if (ch === '\r' && jsonLike[i + 1] === '\n') i++;
+      continue;
+    }
+    if (inStr && ch === '\t') {
+      out += '\\t';
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+
+function safeJsonParse(text: string): any {
+  const candidate = extractJsonBlock(text);
+  try {
+    return JSON.parse(candidate || '{}');
+  } catch {
+    const repaired = escapeNewlinesInsideStrings(candidate);
+    return JSON.parse(repaired || '{}');
+  }
+}
+
+
 /**
  * IMPORTANT (Blank-screen fix):
  * We no longer instantiate GoogleGenAI in the browser at module load.

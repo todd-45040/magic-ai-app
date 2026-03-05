@@ -580,6 +580,7 @@ const dictionaryLinks = useMemo(() => {
 
         const prompt = `
 Please generate a show blueprint in STRICT JSON matching the provided schema.
+IMPORTANT: Keep ALL string values single-line (no raw line breaks). If you must represent a line break, use the literal sequence \\n inside the string.
 
 The blueprint must be practical, stage-ready, and non-exposure (no secrets).
 Keep it structured and concise.
