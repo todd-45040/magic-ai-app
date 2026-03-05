@@ -411,7 +411,7 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
     const [isSavingIdea, setIsSavingIdea] = useState(false);
     const [isSavedToIdeas, setIsSavedToIdeas] = useState(false);
     const [plannerNotice, setPlannerNotice] = useState<string | null>(null);
-    const \[ideaNotice, setIdeaNotice\] = useState<string \| null>\(null\);
+    const [ideaNotice, setIdeaNotice] = useState<string | null>(null);
 
     // In-panel Save Blueprint status (more native than global toast)
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
@@ -498,7 +498,7 @@ const dictionaryLinks = useMemo(() => {
         Array.from(dictionaryTermSet).forEach((term) => {
             const t = term.toLowerCase();
             if (!t || t.length < 3) return;
-            const re = new RegExp(`(^|[^a-z0-9])${t.replace(/[.*+?^${}()|[]\]/g, '\\$&')}([^a-z0-9]|$)`, 'i');
+            const re = new RegExp(`(^|[^a-z0-9])${t.replace(/[.*+?^${}()|[]]/g, '\\$&')}([^a-z0-9]|$)`, 'i');
             if (re.test(text)) matches.push(term);
         });
         return matches.sort((a, b) => a.localeCompare(b));
