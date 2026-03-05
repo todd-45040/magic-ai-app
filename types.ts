@@ -25,7 +25,7 @@ export interface PredefinedPrompt {
   icon?: React.FC<{ className?: string }>;
 }
 
-export type IdeaType = 'text' | 'image' | 'rehearsal' | 'blueprint';
+export type IdeaType = 'text' | 'image' | 'rehearsal';
 
 export interface SavedIdea {
   id: string;
