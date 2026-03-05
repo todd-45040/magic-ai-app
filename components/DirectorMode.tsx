@@ -411,7 +411,10 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
     const [isSavingIdea, setIsSavingIdea] = useState(false);
     const [isSavedToIdeas, setIsSavedToIdeas] = useState(false);
     const [plannerNotice, setPlannerNotice] = useState<string | null>(null);
-    const [ideaNotice, setIdeaNotice] = useState<string | null>(null);
+    const \[ideaNotice, setIdeaNotice\] = useState<string \| null>\(null\);
+
+    // In-panel Save Blueprint status (more native than global toast)
+    const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
 
     // Blueprint viewer tabs (Segments | Show Outline | JSON)
     const [blueprintView, setBlueprintView] = useState<'segments' | 'outline' | 'json'>('outline');
@@ -890,6 +893,7 @@ try {
         if (!active || isSavingIdea || isSavedToIdeas) return;
         try {
             setIsSavingIdea(true);
+            setSaveStatus('saving');
             setError(null);
             setIdeaNotice(null);
 
@@ -902,6 +906,8 @@ try {
             });
 
             setIsSavedToIdeas(true);
+            setSaveStatus('saved');
+            window.setTimeout(() => setSaveStatus('idle'), 3000);
 
             // Telemetry: saved blueprint
             trackClientEvent({
@@ -913,9 +919,12 @@ try {
             onIdeaSaved?.();
         } catch (e: any) {
             console.error('Save to Ideas failed:', e);
+            setSaveStatus('failed');
+            window.setTimeout(() => setSaveStatus('idle'), 4500);
             setError(e?.message ?? 'Unable to save to Saved Ideas.');
         } finally {
             setIsSavingIdea(false);
+            if (saveStatus === 'saving') setSaveStatus('idle');
         }
     };
 
@@ -930,8 +939,69 @@ try {
     const handleCopyOutline = async () => {
         const active = getActiveBlueprint() ?? showPlan;
         if (!active) return;
-        const ok = await copyToClipboard(buildOutlineFromBlueprint(active));
-        setRefineNotice(ok ? 'Copied outline to clipboard.' : 'Copy failed — your browser blocked clipboard access.');
+
+        // Copy should match what the user is currently viewing (Segments | Show Outline | JSON)
+        let payload = '';
+        let ok = false;
+
+        if (blueprintView === 'json') {
+            payload = JSON.stringify(active, null, 2);
+            ok = await copyToClipboard(payload);
+            setRefineNotice(ok ? 'Copied JSON to clipboard.' : 'Copy failed — your browser blocked clipboard access.');
+        } else if (blueprintView === 'outline') {
+            payload = blueprintToOutline(active, { fullDetail: speedMode === 'full' && outlineFullDetail });
+            ok = await copyToClipboard(payload);
+            setRefineNotice(ok ? 'Copied outline to clipboard.' : 'Copy failed — your browser blocked clipboard access.');
+        } else {
+            // segments
+            const segs = (active.segments || []) as any[];
+            const total = segs.length || 0;
+
+            const getTimelineRole = (idx: number, totalCount: number, seg: any) => {
+                const p = String(seg?.purpose || '').toLowerCase();
+                if (p.includes('open')) return 'Opener';
+                if (p.includes('close')) return 'Closer';
+                if (p.includes('middle')) return 'Middle';
+                if (p.includes('audience')) return 'Audience Piece';
+                if (p.includes('feature')) return 'Feature';
+                if (idx === 0) return 'Opener';
+                if (idx === totalCount - 1) return 'Closer';
+                const middleCount = Math.max(0, totalCount - 2);
+                const pos = idx - 1;
+                if (middleCount <= 1) return 'Middle';
+                if (middleCount === 2) return pos === 0 ? 'Middle' : 'Feature';
+                if (middleCount === 3) return ['Middle', 'Feature', 'Audience Piece'][pos] || 'Feature';
+                if (pos === 0) return 'Middle';
+                if (pos === 1) return 'Feature';
+                if (pos === 2) return 'Audience Piece';
+                return 'Feature';
+            };
+
+            const fullDetail = speedMode === 'full' && outlineFullDetail;
+
+            payload = segs.map((seg, idx) => {
+                const role = getTimelineRole(idx, total, seg);
+                const minutes = Number(seg?.duration_estimate_minutes) || 0;
+                const lines: string[] = [];
+                lines.push(`${role.toUpperCase()} — ${seg?.title || 'Untitled'} (${minutes}m)`);
+                const props = Array.isArray(seg?.props_required) ? seg.props_required.filter(Boolean) : [];
+                if (props.length) lines.push(`Props: ${props.join(', ')}`);
+                if (String(seg?.transition_notes || '').trim()) lines.push(`Transition: ${String(seg.transition_notes).trim()}`);
+                if (fullDetail) {
+                    const beats = Array.isArray(seg?.beats) ? seg.beats.filter(Boolean) : [];
+                    if (beats.length) lines.push(`Beats: ${beats.join(' • ')}`);
+                    if (String(seg?.patter_hook || '').trim()) lines.push(`Patter: ${String(seg.patter_hook).trim()}`);
+                    if (String(seg?.blocking_notes || '').trim()) lines.push(`Blocking: ${String(seg.blocking_notes).trim()}`);
+                    if (String(seg?.volunteer_management || '').trim()) lines.push(`Volunteer: ${String(seg.volunteer_management).trim()}`);
+                    if (String(seg?.music_lighting || '').trim()) lines.push(`Music/lighting: ${String(seg.music_lighting).trim()}`);
+                }
+                return lines.join('\n');
+            }).join('\n\n');
+
+            ok = await copyToClipboard(payload);
+            setRefineNotice(ok ? 'Copied segments to clipboard.' : 'Copy failed — your browser blocked clipboard access.');
+        }
+
         window.setTimeout(() => setRefineNotice(null), 2500);
     };
 
@@ -1271,6 +1341,9 @@ ${speedConstraints}
                                     >
                                         Back
                                     </button>
+                                    <div className="min-w-[120px] text-sm text-slate-300/90 pl-3">
+                                        {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? 'Saved ✓' : saveStatus === 'failed' ? 'Save failed' : ''}
+                                    </div>
 
                                     <button
                                         onClick={handleSaveToIdeas}
@@ -1314,7 +1387,7 @@ ${speedConstraints}
                                         onClick={handleCopyOutline}
                                         className="px-4 py-2 rounded-lg bg-slate-900/40 hover:bg-slate-900/60 text-slate-200 border border-slate-700"
                                     >
-                                        Copy Outline
+                                        {blueprintView === 'json' ? 'Copy JSON' : blueprintView === 'segments' ? 'Copy Segments' : 'Copy Outline'}
                                     </button>
 
                                     <button
