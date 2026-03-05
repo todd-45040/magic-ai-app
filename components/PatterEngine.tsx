@@ -52,7 +52,8 @@ const PatterEngine: React.FC<PatterEngineProps> = ({ user: _user, onIdeaSaved })
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved">("idle");
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied">("idle");
 
-  const canGenerate = effectDescription.trim().length > 20 && selectedTones.length > 0 && !isLoading;
+  const canGenerate =
+    effectDescription.trim().length > 20 && selectedTones.length > 0 && !isLoading;
 
   const buildPrompt = (desc: string, tonesList: string[]) => {
     const tones = tonesList.join(", ");
@@ -64,10 +65,14 @@ Tones: ${tones}`;
   };
 
   const handleToneToggle = (tone: string) => {
-    setSelectedTones((prev) => (prev.includes(tone) ? prev.filter((t) => t !== tone) : [...prev, tone]));
+    setSelectedTones((prev) =>
+      prev.includes(tone) ? prev.filter((t) => t !== tone) : [...prev, tone]
+    );
   };
 
-  const handleGenerate = async (override?: { description?: string; tones?: string[] }) => {
+  const handleGenerate = async (
+    override?: { description?: string; tones?: string[] }
+  ) => {
     setAttemptedGenerate(true);
     const desc = (override?.description ?? effectDescription).trim();
     const tones = override?.tones ?? selectedTones;
@@ -77,7 +82,9 @@ Tones: ${tones}`;
       return;
     }
     if (desc.length <= 20) {
-      setError("Please add a bit more detail (at least ~20 characters) for best results.");
+      setError(
+        "Please add a bit more detail (at least ~20 characters) for best results."
+      );
       return;
     }
     if (tones.length === 0) {
@@ -94,6 +101,7 @@ Tones: ${tones}`;
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
+
       if (!token) {
         setError("Please log in to generate patter.");
         return;
@@ -135,11 +143,14 @@ Tones: ${tones}`;
   useEffect(() => {
     if (!isLoading) return;
     setLoadingStep(0);
-    const t = window.setInterval(() => setLoadingStep((s) => (s + 1) % loadingSteps.length), 950);
+    const t = window.setInterval(
+      () => setLoadingStep((s) => (s + 1) % loadingSteps.length),
+      950
+    );
     return () => window.clearInterval(t);
   }, [isLoading, loadingSteps.length]);
 
-  // UPDATED RESET FUNCTION
+  // Correct reset behavior
   const handleReset = () => {
     setEffectDescription("");
     setSelectedTones([]);
@@ -153,11 +164,108 @@ Tones: ${tones}`;
 
     topRef.current?.scrollIntoView({
       behavior: "smooth",
-      block: "start"
+      block: "start",
     });
   };
 
-  return null;
+  const handleCopy = async () => {
+    if (!result) return;
+    await navigator.clipboard.writeText(result);
+    setCopyStatus("copied");
+    setTimeout(() => setCopyStatus("idle"), 1500);
+  };
+
+  const handleSave = async () => {
+    if (!result) return;
+    const full = `## Patter Variations for: ${effectDescription}
+
+Tones: ${selectedTones.join(", ")}
+
+${result}`;
+
+    await saveIdea("text", full);
+    onIdeaSaved();
+    setSaveStatus("saved");
+    setTimeout(() => setSaveStatus("idle"), 2000);
+  };
+
+  return (
+    <main className="flex-1 overflow-y-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
+      <div className="flex flex-col">
+        <div ref={topRef} />
+        <h2 className="text-xl font-bold text-slate-300 mb-2">The Patter Engine</h2>
+
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <button
+            type="button"
+            onClick={handleReset}
+            className="px-2.5 py-1.5 text-xs rounded-md bg-transparent border border-slate-700 text-slate-300 hover:bg-slate-800 transition-colors"
+          >
+            Reset
+          </button>
+        </div>
+
+        <textarea
+          rows={5}
+          value={effectDescription}
+          onChange={(e) => setEffectDescription(e.target.value)}
+          className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white"
+        />
+
+        <button
+          type="button"
+          onClick={() => handleGenerate()}
+          disabled={!canGenerate}
+          className="w-full py-3 mt-4 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
+        >
+          <WandIcon className="w-5 h-5" />
+          Generate Patter
+        </button>
+
+        {error && <p className="text-red-400 mt-2 text-sm text-center">{error}</p>}
+      </div>
+
+      <div className="flex flex-col bg-slate-900/50 rounded-lg border border-slate-800 min-h-[300px]">
+        {isLoading ? (
+          <div className="flex-1 flex items-center justify-center">
+            <LoadingIndicator statusText={loadingSteps[loadingStep]} />
+          </div>
+        ) : result ? (
+          <div className="relative group flex-1 flex flex-col">
+            <div className="p-4 overflow-y-auto text-slate-200 whitespace-pre-wrap">
+              {result}
+            </div>
+
+            <div className="mt-auto p-3 border-t border-slate-800 bg-slate-950/30">
+              <SaveActionBar
+                title="Next step:"
+                subtitle="Save it, then move it into a Show or Task."
+                onSave={handleSave}
+                onCopy={handleCopy}
+                saved={saveStatus === "saved"}
+                saving={false}
+              />
+              <div className="mt-2 flex justify-end">
+                <CohesionActions
+                  content={result}
+                  defaultTitle={"Patter"}
+                  defaultTags={["patter"]}
+                  compact
+                />
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 flex items-center justify-center text-center text-slate-500 p-4">
+            <div>
+              <BookIcon className="w-24 h-24 mx-auto mb-4" />
+              <p>Your generated patter scripts will appear here.</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </main>
+  );
 };
 
 export default PatterEngine;
