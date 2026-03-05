@@ -366,6 +366,18 @@ const PromptGrid: React.FC<{
       ],
     },
 
+    {
+      key: 'specialty',
+      icon: '✨',
+      title: 'Specialty Assistants',
+      description: 'Get focused guidance for specialized performance styles.',
+      titles: [
+        "Assistant's Studio",
+        'Mentalism Assistant',
+        'Gospel Magic Assistant',
+      ],
+    },
+
     // --- Everything below stays accessible, but is “secondary” to the main flow above. ---
     {
       key: 'library',
@@ -386,17 +398,6 @@ const PromptGrid: React.FC<{
         'Magic Theory Tutor',
         'Magic Dictionary',
         'Magic Archives',
-      ],
-    },
-    {
-      key: 'specialty',
-      icon: '✨',
-      title: 'Specialty Assistants',
-      description: 'Get focused guidance for specialized performance styles.',
-      titles: [
-        "Assistant's Studio",
-        'Mentalism Assistant',
-        'Gospel Magic Assistant',
       ],
     },
   ];
@@ -3128,6 +3129,9 @@ ${action.payload.content}`;
           {subBtn('Director Mode', () => handleNavigate('director-mode'), activeView === 'director-mode', !hasProfessionalAccess)}
           {subBtn('Patter Engine', () => handleNavigate('patter-engine'), activeView === 'patter-engine')}
           {subBtn('Illusion Blueprint', () => handleNavigate('illusion-blueprint'), activeView === 'illusion-blueprint', !hasProfessionalAccess)}
+          {subBtn("Assistant's Studio", () => handleNavigate('assistant-studio'), activeView === 'assistant-studio', !hasProfessionalAccess)}
+          {subBtn('Mentalism', () => handleNavigate('mentalism-assistant'), activeView === 'mentalism-assistant', !hasProfessionalAccess)}
+          {subBtn('Gospel Magic', () => handleNavigate('gospel-magic-assistant'), activeView === 'gospel-magic-assistant', !hasProfessionalAccess)}
         </div>
       );
     }
@@ -3148,8 +3152,11 @@ ${action.payload.content}`;
       <div className="flex items-center gap-2 px-2 md:px-4 py-2 border-b border-slate-800/70 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         {subBtn('Show Planner', () => handleNavigate('show-planner'), activeTab === 'show-planner', !hasAmateurAccess)}
         {subBtn('Saved Ideas', () => handleNavigate('saved-ideas'), activeView === 'saved-ideas', !hasAmateurAccess)}
+        {subBtn('Show Feedback', () => handleNavigate('show-feedback'), activeView === 'show-feedback', !hasProfessionalAccess)}
         {subBtn('Clients', () => handleNavigate('client-management'), activeView === 'client-management', !hasProfessionalAccess)}
         {subBtn('Contracts', () => handleNavigate('contract-generator'), activeView === 'contract-generator', !hasProfessionalAccess)}
+        {subBtn('Prop Checklist', () => handleNavigate('prop-checklists'), activeView === 'prop-checklists', !hasProfessionalAccess)}
+        {subBtn('Marketing', () => handleNavigate('marketing-campaign'), activeView === 'marketing-campaign', !hasProfessionalAccess)}
         {subBtn('Magic Wire', () => handleNavigate('magic-wire'), activeTab === 'magic-wire')}
         {subBtn('Publications', () => handleNavigate('publications'), activeTab === 'publications')}
         {subBtn('Community', () => handleNavigate('community'), activeTab === 'community')}
