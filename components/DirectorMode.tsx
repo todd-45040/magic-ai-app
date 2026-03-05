@@ -792,16 +792,12 @@ try {
           const endedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
           const elapsedMs = Math.max(0, Math.round((endedAt as number) - (startedAt as number)));
           setGenTimingMs(prev => ({ ...prev, [speedMode]: elapsedMs } as any));
-            const endedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-            const elapsedMs = Math.max(0, Math.round((endedAt as number) - (startedAt as number)));
-            setGenTimingMs(prev => ({ ...prev, [speedMode]: elapsedMs } as any));
 
             const blueprint = resultJson as DirectorModeBlueprint;
           const vId = makeId();
           setShowPlan(blueprint);
           setBlueprintVersions([{ id: vId, createdAt: Date.now(), blueprint, diffHint: 'Initial blueprint' }]);
           setActiveBlueprintId(vId);
-          setBlueprintView('outline');
           setBlueprintView('outline');
 
           // Telemetry: request success (units = segment count for KPI averages)
