@@ -758,10 +758,9 @@ Hard requirements:
 
             <main className="flex-1 overflow-y-auto p-4 md:p-6 animate-fade-in">
                 <div className="w-full max-w-7xl mx-auto">
-                    <div className="text-center">
-                        <StageCurtainsIcon className="w-16 h-16 text-purple-400 mx-auto mb-4" />
-                        <h2 className="text-2xl font-bold text-slate-300 mb-2 font-cinzel">Director Mode</h2>
-                        <p className="text-slate-400 mb-6">Your show blueprint is ready. Refine it, save it, or send it to the Show Planner.</p>
+                    <div className="mb-4 md:mb-5 text-left">
+                        <h2 className="text-xl md:text-2xl font-bold text-slate-300 font-cinzel">Director Mode</h2>
+                        <p className="text-slate-400 mt-1 text-sm">Your show blueprint is ready. Refine it, save it, or send it to the Show Planner.</p>
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1007,10 +1006,9 @@ Hard requirements:
     return (
         <main className="flex-1 overflow-y-auto p-4 md:p-6 animate-fade-in">
             <div className="w-full max-w-7xl mx-auto">
-                <div className="text-center">
-                    <StageCurtainsIcon className="w-16 h-16 text-purple-400 mx-auto mb-4" />
-                    <h2 className="text-2xl font-bold text-slate-300 mb-2 font-cinzel">Director Mode</h2>
-                    <p className="text-slate-400 mb-6">Let's design your next show. Provide the core details, and the AI will architect a complete show structure for you.</p>
+                <div className="mb-4 md:mb-5 text-left">
+                    <h2 className="text-xl md:text-2xl font-bold text-slate-300 font-cinzel">Director Mode</h2>
+                    <p className="text-slate-400 mt-1 text-sm">Let's design your next show. Provide the core details, and the AI will architect a complete show structure for you.</p>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
