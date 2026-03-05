@@ -90,8 +90,7 @@ const blueprintToOutline = (bp: DirectorModeBlueprint): string => {
         lines.push('');
     });
 
-    return lines.join('
-');
+    return lines.join('\n');
 };
 
 
