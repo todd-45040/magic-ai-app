@@ -576,7 +576,7 @@ const dictionaryLinks = useMemo(() => {
 
         const speedConstraints = speedMode === 'fast'
           ? `\nSpeed mode: FAST (demo-optimized)\n- Return EXACTLY 3 segments total: opener, middle, closer (one each).\n- transition_notes: MAX 1 sentence per segment.\n- props_required: MAX 3 items per segment.\n- Keep titles short (<= 6 words).\n- Keep text tight and punchy.`
-          : `\nSpeed mode: FULL (richer)\n- Return 3–6 segments total depending on the show length.\n- Must include exactly 1 opener and 1 closer, and 1–4 middle segments.\n- transition_notes: keep concise but can be 1–3 sentences when helpful.\n- props_required: keep practical (up to ~6 items when needed).`;
+          : `\nSpeed mode: FULL (richer)\n- Return 4–6 segments total depending on the show length (never fewer than 4).\n- Must include exactly 1 opener and 1 closer, and 2–4 middle segments.\n- Segment count guidance:\n  • <= 25 minutes: 4 segments\n  • 26–40 minutes: 5 segments\n  • 41+ minutes: 6 segments\n- transition_notes: concise but can be 1–3 sentences when helpful.\n- props_required: practical (up to ~6 items when needed).`;
 
         const prompt = `
 Please generate a show blueprint in STRICT JSON matching the provided schema.
@@ -615,7 +615,7 @@ try {
             DIRECTOR_MODE_SYSTEM_INSTRUCTION,
             directorResponseSchema,
             undefined,
-            { maxOutputTokens: speedMode === 'fast' ? 1800 : 8192 }
+            { maxOutputTokens: speedMode === 'fast' ? 2600 : 8192 }
           );
           const blueprint = resultJson as DirectorModeBlueprint;
           const vId = makeId();
@@ -830,7 +830,7 @@ try {
 
         const speedConstraints = speedMode === 'fast'
           ? `\nSpeed mode: FAST (demo-optimized)\n- Return EXACTLY 3 segments total: opener, middle, closer (one each).\n- transition_notes: MAX 1 sentence per segment.\n- props_required: MAX 3 items per segment.\n- Keep titles short (<= 6 words).\n- Keep text tight and punchy.`
-          : `\nSpeed mode: FULL (richer)\n- Return 3–6 segments total depending on the show length.\n- Must include exactly 1 opener and 1 closer, and 1–4 middle segments.\n- transition_notes: keep concise but can be 1–3 sentences when helpful.\n- props_required: keep practical (up to ~6 items when needed).`;
+          : `\nSpeed mode: FULL (richer)\n- Return 4–6 segments total depending on the show length (never fewer than 4).\n- Must include exactly 1 opener and 1 closer, and 2–4 middle segments.\n- Segment count guidance:\n  • <= 25 minutes: 4 segments\n  • 26–40 minutes: 5 segments\n  • 41+ minutes: 6 segments\n- transition_notes: concise but can be 1–3 sentences when helpful.\n- props_required: practical (up to ~6 items when needed).`;
 
         const refinePrompt = `
 You are refining an EXISTING show blueprint.
@@ -857,7 +857,7 @@ ${speedConstraints}
                 DIRECTOR_MODE_SYSTEM_INSTRUCTION,
                 directorResponseSchema,
                 undefined,
-                { maxOutputTokens: speedMode === 'fast' ? 1800 : 8192 }
+                { maxOutputTokens: speedMode === 'fast' ? 2600 : 8192 }
             );
             const next = resultJson as DirectorModeBlueprint;
             const vId = makeId();
