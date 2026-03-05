@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { saveIdea } from "../services/ideasService";
 import { CohesionActions } from "./CohesionActions";
-import { BookIcon, WandIcon, SaveIcon, CheckIcon, CopyIcon } from "./icons";
+import { BookIcon, WandIcon, CheckIcon, CopyIcon } from "./icons";
 import type { User } from "../types";
 
 interface PatterEngineProps {
@@ -11,7 +11,7 @@ interface PatterEngineProps {
 
 const TONES = ["Comedic", "Mysterious", "Dramatic", "Storytelling"] as const;
 
-const LoadingIndicator: React.FC = () => (
+const LoadingIndicator: React.FC<{ statusText?: string }> = ({ statusText }) => (
   <div className="flex flex-col items-center justify-center text-center p-8">
     <div className="relative">
       <WandIcon className="w-16 h-16 text-purple-400 animate-pulse" />
@@ -19,7 +19,7 @@ const LoadingIndicator: React.FC = () => (
         <div className="w-24 h-24 border-t-2 border-purple-300 rounded-full animate-spin" />
       </div>
     </div>
-    <p className="text-slate-300 mt-4 text-lg">Writing your scripts...</p>
+    <p className="text-slate-300 mt-4 text-lg">{statusText || "Writing your scripts..."}</p>
     <p className="text-slate-400 text-sm">Crafting the perfect words for your performance.</p>
   </div>
 );
@@ -30,33 +30,51 @@ function extractGeminiText(data: any): string {
   return data?.text || data?.output || "";
 }
 
-const PatterEngine: React.FC<PatterEngineProps> = ({ user, onIdeaSaved }) => {
+const PatterEngine: React.FC<PatterEngineProps> = ({ user: _user, onIdeaSaved }) => {
   const [effectDescription, setEffectDescription] = useState("");
   const [selectedTones, setSelectedTones] = useState<string[]>(["Comedic", "Mysterious"]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
+  const [attemptedGenerate, setAttemptedGenerate] = useState(false);
+
+  // Perceived speed: staged progress text while loading
+  const [loadingStep, setLoadingStep] = useState(0);
+  const loadingSteps = useMemo(
+    () => ["Analyzing effect…", "Building beats…", "Writing 2–3 variations…", "Final polish…"],
+    []
+  );
+
+  const topRef = useRef<HTMLDivElement | null>(null);
 
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved">("idle");
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied">("idle");
 
-  const canGenerate = effectDescription.trim().length > 0 && selectedTones.length > 0 && !isLoading;
+  const canGenerate = effectDescription.trim().length > 20 && selectedTones.length > 0 && !isLoading;
 
-  const prompt = useMemo(() => {
-    const tones = selectedTones.join(", ");
-    return `Generate performance-ready patter for the effect below. Provide multiple variations and beat-by-beat suggestions. Keep it practical for live performance.\n\nEffect: ${effectDescription}\n\nTones: ${tones}`;
-  }, [effectDescription, selectedTones]);
+  const buildPrompt = (desc: string, tonesList: string[]) => {
+    const tones = tonesList.join(", ");
+    return `Generate performance-ready patter for the effect below. Provide multiple variations and beat-by-beat suggestions. Keep it practical for live performance.\n\nEffect: ${desc}\n\nTones: ${tones}`;
+  };
 
   const handleToneToggle = (tone: string) => {
     setSelectedTones((prev) => (prev.includes(tone) ? prev.filter((t) => t !== tone) : [...prev, tone]));
   };
 
-  const handleGenerate = async () => {
-    if (!effectDescription.trim()) {
+  const handleGenerate = async (override?: { description?: string; tones?: string[] }) => {
+    setAttemptedGenerate(true);
+    const desc = (override?.description ?? effectDescription).trim();
+    const tones = override?.tones ?? selectedTones;
+
+    if (!desc) {
       setError("Please describe the magic effect.");
       return;
     }
-    if (selectedTones.length === 0) {
+    if (desc.length <= 20) {
+      setError("Please add a bit more detail (at least ~20 characters) for best results.");
+      return;
+    }
+    if (tones.length === 0) {
       setError("Please select at least one tone.");
       return;
     }
@@ -68,10 +86,21 @@ const PatterEngine: React.FC<PatterEngineProps> = ({ user, onIdeaSaved }) => {
     setCopyStatus("idle");
 
     try {
+      // Critical: /api/generatePatter requires an auth header (Bearer token)
+      const { data } = await supabase.auth.getSession();
+      const token = data?.session?.access_token;
+      if (!token) {
+        setError("Please log in to generate patter.");
+        return;
+      }
+
       const res = await fetch(`/api/generatePatter?ts=${Date.now()}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ prompt: buildPrompt(desc, tones) }),
       });
 
       const data = await res.json().catch(async () => {
@@ -95,6 +124,89 @@ const PatterEngine: React.FC<PatterEngineProps> = ({ user, onIdeaSaved }) => {
       setError(err?.message || "Failed to generate patter.");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isLoading) return;
+    setLoadingStep(0);
+    const t = window.setInterval(() => setLoadingStep((s) => (s + 1) % loadingSteps.length), 950);
+    return () => window.clearInterval(t);
+  }, [isLoading, loadingSteps.length]);
+
+  const handleReset = () => {
+    setError(null);
+    setResult(null);
+    setIsLoading(false);
+    setSaveStatus("idle");
+    setCopyStatus("idle");
+    setSelectedTones(["Comedic", "Mysterious"]);
+    setAttemptedGenerate(false);
+    topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const presets = useMemo(
+    () => [
+      {
+        label: "Linking Rings (Comedy)",
+        description:
+          "Chinese Linking Rings: a playful comedic routine where the rings seem to have a mind of their own. Include quick audience lines and a strong callback at the end.",
+        tones: ["Comedic"],
+      },
+      {
+        label: "Ambitious Card (Mysterious)",
+        description:
+          "Ambitious Card: a mysterious, impossible escalation where the signed card repeatedly rises to the top. Emphasize suspense, pauses, and clean fairness lines.",
+        tones: ["Mysterious"],
+      },
+      {
+        label: "Torn & Restored (Story)",
+        description:
+          "Torn & Restored: a storytelling presentation about memory and second chances, ending with a strong emotional beat. Keep it warm and audience-safe.",
+        tones: ["Storytelling"],
+      },
+    ],
+    []
+  );
+
+  const parseSections = (text: string) => {
+    const cleaned = text.trim();
+    const re = /(^|\n)(variation\s*(?:a|b|c|1|2|3)\b[^\n]*:?)/gi;
+    const matches = Array.from(cleaned.matchAll(re));
+    if (matches.length === 0) return [{ title: "Script", body: cleaned }];
+
+    const sections: { title: string; body: string }[] = [];
+    for (let i = 0; i < matches.length; i++) {
+      const start = matches[i].index ?? 0;
+      const end = i + 1 < matches.length ? (matches[i + 1].index ?? cleaned.length) : cleaned.length;
+      const chunk = cleaned.slice(start, end).trim();
+      const firstLine = chunk.split("\n")[0].trim();
+      const body = chunk.replace(firstLine, "").trim();
+      sections.push({ title: firstLine.replace(/^\n/, "").trim(), body: body || chunk });
+    }
+    return sections;
+  };
+
+  const copySection = async (sectionText: string) => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(sectionText);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = sectionText;
+        ta.style.position = "fixed";
+        ta.style.top = "-9999px";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      setCopyStatus("copied");
+      setTimeout(() => setCopyStatus("idle"), 1500);
+    } catch (err: any) {
+      console.error("Copy failed:", err);
+      setError(err?.message || "Copy failed.");
     }
   };
 
@@ -147,10 +259,41 @@ const PatterEngine: React.FC<PatterEngineProps> = ({ user, onIdeaSaved }) => {
     <main className="flex-1 overflow-y-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
       {/* Control Panel */}
       <div className="flex flex-col">
+        <div ref={topRef} />
         <h2 className="text-xl font-bold text-slate-300 mb-2">The Patter Engine</h2>
         <p className="text-slate-400 mb-4">
           Describe your effect, choose a style, and generate performance-ready patter you can copy or save to your Ideas.
         </p>
+
+        {/* Booth-friendly presets + reset */}
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <span className="text-xs font-semibold text-slate-400 mr-1">Demo presets:</span>
+          {presets.map((p) => (
+            <button
+              key={p.label}
+              type="button"
+              onClick={() => {
+                setEffectDescription(p.description);
+                setSelectedTones(p.tones);
+                setError(null);
+                void handleGenerate({ description: p.description, tones: p.tones });
+              }}
+              className="px-2.5 py-1.5 text-xs rounded-md bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 transition-colors"
+              title="Load a preset and generate"
+            >
+              {p.label}
+            </button>
+          ))}
+          <div className="flex-1" />
+          <button
+            type="button"
+            onClick={handleReset}
+            className="px-2.5 py-1.5 text-xs rounded-md bg-transparent border border-slate-700 text-slate-300 hover:bg-slate-800 transition-colors"
+            title="Reset this tool"
+          >
+            Reset
+          </button>
+        </div>
 
         <div className="space-y-4">
           <div>
@@ -165,27 +308,38 @@ const PatterEngine: React.FC<PatterEngineProps> = ({ user, onIdeaSaved }) => {
                 setEffectDescription(e.target.value);
                 setError(null);
               }}
+              onKeyDown={(e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+                  e.preventDefault();
+                  void handleGenerate();
+                }
+              }}
               placeholder='e.g., "Chinese Linking Rings: a comedic routine where the rings seem to have a mind of their own."'
               className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
             />
+            {attemptedGenerate && effectDescription.trim().length > 0 && effectDescription.trim().length <= 20 ? (
+              <p className="text-amber-300 mt-2 text-xs">Add a bit more detail (at least ~20 characters) for best results.</p>
+            ) : null}
           </div>
 
           {/* Tone buttons */}
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-2">Select Tones</label>
+            <p className="text-xs text-slate-500 mb-2">Pick 1–2 tones for best output.</p>
             <div className="grid grid-cols-2 gap-2">
               {TONES.map((tone) => (
                 <button
                   key={tone}
                   type="button"
                   onClick={() => handleToneToggle(tone)}
-                  className={`py-2 px-3 rounded-md transition-colors text-sm font-semibold ${
+                  className={`py-2 px-3 rounded-md transition-colors text-sm font-semibold flex items-center justify-between gap-2 ${
                     selectedTones.includes(tone)
                       ? "bg-purple-600 text-white"
                       : "bg-slate-700 hover:bg-slate-600 text-slate-300"
                   }`}
                 >
-                  {tone}
+                  <span>{tone}</span>
+                  {selectedTones.includes(tone) ? <CheckIcon className="w-4 h-4" /> : <span className="w-4 h-4" />}
                 </button>
               ))}
             </div>
@@ -209,56 +363,49 @@ const PatterEngine: React.FC<PatterEngineProps> = ({ user, onIdeaSaved }) => {
       <div className="flex flex-col bg-slate-900/50 rounded-lg border border-slate-800 min-h-[300px]">
         {isLoading ? (
           <div className="flex-1 flex items-center justify-center">
-            <LoadingIndicator />
+            <LoadingIndicator statusText={loadingSteps[loadingStep]} />
           </div>
         ) : result ? (
           <div className="relative group flex-1 flex flex-col">
-            <div className="p-4 overflow-y-auto">
-              <pre className="whitespace-pre-wrap break-words text-slate-200 font-sans text-sm">{result}</pre>
+            <div className="p-4 overflow-y-auto space-y-3">
+              <div className="text-xs text-slate-400">
+                <span className="font-semibold text-slate-300">{effectDescription || "Patter"}</span>
+                <span className="mx-2">•</span>
+                <span>{selectedTones.join(", ")}</span>
+              </div>
+
+              {parseSections(result).map((sec, idx) => (
+                <div key={`${sec.title}-${idx}`} className="rounded-xl border border-slate-800 bg-slate-950/30 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="text-sm font-semibold text-slate-200">{sec.title}</div>
+                    <button
+                      type="button"
+                      onClick={() => void copySection(`${sec.title}\n\n${sec.body}`)}
+                      className="flex items-center gap-1.5 px-2 py-1 text-xs rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors"
+                      title="Copy this variation"
+                    >
+                      <CopyIcon className="w-3.5 h-3.5" />
+                      Copy
+                    </button>
+                  </div>
+                  <div className="mt-2 whitespace-pre-wrap break-words text-slate-200 font-sans text-sm">{sec.body}</div>
+                </div>
+              ))}
             </div>
 
-            {/* Footer: Cohesion actions + Copy + Save */}
-            <div className="mt-auto p-2 bg-slate-900/50 flex flex-wrap justify-end gap-2 border-t border-slate-800">
-              <CohesionActions content={fullContentForSave()} defaultTitle={"Patter"} defaultTags={["patter"]} compact />
-              <button
-                type="button"
-                onClick={handleCopy}
-                disabled={copyStatus === "copied"}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 disabled:cursor-default transition-colors"
-                title="Copy patter to clipboard"
-              >
-                {copyStatus === "copied" ? (
-                  <>
-                    <CheckIcon className="w-4 h-4 text-green-400" />
-                    <span>Copied!</span>
-                  </>
-                ) : (
-                  <>
-                    <CopyIcon className="w-4 h-4" />
-                    <span>Copy</span>
-                  </>
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={saveStatus === "saved"}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 disabled:cursor-default transition-colors"
-                title="Save this patter to your Ideas"
-              >
-                {saveStatus === "saved" ? (
-                  <>
-                    <CheckIcon className="w-4 h-4 text-green-400" />
-                    <span>Saved!</span>
-                  </>
-                ) : (
-                  <>
-                    <SaveIcon className="w-4 h-4" />
-                    <span>Save Idea</span>
-                  </>
-                )}
-              </button>
+            {/* Premium SaveActionBar + keep CohesionActions for workflow parity (Option A) */}
+            <div className="mt-auto p-3 border-t border-slate-800 bg-slate-950/30">
+              <SaveActionBar
+                title="Next step:"
+                subtitle="Save it, then move it into a Show or Task."
+                onSave={handleSave}
+                onCopy={handleCopy}
+                saved={saveStatus === "saved"}
+                saving={false}
+              />
+              <div className="mt-2 flex justify-end">
+                <CohesionActions content={fullContentForSave()} defaultTitle={"Patter"} defaultTags={["patter"]} compact />
+              </div>
             </div>
           </div>
         ) : (
