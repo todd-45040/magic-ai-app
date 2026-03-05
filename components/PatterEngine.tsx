@@ -202,15 +202,16 @@ Tones: ${tones}`;
 
   const parseSections = (text: string) => {
     const cleaned = text.trim();
+    const cleanedNoMd = cleaned.replace(/\*\*/g, "");
     const re = /(^|\n)(variation\s*(?:a|b|c|1|2|3)\b[^\n]*:?)/gi;
-    const matches = Array.from(cleaned.matchAll(re));
+    const matches = Array.from(cleanedNoMd.matchAll(re));
     if (matches.length === 0) return [{ title: "Script", body: cleaned }];
 
     const sections: { title: string; body: string }[] = [];
     for (let i = 0; i < matches.length; i++) {
       const start = matches[i].index ?? 0;
-      const end = i + 1 < matches.length ? (matches[i + 1].index ?? cleaned.length) : cleaned.length;
-      const chunk = cleaned.slice(start, end).trim();
+      const end = i + 1 < matches.length ? (matches[i + 1].index ?? cleanedNoMd.length) : cleanedNoMd.length;
+      const chunk = cleanedNoMd.slice(start, end).trim();
       const firstLine = chunk.split("\n")[0].trim();
       const body = chunk.replace(firstLine, "").trim();
       sections.push({ title: firstLine.replace(/^\n/, "").trim(), body: body || chunk });
