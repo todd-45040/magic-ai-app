@@ -4,8 +4,10 @@ import { Type } from '@google/genai';
 import { generateImage, generateStructuredResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
 import { CohesionActions } from './CohesionActions';
+import SaveActionBar from './shared/SaveActionBar';
 import type { User } from '../types';
-import { BlueprintIcon, WandIcon, SaveIcon, CheckIcon } from './icons';
+import { APP_VERSION } from '../constants';
+import { BlueprintIcon, WandIcon } from './icons';
 
 interface IllusionBlueprintProps {
   user: User;
@@ -13,6 +15,14 @@ interface IllusionBlueprintProps {
 }
 
 type SaveStatus = 'idle' | 'saved';
+
+type EffectType = 'Appearance' | 'Vanish' | 'Transformation' | 'Levitation' | 'Penetration' | 'Escape' | 'Teleportation';
+type VenueSize = 'Close-up' | 'Parlor' | 'Stage' | 'Grand Illusion' | 'Arena';
+type PerformerStyle = 'Comedy' | 'Mystery' | 'Elegant' | 'Dark' | 'Story-driven';
+
+const EFFECT_TYPES: EffectType[] = ['Appearance', 'Vanish', 'Transformation', 'Levitation', 'Penetration', 'Escape', 'Teleportation'];
+const VENUE_SIZES: VenueSize[] = ['Close-up', 'Parlor', 'Stage', 'Grand Illusion', 'Arena'];
+const PERFORMER_STYLES: PerformerStyle[] = ['Comedy', 'Mystery', 'Elegant', 'Dark', 'Story-driven'];
 
 type StagingBlueprint = {
   potential_principles: { name: string; description: string }[];
@@ -52,9 +62,35 @@ type BuildBlueprintPack = {
   build_notes: string[];
 };
 
-// NOTE: Keep this in sync with your benchmark tag.
-// If you prefer env-driven versioning, set VITE_APP_VERSION in Vercel/Env.
-const APP_VERSION = 'v0.91 Beta';
+const DEMO_PRESETS: Array<{ label: string; concept: string; effectType: EffectType; venue: VenueSize; style: PerformerStyle; constraints?: string }> = [
+  {
+    label: 'Assistant Sawing',
+    effectType: 'Penetration',
+    venue: 'Grand Illusion',
+    style: 'Mystery',
+    concept:
+      'Classic sawing illusion with a modern twist. Audience believes the assistant is visibly separated. Include staging, safety, reset, and build complexity.',
+    constraints: 'Budget: mid-range. Crew: 2–3. Reset: under 2 minutes. Stage limitations: standard theater deck; limited wing depth.',
+  },
+  {
+    label: 'Floating Assistant',
+    effectType: 'Levitation',
+    venue: 'Stage',
+    style: 'Elegant',
+    concept:
+      'Elegant levitation where the assistant floats across stage. Strong theatrical framing, sightline notes, and safe, realistic construction considerations.',
+    constraints: 'Budget: moderate. Crew: 1–2. Reset: 90 seconds. Angles: avoid extreme side seating; include balcony considerations.',
+  },
+  {
+    label: 'Instant Appearance',
+    effectType: 'Appearance',
+    venue: 'Stage',
+    style: 'Mystery',
+    concept:
+      'Performer appears instantly inside a sealed cabinet on an otherwise empty stage. Emphasize staging, lighting, and practical reset constraints.',
+    constraints: 'Budget: flexible. Crew: 1 assistant. Reset: 2–3 minutes. Stage limitations: minimal smoke; quiet operation preferred.',
+  },
+];
 
 const LoadingIndicator: React.FC = () => (
   <div className="flex flex-col items-center justify-center text-center p-8 h-full">
@@ -133,6 +169,10 @@ Return JSON matching the provided schema exactly.`;
 
 const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved }) => {
   const [prompt, setPrompt] = useState('');
+  const [effectType, setEffectType] = useState<EffectType>('Appearance');
+  const [venueSize, setVenueSize] = useState<VenueSize>('Stage');
+  const [performerStyle, setPerformerStyle] = useState<PerformerStyle>('Mystery');
+  const [constraints, setConstraints] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -350,6 +390,14 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
       return;
     }
 
+    const context = [
+      `Effect Type: ${effectType}`,
+      `Venue Size: ${venueSize}`,
+      `Performer Style: ${performerStyle}`,
+      constraints.trim() ? `Constraints: ${constraints.trim()}` : 'Constraints: (none provided)',
+      `Concept: ${prompt.trim()}`,
+    ].join('\n');
+
     setIsLoading(true);
     setError(null);
     setConceptArt(null);
@@ -373,13 +421,13 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     setJsonCopyStatus('idle');
     setSaveStatus('idle');
 
-    const artPrompt = `Dramatic, theatrical concept art for a grand illusion: ${prompt}. Focus on the magical moment from the audience's perspective. Cinematic lighting, professional digital painting style.`;
+    const artPrompt = `Dramatic, theatrical concept art for a stage illusion.\n\n${context}\n\nFocus on the magical moment from the audience's perspective. Cinematic lighting, professional digital painting style.`;
 
     setLastArtPrompt(artPrompt);
 
-    const stagingPrompt = `Generate a STAGING blueprint for an illusion concept: "${prompt}". Provide performance-facing principles and a clear staging description.`;
+    const stagingPrompt = `Generate a STAGING blueprint for this illusion request.\n\n${context}\n\nProvide performance-facing principles and a clear staging description.`;
 
-    const buildPrompt = `Create a BUILD BLUEPRINT PACK for this illusion concept: "${prompt}". Provide realistic dimensions and a cut list. Include 3 mechanism options (manual, assisted, motorized) with mechanism ids and tag parts/steps that differ by option.`;
+    const buildPrompt = `Create a BUILD BLUEPRINT PACK for this illusion request.\n\n${context}\n\nProvide realistic dimensions and a cut list. Include 3 mechanism options (manual, assisted, motorized) with mechanism ids and tag parts/steps that differ by option.`;
 
     try {
       const artPromise = generateImage(artPrompt, '16:9', user);
@@ -422,7 +470,7 @@ const handleGenerateBlueprint = async () => {
     'Include a simple title block with the illusion name and the overall dimensions.',
     'Keep it readable and print-friendly.',
     '',
-    `Illusion concept: ${prompt}`,
+    `Illusion request details:\nEffect Type: ${effectType}\nVenue Size: ${venueSize}\nPerformer Style: ${performerStyle}\nConstraints: ${constraints.trim() || '(none provided)'}\nConcept: ${prompt}`,
     dimsLine,
   ].join('\n');
 
@@ -447,9 +495,17 @@ const handleRegenerateConceptArt = async () => {
     return;
   }
 
+  const context = [
+    `Effect Type: ${effectType}`,
+    `Venue Size: ${venueSize}`,
+    `Performer Style: ${performerStyle}`,
+    constraints.trim() ? `Constraints: ${constraints.trim()}` : 'Constraints: (none provided)',
+    `Concept: ${prompt.trim()}`,
+  ].join('\n');
+
   const base = lastArtPrompt
     ? lastArtPrompt
-    : `Dramatic, theatrical concept art for a grand stage illusion prop based on: "${prompt}". Highly detailed, realistic, stage-ready, showing the prop on a theater stage with lighting. Include materials hints (wood/metal/fabric) visually. 16:9 composition. No text.`;
+    : `Dramatic, theatrical concept art for a grand stage illusion prop.\n\n${context}\n\nHighly detailed, realistic, stage-ready, showing the prop on a theater stage with lighting. Include materials hints (wood/metal/fabric) visually. 16:9 composition. No text.`;
 
   try {
     setIsConceptLoading(true);
@@ -484,6 +540,10 @@ const handleRegenerateConceptArt = async () => {
   const buildFullContent = () => {
     if (!stagingBlueprint || !buildPack) return '';
     let fullContent = `## Illusion Blueprint: ${prompt}\n\n`;
+    fullContent += `**Effect Type:** ${effectType}\n\n`;
+    fullContent += `**Venue Size:** ${venueSize}\n\n`;
+    fullContent += `**Performer Style:** ${performerStyle}\n\n`;
+    if (constraints.trim()) fullContent += `**Constraints:** ${constraints.trim()}\n\n`;
     if (conceptArt) fullContent += `![Concept Art](${conceptArt})\n\n`;
     fullContent += `### Potential Principles\n\n`;
     stagingBlueprint.potential_principles.forEach((p) => {
@@ -498,14 +558,29 @@ const handleRegenerateConceptArt = async () => {
   const handleSave = () => {
     if (!stagingBlueprint || !buildPack) return;
     const fullContent = buildFullContent();
-    saveIdea('text', fullContent, `Illusion Blueprint: ${prompt}`);
+    const titleBase = prompt.trim() ? prompt.trim() : buildPack.title;
+    saveIdea('text', fullContent, `Illusion Blueprint (${effectType}) — ${titleBase}`);
     onIdeaSaved();
     setSaveStatus('saved');
     setTimeout(() => setSaveStatus('idle'), 2000);
   };
 
+  const handleCopyAll = async () => {
+    try {
+      const fullContent = buildFullContent();
+      if (!fullContent) return;
+      await navigator.clipboard.writeText(fullContent);
+    } catch {
+      // Clipboard can be blocked by browser permissions; user can still copy manually.
+    }
+  };
+
   const handleStartOver = () => {
     setPrompt('');
+    setEffectType('Appearance');
+    setVenueSize('Stage');
+    setPerformerStyle('Mystery');
+    setConstraints('');
     setConceptArt(null);
     setBlueprintSheet(null);
     setStagingBlueprint(null);
@@ -515,6 +590,7 @@ const handleRegenerateConceptArt = async () => {
     setActiveSection('concept');
     setOpenSections({
       concept: true,
+      blueprint: true,
       principles: true,
       staging: true,
       buildpack: true,
@@ -596,16 +672,127 @@ const handleRegenerateConceptArt = async () => {
       {!stagingBlueprint || !buildPack ? (
         <div className="flex-1 flex items-center justify-center">
           <div className="w-full max-w-xl">
-            <textarea
-              rows={4}
-              value={prompt}
-              onChange={(e) => {
-                setPrompt(e.target.value);
-                setError(null);
-              }}
-              placeholder="e.g., I want to make a motorcycle appear from a cloud of smoke on an empty stage."
-              className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
-            />
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <div className="text-xs text-slate-400">Demo presets:</div>
+              {DEMO_PRESETS.map((p) => (
+                <button
+                  key={p.label}
+                  type="button"
+                  onClick={() => {
+                    setPrompt(p.concept);
+                    setEffectType(p.effectType);
+                    setVenueSize(p.venue);
+                    setPerformerStyle(p.style);
+                    setConstraints(p.constraints || '');
+                    setError(null);
+                  }}
+                  className="px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border bg-slate-900/40 border-slate-700 text-slate-200 hover:border-slate-500"
+                >
+                  {p.label}
+                </button>
+              ))}
+
+              <button
+                type="button"
+                onClick={handleStartOver}
+                className="ml-auto px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border bg-slate-900/40 border-slate-700 text-slate-200 hover:border-slate-500"
+              >
+                Reset
+              </button>
+            </div>
+
+            {/* Micro-help (parity with other tools) */}
+            <div className="mb-4 rounded-lg border border-slate-800 bg-slate-900/30 p-3">
+              <div className="text-sm font-semibold text-slate-200">Why use this?</div>
+              <ul className="mt-1 text-xs text-slate-400 list-disc pl-5 space-y-1">
+                <li>Turns an illusion idea into a structured, stage-ready blueprint.</li>
+                <li>Adds staging + safety + reset thinking so concepts stay realistic.</li>
+                <li>Provides build-ready details (modules, materials, cut list) you can hand to a fabricator.</li>
+              </ul>
+            </div>
+
+            {/* Inputs */}
+            <div className="space-y-3">
+              <div>
+                <div className="text-xs font-semibold text-slate-300 mb-1">Effect Type</div>
+                <div className="flex flex-wrap gap-2">
+                  {EFFECT_TYPES.map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setEffectType(t)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
+                        effectType === t
+                          ? 'bg-purple-600/30 border-purple-500 text-purple-200'
+                          : 'bg-slate-900/40 border-slate-700 text-slate-200 hover:border-slate-500'
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 mb-1 block">Venue Size</label>
+                  <select
+                    value={venueSize}
+                    onChange={(e) => setVenueSize(e.target.value as VenueSize)}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500 transition-colors"
+                  >
+                    {VENUE_SIZES.map((v) => (
+                      <option key={v} value={v}>
+                        {v}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 mb-1 block">Performer Style</label>
+                  <select
+                    value={performerStyle}
+                    onChange={(e) => setPerformerStyle(e.target.value as PerformerStyle)}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500 transition-colors"
+                  >
+                    {PERFORMER_STYLES.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-300 mb-1 block">Constraints (optional)</label>
+                <textarea
+                  rows={3}
+                  value={constraints}
+                  onChange={(e) => {
+                    setConstraints(e.target.value);
+                    setError(null);
+                  }}
+                  placeholder="Props available, stage limitations, budget range, crew size, reset requirements…"
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-300 mb-1 block">Core Concept</label>
+                <textarea
+                  rows={4}
+                  value={prompt}
+                  onChange={(e) => {
+                    setPrompt(e.target.value);
+                    setError(null);
+                  }}
+                  placeholder="e.g., I want to make a motorcycle appear from a cloud of smoke on an empty stage."
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
+                />
+              </div>
+            </div>
             <button
               onClick={handleGenerate}
               disabled={isLoading || !prompt.trim()}
@@ -1033,34 +1220,34 @@ const handleRegenerateConceptArt = async () => {
                 </pre>
           </CollapsibleSection>
 
-          {/* Actions */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4 border-t border-slate-700">
-            <CohesionActions
-              content={buildFullContent()}
-              defaultTitle={`Illusion Blueprint: ${prompt || 'Untitled'}`}
-              defaultTags={["illusion-blueprint", "build"]}
-              compact
+          {/* Premium SaveActionBar + workflow parity */}
+          <div className="pt-4 border-t border-slate-800">
+            <SaveActionBar
+              title="Next step:"
+              subtitle="Save it, then move it into a Show or Task."
+              onSave={handleSave}
+              onCopy={() => void handleCopyAll()}
+              saved={saveStatus === 'saved'}
+              saving={false}
+              primaryLabel="Save Blueprint to Idea Vault"
             />
-            <button onClick={handleStartOver} className="px-6 py-2 bg-slate-600 hover:bg-slate-700 rounded-md text-white font-bold">
-              Start Over
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={saveStatus === 'saved'}
-              className="flex items-center gap-2 px-6 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold"
-            >
-              {saveStatus === 'saved' ? (
-                <>
-                  <CheckIcon className="w-5 h-5" />
-                  <span>Saved!</span>
-                </>
-              ) : (
-                <>
-                  <SaveIcon className="w-5 h-5" />
-                  <span>Save Blueprint</span>
-                </>
-              )}
-            </button>
+
+            <div className="mt-2 flex flex-col sm:flex-row items-center justify-between gap-2">
+              <CohesionActions
+                content={buildFullContent()}
+                defaultTitle={`Illusion Blueprint: ${prompt || 'Untitled'}`}
+                defaultTags={["illusion-blueprint", "build"]}
+                compact
+              />
+
+              <button
+                type="button"
+                onClick={handleStartOver}
+                className="px-5 py-2 rounded-lg border border-slate-700 bg-slate-900/40 text-slate-100 font-semibold hover:bg-slate-900/60"
+              >
+                Start Over
+              </button>
+            </div>
           </div>
 
           <div className="text-center text-xs text-slate-500 pt-2">Version: {APP_VERSION}</div>
