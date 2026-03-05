@@ -316,6 +316,20 @@ export const generateStructuredResponse = async (
   const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 2 });
   const text = extractText(result);
 
+  const looksTruncated = (raw: string, errMsg: string) => {
+    const t = (raw || '').trim();
+    if (!t) return false;
+    if (/end of data/i.test(errMsg)) return true;
+    // If it doesn't end like JSON, it was likely cut off mid-object/array.
+    return !/[}\]]\s*$/.test(t);
+  };
+
+  const clampForPrompt = (s: string, maxChars: number) => {
+    const str = String(s || '');
+    if (str.length <= maxChars) return str;
+    return str.slice(0, maxChars) + `\n\n[TRUNCATED ${str.length - maxChars} CHARS]`;
+  };
+
   // First attempt: best-effort local repair (escape newlines in strings, extract JSON block)
   try {
     return safeJsonParse(text || '{}');
@@ -323,35 +337,74 @@ export const generateStructuredResponse = async (
     // Second attempt: ask the model to re-emit ONLY valid JSON (booth-proofing).
     // This is the most reliable fix for "unterminated string" and truncation errors.
     const msg = String(err?.message || err || 'Invalid JSON');
+    const wasTruncated = looksTruncated(text || '', msg);
     const retryPrompt =
-      `The previous response was INVALID JSON and failed to parse (error: ${msg}).\n\n` +
+      `The previous response was INVALID JSON and failed to parse (error: ${msg}).\n` +
+      (wasTruncated ? `It appears the JSON was TRUNCATED (cut off before closing braces).\n\n` : `\n`) +
       `Re-emit ONLY valid JSON that conforms EXACTLY to the provided schema.\n` +
       `Rules:\n` +
       `- Output ONLY JSON (no markdown fences, no prose).\n` +
       `- Do NOT include trailing comments.\n` +
       `- Do NOT include raw newlines inside string values; use \\n if needed.\n` +
       `- Ensure all quotes inside strings are properly escaped.\n` +
-      `- The JSON MUST be complete and must end with a closing } or ].\n\n` +
+      `- The JSON MUST be complete and MUST end with a closing } or ].\n` +
+      `- If you are running out of space, shorten string fields (titles, transitions) but keep the schema valid.\n\n` +
       `Here is the invalid output to fix:\n` +
-      `${text || ''}\n\n` +
+      `${clampForPrompt(text || '', 8000)}\n\n` +
       `Now output the corrected JSON only.`;
 
     const retryBody: GeminiGenerateBody = {
-      model: 'gemini-3-flash-preview',
+      // More reliable structured output in edge cases (truncation / schema pressure)
+      model: 'gemini-3-pro-preview',
       contents: [{ role: 'user', parts: [{ text: retryPrompt }] }],
       config: {
         systemInstruction,
         responseMimeType: "application/json",
         responseSchema,
+        // Completion-safe retry budget (even if Fast)
         ...(typeof options?.maxOutputTokens === 'number'
-          ? { maxOutputTokens: Math.max(options.maxOutputTokens, 4200) }
-          : { maxOutputTokens: 4200 }),
+          ? { maxOutputTokens: Math.max(options.maxOutputTokens, 8192) }
+          : { maxOutputTokens: 8192 }),
       },
     };
 
     const retryResult = await postJson<any>('/api/generate', retryBody, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 1 });
     const retryText = extractText(retryResult);
-    return safeJsonParse(retryText || '{}');
+
+    try {
+      return safeJsonParse(retryText || '{}');
+    } catch (err2: any) {
+      // Final fallback: force a SHORTER JSON re-emit. This is specifically for truncation
+      // where even the first re-emit attempt was cut off.
+      const msg2 = String(err2?.message || err2 || 'Invalid JSON');
+      const fallbackPrompt =
+        `The JSON is STILL invalid after a repair attempt (error: ${msg2}).\n\n` +
+        `Re-emit a SHORTER JSON that fits within limits while preserving the schema.\n` +
+        `Hard requirements:\n` +
+        `- JSON ONLY (no markdown, no prose).\n` +
+        `- MUST be complete and MUST end with } or ].\n` +
+        `- Preserve the provided schema exactly.\n` +
+        `- Shorten all strings aggressively (especially transition_notes).\n` +
+        `- If segments are part of the schema, keep them minimal and concise.\n\n` +
+        `Here is the last invalid output (for reference):\n` +
+        `${clampForPrompt(retryText || text || '', 6000)}\n\n` +
+        `Now output the corrected SHORTER JSON only.`;
+
+      const fallbackBody: GeminiGenerateBody = {
+        model: 'gemini-3-pro-preview',
+        contents: [{ role: 'user', parts: [{ text: fallbackPrompt }] }],
+        config: {
+          systemInstruction,
+          responseMimeType: "application/json",
+          responseSchema,
+          maxOutputTokens: 4096,
+        },
+      };
+
+      const fallbackResult = await postJson<any>('/api/generate', fallbackBody, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 1 });
+      const fallbackText = extractText(fallbackResult);
+      return safeJsonParse(fallbackText || '{}');
+    }
   }
 };
 
