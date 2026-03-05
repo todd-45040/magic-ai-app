@@ -1050,6 +1050,55 @@ const kUsers = data?.users || {};
         })()}
       </div>
 
+
+      {/* Director Mode — Health (24h) + KPIs (7d) */}
+      <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-sm opacity-80">Director Mode Health</div>
+          <div className="text-[11px] text-white/50">Last 24h</div>
+        </div>
+
+        {(() => {
+          const dmH = (data as any)?.director_mode_health_24h;
+          const dmK = (data as any)?.director_mode_kpis;
+          if (!dmH && !dmK) return <div className="mt-2 text-sm text-white/60">—</div>;
+
+          return (
+            <div className="mt-3 grid grid-cols-1 md:grid-cols-4 gap-3">
+              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                <div className="text-xs text-white/60">Requests (24h)</div>
+                <div className="text-xl font-bold text-white">{Number(dmH?.requests || 0)}</div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                <div className="text-xs text-white/60">Success % (24h)</div>
+                <div className="text-xl font-bold text-white">{pct(dmH?.success_rate, 0)}</div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                <div className="text-xs text-white/60">Last error</div>
+                <div className="text-[12px] text-white/80 mt-1">
+                  {dmH?.last_error ? `${String(dmH.last_error.error_code || 'ERROR')} · ${String(dmH.last_error.created_at || '').slice(0, 19).replace('T', ' ')}` : '—'}
+                </div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                <div className="text-xs text-white/60">Create-show conv (7d)</div>
+                <div className="text-xl font-bold text-white">{pct(dmK?.create_show_conversion_rate, 0)}</div>
+              </div>
+
+              {dmK && (
+                <div className="md:col-span-4 text-[11px] text-white/50 flex flex-wrap gap-x-4 gap-y-1">
+                  <span>7d Requests: <span className="text-white/70">{Number(dmK.requests || 0)}</span></span>
+                  <span>7d Success: <span className="text-white/70">{pct(dmK.success_rate, 0)}</span></span>
+                  <span>Refine: <span className="text-white/70">{pct(dmK.refine_rate, 0)}</span></span>
+                  <span>Save: <span className="text-white/70">{pct(dmK.save_rate, 0)}</span></span>
+                  <span>Avg segments: <span className="text-white/70">{dmK.avg_segments_per_success != null ? Number(dmK.avg_segments_per_success).toFixed(1) : '—'}</span></span>
+                  <span>Avg show length: <span className="text-white/70">{dmK.avg_show_length_minutes != null ? Number(dmK.avg_show_length_minutes).toFixed(0) + 'm' : '—'}</span></span>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+      </div>
+
       {/* Phase 2 — Growth + Activation Funnel */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div className="p-3 rounded-xl bg-white/5 border border-white/10">

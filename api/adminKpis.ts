@@ -134,6 +134,122 @@ export default async function handler(req: any, res: any) {
       // Do not fail dashboard
     }
 
+
+
+    // Phase DM — Director Mode KPIs (fixed 7d window)
+    // Client telemetry is stored in ai_usage_events with tool='director_mode' and endpoint='client:<action>'.
+    // We overload units:
+    //  - request_start.units = show length minutes (for avg show length requested)
+    //  - request_success.units = segment count (for avg segments generated)
+    let directorModeKpis: any = {
+      window_days: 7,
+      requests: 0,
+      successes: 0,
+      errors: 0,
+      refine_clicks: 0,
+      save_successes: 0,
+      create_show: 0,
+      send_to_planner: 0,
+      success_rate: null as number | null,
+      refine_rate: null as number | null,
+      save_rate: null as number | null,
+      create_show_conversion_rate: null as number | null,
+      avg_segments_per_success: null as number | null,
+      avg_show_length_minutes: null as number | null,
+    };
+
+    let directorModeHealth24h: any = {
+      window_hours: 24,
+      requests: 0,
+      successes: 0,
+      errors: 0,
+      success_rate: null as number | null,
+      last_error: null as any,
+    };
+
+    try {
+      const { data: dmEvents, error: dmErr } = await admin
+        .from('ai_usage_events')
+        .select('endpoint, units, created_at, error_code')
+        .eq('tool', 'director_mode')
+        .gte('created_at', sinceIso7)
+        .limit(50000);
+
+      if (!dmErr) {
+        let segmentsTotal = 0;
+        let segmentsCounted = 0;
+        let showLenTotal = 0;
+        let showLenCounted = 0;
+
+        for (const ev of (dmEvents || []) as any[]) {
+          const ep = String(ev?.endpoint || '');
+          if (ep === 'client:director_request_start') {
+            directorModeKpis.requests += 1;
+            const u = Number(ev?.units);
+            if (Number.isFinite(u)) {
+              showLenTotal += u;
+              showLenCounted += 1;
+            }
+          } else if (ep === 'client:director_request_success') {
+            directorModeKpis.successes += 1;
+            const u = Number(ev?.units);
+            if (Number.isFinite(u)) {
+              segmentsTotal += u;
+              segmentsCounted += 1;
+            }
+          } else if (ep === 'client:director_request_error') directorModeKpis.errors += 1;
+          else if (ep === 'client:director_refine_click') directorModeKpis.refine_clicks += 1;
+          else if (ep === 'client:director_save_blueprint') directorModeKpis.save_successes += 1;
+          else if (ep === 'client:director_create_show') directorModeKpis.create_show += 1;
+          else if (ep === 'client:director_send_to_show_planner') directorModeKpis.send_to_planner += 1;
+        }
+
+        const req = directorModeKpis.requests || 0;
+        const ok = directorModeKpis.successes || 0;
+        directorModeKpis.success_rate = req ? ok / req : null;
+        directorModeKpis.refine_rate = ok ? directorModeKpis.refine_clicks / ok : null;
+        directorModeKpis.save_rate = ok ? directorModeKpis.save_successes / ok : null;
+        directorModeKpis.create_show_conversion_rate = ok ? directorModeKpis.create_show / ok : null;
+        directorModeKpis.avg_segments_per_success = segmentsCounted ? segmentsTotal / segmentsCounted : null;
+        directorModeKpis.avg_show_length_minutes = showLenCounted ? showLenTotal / showLenCounted : null;
+      }
+
+      // 24h health widget (smaller query)
+      const sinceIso24 = isoDaysAgo(1);
+      const { data: dmEvents24, error: dmErr24 } = await admin
+        .from('ai_usage_events')
+        .select('endpoint, created_at, error_code')
+        .eq('tool', 'director_mode')
+        .gte('created_at', sinceIso24)
+        .limit(20000);
+
+      if (!dmErr24) {
+        for (const ev of (dmEvents24 || []) as any[]) {
+          const ep = String(ev?.endpoint || '');
+          if (ep === 'client:director_request_start') directorModeHealth24h.requests += 1;
+          else if (ep === 'client:director_request_success') directorModeHealth24h.successes += 1;
+          else if (ep === 'client:director_request_error') directorModeHealth24h.errors += 1;
+        }
+        directorModeHealth24h.success_rate = directorModeHealth24h.requests
+          ? directorModeHealth24h.successes / directorModeHealth24h.requests
+          : null;
+
+        const { data: lastErr, error: lastErrQ } = await admin
+          .from('ai_usage_events')
+          .select('created_at, error_code, endpoint')
+          .eq('tool', 'director_mode')
+          .eq('endpoint', 'client:director_request_error')
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (!lastErrQ && Array.isArray(lastErr) && lastErr.length) {
+          directorModeHealth24h.last_error = lastErr[0];
+        }
+      }
+    } catch {
+      // Do not fail dashboard
+    }
+
     // --- New users (created in window)
     // Prefer an exact count() for new-user total, but fall back to scan length if count fails
     // (some deployments may restrict count/head behavior or return errors for large tables).
@@ -1833,6 +1949,8 @@ const provider_breakdown = Object.entries(providerReliability)
         top_by_cost: topToolsByCost,
       },
       visual_brainstorm_kpis: visualBrainstormKpis,
+      director_mode_kpis: directorModeKpis,
+      director_mode_health_24h: directorModeHealth24h,
     });
   } catch (e: any) {
     return res.status(500).json({ ok: false, error: e?.message || 'Server error' });

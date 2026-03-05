@@ -19,6 +19,13 @@ export type ClientTelemetryAction =
   | 'visual_refine_click'
   | 'visual_save_click'
   | 'visual_save_success'
+  | 'director_request_start'
+  | 'director_request_success'
+  | 'director_request_error'
+  | 'director_refine_click'
+  | 'director_save_blueprint'
+  | 'director_create_show'
+  | 'director_send_to_show_planner'
 ;
 
 export async function trackClientEvent(input: {

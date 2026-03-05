@@ -5,6 +5,7 @@ import { saveIdea } from '../services/ideasService';
 import { CohesionActions } from './CohesionActions';
 import { createShow, addTasksToShow } from '../services/showsService';
 import { saveDirectorBlueprint } from '../services/directorBlueprintsService';
+import { trackClientEvent } from '../services/telemetryClient';
 import { DIRECTOR_MODE_SYSTEM_INSTRUCTION, MAGIC_DICTIONARY_TERMS } from '../constants';
 import type { DirectorModeBlueprint } from '../types';
 import { StageCurtainsIcon, WandIcon, SaveIcon, CheckIcon, ChecklistIcon } from './icons';
@@ -345,10 +346,24 @@ const dictionaryLinks = useMemo(() => {
         setBlueprintVersions([]);
         setActiveBlueprintId(null);
         setRefineNotice(null);
+
+        // Telemetry: refine clicked (best-effort)
+        trackClientEvent({
+            tool: 'director_mode',
+            action: 'director_refine_click',
+        });
         setCreatedShowId(null);
         setCreateShowNotice(null);
         setIsAddedToPlanner(false);
         setIsSavedToIdeas(false);
+
+        // Telemetry: Director Mode request start (best-effort)
+        trackClientEvent({
+            tool: 'director_mode',
+            action: 'director_request_start',
+            // Use units to store requested show length for KPI averages
+            units: Number.isFinite(Number(showLength)) ? Number(showLength) : undefined,
+        });
 
         const titleLine = showTitle.trim()
             ? `- Show Title: ${showTitle.trim()}`
@@ -399,6 +414,13 @@ try {
           setShowPlan(blueprint);
           setBlueprintVersions([{ id: vId, createdAt: Date.now(), blueprint, diffHint: 'Initial blueprint' }]);
           setActiveBlueprintId(vId);
+
+          // Telemetry: request success (units = segment count for KPI averages)
+          trackClientEvent({
+            tool: 'director_mode',
+            action: 'director_request_success',
+            units: Array.isArray(blueprint?.segments) ? blueprint.segments.length : undefined,
+          });
           // Persist blueprint JSON (non-fatal if table not installed yet)
           await saveDirectorBlueprint(
             {
@@ -419,6 +441,14 @@ try {
           );
         } catch (err) {
           console.error(err);
+
+          // Telemetry: request error
+          trackClientEvent({
+            tool: 'director_mode',
+            action: 'director_request_error',
+            outcome: 'ERROR_UPSTREAM',
+            error_code: err instanceof Error ? err.name : 'UNKNOWN',
+          });
           setError(err instanceof Error ? err.message : "An unknown error occurred while generating the plan. The AI may have returned an invalid structure. Please try again.");
         } finally {
           setIsLoading(false);
@@ -485,6 +515,12 @@ try {
             });
 
             setIsSavedToIdeas(true);
+
+            // Telemetry: saved blueprint
+            trackClientEvent({
+                tool: 'director_mode',
+                action: 'director_save_blueprint',
+            });
             setIdeaNotice('Saved — open Saved Ideas to view this blueprint.');
             window.setTimeout(() => setIdeaNotice(null), 7000);
             onIdeaSaved?.();
@@ -524,6 +560,12 @@ try {
             const showId = (created as any)?.id ?? null;
             setCreatedShowId(showId);
             setCreateShowNotice('Show created in Show Planner.');
+
+            // Telemetry: created show
+            trackClientEvent({
+                tool: 'director_mode',
+                action: 'director_create_show',
+            });
             window.setTimeout(() => setCreateShowNotice(null), 7000);
         } catch (e: any) {
             console.error('Create show failed:', e);
@@ -667,6 +709,12 @@ Hard requirements:
             setIsAddedToPlanner(true);
             setIsAddingToPlanner(false);
             setPlannerNotice('Added to Show Planner — a show and tasks were created from your blueprint.');
+
+            // Telemetry: sent to show planner
+            trackClientEvent({
+                tool: 'director_mode',
+                action: 'director_send_to_show_planner',
+            });
         } catch (err) {
             console.error(err);
             setError(err instanceof Error ? err.message : 'Failed to send to Show Planner.');
@@ -685,6 +733,14 @@ Hard requirements:
         setCreateShowNotice(null);
         setIsAddedToPlanner(false);
         setIsSavedToIdeas(false);
+
+        // Telemetry: Director Mode request start (best-effort)
+        trackClientEvent({
+            tool: 'director_mode',
+            action: 'director_request_start',
+            // Use units to store requested show length for KPI averages
+            units: Number.isFinite(Number(showLength)) ? Number(showLength) : undefined,
+        });
         setError(null);
     };
 
