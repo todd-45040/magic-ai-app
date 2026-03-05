@@ -232,7 +232,7 @@ export const generateStructuredResponse = async (
   systemInstruction: string,
   responseSchema: any,
   currentUser?: User,
-  options?: { extraHeaders?: Record<string, string> }
+  options?: { extraHeaders?: Record<string, string>; maxOutputTokens?: number }
 ): Promise<any> => {
   const body: GeminiGenerateBody = {
     model: 'gemini-3-flash-preview',
@@ -241,6 +241,7 @@ export const generateStructuredResponse = async (
       systemInstruction,
       responseMimeType: "application/json",
       responseSchema,
+      ...(typeof options?.maxOutputTokens === 'number' ? { maxOutputTokens: options.maxOutputTokens } : {}),
     },
   };
 

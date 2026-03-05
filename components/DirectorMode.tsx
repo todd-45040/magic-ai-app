@@ -98,6 +98,9 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
     // Form State
     const [showTitle, setShowTitle] = useState('');
     const [showLength, setShowLength] = useState('');
+
+    // Speed / Reliability
+    const [speedMode, setSpeedMode] = useState<'fast' | 'full'>('fast');
     // Audience: quick-select chips + optional custom text
     const [audienceType, setAudienceType] = useState(''); // custom audience text
     const [audienceChips, setAudienceChips] = useState<string[]>([]);
@@ -546,6 +549,7 @@ const dictionaryLinks = useMemo(() => {
         trackClientEvent({
             tool: 'director_mode',
             action: 'director_refine_click',
+            metadata: { speed_mode: speedMode },
         });
         setCreatedShowId(null);
         setCreateShowNotice(null);
@@ -556,6 +560,7 @@ const dictionaryLinks = useMemo(() => {
         trackClientEvent({
             tool: 'director_mode',
             action: 'director_request_start',
+            metadata: { speed_mode: speedMode },
             // Use units to store requested show length for KPI averages
             units: Number.isFinite(Number(showLength)) ? Number(showLength) : undefined,
         });
@@ -568,6 +573,10 @@ const dictionaryLinks = useMemo(() => {
             .split(/\n|,/g)
             .map((s) => s.trim())
             .filter(Boolean);
+
+        const speedConstraints = speedMode === 'fast'
+          ? `\nSpeed mode: FAST (demo-optimized)\n- Return EXACTLY 3 segments total: opener, middle, closer (one each).\n- transition_notes: MAX 1 sentence per segment.\n- props_required: MAX 3 items per segment.\n- Keep titles short (<= 6 words).\n- Keep text tight and punchy.`
+          : `\nSpeed mode: FULL (richer)\n- Return 3–6 segments total depending on the show length.\n- Must include exactly 1 opener and 1 closer, and 1–4 middle segments.\n- transition_notes: keep concise but can be 1–3 sentences when helpful.\n- props_required: keep practical (up to ~6 items when needed).`;
 
         const prompt = `
 Please generate a show blueprint in STRICT JSON matching the provided schema.
@@ -597,12 +606,15 @@ Hard requirements:
 - Use audience_interaction_level: low/medium/high.
 - props_required should be a list of props needed for that segment (can be empty).
 - transition_notes should be short, actionable cues between segments.
+${speedConstraints}
 `;
 try {
           const resultJson = await generateStructuredResponse(
             prompt,
             DIRECTOR_MODE_SYSTEM_INSTRUCTION,
-            directorResponseSchema
+            directorResponseSchema,
+            undefined,
+            { maxOutputTokens: speedMode === 'fast' ? 1800 : 6500 }
           );
           const blueprint = resultJson as DirectorModeBlueprint;
           const vId = makeId();
@@ -616,6 +628,7 @@ try {
           trackClientEvent({
             tool: 'director_mode',
             action: 'director_request_success',
+            metadata: { speed_mode: speedMode },
             units: Array.isArray(blueprint?.segments) ? blueprint.segments.length : undefined,
           });
           // Persist blueprint JSON (non-fatal if table not installed yet)
@@ -643,6 +656,7 @@ try {
           trackClientEvent({
             tool: 'director_mode',
             action: 'director_request_error',
+            metadata: { speed_mode: speedMode },
             outcome: 'ERROR_UPSTREAM',
             error_code: err instanceof Error ? err.name : 'UNKNOWN',
           });
@@ -813,6 +827,10 @@ try {
             },
         };
 
+        const speedConstraints = speedMode === 'fast'
+          ? `\nSpeed mode: FAST (demo-optimized)\n- Return EXACTLY 3 segments total: opener, middle, closer (one each).\n- transition_notes: MAX 1 sentence per segment.\n- props_required: MAX 3 items per segment.\n- Keep titles short (<= 6 words).\n- Keep text tight and punchy.`
+          : `\nSpeed mode: FULL (richer)\n- Return 3–6 segments total depending on the show length.\n- Must include exactly 1 opener and 1 closer, and 1–4 middle segments.\n- transition_notes: keep concise but can be 1–3 sentences when helpful.\n- props_required: keep practical (up to ~6 items when needed).`;
+
         const refinePrompt = `
 You are refining an EXISTING show blueprint.
 
@@ -829,13 +847,16 @@ Hard requirements:
 - Sum of duration_estimate_minutes across segments MUST equal show_length_minutes exactly.
 - Must include exactly 1 opener and 1 closer, and at least 1 middle.
 - Keep it practical and non-exposure.
+${speedConstraints}
 `;
 
         try {
             const resultJson = await generateStructuredResponse(
                 refinePrompt,
                 DIRECTOR_MODE_SYSTEM_INSTRUCTION,
-                directorResponseSchema
+                directorResponseSchema,
+                undefined,
+                { maxOutputTokens: speedMode === 'fast' ? 1800 : 6500 }
             );
             const next = resultJson as DirectorModeBlueprint;
             const vId = makeId();
@@ -857,6 +878,14 @@ Hard requirements:
 
             // Persist refined blueprint (non-fatal)
             await saveDirectorBlueprint({ ...originalInputs, refinement: instruction, previous_blueprint_id: activeBlueprintId }, next);
+
+            // Telemetry: refine (best-effort)
+            trackClientEvent({
+                tool: 'director_mode',
+                action: 'director_refine_click',
+                metadata: { speed_mode: speedMode },
+                units: Array.isArray(next?.segments) ? next.segments.length : undefined,
+            });
         } catch (e: any) {
             console.error('Refine failed:', e);
             setError(e?.message ?? 'Unable to refine blueprint.');
@@ -1539,6 +1568,28 @@ Hard requirements:
                         </div>
 
                         <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+                            <div className="flex items-center justify-between gap-3 mb-3">
+                                <div>
+                                    <div className="text-xs font-semibold text-slate-200">Speed</div>
+                                    <div className="text-[11px] text-slate-400">Fast is optimized for demos; Full is richer.</div>
+                                </div>
+                                <div className="inline-flex rounded-md border border-slate-600 bg-slate-900/60 overflow-hidden">
+                                    <button
+                                        type="button"
+                                        onClick={() => setSpeedMode('fast')}
+                                        className={`px-3 py-1.5 text-xs font-semibold transition-colors ${speedMode === 'fast' ? 'bg-purple-600 text-white' : 'text-slate-200 hover:bg-slate-800'}`}
+                                    >
+                                        Fast
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSpeedMode('full')}
+                                        className={`px-3 py-1.5 text-xs font-semibold transition-colors ${speedMode === 'full' ? 'bg-purple-600 text-white' : 'text-slate-200 hover:bg-slate-800'}`}
+                                    >
+                                        Full
+                                    </button>
+                                </div>
+                            </div>
                             <button
                                 onClick={handleGenerate}
                                 disabled={!isFormValid}
@@ -1547,7 +1598,7 @@ Hard requirements:
                                 <WandIcon className="w-5 h-5" />
                                 <span>🎭 Direct My Show Blueprint</span>
                             </button>
-                            <p className="text-center text-xs text-slate-400 mt-2">Typically takes 10–15 seconds.</p>
+                            <p className="text-center text-xs text-slate-400 mt-2">Fast is usually quicker and more reliable for booth demos.</p>
 
                             {error && <p className="text-red-400 mt-2 text-sm text-center">{error}</p>}
                         </div>
