@@ -563,7 +563,7 @@ const PromptGrid: React.FC<{
         Choose a tool to start, or ask me anything. Recommended tools are highlighted.
       </p>
 
-      <div className="w-full max-w-5xl space-y-10">
+      <div id="maw-tool-grid" className="w-full max-w-5xl space-y-10">
         {SECTION_DEFS.map((section) => {
           const sectionPrompts = section.titles
             .map((t) => promptMap.get(t))
@@ -1586,6 +1586,9 @@ useEffect(() => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const mainScrollRef = useRef<HTMLDivElement>(null);
+  const [navElevated, setNavElevated] = useState(false);
+
   const [viewingPerformanceId, setViewingPerformanceId] = useState<string | null>(null);
 
   const [initialShowId, setInitialShowId] = useState<string | null>(null);
@@ -3102,7 +3105,22 @@ ${action.payload.content}`;
     }
   };
 
-  const renderIntentSubnav = () => {
+  
+  const handleMainScroll = () => {
+    const el = mainScrollRef.current;
+    if (!el) return;
+    setNavElevated(el.scrollTop > 4);
+  };
+
+  const jumpToAllTools = () => {
+    handlePrimaryIntentClick('home');
+    window.setTimeout(() => {
+      const target = document.getElementById('maw-tool-grid');
+      target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+  };
+
+const renderIntentSubnav = () => {
     if (activeIntent === 'home' || activeIntent === 'admin') return null;
 
     const subBtn = (label: string, onClick: () => void, isActive?: boolean, locked?: boolean) => (
@@ -3296,7 +3314,7 @@ ${action.payload.content}`;
       )}
 
 
-      <nav className="flex items-center gap-1 border-b border-slate-800 px-2 md:px-4 flex-wrap [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+      <nav className={`sticky top-0 z-40 flex items-center gap-1 border-b border-slate-800/80 bg-slate-950/75 backdrop-blur px-2 md:px-4 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden ${navElevated ? 'shadow-lg shadow-black/20' : ''}`}>
         {/* Phase 2 (Navigation Tightening): Intent-based primary navigation */}
         <TabButton
           label="Home"
@@ -3332,6 +3350,17 @@ ${action.payload.content}`;
           />
         ) : null}
 
+        <div className="flex-1" />
+
+        {/* Premium polish: always-visible jump to the full tool grid */}
+        <button
+          onClick={jumpToAllTools}
+          className="whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium border border-slate-700/80 bg-slate-900/40 text-slate-300 hover:bg-slate-800/50 hover:text-white transition-colors"
+          title="Jump to the full tool list"
+        >
+          All Tools
+        </button>
+
         {/* Rightmost utility: keep feedback visible without cluttering primary tools */}
         <TabButton
           label="Feedback"
@@ -3343,7 +3372,7 @@ ${action.payload.content}`;
 
       {renderIntentSubnav()}
 
-      <main className="flex-1 flex flex-col overflow-y-auto">
+      <main ref={mainScrollRef} onScroll={handleMainScroll} className="flex-1 flex flex-col overflow-y-auto">
         <div className="flex-1 flex flex-col animate-fade-in">
           {/* Demo Mode v2 (Phase 3): Guided Showcase tour bar */}
           <DemoTourBar activeView={activeView} onNavigate={demoGuardSetActiveView} />
