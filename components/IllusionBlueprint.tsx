@@ -167,6 +167,24 @@ SAFETY:
 
 Return JSON matching the provided schema exactly.`;
 
+// 15-line realism upgrade: prevents "impossible" outputs and forces practical tradeoffs.
+const REALISM_GUARDRAILS = `REALISM GUARDRAILS (must follow):
+- Treat this as real theatre engineering. No supernatural claims.
+- Do NOT propose impossible physics (true teleportation, matter creation, antigravity, instant disintegration).
+- If an effect sounds "impossible", translate it into plausible stage illusion principles at a HIGH level.
+- Keep method talk non-exposure: describe principles, constraints, and tradeoffs — not secret step-by-step.
+- Always include sightline/angle notes (front, sides, balcony) and what seating to avoid.
+- Include setup/reset realities: crew count, time to reset, noise considerations, and transport weight.
+- Prefer common build materials and standard stage hardware.
+- Call out risk areas: pinch points, tipping, trip hazards, heat/smoke, and emergency stop.
+- If a request is unsafe or unrealistic for the venue/budget, suggest a safer, achievable alternative.
+- Provide practical "failure modes" (what can go wrong) and mitigations.
+- Keep outputs concise and buildable; avoid sci‑fi.
+- Use conservative dimensions; modular breakdown whenever possible.
+- Never instruct on weapons/explosives or dangerous construction.
+- Assume the user is a magician; still avoid exposure-level details.
+- End with a brief feasibility verdict: Easy/Medium/Hard + why.`;
+
 const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved }) => {
   const [prompt, setPrompt] = useState('');
   const [effectType, setEffectType] = useState<EffectType>('Appearance');
@@ -425,14 +443,19 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
 
     setLastArtPrompt(artPrompt);
 
-    const stagingPrompt = `Generate a STAGING blueprint for this illusion request.\n\n${context}\n\nProvide performance-facing principles and a clear staging description.`;
+    const stagingPrompt = `Generate a STAGING blueprint for this illusion request.\n\n${context}\n\n${REALISM_GUARDRAILS}\n\nProvide performance-facing principles and a clear staging description.`;
 
-    const buildPrompt = `Create a BUILD BLUEPRINT PACK for this illusion request.\n\n${context}\n\nProvide realistic dimensions and a cut list. Include 3 mechanism options (manual, assisted, motorized) with mechanism ids and tag parts/steps that differ by option.`;
+    const buildPrompt = `Create a BUILD BLUEPRINT PACK for this illusion request.\n\n${context}\n\n${REALISM_GUARDRAILS}\n\nProvide realistic dimensions and a cut list. Include 3 mechanism options (manual, assisted, motorized) with mechanism ids and tag parts/steps that differ by option.`;
 
     try {
       const artPromise = generateImage(artPrompt, '16:9', user);
       const stagingPromise = generateStructuredResponse(stagingPrompt, 'You are an expert stage illusion designer.', stagingSchema, user);
-      const buildPromise = generateStructuredResponse(buildPrompt, BUILD_BLUEPRINT_SYSTEM_INSTRUCTION, buildPackSchema, user);
+      const buildPromise = generateStructuredResponse(
+        buildPrompt,
+        `${BUILD_BLUEPRINT_SYSTEM_INSTRUCTION}\n\n${REALISM_GUARDRAILS}`,
+        buildPackSchema,
+        user
+      );
 
       const [artResult, stagingResult, buildResult] = await Promise.all([artPromise, stagingPromise, buildPromise]);
 
@@ -660,7 +683,7 @@ const handleRegenerateConceptArt = async () => {
   };
 
   return (
-    <div ref={containerRef} className="flex-1 flex flex-col overflow-y-auto p-4 md:p-6 animate-fade-in">
+    <div className="flex-1 flex flex-col overflow-hidden p-4 md:p-6 animate-fade-in">
       <header className="mb-6">
         <div className="flex items-center gap-3">
           <BlueprintIcon className="w-8 h-8 text-purple-400" />
@@ -669,146 +692,173 @@ const handleRegenerateConceptArt = async () => {
         <p className="text-slate-400 mt-1">From a simple concept to stage-ready plans. Generate concept art, staging, and build-ready construction plans.</p>
       </header>
 
-      {!stagingBlueprint || !buildPack ? (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="w-full max-w-xl">
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-              <div className="text-xs text-slate-400">Demo presets:</div>
-              {DEMO_PRESETS.map((p) => (
-                <button
-                  key={p.label}
-                  type="button"
-                  onClick={() => {
-                    setPrompt(p.concept);
-                    setEffectType(p.effectType);
-                    setVenueSize(p.venue);
-                    setPerformerStyle(p.style);
-                    setConstraints(p.constraints || '');
-                    setError(null);
-                  }}
-                  className="px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border bg-slate-900/40 border-slate-700 text-slate-200 hover:border-slate-500"
-                >
-                  {p.label}
-                </button>
-              ))}
-
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 overflow-hidden">
+        {/* LEFT COLUMN — Inputs */}
+        <div className="rounded-2xl border border-slate-800 bg-slate-950/20 p-4 md:p-5 overflow-y-auto">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <div className="text-xs text-slate-400">Demo presets:</div>
+            {DEMO_PRESETS.map((p) => (
               <button
+                key={p.label}
                 type="button"
-                onClick={handleStartOver}
-                className="ml-auto px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border bg-slate-900/40 border-slate-700 text-slate-200 hover:border-slate-500"
+                onClick={() => {
+                  setPrompt(p.concept);
+                  setEffectType(p.effectType);
+                  setVenueSize(p.venue);
+                  setPerformerStyle(p.style);
+                  setConstraints(p.constraints || '');
+                  setError(null);
+                }}
+                className="px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border bg-slate-900/40 border-slate-700 text-slate-200 hover:border-slate-500"
               >
-                Reset
+                {p.label}
               </button>
-            </div>
+            ))}
 
-            {/* Micro-help (parity with other tools) */}
-            <div className="mb-4 rounded-lg border border-slate-800 bg-slate-900/30 p-3">
-              <div className="text-sm font-semibold text-slate-200">Why use this?</div>
-              <ul className="mt-1 text-xs text-slate-400 list-disc pl-5 space-y-1">
-                <li>Turns an illusion idea into a structured, stage-ready blueprint.</li>
-                <li>Adds staging + safety + reset thinking so concepts stay realistic.</li>
-                <li>Provides build-ready details (modules, materials, cut list) you can hand to a fabricator.</li>
-              </ul>
-            </div>
-
-            {/* Inputs */}
-            <div className="space-y-3">
-              <div>
-                <div className="text-xs font-semibold text-slate-300 mb-1">Effect Type</div>
-                <div className="flex flex-wrap gap-2">
-                  {EFFECT_TYPES.map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => setEffectType(t)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
-                        effectType === t
-                          ? 'bg-purple-600/30 border-purple-500 text-purple-200'
-                          : 'bg-slate-900/40 border-slate-700 text-slate-200 hover:border-slate-500'
-                      }`}
-                    >
-                      {t}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-semibold text-slate-300 mb-1 block">Venue Size</label>
-                  <select
-                    value={venueSize}
-                    onChange={(e) => setVenueSize(e.target.value as VenueSize)}
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500 transition-colors"
-                  >
-                    {VENUE_SIZES.map((v) => (
-                      <option key={v} value={v}>
-                        {v}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-slate-300 mb-1 block">Performer Style</label>
-                  <select
-                    value={performerStyle}
-                    onChange={(e) => setPerformerStyle(e.target.value as PerformerStyle)}
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500 transition-colors"
-                  >
-                    {PERFORMER_STYLES.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-slate-300 mb-1 block">Constraints (optional)</label>
-                <textarea
-                  rows={3}
-                  value={constraints}
-                  onChange={(e) => {
-                    setConstraints(e.target.value);
-                    setError(null);
-                  }}
-                  placeholder="Props available, stage limitations, budget range, crew size, reset requirements…"
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-slate-300 mb-1 block">Core Concept</label>
-                <textarea
-                  rows={4}
-                  value={prompt}
-                  onChange={(e) => {
-                    setPrompt(e.target.value);
-                    setError(null);
-                  }}
-                  placeholder="e.g., I want to make a motorcycle appear from a cloud of smoke on an empty stage."
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
-                />
-              </div>
-            </div>
             <button
-              onClick={handleGenerate}
-              disabled={isLoading || !prompt.trim()}
-              className="w-full py-3 mt-4 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
+              type="button"
+              onClick={handleStartOver}
+              className="ml-auto px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border bg-slate-900/40 border-slate-700 text-slate-200 hover:border-slate-500"
             >
-              <WandIcon className="w-5 h-5" />
-              <span>{isLoading ? 'Generating…' : 'Generate Blueprint'}</span>
+              Reset
             </button>
-            {error && <p className="text-red-400 mt-2 text-sm text-center">{error}</p>}
-            {isLoading && <LoadingIndicator />}
           </div>
+
+          {/* Micro-help (parity with other tools) */}
+          <div className="mb-4 rounded-xl border border-slate-800 bg-slate-900/30 p-3">
+            <div className="text-sm font-semibold text-slate-200">Why use this?</div>
+            <ul className="mt-1 text-xs text-slate-400 list-disc pl-5 space-y-1">
+              <li>Turns an illusion idea into a structured, stage-ready blueprint.</li>
+              <li>Adds staging + safety + reset thinking so concepts stay realistic.</li>
+              <li>Provides build-ready details (modules, materials, cut list) you can hand to a fabricator.</li>
+            </ul>
+          </div>
+
+          {/* Inputs */}
+          <div className="space-y-3">
+            <div>
+              <div className="text-xs font-semibold text-slate-300 mb-1">Effect Type</div>
+              <div className="flex flex-wrap gap-2">
+                {EFFECT_TYPES.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setEffectType(t)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
+                      effectType === t
+                        ? 'bg-purple-600/30 border-purple-500 text-purple-200'
+                        : 'bg-slate-900/40 border-slate-700 text-slate-200 hover:border-slate-500'
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-slate-300 mb-1 block">Venue Size</label>
+                <select
+                  value={venueSize}
+                  onChange={(e) => setVenueSize(e.target.value as VenueSize)}
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500 transition-colors"
+                >
+                  {VENUE_SIZES.map((v) => (
+                    <option key={v} value={v}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-300 mb-1 block">Performer Style</label>
+                <select
+                  value={performerStyle}
+                  onChange={(e) => setPerformerStyle(e.target.value as PerformerStyle)}
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500 transition-colors"
+                >
+                  {PERFORMER_STYLES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-300 mb-1 block">Constraints (optional)</label>
+              <textarea
+                rows={3}
+                value={constraints}
+                onChange={(e) => {
+                  setConstraints(e.target.value);
+                  setError(null);
+                }}
+                placeholder="Props available, stage limitations, budget range, crew size, reset requirements…"
+                className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-300 mb-1 block">Core Concept</label>
+              <textarea
+                rows={4}
+                value={prompt}
+                onChange={(e) => {
+                  setPrompt(e.target.value);
+                  setError(null);
+                }}
+                placeholder="e.g., I want to make a motorcycle appear from a cloud of smoke on an empty stage."
+                className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
+              />
+            </div>
+          </div>
+
+          <button
+            onClick={handleGenerate}
+            disabled={isLoading || !prompt.trim()}
+            className="w-full py-3 mt-4 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
+          >
+            <WandIcon className="w-5 h-5" />
+            <span>{isLoading ? 'Generating…' : 'Generate Blueprint'}</span>
+          </button>
+          {error && <p className="text-red-400 mt-2 text-sm">{error}</p>}
         </div>
-      ) : (
-        <div className="space-y-6">
+
+        {/* RIGHT COLUMN — Output */}
+        <div className="rounded-2xl border border-slate-800 bg-slate-950/20 overflow-hidden flex flex-col">
+          <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
+            <div>
+              <div className="text-sm font-semibold text-slate-200">Blueprint Output</div>
+              <div className="text-xs text-slate-500">Concept art, staging, build pack, and safety notes.</div>
+            </div>
+            <div className="text-[11px] text-slate-500">Version: {APP_VERSION}</div>
+          </div>
+
+          <div ref={containerRef} className="flex-1 overflow-y-auto p-4 md:p-5">
+            {!stagingBlueprint || !buildPack ? (
+              <div className="h-full flex items-center justify-center">
+                {isLoading ? (
+                  <LoadingIndicator />
+                ) : (
+                  <div className="max-w-md text-center">
+                    <div className="text-slate-200 font-semibold">Your blueprint will appear here.</div>
+                    <div className="text-sm text-slate-400 mt-2">
+                      Choose an effect type, venue, and style — then generate a structured blueprint that stays realistic.
+                    </div>
+                    <div className="mt-3 text-xs text-slate-500">
+                      Tip: Demo presets are great for booth flow.
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-6">
           {/* Sticky Mini-Nav */}
-          <div className="sticky top-0 z-20 -mx-4 md:-mx-6 px-4 md:px-6 py-3 bg-slate-950/80 backdrop-blur border-b border-slate-800">
+          <div className="sticky top-0 z-20 -mx-4 md:-mx-5 px-4 md:px-5 py-3 bg-slate-950/80 backdrop-blur border-b border-slate-800">
             <div className="flex flex-wrap items-center gap-2">
               {SECTION_IDS.map((s) => (
                 <button
@@ -1250,9 +1300,11 @@ const handleRegenerateConceptArt = async () => {
             </div>
           </div>
 
-          <div className="text-center text-xs text-slate-500 pt-2">Version: {APP_VERSION}</div>
+              </div>
+            )}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 };
