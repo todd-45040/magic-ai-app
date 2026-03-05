@@ -300,10 +300,15 @@ export const generateStructuredResponse = async (
   systemInstruction: string,
   responseSchema: any,
   currentUser?: User,
-  options?: { extraHeaders?: Record<string, string>; maxOutputTokens?: number }
+  options?: { extraHeaders?: Record<string, string>; maxOutputTokens?: number; speedMode?: 'fast' | 'full' }
 ): Promise<any> => {
+  const model =
+    options?.speedMode === 'fast'
+      ? 'gemini-2.0-flash'
+      : 'gemini-3-pro-preview';
+
   const body: GeminiGenerateBody = {
-    model: 'gemini-3-flash-preview',
+    model,
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
     config: {
       systemInstruction,
@@ -353,9 +358,11 @@ export const generateStructuredResponse = async (
       `${clampForPrompt(text || '', 8000)}\n\n` +
       `Now output the corrected JSON only.`;
 
+    const retryModel = options?.speedMode === 'fast' ? 'gemini-2.0-flash' : 'gemini-3-pro-preview';
+
     const retryBody: GeminiGenerateBody = {
       // More reliable structured output in edge cases (truncation / schema pressure)
-      model: 'gemini-3-pro-preview',
+      model: retryModel,
       contents: [{ role: 'user', parts: [{ text: retryPrompt }] }],
       config: {
         systemInstruction,
@@ -391,7 +398,7 @@ export const generateStructuredResponse = async (
         `Now output the corrected SHORTER JSON only.`;
 
       const fallbackBody: GeminiGenerateBody = {
-        model: 'gemini-3-pro-preview',
+        model: retryModel,
         contents: [{ role: 'user', parts: [{ text: fallbackPrompt }] }],
         config: {
           systemInstruction,

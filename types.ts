@@ -267,6 +267,20 @@ export interface DirectorModeSegment {
   music_lighting?: string; // optional
 }
 
+// Phase C: FAST mode minimal schema (intentionally omits rich fields)
+export type DirectorModeSegmentFast = {
+  title: string;
+  duration_estimate_minutes: number;
+  props_required: string[];
+  transition_notes: string;
+};
+
+export type DirectorModeBlueprintFast = {
+  show_title: string;
+  show_length_minutes: number;
+  segments: DirectorModeSegmentFast[];
+};
+
 export interface DirectorModeBlueprint {
   show_title: string;
   show_length_minutes: number;
