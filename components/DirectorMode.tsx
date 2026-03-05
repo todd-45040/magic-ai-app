@@ -790,7 +790,7 @@ try {
             DIRECTOR_MODE_SYSTEM_INSTRUCTION,
             speedMode === 'fast' ? directorResponseSchemaFast : directorResponseSchemaFull,
             undefined,
-            { maxOutputTokens: speedMode === 'fast' ? 900 : 8192, speedMode }
+            { maxOutputTokens: speedMode === 'fast' ? 900 : 4096, speedMode }
           );
           const endedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
           const elapsedMs = Math.max(0, Math.round((endedAt as number) - (startedAt as number)));
@@ -1143,7 +1143,7 @@ ${speedConstraints}
                 DIRECTOR_MODE_SYSTEM_INSTRUCTION,
                 speedMode === 'fast' ? directorResponseSchemaFast : directorResponseSchemaFull,
                 undefined,
-                { maxOutputTokens: speedMode === 'fast' ? 900 : 8192, speedMode }
+                { maxOutputTokens: speedMode === 'fast' ? 900 : 4096, speedMode }
             );
             const next = resultJson as DirectorModeBlueprint;
             const vId = makeId();
