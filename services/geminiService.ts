@@ -259,7 +259,7 @@ export const generateResponse = async (
   };
 
   try {
-    const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 2 });
+    const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: speedMode === 'fast' ? 1 : 2 });
     return extractText(result);
   } catch (error: any) {
     console.error('AI Error:', error);
@@ -287,7 +287,7 @@ export const generateResponseWithParts = async (
   };
 
   try {
-    const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 2 });
+    const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: speedMode === 'fast' ? 1 : 2 });
     return extractText(result);
   } catch (error: any) {
     console.error('AI Error:', error);
@@ -300,7 +300,7 @@ export const generateStructuredResponse = async (
   systemInstruction: string,
   responseSchema: any,
   currentUser?: User,
-  options?: { extraHeaders?: Record<string, string>; maxOutputTokens?: number }
+  options?: { extraHeaders?: Record<string, string>; maxOutputTokens?: number; speedMode?: 'fast' | 'full' }
 ): Promise<any> => {
   const body: GeminiGenerateBody = {
     model: 'gemini-3-flash-preview',
@@ -313,7 +313,7 @@ export const generateStructuredResponse = async (
     },
   };
 
-  const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 2 });
+  const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: speedMode === 'fast' ? 1 : 2 });
   const text = extractText(result);
 
   const looksTruncated = (raw: string, errMsg: string) => {
@@ -355,16 +355,18 @@ export const generateStructuredResponse = async (
 
     const retryBody: GeminiGenerateBody = {
       // More reliable structured output in edge cases (truncation / schema pressure)
-      model: 'gemini-3-pro-preview',
+      model,
       contents: [{ role: 'user', parts: [{ text: retryPrompt }] }],
       config: {
         systemInstruction,
         responseMimeType: "application/json",
         responseSchema,
         // Completion-safe retry budget (even if Fast)
-        ...(typeof options?.maxOutputTokens === 'number'
-          ? { maxOutputTokens: Math.max(options.maxOutputTokens, 8192) }
-          : { maxOutputTokens: 8192 }),
+        ...(speedMode === 'fast'
+          ? { maxOutputTokens: Math.max(Number(options?.maxOutputTokens ?? 900), 1200) }
+          : (typeof options?.maxOutputTokens === 'number'
+              ? { maxOutputTokens: Math.max(options.maxOutputTokens, 8192) }
+              : { maxOutputTokens: 8192 })),
       },
     };
 
@@ -374,6 +376,10 @@ export const generateStructuredResponse = async (
     try {
       return safeJsonParse(retryText || '{}');
     } catch (err2: any) {
+      // Fast mode should stay fast: do not escalate into longer Pro retries.
+      if (speedMode === 'fast') {
+        throw err2;
+      }
       // Final fallback: force a SHORTER JSON re-emit. This is specifically for truncation
       // where even the first re-emit attempt was cut off.
       const msg2 = String(err2?.message || err2 || 'Invalid JSON');
@@ -391,7 +397,7 @@ export const generateStructuredResponse = async (
         `Now output the corrected SHORTER JSON only.`;
 
       const fallbackBody: GeminiGenerateBody = {
-        model: 'gemini-3-pro-preview',
+        model,
         contents: [{ role: 'user', parts: [{ text: fallbackPrompt }] }],
         config: {
           systemInstruction,

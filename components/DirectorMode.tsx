@@ -504,6 +504,67 @@ const dictionaryLinks = useMemo(() => {
     );
 
     const makeId = () => `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    const normalizeBlueprint = (raw: any): DirectorModeBlueprint => {
+        const showLenNum = Number(showLength);
+        const show_length_minutes = Number.isFinite(Number(raw?.show_length_minutes))
+            ? Number(raw.show_length_minutes)
+            : (Number.isFinite(showLenNum) ? showLenNum : 30);
+
+        const baseConstraints = {
+            props_owned: propsOwned
+                .split(/\n|,/g)
+                .map((s) => s.trim())
+                .filter(Boolean),
+            reset_time: resetTime,
+            skill_level: skillLevel,
+            notes: constraintNotes.trim(),
+        };
+
+        const segsRaw = Array.isArray(raw?.segments) ? raw.segments : [];
+        const segs = segsRaw.map((s: any, idx: number) => {
+            const purpose = String(s?.purpose || '').trim();
+            const inferredPurpose =
+                purpose === 'opener' || purpose === 'middle' || purpose === 'closer'
+                    ? purpose
+                    : (idx === 0 ? 'opener' : (idx === segsRaw.length - 1 ? 'closer' : 'middle'));
+
+            return {
+                title: String(s?.title || '').trim() || (inferredPurpose === 'opener' ? 'Opener' : inferredPurpose === 'closer' ? 'Closer' : 'Middle'),
+                purpose: inferredPurpose as any,
+                duration_estimate_minutes: Number.isFinite(Number(s?.duration_estimate_minutes)) ? Number(s.duration_estimate_minutes) : 5,
+                audience_interaction_level: (s?.audience_interaction_level === 'low' || s?.audience_interaction_level === 'medium' || s?.audience_interaction_level === 'high')
+                    ? s.audience_interaction_level
+                    : 'medium',
+                props_required: Array.isArray(s?.props_required) ? s.props_required.map((x: any) => String(x || '').trim()).filter(Boolean) : [],
+                transition_notes: String(s?.transition_notes || '').trim() || '—',
+                // FULL-only fields may exist; keep if present
+                ...(Array.isArray(s?.beats) ? { beats: s.beats } : {}),
+                ...(s?.patter_hook ? { patter_hook: s.patter_hook } : {}),
+                ...(s?.blocking_notes ? { blocking_notes: s.blocking_notes } : {}),
+                ...(s?.volunteer_management ? { volunteer_management: s.volunteer_management } : {}),
+                ...(s?.music_lighting ? { music_lighting: s.music_lighting } : {}),
+            } as any;
+        });
+
+        // If FAST returned exactly 3 segments, ensure opener/middle/closer labels
+        if (segs.length === 3) {
+            segs[0].purpose = 'opener';
+            segs[1].purpose = 'middle';
+            segs[2].purpose = 'closer';
+        }
+
+        return {
+            show_title: String(raw?.show_title || showTitle || 'Untitled Show').trim(),
+            show_length_minutes,
+            audience_type: String(raw?.audience_type || computedAudience || '').trim(),
+            venue_type: String(raw?.venue_type || venueType || '').trim(),
+            tone: String(raw?.tone || tone || theme || '').trim(),
+            performer_persona: String(raw?.performer_persona || performerPersona || '').trim(),
+            constraints: raw?.constraints ? raw.constraints : baseConstraints,
+            segments: segs,
+        } as DirectorModeBlueprint;
+    };
+
 
     const copyToClipboard = async (text: string) => {
         try {
@@ -601,91 +662,105 @@ const dictionaryLinks = useMemo(() => {
             .join(' ');
     };
 
-    // Phase B: Structured output schema.
-    // FAST schema is minimal for speed.
-    // FULL schema adds richer fields per segment (beats, patter, blocking, etc.).
-    const baseSegmentSchema = {
-        type: Type.OBJECT,
-        properties: {
-            title: { type: Type.STRING },
-            purpose: { type: Type.STRING, enum: ['opener', 'middle', 'closer'] },
-            duration_estimate_minutes: { type: Type.NUMBER },
-            audience_interaction_level: { type: Type.STRING, enum: ['low', 'medium', 'high'] },
-            props_required: { type: Type.ARRAY, items: { type: Type.STRING } },
-            transition_notes: { type: Type.STRING },
-        },
-        required: ['title', 'purpose', 'duration_estimate_minutes', 'audience_interaction_level', 'props_required', 'transition_notes'],
-    };
+    // Phase B/C: Structured output schema.
+// FAST schema is intentionally minimal for speed and to create a clear content difference.
+// FULL schema adds richer fields per segment (beats, patter, blocking, etc.).
 
-    const richSegmentSchema = {
-        ...baseSegmentSchema,
-        properties: {
-            ...(baseSegmentSchema as any).properties,
-            beats: { type: Type.ARRAY, items: { type: Type.STRING } },
-            patter_hook: { type: Type.STRING },
-            blocking_notes: { type: Type.STRING },
-            volunteer_management: { type: Type.STRING },
-            music_lighting: { type: Type.STRING },
-        },
-        // FULL requires the rich fields (volunteer/music can be empty strings if not applicable)
-        required: [
-            'title',
-            'purpose',
-            'duration_estimate_minutes',
-            'audience_interaction_level',
-            'props_required',
-            'transition_notes',
-            'beats',
-            'patter_hook',
-            'blocking_notes',
-            'volunteer_management',
-            'music_lighting',
-        ],
-    };
-
-    const baseBlueprintSchema = {
-        type: Type.OBJECT,
-        properties: {
-            show_title: { type: Type.STRING },
-            show_length_minutes: { type: Type.NUMBER },
-            audience_type: { type: Type.STRING },
-            venue_type: { type: Type.STRING },
-            tone: { type: Type.STRING },
-            performer_persona: { type: Type.STRING },
-            constraints: {
+const directorResponseSchemaFast = {
+    type: Type.OBJECT,
+    properties: {
+        show_title: { type: Type.STRING },
+        show_length_minutes: { type: Type.NUMBER },
+        segments: {
+            type: Type.ARRAY,
+            minItems: 3,
+            maxItems: 3,
+            items: {
                 type: Type.OBJECT,
                 properties: {
-                    props_owned: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    reset_time: { type: Type.STRING },
-                    skill_level: { type: Type.STRING },
-                    notes: { type: Type.STRING },
+                    title: { type: Type.STRING },
+                    duration_estimate_minutes: { type: Type.NUMBER },
+                    props_required: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    transition_notes: { type: Type.STRING },
                 },
-                required: ['props_owned', 'reset_time', 'skill_level', 'notes'],
-            },
-            segments: {
-                type: Type.ARRAY,
-                items: {
-                    ...(baseSegmentSchema as any),
-                },
+                required: ['title', 'duration_estimate_minutes', 'props_required', 'transition_notes'],
             },
         },
-        required: ['show_title', 'show_length_minutes', 'audience_type', 'venue_type', 'tone', 'performer_persona', 'constraints', 'segments'],
-    };
+    },
+    required: ['show_title', 'show_length_minutes', 'segments'],
+};
 
-    const directorResponseSchemaFast = baseBlueprintSchema;
-    const directorResponseSchemaFull = {
-        ...(baseBlueprintSchema as any),
-        properties: {
-            ...(baseBlueprintSchema as any).properties,
-            segments: {
-                type: Type.ARRAY,
-                items: {
-                    ...(richSegmentSchema as any),
-                },
+const baseSegmentSchema = {
+    type: Type.OBJECT,
+    properties: {
+        title: { type: Type.STRING },
+        purpose: { type: Type.STRING, enum: ['opener', 'middle', 'closer'] },
+        duration_estimate_minutes: { type: Type.NUMBER },
+        audience_interaction_level: { type: Type.STRING, enum: ['low', 'medium', 'high'] },
+        props_required: { type: Type.ARRAY, items: { type: Type.STRING } },
+        transition_notes: { type: Type.STRING },
+    },
+    required: ['title', 'purpose', 'duration_estimate_minutes', 'audience_interaction_level', 'props_required', 'transition_notes'],
+};
+
+const richSegmentSchema = {
+    ...baseSegmentSchema,
+    properties: {
+        ...(baseSegmentSchema as any).properties,
+        beats: { type: Type.ARRAY, items: { type: Type.STRING } },
+        patter_hook: { type: Type.STRING },
+        blocking_notes: { type: Type.STRING },
+        volunteer_management: { type: Type.STRING },
+        music_lighting: { type: Type.STRING },
+    },
+    required: [
+        'title',
+        'purpose',
+        'duration_estimate_minutes',
+        'audience_interaction_level',
+        'props_required',
+        'transition_notes',
+        'beats',
+        'patter_hook',
+        'blocking_notes',
+        'volunteer_management',
+        'music_lighting',
+    ],
+};
+
+const directorResponseSchemaFull = {
+    type: Type.OBJECT,
+    properties: {
+        show_title: { type: Type.STRING },
+        show_length_minutes: { type: Type.NUMBER },
+        audience_type: { type: Type.STRING },
+        venue_type: { type: Type.STRING },
+        tone: { type: Type.STRING },
+        performer_persona: { type: Type.STRING },
+        constraints: {
+            type: Type.OBJECT,
+            properties: {
+                props_owned: { type: Type.ARRAY, items: { type: Type.STRING } },
+                reset_time: { type: Type.STRING },
+                skill_level: { type: Type.STRING },
+                notes: { type: Type.STRING },
+            },
+            required: ['props_owned', 'reset_time', 'skill_level', 'notes'],
+        },
+        segments: {
+            type: Type.ARRAY,
+            minItems: 4,
+            maxItems: 6,
+            items: {
+                ...(richSegmentSchema as any),
             },
         },
-    };
-    const handleGenerate = async () => {
+    },
+    required: ['show_title', 'show_length_minutes', 'audience_type', 'venue_type', 'tone', 'performer_persona', 'constraints', 'segments'],
+};
+
+
+const handleGenerate = async () => {
         if (!isFormValid) {
             setError("Please fill in all required fields.");
             return;
@@ -764,7 +839,8 @@ ${participation ? `- participation_hint: ${participation}` : ''}
 ${volunteersOk ? `- volunteers_ok: ${volunteersOk}` : ''}
 
 Hard requirements:
-- segments must include exactly 1 opener and 1 closer, and at least 1 middle.
+- FAST: segments must be ordered as [opener, middle, closer] and MUST NOT include a purpose field.
+- FULL: segments must include exactly 1 opener and 1 closer, and at least 1 middle.
 - Sum of duration_estimate_minutes across segments MUST equal show_length_minutes exactly.
 - Use audience_interaction_level: low/medium/high.
 - props_required should be a list of props needed for that segment (can be empty).
@@ -777,9 +853,9 @@ try {
             DIRECTOR_MODE_SYSTEM_INSTRUCTION,
             speedMode === 'fast' ? directorResponseSchemaFast : directorResponseSchemaFull,
             undefined,
-            { maxOutputTokens: speedMode === 'fast' ? 2600 : 8192 }
+            { maxOutputTokens: speedMode === 'fast' ? 900 : 8192, speedMode }
           );
-          const blueprint = resultJson as DirectorModeBlueprint;
+          const blueprint = normalizeBlueprint(resultJson);
           const vId = makeId();
           setShowPlan(blueprint);
           setBlueprintVersions([{ id: vId, createdAt: Date.now(), blueprint, diffHint: 'Initial blueprint' }]);
@@ -1017,7 +1093,8 @@ Refinement instruction:\n- ${instruction}
 Hard requirements:
 - The returned JSON MUST match the schema.
 - Sum of duration_estimate_minutes across segments MUST equal show_length_minutes exactly.
-- Must include exactly 1 opener and 1 closer, and at least 1 middle.
+- FAST: segments must be ordered as [opener, middle, closer] and MUST NOT include a purpose field.
+- FULL: Must include exactly 1 opener and 1 closer, and at least 1 middle.
 - Keep it practical and non-exposure.
 ${speedConstraints}
 `;
@@ -1028,9 +1105,9 @@ ${speedConstraints}
                 DIRECTOR_MODE_SYSTEM_INSTRUCTION,
                 speedMode === 'fast' ? directorResponseSchemaFast : directorResponseSchemaFull,
                 undefined,
-                { maxOutputTokens: speedMode === 'fast' ? 2600 : 8192 }
+                { maxOutputTokens: speedMode === 'fast' ? 900 : 8192, speedMode }
             );
-            const next = resultJson as DirectorModeBlueprint;
+            const next = normalizeBlueprint(resultJson);
             const vId = makeId();
             const diffHint = computeDiffHint(active, next, instruction);
 
@@ -1157,7 +1234,7 @@ ${speedConstraints}
     };
 
     if (isLoading) {
-        return <div className="flex-1 flex items-center justify-center"><LoadingIndicator /></div>;
+        return <div className="flex-1 flex items-start justify-start pt-8"><div className="w-full"><LoadingIndicator /></div></div>;
     }
     
     if (showPlan) {
@@ -1951,7 +2028,7 @@ ${speedConstraints}
                     </div>
 
                     {/* RIGHT PANEL — Results placeholder */}
-                    <div className="bg-slate-800/30 border border-slate-700 rounded-lg p-6 flex flex-col items-center justify-center text-center min-h-[520px]">
+                    <div className="bg-slate-800/30 border border-slate-700 rounded-lg p-6 flex flex-col items-center justify-start pt-10 text-center min-h-[520px]">
                         <div className="w-14 h-14 rounded-xl bg-slate-900/40 border border-slate-700 flex items-center justify-center mb-4">
                             <WandIcon className="w-7 h-7 text-slate-300" />
                         </div>
