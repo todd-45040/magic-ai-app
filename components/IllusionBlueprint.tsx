@@ -666,8 +666,13 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
       );
 
       const [engineeringResult, stagingResult] = await Promise.all([engineeringPromise, stagingPromise]);
-      setEngineeringSummary(engineeringResult as EngineeringSummary);
-      setStagingBlueprint(stagingResult as StagingBlueprint);
+      
+      const safeEng = engineeringResult as any;
+      const safeStaging = stagingResult as any;
+      if (!safeEng || !safeStaging) throw new Error('AI returned an empty response. Please try again.');
+      if (!Array.isArray(safeStaging.potential_principles)) safeStaging.potential_principles = [];
+      setEngineeringSummary(safeEng as EngineeringSummary);
+      setStagingBlueprint(safeStaging as StagingBlueprint);
 
       // In booth Fast mode, stop here to avoid 90s timeouts.
       // Users can optionally generate Concept Art / Build Pack afterward (buttons in the output panel).
@@ -692,7 +697,14 @@ ${REALISM_GUARDRAILS}`,
 
       const [artResult, buildResult] = await Promise.all([artPromise, buildPromise]);
       setConceptArt(artResult);
-      setBuildPack(buildResult as BuildBlueprintPack);
+      
+      // Defensive normalization: occasionally the model can omit arrays/fields.
+      // Prevent runtime crashes by validating required lists.
+      const safeBuild = buildResult as any;
+      if (!safeBuild || !Array.isArray(safeBuild.mechanism_options) || !Array.isArray(safeBuild.cut_list) || !Array.isArray(safeBuild.assembly_steps)) {
+        throw new Error('AI returned an incomplete build pack. Please try again (or use Fast mode).');
+      }
+      setBuildPack(safeBuild as BuildBlueprintPack);
 
       setLoadingStage('');
     } catch (err) {
@@ -884,7 +896,7 @@ const handleRegenerateConceptArt = async () => {
     fullContent += `**Feasibility Verdict:** ${engineeringSummary.feasibility_verdict.level} â€” ${engineeringSummary.feasibility_verdict.why}\n\n`;
     if (conceptArt) fullContent += `![Concept Art](${conceptArt})\n\n`;
     fullContent += `### Potential Principles\n\n`;
-    stagingBlueprint.potential_principles.forEach((p) => {
+    (stagingBlueprint?.potential_principles ?? []).forEach((p) => {
       fullContent += `**${p.name}:** ${p.description}\n\n`;
     });
     fullContent += `### Staging Blueprint\n\n${stagingBlueprint.blueprint_description}\n\n`;
@@ -966,7 +978,7 @@ Fast mode skips the build pack by default for speed. Use â€œGenerate Build Packâ
           header +
           meta +
           `### Potential Principles\n\n` +
-          stagingBlueprint.potential_principles.map((p) => `- ${p.name}: ${p.description}`).join('\n') +
+          (stagingBlueprint?.potential_principles ?? []).map((p) => `- ${p.name}: ${p.description}`).join('\n') +
           `\n`
         );
       }
@@ -979,12 +991,12 @@ Fast mode skips the build pack by default for speed. Use â€œGenerate Build Packâ
       }
       case 'cutlist': {
         if (!buildPack) return header + meta + `### Cut List\n\n(Not generated in Fast mode)\n`;
-        const lines = filteredCutList.map((c) => `- ${c.part} (${c.material}, ${c.thickness}) x${c.qty} â€” ${c.size_in} / ${c.size_mm}${c.notes ? ` â€” ${c.notes}` : ''}`);
+        const lines = (filteredCutList ?? []).map((c) => `- ${c.part} (${c.material}, ${c.thickness}) x${c.qty} â€” ${c.size_in} / ${c.size_mm}${c.notes ? ` â€” ${c.notes}` : ''}`);
         return header + meta + `### Cut List\n\n${lines.join('\n')}\n`;
       }
       case 'assembly': {
         if (!buildPack) return header + meta + `### Assembly Steps\n\n(Not generated in Fast mode)\n`;
-        const steps = filteredSteps.map((s) => `${s.step}. ${s.text}`);
+        const steps = (filteredSteps ?? []).map((s) => `${s.step}. ${s.text}`);
         return header + meta + `### Assembly Steps\n\n${steps.join('\n')}\n`;
       }
       case 'safety': {
@@ -1445,7 +1457,7 @@ Fast mode skips the build pack by default for speed. Use â€œGenerate Build Packâ
                       className="bg-slate-900 border border-slate-700 text-slate-200 text-[11px] rounded-md px-2 py-1 focus:outline-none focus:border-purple-500"
                     >
                       <option value="all">All</option>
-                      {buildPack.mechanism_options.map((m) => (
+                      {(buildPack?.mechanism_options ?? []).map((m) => (
                         <option key={m.id} value={m.id}>
                           {m.name}
                         </option>
@@ -1730,7 +1742,7 @@ Fast mode skips the build pack by default for speed. Use â€œGenerate Build Packâ
             copied={sectionCopyStatus.principles === 'copied'}
           >
             <div className="space-y-3">
-                {stagingBlueprint.potential_principles.map((principle, i) => (
+                {(stagingBlueprint?.potential_principles ?? []).map((principle, i) => (
                   <div key={i} className="bg-slate-800/50 p-3 rounded-md border border-slate-700/50">
                     <h4 className="font-semibold text-purple-300">{principle.name}</h4>
                     <p className="text-sm text-slate-400">{principle.description}</p>
@@ -1798,7 +1810,7 @@ Fast mode skips the build pack by default for speed. Use â€œGenerate Build Packâ
                   </div>
 
                   <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-                    {buildPack.mechanism_options.map((m) => {
+                    {(buildPack?.mechanism_options ?? []).map((m) => {
                       const isActive = selectedMechanismId === m.id;
                       return (
                         <div
@@ -1862,7 +1874,7 @@ Fast mode skips the build pack by default for speed. Use â€œGenerate Build Packâ
                   <div className="bg-slate-800/50 p-4 rounded-md border border-slate-700/50">
                     <h4 className="text-white font-semibold">Modules</h4>
                     <ul className="mt-2 space-y-2">
-                      {filteredModules.map((m) => (
+                      {(filteredModules ?? []).map((m) => (
                         <li key={m.id} className="text-sm text-slate-300">
                           <span className="text-purple-300 font-semibold">{m.name}:</span> {m.notes}
                         </li>
@@ -1873,7 +1885,7 @@ Fast mode skips the build pack by default for speed. Use â€œGenerate Build Packâ
                   <div className="bg-slate-800/50 p-4 rounded-md border border-slate-700/50">
                     <h4 className="text-white font-semibold">Materials</h4>
                     <ul className="mt-2 space-y-2">
-                      {filteredMaterials.map((m, idx) => (
+                      {(filteredMaterials ?? []).map((m, idx) => (
                         <li key={`${m.item}-${idx}`} className="text-sm text-slate-300">
                           <span className="text-purple-300 font-semibold">{m.qty}Ã—</span> {m.item} â€”{' '}
                           <span className="text-slate-200">{m.spec}</span>
@@ -1886,7 +1898,7 @@ Fast mode skips the build pack by default for speed. Use â€œGenerate Build Packâ
                   <div className="bg-slate-800/50 p-4 rounded-md border border-slate-700/50">
                     <h4 className="text-white font-semibold">Hardware</h4>
                     <ul className="mt-2 space-y-2">
-                      {filteredHardware.map((h, idx) => (
+                      {(filteredHardware ?? []).map((h, idx) => (
                         <li key={`${h.item}-${idx}`} className="text-sm text-slate-300">
                           <span className="text-purple-300 font-semibold">{h.qty}Ã—</span> {h.item} â€”{' '}
                           <span className="text-slate-200">{h.spec}</span>
@@ -1922,7 +1934,7 @@ Fast mode skips the build pack by default for speed. Use â€œGenerate Build Packâ
                     </tr>
                   </thead>
                   <tbody className="text-slate-300">
-                    {filteredCutList.map((c, idx) => (
+                    {(filteredCutList ?? []).map((c, idx) => (
                       <tr key={`${c.part}-${idx}`} className="border-t border-slate-700/40">
                         <td className="px-3 py-2 font-semibold text-slate-200">{c.part}</td>
                         <td className="px-3 py-2">{c.material}</td>
@@ -1987,7 +1999,7 @@ Fast mode skips the build pack by default for speed. Use â€œGenerate Build Packâ
           >
             <div className="bg-slate-800/50 p-4 rounded-md border border-slate-700/50">
                 <ul className="list-disc list-inside text-sm text-slate-300 space-y-1">
-                  {buildPack.safety_notes.map((n, idx) => (
+                  {(buildPack?.safety_notes ?? []).map((n, idx) => (
                     <li key={idx}>{n}</li>
                   ))}
                 </ul>
