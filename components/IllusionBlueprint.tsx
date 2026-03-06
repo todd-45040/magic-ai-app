@@ -132,7 +132,7 @@ const DEMO_PRESETS: Array<{ label: string; concept: string; effectType: EffectTy
   },
 ];
 
-const LoadingIndicator: React.FC<{ stage?: string }> = ({ stage }) => (
+const LoadingIndicator: React.FC = () => (
   <div className="flex flex-col items-center justify-center text-center p-8 h-full">
     <div className="relative">
       <WandIcon className="w-16 h-16 text-purple-400 animate-pulse" />
@@ -140,8 +140,8 @@ const LoadingIndicator: React.FC<{ stage?: string }> = ({ stage }) => (
         <div className="w-24 h-24 border-t-2 border-purple-300 rounded-full animate-spin"></div>
       </div>
     </div>
-    <p className="text-slate-300 mt-4 text-lg">{stage || 'Generating Illusion Blueprint…'}</p>
-    <p className="text-slate-400 text-sm">Fast mode returns the engineering summary first. Heavy extras can be generated on demand.</p>
+    <p className="text-slate-300 mt-4 text-lg">Generating Illusion Blueprint…</p>
+    <p className="text-slate-400 text-sm">This involves multiple AI steps and may take a moment.</p>
   </div>
 );
 
@@ -260,9 +260,6 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
   const [isConceptLoading, setIsConceptLoading] = useState(false);
   const [blueprintSheet, setBlueprintSheet] = useState<string | null>(null);
   const [isBlueprintLoading, setIsBlueprintLoading] = useState(false);
-  const [fastMode, setFastMode] = useState(true);
-  const [generationStage, setGenerationStage] = useState<string>('');
-  const [isBuildPackLoading, setIsBuildPackLoading] = useState(false);
 
   const [stagingBlueprint, setStagingBlueprint] = useState<StagingBlueprint | null>(null);
   const [buildPack, setBuildPack] = useState<BuildBlueprintPack | null>(null);
@@ -568,108 +565,21 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     return () => obs.disconnect();
   }, [engineeringSummary, conceptArt, stagingBlueprint, buildPack]);
 
-  const hasCoreOutput = Boolean(engineeringSummary && stagingBlueprint);
-
-  const normalizeBuildPack = (pack: any): BuildBlueprintPack => ({
-    title: pack?.title || 'Illusion Build Pack',
-    intended_effect: pack?.intended_effect || prompt.trim(),
-    overall_dimensions: {
-      width_in: Number(pack?.overall_dimensions?.width_in ?? 0),
-      depth_in: Number(pack?.overall_dimensions?.depth_in ?? 0),
-      height_in: Number(pack?.overall_dimensions?.height_in ?? 0),
-      width_mm: Number(pack?.overall_dimensions?.width_mm ?? 0),
-      depth_mm: Number(pack?.overall_dimensions?.depth_mm ?? 0),
-      height_mm: Number(pack?.overall_dimensions?.height_mm ?? 0),
-      target_weight_lb: pack?.overall_dimensions?.target_weight_lb,
-      target_weight_kg: pack?.overall_dimensions?.target_weight_kg,
-      tolerance_in: pack?.overall_dimensions?.tolerance_in,
-      tolerance_mm: pack?.overall_dimensions?.tolerance_mm,
-    },
-    breakdown_modules: Array.isArray(pack?.breakdown_modules) ? pack.breakdown_modules : [],
-    mechanism_options: Array.isArray(pack?.mechanism_options) ? pack.mechanism_options : [],
-    materials: Array.isArray(pack?.materials) ? pack.materials : [],
-    hardware: Array.isArray(pack?.hardware) ? pack.hardware : [],
-    cut_list: Array.isArray(pack?.cut_list) ? pack.cut_list : [],
-    assembly_steps: Array.isArray(pack?.assembly_steps) ? pack.assembly_steps : [],
-    safety_notes: Array.isArray(pack?.safety_notes) ? pack.safety_notes : [],
-    build_notes: Array.isArray(pack?.build_notes) ? pack.build_notes : [],
-  });
-
-  const buildContext = () => [
-    `Effect Type: ${effectType}`,
-    `Venue Size: ${venueSize}`,
-    `Performer Style: ${performerStyle}`,
-    constraints.trim() ? `Constraints: ${constraints.trim()}` : 'Constraints: (none provided)',
-    `Concept: ${prompt.trim()}`,
-  ].join('\n');
-
-  const handleGenerateBuildPack = async () => {
-    if (!prompt.trim()) {
-      setError('Please describe your illusion concept first.');
-      return;
-    }
-    const context = buildContext();
-    const buildProfile = fastMode
-      ? 'FAST BUILD PACK: keep output concise. Use 1-2 mechanism options, 8 cut-list rows max, and 8 assembly steps max.'
-      : 'FULL BUILD PACK: include practical detail, but keep it readable and stage-realistic.';
-    const buildPrompt = `Create a BUILD BLUEPRINT PACK for this illusion request.\n\n${context}\n\n${buildProfile}\n\n${REALISM_GUARDRAILS}\n\nProvide realistic dimensions and a concise cut list. Include mechanism ids and tag parts/steps that differ by option.`;
-    try {
-      setIsBuildPackLoading(true);
-      setGenerationStage('Generating build pack…');
-      setError(null);
-      const buildResult = await generateStructuredResponse(
-        buildPrompt,
-        `${BUILD_BLUEPRINT_SYSTEM_INSTRUCTION}\n\n${REALISM_GUARDRAILS}`,
-        buildPackSchema,
-        user,
-        { speedMode: fastMode ? 'fast' : 'full', maxOutputTokens: fastMode ? 1600 : 3200 }
-      );
-      setBuildPack(normalizeBuildPack(buildResult));
-      setOpenSections((prev) => ({ ...prev, buildpack: true, cutlist: true, assembly: true, safety: true }));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to generate build pack. Please try again.');
-    } finally {
-      setGenerationStage('');
-      setIsBuildPackLoading(false);
-    }
-  };
-
-  const handleGenerateConceptArt = async () => {
-    if (!prompt.trim()) {
-      setError('Please describe your illusion concept first.');
-      return;
-    }
-    const context = buildContext();
-    const artPrompt = `Dramatic, theatrical concept art for a stage illusion.\n\n${context}\n\nFocus on the magical moment from the audience's perspective. Cinematic lighting, professional digital painting style.`;
-    try {
-      setIsConceptLoading(true);
-      setGenerationStage('Generating concept art…');
-      setError(null);
-      setLastArtPrompt(artPrompt);
-      const img = await generateImage(artPrompt, '16:9', user);
-      setConceptArt(img);
-      setOpenSections((prev) => ({ ...prev, concept: true }));
-    } catch (e: any) {
-      setError(e?.message || 'Could not generate concept art.');
-    } finally {
-      setGenerationStage('');
-      setIsConceptLoading(false);
-    }
-  };
-
   const handleGenerate = async () => {
     if (!prompt.trim()) {
       setError('Please describe your illusion concept.');
       return;
     }
 
-    const context = buildContext();
-    const speedProfile = fastMode
-      ? 'FAST MODE: Keep all text concise. Max 4 bullets per list. Max 2 short sentences per paragraph.'
-      : 'FULL MODE: You may add more detail, but stay practical and non-exposure.';
+    const context = [
+      `Effect Type: ${effectType}`,
+      `Venue Size: ${venueSize}`,
+      `Performer Style: ${performerStyle}`,
+      constraints.trim() ? `Constraints: ${constraints.trim()}` : 'Constraints: (none provided)',
+      `Concept: ${prompt.trim()}`,
+    ].join('\n');
 
     setIsLoading(true);
-    setGenerationStage('Generating engineering summary…');
     setError(null);
     setConceptArt(null);
     setBlueprintSheet(null);
@@ -681,50 +591,59 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     setOpenSections((prev) => ({
       ...prev,
       engineering: true,
-      concept: false,
-      blueprint: false,
-      principles: false,
+      concept: true,
+      blueprint: true,
+      principles: true,
       staging: true,
-      buildpack: false,
-      cutlist: false,
-      assembly: false,
-      safety: false,
+      buildpack: true,
+      cutlist: true,
+      assembly: true,
+      safety: true,
       json: false,
     }));
     setJsonCopyStatus('idle');
     setSaveStatus('idle');
 
-    const engineeringPrompt = `Create an ENGINEERING-MINDED SUMMARY for this stage illusion request.\n\n${context}\n\n${speedProfile}\n\n${REALISM_GUARDRAILS}\n\nSTRICT: non-exposure. Provide high-level principles and tradeoffs only. No step-by-step secrets.\n\nReturn JSON matching the schema exactly.`;
-    const stagingPrompt = `Generate a STAGING blueprint for this illusion request.\n\n${context}\n\n${speedProfile}\n\n${REALISM_GUARDRAILS}\n\nProvide performance-facing principles and a clear staging description.`;
+    const artPrompt = `Dramatic, theatrical concept art for a stage illusion.\n\n${context}\n\nFocus on the magical moment from the audience's perspective. Cinematic lighting, professional digital painting style.`;
+
+    setLastArtPrompt(artPrompt);
+
+    const engineeringPrompt = `Create an ENGINEERING-MINDED SUMMARY for this stage illusion request.\n\n${context}\n\n${REALISM_GUARDRAILS}\n\nSTRICT: non-exposure. Provide high-level principles and tradeoffs only. No step-by-step secrets.\n\nReturn JSON matching the schema exactly.`;
+
+    const stagingPrompt = `Generate a STAGING blueprint for this illusion request.\n\n${context}\n\n${REALISM_GUARDRAILS}\n\nProvide performance-facing principles and a clear staging description.`;
+
+    const buildPrompt = `Create a BUILD BLUEPRINT PACK for this illusion request.\n\n${context}\n\n${REALISM_GUARDRAILS}\n\nProvide realistic dimensions and a cut list. Include 3 mechanism options (manual, assisted, motorized) with mechanism ids and tag parts/steps that differ by option.`;
 
     try {
-      const engineeringResult = await generateStructuredResponse(
+      const artPromise = generateImage(artPrompt, '16:9', user);
+      const engineeringPromise = generateStructuredResponse(
         engineeringPrompt,
         'You are a master illusion designer and technical director. Produce practical, build-realistic, non-exposure engineering summaries for stage illusions. Output only JSON.',
         engineeringSchema,
-        user,
-        { speedMode: fastMode ? 'fast' : 'full', maxOutputTokens: fastMode ? 1200 : 2200 }
+        user
       );
+      const stagingPromise = generateStructuredResponse(stagingPrompt, 'You are an expert stage illusion designer.', stagingSchema, user);
+      const buildPromise = generateStructuredResponse(
+        buildPrompt,
+        `${BUILD_BLUEPRINT_SYSTEM_INSTRUCTION}\n\n${REALISM_GUARDRAILS}`,
+        buildPackSchema,
+        user
+      );
+
+      const [artResult, engineeringResult, stagingResult, buildResult] = await Promise.all([
+        artPromise,
+        engineeringPromise,
+        stagingPromise,
+        buildPromise,
+      ]);
+
+      setConceptArt(artResult);
       setEngineeringSummary(engineeringResult as EngineeringSummary);
-
-      setGenerationStage('Drafting staging blueprint…');
-      const stagingResult = await generateStructuredResponse(
-        stagingPrompt,
-        'You are an expert stage illusion designer.',
-        stagingSchema,
-        user,
-        { speedMode: fastMode ? 'fast' : 'full', maxOutputTokens: fastMode ? 1000 : 1800 }
-      );
       setStagingBlueprint(stagingResult as StagingBlueprint);
-
-      if (!fastMode) {
-        await handleGenerateBuildPack();
-        await handleGenerateConceptArt();
-      }
+      setBuildPack(buildResult as BuildBlueprintPack);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred. Please try again.');
     } finally {
-      setGenerationStage('');
       setIsLoading(false);
     }
   };
@@ -773,7 +692,39 @@ const handleGenerateBlueprint = async () => {
 
 
 const handleRegenerateConceptArt = async () => {
-  await handleGenerateConceptArt();
+  if (!prompt.trim()) {
+    setError('Please describe your illusion concept first.');
+    return;
+  }
+
+  const context = [
+    `Effect Type: ${effectType}`,
+    `Venue Size: ${venueSize}`,
+    `Performer Style: ${performerStyle}`,
+    constraints.trim() ? `Constraints: ${constraints.trim()}` : 'Constraints: (none provided)',
+    `Concept: ${prompt.trim()}`,
+  ].join('\n');
+
+  const base = lastArtPrompt
+    ? lastArtPrompt
+    : `Dramatic, theatrical concept art for a grand stage illusion prop.\n\n${context}\n\nHighly detailed, realistic, stage-ready, showing the prop on a theater stage with lighting. Include materials hints (wood/metal/fabric) visually. 16:9 composition. No text.`;
+
+  try {
+    setIsConceptLoading(true);
+    setError(null);
+    const variationHint = `\n\nCreate a DIFFERENT design variation (new silhouette, proportions, and detailing) while keeping the same illusion concept.`;
+    const img = await generateImage(base + variationHint, '16:9', user);
+    setConceptArt(img);
+    setOpenSections((prev) => ({ ...prev, concept: true }));
+    setActiveSection('concept');
+    setTimeout(() => {
+      document.getElementById('section-concept')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  } catch (e: any) {
+    setError(e?.message || 'Could not regenerate concept art.');
+  } finally {
+    setIsConceptLoading(false);
+  }
 };
 
 
@@ -782,111 +733,42 @@ const handleRegenerateConceptArt = async () => {
     return arr.filter((x) => !x.applies_to || x.applies_to.includes(selectedMechanismId));
   };
 
-  const filteredModules = useMemo(() => (buildPack ? toFiltered(buildPack.breakdown_modules || []) : []), [buildPack, selectedMechanismId]);
-  const filteredMaterials = useMemo(() => (buildPack ? toFiltered(buildPack.materials || []) : []), [buildPack, selectedMechanismId]);
-  const filteredHardware = useMemo(() => (buildPack ? toFiltered(buildPack.hardware || []) : []), [buildPack, selectedMechanismId]);
-  const filteredCutList = useMemo(() => (buildPack ? toFiltered(buildPack.cut_list || []) : []), [buildPack, selectedMechanismId]);
-  const filteredSteps = useMemo(() => (buildPack ? toFiltered(buildPack.assembly_steps || []) : []), [buildPack, selectedMechanismId]);
-
-  const safeBlueprintTitle =
-    buildPack?.title ||
-    engineeringSummary?.title ||
-    prompt.trim() ||
-    'Untitled Illusion Blueprint';
-
-  const safeIntendedEffect =
-    buildPack?.intended_effect ||
-    engineeringSummary?.audience_experience ||
-    prompt.trim() ||
-    'Illusion concept in progress';
-
-  const safePrinciples =
-    Array.isArray(stagingBlueprint?.potential_principles) && stagingBlueprint.potential_principles.length
-      ? stagingBlueprint.potential_principles
-      : [
-          {
-            name: 'Method Framing Pending',
-            description:
-              'Potential principles were not returned in this pass. Use the engineering summary as the primary reference and regenerate staging if needed.',
-          },
-        ];
+  const filteredModules = useMemo(() => (buildPack ? toFiltered(buildPack.breakdown_modules) : []), [buildPack, selectedMechanismId]);
+  const filteredMaterials = useMemo(() => (buildPack ? toFiltered(buildPack.materials) : []), [buildPack, selectedMechanismId]);
+  const filteredHardware = useMemo(() => (buildPack ? toFiltered(buildPack.hardware) : []), [buildPack, selectedMechanismId]);
+  const filteredCutList = useMemo(() => (buildPack ? toFiltered(buildPack.cut_list) : []), [buildPack, selectedMechanismId]);
+  const filteredSteps = useMemo(() => (buildPack ? toFiltered(buildPack.assembly_steps) : []), [buildPack, selectedMechanismId]);
 
   const buildFullContent = () => {
-    if (!engineeringSummary || !stagingBlueprint) return '';
-    let fullContent = `## Illusion Blueprint: ${safeBlueprintTitle}
-
-`;
-    fullContent += `**Effect Type:** ${effectType}
-
-`;
-    fullContent += `**Venue Size:** ${venueSize}
-
-`;
-    fullContent += `**Performer Style:** ${performerStyle}
-
-`;
-    if (constraints.trim()) fullContent += `**Constraints:** ${constraints.trim()}
-
-`;
-    fullContent += `### Engineering Summary
-
-`;
-    fullContent += `**Title:** ${engineeringSummary.title}
-
-`;
-    fullContent += `**Audience Experience:** ${engineeringSummary.audience_experience}
-
-`;
-    fullContent += `**Build Complexity (1–5):** ${engineeringSummary.build_complexity.rating_1_to_5} — ${engineeringSummary.build_complexity.rationale}
-
-`;
-    fullContent += `**Reset Time:** ${engineeringSummary.reset_time}
-
-`;
-    fullContent += `**Angle Risk Summary:**
-- Front: ${engineeringSummary.angle_risk_summary.front}
-- Sides: ${engineeringSummary.angle_risk_summary.sides}
-- Balcony: ${engineeringSummary.angle_risk_summary.balcony}
-
-`;
-    fullContent += `**Reality Checks:**
-- Weight/Transport: ${engineeringSummary.reality_checks.weight_transport}
-- Crew: ${engineeringSummary.reality_checks.crew}
-- Setup Time: ${engineeringSummary.reality_checks.setup_time}
-
-`;
-    fullContent += `**Feasibility Verdict:** ${engineeringSummary.feasibility_verdict.level} — ${engineeringSummary.feasibility_verdict.why}
-
-`;
-    if (conceptArt) fullContent += `![Concept Art](${conceptArt})
-
-`;
-    fullContent += `### Potential Principles
-
-`;
-    safePrinciples.forEach((p) => {
-      fullContent += `**${p.name}:** ${p.description}
-
-`;
+    if (!engineeringSummary || !stagingBlueprint || !buildPack) return '';
+    let fullContent = `## Illusion Blueprint: ${prompt}\n\n`;
+    fullContent += `**Effect Type:** ${effectType}\n\n`;
+    fullContent += `**Venue Size:** ${venueSize}\n\n`;
+    fullContent += `**Performer Style:** ${performerStyle}\n\n`;
+    if (constraints.trim()) fullContent += `**Constraints:** ${constraints.trim()}\n\n`;
+    fullContent += `### Engineering Summary\n\n`;
+    fullContent += `**Title:** ${engineeringSummary.title}\n\n`;
+    fullContent += `**Audience Experience:** ${engineeringSummary.audience_experience}\n\n`;
+    fullContent += `**Build Complexity (1–5):** ${engineeringSummary.build_complexity.rating_1_to_5} — ${engineeringSummary.build_complexity.rationale}\n\n`;
+    fullContent += `**Reset Time:** ${engineeringSummary.reset_time}\n\n`;
+    fullContent += `**Angle Risk Summary:**\n- Front: ${engineeringSummary.angle_risk_summary.front}\n- Sides: ${engineeringSummary.angle_risk_summary.sides}\n- Balcony: ${engineeringSummary.angle_risk_summary.balcony}\n\n`;
+    fullContent += `**Reality Checks:**\n- Weight/Transport: ${engineeringSummary.reality_checks.weight_transport}\n- Crew: ${engineeringSummary.reality_checks.crew}\n- Setup Time: ${engineeringSummary.reality_checks.setup_time}\n\n`;
+    fullContent += `**Feasibility Verdict:** ${engineeringSummary.feasibility_verdict.level} — ${engineeringSummary.feasibility_verdict.why}\n\n`;
+    if (conceptArt) fullContent += `![Concept Art](${conceptArt})\n\n`;
+    fullContent += `### Potential Principles\n\n`;
+    stagingBlueprint.potential_principles.forEach((p) => {
+      fullContent += `**${p.name}:** ${p.description}\n\n`;
     });
-    fullContent += `### Staging Blueprint
-
-${stagingBlueprint.blueprint_description}
-
-`;
-    if (buildPack) {
-      fullContent += `### Build Blueprint Pack (JSON)
-
-`;
-      fullContent += JSON.stringify(buildPack, null, 2);
-    }
+    fullContent += `### Staging Blueprint\n\n${stagingBlueprint.blueprint_description}\n\n`;
+    fullContent += `### Build Blueprint Pack (JSON)\n\n`;
+    fullContent += JSON.stringify(buildPack, null, 2);
     return fullContent;
   };
 
   const handleSave = () => {
-    if (!engineeringSummary || !stagingBlueprint) return;
+    if (!engineeringSummary || !stagingBlueprint || !buildPack) return;
     const fullContent = buildFullContent();
-    const titleBase = prompt.trim() || safeBlueprintTitle;
+    const titleBase = prompt.trim() ? prompt.trim() : buildPack.title;
     saveIdea('text', fullContent, `Illusion Blueprint (${effectType}) — ${titleBase}`);
     onIdeaSaved();
     setSaveStatus('saved');
@@ -907,6 +789,7 @@ ${stagingBlueprint.blueprint_description}
 
   const buildSectionContent = (id: SectionId) => {
     if (!engineeringSummary || !stagingBlueprint) return '';
+
     const header = `## Illusion Blueprint: ${safeBlueprintTitle}
 `;
     const meta = `Effect Type: ${effectType}
@@ -918,6 +801,10 @@ Constraints: ${constraints.trim()}` : ''}
 
     switch (id) {
       case 'engineering': {
+        const safetyText = (engineeringSummary.safety_notes || []).map((s) => `- ${s}`).join('
+');
+        const propsText = (engineeringSummary.technical_requirements?.props || []).join(', ');
+        const mechanicsText = (engineeringSummary.technical_requirements?.mechanics || []).join(', ');
         return (
           header +
           meta +
@@ -944,13 +831,12 @@ Constraints: ${constraints.trim()}` : ''}
 ` +
           `Technical Requirements:
 - Assistants: ${engineeringSummary.technical_requirements.assistants}
-- Props: ${engineeringSummary.technical_requirements.props.join(', ')}
-- Mechanics: ${engineeringSummary.technical_requirements.mechanics.join(', ')}
+- Props: ${propsText}
+- Mechanics: ${mechanicsText}
 
 ` +
           `Safety Notes:
-${engineeringSummary.safety_notes.map((s) => `- ${s}`).join('
-')}
+${safetyText}
 
 ` +
           `Reset Time: ${engineeringSummary.reset_time}
@@ -975,7 +861,7 @@ ${engineeringSummary.safety_notes.map((s) => `- ${s}`).join('
 `
         );
       }
-      case 'concept': {
+      case 'concept':
         return (
           header +
           meta +
@@ -988,33 +874,23 @@ ${engineeringSummary.safety_notes.map((s) => `- ${s}`).join('
           (conceptArt ? `Image URL: ${conceptArt}
 ` : 'No concept art generated.')
         );
-      }
-      case 'blueprint': {
+      case 'blueprint':
         return header + meta + `### Blueprint Sheet
 
 ` + (blueprintSheet ? `Image URL: ${blueprintSheet}
 ` : 'No blueprint sheet generated.');
-      }
-      case 'principles': {
-        return (
-          header +
-          meta +
-          `### Potential Principles
+      case 'principles':
+        return header + meta + `### Potential Principles
 
-` +
-          safePrinciples.map((p) => `- ${p.name}: ${p.description}`).join('
-') +
-          `
-`
-        );
-      }
-      case 'staging': {
+` + safePrinciples.map((p) => `- ${p.name}: ${p.description}`).join('
+') + `
+`;
+      case 'staging':
         return header + meta + `### Staging Blueprint
 
 ${stagingBlueprint.blueprint_description}
 `;
-      }
-      case 'buildpack': {
+      case 'buildpack':
         return buildPack
           ? header + meta + `### Build Blueprint Pack (JSON)
 
@@ -1022,54 +898,46 @@ ${JSON.stringify(buildPack, null, 2)}
 `
           : header + meta + `### Build Blueprint Pack
 
-Not generated yet. Current intended effect: ${safeIntendedEffect}
+Not generated yet.
 `;
-      }
       case 'cutlist': {
-        return buildPack
-          ? header + meta + `### Cut List
+        const lines = filteredCutList.map((c) => `- ${c.part} (${c.material}, ${c.thickness}) x${c.qty} — ${c.size_in} / ${c.size_mm}${c.notes ? ` — ${c.notes}` : ''}`);
+        return buildPack ? header + meta + `### Cut List
 
-${filteredCutList.map((c) => `- ${c.part} (${c.material}, ${c.thickness}) x${c.qty} — ${c.size_in} / ${c.size_mm}${c.notes ? ` — ${c.notes}` : ''}`).join('
+${lines.join('
 ')}
-`
-          : header + meta + `### Cut List
+` : header + meta + `### Cut List
 
 Not generated yet.
 `;
       }
       case 'assembly': {
-        return buildPack
-          ? header + meta + `### Assembly Steps
+        const steps = filteredSteps.map((s) => `${s.step}. ${s.text}`);
+        return buildPack ? header + meta + `### Assembly Steps
 
-${filteredSteps.map((s) => `${s.step}. ${s.text}`).join('
+${steps.join('
 ')}
-`
-          : header + meta + `### Assembly Steps
+` : header + meta + `### Assembly Steps
 
 Not generated yet.
 `;
       }
       case 'safety': {
-        const merged = Array.from(
-          new Set([...(engineeringSummary.safety_notes || []), ...((buildPack?.safety_notes) || [])])
-        );
+        const merged = Array.from(new Set([...(engineeringSummary.safety_notes || []), ...((buildPack?.safety_notes) || [])]));
         return header + meta + `### Safety Notes
 
 ${merged.map((s) => `- ${s}`).join('
 ')}
 `;
       }
-      case 'json': {
-        return buildPack
-          ? header + meta + `### Raw JSON
+      case 'json':
+        return buildPack ? header + meta + `### Raw JSON
 
 ${rawJson}
-`
-          : header + meta + `### Raw JSON
+` : header + meta + `### Raw JSON
 
 Not generated yet.
 `;
-      }
       default:
         return '';
     }
@@ -1229,20 +1097,6 @@ Not generated yet.
             </button>
           </div>
 
-          <div className="mb-4 rounded-xl border border-slate-800 bg-slate-900/30 p-3 flex items-center justify-between gap-3">
-            <div>
-              <div className="text-sm font-semibold text-slate-200">Booth Demo Speed</div>
-              <div className="text-xs text-slate-400">Fast = summary + staging first. Full adds build pack + art automatically.</div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setFastMode((v) => !v)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${fastMode ? 'bg-purple-600/30 border-purple-500 text-purple-200' : 'bg-slate-900/40 border-slate-700 text-slate-200'}`}
-            >
-              {fastMode ? 'Fast: ON' : 'Full: ON'}
-            </button>
-          </div>
-
           {/* Micro-help (parity with other tools) */}
           <div className="mb-4 rounded-xl border border-slate-800 bg-slate-900/30 p-3">
             <div className="text-sm font-semibold text-slate-200">Why use this?</div>
@@ -1352,47 +1206,27 @@ Not generated yet.
           <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
             <div>
               <div className="text-sm font-semibold text-slate-200">Blueprint Output</div>
-              <div className="text-xs text-slate-500">Fast mode returns summary + staging first. Add art/build pack on demand.</div>
+              <div className="text-xs text-slate-500">Concept art, staging, build pack, and safety notes.</div>
             </div>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => void handleCopyAll()}
-                disabled={!hasCoreOutput}
+                disabled={!engineeringSummary || !stagingBlueprint || !buildPack}
                 className="px-3 py-1.5 rounded-md text-[11px] font-semibold border border-slate-700 bg-slate-900/60 text-slate-200 hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Copy the full blueprint"
               >
                 {copyAllStatus === 'copied' ? 'Copied!' : 'Copy Blueprint'}
               </button>
-              {hasCoreOutput && !conceptArt ? (
-                <button
-                  type="button"
-                  onClick={handleGenerateConceptArt}
-                  disabled={isConceptLoading || isLoading}
-                  className="px-3 py-1.5 rounded-md text-[11px] font-semibold border border-slate-700 bg-slate-900/60 text-slate-200 hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isConceptLoading ? 'Generating Art…' : 'Generate Art'}
-                </button>
-              ) : null}
-              {hasCoreOutput && !buildPack ? (
-                <button
-                  type="button"
-                  onClick={handleGenerateBuildPack}
-                  disabled={isBuildPackLoading || isLoading}
-                  className="px-3 py-1.5 rounded-md text-[11px] font-semibold border border-slate-700 bg-slate-900/60 text-slate-200 hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isBuildPackLoading ? 'Generating Build…' : 'Generate Build Pack'}
-                </button>
-              ) : null}
               <div className="text-[11px] text-slate-500">Version: {APP_VERSION}</div>
             </div>
           </div>
 
           <div ref={containerRef} className="flex-1 overflow-y-auto p-4 md:p-5">
-            {!hasCoreOutput ? (
+            {!engineeringSummary || !stagingBlueprint || !buildPack ? (
               <div className="h-full flex items-center justify-center">
                 {isLoading ? (
-                  <LoadingIndicator stage={generationStage} />
+                  <LoadingIndicator />
                 ) : (
                   <div className="max-w-md text-center">
                     <div className="text-slate-200 font-semibold">Your blueprint will appear here.</div>
@@ -1424,33 +1258,33 @@ Not generated yet.
                 </button>
               ))}
 
-              {buildPack ? (
-                <div className="flex items-center gap-2 ml-1">
-                  <span className="text-[11px] text-slate-400">Mechanism:</span>
-                  <select
-                    value={selectedMechanismId}
-                    onChange={(e) => setSelectedMechanismId(e.target.value)}
-                    className="bg-slate-900 border border-slate-700 text-slate-200 text-[11px] rounded-md px-2 py-1 focus:outline-none focus:border-purple-500"
-                  >
-                    <option value="all">All</option>
-                    {(buildPack?.mechanism_options ?? []).map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name}
-                      </option>
-                    ))}
-                  </select>
+              {/* Mechanism selector (always accessible) */}
+              <div className="flex items-center gap-2 ml-1">
+                <span className="text-[11px] text-slate-400">Mechanism:</span>
+                <select
+                  value={selectedMechanismId}
+                  onChange={(e) => setSelectedMechanismId(e.target.value)}
+                  className="bg-slate-900 border border-slate-700 text-slate-200 text-[11px] rounded-md px-2 py-1 focus:outline-none focus:border-purple-500"
+                >
+                  <option value="all">All</option>
+                  {buildPack.mechanism_options.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
 
-                  <button
-                    type="button"
-                    onClick={handleGenerateBlueprint}
-                    disabled={isBlueprintLoading}
-                    className="px-3 py-1.5 rounded-md text-[11px] font-semibold border border-slate-700 bg-slate-900/60 text-slate-200 hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Generate blueprint-style orthographic plan image"
-                  >
-                    {isBlueprintLoading ? "Generating Blueprint…" : "Generate Blueprint Sheet"}
-                  </button>
-                </div>
-              ) : null}
+{/* Blueprint sheet quick action */}
+<button
+  type="button"
+  onClick={handleGenerateBlueprint}
+  disabled={!buildPack || isBlueprintLoading}
+  className="px-3 py-1.5 rounded-md text-[11px] font-semibold border border-slate-700 bg-slate-900/60 text-slate-200 hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+  title={!buildPack ? "Generate an illusion first" : "Generate blueprint-style orthographic plan image"}
+>
+  {isBlueprintLoading ? "Generating Blueprint…" : "Generate Blueprint Sheet"}
+</button>
+              </div>
 
               {/* Expand/collapse controls */}
               <button
@@ -1676,7 +1510,7 @@ Not generated yet.
             copied={sectionCopyStatus.principles === 'copied'}
           >
             <div className="space-y-3">
-                {safePrinciples.map((principle, i) => (
+                {stagingBlueprint.potential_principles.map((principle, i) => (
                   <div key={i} className="bg-slate-800/50 p-3 rounded-md border border-slate-700/50">
                     <h4 className="font-semibold text-purple-300">{principle.name}</h4>
                     <p className="text-sm text-slate-400">{principle.description}</p>
@@ -1700,8 +1534,6 @@ Not generated yet.
           </CollapsibleSection>
 
           {/* Build Pack */}
-          {buildPack ? (
-          <>
           <CollapsibleSection
             id="buildpack"
             title="Build Blueprint Pack"
@@ -1746,7 +1578,7 @@ Not generated yet.
                   </div>
 
                   <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-                    {(buildPack?.mechanism_options ?? []).map((m) => {
+                    {buildPack.mechanism_options.map((m) => {
                       const isActive = selectedMechanismId === m.id;
                       return (
                         <div
@@ -1935,7 +1767,7 @@ Not generated yet.
           >
             <div className="bg-slate-800/50 p-4 rounded-md border border-slate-700/50">
                 <ul className="list-disc list-inside text-sm text-slate-300 space-y-1">
-                  {(buildPack?.safety_notes ?? []).map((n, idx) => (
+                  {buildPack.safety_notes.map((n, idx) => (
                     <li key={idx}>{n}</li>
                   ))}
                 </ul>
@@ -1984,15 +1816,12 @@ Not generated yet.
                 </pre>
           </CollapsibleSection>
 
-          </>
-          ) : null}
-
               </div>
             )}
           </div>
 
           {/* Pinned SaveActionBar + workflow parity (outside scroll area) */}
-          {hasCoreOutput ? (
+          {engineeringSummary && stagingBlueprint && buildPack ? (
             <div className="border-t border-slate-800 bg-slate-950/70 backdrop-blur p-4">
               <div className="flex flex-col gap-3">
                 <SaveActionBar
@@ -2008,7 +1837,7 @@ Not generated yet.
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
                   <CohesionActions
                     content={buildFullContent()}
-                    defaultTitle={`Illusion Blueprint: ${safeBlueprintTitle}`}
+                    defaultTitle={`Illusion Blueprint: ${prompt || 'Untitled'}`}
                     defaultTags={["illusion-blueprint", "build"]}
                     compact
                   />
