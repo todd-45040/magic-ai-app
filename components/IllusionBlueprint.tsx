@@ -172,6 +172,9 @@ Rules:
 - Keep the response compact and useful for a builder/fabricator.
 - If a requested effect is unrealistic for the stated constraints, adapt it into a safer, more achievable version.
 - No dangerous instructions involving weapons, explosives, or illegal construction.
+- If any part of the concept is not realistically buildable within the stated venue, crew, budget, transport, or safety constraints, revise it to the most practical version before returning the plan.
+- Do NOT propose effects, dimensions, or mechanisms that require hidden infrastructure, trap access, overhead rigging, or external stage modifications unless the user explicitly states those are available.
+
 - Build complexity must be a number from 1 to 5.`;
 
 const IMAGE_STYLE_GUIDE = `Create theatrical but practical illusion concept imagery. Show the prop or illusion unit clearly. Prioritize believable materials, clean stage presentation, and builder-oriented visibility. No text overlays. No exploded diagrams. No impossible sci-fi visuals.`;
