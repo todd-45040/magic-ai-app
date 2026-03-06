@@ -296,7 +296,6 @@ const TextBlock: React.FC<{
         ))
       )}
     </div>
-    </>
   );
 };
 
