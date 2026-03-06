@@ -155,22 +155,33 @@ const CollapsibleCard: React.FC<{
   actions?: React.ReactNode;
   children: React.ReactNode;
 }> = ({ title, subtitle, isOpen, onToggle, actions, children }) => (
-  <section className="rounded-2xl border border-slate-800 bg-slate-900/20 overflow-hidden">
-    <div className="px-4 py-3 border-b border-slate-800 flex items-center gap-3">
+  <section className="overflow-hidden rounded-2xl border border-slate-800/90 bg-gradient-to-br from-slate-900/55 to-slate-950/45 shadow-[0_8px_28px_-24px_rgba(15,23,42,0.9)]">
+    <div className="flex items-center gap-3 border-b border-white/5 bg-white/[0.02] px-4 py-3.5">
       <button
         type="button"
         onClick={onToggle}
-        className="flex-1 text-left flex items-center justify-between gap-3"
+        className="flex flex-1 items-center justify-between gap-4 text-left"
+        aria-expanded={isOpen}
       >
-        <div>
-          <h3 className="text-lg font-bold text-white font-cinzel">{title}</h3>
-          {subtitle ? <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p> : null}
+        <div className="min-w-0">
+          <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Builder Section</div>
+          <h3 className="mt-1 text-lg font-bold text-white font-cinzel leading-tight">{title}</h3>
+          {subtitle ? <p className="mt-1 text-xs leading-relaxed text-slate-400">{subtitle}</p> : null}
         </div>
-        <span className={`text-slate-400 text-sm transition-transform ${isOpen ? 'rotate-180' : ''}`}>▾</span>
+        <div className="flex items-center gap-2 self-start">
+          <span className="rounded-full border border-slate-700/80 bg-slate-950/70 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+            {isOpen ? 'Collapse' : 'Expand'}
+          </span>
+          <span
+            className={`flex h-8 w-8 items-center justify-center rounded-full border border-slate-700/80 bg-slate-950/70 text-slate-300 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+          >
+            ▾
+          </span>
+        </div>
       </button>
       {actions ? <div className="shrink-0">{actions}</div> : null}
     </div>
-    {isOpen ? <div className="p-4">{children}</div> : null}
+    {isOpen ? <div className="border-t border-white/[0.02] p-4 md:p-5">{children}</div> : null}
   </section>
 );
 
@@ -303,9 +314,9 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
   const [selectedConceptIndex, setSelectedConceptIndex] = useState<number | null>(null);
   const [openSections, setOpenSections] = useState({
     plan: true,
-    construction: true,
-    operations: true,
-    visuals: true,
+    construction: false,
+    operations: false,
+    visuals: false,
   });
 
   const planSchema = useMemo(
@@ -404,9 +415,9 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     setLoadingStage('');
     setOpenSections({
       plan: true,
-      construction: true,
-      operations: true,
-      visuals: true,
+      construction: false,
+      operations: false,
+      visuals: false,
     });
   };
 
@@ -616,9 +627,9 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
       setBuilderPlan(plan);
       setOpenSections({
         plan: true,
-        construction: true,
-        operations: true,
-        visuals: true,
+        construction: false,
+        operations: false,
+        visuals: false,
       });
 
       setLoadingStage('Generating visual concepts…');
