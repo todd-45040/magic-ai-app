@@ -176,6 +176,8 @@ Rules:
 
 const IMAGE_STYLE_GUIDE = `Create theatrical but practical illusion concept imagery. Show the prop or illusion unit clearly. Prioritize believable materials, clean stage presentation, and builder-oriented visibility. No text overlays. No exploded diagrams. No impossible sci-fi visuals.`;
 
+const BLUEPRINT_STYLE_GUIDE = `Create technical blueprint-style drawings for a stage illusion prop. Show practical construction-oriented diagram views with clean white or light blue linework on a dark blueprint background. Include front elevation, side elevation, and cutaway or mechanism-style layout where helpful. Emphasize labeled structural sections, dimensional feel, fabrication logic, and workshop realism. No text paragraphs. No poster art. No glossy rendering. Make it look like an illusion builder's technical concept sheet.`;
+
 const LoadingIndicator: React.FC<{ stage: string }> = ({ stage }) => (
   <div className="flex flex-col items-center justify-center text-center p-8 h-full">
     <div className="relative">
@@ -346,6 +348,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
   const [specialNotes, setSpecialNotes] = useState('');
 
   const [builderPlan, setBuilderPlan] = useState<BuilderPlan | null>(null);
+  const [blueprintDrawings, setBlueprintDrawings] = useState<string[]>([]);
   const [imageOptions, setImageOptions] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
@@ -357,8 +360,9 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
   const [activeConceptIndex, setActiveConceptIndex] = useState<number | null>(null);
   const [openSections, setOpenSections] = useState({
     plan: true,
-    construction: false,
+    construction: true,
     operations: false,
+    blueprints: true,
     visuals: false,
   });
 
@@ -449,6 +453,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     setMaterialsPreference('');
     setSpecialNotes('');
     setBuilderPlan(null);
+    setBlueprintDrawings([]);
     setImageOptions([]);
     setError(null);
     setWarning(null);
@@ -459,8 +464,9 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     setLoadingStage('');
     setOpenSections({
       plan: true,
-      construction: false,
+      construction: true,
       operations: false,
+      blueprints: true,
       visuals: false,
     });
   };
@@ -629,6 +635,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     setError(null);
     setWarning(null);
     setBuilderPlan(null);
+    setBlueprintDrawings([]);
     setImageOptions([]);
     setSaveStatus('idle');
     setCopyStatus('idle');
@@ -659,10 +666,34 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
       setBuilderPlan(plan);
       setOpenSections({
         plan: true,
-        construction: false,
+        construction: true,
         operations: false,
+        blueprints: true,
         visuals: false,
       });
+
+      setLoadingStage('Generating blueprint drawings…');
+      const blueprintPrompt = [
+        BLUEPRINT_STYLE_GUIDE,
+        '',
+        `Project title: ${plan.project_title}`,
+        `Audience effect: ${plan.audience_effect}`,
+        `Build concept: ${plan.build_concept}`,
+        `Main structure: ${plan.recommended_construction.main_structure.join(', ')}`,
+        `Materials: ${plan.recommended_construction.materials.join(', ')}`,
+        `Hardware: ${plan.recommended_construction.hardware.join(', ')}`,
+        `Dimensions / footprint: ${plan.dimensions_footprint}`,
+        `Primary mechanism direction: ${plan.mechanism_approach.primary}`,
+        `Mobility / modularity: ${plan.recommended_construction.mobility_modularity}`,
+        'Create technical drawing style images suitable for illusion build planning.',
+      ].join('\n');
+
+      try {
+        const drawings = await generateImages(blueprintPrompt, '16:9', 2, user);
+        setBlueprintDrawings(drawings);
+      } catch {
+        setBlueprintDrawings([]);
+      }
 
       setLoadingStage('Generating visual concepts…');
       const imagePrompt = [
@@ -980,7 +1011,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
           <div className="px-4 py-3 border-b border-slate-800 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
             <div>
               <div className="text-sm font-semibold text-slate-200">Builder Output</div>
-              <div className="text-xs text-slate-500">Realistic plan first. Multiple image concepts second.</div>
+              <div className="text-xs text-slate-500">Realistic plan first. Blueprint drawings and concept images second.</div>
             </div>
             <div className="text-[11px] text-slate-500">Version: {APP_VERSION}</div>
           </div>
@@ -1008,6 +1039,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                       ['plan', 'Overview'],
                       ['construction', 'Construction'],
                       ['operations', 'Safety & Ops'],
+                      ['blueprints', 'Blueprint Drawings'],
                       ['visuals', 'Visual Concepts'],
                     ].map(([key, label]) => (
                       <button
@@ -1222,6 +1254,60 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                           <DetailList items={builderPlan.reset_transport_crew.map(cleanText)} />
                         </div>
                       </div>
+                    </div>
+                  </CollapsibleCard>
+                </div>
+
+                <div id="ib-blueprints">
+                  <CollapsibleCard
+                    title="Blueprint Drawings"
+                    subtitle="Technical concept drawings for build planning"
+                    isOpen={openSections.blueprints}
+                    onToggle={() => toggleSection('blueprints')}
+                    actions={
+                      blueprintDrawings.length ? (
+                        <div className="text-[11px] text-slate-500">{blueprintDrawings.length} drawings</div>
+                      ) : null
+                    }
+                  >
+                    <div className="space-y-5">
+                      <SectionIntro
+                        icon={<BlueprintIcon className="h-4 w-4" />}
+                        title="Technical Drawing Set"
+                        subtitle="Blueprint-style concept drawings to help visualize structure, layout, and mechanism direction before fabrication."
+                      />
+                      {blueprintDrawings.length ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {blueprintDrawings.map((src, idx) => {
+                            const drawingLabel = `Blueprint ${String.fromCharCode(65 + idx)}`;
+
+                            return (
+                              <div
+                                key={`${src.slice(0, 30)}-${idx}`}
+                                className="group relative overflow-hidden rounded-xl border border-white/10 bg-white/5 transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-300/60 hover:shadow-md hover:shadow-black/20"
+                              >
+                                <div className="aspect-[4/3] overflow-hidden bg-slate-950/40">
+                                  <img
+                                    src={src}
+                                    alt={`Technical drawing ${drawingLabel}`}
+                                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                                  />
+                                </div>
+                                <div className="p-3">
+                                  <div className="text-sm font-semibold text-slate-100">{drawingLabel}</div>
+                                  <div className="mt-1 text-xs text-slate-400">
+                                    Blueprint-style technical drawing for build planning
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="rounded-lg border border-dashed border-slate-700 bg-slate-950/20 p-4 text-sm text-slate-400">
+                          No blueprint drawings were returned on this attempt.
+                        </div>
+                      )}
                     </div>
                   </CollapsibleCard>
                 </div>
