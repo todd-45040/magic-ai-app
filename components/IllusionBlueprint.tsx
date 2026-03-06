@@ -24,18 +24,6 @@ const EFFECT_TYPES: EffectType[] = ['Appearance', 'Vanish', 'Transformation', 'L
 const VENUE_SIZES: VenueSize[] = ['Close-up', 'Parlor', 'Stage', 'Grand Illusion', 'Arena'];
 const PERFORMER_STYLES: PerformerStyle[] = ['Comedy', 'Mystery', 'Elegant', 'Dark', 'Story-driven'];
 
-// Phase 5 Booth Demo Optimization
-const FAST_DEMO_MODE = true;
-const MAX_OUTPUT_TOKENS = 1200;
-const LOADING_MESSAGES = [
-  "Consulting illusion engineering notes...",
-  "Evaluating stage mechanics...",
-  "Checking sightline and angle risks...",
-  "Drafting build concepts...",
-  "Finalizing illusion blueprint..."
-];
-
-
 type StagingBlueprint = {
   potential_principles: { name: string; description: string }[];
   blueprint_description: string;
@@ -144,7 +132,16 @@ const DEMO_PRESETS: Array<{ label: string; concept: string; effectType: EffectTy
   },
 ];
 
-const LoadingIndicator: React.FC = () => (
+
+const LOADING_MESSAGES = [
+  'Consulting illusion engineering notes…',
+  'Evaluating stage mechanics…',
+  'Checking sightlines and angle risks…',
+  'Drafting build-ready options…',
+  'Finalizing blueprint pack…',
+] as const;
+
+const LoadingIndicator: React.FC<{ message?: string }> = ({ message }) => (
   <div className="flex flex-col items-center justify-center text-center p-8 h-full">
     <div className="relative">
       <WandIcon className="w-16 h-16 text-purple-400 animate-pulse" />
@@ -153,7 +150,7 @@ const LoadingIndicator: React.FC = () => (
       </div>
     </div>
     <p className="text-slate-300 mt-4 text-lg">Generating Illusion Blueprint…</p>
-    <p className="text-slate-400 text-sm">This involves multiple AI steps and may take a moment.</p>
+    <p className="text-slate-400 text-sm">{message || 'This involves multiple AI steps and may take a moment.'}</p>
   </div>
 );
 
@@ -265,7 +262,17 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
   const [performerStyle, setPerformerStyle] = useState<PerformerStyle>('Mystery');
   const [constraints, setConstraints] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingTick, setLoadingTick] = useState(0);
   const [error, setError] = useState<string | null>(null);
+
+
+  useEffect(() => {
+    if (!isLoading) return;
+    const t = window.setInterval(() => setLoadingTick((v) => v + 1), 1200);
+    return () => window.clearInterval(t);
+  }, [isLoading]);
+
+  const loadingMessage = LOADING_MESSAGES[loadingTick % LOADING_MESSAGES.length];
 
   const [conceptArt, setConceptArt] = useState<string | null>(null);
   const [lastArtPrompt, setLastArtPrompt] = useState<string | null>(null);
@@ -284,16 +291,21 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
 
   const [openSections, setOpenSections] = useState<Record<SectionId, boolean>>({
     engineering: true,
-    concept: true,
-    blueprint: true,
-    principles: true,
-    staging: true,
-    buildpack: true,
-    cutlist: true,
-    assembly: true,
-    safety: true,
+    concept: false,
+    blueprint: false,
+    principles: false,
+    staging: false,
+    buildpack: false,
+    cutlist: false,
+    assembly: false,
+    safety: false,
     json: false,
   });
+
+  const [viewMode, setViewMode] = useState<'compact' | 'full'>('compact');
+  const [fastMode, setFastMode] = useState<boolean>(true);
+  const [focusedSection, setFocusedSection] = useState<SectionId>('engineering');
+  const [accordionMode, setAccordionMode] = useState<boolean>(true);
 
   const [jsonCopyStatus, setJsonCopyStatus] = useState<'idle' | 'copied'>('idle');
   const [copyAllStatus, setCopyAllStatus] = useState<'idle' | 'copied'>('idle');
@@ -574,13 +586,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     );
 
     targets.forEach((t) => obs.observe(t));
-    
-const resetSession = () => {
-  window.location.reload();
-};
-
-return (
-) => obs.disconnect();
+    return () => obs.disconnect();
   }, [engineeringSummary, conceptArt, stagingBlueprint, buildPack]);
 
   const handleGenerate = async () => {
@@ -597,6 +603,10 @@ return (
       `Concept: ${prompt.trim()}`,
     ].join('\n');
 
+    const speedProfile = fastMode
+      ? 'FAST MODE: Keep all text concise. Max 5 bullets per list. Max 2 sentences per paragraph. Limit assembly steps to 10–14. Avoid long narratives.'
+      : 'FULL MODE: You may add a bit more detail, but stay practical and non-exposure.';
+
     setIsLoading(true);
     setError(null);
     setConceptArt(null);
@@ -606,17 +616,20 @@ return (
     setBuildPack(null);
     setSelectedMechanismId('all');
     setActiveSection('engineering');
+    setViewMode('compact');
+    setFocusedSection('engineering');
+    setAccordionMode(true);
     setOpenSections((prev) => ({
       ...prev,
       engineering: true,
-      concept: true,
-      blueprint: true,
-      principles: true,
-      staging: true,
-      buildpack: true,
-      cutlist: true,
-      assembly: true,
-      safety: true,
+      concept: false,
+      blueprint: false,
+      principles: false,
+      staging: false,
+      buildpack: false,
+      cutlist: false,
+      assembly: false,
+      safety: false,
       json: false,
     }));
     setJsonCopyStatus('idle');
@@ -626,11 +639,11 @@ return (
 
     setLastArtPrompt(artPrompt);
 
-    const engineeringPrompt = `Create an ENGINEERING-MINDED SUMMARY for this stage illusion request.\n\n${context}\n\n${REALISM_GUARDRAILS}\n\nSTRICT: non-exposure. Provide high-level principles and tradeoffs only. No step-by-step secrets.\n\nReturn JSON matching the schema exactly.`;
+    const engineeringPrompt = `Create an ENGINEERING-MINDED SUMMARY for this stage illusion request.\n\n${context}\n\n${speedProfile}\n\n${REALISM_GUARDRAILS}\n\nSTRICT: non-exposure. Provide high-level principles and tradeoffs only. No step-by-step secrets.\n\nReturn JSON matching the schema exactly.`;
 
-    const stagingPrompt = `Generate a STAGING blueprint for this illusion request.\n\n${context}\n\n${REALISM_GUARDRAILS}\n\nProvide performance-facing principles and a clear staging description.`;
+    const stagingPrompt = `Generate a STAGING blueprint for this illusion request.\n\n${context}\n\n${speedProfile}\n\n${REALISM_GUARDRAILS}\n\nProvide performance-facing principles and a clear staging description.`;
 
-    const buildPrompt = `Create a BUILD BLUEPRINT PACK for this illusion request.\n\n${context}\n\n${REALISM_GUARDRAILS}\n\nProvide realistic dimensions and a cut list. Include 3 mechanism options (manual, assisted, motorized) with mechanism ids and tag parts/steps that differ by option.`;
+    const buildPrompt = `Create a BUILD BLUEPRINT PACK for this illusion request.\n\n${context}\n\n${speedProfile}\n\n${REALISM_GUARDRAILS}\n\nProvide realistic dimensions and a cut list. Include 3 mechanism options (manual, assisted, motorized) with mechanism ids and tag parts/steps that differ by option.`;
 
     try {
       const artPromise = generateImage(artPrompt, '16:9', user);
@@ -812,13 +825,7 @@ const handleRegenerateConceptArt = async () => {
 
     switch (id) {
       case 'engineering': {
-        
-const resetSession = () => {
-  window.location.reload();
-};
-
-return (
-
+        return (
           header +
           meta +
           `### Engineering Summary\n\n` +
@@ -836,13 +843,7 @@ return (
         );
       }
       case 'concept': {
-        
-const resetSession = () => {
-  window.location.reload();
-};
-
-return (
-
+        return (
           header +
           meta +
           `### Concept Art\n\n` +
@@ -854,13 +855,7 @@ return (
         return header + meta + `### Blueprint Sheet\n\n` + (blueprintSheet ? `Image URL: ${blueprintSheet}\n` : 'No blueprint sheet generated.');
       }
       case 'principles': {
-        
-const resetSession = () => {
-  window.location.reload();
-};
-
-return (
-
+        return (
           header +
           meta +
           `### Potential Principles\n\n` +
@@ -912,6 +907,9 @@ return (
     setVenueSize('Stage');
     setPerformerStyle('Mystery');
     setConstraints('');
+    setViewMode('compact');
+    setFocusedSection('engineering');
+    setAccordionMode(true);
     setConceptArt(null);
     setBlueprintSheet(null);
     setEngineeringSummary(null);
@@ -922,14 +920,14 @@ return (
     setActiveSection('engineering');
     setOpenSections({
       engineering: true,
-      concept: true,
-      blueprint: true,
-      principles: true,
-      staging: true,
-      buildpack: true,
-      cutlist: true,
-      assembly: true,
-      safety: true,
+      concept: false,
+      blueprint: false,
+      principles: false,
+      staging: false,
+      buildpack: false,
+      cutlist: false,
+      assembly: false,
+      safety: false,
       json: false,
     });
     setJsonCopyStatus('idle');
@@ -981,13 +979,54 @@ return (
   };
 
   const scrollToSection = (id: string) => {
+    // In compact mode, switch the visible section first, then scroll.
+    if (viewMode === 'compact') {
+      const sid = id as SectionId;
+      setFocusedSection(sid);
+      setOpenSections((prev) => {
+        const next: Record<SectionId, boolean> = {
+          engineering: false,
+          concept: false,
+          blueprint: false,
+          principles: false,
+          staging: false,
+          buildpack: false,
+          cutlist: false,
+          assembly: false,
+          safety: false,
+          json: prev.json,
+        };
+        next[sid] = true;
+        return next;
+      });
+    }
+
     const el = document.getElementById(id);
     if (!el) return;
     el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   const toggleSection = (id: SectionId) => {
-    setOpenSections((prev) => ({ ...prev, [id]: !prev[id] }));
+    setOpenSections((prev) => {
+      const nextOpen = !prev[id];
+      if (!accordionMode) return { ...prev, [id]: nextOpen };
+
+      // Accordion mode: keep one open at a time (except Raw JSON stays independent).
+      const next: Record<SectionId, boolean> = {
+        engineering: false,
+        concept: false,
+        blueprint: false,
+        principles: false,
+        staging: false,
+        buildpack: false,
+        cutlist: false,
+        assembly: false,
+        safety: false,
+        json: prev.json,
+      };
+      next[id] = nextOpen;
+      return next;
+    });
   };
 
   const setAllSections = (open: boolean) => {
@@ -1006,13 +1045,7 @@ return (
     });
   };
 
-  
-const resetSession = () => {
-  window.location.reload();
-};
-
-return (
-
+  return (
     <div className="flex-1 flex flex-col overflow-hidden p-4 md:p-6 animate-fade-in">
       <header className="mb-6">
         <div className="flex items-center gap-3">
@@ -1051,6 +1084,23 @@ return (
               className="ml-auto px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border bg-slate-900/40 border-slate-700 text-slate-200 hover:border-slate-500"
             >
               Reset
+            </button>
+          </div>
+
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/20 p-3">
+            <div>
+              <div className="text-sm font-semibold text-slate-200">Booth Demo Speed</div>
+              <div className="text-xs text-slate-400">Fast mode keeps outputs shorter and more reliable live.</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setFastMode((v) => !v)}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
+                fastMode ? 'bg-purple-600/30 border-purple-500 text-purple-200' : 'bg-slate-900/40 border-slate-700 text-slate-300 hover:border-slate-500'
+              }`}
+              title="Fast mode reduces verbosity to improve generation speed."
+            >
+              {fastMode ? 'Fast: ON' : 'Fast: OFF'}
             </button>
           </div>
 
@@ -1168,6 +1218,15 @@ return (
             <div className="flex items-center gap-2">
               <button
                 type="button"
+                onClick={handleStartOver}
+                className="px-3 py-1.5 rounded-md text-[11px] font-semibold border border-slate-700 bg-slate-900/60 text-slate-200 hover:bg-slate-900"
+                title="Reset this session"
+              >
+                Reset
+              </button>
+
+              <button
+                type="button"
                 onClick={() => void handleCopyAll()}
                 disabled={!engineeringSummary || !stagingBlueprint || !buildPack}
                 className="px-3 py-1.5 rounded-md text-[11px] font-semibold border border-slate-700 bg-slate-900/60 text-slate-200 hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1183,7 +1242,7 @@ return (
             {!engineeringSummary || !stagingBlueprint || !buildPack ? (
               <div className="h-full flex items-center justify-center">
                 {isLoading ? (
-                  <LoadingIndicator />
+                  <LoadingIndicator message={loadingMessage} />
                 ) : (
                   <div className="max-w-md text-center">
                     <div className="text-slate-200 font-semibold">Your blueprint will appear here.</div>
@@ -1198,6 +1257,32 @@ return (
               </div>
             ) : (
               <div className="space-y-6">
+                {/* Professional engineering header (visual hierarchy) */}
+                <div className="rounded-2xl border border-slate-800 bg-slate-900/20 p-4">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                    <div>
+                      <div className="text-xs uppercase tracking-wider text-slate-400">Illusion Engineering Readout</div>
+                      <div className="text-lg font-bold text-white font-cinzel">{engineeringSummary.title}</div>
+                      <div className="text-sm text-slate-300 mt-1 line-clamp-2">{engineeringSummary.audience_experience}</div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <span className="px-3 py-1.5 rounded-full text-xs font-semibold border border-slate-700 bg-slate-950/30 text-slate-200">
+                        Complexity: {engineeringSummary.build_complexity.rating_1_to_5}/5
+                      </span>
+                      <span className="px-3 py-1.5 rounded-full text-xs font-semibold border border-slate-700 bg-slate-950/30 text-slate-200">
+                        Reset: {engineeringSummary.reset_time}
+                      </span>
+                      <span className="px-3 py-1.5 rounded-full text-xs font-semibold border border-slate-700 bg-slate-950/30 text-slate-200">
+                        Feasibility: {engineeringSummary.feasibility_verdict.level}
+                      </span>
+                      <span className="px-3 py-1.5 rounded-full text-xs font-semibold border border-slate-700 bg-slate-950/30 text-slate-300">
+                        Venue: {venueSize}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+
           {/* Sticky Mini-Nav */}
           <div className="sticky top-0 z-20 -mx-4 md:-mx-5 px-4 md:px-5 py-3 bg-slate-950/80 backdrop-blur border-b border-slate-800">
             <div className="flex flex-wrap items-center gap-2">
@@ -1243,7 +1328,49 @@ return (
 </button>
               </div>
 
-              {/* Expand/collapse controls */}
+              
+              {/* View controls (booth-friendly) */}
+              <div className="flex items-center gap-2 ml-1">
+                <span className="text-[11px] text-slate-400">View:</span>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('compact')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
+                    viewMode === 'compact'
+                      ? 'bg-purple-600/30 border-purple-500 text-purple-200'
+                      : 'bg-slate-900/40 border-slate-700 text-slate-300 hover:border-slate-500'
+                  }`}
+                >
+                  Compact
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('full')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
+                    viewMode === 'full'
+                      ? 'bg-purple-600/30 border-purple-500 text-purple-200'
+                      : 'bg-slate-900/40 border-slate-700 text-slate-300 hover:border-slate-500'
+                  }`}
+                >
+                  Full
+                </button>
+
+                <span className="text-[11px] text-slate-400 ml-2">Accordion:</span>
+                <button
+                  type="button"
+                  onClick={() => setAccordionMode((v) => !v)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
+                    accordionMode
+                      ? 'bg-purple-600/30 border-purple-500 text-purple-200'
+                      : 'bg-slate-900/40 border-slate-700 text-slate-300 hover:border-slate-500'
+                  }`}
+                  title="Accordion keeps one section open at a time"
+                >
+                  {accordionMode ? 'On' : 'Off'}
+                </button>
+              </div>
+
+{/* Expand/collapse controls */}
               <button
                 type="button"
                 onClick={() => setAllSections(true)}
@@ -1537,13 +1664,7 @@ return (
                   <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
                     {buildPack.mechanism_options.map((m) => {
                       const isActive = selectedMechanismId === m.id;
-                      
-const resetSession = () => {
-  window.location.reload();
-};
-
-return (
-
+                      return (
                         <div
                           key={m.id}
                           role="button"
