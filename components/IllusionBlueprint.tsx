@@ -296,6 +296,7 @@ const TextBlock: React.FC<{
         ))
       )}
     </div>
+    </>
   );
 };
 
@@ -354,6 +355,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [copyStatus, setCopyStatus] = useState<CopyStatus>('idle');
   const [selectedConceptIndex, setSelectedConceptIndex] = useState<number | null>(null);
+  const [activeConceptIndex, setActiveConceptIndex] = useState<number | null>(null);
   const [openSections, setOpenSections] = useState({
     plan: true,
     construction: false,
@@ -454,6 +456,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     setSaveStatus('idle');
     setCopyStatus('idle');
     setSelectedConceptIndex(null);
+    setActiveConceptIndex(null);
     setLoadingStage('');
     setOpenSections({
       plan: true,
@@ -631,6 +634,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     setSaveStatus('idle');
     setCopyStatus('idle');
     setSelectedConceptIndex(null);
+    setActiveConceptIndex(null);
 
     const planPrompt = [
       'Create a realistic builder plan for the following illusion request.',
@@ -691,6 +695,70 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
   };
 
   return (
+    <>
+      {activeConceptIndex !== null && imageOptions[activeConceptIndex] ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Visual concept preview"
+          onClick={() => setActiveConceptIndex(null)}
+        >
+          <div
+            className="w-full max-w-5xl overflow-hidden rounded-2xl border border-white/10 bg-slate-950 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+              <div>
+                <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Concept Preview</div>
+                <div className="mt-1 text-lg font-bold text-white">{`Concept ${String.fromCharCode(65 + activeConceptIndex)}`}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveConceptIndex(null)}
+                className="rounded-full border border-slate-700 bg-slate-900/70 px-3 py-1.5 text-xs font-semibold text-slate-200 transition-colors hover:border-slate-500"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="bg-slate-950/60 p-4">
+              <div className="overflow-hidden rounded-xl border border-white/10 bg-slate-900/50">
+                <img
+                  src={imageOptions[activeConceptIndex]}
+                  alt={`Illusion concept Concept ${String.fromCharCode(65 + activeConceptIndex)}`}
+                  className="h-auto max-h-[72vh] w-full object-contain"
+                />
+              </div>
+
+              <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-sm text-slate-400">Inspect the concept at a larger size, then choose it as the preferred build direction.</div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedConceptIndex(activeConceptIndex)}
+                    className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                      selectedConceptIndex === activeConceptIndex
+                        ? 'border border-violet-400/70 bg-violet-500/20 text-violet-100'
+                        : 'border border-slate-700 bg-slate-900/70 text-slate-200 hover:border-violet-300/60 hover:text-violet-100'
+                    }`}
+                  >
+                    {selectedConceptIndex === activeConceptIndex ? 'Selected for Build' : 'Select Concept'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveConceptIndex(null)}
+                    className="rounded-full border border-slate-700 bg-slate-900/70 px-4 py-2 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-500"
+                  >
+                    Close Preview
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
     <div className="flex-1 flex flex-col overflow-hidden p-4 md:p-6 animate-fade-in">
       <header className="mb-6">
         <div className="flex items-center gap-3">
@@ -1179,31 +1247,34 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                           const isSelected = selectedConceptIndex === idx;
 
                           return (
-                            <button
+                            <div
                               key={`${src.slice(0, 30)}-${idx}`}
-                              type="button"
-                              onClick={() => setSelectedConceptIndex(idx)}
-                              className={`group relative overflow-hidden rounded-xl border bg-white/5 text-left transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-violet-400/70 ${
+                              className={`group relative overflow-hidden rounded-xl border bg-white/5 text-left transition-all duration-200 ${
                                 isSelected
                                   ? 'border-violet-400 ring-2 ring-violet-400 shadow-lg shadow-violet-500/20'
                                   : 'border-white/10 hover:border-violet-300/60 hover:shadow-md hover:shadow-black/20 hover:-translate-y-0.5'
                               }`}
-                              aria-pressed={isSelected}
                             >
-                              <div className="aspect-[4/3] overflow-hidden bg-slate-950/40">
-                                <img
-                                  src={src}
-                                  alt={`Illusion concept ${conceptLabel}`}
-                                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                                />
-                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setActiveConceptIndex(idx)}
+                                className="block w-full text-left focus:outline-none focus:ring-2 focus:ring-inset focus:ring-violet-400/70"
+                              >
+                                <div className="aspect-[4/3] overflow-hidden bg-slate-950/40">
+                                  <img
+                                    src={src}
+                                    alt={`Illusion concept ${conceptLabel}`}
+                                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                                  />
+                                </div>
+                              </button>
 
                               <div className="p-3">
                                 <div className="flex items-start justify-between gap-3">
                                   <div>
                                     <div className="text-sm font-semibold text-slate-100">{conceptLabel}</div>
                                     <div className="mt-1 text-xs text-slate-400">
-                                      {isSelected ? 'Selected for Build' : 'Click to select this build direction'}
+                                      {isSelected ? 'Selected for Build' : 'Click image to inspect and compare'}
                                     </div>
                                   </div>
                                   {isSelected ? (
@@ -1215,18 +1286,30 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
 
                                 <div className="mt-3 flex items-center justify-between gap-3">
                                   <span className="text-[11px] text-slate-500">Builder concept image</span>
-                                  <span
-                                    className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${
-                                      isSelected
-                                        ? 'bg-violet-500/20 text-violet-200 border border-violet-400/60'
-                                        : 'border border-slate-700 bg-slate-900/50 text-slate-300 group-hover:border-violet-300/50 group-hover:text-violet-200'
-                                    }`}
-                                  >
-                                    {isSelected ? 'Selected' : 'Select Concept'}
-                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => setActiveConceptIndex(idx)}
+                                      className="rounded-full border border-slate-700 bg-slate-900/50 px-2.5 py-1 text-[11px] font-semibold text-slate-300 transition-colors hover:border-violet-300/50 hover:text-violet-200"
+                                    >
+                                      View Larger
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedConceptIndex(idx)}
+                                      aria-pressed={isSelected}
+                                      className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                                        isSelected
+                                          ? 'bg-violet-500/20 text-violet-200 border border-violet-400/60'
+                                          : 'border border-slate-700 bg-slate-900/50 text-slate-300 hover:border-violet-300/50 hover:text-violet-200'
+                                      }`}
+                                    >
+                                      {isSelected ? 'Selected' : 'Select Concept'}
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
-                            </button>
+                            </div>
                           );
                         })}
                       </div>
@@ -1276,6 +1359,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
         </div>
       </div>
     </div>
+    </>
   );
 };
 
