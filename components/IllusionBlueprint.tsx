@@ -182,6 +182,22 @@ const DetailList: React.FC<{ items: string[] }> = ({ items }) => (
   </ul>
 );
 
+
+const inferOperationalDetail = (items: string[], keywords: string[]): string | null => {
+  const match = items.find((item) => keywords.some((keyword) => item.toLowerCase().includes(keyword)));
+  if (!match) return null;
+  const cleaned = match
+    .replace(/^(crew|reset|transport|portability|mobility)\s*[:\-]\s*/i, '')
+    .trim();
+  return cleaned || match.trim();
+};
+
+const inferEffectCategory = (effectInput: string): string => {
+  const lowered = effectInput.toLowerCase();
+  const match = EFFECT_SUGGESTIONS.find((suggestion) => lowered.includes(suggestion.toLowerCase()));
+  return match ?? 'Custom Illusion';
+};
+
 const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved }) => {
   const [effectInput, setEffectInput] = useState('');
   const [venueScale, setVenueScale] = useState<VenueScale>('Stage');
@@ -341,6 +357,46 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
       specialNotes,
     ]
   );
+
+  const buildSummary = useMemo(() => {
+    if (!builderPlan) return null;
+
+    const transportProfile =
+      inferOperationalDetail(builderPlan.reset_transport_crew, ['transport', 'road case', 'truck', 'modular', 'rolling', 'tour']) ||
+      transportLimitations.trim() ||
+      'Not specified';
+
+    const crewProfile =
+      inferOperationalDetail(builderPlan.reset_transport_crew, ['crew', 'assistant', 'operator']) ??
+      crewSize;
+
+    const resetProfile =
+      inferOperationalDetail(builderPlan.reset_transport_crew, ['reset', 'seconds', 'minute']) ??
+      resetRequirement;
+
+    return {
+      title: builderPlan.project_title,
+      effectCategory: inferEffectCategory(effectInput),
+      audienceEffect: builderPlan.audience_effect,
+      footprint: builderPlan.dimensions_footprint,
+      crew: crewProfile,
+      reset: resetProfile,
+      budget: budgetLevel,
+      complexity: builderPlan.build_complexity.rating_1_to_5,
+      complexityRationale: builderPlan.build_complexity.rationale,
+      transport: transportProfile,
+      materials: materialsPreference.trim() || builderPlan.recommended_construction.materials.slice(0, 3).join(', '),
+      mechanism: builderPlan.mechanism_approach.primary || 'Not specified',
+    };
+  }, [
+    builderPlan,
+    effectInput,
+    budgetLevel,
+    crewSize,
+    resetRequirement,
+    transportLimitations,
+    materialsPreference,
+  ]);
 
   const planMarkdown = useMemo(() => {
     if (!builderPlan) return '';
@@ -772,6 +828,72 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                     ))}
                   </div>
                 </div>
+
+                {buildSummary ? (
+                  <section className="rounded-2xl border border-violet-400/20 bg-gradient-to-br from-slate-900/95 via-slate-900/90 to-violet-950/30 p-4 md:p-5 shadow-[0_12px_40px_-24px_rgba(139,92,246,0.55)]">
+                    <div className="flex flex-col gap-4">
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5 rounded-xl border border-violet-400/30 bg-violet-500/10 p-2 text-violet-200">
+                          <BlueprintIcon className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-violet-200/80">
+                            Builder Summary
+                          </div>
+                          <h3 className="mt-1 text-xl font-bold text-white font-cinzel">
+                            {buildSummary.title}
+                          </h3>
+                          <p className="mt-2 text-sm leading-relaxed text-slate-300 max-w-3xl">
+                            {buildSummary.audienceEffect}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          `Complexity ${buildSummary.complexity}/5`,
+                          `Crew ${buildSummary.crew}`,
+                          `Reset ${buildSummary.reset}`,
+                          `Budget ${buildSummary.budget}`,
+                        ].map((item) => (
+                          <span
+                            key={item}
+                            className="rounded-full border border-violet-400/25 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200"
+                          >
+                            {item}
+                          </span>
+                        ))}
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
+                          <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Effect Category</div>
+                          <p className="mt-1 text-sm text-slate-100">{buildSummary.effectCategory}</p>
+                        </div>
+                        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
+                          <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Stage Footprint</div>
+                          <p className="mt-1 text-sm text-slate-100">{buildSummary.footprint}</p>
+                        </div>
+                        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
+                          <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Transport Profile</div>
+                          <p className="mt-1 text-sm text-slate-100">{buildSummary.transport}</p>
+                        </div>
+                        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
+                          <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Materials Preference</div>
+                          <p className="mt-1 text-sm text-slate-100">{buildSummary.materials}</p>
+                        </div>
+                        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3 md:col-span-2">
+                          <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Primary Mechanism Direction</div>
+                          <p className="mt-1 text-sm text-slate-100 leading-relaxed">{buildSummary.mechanism}</p>
+                        </div>
+                        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3 md:col-span-2">
+                          <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Build Complexity Notes</div>
+                          <p className="mt-1 text-sm text-slate-300 leading-relaxed">{buildSummary.complexityRationale}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                ) : null}
 
                 <div id="ib-plan">
                   <CollapsibleCard
