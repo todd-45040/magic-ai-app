@@ -569,8 +569,6 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
   }, [engineeringSummary, conceptArt, stagingBlueprint, buildPack]);
 
   const hasCoreOutput = Boolean(engineeringSummary && stagingBlueprint);
-  const safeBlueprintTitle = buildPack?.title || engineeringSummary?.title || prompt.trim() || 'Untitled Illusion Blueprint';
-  const safeIntendedEffect = buildPack?.intended_effect || engineeringSummary?.audience_experience || prompt.trim() || 'Illusion concept in progress';
 
   const normalizeBuildPack = (pack: any): BuildBlueprintPack => ({
     title: pack?.title || 'Illusion Build Pack',
@@ -597,6 +595,26 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     build_notes: Array.isArray(pack?.build_notes) ? pack.build_notes : [],
   });
 
+
+  const normalizeStagingBlueprint = (blueprint: any, summary?: EngineeringSummary | null): StagingBlueprint => {
+    const principles = Array.isArray(blueprint?.potential_principles) ? blueprint.potential_principles.filter(Boolean) : [];
+    const fallbackPrinciples = summary
+      ? [
+          { name: 'Method A', description: summary.secret_method_possibilities.method_a },
+          { name: 'Method B', description: summary.secret_method_possibilities.method_b },
+          { name: 'Method C', description: summary.secret_method_possibilities.method_c },
+        ].filter((p) => p.description && p.description.trim())
+      : [];
+
+    return {
+      potential_principles: principles.length ? principles : fallbackPrinciples,
+      blueprint_description:
+        blueprint?.blueprint_description ||
+        summary?.stage_staging?.blocking ||
+        'Staging notes were not returned. Try regenerating staging for a fuller performance plan.',
+    };
+  };
+
   const buildContext = () => [
     `Effect Type: ${effectType}`,
     `Venue Size: ${venueSize}`,
@@ -611,23 +629,167 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
       return;
     }
     const context = buildContext();
-    const buildProfile = fastMode
-      ? 'FAST BUILD PACK: keep output concise. Use 1-2 mechanism options, 8 cut-list rows max, and 8 assembly steps max.'
-      : 'FULL BUILD PACK: include practical detail, but keep it readable and stage-realistic.';
-    const buildPrompt = `Create a BUILD BLUEPRINT PACK for this illusion request.\n\n${context}\n\n${buildProfile}\n\n${REALISM_GUARDRAILS}\n\nProvide realistic dimensions and a concise cut list. Include mechanism ids and tag parts/steps that differ by option.`;
+    const buildPrompt = `Create a BUILD BLUEPRINT PACK for this illusion request.
+
+${context}
+
+${REALISM_GUARDRAILS}
+
+Provide realistic dimensions and a concise cut list. Include mechanism ids and tag parts/steps that differ by option.`;
+    const fullOptions = { speedMode: fastMode ? 'fast' : 'full', maxOutputTokens: fastMode ? 2600 : 3800 };
+    const liteSchema = {
+      type: Type.OBJECT,
+      properties: {
+        title: { type: Type.STRING },
+        intended_effect: { type: Type.STRING },
+        overall_dimensions: {
+          type: Type.OBJECT,
+          properties: {
+            width_in: { type: Type.NUMBER },
+            depth_in: { type: Type.NUMBER },
+            height_in: { type: Type.NUMBER },
+            width_mm: { type: Type.NUMBER },
+            depth_mm: { type: Type.NUMBER },
+            height_mm: { type: Type.NUMBER },
+            tolerance_in: { type: Type.NUMBER },
+            tolerance_mm: { type: Type.NUMBER },
+          },
+          required: ['width_in', 'depth_in', 'height_in', 'width_mm', 'depth_mm', 'height_mm'],
+        },
+        breakdown_modules: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.STRING },
+              name: { type: Type.STRING },
+              notes: { type: Type.STRING },
+            },
+            required: ['id', 'name', 'notes'],
+          },
+        },
+        mechanism_options: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.STRING },
+              name: { type: Type.STRING },
+              difficulty: { type: Type.STRING },
+              description: { type: Type.STRING },
+              key_components: { type: Type.ARRAY, items: { type: Type.STRING } },
+              pros: { type: Type.ARRAY, items: { type: Type.STRING } },
+              cons: { type: Type.ARRAY, items: { type: Type.STRING } },
+            },
+            required: ['id', 'name', 'difficulty', 'description', 'key_components', 'pros', 'cons'],
+          },
+        },
+        materials: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              item: { type: Type.STRING },
+              spec: { type: Type.STRING },
+              qty: { type: Type.NUMBER },
+              notes: { type: Type.STRING },
+            },
+            required: ['item', 'spec', 'qty'],
+          },
+        },
+        hardware: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              item: { type: Type.STRING },
+              spec: { type: Type.STRING },
+              qty: { type: Type.NUMBER },
+              notes: { type: Type.STRING },
+            },
+            required: ['item', 'spec', 'qty'],
+          },
+        },
+        cut_list: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              part: { type: Type.STRING },
+              material: { type: Type.STRING },
+              thickness: { type: Type.STRING },
+              qty: { type: Type.NUMBER },
+              size_in: { type: Type.STRING },
+              size_mm: { type: Type.STRING },
+              notes: { type: Type.STRING },
+            },
+            required: ['part', 'material', 'thickness', 'qty', 'size_in', 'size_mm'],
+          },
+        },
+        assembly_steps: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              step: { type: Type.NUMBER },
+              text: { type: Type.STRING },
+            },
+            required: ['step', 'text'],
+          },
+        },
+        safety_notes: { type: Type.ARRAY, items: { type: Type.STRING } },
+        build_notes: { type: Type.ARRAY, items: { type: Type.STRING } },
+      },
+      required: [
+        'title',
+        'intended_effect',
+        'overall_dimensions',
+        'breakdown_modules',
+        'mechanism_options',
+        'materials',
+        'hardware',
+        'cut_list',
+        'assembly_steps',
+        'safety_notes',
+        'build_notes',
+      ],
+    };
     try {
       setIsBuildPackLoading(true);
       setGenerationStage('Generating build pack…');
       setError(null);
-      const buildResult = await generateStructuredResponse(
-        buildPrompt,
-        `${BUILD_BLUEPRINT_SYSTEM_INSTRUCTION}\n\n${REALISM_GUARDRAILS}`,
-        buildPackSchema,
-        user,
-        { speedMode: fastMode ? 'fast' : 'full', maxOutputTokens: fastMode ? 1600 : 3200 }
-      );
+      let buildResult: any;
+      try {
+        buildResult = await generateStructuredResponse(
+          buildPrompt,
+          `${BUILD_BLUEPRINT_SYSTEM_INSTRUCTION}
+
+${REALISM_GUARDRAILS}`,
+          buildPackSchema,
+          user,
+          fullOptions
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (!/JSON\.parse|Unexpected end|end of data|not valid JSON/i.test(msg)) {
+          throw err;
+        }
+        setGenerationStage('Retrying with compact build pack…');
+        const compactPrompt = `${buildPrompt}
+
+COMPACT JSON ONLY: return 1 mechanism option, 6 materials max, 6 hardware items max, 8 cut-list rows max, and 8 assembly steps max.`;
+        buildResult = await generateStructuredResponse(
+          compactPrompt,
+          `${BUILD_BLUEPRINT_SYSTEM_INSTRUCTION}
+
+${REALISM_GUARDRAILS}`,
+          liteSchema,
+          user,
+          { speedMode: 'fast', maxOutputTokens: 1800 }
+        );
+      }
       setBuildPack(normalizeBuildPack(buildResult));
-      setOpenSections((prev) => ({ ...prev, buildpack: true, cutlist: true, assembly: true, safety: true }));
+      setOpenSections((prev) => ({ ...prev, buildpack: true, cutlist: true, assembly: true, safety: true, blueprint: true }));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate build pack. Please try again.');
     } finally {
@@ -717,7 +879,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
         user,
         { speedMode: fastMode ? 'fast' : 'full', maxOutputTokens: fastMode ? 1000 : 1800 }
       );
-      setStagingBlueprint(stagingResult as StagingBlueprint);
+      setStagingBlueprint(normalizeStagingBlueprint(stagingResult, engineeringResult as EngineeringSummary));
 
       if (!fastMode) {
         await handleGenerateBuildPack();
@@ -819,7 +981,7 @@ const handleRegenerateConceptArt = async () => {
   const handleSave = () => {
     if (!engineeringSummary || !stagingBlueprint) return;
     const fullContent = buildFullContent();
-    const titleBase = prompt.trim() || safeBlueprintTitle;
+    const titleBase = prompt.trim() ? prompt.trim() : buildPack.title;
     saveIdea('text', fullContent, `Illusion Blueprint (${effectType}) — ${titleBase}`);
     onIdeaSaved();
     setSaveStatus('saved');
@@ -1218,6 +1380,16 @@ const handleRegenerateConceptArt = async () => {
                   {isBuildPackLoading ? 'Generating Build…' : 'Generate Build Pack'}
                 </button>
               ) : null}
+              {buildPack ? (
+                <button
+                  type="button"
+                  onClick={handleGenerateBlueprint}
+                  disabled={isBlueprintLoading || isBuildPackLoading}
+                  className="px-3 py-1.5 rounded-md text-[11px] font-semibold border border-slate-700 bg-slate-900/60 text-slate-200 hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isBlueprintLoading ? 'Generating Sheet…' : (blueprintSheet ? 'Regenerate Sheet' : 'Generate Blueprint Sheet')}
+                </button>
+              ) : null}
               <div className="text-[11px] text-slate-500">Version: {APP_VERSION}</div>
             </div>
           </div>
@@ -1534,7 +1706,6 @@ const handleRegenerateConceptArt = async () => {
           </CollapsibleSection>
 
           {/* Build Pack */}
-          {buildPack ? (
           <CollapsibleSection
             id="buildpack"
             title="Build Blueprint Pack"
@@ -1679,10 +1850,8 @@ const handleRegenerateConceptArt = async () => {
                 </div>
             </div>
           </CollapsibleSection>
-          ) : null}
 
           {/* Cut list */}
-          {buildPack ? (
           <CollapsibleSection
             id="cutlist"
             title="Cut List"
@@ -1724,10 +1893,8 @@ const handleRegenerateConceptArt = async () => {
                 Tip: Verify stock thickness, kerf, and square before final assembly. Treat dimensions as nominal and test-fit critical parts.
               </div>
           </CollapsibleSection>
-          ) : null}
 
           {/* Assembly */}
-          {buildPack ? (
           <CollapsibleSection
             id="assembly"
             title="Assembly Steps"
@@ -1760,10 +1927,8 @@ const handleRegenerateConceptArt = async () => {
                 ) : null}
             </div>
           </CollapsibleSection>
-          ) : null}
 
           {/* Safety */}
-          {buildPack ? (
           <CollapsibleSection
             id="safety"
             title="Safety & Stability"
@@ -1780,10 +1945,8 @@ const handleRegenerateConceptArt = async () => {
                 </ul>
             </div>
           </CollapsibleSection>
-          ) : null}
 
           {/* Blueprint Data Info Box */}
-{buildPack ? (
 <div className="mb-4 rounded-md border border-slate-700/60 bg-slate-800/40 p-4 text-sm text-slate-300">
   <div className="mb-1 font-semibold text-slate-200">Blueprint Data (Advanced)</div>
   <p className="mb-1">
@@ -1791,10 +1954,8 @@ const handleRegenerateConceptArt = async () => {
   </p>
   <p>Use it to export plans, share with builders, or feed into other design tools.</p>
 </div>
-) : null}
 
 {/* Raw JSON */}
-          {buildPack ? (
           <CollapsibleSection
             id="json"
             title="Raw JSON"
@@ -1826,7 +1987,6 @@ const handleRegenerateConceptArt = async () => {
                   {rawJson}
                 </pre>
           </CollapsibleSection>
-          ) : null}
 
               </div>
             )}
@@ -1849,7 +2009,7 @@ const handleRegenerateConceptArt = async () => {
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
                   <CohesionActions
                     content={buildFullContent()}
-                    defaultTitle={`Illusion Blueprint: ${safeBlueprintTitle}`}
+                    defaultTitle={`Illusion Blueprint: ${prompt || 'Untitled'}`}
                     defaultTags={["illusion-blueprint", "build"]}
                     compact
                   />
