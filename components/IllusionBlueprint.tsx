@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Type } from '@google/genai';
 
-import { generateImage, generateStructuredResponse } from '../services/geminiService';
+import { generateImages, generateStructuredResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
 import { CohesionActions } from './CohesionActions';
 import SaveActionBar from './shared/SaveActionBar';
@@ -15,124 +15,126 @@ interface IllusionBlueprintProps {
 }
 
 type SaveStatus = 'idle' | 'saved';
+type CopyStatus = 'idle' | 'copied';
 
-type EffectType = 'Appearance' | 'Vanish' | 'Transformation' | 'Levitation' | 'Penetration' | 'Escape' | 'Teleportation';
-type VenueSize = 'Close-up' | 'Parlor' | 'Stage' | 'Grand Illusion' | 'Arena';
+type EffectSuggestion =
+  | 'Appearance'
+  | 'Vanish'
+  | 'Levitation'
+  | 'Penetration'
+  | 'Transformation'
+  | 'Escape'
+  | 'Teleportation';
+
+type VenueScale = 'Close-up' | 'Parlor' | 'Stage' | 'Grand Illusion' | 'Arena';
 type PerformerStyle = 'Comedy' | 'Mystery' | 'Elegant' | 'Dark' | 'Story-driven';
+type BudgetLevel = 'Lean' | 'Moderate' | 'Premium';
+type CrewSize = 'Solo' | '1 Assistant' | '2-3 Crew' | '4+ Crew';
+type ResetRequirement = 'Instant' | 'Under 1 minute' | 'Under 3 minutes' | 'Flexible';
 
-const EFFECT_TYPES: EffectType[] = ['Appearance', 'Vanish', 'Transformation', 'Levitation', 'Penetration', 'Escape', 'Teleportation'];
-const VENUE_SIZES: VenueSize[] = ['Close-up', 'Parlor', 'Stage', 'Grand Illusion', 'Arena'];
-const PERFORMER_STYLES: PerformerStyle[] = ['Comedy', 'Mystery', 'Elegant', 'Dark', 'Story-driven'];
-
-type StagingBlueprint = {
-  potential_principles: { name: string; description: string }[];
-  blueprint_description: string;
-};
-
-type BuildBlueprintPack = {
-  title: string;
-  intended_effect: string;
-  overall_dimensions: {
-    width_in: number;
-    depth_in: number;
-    height_in: number;
-    width_mm: number;
-    depth_mm: number;
-    height_mm: number;
-    target_weight_lb?: number;
-    target_weight_kg?: number;
-    tolerance_in?: number;
-    tolerance_mm?: number;
+type BuilderPlan = {
+  project_title: string;
+  audience_effect: string;
+  build_concept: string;
+  recommended_construction: {
+    main_structure: string[];
+    materials: string[];
+    hardware: string[];
+    mobility_modularity: string;
   };
-  breakdown_modules: { id: string; name: string; notes: string; approx_weight_lb?: number; applies_to?: string[] }[];
-  mechanism_options: {
-    id: string;
-    name: string;
-    difficulty: 'Easy' | 'Medium' | 'Hard';
-    description: string;
-    key_components: string[];
-    pros: string[];
-    cons: string[];
-  }[];
-  materials: { item: string; spec: string; qty: number; notes?: string; applies_to?: string[] }[];
-  hardware: { item: string; spec: string; qty: number; notes?: string; applies_to?: string[] }[];
-  cut_list: { part: string; material: string; thickness: string; qty: number; size_in: string; size_mm: string; notes?: string; applies_to?: string[] }[];
-  assembly_steps: { step: number; text: string; applies_to?: string[] }[];
-  safety_notes: string[];
-  build_notes: string[];
-};
-
-type EngineeringSummary = {
-  title: string;
-  audience_experience: string;
-  secret_method_possibilities: {
-    method_a: string;
-    method_b: string;
-    method_c: string;
+  dimensions_footprint: string;
+  mechanism_approach: {
+    primary: string;
+    alternate: string;
   };
-  stage_staging: {
-    lighting: string;
-    blocking: string;
-    angles: string;
-  };
-  technical_requirements: {
-    props: string[];
-    mechanics: string[];
-    assistants: string;
-  };
-  safety_notes: string[];
-  reset_time: string;
+  assembly_overview: string[];
+  safety_stability_notes: string[];
+  reset_transport_crew: string[];
   build_complexity: {
     rating_1_to_5: number;
     rationale: string;
   };
-  reality_checks: {
-    weight_transport: string;
-    crew: string;
-    setup_time: string;
-  };
-  angle_risk_summary: {
-    front: string;
-    sides: string;
-    balcony: string;
-  };
-  feasibility_verdict: {
-    level: 'Easy' | 'Medium' | 'Hard';
-    why: string;
-  };
 };
 
-const DEMO_PRESETS: Array<{ label: string; concept: string; effectType: EffectType; venue: VenueSize; style: PerformerStyle; constraints?: string }> = [
-  {
-    label: 'Assistant Sawing',
-    effectType: 'Penetration',
-    venue: 'Grand Illusion',
-    style: 'Mystery',
-    concept:
-      'Classic sawing illusion with a modern twist. Audience believes the assistant is visibly separated. Include staging, safety, reset, and build complexity.',
-    constraints: 'Budget: mid-range. Crew: 2–3. Reset: under 2 minutes. Stage limitations: standard theater deck; limited wing depth.',
-  },
+const EFFECT_SUGGESTIONS: EffectSuggestion[] = [
+  'Appearance',
+  'Vanish',
+  'Levitation',
+  'Penetration',
+  'Transformation',
+  'Escape',
+  'Teleportation',
+];
+
+const VENUE_SCALES: VenueScale[] = ['Close-up', 'Parlor', 'Stage', 'Grand Illusion', 'Arena'];
+const PERFORMER_STYLES: PerformerStyle[] = ['Comedy', 'Mystery', 'Elegant', 'Dark', 'Story-driven'];
+const BUDGET_LEVELS: BudgetLevel[] = ['Lean', 'Moderate', 'Premium'];
+const CREW_SIZES: CrewSize[] = ['Solo', '1 Assistant', '2-3 Crew', '4+ Crew'];
+const RESET_REQUIREMENTS: ResetRequirement[] = ['Instant', 'Under 1 minute', 'Under 3 minutes', 'Flexible'];
+
+const DEMO_PRESETS = [
   {
     label: 'Floating Assistant',
-    effectType: 'Levitation',
-    venue: 'Stage',
-    style: 'Elegant',
-    concept:
-      'Elegant levitation where the assistant floats across stage. Strong theatrical framing, sightline notes, and safe, realistic construction considerations.',
-    constraints: 'Budget: moderate. Crew: 1–2. Reset: 90 seconds. Angles: avoid extreme side seating; include balcony considerations.',
+    effect: 'Levitation with a graceful assistant floating several feet above a low platform and rotating slightly for the audience.',
+    venue: 'Stage' as VenueScale,
+    style: 'Elegant' as PerformerStyle,
+    budget: 'Premium' as BudgetLevel,
+    crew: '2-3 Crew' as CrewSize,
+    reset: 'Under 3 minutes' as ResetRequirement,
+    transport: 'Must break down into rolling road-case-friendly sections.',
+    stage: 'Proscenium theatre, limited wing depth, avoid extreme side seating exposure.',
+    safety: 'Performer and assistant stability, smooth ascent, emergency access.',
+    materials: 'Aluminum frame, birch ply skin, soft goods trim.',
+    notes: 'Prioritize elegance, sightline discipline, and quiet operation.',
   },
   {
-    label: 'Instant Appearance',
-    effectType: 'Appearance',
-    venue: 'Stage',
-    style: 'Mystery',
-    concept:
-      'Performer appears instantly inside a sealed cabinet on an otherwise empty stage. Emphasize staging, lighting, and practical reset constraints.',
-    constraints: 'Budget: flexible. Crew: 1 assistant. Reset: 2–3 minutes. Stage limitations: minimal smoke; quiet operation preferred.',
+    label: 'Instant Appearance Cabinet',
+    effect: 'Performer appears instantly inside a compact cabinet center stage after a brief burst of theatrical cover.',
+    venue: 'Grand Illusion' as VenueScale,
+    style: 'Mystery' as PerformerStyle,
+    budget: 'Moderate' as BudgetLevel,
+    crew: '1 Assistant' as CrewSize,
+    reset: 'Under 1 minute' as ResetRequirement,
+    transport: 'Must fit into a box truck with modular sections.',
+    stage: 'Indoor convention stage, shallow backstage crossover.',
+    safety: 'Tipping resistance, fast latch access, clean performer egress.',
+    materials: 'Plywood, steel reinforcement where needed, concealed casters.',
+    notes: 'Cabinet should read premium and theatrical without becoming oversized.',
+  },
+  {
+    label: 'Motorcycle Vanish',
+    effect: 'A full-size motorcycle vanishes from a raised display platform under theatrical cover within seconds.',
+    venue: 'Arena' as VenueScale,
+    style: 'Dark' as PerformerStyle,
+    budget: 'Premium' as BudgetLevel,
+    crew: '4+ Crew' as CrewSize,
+    reset: 'Flexible' as ResetRequirement,
+    transport: 'Heavy scenic pieces acceptable, but modularity still preferred.',
+    stage: 'Large stage with flown lighting, broad audience width, balcony sightlines present.',
+    safety: 'Vehicle handling, platform load, edge protection, crew communication.',
+    materials: 'Steel frame primary, scenic panels secondary.',
+    notes: 'Keep it realistic, safe, and suitable for repeated touring use.',
   },
 ];
 
-const LoadingIndicator: React.FC = () => (
+const PLAN_SYSTEM_INSTRUCTION = `You are a professional illusion builder's planning assistant.
+
+Your job is to create realistic, high-quality builder plans for stage and performance illusions.
+
+Rules:
+- Output ONLY valid JSON matching the provided schema.
+- Stay practical, workshop-minded, and non-exposure.
+- Use high-level principle language only. Do NOT reveal secrets or step-by-step exposure.
+- Prioritize buildability, modularity, transport, stability, and safe operation.
+- Use common theatrical fabrication language and realistic materials/hardware.
+- Keep the response compact and useful for a builder/fabricator.
+- If a requested effect is unrealistic for the stated constraints, adapt it into a safer, more achievable version.
+- No dangerous instructions involving weapons, explosives, or illegal construction.
+- Build complexity must be a number from 1 to 5.`;
+
+const IMAGE_STYLE_GUIDE = `Create theatrical but practical illusion concept imagery. Show the prop or illusion unit clearly. Prioritize believable materials, clean stage presentation, and builder-oriented visibility. No text overlays. No exploded diagrams. No impossible sci-fi visuals.`;
+
+const LoadingIndicator: React.FC<{ stage: string }> = ({ stage }) => (
   <div className="flex flex-col items-center justify-center text-center p-8 h-full">
     <div className="relative">
       <WandIcon className="w-16 h-16 text-purple-400 animate-pulse" />
@@ -140,223 +142,103 @@ const LoadingIndicator: React.FC = () => (
         <div className="w-24 h-24 border-t-2 border-purple-300 rounded-full animate-spin"></div>
       </div>
     </div>
-    <p className="text-slate-300 mt-4 text-lg">Generating Illusion Blueprint…</p>
-    <p className="text-slate-400 text-sm">This involves multiple AI steps and may take a moment.</p>
+    <p className="text-slate-300 mt-4 text-lg">Building your illusion plan…</p>
+    <p className="text-slate-400 text-sm">{stage}</p>
   </div>
 );
 
-const SECTION_IDS = [
-  { id: 'engineering', label: 'Summary' },
-  { id: 'concept', label: 'Concept Art' },
-  { id: 'blueprint', label: 'Blueprint Sheet' },
-  { id: 'principles', label: 'Principles' },
-  { id: 'staging', label: 'Staging' },
-  { id: 'buildpack', label: 'Build Pack' },
-  { id: 'cutlist', label: 'Cut List' },
-  { id: 'assembly', label: 'Assembly' },
-  { id: 'safety', label: 'Safety' },
-  { id: 'json', label: 'Raw JSON' },
-] as const;
-
-type SectionId = (typeof SECTION_IDS)[number]['id'];
-
-const CollapsibleSection: React.FC<{
-  id: SectionId;
+const CollapsibleCard: React.FC<{
   title: string;
+  subtitle?: string;
   isOpen: boolean;
   onToggle: () => void;
-  onCopy?: () => void;
-  copyLabel?: string;
-  copied?: boolean;
+  actions?: React.ReactNode;
   children: React.ReactNode;
-}> = ({ id, title, isOpen, onToggle, onCopy, copyLabel, copied, children }) => (
-  <section id={id} className="scroll-mt-24">
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/20 overflow-hidden">
-      <div className="px-4 py-3 flex items-center gap-3 border-b border-slate-800">
-        <button
-          type="button"
-          onClick={onToggle}
-          className="flex-1 flex items-center justify-between gap-3 text-left cursor-pointer select-none"
-          aria-expanded={isOpen}
-          aria-controls={`${id}-panel`}
-        >
+}> = ({ title, subtitle, isOpen, onToggle, actions, children }) => (
+  <section className="rounded-2xl border border-slate-800 bg-slate-900/20 overflow-hidden">
+    <div className="px-4 py-3 border-b border-slate-800 flex items-center gap-3">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex-1 text-left flex items-center justify-between gap-3"
+      >
+        <div>
           <h3 className="text-lg font-bold text-white font-cinzel">{title}</h3>
-          <span className={`text-slate-400 text-sm transition-transform ${isOpen ? 'rotate-180' : ''}`}>▾</span>
-        </button>
-
-        {onCopy ? (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onCopy();
-            }}
-            className="shrink-0 px-3 py-1.5 rounded-md text-xs font-semibold border border-slate-700 bg-slate-900/60 text-slate-200 hover:bg-slate-900"
-            title="Copy this section"
-          >
-            {copied ? 'Copied!' : copyLabel || 'Copy'}
-          </button>
-        ) : null}
-      </div>
-
-      {isOpen ? (
-        <div id={`${id}-panel`} className="p-4">
-          {children}
+          {subtitle ? <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p> : null}
         </div>
-      ) : null}
+        <span className={`text-slate-400 text-sm transition-transform ${isOpen ? 'rotate-180' : ''}`}>▾</span>
+      </button>
+      {actions ? <div className="shrink-0">{actions}</div> : null}
     </div>
+    {isOpen ? <div className="p-4">{children}</div> : null}
   </section>
 );
 
-const BUILD_BLUEPRINT_SYSTEM_INSTRUCTION = `You are a theatrical illusion prop fabricator and technical designer.
-
-Your job: output a construction-ready blueprint pack for a stage illusion prop based on the user's concept.
-
-STRICT OUTPUT RULES:
-- Output ONLY valid JSON. No markdown. No backticks.
-- Use BOTH inches and millimeters for key dimensions.
-- Keep measurements realistic and buildable with common materials (plywood, 2x lumber, hinges, screws, casters).
-- The blueprint should be portable for stage use when possible (modules/breakdown).
-- Include multiple mechanism options and tag parts/steps by mechanism option id.
-
-MECHANISM TAGGING (critical):
-- For each of these arrays: breakdown_modules, materials, hardware, cut_list, assembly_steps, include optional applies_to:["<mechanism_id>"] when something is specific to a mechanism.
-- If an item applies to ALL mechanisms, omit applies_to.
-
-SAFETY:
-- Include stability and pinch-point notes. Avoid dangerous instructions (no weapons, no explosives).
-
-Return JSON matching the provided schema exactly.`;
-
-// 15-line realism upgrade: prevents "impossible" outputs and forces practical tradeoffs.
-const REALISM_GUARDRAILS = `REALISM GUARDRAILS (must follow):
-- Treat this as real theatre engineering. No supernatural claims.
-- Do NOT propose impossible physics (true teleportation, matter creation, antigravity, instant disintegration).
-- If an effect sounds "impossible", translate it into plausible stage illusion principles at a HIGH level.
-- Keep method talk non-exposure: describe principles, constraints, and tradeoffs — not secret step-by-step.
-- Always include sightline/angle notes (front, sides, balcony) and what seating to avoid.
-- Include setup/reset realities: crew count, time to reset, noise considerations, and transport weight.
-- Prefer common build materials and standard stage hardware.
-- Call out risk areas: pinch points, tipping, trip hazards, heat/smoke, and emergency stop.
-- If a request is unsafe or unrealistic for the venue/budget, suggest a safer, achievable alternative.
-- Provide practical "failure modes" (what can go wrong) and mitigations.
-- Keep outputs concise and buildable; avoid sci‑fi.
-- Use conservative dimensions; modular breakdown whenever possible.
-- Never instruct on weapons/explosives or dangerous construction.
-- Assume the user is a magician; still avoid exposure-level details.
-- End with a brief feasibility verdict: Easy/Medium/Hard + why.`;
+const DetailList: React.FC<{ items: string[] }> = ({ items }) => (
+  <ul className="list-disc pl-5 text-sm text-slate-200 space-y-1.5">
+    {items.map((item, idx) => (
+      <li key={`${item}-${idx}`}>{item}</li>
+    ))}
+  </ul>
+);
 
 const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved }) => {
-  const [prompt, setPrompt] = useState('');
-  const [effectType, setEffectType] = useState<EffectType>('Appearance');
-  const [venueSize, setVenueSize] = useState<VenueSize>('Stage');
+  const [effectInput, setEffectInput] = useState('');
+  const [venueScale, setVenueScale] = useState<VenueScale>('Stage');
   const [performerStyle, setPerformerStyle] = useState<PerformerStyle>('Mystery');
-  const [constraints, setConstraints] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [budgetLevel, setBudgetLevel] = useState<BudgetLevel>('Moderate');
+  const [crewSize, setCrewSize] = useState<CrewSize>('1 Assistant');
+  const [resetRequirement, setResetRequirement] = useState<ResetRequirement>('Under 3 minutes');
+  const [transportLimitations, setTransportLimitations] = useState('');
+  const [stageLimitations, setStageLimitations] = useState('');
+  const [safetyConcerns, setSafetyConcerns] = useState('');
+  const [materialsPreference, setMaterialsPreference] = useState('');
+  const [specialNotes, setSpecialNotes] = useState('');
+
+  const [builderPlan, setBuilderPlan] = useState<BuilderPlan | null>(null);
+  const [imageOptions, setImageOptions] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
-
-  const [conceptArt, setConceptArt] = useState<string | null>(null);
-  const [lastArtPrompt, setLastArtPrompt] = useState<string | null>(null);
-  const [isConceptLoading, setIsConceptLoading] = useState(false);
-  const [blueprintSheet, setBlueprintSheet] = useState<string | null>(null);
-  const [isBlueprintLoading, setIsBlueprintLoading] = useState(false);
-
-  const [stagingBlueprint, setStagingBlueprint] = useState<StagingBlueprint | null>(null);
-  const [buildPack, setBuildPack] = useState<BuildBlueprintPack | null>(null);
-  const [engineeringSummary, setEngineeringSummary] = useState<EngineeringSummary | null>(null);
-
+  const [warning, setWarning] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadingStage, setLoadingStage] = useState('');
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
-
-  const [activeSection, setActiveSection] = useState<string>('engineering');
-  const [selectedMechanismId, setSelectedMechanismId] = useState<string>('all');
-
-  const [openSections, setOpenSections] = useState<Record<SectionId, boolean>>({
-    engineering: true,
-    concept: true,
-    blueprint: true,
-    principles: true,
-    staging: true,
-    buildpack: true,
-    cutlist: true,
-    assembly: true,
-    safety: true,
-    json: false,
+  const [copyStatus, setCopyStatus] = useState<CopyStatus>('idle');
+  const [openSections, setOpenSections] = useState({
+    plan: true,
+    construction: true,
+    operations: true,
+    visuals: true,
   });
 
-  const [jsonCopyStatus, setJsonCopyStatus] = useState<'idle' | 'copied'>('idle');
-  const [copyAllStatus, setCopyAllStatus] = useState<'idle' | 'copied'>('idle');
-  const [sectionCopyStatus, setSectionCopyStatus] = useState<Record<SectionId, 'idle' | 'copied'>>({
-    engineering: 'idle',
-    concept: 'idle',
-    blueprint: 'idle',
-    principles: 'idle',
-    staging: 'idle',
-    buildpack: 'idle',
-    cutlist: 'idle',
-    assembly: 'idle',
-    safety: 'idle',
-    json: 'idle',
-  });
-
-  const containerRef = useRef<HTMLDivElement | null>(null);
-
-  const stagingSchema = useMemo(
+  const planSchema = useMemo(
     () => ({
       type: Type.OBJECT,
       properties: {
-        potential_principles: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              name: { type: Type.STRING },
-              description: { type: Type.STRING },
-            },
-            required: ['name', 'description'],
-          },
-        },
-        blueprint_description: { type: Type.STRING },
-      },
-      required: ['potential_principles', 'blueprint_description'],
-    }),
-    []
-  );
-
-  const engineeringSchema = useMemo(
-    () => ({
-      type: Type.OBJECT,
-      properties: {
-        title: { type: Type.STRING },
-        audience_experience: { type: Type.STRING },
-        secret_method_possibilities: {
+        project_title: { type: Type.STRING },
+        audience_effect: { type: Type.STRING },
+        build_concept: { type: Type.STRING },
+        recommended_construction: {
           type: Type.OBJECT,
           properties: {
-            method_a: { type: Type.STRING },
-            method_b: { type: Type.STRING },
-            method_c: { type: Type.STRING },
+            main_structure: { type: Type.ARRAY, items: { type: Type.STRING } },
+            materials: { type: Type.ARRAY, items: { type: Type.STRING } },
+            hardware: { type: Type.ARRAY, items: { type: Type.STRING } },
+            mobility_modularity: { type: Type.STRING },
           },
-          required: ['method_a', 'method_b', 'method_c'],
+          required: ['main_structure', 'materials', 'hardware', 'mobility_modularity'],
         },
-        stage_staging: {
+        dimensions_footprint: { type: Type.STRING },
+        mechanism_approach: {
           type: Type.OBJECT,
           properties: {
-            lighting: { type: Type.STRING },
-            blocking: { type: Type.STRING },
-            angles: { type: Type.STRING },
+            primary: { type: Type.STRING },
+            alternate: { type: Type.STRING },
           },
-          required: ['lighting', 'blocking', 'angles'],
+          required: ['primary', 'alternate'],
         },
-        technical_requirements: {
-          type: Type.OBJECT,
-          properties: {
-            props: { type: Type.ARRAY, items: { type: Type.STRING } },
-            mechanics: { type: Type.ARRAY, items: { type: Type.STRING } },
-            assistants: { type: Type.STRING },
-          },
-          required: ['props', 'mechanics', 'assistants'],
-        },
-        safety_notes: { type: Type.ARRAY, items: { type: Type.STRING } },
-        reset_time: { type: Type.STRING },
+        assembly_overview: { type: Type.ARRAY, items: { type: Type.STRING } },
+        safety_stability_notes: { type: Type.ARRAY, items: { type: Type.STRING } },
+        reset_transport_crew: { type: Type.ARRAY, items: { type: Type.STRING } },
         build_complexity: {
           type: Type.OBJECT,
           properties: {
@@ -365,615 +247,267 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
           },
           required: ['rating_1_to_5', 'rationale'],
         },
-        reality_checks: {
-          type: Type.OBJECT,
-          properties: {
-            weight_transport: { type: Type.STRING },
-            crew: { type: Type.STRING },
-            setup_time: { type: Type.STRING },
-          },
-          required: ['weight_transport', 'crew', 'setup_time'],
-        },
-        angle_risk_summary: {
-          type: Type.OBJECT,
-          properties: {
-            front: { type: Type.STRING },
-            sides: { type: Type.STRING },
-            balcony: { type: Type.STRING },
-          },
-          required: ['front', 'sides', 'balcony'],
-        },
-        feasibility_verdict: {
-          type: Type.OBJECT,
-          properties: {
-            level: { type: Type.STRING },
-            why: { type: Type.STRING },
-          },
-          required: ['level', 'why'],
-        },
       },
       required: [
-        'title',
-        'audience_experience',
-        'secret_method_possibilities',
-        'stage_staging',
-        'technical_requirements',
-        'safety_notes',
-        'reset_time',
+        'project_title',
+        'audience_effect',
+        'build_concept',
+        'recommended_construction',
+        'dimensions_footprint',
+        'mechanism_approach',
+        'assembly_overview',
+        'safety_stability_notes',
+        'reset_transport_crew',
         'build_complexity',
-        'reality_checks',
-        'angle_risk_summary',
-        'feasibility_verdict',
       ],
     }),
     []
   );
 
-  const buildPackSchema = useMemo(
-    () => ({
-      type: Type.OBJECT,
-      properties: {
-        title: { type: Type.STRING },
-        intended_effect: { type: Type.STRING },
-        overall_dimensions: {
-          type: Type.OBJECT,
-          properties: {
-            width_in: { type: Type.NUMBER },
-            depth_in: { type: Type.NUMBER },
-            height_in: { type: Type.NUMBER },
-            width_mm: { type: Type.NUMBER },
-            depth_mm: { type: Type.NUMBER },
-            height_mm: { type: Type.NUMBER },
-            target_weight_lb: { type: Type.NUMBER },
-            target_weight_kg: { type: Type.NUMBER },
-            tolerance_in: { type: Type.NUMBER },
-            tolerance_mm: { type: Type.NUMBER },
-          },
-          required: ['width_in', 'depth_in', 'height_in', 'width_mm', 'depth_mm', 'height_mm'],
-        },
-        breakdown_modules: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              id: { type: Type.STRING },
-              name: { type: Type.STRING },
-              notes: { type: Type.STRING },
-              approx_weight_lb: { type: Type.NUMBER },
-              applies_to: { type: Type.ARRAY, items: { type: Type.STRING } },
-            },
-            required: ['id', 'name', 'notes'],
-          },
-        },
-        mechanism_options: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              id: { type: Type.STRING },
-              name: { type: Type.STRING },
-              difficulty: { type: Type.STRING },
-              description: { type: Type.STRING },
-              key_components: { type: Type.ARRAY, items: { type: Type.STRING } },
-              pros: { type: Type.ARRAY, items: { type: Type.STRING } },
-              cons: { type: Type.ARRAY, items: { type: Type.STRING } },
-            },
-            required: ['id', 'name', 'difficulty', 'description', 'key_components', 'pros', 'cons'],
-          },
-        },
-        materials: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              item: { type: Type.STRING },
-              spec: { type: Type.STRING },
-              qty: { type: Type.NUMBER },
-              notes: { type: Type.STRING },
-              applies_to: { type: Type.ARRAY, items: { type: Type.STRING } },
-            },
-            required: ['item', 'spec', 'qty'],
-          },
-        },
-        hardware: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              item: { type: Type.STRING },
-              spec: { type: Type.STRING },
-              qty: { type: Type.NUMBER },
-              notes: { type: Type.STRING },
-              applies_to: { type: Type.ARRAY, items: { type: Type.STRING } },
-            },
-            required: ['item', 'spec', 'qty'],
-          },
-        },
-        cut_list: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              part: { type: Type.STRING },
-              material: { type: Type.STRING },
-              thickness: { type: Type.STRING },
-              qty: { type: Type.NUMBER },
-              size_in: { type: Type.STRING },
-              size_mm: { type: Type.STRING },
-              notes: { type: Type.STRING },
-              applies_to: { type: Type.ARRAY, items: { type: Type.STRING } },
-            },
-            required: ['part', 'material', 'thickness', 'qty', 'size_in', 'size_mm'],
-          },
-        },
-        assembly_steps: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              step: { type: Type.NUMBER },
-              text: { type: Type.STRING },
-              applies_to: { type: Type.ARRAY, items: { type: Type.STRING } },
-            },
-            required: ['step', 'text'],
-          },
-        },
-        safety_notes: { type: Type.ARRAY, items: { type: Type.STRING } },
-        build_notes: { type: Type.ARRAY, items: { type: Type.STRING } },
-      },
-      required: [
-        'title',
-        'intended_effect',
-        'overall_dimensions',
-        'breakdown_modules',
-        'mechanism_options',
-        'materials',
-        'hardware',
-        'cut_list',
-        'assembly_steps',
-        'safety_notes',
-        'build_notes',
-      ],
-    }),
-    []
+  const toggleSection = (key: keyof typeof openSections) => {
+    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const applyPreset = (preset: (typeof DEMO_PRESETS)[number]) => {
+    setEffectInput(preset.effect);
+    setVenueScale(preset.venue);
+    setPerformerStyle(preset.style);
+    setBudgetLevel(preset.budget);
+    setCrewSize(preset.crew);
+    setResetRequirement(preset.reset);
+    setTransportLimitations(preset.transport);
+    setStageLimitations(preset.stage);
+    setSafetyConcerns(preset.safety);
+    setMaterialsPreference(preset.materials);
+    setSpecialNotes(preset.notes);
+    setError(null);
+    setWarning(null);
+  };
+
+  const resetAll = () => {
+    setEffectInput('');
+    setVenueScale('Stage');
+    setPerformerStyle('Mystery');
+    setBudgetLevel('Moderate');
+    setCrewSize('1 Assistant');
+    setResetRequirement('Under 3 minutes');
+    setTransportLimitations('');
+    setStageLimitations('');
+    setSafetyConcerns('');
+    setMaterialsPreference('');
+    setSpecialNotes('');
+    setBuilderPlan(null);
+    setImageOptions([]);
+    setError(null);
+    setWarning(null);
+    setSaveStatus('idle');
+    setCopyStatus('idle');
+    setLoadingStage('');
+    setOpenSections({
+      plan: true,
+      construction: true,
+      operations: true,
+      visuals: true,
+    });
+  };
+
+  const generationContext = useMemo(
+    () => [
+      `Requested effect: ${effectInput.trim() || '(none provided)'}`,
+      `Venue / performance scale: ${venueScale}`,
+      `Performer style: ${performerStyle}`,
+      `Budget level: ${budgetLevel}`,
+      `Crew size: ${crewSize}`,
+      `Reset requirement: ${resetRequirement}`,
+      `Transport limitations: ${transportLimitations.trim() || 'Not specified'}`,
+      `Stage limitations: ${stageLimitations.trim() || 'Not specified'}`,
+      `Safety concerns: ${safetyConcerns.trim() || 'Not specified'}`,
+      `Materials preference: ${materialsPreference.trim() || 'Not specified'}`,
+      `Special notes: ${specialNotes.trim() || 'Not specified'}`,
+    ].join('\n'),
+    [
+      effectInput,
+      venueScale,
+      performerStyle,
+      budgetLevel,
+      crewSize,
+      resetRequirement,
+      transportLimitations,
+      stageLimitations,
+      safetyConcerns,
+      materialsPreference,
+      specialNotes,
+    ]
   );
 
-  // Sticky mini-nav: update active section using IntersectionObserver
-  useEffect(() => {
-    if (!engineeringSummary && !conceptArt && !stagingBlueprint && !buildPack) return;
+  const planMarkdown = useMemo(() => {
+    if (!builderPlan) return '';
 
-    const root = containerRef.current;
-    const targets = SECTION_IDS.map((s) => document.getElementById(s.id)).filter(Boolean) as HTMLElement[];
+    return [
+      `# ${builderPlan.project_title}`,
+      '',
+      `**Requested Effect:** ${effectInput}`,
+      `**Venue / Scale:** ${venueScale}`,
+      `**Performer Style:** ${performerStyle}`,
+      `**Budget Level:** ${budgetLevel}`,
+      `**Crew Size:** ${crewSize}`,
+      `**Reset Requirement:** ${resetRequirement}`,
+      transportLimitations.trim() ? `**Transport Limitations:** ${transportLimitations.trim()}` : '',
+      stageLimitations.trim() ? `**Stage Limitations:** ${stageLimitations.trim()}` : '',
+      safetyConcerns.trim() ? `**Safety Concerns:** ${safetyConcerns.trim()}` : '',
+      materialsPreference.trim() ? `**Materials Preference:** ${materialsPreference.trim()}` : '',
+      specialNotes.trim() ? `**Special Notes:** ${specialNotes.trim()}` : '',
+      '',
+      '## Audience Effect',
+      builderPlan.audience_effect,
+      '',
+      '## Build Concept',
+      builderPlan.build_concept,
+      '',
+      '## Recommended Construction',
+      ...builderPlan.recommended_construction.main_structure.map((item) => `- ${item}`),
+      '',
+      '### Materials',
+      ...builderPlan.recommended_construction.materials.map((item) => `- ${item}`),
+      '',
+      '### Hardware',
+      ...builderPlan.recommended_construction.hardware.map((item) => `- ${item}`),
+      '',
+      `### Mobility / Modularity\n${builderPlan.recommended_construction.mobility_modularity}`,
+      '',
+      '## Dimensions / Footprint',
+      builderPlan.dimensions_footprint,
+      '',
+      '## Mechanism Approach',
+      `- Primary: ${builderPlan.mechanism_approach.primary}`,
+      `- Alternate: ${builderPlan.mechanism_approach.alternate}`,
+      '',
+      '## Assembly Overview',
+      ...builderPlan.assembly_overview.map((item, idx) => `${idx + 1}. ${item}`),
+      '',
+      '## Safety / Stability Notes',
+      ...builderPlan.safety_stability_notes.map((item) => `- ${item}`),
+      '',
+      '## Reset / Transport / Crew',
+      ...builderPlan.reset_transport_crew.map((item) => `- ${item}`),
+      '',
+      `## Build Complexity\n${builderPlan.build_complexity.rating_1_to_5} / 5 — ${builderPlan.build_complexity.rationale}`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+  }, [
+    builderPlan,
+    effectInput,
+    venueScale,
+    performerStyle,
+    budgetLevel,
+    crewSize,
+    resetRequirement,
+    transportLimitations,
+    stageLimitations,
+    safetyConcerns,
+    materialsPreference,
+    specialNotes,
+  ]);
 
-    if (!targets.length) return;
+  const handleCopy = async () => {
+    if (!planMarkdown) return;
+    try {
+      await navigator.clipboard.writeText(planMarkdown);
+      setCopyStatus('copied');
+      setTimeout(() => setCopyStatus('idle'), 1500);
+    } catch {
+      // ignore clipboard permission issues
+    }
+  };
 
-    const obs = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => (b.intersectionRatio ?? 0) - (a.intersectionRatio ?? 0));
-        if (visible[0]?.target?.id) setActiveSection(visible[0].target.id);
-      },
-      {
-        root,
-        threshold: [0.2, 0.35, 0.5, 0.65],
-        rootMargin: '-96px 0px -60% 0px',
-      }
-    );
-
-    targets.forEach((t) => obs.observe(t));
-    return () => obs.disconnect();
-  }, [engineeringSummary, conceptArt, stagingBlueprint, buildPack]);
+  const handleSave = async () => {
+    if (!builderPlan || !planMarkdown) return;
+    try {
+      await saveIdea({
+        type: 'text',
+        title: `Illusion Builder Plan — ${builderPlan.project_title}`,
+        content: planMarkdown,
+        tags: ['illusion-blueprint', 'builder-plan'],
+      });
+      onIdeaSaved();
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    } catch (err: any) {
+      setError(err?.message || 'Could not save this builder plan.');
+    }
+  };
 
   const handleGenerate = async () => {
-    if (!prompt.trim()) {
-      setError('Please describe your illusion concept.');
+    if (!effectInput.trim()) {
+      setError('Please describe the illusion or effect you want to build.');
       return;
     }
 
-    const context = [
-      `Effect Type: ${effectType}`,
-      `Venue Size: ${venueSize}`,
-      `Performer Style: ${performerStyle}`,
-      constraints.trim() ? `Constraints: ${constraints.trim()}` : 'Constraints: (none provided)',
-      `Concept: ${prompt.trim()}`,
-    ].join('\n');
-
     setIsLoading(true);
     setError(null);
-    setConceptArt(null);
-    setBlueprintSheet(null);
-    setEngineeringSummary(null);
-    setStagingBlueprint(null);
-    setBuildPack(null);
-    setSelectedMechanismId('all');
-    setActiveSection('engineering');
-    setOpenSections((prev) => ({
-      ...prev,
-      engineering: true,
-      concept: true,
-      blueprint: true,
-      principles: true,
-      staging: true,
-      buildpack: true,
-      cutlist: true,
-      assembly: true,
-      safety: true,
-      json: false,
-    }));
-    setJsonCopyStatus('idle');
+    setWarning(null);
+    setBuilderPlan(null);
+    setImageOptions([]);
     setSaveStatus('idle');
+    setCopyStatus('idle');
 
-    const artPrompt = `Dramatic, theatrical concept art for a stage illusion.\n\n${context}\n\nFocus on the magical moment from the audience's perspective. Cinematic lighting, professional digital painting style.`;
-
-    setLastArtPrompt(artPrompt);
-
-    const engineeringPrompt = `Create an ENGINEERING-MINDED SUMMARY for this stage illusion request.\n\n${context}\n\n${REALISM_GUARDRAILS}\n\nSTRICT: non-exposure. Provide high-level principles and tradeoffs only. No step-by-step secrets.\n\nReturn JSON matching the schema exactly.`;
-
-    const stagingPrompt = `Generate a STAGING blueprint for this illusion request.\n\n${context}\n\n${REALISM_GUARDRAILS}\n\nProvide performance-facing principles and a clear staging description.`;
-
-    const buildPrompt = `Create a BUILD BLUEPRINT PACK for this illusion request.\n\n${context}\n\n${REALISM_GUARDRAILS}\n\nProvide realistic dimensions and a cut list. Include 3 mechanism options (manual, assisted, motorized) with mechanism ids and tag parts/steps that differ by option.`;
+    const planPrompt = [
+      'Create a realistic builder plan for the following illusion request.',
+      '',
+      generationContext,
+      '',
+      'Return a compact, practical plan for a real builder/fabricator.',
+      'The mechanism section must stay non-exposure and principle-based only.',
+      'Include only 1 primary and 1 alternate mechanism direction.',
+      'Keep all sections concise and reliable.',
+    ].join('\n');
 
     try {
-      const artPromise = generateImage(artPrompt, '16:9', user);
-      const engineeringPromise = generateStructuredResponse(
-        engineeringPrompt,
-        'You are a master illusion designer and technical director. Produce practical, build-realistic, non-exposure engineering summaries for stage illusions. Output only JSON.',
-        engineeringSchema,
-        user
-      );
-      const stagingPromise = generateStructuredResponse(stagingPrompt, 'You are an expert stage illusion designer.', stagingSchema, user);
-      const buildPromise = generateStructuredResponse(
-        buildPrompt,
-        `${BUILD_BLUEPRINT_SYSTEM_INSTRUCTION}\n\n${REALISM_GUARDRAILS}`,
-        buildPackSchema,
-        user
-      );
+      setLoadingStage('Generating builder plan…');
+      const plan = (await generateStructuredResponse(
+        planPrompt,
+        PLAN_SYSTEM_INSTRUCTION,
+        planSchema,
+        user,
+        { maxOutputTokens: 1800, speedMode: 'fast' }
+      )) as BuilderPlan;
 
-      const [artResult, engineeringResult, stagingResult, buildResult] = await Promise.all([
-        artPromise,
-        engineeringPromise,
-        stagingPromise,
-        buildPromise,
-      ]);
+      setBuilderPlan(plan);
+      setOpenSections({
+        plan: true,
+        construction: true,
+        operations: true,
+        visuals: true,
+      });
 
-      setConceptArt(artResult);
-      setEngineeringSummary(engineeringResult as EngineeringSummary);
-      setStagingBlueprint(stagingResult as StagingBlueprint);
-      setBuildPack(buildResult as BuildBlueprintPack);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred. Please try again.');
+      setLoadingStage('Generating visual concepts…');
+      const imagePrompt = [
+        IMAGE_STYLE_GUIDE,
+        '',
+        `Project title: ${plan.project_title}`,
+        `Audience effect: ${plan.audience_effect}`,
+        `Build concept: ${plan.build_concept}`,
+        `Dimensions / footprint: ${plan.dimensions_footprint}`,
+        `Materials direction: ${plan.recommended_construction.materials.join(', ')}`,
+        `Mobility / modularity: ${plan.recommended_construction.mobility_modularity}`,
+        `Venue / scale: ${venueScale}`,
+        `Performer style: ${performerStyle}`,
+        'Produce three distinct but related design directions.',
+      ].join('\n');
+
+      try {
+        const images = await generateImages(imagePrompt, '16:9', 3, user);
+        setImageOptions(images);
+      } catch (imageErr: any) {
+        setWarning(imageErr?.message || 'Builder plan generated, but visual concepts could not be created this time.');
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Unable to generate the builder plan.');
     } finally {
+      setLoadingStage('');
       setIsLoading(false);
     }
-  };
-
-
-const handleGenerateBlueprint = async () => {
-  if (!prompt.trim()) {
-    setError('Please describe your illusion concept first.');
-    return;
-  }
-  if (!buildPack?.overall_dimensions) {
-    setError('Generate an illusion first so we have dimensions for the blueprint sheet.');
-    return;
-  }
-
-  setIsBlueprintLoading(true);
-  setError(null);
-
-  const d = buildPack.overall_dimensions;
-  const dimsLine = `Overall dimensions: W ${d.width_in} in (${d.width_mm} mm) × D ${d.depth_in} in (${d.depth_mm} mm) × H ${d.height_in} in (${d.height_mm} mm).`;
-
-  const blueprintPrompt = [
-    'Create a clean TECHNICAL BLUEPRINT SHEET for a theatrical stage illusion prop.',
-    'Style: orthographic blueprint drawing, crisp white line-art on a blueprint background, no shading, no perspective.',
-    'Include FRONT, SIDE, and TOP views on the same sheet, with dimension lines, arrows, and labeled measurements.',
-    'Include a simple title block with the illusion name and the overall dimensions.',
-    'Keep it readable and print-friendly.',
-    '',
-    `Illusion request details:\nEffect Type: ${effectType}\nVenue Size: ${venueSize}\nPerformer Style: ${performerStyle}\nConstraints: ${constraints.trim() || '(none provided)'}\nConcept: ${prompt}`,
-    dimsLine,
-  ].join('\n');
-
-  try {
-    const img = await generateImage(blueprintPrompt);
-    setBlueprintSheet(img);
-    setOpenSections((prev) => ({ ...prev, blueprint: true }));
-    setActiveSection('blueprint');
-    // Scroll after the image renders
-    setTimeout(() => scrollToSection('blueprint'), 50);
-  } catch (err) {
-    setError(err instanceof Error ? err.message : 'Failed to generate blueprint sheet. Please try again.');
-  } finally {
-    setIsBlueprintLoading(false);
-  }
-};
-
-
-const handleRegenerateConceptArt = async () => {
-  if (!prompt.trim()) {
-    setError('Please describe your illusion concept first.');
-    return;
-  }
-
-  const context = [
-    `Effect Type: ${effectType}`,
-    `Venue Size: ${venueSize}`,
-    `Performer Style: ${performerStyle}`,
-    constraints.trim() ? `Constraints: ${constraints.trim()}` : 'Constraints: (none provided)',
-    `Concept: ${prompt.trim()}`,
-  ].join('\n');
-
-  const base = lastArtPrompt
-    ? lastArtPrompt
-    : `Dramatic, theatrical concept art for a grand stage illusion prop.\n\n${context}\n\nHighly detailed, realistic, stage-ready, showing the prop on a theater stage with lighting. Include materials hints (wood/metal/fabric) visually. 16:9 composition. No text.`;
-
-  try {
-    setIsConceptLoading(true);
-    setError(null);
-    const variationHint = `\n\nCreate a DIFFERENT design variation (new silhouette, proportions, and detailing) while keeping the same illusion concept.`;
-    const img = await generateImage(base + variationHint, '16:9', user);
-    setConceptArt(img);
-    setOpenSections((prev) => ({ ...prev, concept: true }));
-    setActiveSection('concept');
-    setTimeout(() => {
-      document.getElementById('section-concept')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 100);
-  } catch (e: any) {
-    setError(e?.message || 'Could not regenerate concept art.');
-  } finally {
-    setIsConceptLoading(false);
-  }
-};
-
-
-  const toFiltered = <T extends { applies_to?: string[] }>(arr: T[]): T[] => {
-    if (selectedMechanismId === 'all') return arr;
-    return arr.filter((x) => !x.applies_to || x.applies_to.includes(selectedMechanismId));
-  };
-
-  const filteredModules = useMemo(() => (buildPack ? toFiltered(buildPack.breakdown_modules) : []), [buildPack, selectedMechanismId]);
-  const filteredMaterials = useMemo(() => (buildPack ? toFiltered(buildPack.materials) : []), [buildPack, selectedMechanismId]);
-  const filteredHardware = useMemo(() => (buildPack ? toFiltered(buildPack.hardware) : []), [buildPack, selectedMechanismId]);
-  const filteredCutList = useMemo(() => (buildPack ? toFiltered(buildPack.cut_list) : []), [buildPack, selectedMechanismId]);
-  const filteredSteps = useMemo(() => (buildPack ? toFiltered(buildPack.assembly_steps) : []), [buildPack, selectedMechanismId]);
-
-  const buildFullContent = () => {
-    if (!engineeringSummary || !stagingBlueprint || !buildPack) return '';
-    let fullContent = `## Illusion Blueprint: ${prompt}\n\n`;
-    fullContent += `**Effect Type:** ${effectType}\n\n`;
-    fullContent += `**Venue Size:** ${venueSize}\n\n`;
-    fullContent += `**Performer Style:** ${performerStyle}\n\n`;
-    if (constraints.trim()) fullContent += `**Constraints:** ${constraints.trim()}\n\n`;
-    fullContent += `### Engineering Summary\n\n`;
-    fullContent += `**Title:** ${engineeringSummary.title}\n\n`;
-    fullContent += `**Audience Experience:** ${engineeringSummary.audience_experience}\n\n`;
-    fullContent += `**Build Complexity (1–5):** ${engineeringSummary.build_complexity.rating_1_to_5} — ${engineeringSummary.build_complexity.rationale}\n\n`;
-    fullContent += `**Reset Time:** ${engineeringSummary.reset_time}\n\n`;
-    fullContent += `**Angle Risk Summary:**\n- Front: ${engineeringSummary.angle_risk_summary.front}\n- Sides: ${engineeringSummary.angle_risk_summary.sides}\n- Balcony: ${engineeringSummary.angle_risk_summary.balcony}\n\n`;
-    fullContent += `**Reality Checks:**\n- Weight/Transport: ${engineeringSummary.reality_checks.weight_transport}\n- Crew: ${engineeringSummary.reality_checks.crew}\n- Setup Time: ${engineeringSummary.reality_checks.setup_time}\n\n`;
-    fullContent += `**Feasibility Verdict:** ${engineeringSummary.feasibility_verdict.level} — ${engineeringSummary.feasibility_verdict.why}\n\n`;
-    if (conceptArt) fullContent += `![Concept Art](${conceptArt})\n\n`;
-    fullContent += `### Potential Principles\n\n`;
-    stagingBlueprint.potential_principles.forEach((p) => {
-      fullContent += `**${p.name}:** ${p.description}\n\n`;
-    });
-    fullContent += `### Staging Blueprint\n\n${stagingBlueprint.blueprint_description}\n\n`;
-    fullContent += `### Build Blueprint Pack (JSON)\n\n`;
-    fullContent += JSON.stringify(buildPack, null, 2);
-    return fullContent;
-  };
-
-  const handleSave = () => {
-    if (!engineeringSummary || !stagingBlueprint || !buildPack) return;
-    const fullContent = buildFullContent();
-    const titleBase = prompt.trim() ? prompt.trim() : buildPack.title;
-    saveIdea('text', fullContent, `Illusion Blueprint (${effectType}) — ${titleBase}`);
-    onIdeaSaved();
-    setSaveStatus('saved');
-    setTimeout(() => setSaveStatus('idle'), 2000);
-  };
-
-  const handleCopyAll = async () => {
-    try {
-      const fullContent = buildFullContent();
-      if (!fullContent) return;
-      await navigator.clipboard.writeText(fullContent);
-      setCopyAllStatus('copied');
-      setTimeout(() => setCopyAllStatus('idle'), 1500);
-    } catch {
-      // Clipboard can be blocked by browser permissions; user can still copy manually.
-    }
-  };
-
-  const buildSectionContent = (id: SectionId) => {
-    if (!engineeringSummary || !stagingBlueprint || !buildPack) return '';
-
-    const header = `## Illusion Blueprint: ${prompt || buildPack.title}\n`;
-    const meta = `Effect Type: ${effectType}\nVenue: ${venueSize}\nStyle: ${performerStyle}${constraints.trim() ? `\nConstraints: ${constraints.trim()}` : ''}\n\n`;
-
-    switch (id) {
-      case 'engineering': {
-        const safetyText = (engineeringSummary.safety_notes || []).map((s) => `- ${s}`).join('\n');
-        const propsText = (engineeringSummary.technical_requirements?.props || []).join(', ');
-        const mechanicsText = (engineeringSummary.technical_requirements?.mechanics || []).join(', ');
-
-        return [
-          header,
-          meta,
-          '### Engineering Summary\n\n',
-          `Title: ${engineeringSummary.title}\n\n`,
-          `Audience Experience: ${engineeringSummary.audience_experience}\n\n`,
-          `Method Possibilities (non-exposure):\n- A: ${engineeringSummary.secret_method_possibilities.method_a}\n- B: ${engineeringSummary.secret_method_possibilities.method_b}\n- C: ${engineeringSummary.secret_method_possibilities.method_c}\n\n`,
-          `Stage Staging:\n- Lighting: ${engineeringSummary.stage_staging.lighting}\n- Blocking: ${engineeringSummary.stage_staging.blocking}\n- Angles: ${engineeringSummary.stage_staging.angles}\n\n`,
-          `Technical Requirements:\n- Assistants: ${engineeringSummary.technical_requirements.assistants}\n- Props: ${propsText}\n- Mechanics: ${mechanicsText}\n\n`,
-          `Safety Notes:\n${safetyText}\n\n`,
-          `Reset Time: ${engineeringSummary.reset_time}\n\n`,
-          `Build Complexity (1–5): ${engineeringSummary.build_complexity.rating_1_to_5} — ${engineeringSummary.build_complexity.rationale}\n\n`,
-          `Reality Checks:\n- Weight/Transport: ${engineeringSummary.reality_checks.weight_transport}\n- Crew: ${engineeringSummary.reality_checks.crew}\n- Setup Time: ${engineeringSummary.reality_checks.setup_time}\n\n`,
-          `Angle Risk Summary:\n- Front: ${engineeringSummary.angle_risk_summary.front}\n- Sides: ${engineeringSummary.angle_risk_summary.sides}\n- Balcony: ${engineeringSummary.angle_risk_summary.balcony}\n\n`,
-          `Feasibility Verdict: ${engineeringSummary.feasibility_verdict.level} — ${engineeringSummary.feasibility_verdict.why}\n`,
-        ].join('');
-      }
-
-      case 'concept':
-        return [
-          header,
-          meta,
-          '### Concept Art\n\n',
-          lastArtPrompt ? `Prompt used: ${lastArtPrompt}\n\n` : '',
-          conceptArt ? `Image URL: ${conceptArt}\n` : 'No concept art generated.',
-        ].join('');
-
-      case 'blueprint':
-        return [header, meta, '### Blueprint Sheet\n\n', blueprintSheet ? `Image URL: ${blueprintSheet}\n` : 'No blueprint sheet generated.'].join('');
-
-      case 'principles': {
-        const principlesText = (stagingBlueprint.potential_principles || []).map((p) => `- ${p.name}: ${p.description}`).join('\n');
-        return [header, meta, '### Potential Principles\n\n', principlesText, '\n'].join('');
-      }
-
-      case 'staging':
-        return [header, meta, `### Staging Blueprint\n\n${stagingBlueprint.blueprint_description}\n`].join('');
-
-      case 'buildpack':
-        return [header, meta, `### Build Blueprint Pack (JSON)\n\n${JSON.stringify(buildPack, null, 2)}\n`].join('');
-
-      case 'cutlist': {
-        const lines = filteredCutList.map((c) => `- ${c.part} (${c.material}, ${c.thickness}) x${c.qty} — ${c.size_in} / ${c.size_mm}${c.notes ? ` — ${c.notes}` : ''}`).join('\n');
-        return [header, meta, '### Cut List\n\n', lines, '\n'].join('');
-      }
-
-      case 'assembly': {
-        const steps = filteredSteps.map((s) => `${s.step}. ${s.text}`).join('\n');
-        return [header, meta, '### Assembly Steps\n\n', steps, '\n'].join('');
-      }
-
-      case 'safety': {
-        const merged = Array.from(new Set([...(engineeringSummary.safety_notes || []), ...(buildPack.safety_notes || [])]));
-        const safetyLines = merged.map((s) => `- ${s}`).join('\n');
-        return [header, meta, '### Safety Notes\n\n', safetyLines, '\n'].join('');
-      }
-
-      case 'json':
-        return [header, meta, `### Raw JSON\n\n${rawJson}\n`].join('');
-
-      default:
-        return '';
-    }
-  };
-
-  const handleCopySection = async (id: SectionId) => {
-    try {
-      const text = buildSectionContent(id);
-      if (!text) return;
-      await navigator.clipboard.writeText(text);
-      setSectionCopyStatus((prev) => ({ ...prev, [id]: 'copied' }));
-      setTimeout(() => setSectionCopyStatus((prev) => ({ ...prev, [id]: 'idle' })), 1200);
-    } catch {
-      // ignore
-    }
-  };
-
-  const handleStartOver = () => {
-    setPrompt('');
-    setEffectType('Appearance');
-    setVenueSize('Stage');
-    setPerformerStyle('Mystery');
-    setConstraints('');
-    setConceptArt(null);
-    setBlueprintSheet(null);
-    setEngineeringSummary(null);
-    setStagingBlueprint(null);
-    setBuildPack(null);
-    setError(null);
-    setSelectedMechanismId('all');
-    setActiveSection('engineering');
-    setOpenSections({
-      engineering: true,
-      concept: true,
-      blueprint: true,
-      principles: true,
-      staging: true,
-      buildpack: true,
-      cutlist: true,
-      assembly: true,
-      safety: true,
-      json: false,
-    });
-    setJsonCopyStatus('idle');
-    setCopyAllStatus('idle');
-    setSectionCopyStatus({
-      engineering: 'idle',
-      concept: 'idle',
-      blueprint: 'idle',
-      principles: 'idle',
-      staging: 'idle',
-      buildpack: 'idle',
-      cutlist: 'idle',
-      assembly: 'idle',
-      safety: 'idle',
-      json: 'idle',
-    });
-    setSaveStatus('idle');
-  };
-
-  const rawJson = useMemo(() => (buildPack ? JSON.stringify(buildPack, null, 2) : ''), [buildPack]);
-
-  const handleCopyJson = async () => {
-    try {
-      await navigator.clipboard.writeText(rawJson);
-      setJsonCopyStatus('copied');
-      setTimeout(() => setJsonCopyStatus('idle'), 1500);
-    } catch {
-      // fallback: nothing (clipboard may be blocked); user can select/copy manually
-    }
-  };
-
-  const handleDownloadJson = () => {
-    if (!rawJson) return;
-    const safeName = (prompt || buildPack?.title || 'illusion-blueprint')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)/g, '')
-      .slice(0, 64);
-
-    const blob = new Blob([rawJson], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${safeName || 'illusion-blueprint'}.json`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  };
-
-  const scrollToSection = (id: string) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
-
-  const toggleSection = (id: SectionId) => {
-    setOpenSections((prev) => ({ ...prev, [id]: !prev[id] }));
-  };
-
-  const setAllSections = (open: boolean) => {
-    setOpenSections({
-      engineering: open,
-      concept: open,
-      blueprint: open,
-      principles: open,
-      staging: open,
-      buildpack: open,
-      cutlist: open,
-      assembly: open,
-      safety: open,
-      // Keep Raw JSON closed by default unless explicitly opened.
-      json: open ? openSections.json : false,
-    });
   };
 
   return (
@@ -983,68 +517,65 @@ const handleRegenerateConceptArt = async () => {
           <BlueprintIcon className="w-8 h-8 text-purple-400" />
           <h2 className="text-2xl font-bold text-slate-200 font-cinzel">Illusion Blueprint Generator</h2>
         </div>
-        <p className="text-slate-400 mt-1">From a simple concept to stage-ready plans. Generate concept art, staging, and build-ready construction plans.</p>
+        <p className="text-slate-400 mt-1">
+          Builder Plans + Visual Concepts. Create practical illusion construction plans with multiple supporting concept images.
+        </p>
       </header>
 
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 overflow-hidden">
-        {/* LEFT COLUMN — Inputs */}
         <div className="rounded-2xl border border-slate-800 bg-slate-950/20 p-4 md:p-5 overflow-y-auto">
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <div className="text-xs text-slate-400">Demo presets:</div>
-            {DEMO_PRESETS.map((p) => (
+            {DEMO_PRESETS.map((preset) => (
               <button
-                key={p.label}
+                key={preset.label}
                 type="button"
-                onClick={() => {
-                  setPrompt(p.concept);
-                  setEffectType(p.effectType);
-                  setVenueSize(p.venue);
-                  setPerformerStyle(p.style);
-                  setConstraints(p.constraints || '');
-                  setError(null);
-                }}
+                onClick={() => applyPreset(preset)}
                 className="px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border bg-slate-900/40 border-slate-700 text-slate-200 hover:border-slate-500"
               >
-                {p.label}
+                {preset.label}
               </button>
             ))}
-
             <button
               type="button"
-              onClick={handleStartOver}
+              onClick={resetAll}
               className="ml-auto px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border bg-slate-900/40 border-slate-700 text-slate-200 hover:border-slate-500"
             >
               Reset
             </button>
           </div>
 
-          {/* Micro-help (parity with other tools) */}
           <div className="mb-4 rounded-xl border border-slate-800 bg-slate-900/30 p-3">
             <div className="text-sm font-semibold text-slate-200">Why use this?</div>
             <ul className="mt-1 text-xs text-slate-400 list-disc pl-5 space-y-1">
-              <li>Turns an illusion idea into a structured, stage-ready blueprint.</li>
-              <li>Adds staging + safety + reset thinking so concepts stay realistic.</li>
-              <li>Provides build-ready details (modules, materials, cut list) you can hand to a fabricator.</li>
+              <li>Turns a rough illusion idea into a realistic builder-oriented plan.</li>
+              <li>Focuses on construction, safety, transport, and practical stage use.</li>
+              <li>Automatically gives you multiple concept images to help choose a direction.</li>
             </ul>
           </div>
 
-          {/* Inputs */}
-          <div className="space-y-3">
+          <div className="space-y-4">
             <div>
-              <div className="text-xs font-semibold text-slate-300 mb-1">Effect Type</div>
-              <div className="flex flex-wrap gap-2">
-                {EFFECT_TYPES.map((t) => (
+              <label className="text-xs font-semibold text-slate-300 mb-1 block">Effect or Illusion to Build</label>
+              <textarea
+                rows={4}
+                value={effectInput}
+                onChange={(e) => {
+                  setEffectInput(e.target.value);
+                  setError(null);
+                }}
+                placeholder="Describe the effect in your own words. Example: A performer vanishes a motorcycle from a raised platform under a brief theatrical cover."
+                className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
+              />
+              <div className="mt-2 flex flex-wrap gap-2">
+                {EFFECT_SUGGESTIONS.map((suggestion) => (
                   <button
-                    key={t}
+                    key={suggestion}
                     type="button"
-                    onClick={() => setEffectType(t)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
-                      effectType === t
-                        ? 'bg-purple-600/30 border-purple-500 text-purple-200'
-                        : 'bg-slate-900/40 border-slate-700 text-slate-200 hover:border-slate-500'
-                    }`}
+                    onClick={() => setEffectInput((prev) => (prev.trim() ? prev : suggestion))}
+                    className="px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border bg-slate-900/40 border-slate-700 text-slate-200 hover:border-slate-500"
                   >
-                    {t}
+                    {suggestion}
                   </button>
                 ))}
               </div>
@@ -1052,20 +583,19 @@ const handleRegenerateConceptArt = async () => {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-semibold text-slate-300 mb-1 block">Venue Size</label>
+                <label className="text-xs font-semibold text-slate-300 mb-1 block">Venue / Performance Scale</label>
                 <select
-                  value={venueSize}
-                  onChange={(e) => setVenueSize(e.target.value as VenueSize)}
+                  value={venueScale}
+                  onChange={(e) => setVenueScale(e.target.value as VenueScale)}
                   className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500 transition-colors"
                 >
-                  {VENUE_SIZES.map((v) => (
-                    <option key={v} value={v}>
-                      {v}
+                  {VENUE_SCALES.map((value) => (
+                    <option key={value} value={value}>
+                      {value}
                     </option>
                   ))}
                 </select>
               </div>
-
               <div>
                 <label className="text-xs font-semibold text-slate-300 mb-1 block">Performer Style</label>
                 <select
@@ -1073,707 +603,342 @@ const handleRegenerateConceptArt = async () => {
                   onChange={(e) => setPerformerStyle(e.target.value as PerformerStyle)}
                   className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500 transition-colors"
                 >
-                  {PERFORMER_STYLES.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
+                  {PERFORMER_STYLES.map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-300 mb-1 block">Budget Level</label>
+                <select
+                  value={budgetLevel}
+                  onChange={(e) => setBudgetLevel(e.target.value as BudgetLevel)}
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500 transition-colors"
+                >
+                  {BUDGET_LEVELS.map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-300 mb-1 block">Crew Size</label>
+                <select
+                  value={crewSize}
+                  onChange={(e) => setCrewSize(e.target.value as CrewSize)}
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500 transition-colors"
+                >
+                  {CREW_SIZES.map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="text-xs font-semibold text-slate-300 mb-1 block">Reset Requirement</label>
+                <select
+                  value={resetRequirement}
+                  onChange={(e) => setResetRequirement(e.target.value as ResetRequirement)}
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500 transition-colors"
+                >
+                  {RESET_REQUIREMENTS.map((value) => (
+                    <option key={value} value={value}>
+                      {value}
                     </option>
                   ))}
                 </select>
               </div>
             </div>
 
-            <div>
-              <label className="text-xs font-semibold text-slate-300 mb-1 block">Constraints (optional)</label>
-              <textarea
-                rows={3}
-                value={constraints}
-                onChange={(e) => {
-                  setConstraints(e.target.value);
-                  setError(null);
-                }}
-                placeholder="Props available, stage limitations, budget range, crew size, reset requirements…"
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-slate-300 mb-1 block">Core Concept</label>
-              <textarea
-                rows={4}
-                value={prompt}
-                onChange={(e) => {
-                  setPrompt(e.target.value);
-                  setError(null);
-                }}
-                placeholder="e.g., I want to make a motorcycle appear from a cloud of smoke on an empty stage."
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
-              />
+            <div className="grid grid-cols-1 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-slate-300 mb-1 block">Transport Limitations</label>
+                <textarea
+                  rows={2}
+                  value={transportLimitations}
+                  onChange={(e) => setTransportLimitations(e.target.value)}
+                  placeholder="Road cases, trailer only, one-person load-in, stairs, etc."
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-300 mb-1 block">Stage Limitations</label>
+                <textarea
+                  rows={2}
+                  value={stageLimitations}
+                  onChange={(e) => setStageLimitations(e.target.value)}
+                  placeholder="Sightline issues, shallow depth, balcony seating, no trap access, etc."
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-300 mb-1 block">Safety Concerns</label>
+                <textarea
+                  rows={2}
+                  value={safetyConcerns}
+                  onChange={(e) => setSafetyConcerns(e.target.value)}
+                  placeholder="Load capacity, pinch points, performer access, emergency stop needs, etc."
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-300 mb-1 block">Materials Preference</label>
+                <textarea
+                  rows={2}
+                  value={materialsPreference}
+                  onChange={(e) => setMaterialsPreference(e.target.value)}
+                  placeholder="Birch ply, aluminum, steel frame, lightweight scenic skin, etc."
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-300 mb-1 block">Special Notes</label>
+                <textarea
+                  rows={3}
+                  value={specialNotes}
+                  onChange={(e) => setSpecialNotes(e.target.value)}
+                  placeholder="Anything else the builder should account for."
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
+                />
+              </div>
             </div>
           </div>
 
           <button
             onClick={handleGenerate}
-            disabled={isLoading || !prompt.trim()}
+            disabled={isLoading || !effectInput.trim()}
             className="w-full py-3 mt-4 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
           >
             <WandIcon className="w-5 h-5" />
-            <span>{isLoading ? 'Generating…' : 'Generate Blueprint'}</span>
+            <span>{isLoading ? 'Generating…' : 'Generate Builder Plan + Images'}</span>
           </button>
-          {error && <p className="text-red-400 mt-2 text-sm">{error}</p>}
+
+          {error ? <p className="text-red-400 mt-3 text-sm">{error}</p> : null}
+          {warning ? <p className="text-yellow-300 mt-2 text-sm">{warning}</p> : null}
         </div>
 
-        {/* RIGHT COLUMN — Output */}
         <div className="rounded-2xl border border-slate-800 bg-slate-950/20 overflow-hidden flex flex-col">
-          <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
+          <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between gap-3">
             <div>
-              <div className="text-sm font-semibold text-slate-200">Blueprint Output</div>
-              <div className="text-xs text-slate-500">Concept art, staging, build pack, and safety notes.</div>
+              <div className="text-sm font-semibold text-slate-200">Builder Output</div>
+              <div className="text-xs text-slate-500">Realistic plan first. Multiple image concepts second.</div>
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => void handleCopyAll()}
-                disabled={!engineeringSummary || !stagingBlueprint || !buildPack}
-                className="px-3 py-1.5 rounded-md text-[11px] font-semibold border border-slate-700 bg-slate-900/60 text-slate-200 hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Copy the full blueprint"
-              >
-                {copyAllStatus === 'copied' ? 'Copied!' : 'Copy Blueprint'}
-              </button>
-              <div className="text-[11px] text-slate-500">Version: {APP_VERSION}</div>
-            </div>
+            <div className="text-[11px] text-slate-500">Version: {APP_VERSION}</div>
           </div>
 
-          <div ref={containerRef} className="flex-1 overflow-y-auto p-4 md:p-5">
-            {!engineeringSummary || !stagingBlueprint || !buildPack ? (
+          <div className="flex-1 overflow-y-auto p-4 md:p-5">
+            {!builderPlan ? (
               <div className="h-full flex items-center justify-center">
                 {isLoading ? (
-                  <LoadingIndicator />
+                  <LoadingIndicator stage={loadingStage || 'Working through the request…'} />
                 ) : (
                   <div className="max-w-md text-center">
-                    <div className="text-slate-200 font-semibold">Your blueprint will appear here.</div>
+                    <div className="text-slate-200 font-semibold">Your builder plan will appear here.</div>
                     <div className="text-sm text-slate-400 mt-2">
-                      Choose an effect type, venue, and style — then generate a structured blueprint that stays realistic.
+                      Describe the effect, add your constraints, and generate a practical construction plan with several visual directions.
                     </div>
-                    <div className="mt-3 text-xs text-slate-500">
-                      Tip: Demo presets are great for booth flow.
-                    </div>
+                    <div className="mt-3 text-xs text-slate-500">Designed to stay fast, reliable, and demo-ready.</div>
                   </div>
                 )}
               </div>
             ) : (
-              <div className="space-y-6">
-          {/* Sticky Mini-Nav */}
-          <div className="sticky top-0 z-20 -mx-4 md:-mx-5 px-4 md:px-5 py-3 bg-slate-950/80 backdrop-blur border-b border-slate-800">
-            <div className="flex flex-wrap items-center gap-2">
-              {SECTION_IDS.map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => scrollToSection(s.id)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
-                    activeSection === s.id
-                      ? 'bg-purple-600/30 border-purple-500 text-purple-200'
-                      : 'bg-slate-900/40 border-slate-700 text-slate-300 hover:border-slate-500'
-                  }`}
-                >
-                  {s.label}
-                </button>
-              ))}
-
-              {/* Mechanism selector (always accessible) */}
-              <div className="flex items-center gap-2 ml-1">
-                <span className="text-[11px] text-slate-400">Mechanism:</span>
-                <select
-                  value={selectedMechanismId}
-                  onChange={(e) => setSelectedMechanismId(e.target.value)}
-                  className="bg-slate-900 border border-slate-700 text-slate-200 text-[11px] rounded-md px-2 py-1 focus:outline-none focus:border-purple-500"
-                >
-                  <option value="all">All</option>
-                  {buildPack.mechanism_options.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                    </option>
-                  ))}
-                </select>
-
-{/* Blueprint sheet quick action */}
-<button
-  type="button"
-  onClick={handleGenerateBlueprint}
-  disabled={!buildPack || isBlueprintLoading}
-  className="px-3 py-1.5 rounded-md text-[11px] font-semibold border border-slate-700 bg-slate-900/60 text-slate-200 hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
-  title={!buildPack ? "Generate an illusion first" : "Generate blueprint-style orthographic plan image"}
->
-  {isBlueprintLoading ? "Generating Blueprint…" : "Generate Blueprint Sheet"}
-</button>
-              </div>
-
-              {/* Expand/collapse controls */}
-              <button
-                type="button"
-                onClick={() => setAllSections(true)}
-                className="px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border bg-slate-900/40 border-slate-700 text-slate-300 hover:border-slate-500"
-              >
-                Expand all
-              </button>
-              <button
-                type="button"
-                onClick={() => setAllSections(false)}
-                className="px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border bg-slate-900/40 border-slate-700 text-slate-300 hover:border-slate-500"
-              >
-                Collapse all
-              </button>
-
-              <div className="ml-auto text-[11px] text-slate-400">{APP_VERSION}</div>
-            </div>
-          </div>
-
-          {/* Engineering Summary */}
-          <CollapsibleSection
-            id="engineering"
-            title="Engineering Summary"
-            isOpen={openSections.engineering}
-            onToggle={() => toggleSection('engineering')}
-            onCopy={() => void handleCopySection('engineering')}
-            copied={sectionCopyStatus.engineering === 'copied'}
-          >
-            <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-4 space-y-4">
-              <div>
-                <div className="text-xs text-slate-400">Title</div>
-                <div className="text-lg font-bold text-white font-cinzel">{engineeringSummary.title}</div>
-              </div>
-
-              <div>
-                <div className="text-xs text-slate-400">Audience Experience</div>
-                <div className="text-sm text-slate-200 leading-relaxed">{engineeringSummary.audience_experience}</div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
-                  <div className="text-xs text-slate-400">Build Complexity (1–5)</div>
-                  <div className="text-sm text-slate-200 font-semibold">
-                    {engineeringSummary.build_complexity.rating_1_to_5} / 5
-                  </div>
-                  <div className="text-xs text-slate-400 mt-1">{engineeringSummary.build_complexity.rationale}</div>
-                </div>
-                <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
-                  <div className="text-xs text-slate-400">Reset Time</div>
-                  <div className="text-sm text-slate-200 font-semibold">{engineeringSummary.reset_time}</div>
-                  <div className="text-xs text-slate-400 mt-1">
-                    Feasibility: <span className="text-slate-200 font-semibold">{engineeringSummary.feasibility_verdict.level}</span> —
-                    <span className="text-slate-400"> {engineeringSummary.feasibility_verdict.why}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
-                  <div className="text-xs text-slate-400">Angle Risk Summary</div>
-                  <ul className="mt-2 text-xs text-slate-300 space-y-1">
-                    <li><span className="text-slate-400">Front:</span> {engineeringSummary.angle_risk_summary.front}</li>
-                    <li><span className="text-slate-400">Sides:</span> {engineeringSummary.angle_risk_summary.sides}</li>
-                    <li><span className="text-slate-400">Balcony:</span> {engineeringSummary.angle_risk_summary.balcony}</li>
-                  </ul>
-                </div>
-                <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
-                  <div className="text-xs text-slate-400">Reality Checks</div>
-                  <ul className="mt-2 text-xs text-slate-300 space-y-1">
-                    <li><span className="text-slate-400">Weight/Transport:</span> {engineeringSummary.reality_checks.weight_transport}</li>
-                    <li><span className="text-slate-400">Crew:</span> {engineeringSummary.reality_checks.crew}</li>
-                    <li><span className="text-slate-400">Setup Time:</span> {engineeringSummary.reality_checks.setup_time}</li>
-                  </ul>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
-                  <div className="text-xs text-slate-400 mb-2">Secret Method Possibilities (non-exposure)</div>
-                  <div className="text-xs text-slate-300 space-y-2">
-                    <div><span className="text-slate-400 font-semibold">A:</span> {engineeringSummary.secret_method_possibilities.method_a}</div>
-                    <div><span className="text-slate-400 font-semibold">B:</span> {engineeringSummary.secret_method_possibilities.method_b}</div>
-                    <div><span className="text-slate-400 font-semibold">C:</span> {engineeringSummary.secret_method_possibilities.method_c}</div>
-                  </div>
-                </div>
-                <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
-                  <div className="text-xs text-slate-400 mb-2">Stage Staging</div>
-                  <div className="text-xs text-slate-300 space-y-2">
-                    <div><span className="text-slate-400 font-semibold">Lighting:</span> {engineeringSummary.stage_staging.lighting}</div>
-                    <div><span className="text-slate-400 font-semibold">Blocking:</span> {engineeringSummary.stage_staging.blocking}</div>
-                    <div><span className="text-slate-400 font-semibold">Angles:</span> {engineeringSummary.stage_staging.angles}</div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
-                  <div className="text-xs text-slate-400 mb-2">Technical Requirements</div>
-                  <div className="text-xs text-slate-300">
-                    <div className="mb-2"><span className="text-slate-400 font-semibold">Assistants:</span> {engineeringSummary.technical_requirements.assistants}</div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <div className="text-[11px] text-slate-400 font-semibold">Props</div>
-                        <ul className="mt-1 list-disc pl-5 space-y-1">
-                          {engineeringSummary.technical_requirements.props.map((p, i) => (
-                            <li key={i}>{p}</li>
-                          ))}
-                        </ul>
-                      </div>
-                      <div>
-                        <div className="text-[11px] text-slate-400 font-semibold">Mechanics</div>
-                        <ul className="mt-1 list-disc pl-5 space-y-1">
-                          {engineeringSummary.technical_requirements.mechanics.map((m, i) => (
-                            <li key={i}>{m}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
-                  <div className="text-xs text-slate-400 mb-2">Safety Notes</div>
-                  <ul className="text-xs text-slate-300 list-disc pl-5 space-y-1">
-                    {engineeringSummary.safety_notes.map((s, i) => (
-                      <li key={i}>{s}</li>
+              <div className="space-y-5">
+                <div className="sticky top-0 z-20 -mx-4 md:-mx-5 px-4 md:px-5 py-3 bg-slate-950/80 backdrop-blur border-b border-slate-800">
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      ['plan', 'Overview'],
+                      ['construction', 'Construction'],
+                      ['operations', 'Safety & Ops'],
+                      ['visuals', 'Visual Concepts'],
+                    ].map(([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => {
+                          const el = document.getElementById(`ib-${key}`);
+                          el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }}
+                        className="px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border bg-slate-900/40 border-slate-700 text-slate-300 hover:border-slate-500"
+                      >
+                        {label}
+                      </button>
                     ))}
-                  </ul>
+                  </div>
                 </div>
-              </div>
-            </div>
-          </CollapsibleSection>
 
-          {/* Concept Art */}
-          {conceptArt ? (
-            <CollapsibleSection
-              id="concept"
-              title="Concept Art"
-              isOpen={openSections.concept}
-              onToggle={() => toggleSection('concept')}
-              onCopy={() => void handleCopySection('concept')}
-              copied={sectionCopyStatus.concept === 'copied'}
-            >
-              <img
-                src={conceptArt}
-                alt="Generated concept art for the illusion"
-                className="w-full rounded-lg border border-slate-700"
-              />
-            
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={handleRegenerateConceptArt}
-                  disabled={isConceptLoading || isLoading}
-                  className="px-3 py-1.5 rounded-md text-sm font-semibold border border-slate-700/60 bg-slate-900/40 text-slate-200 hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isConceptLoading ? 'Regenerating…' : 'Regenerate Concept Art'}
-                </button>
-              </div>
-</CollapsibleSection>
-          ) : null}
-
-          {/* Principles */}
-          
-
-{/* Blueprint Sheet (quick win) */}
-{buildPack ? (
-  <CollapsibleSection
-    id="blueprint"
-    title="Blueprint Sheet"
-    isOpen={openSections.blueprint}
-    onToggle={() => toggleSection('blueprint')}
-    onCopy={() => void handleCopySection('blueprint')}
-    copied={sectionCopyStatus.blueprint === 'copied'}
-  >
-    {!blueprintSheet ? (
-      <div className="rounded-md border border-slate-700/60 bg-slate-900/40 p-4">
-        <p className="text-sm text-slate-200 font-semibold mb-1">Blueprint-style plan image</p>
-        <p className="text-sm text-slate-300">
-          Generate an orthographic “blueprint sheet” (front/side/top views) for quick planning and sharing.
-          Measurements are based on the Build Pack dimensions — always verify before cutting.
-        </p>
-        <div className="mt-3">
-          <button
-            type="button"
-            onClick={handleGenerateBlueprint}
-            disabled={isBlueprintLoading}
-            className="px-4 py-2 rounded-md font-semibold bg-yellow-600 hover:bg-yellow-500 text-black disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isBlueprintLoading ? 'Generating Blueprint…' : 'Generate Blueprint Sheet'}
-          </button>
-        </div>
-      </div>
-    ) : (
-      <div>
-        <img
-          src={blueprintSheet}
-          alt="Generated blueprint sheet for the illusion"
-          className="w-full rounded-lg border border-slate-700"
-        />
-        <div className="mt-3 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={handleGenerateBlueprint}
-            disabled={isBlueprintLoading}
-            className="px-3 py-1.5 rounded-md text-sm font-semibold border border-slate-700 bg-slate-900/60 text-slate-200 hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isBlueprintLoading ? 'Regenerating…' : 'Regenerate Blueprint'}
-          </button>
-        </div>
-      </div>
-    )}
-  </CollapsibleSection>
-) : null}
-
-<CollapsibleSection
-            id="principles"
-            title="Potential Principles"
-            isOpen={openSections.principles}
-            onToggle={() => toggleSection('principles')}
-            onCopy={() => void handleCopySection('principles')}
-            copied={sectionCopyStatus.principles === 'copied'}
-          >
-            <div className="space-y-3">
-                {stagingBlueprint.potential_principles.map((principle, i) => (
-                  <div key={i} className="bg-slate-800/50 p-3 rounded-md border border-slate-700/50">
-                    <h4 className="font-semibold text-purple-300">{principle.name}</h4>
-                    <p className="text-sm text-slate-400">{principle.description}</p>
-                  </div>
-                ))}
-            </div>
-          </CollapsibleSection>
-
-          {/* Staging */}
-          <CollapsibleSection
-            id="staging"
-            title="Staging Blueprint"
-            isOpen={openSections.staging}
-            onToggle={() => toggleSection('staging')}
-            onCopy={() => void handleCopySection('staging')}
-            copied={sectionCopyStatus.staging === 'copied'}
-          >
-            <div className="bg-slate-800/50 p-3 rounded-md border border-slate-700/50">
-              <pre className="whitespace-pre-wrap break-words text-slate-300 font-sans text-sm">{stagingBlueprint.blueprint_description}</pre>
-            </div>
-          </CollapsibleSection>
-
-          {/* Build Pack */}
-          <CollapsibleSection
-            id="buildpack"
-            title="Build Blueprint Pack"
-            isOpen={openSections.buildpack}
-            onToggle={() => toggleSection('buildpack')}
-            onCopy={() => void handleCopySection('buildpack')}
-            copied={sectionCopyStatus.buildpack === 'copied'}
-          >
-            <div className="space-y-4">
-                <div className="bg-slate-800/50 p-4 rounded-md border border-slate-700/50">
-                  <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
-                    <div>
-                      <h4 className="text-white font-semibold">{buildPack.title}</h4>
-                      <p className="text-slate-300 text-sm mt-1">{buildPack.intended_effect}</p>
-                    </div>
-                  </div>
-
-                  {/* Dimensions callout */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
-                    <div className="bg-slate-900/40 border border-slate-700/50 rounded-md p-3">
-                      <div className="text-xs text-slate-400">Width</div>
-                      <div className="text-slate-200 font-semibold">{buildPack.overall_dimensions.width_in}"</div>
-                      <div className="text-xs text-slate-400">{buildPack.overall_dimensions.width_mm} mm</div>
-                    </div>
-                    <div className="bg-slate-900/40 border border-slate-700/50 rounded-md p-3">
-                      <div className="text-xs text-slate-400">Depth</div>
-                      <div className="text-slate-200 font-semibold">{buildPack.overall_dimensions.depth_in}"</div>
-                      <div className="text-xs text-slate-400">{buildPack.overall_dimensions.depth_mm} mm</div>
-                    </div>
-                    <div className="bg-slate-900/40 border border-slate-700/50 rounded-md p-3">
-                      <div className="text-xs text-slate-400">Height</div>
-                      <div className="text-slate-200 font-semibold">{buildPack.overall_dimensions.height_in}"</div>
-                      <div className="text-xs text-slate-400">{buildPack.overall_dimensions.height_mm} mm</div>
-                    </div>
-                    <div className="bg-slate-900/40 border border-slate-700/50 rounded-md p-3">
-                      <div className="text-xs text-slate-400">Tolerance</div>
-                      <div className="text-slate-200 font-semibold">
-                        {(buildPack.overall_dimensions.tolerance_in ?? 0.125).toFixed(3)}"
+                <div id="ib-plan">
+                  <CollapsibleCard
+                    title={builderPlan.project_title}
+                    subtitle="Audience effect, concept direction, and build complexity"
+                    isOpen={openSections.plan}
+                    onToggle={() => toggleSection('plan')}
+                  >
+                    <div className="space-y-4">
+                      <div>
+                        <div className="text-xs text-slate-400 mb-1">Audience Effect</div>
+                        <p className="text-sm text-slate-200 leading-relaxed">{builderPlan.audience_effect}</p>
                       </div>
-                      <div className="text-xs text-slate-400">{buildPack.overall_dimensions.tolerance_mm ?? 3} mm</div>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-                    {buildPack.mechanism_options.map((m) => {
-                      const isActive = selectedMechanismId === m.id;
-                      return (
-                        <div
-                          key={m.id}
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => setSelectedMechanismId((prev) => (prev === m.id ? 'all' : m.id))}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              setSelectedMechanismId((prev) => (prev === m.id ? 'all' : m.id));
-                            }
-                          }}
-                          className={`rounded-md border p-3 bg-slate-900/30 ${
-                            isActive ? 'border-purple-500/70' : 'border-slate-700/50'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <h5 className="text-slate-200 font-semibold text-sm">{m.name}</h5>
-                            <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300">
-                              {m.difficulty}
-                            </span>
-                          </div>
-                          <p className="text-xs text-slate-300 mt-1">{m.description}</p>
-                          <div className="mt-2">
-                            <div className="text-[11px] text-slate-400">Key components</div>
-                            <ul className="list-disc list-inside text-xs text-slate-300 mt-1 space-y-1">
-                              {m.key_components.slice(0, 4).map((k, idx) => (
-                                <li key={idx}>{k}</li>
-                              ))}
-                            </ul>
-                          </div>
-                          {isActive ? (
-                            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                              <div>
-                                <div className="text-[11px] text-slate-400">Pros</div>
-                                <ul className="list-disc list-inside text-xs text-slate-300 mt-1 space-y-1">
-                                  {m.pros.slice(0, 4).map((p, idx) => (
-                                    <li key={idx}>{p}</li>
-                                  ))}
-                                </ul>
-                              </div>
-                              <div>
-                                <div className="text-[11px] text-slate-400">Cons</div>
-                                <ul className="list-disc list-inside text-xs text-slate-300 mt-1 space-y-1">
-                                  {m.cons.slice(0, 4).map((c, idx) => (
-                                    <li key={idx}>{c}</li>
-                                  ))}
-                                </ul>
-                              </div>
-                            </div>
-                          ) : null}
+                      <div>
+                        <div className="text-xs text-slate-400 mb-1">Build Concept</div>
+                        <p className="text-sm text-slate-200 leading-relaxed">{builderPlan.build_concept}</p>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
+                          <div className="text-xs text-slate-400">Dimensions / Footprint</div>
+                          <p className="text-sm text-slate-200 mt-1">{builderPlan.dimensions_footprint}</p>
                         </div>
-                      );
-                    })}
-                  </div>
+                        <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
+                          <div className="text-xs text-slate-400">Build Complexity</div>
+                          <p className="text-sm text-slate-200 mt-1 font-semibold">
+                            {builderPlan.build_complexity.rating_1_to_5} / 5
+                          </p>
+                          <p className="text-xs text-slate-400 mt-1">{builderPlan.build_complexity.rationale}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </CollapsibleCard>
                 </div>
 
-                {/* Modules / Materials / Hardware */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                  <div className="bg-slate-800/50 p-4 rounded-md border border-slate-700/50">
-                    <h4 className="text-white font-semibold">Modules</h4>
-                    <ul className="mt-2 space-y-2">
-                      {filteredModules.map((m) => (
-                        <li key={m.id} className="text-sm text-slate-300">
-                          <span className="text-purple-300 font-semibold">{m.name}:</span> {m.notes}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <div className="bg-slate-800/50 p-4 rounded-md border border-slate-700/50">
-                    <h4 className="text-white font-semibold">Materials</h4>
-                    <ul className="mt-2 space-y-2">
-                      {filteredMaterials.map((m, idx) => (
-                        <li key={`${m.item}-${idx}`} className="text-sm text-slate-300">
-                          <span className="text-purple-300 font-semibold">{m.qty}×</span> {m.item} —{' '}
-                          <span className="text-slate-200">{m.spec}</span>
-                          {m.notes ? <div className="text-xs text-slate-400 mt-0.5">{m.notes}</div> : null}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <div className="bg-slate-800/50 p-4 rounded-md border border-slate-700/50">
-                    <h4 className="text-white font-semibold">Hardware</h4>
-                    <ul className="mt-2 space-y-2">
-                      {filteredHardware.map((h, idx) => (
-                        <li key={`${h.item}-${idx}`} className="text-sm text-slate-300">
-                          <span className="text-purple-300 font-semibold">{h.qty}×</span> {h.item} —{' '}
-                          <span className="text-slate-200">{h.spec}</span>
-                          {h.notes ? <div className="text-xs text-slate-400 mt-0.5">{h.notes}</div> : null}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-            </div>
-          </CollapsibleSection>
-
-          {/* Cut list */}
-          <CollapsibleSection
-            id="cutlist"
-            title="Cut List"
-            isOpen={openSections.cutlist}
-            onToggle={() => toggleSection('cutlist')}
-            onCopy={() => void handleCopySection('cutlist')}
-            copied={sectionCopyStatus.cutlist === 'copied'}
-          >
-            <div className="overflow-x-auto bg-slate-800/40 border border-slate-700/50 rounded-md">
-                <table className="min-w-full text-left text-sm">
-                  <thead className="bg-slate-900/60 text-slate-200">
-                    <tr>
-                      <th className="px-3 py-2">Part</th>
-                      <th className="px-3 py-2">Material</th>
-                      <th className="px-3 py-2">Thk</th>
-                      <th className="px-3 py-2">Qty</th>
-                      <th className="px-3 py-2">Size (in)</th>
-                      <th className="px-3 py-2">Size (mm)</th>
-                      <th className="px-3 py-2">Notes</th>
-                    </tr>
-                  </thead>
-                  <tbody className="text-slate-300">
-                    {filteredCutList.map((c, idx) => (
-                      <tr key={`${c.part}-${idx}`} className="border-t border-slate-700/40">
-                        <td className="px-3 py-2 font-semibold text-slate-200">{c.part}</td>
-                        <td className="px-3 py-2">{c.material}</td>
-                        <td className="px-3 py-2">{c.thickness}</td>
-                        <td className="px-3 py-2">{c.qty}</td>
-                        <td className="px-3 py-2">{c.size_in}</td>
-                        <td className="px-3 py-2">{c.size_mm}</td>
-                        <td className="px-3 py-2 text-xs text-slate-400">{c.notes ?? ''}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="text-xs text-slate-400 mt-2">
-                Tip: Verify stock thickness, kerf, and square before final assembly. Treat dimensions as nominal and test-fit critical parts.
-              </div>
-          </CollapsibleSection>
-
-          {/* Assembly */}
-          <CollapsibleSection
-            id="assembly"
-            title="Assembly Steps"
-            isOpen={openSections.assembly}
-            onToggle={() => toggleSection('assembly')}
-            onCopy={() => void handleCopySection('assembly')}
-            copied={sectionCopyStatus.assembly === 'copied'}
-          >
-            <div className="bg-slate-800/50 p-4 rounded-md border border-slate-700/50">
-                <ol className="list-decimal list-inside space-y-2 text-slate-300">
-                  {filteredSteps
-                    .slice()
-                    .sort((a, b) => a.step - b.step)
-                    .map((s) => (
-                      <li key={s.step} className="text-sm">
-                        {s.text}
-                      </li>
-                    ))}
-                </ol>
-
-                {buildPack.build_notes?.length ? (
-                  <div className="mt-4">
-                    <h4 className="text-white font-semibold">Build Notes</h4>
-                    <ul className="mt-2 list-disc list-inside text-sm text-slate-300 space-y-1">
-                      {buildPack.build_notes.map((n, idx) => (
-                        <li key={idx}>{n}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-            </div>
-          </CollapsibleSection>
-
-          {/* Safety */}
-          <CollapsibleSection
-            id="safety"
-            title="Safety & Stability"
-            isOpen={openSections.safety}
-            onToggle={() => toggleSection('safety')}
-            onCopy={() => void handleCopySection('safety')}
-            copied={sectionCopyStatus.safety === 'copied'}
-          >
-            <div className="bg-slate-800/50 p-4 rounded-md border border-slate-700/50">
-                <ul className="list-disc list-inside text-sm text-slate-300 space-y-1">
-                  {buildPack.safety_notes.map((n, idx) => (
-                    <li key={idx}>{n}</li>
-                  ))}
-                </ul>
-            </div>
-          </CollapsibleSection>
-
-          {/* Blueprint Data Info Box */}
-<div className="mb-4 rounded-md border border-slate-700/60 bg-slate-800/40 p-4 text-sm text-slate-300">
-  <div className="mb-1 font-semibold text-slate-200">Blueprint Data (Advanced)</div>
-  <p className="mb-1">
-    This JSON contains the complete technical blueprint for this illusion — including dimensions, cut list, materials, and assembly steps.
-  </p>
-  <p>Use it to export plans, share with builders, or feed into other design tools.</p>
-</div>
-
-{/* Raw JSON */}
-          <CollapsibleSection
-            id="json"
-            title="Raw JSON"
-            isOpen={openSections.json}
-            onToggle={() => toggleSection('json')}
-            onCopy={() => void handleCopySection('json')}
-            copied={sectionCopyStatus.json === 'copied'}
-            copyLabel="Copy section"
-          >
-                <div className="flex items-center gap-2 mb-2">
-                  <button
-                    onClick={handleCopyJson}
-                    className="px-3 py-1.5 text-xs font-semibold bg-slate-700 hover:bg-slate-600 rounded-md text-white"
-                    type="button"
+                <div id="ib-construction">
+                  <CollapsibleCard
+                    title="Recommended Construction"
+                    subtitle="Structure, materials, hardware, and mechanism direction"
+                    isOpen={openSections.construction}
+                    onToggle={() => toggleSection('construction')}
                   >
-                    {jsonCopyStatus === 'copied' ? 'Copied!' : 'Copy JSON'}
-                  </button>
-                  <button
-                    onClick={handleDownloadJson}
-                    className="px-3 py-1.5 text-xs font-semibold bg-slate-700 hover:bg-slate-600 rounded-md text-white"
-                    type="button"
-                  >
-                    Download .json
-                  </button>
-                  <div className="ml-auto text-[11px] text-slate-500">Tip: use this for exporting or future PDF generation.</div>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
+                          <div className="text-xs text-slate-400 mb-2">Main Structure</div>
+                          <DetailList items={builderPlan.recommended_construction.main_structure} />
+                        </div>
+                        <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
+                          <div className="text-xs text-slate-400 mb-2">Materials</div>
+                          <DetailList items={builderPlan.recommended_construction.materials} />
+                        </div>
+                        <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
+                          <div className="text-xs text-slate-400 mb-2">Hardware</div>
+                          <DetailList items={builderPlan.recommended_construction.hardware} />
+                        </div>
+                        <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
+                          <div className="text-xs text-slate-400 mb-2">Mobility / Modularity</div>
+                          <p className="text-sm text-slate-200 leading-relaxed">
+                            {builderPlan.recommended_construction.mobility_modularity}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
+                          <div className="text-xs text-slate-400 mb-2">Primary Mechanism Approach</div>
+                          <p className="text-sm text-slate-200 leading-relaxed">{builderPlan.mechanism_approach.primary}</p>
+                        </div>
+                        <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
+                          <div className="text-xs text-slate-400 mb-2">Alternate Mechanism Approach</div>
+                          <p className="text-sm text-slate-200 leading-relaxed">{builderPlan.mechanism_approach.alternate}</p>
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
+                        <div className="text-xs text-slate-400 mb-2">Assembly Overview</div>
+                        <ol className="list-decimal pl-5 text-sm text-slate-200 space-y-1.5">
+                          {builderPlan.assembly_overview.map((item, idx) => (
+                            <li key={`${item}-${idx}`}>{item}</li>
+                          ))}
+                        </ol>
+                      </div>
+                    </div>
+                  </CollapsibleCard>
                 </div>
 
-                <pre className="whitespace-pre-wrap break-words text-slate-300 font-mono text-xs bg-slate-900/60 p-3 rounded-md border border-slate-700/50">
-                  {rawJson}
-                </pre>
-          </CollapsibleSection>
+                <div id="ib-operations">
+                  <CollapsibleCard
+                    title="Safety, Reset, Transport, and Crew"
+                    subtitle="Operational realities for the finished unit"
+                    isOpen={openSections.operations}
+                    onToggle={() => toggleSection('operations')}
+                  >
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
+                        <div className="text-xs text-slate-400 mb-2">Safety / Stability Notes</div>
+                        <DetailList items={builderPlan.safety_stability_notes} />
+                      </div>
+                      <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
+                        <div className="text-xs text-slate-400 mb-2">Reset / Transport / Crew</div>
+                        <DetailList items={builderPlan.reset_transport_crew} />
+                      </div>
+                    </div>
+                  </CollapsibleCard>
+                </div>
 
+                <div id="ib-visuals">
+                  <CollapsibleCard
+                    title="Visual Concepts"
+                    subtitle="Builder-oriented image directions to choose from"
+                    isOpen={openSections.visuals}
+                    onToggle={() => toggleSection('visuals')}
+                    actions={
+                      imageOptions.length ? (
+                        <div className="text-[11px] text-slate-500">{imageOptions.length} options</div>
+                      ) : null
+                    }
+                  >
+                    {imageOptions.length ? (
+                      <div className="grid grid-cols-1 gap-4">
+                        {imageOptions.map((src, idx) => (
+                          <div key={`${src.slice(0, 30)}-${idx}`} className="rounded-xl border border-slate-800 bg-slate-950/20 p-2">
+                            <img
+                              src={src}
+                              alt={`Illusion concept option ${idx + 1}`}
+                              className="w-full rounded-lg border border-slate-700"
+                            />
+                            <div className="text-xs text-slate-400 mt-2">Concept option {idx + 1}</div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="rounded-lg border border-dashed border-slate-700 bg-slate-950/20 p-4 text-sm text-slate-400">
+                        The builder plan completed, but concept images were not returned on this attempt.
+                      </div>
+                    )}
+                  </CollapsibleCard>
+                </div>
+
+                <SaveActionBar
+                  title="Next step: save or move this plan"
+                  subtitle="Keep the builder plan in your vault, copy it, or send it into your show workflow."
+                  onSave={() => void handleSave()}
+                  primaryLabel={saveStatus === 'saved' ? 'Saved' : 'Save to Idea Vault'}
+                  saved={saveStatus === 'saved'}
+                  onCopy={() => void handleCopy()}
+                  refineNode={
+                    <div className="text-sm text-zinc-300 leading-relaxed">
+                      This simplified version is intentionally focused on two reliable outputs: a builder plan and multiple visual concepts.
+                    </div>
+                  }
+                />
+
+                <div className="flex flex-wrap gap-2">
+                  <CohesionActions
+                    content={planMarkdown}
+                    defaultTitle={builderPlan.project_title}
+                    defaultTags={['illusion-blueprint', 'builder-plan']}
+                    ideaType="text"
+                    compact
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCopy}
+                    className="px-3 py-2 rounded-md text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200"
+                  >
+                    {copyStatus === 'copied' ? 'Copied!' : 'Copy Plan'}
+                  </button>
+                </div>
               </div>
             )}
           </div>
-
-          {/* Pinned SaveActionBar + workflow parity (outside scroll area) */}
-          {engineeringSummary && stagingBlueprint && buildPack ? (
-            <div className="border-t border-slate-800 bg-slate-950/70 backdrop-blur p-4">
-              <div className="flex flex-col gap-3">
-                <SaveActionBar
-                  title="Next step:"
-                  subtitle="Save it, then move it into a Show or Task."
-                  onSave={handleSave}
-                  onCopy={() => void handleCopyAll()}
-                  saved={saveStatus === 'saved'}
-                  saving={false}
-                  primaryLabel="Save Blueprint to Idea Vault"
-                />
-
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
-                  <CohesionActions
-                    content={buildFullContent()}
-                    defaultTitle={`Illusion Blueprint: ${prompt || 'Untitled'}`}
-                    defaultTags={["illusion-blueprint", "build"]}
-                    compact
-                  />
-
-                  <button
-                    type="button"
-                    onClick={handleStartOver}
-                    className="px-5 py-2 rounded-lg border border-slate-700 bg-slate-900/40 text-slate-100 font-semibold hover:bg-slate-900/60"
-                  >
-                    Start Over
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : null}
         </div>
       </div>
     </div>
