@@ -532,80 +532,67 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     materialsPreference,
   ]);
 
-  const planMarkdown = useMemo(() => {
+  const exportBuilderPlanText = useMemo(() => {
     if (!builderPlan) return '';
 
+    const selectedConcept =
+      selectedConceptIndex !== null ? `Concept ${String.fromCharCode(65 + selectedConceptIndex)}` : 'None selected';
+
+    const constructionSummary = [
+      ...builderPlan.recommended_construction.main_structure,
+      ...builderPlan.recommended_construction.materials.map((item) => `Materials: ${item}`),
+      ...builderPlan.recommended_construction.hardware.map((item) => `Hardware: ${item}`),
+      `Mobility / Modularity: ${builderPlan.recommended_construction.mobility_modularity}`,
+    ];
+
     return [
-      `# ${builderPlan.project_title}`,
+      'ILLUSION BLUEPRINT',
+      `Project Title: ${builderPlan.project_title}`,
+      `Effect Category: ${buildSummary?.effectCategory ?? inferEffectCategory(effectInput)}`,
       '',
-      `**Requested Effect:** ${effectInput}`,
-      `**Venue / Scale:** ${venueScale}`,
-      `**Performer Style:** ${performerStyle}`,
-      `**Budget Level:** ${budgetLevel}`,
-      `**Crew Size:** ${crewSize}`,
-      `**Reset Requirement:** ${resetRequirement}`,
-      transportLimitations.trim() ? `**Transport Limitations:** ${transportLimitations.trim()}` : '',
-      stageLimitations.trim() ? `**Stage Limitations:** ${stageLimitations.trim()}` : '',
-      safetyConcerns.trim() ? `**Safety Concerns:** ${safetyConcerns.trim()}` : '',
-      materialsPreference.trim() ? `**Materials Preference:** ${materialsPreference.trim()}` : '',
-      specialNotes.trim() ? `**Special Notes:** ${specialNotes.trim()}` : '',
+      'Audience Effect:',
+      cleanText(builderPlan.audience_effect),
       '',
-      '## Audience Effect',
-      builderPlan.audience_effect,
+      'Build Concept:',
+      cleanText(builderPlan.build_concept),
       '',
-      '## Build Concept',
-      builderPlan.build_concept,
+      'Construction:',
+      ...constructionSummary.map((item) => `- ${cleanText(item)}`),
       '',
-      '## Recommended Construction',
-      ...builderPlan.recommended_construction.main_structure.map((item) => `- ${item}`),
+      'Mechanism Approach:',
+      `- Primary: ${cleanText(builderPlan.mechanism_approach.primary)}`,
+      `- Alternate: ${cleanText(builderPlan.mechanism_approach.alternate)}`,
       '',
-      '### Materials',
-      ...builderPlan.recommended_construction.materials.map((item) => `- ${item}`),
+      'Assembly Overview:',
+      ...builderPlan.assembly_overview.map((item, idx) => `${idx + 1}. ${cleanText(item)}`),
       '',
-      '### Hardware',
-      ...builderPlan.recommended_construction.hardware.map((item) => `- ${item}`),
+      'Safety Notes:',
+      ...builderPlan.safety_stability_notes.map((item) => `- ${cleanText(item)}`),
       '',
-      `### Mobility / Modularity\n${builderPlan.recommended_construction.mobility_modularity}`,
+      'Reset / Transport / Crew:',
+      ...builderPlan.reset_transport_crew.map((item) => `- ${cleanText(item)}`),
       '',
-      '## Dimensions / Footprint',
-      builderPlan.dimensions_footprint,
-      '',
-      '## Mechanism Approach',
-      `- Primary: ${builderPlan.mechanism_approach.primary}`,
-      `- Alternate: ${builderPlan.mechanism_approach.alternate}`,
-      '',
-      '## Assembly Overview',
-      ...builderPlan.assembly_overview.map((item, idx) => `${idx + 1}. ${item}`),
-      '',
-      '## Safety / Stability Notes',
-      ...builderPlan.safety_stability_notes.map((item) => `- ${item}`),
-      '',
-      '## Reset / Transport / Crew',
-      ...builderPlan.reset_transport_crew.map((item) => `- ${item}`),
-      '',
-      `## Build Complexity\n${builderPlan.build_complexity.rating_1_to_5} / 5 — ${builderPlan.build_complexity.rationale}`,
+      `Build Complexity: ${builderPlan.build_complexity.rating_1_to_5} / 5 — ${cleanText(builderPlan.build_complexity.rationale)}`,
+      `Stage Footprint: ${cleanText(builderPlan.dimensions_footprint)}`,
+      `Budget Level: ${budgetLevel}`,
+      `Materials Preference: ${buildSummary?.materials ?? (materialsPreference.trim() || 'Not specified')}`,
+      `Selected Concept: ${selectedConcept}`,
     ]
       .filter(Boolean)
       .join('\n');
   }, [
     builderPlan,
-    effectInput,
-    venueScale,
-    performerStyle,
+    buildSummary,
     budgetLevel,
-    crewSize,
-    resetRequirement,
-    transportLimitations,
-    stageLimitations,
-    safetyConcerns,
+    effectInput,
     materialsPreference,
-    specialNotes,
+    selectedConceptIndex,
   ]);
 
   const handleCopy = async () => {
-    if (!planMarkdown) return;
+    if (!exportBuilderPlanText) return;
     try {
-      await navigator.clipboard.writeText(planMarkdown);
+      await navigator.clipboard.writeText(exportBuilderPlanText);
       setCopyStatus('copied');
       setTimeout(() => setCopyStatus('idle'), 1500);
     } catch {
@@ -614,12 +601,12 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
   };
 
   const handleSave = async () => {
-    if (!builderPlan || !planMarkdown) return;
+    if (!builderPlan || !exportBuilderPlanText) return;
     try {
       await saveIdea({
         type: 'text',
         title: `Illusion Builder Plan — ${builderPlan.project_title}`,
-        content: planMarkdown,
+        content: exportBuilderPlanText,
         tags: ['illusion-blueprint', 'builder-plan'],
       });
       onIdeaSaved();
@@ -942,6 +929,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
               <div className="space-y-5">
                 <div className="sticky top-0 z-20 -mx-4 md:-mx-5 px-4 md:px-5 py-3 bg-slate-950/80 backdrop-blur border-b border-slate-800">
                   <div className="flex flex-wrap items-stretch gap-2">
+                  <div className="w-full text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Export Builder Plan</div>
                     {[
                       ['plan', 'Overview'],
                       ['construction', 'Construction'],
@@ -984,6 +972,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                       </div>
 
                       <div className="flex flex-wrap items-stretch gap-2">
+                  <div className="w-full text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Export Builder Plan</div>
                         {[
                           `Complexity ${buildSummary.complexity}/5`,
                           `Crew ${buildSummary.crew}`,
@@ -1061,6 +1050,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                         <div className="rounded-xl border border-slate-800 bg-slate-950/20 p-4 space-y-3">
                           <div className="text-xs text-slate-400">Build Complexity</div>
                           <div className="flex flex-wrap items-stretch gap-2">
+                  <div className="w-full text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Export Builder Plan</div>
                             <MetricChip label="Complexity" value={`${builderPlan.build_complexity.rating_1_to_5} / 5`} />
                             <MetricChip label="Crew" value={buildSummary?.crew ?? crewSize} />
                             <MetricChip label="Reset" value={buildSummary?.reset ?? resetRequirement} />
@@ -1258,14 +1248,15 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                   onCopy={() => void handleCopy()}
                   refineNode={
                     <div className="text-sm text-zinc-300 leading-relaxed">
-                      This simplified version is intentionally focused on two reliable outputs: a builder plan and multiple visual concepts.
+                      Export a clean builder brief, save it to your vault, or move it into your workflow.
                     </div>
                   }
                 />
 
                 <div className="flex flex-wrap items-stretch gap-2">
+                  <div className="w-full text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Export Builder Plan</div>
                   <CohesionActions
-                    content={planMarkdown}
+                    content={exportBuilderPlanText}
                     defaultTitle={builderPlan.project_title}
                     defaultTags={['illusion-blueprint', 'builder-plan']}
                     ideaType="text"
@@ -1276,7 +1267,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                     onClick={handleCopy}
                     className="w-full sm:w-auto px-3 py-2 rounded-md text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200"
                   >
-                    {copyStatus === 'copied' ? 'Copied!' : 'Copy Plan'}
+                    {copyStatus === 'copied' ? 'Copied!' : 'Copy Builder Plan'}
                   </button>
                 </div>
               </div>
