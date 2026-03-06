@@ -16,7 +16,6 @@ interface IllusionBlueprintProps {
 
 type SaveStatus = 'idle' | 'saved';
 type CopyStatus = 'idle' | 'copied';
-type RefineAction = 'reduce-size' | 'lower-budget' | 'simplify-reset' | 'increase-portability' | 'tighten-mechanism';
 
 type EffectSuggestion =
   | 'Appearance'
@@ -176,14 +175,6 @@ Rules:
 - Build complexity must be a number from 1 to 5.`;
 
 const IMAGE_STYLE_GUIDE = `Create theatrical but practical illusion concept imagery. Show the prop or illusion unit clearly. Prioritize believable materials, clean stage presentation, and builder-oriented visibility. No text overlays. No exploded diagrams. No impossible sci-fi visuals.`;
-
-const REFINE_ACTIONS: Array<{ key: RefineAction; label: string; instruction: string }> = [
-  { key: 'reduce-size', label: 'Reduce Size', instruction: 'Tighten the footprint and reduce overall bulk while keeping the audience effect strong and the build realistic for the stated venue.' },
-  { key: 'lower-budget', label: 'Lower Budget', instruction: 'Revise the plan toward a lower-cost construction approach using simpler materials, fewer premium finishes, and practical fabrication choices.' },
-  { key: 'simplify-reset', label: 'Simplify Reset', instruction: 'Revise the plan so reset is faster, cleaner, and easier for the stated crew without making the build feel flimsy or unrealistic.' },
-  { key: 'increase-portability', label: 'Increase Portability', instruction: 'Revise the plan to improve modularity, breakdown, rolling transport, and touring practicality for smaller vehicles and tighter load-ins.' },
-  { key: 'tighten-mechanism', label: 'Tighten Mechanism', instruction: 'Revise the mechanism direction so it feels cleaner, more practical, and more fabrication-ready while staying principle-based and non-exposure.' },
-];
 
 const LoadingIndicator: React.FC<{ stage: string }> = ({ stage }) => (
   <div className="flex flex-col items-center justify-center text-center p-8 h-full">
@@ -364,7 +355,6 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
   const [copyStatus, setCopyStatus] = useState<CopyStatus>('idle');
   const [selectedConceptIndex, setSelectedConceptIndex] = useState<number | null>(null);
   const [activeConceptIndex, setActiveConceptIndex] = useState<number | null>(null);
-  const [refiningAction, setRefiningAction] = useState<RefineAction | null>(null);
   const [openSections, setOpenSections] = useState({
     plan: true,
     construction: false,
@@ -466,7 +456,6 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     setCopyStatus('idle');
     setSelectedConceptIndex(null);
     setActiveConceptIndex(null);
-    setRefiningAction(null);
     setLoadingStage('');
     setOpenSections({
       plan: true,
@@ -645,7 +634,6 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     setCopyStatus('idle');
     setSelectedConceptIndex(null);
     setActiveConceptIndex(null);
-    setRefiningAction(null);
 
     const planPrompt = [
       'Create a realistic builder plan for the following illusion request.',
@@ -702,53 +690,6 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     } finally {
       setLoadingStage('');
       setIsLoading(false);
-    }
-  };
-
-  const handleRefine = async (action: RefineAction) => {
-    if (!builderPlan || refiningAction) return;
-
-    const selected = REFINE_ACTIONS.find((item) => item.key === action);
-    if (!selected) return;
-
-    setRefiningAction(action);
-    setError(null);
-    setWarning(null);
-
-    const refinePrompt = [
-      'Revise the existing builder plan according to the requested refinement.',
-      '',
-      generationContext,
-      '',
-      'Current builder plan:',
-      exportBuilderPlanText,
-      '',
-      `Requested refinement: ${selected.label}`,
-      selected.instruction,
-      '',
-      'Return a compact revised plan in the same schema.',
-      'Keep the audience effect recognizable unless the refinement requires a more practical adaptation.',
-      'Do not regenerate images. The visual concepts will remain as previously generated references.',
-    ].join('\n');
-
-    try {
-      setLoadingStage(`Refining builder plan: ${selected.label}…`);
-      const refinedPlan = (await generateStructuredResponse(
-        refinePrompt,
-        PLAN_SYSTEM_INSTRUCTION,
-        planSchema,
-        user,
-        { maxOutputTokens: 1600, speedMode: 'fast' }
-      )) as BuilderPlan;
-
-      setBuilderPlan(refinedPlan);
-      setWarning('Builder plan refined. Existing visual concepts were kept as reference images.');
-      setOpenSections((prev) => ({ ...prev, plan: true }));
-    } catch (err: any) {
-      setError(err?.message || 'Unable to refine the builder plan right now.');
-    } finally {
-      setLoadingStage('');
-      setRefiningAction(null);
     }
   };
 
@@ -823,15 +764,20 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
           <BlueprintIcon className="w-8 h-8 text-purple-400" />
           <h2 className="text-2xl font-bold text-slate-200 font-cinzel">Illusion Blueprint Generator</h2>
         </div>
-        <p className="text-slate-400 mt-1">
-          Professional planning assistant for stage illusion construction. Generate practical, modular builder plans and supporting visual concepts designed for real performance environments.
+        <p className="mt-1 max-w-2xl text-slate-400">
+          Professional planning assistant for stage illusion construction. Generate practical builder plans and visual concepts for modular, workshop-ready illusions built for real performance environments.
         </p>
       </header>
 
       <div className="flex-1 grid grid-cols-1 xl:grid-cols-2 gap-6 overflow-hidden">
         <div className="min-w-0 rounded-2xl border border-slate-800 bg-slate-950/20 p-4 md:p-5 overflow-y-auto">
           <div className="mb-3 flex flex-wrap items-center gap-2">
-            <div className="text-xs text-slate-400">Curated Demo Illusions</div>
+            <div className="w-full">
+              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Curated Demo Illusions</div>
+              <div className="mt-1 text-[11px] text-slate-500">
+                Reliable examples designed to produce strong builder plans and stage-realistic concept visuals.
+              </div>
+            </div>
             {DEMO_PRESETS.map((preset) => (
               <button
                 key={preset.label}
@@ -863,6 +809,9 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
           <div className="space-y-4">
             <div>
               <label className="text-xs font-semibold text-slate-300 mb-1 block">Effect or Illusion to Build</label>
+              <div className="mb-1 text-[11px] leading-relaxed text-slate-500">
+                Describe the audience effect you want to achieve. Focus on what spectators experience rather than secret methods.
+              </div>
               <textarea
                 rows={4}
                 value={effectInput}
@@ -870,7 +819,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                   setEffectInput(e.target.value);
                   setError(null);
                 }}
-                placeholder="Describe the audience effect you want to achieve. Focus on what spectators experience rather than the secret method."
+                placeholder="Describe the effect in your own words. Example: A performer vanishes a motorcycle from a raised platform under a brief theatrical cover."
                 className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
               />
               <div className="mt-2 flex flex-wrap gap-2">
@@ -1055,7 +1004,6 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
               <div className="space-y-5">
                 <div className="sticky top-0 z-20 -mx-4 md:-mx-5 px-4 md:px-5 py-3 bg-slate-950/80 backdrop-blur border-b border-slate-800">
                   <div className="flex flex-wrap items-stretch gap-2">
-                  <div className="w-full text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Export Builder Plan</div>
                     {[
                       ['plan', 'Overview'],
                       ['construction', 'Construction'],
@@ -1098,7 +1046,6 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                       </div>
 
                       <div className="flex flex-wrap items-stretch gap-2">
-                  <div className="w-full text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Export Builder Plan</div>
                         {[
                           `Complexity ${buildSummary.complexity}/5`,
                           `Crew ${buildSummary.crew}`,
@@ -1112,27 +1059,6 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                             {item}
                           </span>
                         ))}
-                      </div>
-
-                      <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3.5">
-                        <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Refine Builder Plan</div>
-                        <p className="mt-1 text-xs leading-relaxed text-slate-400">Make a focused adjustment without changing the initial workflow. Visual concepts stay as reference images unless you regenerate the full plan.</p>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {REFINE_ACTIONS.map((action) => {
-                            const isBusy = refiningAction === action.key;
-                            return (
-                              <button
-                                key={action.key}
-                                type="button"
-                                onClick={() => void handleRefine(action.key)}
-                                disabled={!!refiningAction || isLoading}
-                                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${isBusy ? 'border-violet-400/70 bg-violet-500/20 text-violet-100' : 'border-slate-700 bg-slate-950/60 text-slate-200 hover:border-violet-300/60 hover:text-violet-100 disabled:cursor-not-allowed disabled:opacity-60'}`}
-                              >
-                                {isBusy ? `Refining…` : action.label}
-                              </button>
-                            );
-                          })}
-                        </div>
                       </div>
 
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -1197,7 +1123,6 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                         <div className="rounded-xl border border-slate-800 bg-slate-950/20 p-4 space-y-3">
                           <div className="text-xs text-slate-400">Build Complexity</div>
                           <div className="flex flex-wrap items-stretch gap-2">
-                  <div className="w-full text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Export Builder Plan</div>
                             <MetricChip label="Complexity" value={`${builderPlan.build_complexity.rating_1_to_5} / 5`} />
                             <MetricChip label="Crew" value={buildSummary?.crew ?? crewSize} />
                             <MetricChip label="Reset" value={buildSummary?.reset ?? resetRequirement} />
@@ -1410,13 +1335,12 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                   onCopy={() => void handleCopy()}
                   refineNode={
                     <div className="text-sm text-zinc-300 leading-relaxed">
-                      Use the refinement chips above for focused revisions, then export a clean builder brief or save it to your vault.
+                      Export a clean builder brief, save it to your vault, or move it into your workflow.
                     </div>
                   }
                 />
 
                 <div className="flex flex-wrap items-stretch gap-2">
-                  <div className="w-full text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Export Builder Plan</div>
                   <CohesionActions
                     content={exportBuilderPlanText}
                     defaultTitle={builderPlan.project_title}
@@ -1429,7 +1353,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                     onClick={handleCopy}
                     className="w-full sm:w-auto px-3 py-2 rounded-md text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200"
                   >
-                    {copyStatus === 'copied' ? 'Copied!' : 'Copy Builder Plan'}
+                    {copyStatus === 'copied' ? 'Copied!' : 'Copy Builder Plan Summary'}
                   </button>
                 </div>
               </div>
