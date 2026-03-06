@@ -24,6 +24,18 @@ const EFFECT_TYPES: EffectType[] = ['Appearance', 'Vanish', 'Transformation', 'L
 const VENUE_SIZES: VenueSize[] = ['Close-up', 'Parlor', 'Stage', 'Grand Illusion', 'Arena'];
 const PERFORMER_STYLES: PerformerStyle[] = ['Comedy', 'Mystery', 'Elegant', 'Dark', 'Story-driven'];
 
+// Phase 5 Booth Demo Optimization
+const FAST_DEMO_MODE = true;
+const MAX_OUTPUT_TOKENS = 1200;
+const LOADING_MESSAGES = [
+  "Consulting illusion engineering notes...",
+  "Evaluating stage mechanics...",
+  "Checking sightline and angle risks...",
+  "Drafting build concepts...",
+  "Finalizing illusion blueprint..."
+];
+
+
 type StagingBlueprint = {
   potential_principles: { name: string; description: string }[];
   blueprint_description: string;
@@ -562,7 +574,13 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     );
 
     targets.forEach((t) => obs.observe(t));
-    return () => obs.disconnect();
+    
+const resetSession = () => {
+  window.location.reload();
+};
+
+return (
+) => obs.disconnect();
   }, [engineeringSummary, conceptArt, stagingBlueprint, buildPack]);
 
   const handleGenerate = async () => {
@@ -794,7 +812,13 @@ const handleRegenerateConceptArt = async () => {
 
     switch (id) {
       case 'engineering': {
-        return (
+        
+const resetSession = () => {
+  window.location.reload();
+};
+
+return (
+
           header +
           meta +
           `### Engineering Summary\n\n` +
@@ -812,7 +836,13 @@ const handleRegenerateConceptArt = async () => {
         );
       }
       case 'concept': {
-        return (
+        
+const resetSession = () => {
+  window.location.reload();
+};
+
+return (
+
           header +
           meta +
           `### Concept Art\n\n` +
@@ -824,7 +854,13 @@ const handleRegenerateConceptArt = async () => {
         return header + meta + `### Blueprint Sheet\n\n` + (blueprintSheet ? `Image URL: ${blueprintSheet}\n` : 'No blueprint sheet generated.');
       }
       case 'principles': {
-        return (
+        
+const resetSession = () => {
+  window.location.reload();
+};
+
+return (
+
           header +
           meta +
           `### Potential Principles\n\n` +
@@ -970,7 +1006,13 @@ const handleRegenerateConceptArt = async () => {
     });
   };
 
-  return (
+  
+const resetSession = () => {
+  window.location.reload();
+};
+
+return (
+
     <div className="flex-1 flex flex-col overflow-hidden p-4 md:p-6 animate-fade-in">
       <header className="mb-6">
         <div className="flex items-center gap-3">
@@ -1495,7 +1537,13 @@ const handleRegenerateConceptArt = async () => {
                   <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
                     {buildPack.mechanism_options.map((m) => {
                       const isActive = selectedMechanismId === m.id;
-                      return (
+                      
+const resetSession = () => {
+  window.location.reload();
+};
+
+return (
+
                         <div
                           key={m.id}
                           role="button"
