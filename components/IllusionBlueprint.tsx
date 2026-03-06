@@ -176,6 +176,8 @@ Rules:
 
 const IMAGE_STYLE_GUIDE = `Create theatrical but practical illusion concept imagery. Show the prop or illusion unit clearly. Prioritize believable materials, clean stage presentation, and builder-oriented visibility. No text overlays. No exploded diagrams. No impossible sci-fi visuals.`;
 
+const BLUEPRINT_STYLE_GUIDE = `Create technical blueprint-style drawings for a stage illusion prop. Show practical construction-oriented diagram views with clean white or light blue linework on a dark blueprint background. Include front elevation, side elevation, and cutaway or mechanism-style layout where helpful. Emphasize labeled structural sections, dimensional feel, fabrication logic, and workshop realism. No text paragraphs. No poster art. No glossy rendering. Make it look like an illusion builder's technical concept sheet.`;
+
 const LoadingIndicator: React.FC<{ stage: string }> = ({ stage }) => (
   <div className="flex flex-col items-center justify-center text-center p-8 h-full">
     <div className="relative">
@@ -186,6 +188,18 @@ const LoadingIndicator: React.FC<{ stage: string }> = ({ stage }) => (
     </div>
     <p className="text-slate-300 mt-4 text-lg">Building your illusion plan…</p>
     <p className="text-slate-400 text-sm">{stage}</p>
+  </div>
+);
+
+const ImageGenerationCard: React.FC<{ label: string }> = ({ label }) => (
+  <div className="rounded-xl border border-dashed border-slate-700 bg-slate-950/30 p-5">
+    <div className="flex items-center gap-3">
+      <div className="h-8 w-8 rounded-full border-2 border-slate-600 border-t-violet-400 animate-spin" />
+      <div>
+        <div className="text-sm font-semibold text-slate-200">{label}</div>
+        <div className="mt-1 text-xs text-slate-400">AI is still generating these images…</div>
+      </div>
+    </div>
   </div>
 );
 
@@ -346,6 +360,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
   const [specialNotes, setSpecialNotes] = useState('');
 
   const [builderPlan, setBuilderPlan] = useState<BuilderPlan | null>(null);
+  const [blueprintDrawings, setBlueprintDrawings] = useState<string[]>([]);
   const [imageOptions, setImageOptions] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
@@ -355,10 +370,14 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
   const [copyStatus, setCopyStatus] = useState<CopyStatus>('idle');
   const [selectedConceptIndex, setSelectedConceptIndex] = useState<number | null>(null);
   const [activeConceptIndex, setActiveConceptIndex] = useState<number | null>(null);
+  const [activeBlueprintIndex, setActiveBlueprintIndex] = useState<number | null>(null);
+  const [isGeneratingBlueprints, setIsGeneratingBlueprints] = useState(false);
+  const [isGeneratingVisuals, setIsGeneratingVisuals] = useState(false);
   const [openSections, setOpenSections] = useState({
     plan: true,
     construction: false,
     operations: false,
+    blueprints: false,
     visuals: false,
   });
 
@@ -449,6 +468,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     setMaterialsPreference('');
     setSpecialNotes('');
     setBuilderPlan(null);
+    setBlueprintDrawings([]);
     setImageOptions([]);
     setError(null);
     setWarning(null);
@@ -456,11 +476,15 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     setCopyStatus('idle');
     setSelectedConceptIndex(null);
     setActiveConceptIndex(null);
+    setActiveBlueprintIndex(null);
+    setIsGeneratingBlueprints(false);
+    setIsGeneratingVisuals(false);
     setLoadingStage('');
     setOpenSections({
       plan: true,
       construction: false,
       operations: false,
+      blueprints: false,
       visuals: false,
     });
   };
@@ -629,11 +653,15 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     setError(null);
     setWarning(null);
     setBuilderPlan(null);
+    setBlueprintDrawings([]);
     setImageOptions([]);
     setSaveStatus('idle');
     setCopyStatus('idle');
     setSelectedConceptIndex(null);
     setActiveConceptIndex(null);
+    setActiveBlueprintIndex(null);
+    setIsGeneratingBlueprints(false);
+    setIsGeneratingVisuals(false);
 
     const planPrompt = [
       'Create a realistic builder plan for the following illusion request.',
@@ -661,10 +689,38 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
         plan: true,
         construction: false,
         operations: false,
+        blueprints: false,
         visuals: false,
       });
 
+      setLoadingStage('Generating blueprint drawings…');
+      setIsGeneratingBlueprints(true);
+      const blueprintPrompt = [
+        BLUEPRINT_STYLE_GUIDE,
+        '',
+        `Project title: ${plan.project_title}`,
+        `Audience effect: ${plan.audience_effect}`,
+        `Build concept: ${plan.build_concept}`,
+        `Main structure: ${plan.recommended_construction.main_structure.join(', ')}`,
+        `Materials: ${plan.recommended_construction.materials.join(', ')}`,
+        `Hardware: ${plan.recommended_construction.hardware.join(', ')}`,
+        `Dimensions / footprint: ${plan.dimensions_footprint}`,
+        `Primary mechanism direction: ${plan.mechanism_approach.primary}`,
+        `Mobility / modularity: ${plan.recommended_construction.mobility_modularity}`,
+        'Create technical drawing style images suitable for illusion build planning.',
+      ].join('\n');
+
+      try {
+        const drawings = await generateImages(blueprintPrompt, '16:9', 2, user);
+        setBlueprintDrawings(drawings);
+      } catch {
+        setBlueprintDrawings([]);
+      } finally {
+        setIsGeneratingBlueprints(false);
+      }
+
       setLoadingStage('Generating visual concepts…');
+      setIsGeneratingVisuals(true);
       const imagePrompt = [
         IMAGE_STYLE_GUIDE,
         '',
@@ -684,6 +740,8 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
         setImageOptions(images);
       } catch (imageErr: any) {
         setWarning(imageErr?.message || 'Builder plan generated, but visual concepts could not be created this time.');
+      } finally {
+        setIsGeneratingVisuals(false);
       }
     } catch (err: any) {
       setError(err?.message || 'Unable to generate the builder plan.');
@@ -695,6 +753,45 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
 
   return (
     <>
+      {activeBlueprintIndex !== null && blueprintDrawings[activeBlueprintIndex] ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Blueprint drawing preview"
+          onClick={() => setActiveBlueprintIndex(null)}
+        >
+          <div
+            className="w-full max-w-6xl overflow-hidden rounded-2xl border border-white/10 bg-slate-950 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+              <div>
+                <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Blueprint Preview</div>
+                <div className="mt-1 text-lg font-bold text-white">{`Blueprint ${String.fromCharCode(65 + activeBlueprintIndex)}`}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveBlueprintIndex(null)}
+                className="rounded-full border border-slate-700 bg-slate-900/70 px-3 py-1.5 text-xs font-semibold text-slate-200 transition-colors hover:border-slate-500"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="bg-slate-950/60 p-4">
+              <div className="overflow-hidden rounded-xl border border-white/10 bg-slate-900/50">
+                <img
+                  src={blueprintDrawings[activeBlueprintIndex]}
+                  alt={`Blueprint drawing Blueprint ${String.fromCharCode(65 + activeBlueprintIndex)}`}
+                  className="h-auto max-h-[78vh] w-full object-contain"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {activeConceptIndex !== null && imageOptions[activeConceptIndex] ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
@@ -996,11 +1093,11 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
               <div className="space-y-5">
                 <div className="sticky top-0 z-20 -mx-4 md:-mx-5 px-4 md:px-5 py-3 bg-slate-950/80 backdrop-blur border-b border-slate-800">
                   <div className="flex flex-wrap items-stretch gap-2">
-                  <div className="w-full text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Export Builder Plan</div>
                     {[
                       ['plan', 'Overview'],
                       ['construction', 'Construction'],
                       ['operations', 'Safety & Ops'],
+                      ['blueprints', 'Blueprint Drawings'],
                       ['visuals', 'Visual Concepts'],
                     ].map(([key, label]) => (
                       <button
@@ -1039,7 +1136,6 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                       </div>
 
                       <div className="flex flex-wrap items-stretch gap-2">
-                  <div className="w-full text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Export Builder Plan</div>
                         {[
                           `Complexity ${buildSummary.complexity}/5`,
                           `Crew ${buildSummary.crew}`,
@@ -1117,7 +1213,6 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                         <div className="rounded-xl border border-slate-800 bg-slate-950/20 p-4 space-y-3">
                           <div className="text-xs text-slate-400">Build Complexity</div>
                           <div className="flex flex-wrap items-stretch gap-2">
-                  <div className="w-full text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Export Builder Plan</div>
                             <MetricChip label="Complexity" value={`${builderPlan.build_complexity.rating_1_to_5} / 5`} />
                             <MetricChip label="Crew" value={buildSummary?.crew ?? crewSize} />
                             <MetricChip label="Reset" value={buildSummary?.reset ?? resetRequirement} />
@@ -1221,6 +1316,85 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                   </CollapsibleCard>
                 </div>
 
+                <div id="ib-blueprints">
+                  <CollapsibleCard
+                    title="Blueprint Drawings"
+                    subtitle="Technical concept drawings for build planning"
+                    isOpen={openSections.blueprints}
+                    onToggle={() => toggleSection('blueprints')}
+                    actions={
+                      isGeneratingBlueprints ? (
+                        <div className="text-[11px] text-violet-300">Generating…</div>
+                      ) : blueprintDrawings.length ? (
+                        <div className="text-[11px] text-slate-500">{blueprintDrawings.length} drawings</div>
+                      ) : null
+                    }
+                  >
+                    <div className="space-y-5">
+                      <SectionIntro
+                        icon={<BlueprintIcon className="h-4 w-4" />}
+                        title="Technical Drawing Set"
+                        subtitle="Blueprint-style concept drawings to help visualize structure, layout, and mechanism direction."
+                      />
+                      {isGeneratingBlueprints ? (
+                        <ImageGenerationCard label="Generating blueprint drawings" />
+                      ) : blueprintDrawings.length ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {blueprintDrawings.map((src, idx) => {
+                            const drawingLabel = `Blueprint ${String.fromCharCode(65 + idx)}`;
+                            return (
+                              <div
+                                key={`${src.slice(0, 30)}-${idx}`}
+                                className="group relative overflow-hidden rounded-xl border border-white/10 bg-white/5 text-left transition-all duration-200 hover:border-sky-300/60 hover:shadow-md hover:shadow-black/20 hover:-translate-y-0.5"
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveBlueprintIndex(idx)}
+                                  className="block w-full text-left focus:outline-none focus:ring-2 focus:ring-inset focus:ring-sky-400/70"
+                                >
+                                  <div className="aspect-[4/3] overflow-hidden bg-slate-950/40">
+                                    <img
+                                      src={src}
+                                      alt={`Blueprint drawing ${drawingLabel}`}
+                                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                                    />
+                                  </div>
+                                </button>
+
+                                <div className="p-3">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                      <div className="text-sm font-semibold text-slate-100">{drawingLabel}</div>
+                                      <div className="mt-1 text-xs text-slate-400">
+                                        Click image to inspect the drawing at full size
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="mt-3 flex items-center justify-between gap-3">
+                                    <span className="text-[11px] text-slate-500">Technical blueprint drawing</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setActiveBlueprintIndex(idx)}
+                                      className="rounded-full border border-slate-700 bg-slate-900/50 px-2.5 py-1 text-[11px] font-semibold text-slate-300 transition-colors hover:border-sky-300/50 hover:text-sky-200"
+                                    >
+                                      View Larger
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="rounded-lg border border-dashed border-slate-700 bg-slate-950/20 p-4 text-sm text-slate-400">
+                          No blueprint drawings were returned on this attempt.
+                        </div>
+                      )}
+                    </div>
+                  </CollapsibleCard>
+                </div>
+
                 <div id="ib-visuals">
                   <CollapsibleCard
                     title="Visual Concepts"
@@ -1228,7 +1402,9 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                     isOpen={openSections.visuals}
                     onToggle={() => toggleSection('visuals')}
                     actions={
-                      imageOptions.length ? (
+                      isGeneratingVisuals ? (
+                        <div className="text-[11px] text-violet-300">Generating…</div>
+                      ) : imageOptions.length ? (
                         <div className="text-[11px] text-slate-500">{imageOptions.length} options</div>
                       ) : null
                     }
@@ -1239,7 +1415,9 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                         title="Concept Gallery"
                         subtitle="Compare build directions visually, then select the concept that best matches the practical plan above."
                       />
-                    {imageOptions.length ? (
+                    {isGeneratingVisuals ? (
+                      <ImageGenerationCard label="Generating visual concepts" />
+                    ) : imageOptions.length ? (
                       <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
                         {imageOptions.map((src, idx) => {
                           const conceptLabel = `Concept ${String.fromCharCode(65 + idx)}`;
