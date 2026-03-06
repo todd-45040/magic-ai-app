@@ -7,7 +7,7 @@ import { CohesionActions } from './CohesionActions';
 import SaveActionBar from './shared/SaveActionBar';
 import type { User } from '../types';
 import { APP_VERSION } from '../constants';
-import { BlueprintIcon, WandIcon } from './icons';
+import { BlueprintIcon, WandIcon, FileTextIcon, ChecklistIcon, ShieldIcon, ImageIcon } from './icons';
 
 interface IllusionBlueprintProps {
   user: User;
@@ -180,6 +180,87 @@ const DetailList: React.FC<{ items: string[] }> = ({ items }) => (
       <li key={`${item}-${idx}`}>{item}</li>
     ))}
   </ul>
+);
+
+const cleanText = (text: string): string => text.replace(/\*\*/g, '').replace(/\n{3,}/g, '\n\n').trim();
+
+const splitListLines = (text: string): string[] =>
+  cleanText(text)
+    .split(/\n+/)
+    .map((line) => line.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim())
+    .filter(Boolean);
+
+const parseTextContent = (text: string): { paragraphs: string[]; listItems: string[] } => {
+  const cleaned = cleanText(text);
+  if (!cleaned) return { paragraphs: [], listItems: [] };
+
+  const lines = cleaned.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  const listishLines = lines.filter((line) => /^(?:[-*•]|\d+[.)])\s+/.test(line));
+  if (listishLines.length >= Math.max(2, Math.ceil(lines.length / 2))) {
+    return { paragraphs: [], listItems: splitListLines(cleaned) };
+  }
+
+  const paragraphs = cleaned
+    .split(/\n\n+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  return { paragraphs, listItems: [] };
+};
+
+const TextBlock: React.FC<{
+  text: string;
+  ordered?: boolean;
+  leadIn?: string;
+}> = ({ text, ordered = false, leadIn }) => {
+  const { paragraphs, listItems } = parseTextContent(text);
+
+  return (
+    <div className="space-y-3">
+      {leadIn ? (
+        <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">{leadIn}</div>
+      ) : null}
+
+      {listItems.length ? (
+        ordered ? (
+          <ol className="list-decimal pl-5 text-sm text-slate-200 space-y-2">
+            {listItems.map((item, idx) => (
+              <li key={`${item}-${idx}`} className="leading-relaxed">{item}</li>
+            ))}
+          </ol>
+        ) : (
+          <ul className="list-disc pl-5 text-sm text-slate-200 space-y-2">
+            {listItems.map((item, idx) => (
+              <li key={`${item}-${idx}`} className="leading-relaxed">{item}</li>
+            ))}
+          </ul>
+        )
+      ) : (
+        paragraphs.map((paragraph, idx) => (
+          <p key={`${paragraph}-${idx}`} className="text-sm text-slate-200 leading-relaxed">
+            {paragraph}
+          </p>
+        ))
+      )}
+    </div>
+  );
+};
+
+const MetricChip: React.FC<{ label: string; value: string }> = ({ label, value }) => (
+  <div className="rounded-full border border-slate-700 bg-slate-900/50 px-3 py-1.5 text-xs font-semibold text-slate-200">
+    <span className="text-slate-400">{label}: </span>
+    <span>{value}</span>
+  </div>
+);
+
+const SectionIntro: React.FC<{ icon: React.ReactNode; title: string; subtitle: string }> = ({ icon, title, subtitle }) => (
+  <div className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-3">
+    <div className="mt-0.5 rounded-lg border border-white/10 bg-slate-900/60 p-2 text-slate-200">{icon}</div>
+    <div>
+      <div className="text-sm font-semibold text-white">{title}</div>
+      <div className="mt-1 text-xs leading-relaxed text-slate-400">{subtitle}</div>
+    </div>
+  </div>
 );
 
 
@@ -902,26 +983,36 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                     isOpen={openSections.plan}
                     onToggle={() => toggleSection('plan')}
                   >
-                    <div className="space-y-4">
-                      <div>
-                        <div className="text-xs text-slate-400 mb-1">Audience Effect</div>
-                        <p className="text-sm text-slate-200 leading-relaxed">{builderPlan.audience_effect}</p>
+                    <div className="space-y-5">
+                      <SectionIntro
+                        icon={<FileTextIcon className="h-4 w-4" />}
+                        title="Overview"
+                        subtitle="Start with the audience experience and the overall construction direction before reviewing fabrication details."
+                      />
+
+                      <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                        <div className="text-xs text-slate-400 mb-2">Audience Effect</div>
+                        <TextBlock text={builderPlan.audience_effect} leadIn="What the audience sees" />
                       </div>
-                      <div>
-                        <div className="text-xs text-slate-400 mb-1">Build Concept</div>
-                        <p className="text-sm text-slate-200 leading-relaxed">{builderPlan.build_concept}</p>
+
+                      <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                        <div className="text-xs text-slate-400 mb-2">Build Concept</div>
+                        <TextBlock text={builderPlan.build_concept} leadIn="How the structure is approached" />
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="rounded-xl border border-slate-800 bg-slate-950/20 p-4">
                           <div className="text-xs text-slate-400">Dimensions / Footprint</div>
-                          <p className="text-sm text-slate-200 mt-1">{builderPlan.dimensions_footprint}</p>
+                          <p className="text-sm text-slate-200 mt-2 leading-relaxed">{cleanText(builderPlan.dimensions_footprint)}</p>
                         </div>
-                        <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
+                        <div className="rounded-xl border border-slate-800 bg-slate-950/20 p-4 space-y-3">
                           <div className="text-xs text-slate-400">Build Complexity</div>
-                          <p className="text-sm text-slate-200 mt-1 font-semibold">
-                            {builderPlan.build_complexity.rating_1_to_5} / 5
-                          </p>
-                          <p className="text-xs text-slate-400 mt-1">{builderPlan.build_complexity.rationale}</p>
+                          <div className="flex flex-wrap gap-2">
+                            <MetricChip label="Complexity" value={`${builderPlan.build_complexity.rating_1_to_5} / 5`} />
+                            <MetricChip label="Crew" value={buildSummary?.crew ?? crewSize} />
+                            <MetricChip label="Reset" value={buildSummary?.reset ?? resetRequirement} />
+                          </div>
+                          <p className="text-sm text-slate-300 leading-relaxed">{cleanText(builderPlan.build_complexity.rationale)}</p>
                         </div>
                       </div>
                     </div>
@@ -935,42 +1026,50 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                     isOpen={openSections.construction}
                     onToggle={() => toggleSection('construction')}
                   >
-                    <div className="space-y-4">
+                    <div className="space-y-5">
+                      <SectionIntro
+                        icon={<ChecklistIcon className="h-4 w-4" />}
+                        title="Construction Breakdown"
+                        subtitle="Review fabrication priorities, materials, and mechanism options in a format that is easy to scan in the shop."
+                      />
+
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
+                        <div className="rounded-xl border border-slate-800 bg-slate-950/20 p-4">
                           <div className="text-xs text-slate-400 mb-2">Main Structure</div>
-                          <DetailList items={builderPlan.recommended_construction.main_structure} />
+                          <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400 mb-3">What the builder should prioritize</div>
+                          <DetailList items={builderPlan.recommended_construction.main_structure.map(cleanText)} />
                         </div>
-                        <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
+                        <div className="rounded-xl border border-slate-800 bg-slate-950/20 p-4">
                           <div className="text-xs text-slate-400 mb-2">Materials</div>
-                          <DetailList items={builderPlan.recommended_construction.materials} />
+                          <DetailList items={builderPlan.recommended_construction.materials.map(cleanText)} />
                         </div>
-                        <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
+                        <div className="rounded-xl border border-slate-800 bg-slate-950/20 p-4">
                           <div className="text-xs text-slate-400 mb-2">Hardware</div>
-                          <DetailList items={builderPlan.recommended_construction.hardware} />
+                          <DetailList items={builderPlan.recommended_construction.hardware.map(cleanText)} />
                         </div>
-                        <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
+                        <div className="rounded-xl border border-slate-800 bg-slate-950/20 p-4">
                           <div className="text-xs text-slate-400 mb-2">Mobility / Modularity</div>
-                          <p className="text-sm text-slate-200 leading-relaxed">
-                            {builderPlan.recommended_construction.mobility_modularity}
-                          </p>
+                          <TextBlock text={builderPlan.recommended_construction.mobility_modularity} leadIn="Transport and breakdown approach" />
                         </div>
                       </div>
+
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
+                        <div className="rounded-xl border border-slate-800 bg-slate-950/20 p-4">
                           <div className="text-xs text-slate-400 mb-2">Primary Mechanism Approach</div>
-                          <p className="text-sm text-slate-200 leading-relaxed">{builderPlan.mechanism_approach.primary}</p>
+                          <TextBlock text={builderPlan.mechanism_approach.primary} leadIn="Preferred direction" />
                         </div>
-                        <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
+                        <div className="rounded-xl border border-slate-800 bg-slate-950/20 p-4">
                           <div className="text-xs text-slate-400 mb-2">Alternate Mechanism Approach</div>
-                          <p className="text-sm text-slate-200 leading-relaxed">{builderPlan.mechanism_approach.alternate}</p>
+                          <TextBlock text={builderPlan.mechanism_approach.alternate} leadIn="Backup direction" />
                         </div>
                       </div>
-                      <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
+
+                      <div className="rounded-xl border border-slate-800 bg-slate-950/20 p-4">
                         <div className="text-xs text-slate-400 mb-2">Assembly Overview</div>
-                        <ol className="list-decimal pl-5 text-sm text-slate-200 space-y-1.5">
+                        <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400 mb-3">Ordered build path</div>
+                        <ol className="list-decimal pl-5 text-sm text-slate-200 space-y-2">
                           {builderPlan.assembly_overview.map((item, idx) => (
-                            <li key={`${item}-${idx}`}>{item}</li>
+                            <li key={`${item}-${idx}`} className="leading-relaxed">{cleanText(item)}</li>
                           ))}
                         </ol>
                       </div>
@@ -985,14 +1084,28 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                     isOpen={openSections.operations}
                     onToggle={() => toggleSection('operations')}
                   >
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                      <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
-                        <div className="text-xs text-slate-400 mb-2">Safety / Stability Notes</div>
-                        <DetailList items={builderPlan.safety_stability_notes} />
-                      </div>
-                      <div className="rounded-lg border border-slate-800 bg-slate-950/20 p-3">
-                        <div className="text-xs text-slate-400 mb-2">Reset / Transport / Crew</div>
-                        <DetailList items={builderPlan.reset_transport_crew} />
+                    <div className="space-y-5">
+                      <SectionIntro
+                        icon={<ShieldIcon className="h-4 w-4" />}
+                        title="Operations and Safety"
+                        subtitle="Use this section to review stability, service access, reset expectations, and real-world operating constraints."
+                      />
+
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <div className="rounded-xl border border-slate-800 bg-slate-950/20 p-4">
+                          <div className="text-xs text-slate-400 mb-2">Safety / Stability Notes</div>
+                          <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400 mb-3">What the builder should prioritize</div>
+                          <DetailList items={builderPlan.safety_stability_notes.map(cleanText)} />
+                        </div>
+                        <div className="rounded-xl border border-slate-800 bg-slate-950/20 p-4">
+                          <div className="text-xs text-slate-400 mb-2">Reset / Transport / Crew</div>
+                          <div className="flex flex-wrap gap-2 mb-3">
+                            <MetricChip label="Crew" value={buildSummary?.crew ?? crewSize} />
+                            <MetricChip label="Reset" value={buildSummary?.reset ?? resetRequirement} />
+                            <MetricChip label="Budget" value={budgetLevel} />
+                          </div>
+                          <DetailList items={builderPlan.reset_transport_crew.map(cleanText)} />
+                        </div>
                       </div>
                     </div>
                   </CollapsibleCard>
@@ -1010,6 +1123,12 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                       ) : null
                     }
                   >
+                    <div className="space-y-5">
+                      <SectionIntro
+                        icon={<ImageIcon className="h-4 w-4" />}
+                        title="Concept Gallery"
+                        subtitle="Compare build directions visually, then select the concept that best matches the practical plan above."
+                      />
                     {imageOptions.length ? (
                       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                         {imageOptions.map((src, idx) => {
@@ -1073,6 +1192,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                         The builder plan completed, but concept images were not returned on this attempt.
                       </div>
                     )}
+                    </div>
                   </CollapsibleCard>
                 </div>
 
