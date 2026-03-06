@@ -381,6 +381,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
   const [refiningAction, setRefiningAction] = useState<RefineAction | null>(null);
   const [selectedConceptIndex, setSelectedConceptIndex] = useState<number | null>(null);
   const [activeConceptIndex, setActiveConceptIndex] = useState<number | null>(null);
+  const [activeBlueprintIndex, setActiveBlueprintIndex] = useState<number | null>(null);
   const [showAllBlueprints, setShowAllBlueprints] = useState(false);
   const [showAllVisuals, setShowAllVisuals] = useState(false);
   const [openSections, setOpenSections] = useState({
@@ -496,6 +497,8 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     setCopyStatus('idle');
     setSelectedConceptIndex(null);
     setActiveConceptIndex(null);
+    setActiveBlueprintIndex(null);
+    setActiveBlueprintIndex(null);
     setIsGeneratingBlueprints(false);
     setIsGeneratingVisuals(false);
     setShowAllBlueprints(false);
@@ -840,6 +843,56 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
 
   return (
     <>
+      {activeBlueprintIndex !== null && blueprintDrawings[activeBlueprintIndex] ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Blueprint drawing preview"
+          onClick={() => setActiveBlueprintIndex(null)}
+        >
+          <div
+            className="w-full max-w-6xl overflow-hidden rounded-2xl border border-white/10 bg-slate-950 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+              <div>
+                <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Blueprint Preview</div>
+                <div className="mt-1 text-lg font-bold text-white">{`Blueprint ${String.fromCharCode(65 + activeBlueprintIndex)}`}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveBlueprintIndex(null)}
+                className="rounded-full border border-slate-700 bg-slate-900/70 px-3 py-1.5 text-xs font-semibold text-slate-200 transition-colors hover:border-slate-500"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="bg-slate-950/60 p-4">
+              <div className="overflow-hidden rounded-xl border border-white/10 bg-slate-900/50">
+                <img
+                  src={blueprintDrawings[activeBlueprintIndex]}
+                  alt={`Technical drawing Blueprint ${String.fromCharCode(65 + activeBlueprintIndex)}`}
+                  className="h-auto max-h-[78vh] w-full object-contain"
+                />
+              </div>
+
+              <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-sm text-slate-400">Inspect the blueprint drawing at full size for structure, layout, and mechanism direction.</div>
+                <button
+                  type="button"
+                  onClick={() => setActiveBlueprintIndex(null)}
+                  className="rounded-full border border-slate-700 bg-slate-900/70 px-4 py-2 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-500"
+                >
+                  Close Preview
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {activeConceptIndex !== null && imageOptions[activeConceptIndex] ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
@@ -1425,17 +1478,34 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                                 key={`${src.slice(0, 30)}-${originalIdx}`}
                                 className="group relative overflow-hidden rounded-xl border border-white/10 bg-white/5 transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-300/60 hover:shadow-md hover:shadow-black/20"
                               >
-                                <div className="aspect-[16/10] overflow-hidden bg-slate-950/40">
-                                  <img
-                                    src={src}
-                                    alt={`Technical drawing ${drawingLabel}`}
-                                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                                  />
-                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveBlueprintIndex(originalIdx)}
+                                  className="block w-full text-left focus:outline-none focus:ring-2 focus:ring-inset focus:ring-sky-400/70"
+                                >
+                                  <div className="aspect-[16/10] overflow-hidden bg-slate-950/40">
+                                    <img
+                                      src={src}
+                                      alt={`Technical drawing ${drawingLabel}`}
+                                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                                    />
+                                  </div>
+                                </button>
                                 <div className="p-3">
-                                  <div className="text-sm font-semibold text-slate-100">{drawingLabel}</div>
-                                  <div className="mt-1 text-xs text-slate-400">
-                                    Blueprint-style technical drawing for build planning
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                      <div className="text-sm font-semibold text-slate-100">{drawingLabel}</div>
+                                      <div className="mt-1 text-xs text-slate-400">
+                                        Blueprint-style technical drawing for build planning
+                                      </div>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => setActiveBlueprintIndex(originalIdx)}
+                                      className="rounded-full border border-slate-700 bg-slate-900/50 px-2.5 py-1 text-[11px] font-semibold text-slate-300 transition-colors hover:border-sky-300/50 hover:text-sky-100"
+                                    >
+                                      View Larger
+                                    </button>
                                   </div>
                                 </div>
                               </div>
