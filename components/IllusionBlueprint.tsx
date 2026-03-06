@@ -569,6 +569,8 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
   }, [engineeringSummary, conceptArt, stagingBlueprint, buildPack]);
 
   const hasCoreOutput = Boolean(engineeringSummary && stagingBlueprint);
+  const safeBlueprintTitle = buildPack?.title || engineeringSummary?.title || prompt.trim() || 'Untitled Illusion Blueprint';
+  const safeIntendedEffect = buildPack?.intended_effect || engineeringSummary?.audience_experience || prompt.trim() || 'Illusion concept in progress';
 
   const normalizeBuildPack = (pack: any): BuildBlueprintPack => ({
     title: pack?.title || 'Illusion Build Pack',
@@ -817,7 +819,7 @@ const handleRegenerateConceptArt = async () => {
   const handleSave = () => {
     if (!engineeringSummary || !stagingBlueprint) return;
     const fullContent = buildFullContent();
-    const titleBase = prompt.trim() ? prompt.trim() : buildPack.title;
+    const titleBase = prompt.trim() || safeBlueprintTitle;
     saveIdea('text', fullContent, `Illusion Blueprint (${effectType}) — ${titleBase}`);
     onIdeaSaved();
     setSaveStatus('saved');
@@ -1532,6 +1534,7 @@ const handleRegenerateConceptArt = async () => {
           </CollapsibleSection>
 
           {/* Build Pack */}
+          {buildPack ? (
           <CollapsibleSection
             id="buildpack"
             title="Build Blueprint Pack"
@@ -1676,8 +1679,10 @@ const handleRegenerateConceptArt = async () => {
                 </div>
             </div>
           </CollapsibleSection>
+          ) : null}
 
           {/* Cut list */}
+          {buildPack ? (
           <CollapsibleSection
             id="cutlist"
             title="Cut List"
@@ -1719,8 +1724,10 @@ const handleRegenerateConceptArt = async () => {
                 Tip: Verify stock thickness, kerf, and square before final assembly. Treat dimensions as nominal and test-fit critical parts.
               </div>
           </CollapsibleSection>
+          ) : null}
 
           {/* Assembly */}
+          {buildPack ? (
           <CollapsibleSection
             id="assembly"
             title="Assembly Steps"
@@ -1753,8 +1760,10 @@ const handleRegenerateConceptArt = async () => {
                 ) : null}
             </div>
           </CollapsibleSection>
+          ) : null}
 
           {/* Safety */}
+          {buildPack ? (
           <CollapsibleSection
             id="safety"
             title="Safety & Stability"
@@ -1771,8 +1780,10 @@ const handleRegenerateConceptArt = async () => {
                 </ul>
             </div>
           </CollapsibleSection>
+          ) : null}
 
           {/* Blueprint Data Info Box */}
+{buildPack ? (
 <div className="mb-4 rounded-md border border-slate-700/60 bg-slate-800/40 p-4 text-sm text-slate-300">
   <div className="mb-1 font-semibold text-slate-200">Blueprint Data (Advanced)</div>
   <p className="mb-1">
@@ -1780,8 +1791,10 @@ const handleRegenerateConceptArt = async () => {
   </p>
   <p>Use it to export plans, share with builders, or feed into other design tools.</p>
 </div>
+) : null}
 
 {/* Raw JSON */}
+          {buildPack ? (
           <CollapsibleSection
             id="json"
             title="Raw JSON"
@@ -1813,6 +1826,7 @@ const handleRegenerateConceptArt = async () => {
                   {rawJson}
                 </pre>
           </CollapsibleSection>
+          ) : null}
 
               </div>
             )}
@@ -1835,7 +1849,7 @@ const handleRegenerateConceptArt = async () => {
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
                   <CohesionActions
                     content={buildFullContent()}
-                    defaultTitle={`Illusion Blueprint: ${prompt || 'Untitled'}`}
+                    defaultTitle={`Illusion Blueprint: ${safeBlueprintTitle}`}
                     defaultTags={["illusion-blueprint", "build"]}
                     compact
                   />
