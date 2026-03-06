@@ -132,7 +132,7 @@ const DEMO_PRESETS: Array<{ label: string; concept: string; effectType: EffectTy
   },
 ];
 
-const LoadingIndicator: React.FC = () => (
+const LoadingIndicator: React.FC<{ stage?: string }> = ({ stage }) => (
   <div className="flex flex-col items-center justify-center text-center p-8 h-full">
     <div className="relative">
       <WandIcon className="w-16 h-16 text-purple-400 animate-pulse" />
@@ -140,8 +140,8 @@ const LoadingIndicator: React.FC = () => (
         <div className="w-24 h-24 border-t-2 border-purple-300 rounded-full animate-spin"></div>
       </div>
     </div>
-    <p className="text-slate-300 mt-4 text-lg">Generating Illusion Blueprint…</p>
-    <p className="text-slate-400 text-sm">This involves multiple AI steps and may take a moment.</p>
+    <p className="text-slate-300 mt-4 text-lg">{stage || 'Generating Illusion Blueprint…'}</p>
+    <p className="text-slate-400 text-sm">Fast mode returns the engineering summary first. Heavy extras can be generated on demand.</p>
   </div>
 );
 
@@ -260,6 +260,9 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
   const [isConceptLoading, setIsConceptLoading] = useState(false);
   const [blueprintSheet, setBlueprintSheet] = useState<string | null>(null);
   const [isBlueprintLoading, setIsBlueprintLoading] = useState(false);
+  const [fastMode, setFastMode] = useState(true);
+  const [generationStage, setGenerationStage] = useState<string>('');
+  const [isBuildPackLoading, setIsBuildPackLoading] = useState(false);
 
   const [stagingBlueprint, setStagingBlueprint] = useState<StagingBlueprint | null>(null);
   const [buildPack, setBuildPack] = useState<BuildBlueprintPack | null>(null);
@@ -565,21 +568,108 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     return () => obs.disconnect();
   }, [engineeringSummary, conceptArt, stagingBlueprint, buildPack]);
 
+  const hasCoreOutput = Boolean(engineeringSummary && stagingBlueprint);
+
+  const normalizeBuildPack = (pack: any): BuildBlueprintPack => ({
+    title: pack?.title || 'Illusion Build Pack',
+    intended_effect: pack?.intended_effect || prompt.trim(),
+    overall_dimensions: {
+      width_in: Number(pack?.overall_dimensions?.width_in ?? 0),
+      depth_in: Number(pack?.overall_dimensions?.depth_in ?? 0),
+      height_in: Number(pack?.overall_dimensions?.height_in ?? 0),
+      width_mm: Number(pack?.overall_dimensions?.width_mm ?? 0),
+      depth_mm: Number(pack?.overall_dimensions?.depth_mm ?? 0),
+      height_mm: Number(pack?.overall_dimensions?.height_mm ?? 0),
+      target_weight_lb: pack?.overall_dimensions?.target_weight_lb,
+      target_weight_kg: pack?.overall_dimensions?.target_weight_kg,
+      tolerance_in: pack?.overall_dimensions?.tolerance_in,
+      tolerance_mm: pack?.overall_dimensions?.tolerance_mm,
+    },
+    breakdown_modules: Array.isArray(pack?.breakdown_modules) ? pack.breakdown_modules : [],
+    mechanism_options: Array.isArray(pack?.mechanism_options) ? pack.mechanism_options : [],
+    materials: Array.isArray(pack?.materials) ? pack.materials : [],
+    hardware: Array.isArray(pack?.hardware) ? pack.hardware : [],
+    cut_list: Array.isArray(pack?.cut_list) ? pack.cut_list : [],
+    assembly_steps: Array.isArray(pack?.assembly_steps) ? pack.assembly_steps : [],
+    safety_notes: Array.isArray(pack?.safety_notes) ? pack.safety_notes : [],
+    build_notes: Array.isArray(pack?.build_notes) ? pack.build_notes : [],
+  });
+
+  const buildContext = () => [
+    `Effect Type: ${effectType}`,
+    `Venue Size: ${venueSize}`,
+    `Performer Style: ${performerStyle}`,
+    constraints.trim() ? `Constraints: ${constraints.trim()}` : 'Constraints: (none provided)',
+    `Concept: ${prompt.trim()}`,
+  ].join('\n');
+
+  const handleGenerateBuildPack = async () => {
+    if (!prompt.trim()) {
+      setError('Please describe your illusion concept first.');
+      return;
+    }
+    const context = buildContext();
+    const buildProfile = fastMode
+      ? 'FAST BUILD PACK: keep output concise. Use 1-2 mechanism options, 8 cut-list rows max, and 8 assembly steps max.'
+      : 'FULL BUILD PACK: include practical detail, but keep it readable and stage-realistic.';
+    const buildPrompt = `Create a BUILD BLUEPRINT PACK for this illusion request.\n\n${context}\n\n${buildProfile}\n\n${REALISM_GUARDRAILS}\n\nProvide realistic dimensions and a concise cut list. Include mechanism ids and tag parts/steps that differ by option.`;
+    try {
+      setIsBuildPackLoading(true);
+      setGenerationStage('Generating build pack…');
+      setError(null);
+      const buildResult = await generateStructuredResponse(
+        buildPrompt,
+        `${BUILD_BLUEPRINT_SYSTEM_INSTRUCTION}\n\n${REALISM_GUARDRAILS}`,
+        buildPackSchema,
+        user,
+        { speedMode: fastMode ? 'fast' : 'full', maxOutputTokens: fastMode ? 1600 : 3200 }
+      );
+      setBuildPack(normalizeBuildPack(buildResult));
+      setOpenSections((prev) => ({ ...prev, buildpack: true, cutlist: true, assembly: true, safety: true }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate build pack. Please try again.');
+    } finally {
+      setGenerationStage('');
+      setIsBuildPackLoading(false);
+    }
+  };
+
+  const handleGenerateConceptArt = async () => {
+    if (!prompt.trim()) {
+      setError('Please describe your illusion concept first.');
+      return;
+    }
+    const context = buildContext();
+    const artPrompt = `Dramatic, theatrical concept art for a stage illusion.\n\n${context}\n\nFocus on the magical moment from the audience's perspective. Cinematic lighting, professional digital painting style.`;
+    try {
+      setIsConceptLoading(true);
+      setGenerationStage('Generating concept art…');
+      setError(null);
+      setLastArtPrompt(artPrompt);
+      const img = await generateImage(artPrompt, '16:9', user);
+      setConceptArt(img);
+      setOpenSections((prev) => ({ ...prev, concept: true }));
+    } catch (e: any) {
+      setError(e?.message || 'Could not generate concept art.');
+    } finally {
+      setGenerationStage('');
+      setIsConceptLoading(false);
+    }
+  };
+
   const handleGenerate = async () => {
     if (!prompt.trim()) {
       setError('Please describe your illusion concept.');
       return;
     }
 
-    const context = [
-      `Effect Type: ${effectType}`,
-      `Venue Size: ${venueSize}`,
-      `Performer Style: ${performerStyle}`,
-      constraints.trim() ? `Constraints: ${constraints.trim()}` : 'Constraints: (none provided)',
-      `Concept: ${prompt.trim()}`,
-    ].join('\n');
+    const context = buildContext();
+    const speedProfile = fastMode
+      ? 'FAST MODE: Keep all text concise. Max 4 bullets per list. Max 2 short sentences per paragraph.'
+      : 'FULL MODE: You may add more detail, but stay practical and non-exposure.';
 
     setIsLoading(true);
+    setGenerationStage('Generating engineering summary…');
     setError(null);
     setConceptArt(null);
     setBlueprintSheet(null);
@@ -591,59 +681,50 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     setOpenSections((prev) => ({
       ...prev,
       engineering: true,
-      concept: true,
-      blueprint: true,
-      principles: true,
+      concept: false,
+      blueprint: false,
+      principles: false,
       staging: true,
-      buildpack: true,
-      cutlist: true,
-      assembly: true,
-      safety: true,
+      buildpack: false,
+      cutlist: false,
+      assembly: false,
+      safety: false,
       json: false,
     }));
     setJsonCopyStatus('idle');
     setSaveStatus('idle');
 
-    const artPrompt = `Dramatic, theatrical concept art for a stage illusion.\n\n${context}\n\nFocus on the magical moment from the audience's perspective. Cinematic lighting, professional digital painting style.`;
-
-    setLastArtPrompt(artPrompt);
-
-    const engineeringPrompt = `Create an ENGINEERING-MINDED SUMMARY for this stage illusion request.\n\n${context}\n\n${REALISM_GUARDRAILS}\n\nSTRICT: non-exposure. Provide high-level principles and tradeoffs only. No step-by-step secrets.\n\nReturn JSON matching the schema exactly.`;
-
-    const stagingPrompt = `Generate a STAGING blueprint for this illusion request.\n\n${context}\n\n${REALISM_GUARDRAILS}\n\nProvide performance-facing principles and a clear staging description.`;
-
-    const buildPrompt = `Create a BUILD BLUEPRINT PACK for this illusion request.\n\n${context}\n\n${REALISM_GUARDRAILS}\n\nProvide realistic dimensions and a cut list. Include 3 mechanism options (manual, assisted, motorized) with mechanism ids and tag parts/steps that differ by option.`;
+    const engineeringPrompt = `Create an ENGINEERING-MINDED SUMMARY for this stage illusion request.\n\n${context}\n\n${speedProfile}\n\n${REALISM_GUARDRAILS}\n\nSTRICT: non-exposure. Provide high-level principles and tradeoffs only. No step-by-step secrets.\n\nReturn JSON matching the schema exactly.`;
+    const stagingPrompt = `Generate a STAGING blueprint for this illusion request.\n\n${context}\n\n${speedProfile}\n\n${REALISM_GUARDRAILS}\n\nProvide performance-facing principles and a clear staging description.`;
 
     try {
-      const artPromise = generateImage(artPrompt, '16:9', user);
-      const engineeringPromise = generateStructuredResponse(
+      const engineeringResult = await generateStructuredResponse(
         engineeringPrompt,
         'You are a master illusion designer and technical director. Produce practical, build-realistic, non-exposure engineering summaries for stage illusions. Output only JSON.',
         engineeringSchema,
-        user
+        user,
+        { speedMode: fastMode ? 'fast' : 'full', maxOutputTokens: fastMode ? 1200 : 2200 }
       );
-      const stagingPromise = generateStructuredResponse(stagingPrompt, 'You are an expert stage illusion designer.', stagingSchema, user);
-      const buildPromise = generateStructuredResponse(
-        buildPrompt,
-        `${BUILD_BLUEPRINT_SYSTEM_INSTRUCTION}\n\n${REALISM_GUARDRAILS}`,
-        buildPackSchema,
-        user
-      );
-
-      const [artResult, engineeringResult, stagingResult, buildResult] = await Promise.all([
-        artPromise,
-        engineeringPromise,
-        stagingPromise,
-        buildPromise,
-      ]);
-
-      setConceptArt(artResult);
       setEngineeringSummary(engineeringResult as EngineeringSummary);
+
+      setGenerationStage('Drafting staging blueprint…');
+      const stagingResult = await generateStructuredResponse(
+        stagingPrompt,
+        'You are an expert stage illusion designer.',
+        stagingSchema,
+        user,
+        { speedMode: fastMode ? 'fast' : 'full', maxOutputTokens: fastMode ? 1000 : 1800 }
+      );
       setStagingBlueprint(stagingResult as StagingBlueprint);
-      setBuildPack(buildResult as BuildBlueprintPack);
+
+      if (!fastMode) {
+        await handleGenerateBuildPack();
+        await handleGenerateConceptArt();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred. Please try again.');
     } finally {
+      setGenerationStage('');
       setIsLoading(false);
     }
   };
@@ -691,46 +772,8 @@ const handleGenerateBlueprint = async () => {
 };
 
 
-
-  // Some UI variants call this handler name. Keep as an alias for compatibility.
-  const handleGenerateConceptArt = async () => {
-    return handleRegenerateConceptArt();
-  };
-
 const handleRegenerateConceptArt = async () => {
-  if (!prompt.trim()) {
-    setError('Please describe your illusion concept first.');
-    return;
-  }
-
-  const context = [
-    `Effect Type: ${effectType}`,
-    `Venue Size: ${venueSize}`,
-    `Performer Style: ${performerStyle}`,
-    constraints.trim() ? `Constraints: ${constraints.trim()}` : 'Constraints: (none provided)',
-    `Concept: ${prompt.trim()}`,
-  ].join('\n');
-
-  const base = lastArtPrompt
-    ? lastArtPrompt
-    : `Dramatic, theatrical concept art for a grand stage illusion prop.\n\n${context}\n\nHighly detailed, realistic, stage-ready, showing the prop on a theater stage with lighting. Include materials hints (wood/metal/fabric) visually. 16:9 composition. No text.`;
-
-  try {
-    setIsConceptLoading(true);
-    setError(null);
-    const variationHint = `\n\nCreate a DIFFERENT design variation (new silhouette, proportions, and detailing) while keeping the same illusion concept.`;
-    const img = await generateImage(base + variationHint, '16:9', user);
-    setConceptArt(img);
-    setOpenSections((prev) => ({ ...prev, concept: true }));
-    setActiveSection('concept');
-    setTimeout(() => {
-      document.getElementById('section-concept')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 100);
-  } catch (e: any) {
-    setError(e?.message || 'Could not regenerate concept art.');
-  } finally {
-    setIsConceptLoading(false);
-  }
+  await handleGenerateConceptArt();
 };
 
 
@@ -739,14 +782,14 @@ const handleRegenerateConceptArt = async () => {
     return arr.filter((x) => !x.applies_to || x.applies_to.includes(selectedMechanismId));
   };
 
-  const filteredModules = useMemo(() => (buildPack ? toFiltered(buildPack.breakdown_modules) : []), [buildPack, selectedMechanismId]);
-  const filteredMaterials = useMemo(() => (buildPack ? toFiltered(buildPack.materials) : []), [buildPack, selectedMechanismId]);
-  const filteredHardware = useMemo(() => (buildPack ? toFiltered(buildPack.hardware) : []), [buildPack, selectedMechanismId]);
-  const filteredCutList = useMemo(() => (buildPack ? toFiltered(buildPack.cut_list) : []), [buildPack, selectedMechanismId]);
-  const filteredSteps = useMemo(() => (buildPack ? toFiltered(buildPack.assembly_steps) : []), [buildPack, selectedMechanismId]);
+  const filteredModules = useMemo(() => (buildPack ? toFiltered(buildPack.breakdown_modules || []) : []), [buildPack, selectedMechanismId]);
+  const filteredMaterials = useMemo(() => (buildPack ? toFiltered(buildPack.materials || []) : []), [buildPack, selectedMechanismId]);
+  const filteredHardware = useMemo(() => (buildPack ? toFiltered(buildPack.hardware || []) : []), [buildPack, selectedMechanismId]);
+  const filteredCutList = useMemo(() => (buildPack ? toFiltered(buildPack.cut_list || []) : []), [buildPack, selectedMechanismId]);
+  const filteredSteps = useMemo(() => (buildPack ? toFiltered(buildPack.assembly_steps || []) : []), [buildPack, selectedMechanismId]);
 
   const buildFullContent = () => {
-    if (!engineeringSummary || !stagingBlueprint || !buildPack) return '';
+    if (!engineeringSummary || !stagingBlueprint) return '';
     let fullContent = `## Illusion Blueprint: ${prompt}\n\n`;
     fullContent += `**Effect Type:** ${effectType}\n\n`;
     fullContent += `**Venue Size:** ${venueSize}\n\n`;
@@ -772,7 +815,7 @@ const handleRegenerateConceptArt = async () => {
   };
 
   const handleSave = () => {
-    if (!engineeringSummary || !stagingBlueprint || !buildPack) return;
+    if (!engineeringSummary || !stagingBlueprint) return;
     const fullContent = buildFullContent();
     const titleBase = prompt.trim() ? prompt.trim() : buildPack.title;
     saveIdea('text', fullContent, `Illusion Blueprint (${effectType}) — ${titleBase}`);
@@ -1018,6 +1061,20 @@ const handleRegenerateConceptArt = async () => {
             </button>
           </div>
 
+          <div className="mb-4 rounded-xl border border-slate-800 bg-slate-900/30 p-3 flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold text-slate-200">Booth Demo Speed</div>
+              <div className="text-xs text-slate-400">Fast = summary + staging first. Full adds build pack + art automatically.</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setFastMode((v) => !v)}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${fastMode ? 'bg-purple-600/30 border-purple-500 text-purple-200' : 'bg-slate-900/40 border-slate-700 text-slate-200'}`}
+            >
+              {fastMode ? 'Fast: ON' : 'Full: ON'}
+            </button>
+          </div>
+
           {/* Micro-help (parity with other tools) */}
           <div className="mb-4 rounded-xl border border-slate-800 bg-slate-900/30 p-3">
             <div className="text-sm font-semibold text-slate-200">Why use this?</div>
@@ -1127,27 +1184,47 @@ const handleRegenerateConceptArt = async () => {
           <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
             <div>
               <div className="text-sm font-semibold text-slate-200">Blueprint Output</div>
-              <div className="text-xs text-slate-500">Concept art, staging, build pack, and safety notes.</div>
+              <div className="text-xs text-slate-500">Fast mode returns summary + staging first. Add art/build pack on demand.</div>
             </div>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => void handleCopyAll()}
-                disabled={!engineeringSummary || !stagingBlueprint || !buildPack}
+                disabled={!hasCoreOutput}
                 className="px-3 py-1.5 rounded-md text-[11px] font-semibold border border-slate-700 bg-slate-900/60 text-slate-200 hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Copy the full blueprint"
               >
                 {copyAllStatus === 'copied' ? 'Copied!' : 'Copy Blueprint'}
               </button>
+              {hasCoreOutput && !conceptArt ? (
+                <button
+                  type="button"
+                  onClick={handleGenerateConceptArt}
+                  disabled={isConceptLoading || isLoading}
+                  className="px-3 py-1.5 rounded-md text-[11px] font-semibold border border-slate-700 bg-slate-900/60 text-slate-200 hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isConceptLoading ? 'Generating Art…' : 'Generate Art'}
+                </button>
+              ) : null}
+              {hasCoreOutput && !buildPack ? (
+                <button
+                  type="button"
+                  onClick={handleGenerateBuildPack}
+                  disabled={isBuildPackLoading || isLoading}
+                  className="px-3 py-1.5 rounded-md text-[11px] font-semibold border border-slate-700 bg-slate-900/60 text-slate-200 hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isBuildPackLoading ? 'Generating Build…' : 'Generate Build Pack'}
+                </button>
+              ) : null}
               <div className="text-[11px] text-slate-500">Version: {APP_VERSION}</div>
             </div>
           </div>
 
           <div ref={containerRef} className="flex-1 overflow-y-auto p-4 md:p-5">
-            {!engineeringSummary || !stagingBlueprint || !buildPack ? (
+            {!hasCoreOutput ? (
               <div className="h-full flex items-center justify-center">
                 {isLoading ? (
-                  <LoadingIndicator />
+                  <LoadingIndicator stage={generationStage} />
                 ) : (
                   <div className="max-w-md text-center">
                     <div className="text-slate-200 font-semibold">Your blueprint will appear here.</div>
@@ -1179,33 +1256,33 @@ const handleRegenerateConceptArt = async () => {
                 </button>
               ))}
 
-              {/* Mechanism selector (always accessible) */}
-              <div className="flex items-center gap-2 ml-1">
-                <span className="text-[11px] text-slate-400">Mechanism:</span>
-                <select
-                  value={selectedMechanismId}
-                  onChange={(e) => setSelectedMechanismId(e.target.value)}
-                  className="bg-slate-900 border border-slate-700 text-slate-200 text-[11px] rounded-md px-2 py-1 focus:outline-none focus:border-purple-500"
-                >
-                  <option value="all">All</option>
-                  {buildPack.mechanism_options.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                    </option>
-                  ))}
-                </select>
+              {buildPack ? (
+                <div className="flex items-center gap-2 ml-1">
+                  <span className="text-[11px] text-slate-400">Mechanism:</span>
+                  <select
+                    value={selectedMechanismId}
+                    onChange={(e) => setSelectedMechanismId(e.target.value)}
+                    className="bg-slate-900 border border-slate-700 text-slate-200 text-[11px] rounded-md px-2 py-1 focus:outline-none focus:border-purple-500"
+                  >
+                    <option value="all">All</option>
+                    {(buildPack?.mechanism_options ?? []).map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
 
-{/* Blueprint sheet quick action */}
-<button
-  type="button"
-  onClick={handleGenerateBlueprint}
-  disabled={!buildPack || isBlueprintLoading}
-  className="px-3 py-1.5 rounded-md text-[11px] font-semibold border border-slate-700 bg-slate-900/60 text-slate-200 hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
-  title={!buildPack ? "Generate an illusion first" : "Generate blueprint-style orthographic plan image"}
->
-  {isBlueprintLoading ? "Generating Blueprint…" : "Generate Blueprint Sheet"}
-</button>
-              </div>
+                  <button
+                    type="button"
+                    onClick={handleGenerateBlueprint}
+                    disabled={isBlueprintLoading}
+                    className="px-3 py-1.5 rounded-md text-[11px] font-semibold border border-slate-700 bg-slate-900/60 text-slate-200 hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Generate blueprint-style orthographic plan image"
+                  >
+                    {isBlueprintLoading ? "Generating Blueprint…" : "Generate Blueprint Sheet"}
+                  </button>
+                </div>
+              ) : null}
 
               {/* Expand/collapse controls */}
               <button
@@ -1499,7 +1576,7 @@ const handleRegenerateConceptArt = async () => {
                   </div>
 
                   <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-                    {buildPack.mechanism_options.map((m) => {
+                    {(buildPack?.mechanism_options ?? []).map((m) => {
                       const isActive = selectedMechanismId === m.id;
                       return (
                         <div
@@ -1688,7 +1765,7 @@ const handleRegenerateConceptArt = async () => {
           >
             <div className="bg-slate-800/50 p-4 rounded-md border border-slate-700/50">
                 <ul className="list-disc list-inside text-sm text-slate-300 space-y-1">
-                  {buildPack.safety_notes.map((n, idx) => (
+                  {(buildPack?.safety_notes ?? []).map((n, idx) => (
                     <li key={idx}>{n}</li>
                   ))}
                 </ul>
@@ -1742,7 +1819,7 @@ const handleRegenerateConceptArt = async () => {
           </div>
 
           {/* Pinned SaveActionBar + workflow parity (outside scroll area) */}
-          {engineeringSummary && stagingBlueprint && buildPack ? (
+          {hasCoreOutput ? (
             <div className="border-t border-slate-800 bg-slate-950/70 backdrop-blur p-4">
               <div className="flex flex-col gap-3">
                 <SaveActionBar
