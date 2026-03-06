@@ -263,6 +263,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
   const [constraints, setConstraints] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [loadingTick, setLoadingTick] = useState(0);
+  const [loadingStage, setLoadingStage] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
 
 
@@ -272,13 +273,14 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     return () => window.clearInterval(t);
   }, [isLoading]);
 
-  const loadingMessage = LOADING_MESSAGES[loadingTick % LOADING_MESSAGES.length];
+  const loadingMessage = loadingStage ? loadingStage : LOADING_MESSAGES[loadingTick % LOADING_MESSAGES.length];
 
   const [conceptArt, setConceptArt] = useState<string | null>(null);
   const [lastArtPrompt, setLastArtPrompt] = useState<string | null>(null);
   const [isConceptLoading, setIsConceptLoading] = useState(false);
   const [blueprintSheet, setBlueprintSheet] = useState<string | null>(null);
   const [isBlueprintLoading, setIsBlueprintLoading] = useState(false);
+  const [isBuildPackLoading, setIsBuildPackLoading] = useState(false);
 
   const [stagingBlueprint, setStagingBlueprint] = useState<StagingBlueprint | null>(null);
   const [buildPack, setBuildPack] = useState<BuildBlueprintPack | null>(null);
@@ -646,38 +648,133 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     const buildPrompt = `Create a BUILD BLUEPRINT PACK for this illusion request.\n\n${context}\n\n${speedProfile}\n\n${REALISM_GUARDRAILS}\n\nProvide realistic dimensions and a cut list. Include 3 mechanism options (manual, assisted, motorized) with mechanism ids and tag parts/steps that differ by option.`;
 
     try {
-      const artPromise = generateImage(artPrompt, '16:9', user);
+      // Stage 1: always generate the engineering + staging results first (fast, usable, and demo-friendly).
+      setLoadingStage('Generating engineering summary…');
       const engineeringPromise = generateStructuredResponse(
         engineeringPrompt,
         'You are a master illusion designer and technical director. Produce practical, build-realistic, non-exposure engineering summaries for stage illusions. Output only JSON.',
         engineeringSchema,
         user
       );
-      const stagingPromise = generateStructuredResponse(stagingPrompt, 'You are an expert stage illusion designer.', stagingSchema, user);
+
+      setLoadingStage('Drafting staging blueprint…');
+      const stagingPromise = generateStructuredResponse(
+        stagingPrompt,
+        'You are an expert stage illusion designer.',
+        stagingSchema,
+        user
+      );
+
+      const [engineeringResult, stagingResult] = await Promise.all([engineeringPromise, stagingPromise]);
+      setEngineeringSummary(engineeringResult as EngineeringSummary);
+      setStagingBlueprint(stagingResult as StagingBlueprint);
+
+      // In booth Fast mode, stop here to avoid 90s timeouts.
+      // Users can optionally generate Concept Art / Build Pack afterward (buttons in the output panel).
+      if (fastMode) {
+        setLoadingStage('');
+        return;
+      }
+
+      // Stage 2: heavier artifacts (concept art + build pack)
+      setLoadingStage('Generating concept art…');
+      const artPromise = generateImage(artPrompt, '16:9', user);
+
+      setLoadingStage('Assembling build blueprint pack…');
       const buildPromise = generateStructuredResponse(
         buildPrompt,
-        `${BUILD_BLUEPRINT_SYSTEM_INSTRUCTION}\n\n${REALISM_GUARDRAILS}`,
+        `${BUILD_BLUEPRINT_SYSTEM_INSTRUCTION}
+
+${REALISM_GUARDRAILS}`,
         buildPackSchema,
         user
       );
 
-      const [artResult, engineeringResult, stagingResult, buildResult] = await Promise.all([
-        artPromise,
-        engineeringPromise,
-        stagingPromise,
-        buildPromise,
-      ]);
-
+      const [artResult, buildResult] = await Promise.all([artPromise, buildPromise]);
       setConceptArt(artResult);
-      setEngineeringSummary(engineeringResult as EngineeringSummary);
-      setStagingBlueprint(stagingResult as StagingBlueprint);
       setBuildPack(buildResult as BuildBlueprintPack);
+
+      setLoadingStage('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred. Please try again.');
     } finally {
       setIsLoading(false);
     }
+  
+
+  const handleGenerateConceptArt = async () => {
+    if (!prompt.trim()) {
+      setError('Please describe your illusion concept first.');
+      return;
+    }
+    const context = [
+      `Effect Type: ${effectType}`,
+      `Venue Size: ${venueSize}`,
+      `Performer Style: ${performerStyle}`,
+      constraints.trim() ? `Constraints: ${constraints.trim()}` : 'Constraints: (none provided)',
+      `Concept: ${prompt.trim()}`,
+    ].join('\n');
+
+    const artPrompt = `Dramatic, theatrical concept art for a stage illusion.\n\n${context}\n\nFocus on the magical moment from the audience's perspective. Cinematic lighting, professional digital painting style.`;
+    setLastArtPrompt(artPrompt);
+
+    try {
+      setIsConceptLoading(true);
+      setError(null);
+      const img = await generateImage(artPrompt, '16:9', user);
+      setConceptArt(img);
+      setOpenSections((prev) => ({ ...prev, concept: true }));
+      setActiveSection('concept');
+      setTimeout(() => scrollToSection('concept'), 50);
+    } catch (e: any) {
+      setError(e?.message || 'Could not generate concept art.');
+    } finally {
+      setIsConceptLoading(false);
+    }
   };
+
+  const handleGenerateBuildPack = async () => {
+    if (!prompt.trim()) {
+      setError('Please describe your illusion concept first.');
+      return;
+    }
+
+    const context = [
+      `Effect Type: ${effectType}`,
+      `Venue Size: ${venueSize}`,
+      `Performer Style: ${performerStyle}`,
+      constraints.trim() ? `Constraints: ${constraints.trim()}` : 'Constraints: (none provided)',
+      `Concept: ${prompt.trim()}`,
+    ].join('\n');
+
+    const speedProfile = fastMode
+      ? 'FAST MODE: Keep JSON concise. Provide minimal viable lists. Cap modules to 3–5, materials to 8–12, hardware to 8–12, cut_list to 10–16, assembly_steps to 10–14. Use short notes.'
+      : 'FULL MODE: You may add detail, but keep it practical and non-exposure.';
+
+    const buildPrompt = `Create a BUILD BLUEPRINT PACK for this illusion request.\n\n${context}\n\n${speedProfile}\n\n${REALISM_GUARDRAILS}\n\nProvide realistic dimensions and a cut list. Include 3 mechanism options (manual, assisted, motorized) with mechanism ids and tag parts/steps that differ by option.`;
+
+    try {
+      setIsBuildPackLoading(true);
+      setError(null);
+      setLoadingStage('Assembling build blueprint pack…');
+      const buildResult = await generateStructuredResponse(
+        buildPrompt,
+        `${BUILD_BLUEPRINT_SYSTEM_INSTRUCTION}\n\n${REALISM_GUARDRAILS}`,
+        buildPackSchema,
+        user
+      );
+      setBuildPack(buildResult as BuildBlueprintPack);
+      setOpenSections((prev) => ({ ...prev, buildpack: true, cutlist: true, assembly: true, safety: true, json: false }));
+      setActiveSection('buildpack');
+      setTimeout(() => scrollToSection('buildpack'), 50);
+    } catch (e: any) {
+      setError(e?.message || 'Could not generate build pack.');
+    } finally {
+      setLoadingStage('');
+      setIsBuildPackLoading(false);
+    }
+  };
+};
 
 
 const handleGenerateBlueprint = async () => {
@@ -771,7 +868,7 @@ const handleRegenerateConceptArt = async () => {
   const filteredSteps = useMemo(() => (buildPack ? toFiltered(buildPack.assembly_steps) : []), [buildPack, selectedMechanismId]);
 
   const buildFullContent = () => {
-    if (!engineeringSummary || !stagingBlueprint || !buildPack) return '';
+    if (!engineeringSummary || !stagingBlueprint) return '';
     let fullContent = `## Illusion Blueprint: ${prompt}\n\n`;
     fullContent += `**Effect Type:** ${effectType}\n\n`;
     fullContent += `**Venue Size:** ${venueSize}\n\n`;
@@ -791,13 +888,22 @@ const handleRegenerateConceptArt = async () => {
       fullContent += `**${p.name}:** ${p.description}\n\n`;
     });
     fullContent += `### Staging Blueprint\n\n${stagingBlueprint.blueprint_description}\n\n`;
-    fullContent += `### Build Blueprint Pack (JSON)\n\n`;
-    fullContent += JSON.stringify(buildPack, null, 2);
+    if (buildPack) {
+      fullContent += `### Build Blueprint Pack (JSON)
+
+`;
+      fullContent += JSON.stringify(buildPack, null, 2);
+    } else {
+      fullContent += `### Build Blueprint Pack (Not generated)
+
+Fast mode skips the build pack by default for speed. Use “Generate Build Pack” to create it.
+`;
+    }
     return fullContent;
   };
 
   const handleSave = () => {
-    if (!engineeringSummary || !stagingBlueprint || !buildPack) return;
+    if (!engineeringSummary || !stagingBlueprint) return;
     const fullContent = buildFullContent();
     const titleBase = prompt.trim() ? prompt.trim() : buildPack.title;
     saveIdea('text', fullContent, `Illusion Blueprint (${effectType}) — ${titleBase}`);
@@ -819,8 +925,9 @@ const handleRegenerateConceptArt = async () => {
   };
 
   const buildSectionContent = (id: SectionId) => {
-    if (!engineeringSummary || !stagingBlueprint || !buildPack) return '';
-    const header = `## Illusion Blueprint: ${prompt || buildPack.title}\n`;
+    if (!engineeringSummary || !stagingBlueprint) return '';
+    const header = `## Illusion Blueprint: ${prompt || (buildPack ? buildPack.title : 'Untitled')}
+`;
     const meta = `Effect Type: ${effectType}\nVenue: ${venueSize}\nStyle: ${performerStyle}${constraints.trim() ? `\nConstraints: ${constraints.trim()}` : ''}\n\n`;
 
     switch (id) {
@@ -867,21 +974,26 @@ const handleRegenerateConceptArt = async () => {
         return header + meta + `### Staging Blueprint\n\n${stagingBlueprint.blueprint_description}\n`;
       }
       case 'buildpack': {
+        if (!buildPack) return header + meta + `### Build Blueprint Pack\n\n(Not generated in Fast mode)\n`;
         return header + meta + `### Build Blueprint Pack (JSON)\n\n${JSON.stringify(buildPack, null, 2)}\n`;
       }
       case 'cutlist': {
+        if (!buildPack) return header + meta + `### Cut List\n\n(Not generated in Fast mode)\n`;
         const lines = filteredCutList.map((c) => `- ${c.part} (${c.material}, ${c.thickness}) x${c.qty} — ${c.size_in} / ${c.size_mm}${c.notes ? ` — ${c.notes}` : ''}`);
         return header + meta + `### Cut List\n\n${lines.join('\n')}\n`;
       }
       case 'assembly': {
+        if (!buildPack) return header + meta + `### Assembly Steps\n\n(Not generated in Fast mode)\n`;
         const steps = filteredSteps.map((s) => `${s.step}. ${s.text}`);
         return header + meta + `### Assembly Steps\n\n${steps.join('\n')}\n`;
       }
       case 'safety': {
+        if (!buildPack) return header + meta + `### Safety Notes\n\n(Not generated in Fast mode)\n`;
         const merged = Array.from(new Set([...(engineeringSummary.safety_notes || []), ...(buildPack.safety_notes || [])]));
         return header + meta + `### Safety Notes\n\n${merged.map((s) => `- ${s}`).join('\n')}\n`;
       }
       case 'json': {
+        if (!buildPack) return header + meta + `### Raw JSON\n\n(Not generated in Fast mode)\n`;
         return header + meta + `### Raw JSON\n\n${rawJson}\n`;
       }
       default:
@@ -1234,6 +1346,28 @@ const handleRegenerateConceptArt = async () => {
               >
                 {copyAllStatus === 'copied' ? 'Copied!' : 'Copy Blueprint'}
               </button>
+
+              {/* Fast-mode optional generators to keep booth demos under 90 seconds */}
+              {!isLoading && engineeringSummary && stagingBlueprint && !conceptArt && (
+                <button
+                  onClick={handleGenerateConceptArt}
+                  disabled={isConceptLoading}
+                  className="ml-2 px-3 py-2 rounded-lg text-[12px] font-medium border border-slate-700 bg-slate-950/40 hover:bg-slate-900/40 disabled:opacity-60"
+                  title="Generate concept art (optional)"
+                >
+                  {isConceptLoading ? 'Generating Art…' : 'Generate Art'}
+                </button>
+              )}
+              {!isLoading && engineeringSummary && stagingBlueprint && !buildPack && (
+                <button
+                  onClick={handleGenerateBuildPack}
+                  disabled={isBuildPackLoading}
+                  className="ml-2 px-3 py-2 rounded-lg text-[12px] font-medium border border-slate-700 bg-slate-950/40 hover:bg-slate-900/40 disabled:opacity-60"
+                  title="Generate the build blueprint pack (optional)"
+                >
+                  {isBuildPackLoading ? 'Generating Build Pack…' : 'Generate Build Pack'}
+                </button>
+              )}
               <div className="text-[11px] text-slate-500">Version: {APP_VERSION}</div>
             </div>
           </div>
@@ -1300,76 +1434,79 @@ const handleRegenerateConceptArt = async () => {
                 </button>
               ))}
 
+              {buildPack ? (
               {/* Mechanism selector (always accessible) */}
-              <div className="flex items-center gap-2 ml-1">
-                <span className="text-[11px] text-slate-400">Mechanism:</span>
-                <select
-                  value={selectedMechanismId}
-                  onChange={(e) => setSelectedMechanismId(e.target.value)}
-                  className="bg-slate-900 border border-slate-700 text-slate-200 text-[11px] rounded-md px-2 py-1 focus:outline-none focus:border-purple-500"
-                >
-                  <option value="all">All</option>
-                  {buildPack.mechanism_options.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                    </option>
-                  ))}
-                </select>
-
-{/* Blueprint sheet quick action */}
-<button
-  type="button"
-  onClick={handleGenerateBlueprint}
-  disabled={!buildPack || isBlueprintLoading}
-  className="px-3 py-1.5 rounded-md text-[11px] font-semibold border border-slate-700 bg-slate-900/60 text-slate-200 hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
-  title={!buildPack ? "Generate an illusion first" : "Generate blueprint-style orthographic plan image"}
->
-  {isBlueprintLoading ? "Generating Blueprint…" : "Generate Blueprint Sheet"}
-</button>
-              </div>
-
+                            <div className="flex items-center gap-2 ml-1">
+                              <span className="text-[11px] text-slate-400">Mechanism:</span>
+                              <select
+                                value={selectedMechanismId}
+                                onChange={(e) => setSelectedMechanismId(e.target.value)}
+                                className="bg-slate-900 border border-slate-700 text-slate-200 text-[11px] rounded-md px-2 py-1 focus:outline-none focus:border-purple-500"
+                              >
+                                <option value="all">All</option>
+                                {buildPack.mechanism_options.map((m) => (
+                                  <option key={m.id} value={m.id}>
+                                    {m.name}
+                                  </option>
+                                ))}
+                              </select>
               
-              {/* View controls (booth-friendly) */}
-              <div className="flex items-center gap-2 ml-1">
-                <span className="text-[11px] text-slate-400">View:</span>
-                <button
-                  type="button"
-                  onClick={() => setViewMode('compact')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
-                    viewMode === 'compact'
-                      ? 'bg-purple-600/30 border-purple-500 text-purple-200'
-                      : 'bg-slate-900/40 border-slate-700 text-slate-300 hover:border-slate-500'
-                  }`}
-                >
-                  Compact
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode('full')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
-                    viewMode === 'full'
-                      ? 'bg-purple-600/30 border-purple-500 text-purple-200'
-                      : 'bg-slate-900/40 border-slate-700 text-slate-300 hover:border-slate-500'
-                  }`}
-                >
-                  Full
-                </button>
-
-                <span className="text-[11px] text-slate-400 ml-2">Accordion:</span>
-                <button
-                  type="button"
-                  onClick={() => setAccordionMode((v) => !v)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
-                    accordionMode
-                      ? 'bg-purple-600/30 border-purple-500 text-purple-200'
-                      : 'bg-slate-900/40 border-slate-700 text-slate-300 hover:border-slate-500'
-                  }`}
-                  title="Accordion keeps one section open at a time"
-                >
-                  {accordionMode ? 'On' : 'Off'}
-                </button>
-              </div>
-
+              {/* Blueprint sheet quick action */}
+              <button
+                type="button"
+                onClick={handleGenerateBlueprint}
+                disabled={!buildPack || isBlueprintLoading}
+                className="px-3 py-1.5 rounded-md text-[11px] font-semibold border border-slate-700 bg-slate-900/60 text-slate-200 hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                title={!buildPack ? "Generate an illusion first" : "Generate blueprint-style orthographic plan image"}
+              >
+                {isBlueprintLoading ? "Generating Blueprint…" : "Generate Blueprint Sheet"}
+              </button>
+                            </div>
+              
+                            
+                            {/* View controls (booth-friendly) */}
+                            <div className="flex items-center gap-2 ml-1">
+                              <span className="text-[11px] text-slate-400">View:</span>
+                              <button
+                                type="button"
+                                onClick={() => setViewMode('compact')}
+                                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
+                                  viewMode === 'compact'
+                                    ? 'bg-purple-600/30 border-purple-500 text-purple-200'
+                                    : 'bg-slate-900/40 border-slate-700 text-slate-300 hover:border-slate-500'
+                                }`}
+                              >
+                                Compact
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setViewMode('full')}
+                                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
+                                  viewMode === 'full'
+                                    ? 'bg-purple-600/30 border-purple-500 text-purple-200'
+                                    : 'bg-slate-900/40 border-slate-700 text-slate-300 hover:border-slate-500'
+                                }`}
+                              >
+                                Full
+                              </button>
+              
+                              <span className="text-[11px] text-slate-400 ml-2">Accordion:</span>
+                              <button
+                                type="button"
+                                onClick={() => setAccordionMode((v) => !v)}
+                                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
+                                  accordionMode
+                                    ? 'bg-purple-600/30 border-purple-500 text-purple-200'
+                                    : 'bg-slate-900/40 border-slate-700 text-slate-300 hover:border-slate-500'
+                                }`}
+                                title="Accordion keeps one section open at a time"
+                              >
+                                {accordionMode ? 'On' : 'Off'}
+                              </button>
+                            </div>
+              
+              
+            ) : null}
 {/* Expand/collapse controls */}
               <button
                 type="button"
