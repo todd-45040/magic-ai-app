@@ -4,7 +4,6 @@ import { Type } from '@google/genai';
 import { generateImages, generateStructuredResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
 import { CohesionActions } from './CohesionActions';
-import SaveActionBar from './shared/SaveActionBar';
 import type { User } from '../types';
 import { APP_VERSION } from '../constants';
 import { BlueprintIcon, WandIcon, FileTextIcon, ChecklistIcon, ShieldIcon, ImageIcon } from './icons';
@@ -16,6 +15,7 @@ interface IllusionBlueprintProps {
 
 type SaveStatus = 'idle' | 'saved';
 type CopyStatus = 'idle' | 'copied';
+type RefineAction = 'reduce-size' | 'lower-budget' | 'simplify-reset' | 'increase-portability' | 'tighten-mechanism';
 
 type EffectSuggestion =
   | 'Appearance'
@@ -177,6 +177,14 @@ Rules:
 const IMAGE_STYLE_GUIDE = `Create theatrical but practical illusion concept imagery. Show the prop or illusion unit clearly. Prioritize believable materials, clean stage presentation, and builder-oriented visibility. No text overlays. No exploded diagrams. No impossible sci-fi visuals.`;
 
 const BLUEPRINT_STYLE_GUIDE = `Create technical blueprint-style drawings for a stage illusion prop. Show practical construction-oriented diagram views with clean white or light blue linework on a dark blueprint background. Include front elevation, side elevation, and cutaway or mechanism-style layout where helpful. Emphasize labeled structural sections, dimensional feel, fabrication logic, and workshop realism. No text paragraphs. No poster art. No glossy rendering. Make it look like an illusion builder's technical concept sheet.`;
+
+const REFINE_ACTIONS: Array<{ key: RefineAction; label: string; instruction: string }> = [
+  { key: 'reduce-size', label: 'Reduce Size', instruction: 'Tighten the footprint and reduce overall bulk while keeping the audience effect strong and the build realistic for the stated venue.' },
+  { key: 'lower-budget', label: 'Lower Budget', instruction: 'Revise the plan toward a lower-cost construction approach using simpler materials, fewer premium finishes, and practical fabrication choices.' },
+  { key: 'simplify-reset', label: 'Simplify Reset', instruction: 'Revise the plan so reset is faster, cleaner, and easier for the stated crew without making the build feel flimsy or unrealistic.' },
+  { key: 'increase-portability', label: 'Increase Portability', instruction: 'Revise the plan to improve modularity, breakdown, rolling transport, and touring practicality for smaller vehicles and tighter load-ins.' },
+  { key: 'tighten-mechanism', label: 'Tighten Mechanism', instruction: 'Revise the mechanism direction so it feels cleaner, more practical, and more fabrication-ready while staying principle-based and non-exposure.' },
+];
 
 const LoadingIndicator: React.FC<{ stage: string }> = ({ stage }) => (
   <div className="flex flex-col items-center justify-center text-center p-8 h-full">
@@ -356,13 +364,16 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
   const [loadingStage, setLoadingStage] = useState('');
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [copyStatus, setCopyStatus] = useState<CopyStatus>('idle');
+  const [refiningAction, setRefiningAction] = useState<RefineAction | null>(null);
   const [selectedConceptIndex, setSelectedConceptIndex] = useState<number | null>(null);
   const [activeConceptIndex, setActiveConceptIndex] = useState<number | null>(null);
+  const [showAllBlueprints, setShowAllBlueprints] = useState(false);
+  const [showAllVisuals, setShowAllVisuals] = useState(false);
   const [openSections, setOpenSections] = useState({
-    plan: true,
+    plan: false,
     construction: true,
     operations: false,
-    blueprints: true,
+    blueprints: false,
     visuals: false,
   });
 
@@ -421,7 +432,17 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
   );
 
   const toggleSection = (key: keyof typeof openSections) => {
-    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
+    setOpenSections((prev) => {
+      const nextValue = !prev[key];
+      return {
+        plan: false,
+        construction: false,
+        operations: false,
+        blueprints: false,
+        visuals: false,
+        [key]: nextValue,
+      };
+    });
   };
 
   const applyPreset = (preset: (typeof DEMO_PRESETS)[number]) => {
@@ -461,12 +482,16 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     setCopyStatus('idle');
     setSelectedConceptIndex(null);
     setActiveConceptIndex(null);
+    setShowAllBlueprints(false);
+    setShowAllVisuals(false);
+    setShowAllBlueprints(false);
+    setShowAllVisuals(false);
     setLoadingStage('');
     setOpenSections({
-      plan: true,
+      plan: false,
       construction: true,
       operations: false,
-      blueprints: true,
+      blueprints: false,
       visuals: false,
     });
   };
@@ -539,6 +564,16 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     transportLimitations,
     materialsPreference,
   ]);
+
+  const visibleBlueprintDrawings = useMemo(
+    () => (showAllBlueprints ? blueprintDrawings : blueprintDrawings.slice(0, 1)),
+    [blueprintDrawings, showAllBlueprints]
+  );
+
+  const visibleConceptImages = useMemo(
+    () => (showAllVisuals ? imageOptions : imageOptions.slice(0, 2)),
+    [imageOptions, showAllVisuals]
+  );
 
   const exportBuilderPlanText = useMemo(() => {
     if (!builderPlan) return '';
@@ -665,10 +700,10 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
 
       setBuilderPlan(plan);
       setOpenSections({
-        plan: true,
+        plan: false,
         construction: true,
         operations: false,
-        blueprints: true,
+        blueprints: false,
         visuals: false,
       });
 
@@ -721,6 +756,59 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     } finally {
       setLoadingStage('');
       setIsLoading(false);
+    }
+  };
+
+  const handleRefine = async (action: RefineAction) => {
+    if (!builderPlan || refiningAction) return;
+
+    const selected = REFINE_ACTIONS.find((item) => item.key === action);
+    if (!selected) return;
+
+    setRefiningAction(action);
+    setError(null);
+    setWarning(null);
+
+    const refinePrompt = [
+      'Revise the existing builder plan according to the requested refinement.',
+      '',
+      generationContext,
+      '',
+      'Current builder plan:',
+      exportBuilderPlanText,
+      '',
+      `Requested refinement: ${selected.label}`,
+      selected.instruction,
+      '',
+      'Return a compact revised plan in the same schema.',
+      'Keep the audience effect recognizable unless the refinement requires a more practical adaptation.',
+      'Do not regenerate images. The blueprint drawings and visual concepts will remain as previously generated references.',
+    ].join('\n');
+
+    try {
+      setLoadingStage(`Refining builder plan: ${selected.label}…`);
+      const refinedPlan = (await generateStructuredResponse(
+        refinePrompt,
+        PLAN_SYSTEM_INSTRUCTION,
+        planSchema,
+        user,
+        { maxOutputTokens: 1600, speedMode: 'fast' }
+      )) as BuilderPlan;
+
+      setBuilderPlan(refinedPlan);
+      setWarning('Builder plan refined. Existing drawings and visual concepts were kept as reference images.');
+      setOpenSections({
+        plan: false,
+        construction: true,
+        operations: false,
+        blueprints: false,
+        visuals: false,
+      });
+    } catch (err: any) {
+      setError(err?.message || 'Unable to refine the builder plan right now.');
+    } finally {
+      setLoadingStage('');
+      setRefiningAction(null);
     }
   };
 
@@ -1046,6 +1134,14 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                         key={key}
                         type="button"
                         onClick={() => {
+                          setOpenSections({
+                            plan: false,
+                            construction: false,
+                            operations: false,
+                            blueprints: false,
+                            visuals: false,
+                            [key]: true,
+                          });
                           const el = document.getElementById(`ib-${key}`);
                           el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                         }}
@@ -1266,7 +1362,18 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                     onToggle={() => toggleSection('blueprints')}
                     actions={
                       blueprintDrawings.length ? (
-                        <div className="text-[11px] text-slate-500">{blueprintDrawings.length} drawings</div>
+                        <div className="flex items-center gap-2">
+                          {blueprintDrawings.length > 1 ? (
+                            <button
+                              type="button"
+                              onClick={() => setShowAllBlueprints((prev) => !prev)}
+                              className="rounded-full border border-slate-700 bg-slate-900/70 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-300 transition-colors hover:border-sky-300/60 hover:text-sky-100"
+                            >
+                              {showAllBlueprints ? 'Show Less' : 'Expand Gallery'}
+                            </button>
+                          ) : null}
+                          <div className="text-[11px] text-slate-500">{blueprintDrawings.length} drawings</div>
+                        </div>
                       ) : null
                     }
                   >
@@ -1277,16 +1384,18 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                         subtitle="Blueprint-style concept drawings to help visualize structure, layout, and mechanism direction before fabrication."
                       />
                       {blueprintDrawings.length ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {blueprintDrawings.map((src, idx) => {
-                            const drawingLabel = `Blueprint ${String.fromCharCode(65 + idx)}`;
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {visibleBlueprintDrawings.map((src) => {
+                            const originalIdx = blueprintDrawings.indexOf(src);
+                            const drawingLabel = `Blueprint ${String.fromCharCode(65 + originalIdx)}`;
 
                             return (
                               <div
-                                key={`${src.slice(0, 30)}-${idx}`}
+                                key={`${src.slice(0, 30)}-${originalIdx}`}
                                 className="group relative overflow-hidden rounded-xl border border-white/10 bg-white/5 transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-300/60 hover:shadow-md hover:shadow-black/20"
                               >
-                                <div className="aspect-[4/3] overflow-hidden bg-slate-950/40">
+                                <div className="aspect-[16/10] overflow-hidden bg-slate-950/40">
                                   <img
                                     src={src}
                                     alt={`Technical drawing ${drawingLabel}`}
@@ -1302,6 +1411,18 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                               </div>
                             );
                           })}
+                        </div>
+                          {blueprintDrawings.length > visibleBlueprintDrawings.length ? (
+                            <div className="flex justify-end">
+                              <button
+                                type="button"
+                                onClick={() => setShowAllBlueprints(true)}
+                                className="rounded-full border border-slate-700 bg-slate-900/60 px-3 py-1.5 text-xs font-semibold text-slate-200 transition-colors hover:border-sky-300/60 hover:text-sky-100"
+                              >
+                                View All Drawings
+                              </button>
+                            </div>
+                          ) : null}
                         </div>
                       ) : (
                         <div className="rounded-lg border border-dashed border-slate-700 bg-slate-950/20 p-4 text-sm text-slate-400">
@@ -1320,7 +1441,18 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                     onToggle={() => toggleSection('visuals')}
                     actions={
                       imageOptions.length ? (
-                        <div className="text-[11px] text-slate-500">{imageOptions.length} options</div>
+                        <div className="flex items-center gap-2">
+                          {imageOptions.length > 2 ? (
+                            <button
+                              type="button"
+                              onClick={() => setShowAllVisuals((prev) => !prev)}
+                              className="rounded-full border border-slate-700 bg-slate-900/70 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-300 transition-colors hover:border-violet-300/60 hover:text-violet-100"
+                            >
+                              {showAllVisuals ? 'Show Less' : 'Expand Gallery'}
+                            </button>
+                          ) : null}
+                          <div className="text-[11px] text-slate-500">{imageOptions.length} options</div>
+                        </div>
                       ) : null
                     }
                   >
@@ -1331,14 +1463,16 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                         subtitle="Compare build directions visually, then select the concept that best matches the practical plan above."
                       />
                     {imageOptions.length ? (
-                      <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
-                        {imageOptions.map((src, idx) => {
-                          const conceptLabel = `Concept ${String.fromCharCode(65 + idx)}`;
-                          const isSelected = selectedConceptIndex === idx;
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {visibleConceptImages.map((src) => {
+                          const originalIdx = imageOptions.indexOf(src);
+                          const conceptLabel = `Concept ${String.fromCharCode(65 + originalIdx)}`;
+                          const isSelected = selectedConceptIndex === originalIdx;
 
                           return (
                             <div
-                              key={`${src.slice(0, 30)}-${idx}`}
+                              key={`${src.slice(0, 30)}-${originalIdx}`}
                               className={`group relative overflow-hidden rounded-xl border bg-white/5 text-left transition-all duration-200 ${
                                 isSelected
                                   ? 'border-violet-400 ring-2 ring-violet-400 shadow-lg shadow-violet-500/20'
@@ -1347,10 +1481,10 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                             >
                               <button
                                 type="button"
-                                onClick={() => setActiveConceptIndex(idx)}
+                                onClick={() => setActiveConceptIndex(originalIdx)}
                                 className="block w-full text-left focus:outline-none focus:ring-2 focus:ring-inset focus:ring-violet-400/70"
                               >
-                                <div className="aspect-[4/3] overflow-hidden bg-slate-950/40">
+                                <div className="aspect-[16/10] overflow-hidden bg-slate-950/40">
                                   <img
                                     src={src}
                                     alt={`Illusion concept ${conceptLabel}`}
@@ -1379,14 +1513,14 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                                   <div className="flex items-center gap-2">
                                     <button
                                       type="button"
-                                      onClick={() => setActiveConceptIndex(idx)}
+                                      onClick={() => setActiveConceptIndex(originalIdx)}
                                       className="rounded-full border border-slate-700 bg-slate-900/50 px-2.5 py-1 text-[11px] font-semibold text-slate-300 transition-colors hover:border-violet-300/50 hover:text-violet-200"
                                     >
                                       View Larger
                                     </button>
                                     <button
                                       type="button"
-                                      onClick={() => setSelectedConceptIndex(idx)}
+                                      onClick={() => setSelectedConceptIndex(originalIdx)}
                                       aria-pressed={isSelected}
                                       className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${
                                         isSelected
@@ -1403,6 +1537,18 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                           );
                         })}
                       </div>
+                        {imageOptions.length > visibleConceptImages.length ? (
+                          <div className="flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => setShowAllVisuals(true)}
+                              className="rounded-full border border-slate-700 bg-slate-900/60 px-3 py-1.5 text-xs font-semibold text-slate-200 transition-colors hover:border-violet-300/60 hover:text-violet-100"
+                            >
+                              View All Concepts
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
                     ) : (
                       <div className="rounded-lg border border-dashed border-slate-700 bg-slate-950/20 p-4 text-sm text-slate-400">
                         The builder plan completed, but concept images were not returned on this attempt.
@@ -1412,36 +1558,58 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                   </CollapsibleCard>
                 </div>
 
-                <SaveActionBar
-                  title="Next step: save or move this plan"
-                  subtitle="Keep the builder plan in your vault, copy it, or send it into your show workflow."
-                  onSave={() => void handleSave()}
-                  primaryLabel={saveStatus === 'saved' ? 'Saved' : 'Save to Idea Vault'}
-                  saved={saveStatus === 'saved'}
-                  onCopy={() => void handleCopy()}
-                  refineNode={
-                    <div className="text-sm text-zinc-300 leading-relaxed">
-                      Export a clean builder brief, save it to your vault, or move it into your workflow.
+                <section className="rounded-2xl border border-slate-800/90 bg-slate-950/45 p-4">
+                  <div className="flex flex-col gap-4">
+                    <div>
+                      <div className="text-sm font-semibold text-slate-100">Plan Actions</div>
+                      <div className="mt-1 text-xs text-slate-400">Save, export, or lightly refine the current builder plan without rebuilding the whole page.</div>
                     </div>
-                  }
-                />
 
-                <div className="flex flex-wrap items-stretch gap-2">
-                  <CohesionActions
-                    content={exportBuilderPlanText}
-                    defaultTitle={builderPlan.project_title}
-                    defaultTags={['illusion-blueprint', 'builder-plan']}
-                    ideaType="text"
-                    compact
-                  />
-                  <button
-                    type="button"
-                    onClick={handleCopy}
-                    className="w-full sm:w-auto px-3 py-2 rounded-md text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200"
-                  >
-                    {copyStatus === 'copied' ? 'Copied!' : 'Copy Builder Plan Summary'}
-                  </button>
-                </div>
+                    <div>
+                      <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Refine Builder Plan</div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {REFINE_ACTIONS.map((action) => {
+                          const isBusy = refiningAction === action.key;
+                          return (
+                            <button
+                              key={action.key}
+                              type="button"
+                              onClick={() => void handleRefine(action.key)}
+                              disabled={!!refiningAction || isLoading}
+                              className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${isBusy ? 'border-violet-400/70 bg-violet-500/20 text-violet-100' : 'border-slate-700 bg-slate-950/60 text-slate-200 hover:border-violet-300/60 hover:text-violet-100 disabled:cursor-not-allowed disabled:opacity-60'}`}
+                            >
+                              {isBusy ? 'Refining…' : action.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void handleSave()}
+                        className="rounded-md bg-purple-600 px-3.5 py-2 text-sm font-semibold text-white transition-colors hover:bg-purple-700"
+                      >
+                        {saveStatus === 'saved' ? 'Saved' : 'Save to Idea Vault'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCopy}
+                        className="rounded-md border border-slate-700 bg-slate-900/70 px-3.5 py-2 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-500"
+                      >
+                        {copyStatus === 'copied' ? 'Copied!' : 'Copy Builder Plan Summary'}
+                      </button>
+                      <CohesionActions
+                        content={exportBuilderPlanText}
+                        defaultTitle={builderPlan.project_title}
+                        defaultTags={['illusion-blueprint', 'builder-plan']}
+                        ideaType="text"
+                        compact
+                      />
+                    </div>
+                  </div>
+                </section>
               </div>
             )}
           </div>
