@@ -765,14 +765,14 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
           <h2 className="text-2xl font-bold text-slate-200 font-cinzel">Illusion Blueprint Generator</h2>
         </div>
         <p className="text-slate-400 mt-1">
-          Builder Plans + Visual Concepts. Create practical illusion construction plans with multiple supporting concept images.
+          Professional planning assistant for stage illusion construction. Generate practical, modular builder plans and supporting visual concepts designed for real performance environments.
         </p>
       </header>
 
       <div className="flex-1 grid grid-cols-1 xl:grid-cols-2 gap-6 overflow-hidden">
         <div className="min-w-0 rounded-2xl border border-slate-800 bg-slate-950/20 p-4 md:p-5 overflow-y-auto">
           <div className="mb-3 flex flex-wrap items-center gap-2">
-            <div className="text-xs text-slate-400">Curated demo presets:</div>
+            <div className="text-xs text-slate-400">Curated Demo Illusions</div>
             {DEMO_PRESETS.map((preset) => (
               <button
                 key={preset.label}
@@ -811,7 +811,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                   setEffectInput(e.target.value);
                   setError(null);
                 }}
-                placeholder="Describe the effect in your own words. Example: A performer vanishes a motorcycle from a raised platform under a brief theatrical cover."
+                placeholder="Describe the audience effect you want to achieve. Focus on what spectators experience rather than the secret method."
                 className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
               />
               <div className="mt-2 flex flex-wrap gap-2">
