@@ -199,6 +199,18 @@ const LoadingIndicator: React.FC<{ stage: string }> = ({ stage }) => (
   </div>
 );
 
+const ImageGenerationCard: React.FC<{ label: string }> = ({ label }) => (
+  <div className="rounded-xl border border-dashed border-slate-700 bg-slate-950/30 p-5">
+    <div className="flex items-center gap-3">
+      <div className="h-8 w-8 rounded-full border-2 border-slate-600 border-t-violet-400 animate-spin" />
+      <div>
+        <div className="text-sm font-semibold text-slate-200">{label}</div>
+        <div className="mt-1 text-xs text-slate-400">AI is still generating these images…</div>
+      </div>
+    </div>
+  </div>
+);
+
 const CollapsibleCard: React.FC<{
   title: string;
   subtitle?: string;
@@ -362,6 +374,8 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
   const [warning, setWarning] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingStage, setLoadingStage] = useState('');
+  const [isGeneratingBlueprints, setIsGeneratingBlueprints] = useState(false);
+  const [isGeneratingVisuals, setIsGeneratingVisuals] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [copyStatus, setCopyStatus] = useState<CopyStatus>('idle');
   const [refiningAction, setRefiningAction] = useState<RefineAction | null>(null);
@@ -482,11 +496,15 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     setCopyStatus('idle');
     setSelectedConceptIndex(null);
     setActiveConceptIndex(null);
+    setIsGeneratingBlueprints(false);
+    setIsGeneratingVisuals(false);
     setShowAllBlueprints(false);
     setShowAllVisuals(false);
     setShowAllBlueprints(false);
     setShowAllVisuals(false);
     setLoadingStage('');
+    setIsGeneratingBlueprints(false);
+    setIsGeneratingVisuals(false);
     setOpenSections({
       plan: false,
       construction: true,
@@ -708,6 +726,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
       });
 
       setLoadingStage('Generating blueprint drawings…');
+      setIsGeneratingBlueprints(true);
       const blueprintPrompt = [
         BLUEPRINT_STYLE_GUIDE,
         '',
@@ -728,9 +747,12 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
         setBlueprintDrawings(drawings);
       } catch {
         setBlueprintDrawings([]);
+      } finally {
+        setIsGeneratingBlueprints(false);
       }
 
       setLoadingStage('Generating visual concepts…');
+      setIsGeneratingVisuals(true);
       const imagePrompt = [
         IMAGE_STYLE_GUIDE,
         '',
@@ -750,11 +772,15 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
         setImageOptions(images);
       } catch (imageErr: any) {
         setWarning(imageErr?.message || 'Builder plan generated, but visual concepts could not be created this time.');
+      } finally {
+        setIsGeneratingVisuals(false);
       }
     } catch (err: any) {
       setError(err?.message || 'Unable to generate the builder plan.');
     } finally {
       setLoadingStage('');
+      setIsGeneratingBlueprints(false);
+      setIsGeneratingVisuals(false);
       setIsLoading(false);
     }
   };
@@ -1361,7 +1387,9 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                     isOpen={openSections.blueprints}
                     onToggle={() => toggleSection('blueprints')}
                     actions={
-                      blueprintDrawings.length ? (
+                      isGeneratingBlueprints ? (
+                        <div className="text-[11px] text-violet-300">Generating…</div>
+                      ) : blueprintDrawings.length ? (
                         <div className="flex items-center gap-2">
                           {blueprintDrawings.length > 1 ? (
                             <button
@@ -1383,7 +1411,9 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                         title="Technical Drawing Set"
                         subtitle="Blueprint-style concept drawings to help visualize structure, layout, and mechanism direction before fabrication."
                       />
-                      {blueprintDrawings.length ? (
+                      {isGeneratingBlueprints ? (
+                        <ImageGenerationCard label="Generating blueprint drawings" />
+                      ) : blueprintDrawings.length ? (
                         <div className="space-y-3">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           {visibleBlueprintDrawings.map((src) => {
@@ -1440,7 +1470,9 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                     isOpen={openSections.visuals}
                     onToggle={() => toggleSection('visuals')}
                     actions={
-                      imageOptions.length ? (
+                      isGeneratingVisuals ? (
+                        <div className="text-[11px] text-violet-300">Generating…</div>
+                      ) : imageOptions.length ? (
                         <div className="flex items-center gap-2">
                           {imageOptions.length > 2 ? (
                             <button
@@ -1462,7 +1494,9 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                         title="Concept Gallery"
                         subtitle="Compare build directions visually, then select the concept that best matches the practical plan above."
                       />
-                    {imageOptions.length ? (
+                    {isGeneratingVisuals ? (
+                      <ImageGenerationCard label="Generating visual concepts" />
+                    ) : imageOptions.length ? (
                       <div className="space-y-3">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {visibleConceptImages.map((src) => {
