@@ -788,156 +788,77 @@ const handleRegenerateConceptArt = async () => {
   };
 
   const buildSectionContent = (id: SectionId) => {
-    if (!engineeringSummary || !stagingBlueprint) return '';
+    if (!engineeringSummary || !stagingBlueprint || !buildPack) return '';
 
-    const header = `## Illusion Blueprint: ${safeBlueprintTitle}
-`;
-    const meta = `Effect Type: ${effectType}
-Venue: ${venueSize}
-Style: ${performerStyle}${constraints.trim() ? `
-Constraints: ${constraints.trim()}` : ''}
-
-`;
+    const header = `## Illusion Blueprint: ${prompt || buildPack.title}\n`;
+    const meta = `Effect Type: ${effectType}\nVenue: ${venueSize}\nStyle: ${performerStyle}${constraints.trim() ? `\nConstraints: ${constraints.trim()}` : ''}\n\n`;
 
     switch (id) {
       case 'engineering': {
-        const safetyText = (engineeringSummary.safety_notes || []).map((s) => `- ${s}`).join('
-');
+        const safetyText = (engineeringSummary.safety_notes || []).map((s) => `- ${s}`).join('\n');
         const propsText = (engineeringSummary.technical_requirements?.props || []).join(', ');
         const mechanicsText = (engineeringSummary.technical_requirements?.mechanics || []).join(', ');
-        return (
-          header +
-          meta +
-          `### Engineering Summary
 
-` +
-          `Title: ${engineeringSummary.title}
-
-` +
-          `Audience Experience: ${engineeringSummary.audience_experience}
-
-` +
-          `Method Possibilities (non-exposure):
-- A: ${engineeringSummary.secret_method_possibilities.method_a}
-- B: ${engineeringSummary.secret_method_possibilities.method_b}
-- C: ${engineeringSummary.secret_method_possibilities.method_c}
-
-` +
-          `Stage Staging:
-- Lighting: ${engineeringSummary.stage_staging.lighting}
-- Blocking: ${engineeringSummary.stage_staging.blocking}
-- Angles: ${engineeringSummary.stage_staging.angles}
-
-` +
-          `Technical Requirements:
-- Assistants: ${engineeringSummary.technical_requirements.assistants}
-- Props: ${propsText}
-- Mechanics: ${mechanicsText}
-
-` +
-          `Safety Notes:
-${safetyText}
-
-` +
-          `Reset Time: ${engineeringSummary.reset_time}
-
-` +
-          `Build Complexity (1–5): ${engineeringSummary.build_complexity.rating_1_to_5} — ${engineeringSummary.build_complexity.rationale}
-
-` +
-          `Reality Checks:
-- Weight/Transport: ${engineeringSummary.reality_checks.weight_transport}
-- Crew: ${engineeringSummary.reality_checks.crew}
-- Setup Time: ${engineeringSummary.reality_checks.setup_time}
-
-` +
-          `Angle Risk Summary:
-- Front: ${engineeringSummary.angle_risk_summary.front}
-- Sides: ${engineeringSummary.angle_risk_summary.sides}
-- Balcony: ${engineeringSummary.angle_risk_summary.balcony}
-
-` +
-          `Feasibility Verdict: ${engineeringSummary.feasibility_verdict.level} — ${engineeringSummary.feasibility_verdict.why}
-`
-        );
+        return [
+          header,
+          meta,
+          '### Engineering Summary\n\n',
+          `Title: ${engineeringSummary.title}\n\n`,
+          `Audience Experience: ${engineeringSummary.audience_experience}\n\n`,
+          `Method Possibilities (non-exposure):\n- A: ${engineeringSummary.secret_method_possibilities.method_a}\n- B: ${engineeringSummary.secret_method_possibilities.method_b}\n- C: ${engineeringSummary.secret_method_possibilities.method_c}\n\n`,
+          `Stage Staging:\n- Lighting: ${engineeringSummary.stage_staging.lighting}\n- Blocking: ${engineeringSummary.stage_staging.blocking}\n- Angles: ${engineeringSummary.stage_staging.angles}\n\n`,
+          `Technical Requirements:\n- Assistants: ${engineeringSummary.technical_requirements.assistants}\n- Props: ${propsText}\n- Mechanics: ${mechanicsText}\n\n`,
+          `Safety Notes:\n${safetyText}\n\n`,
+          `Reset Time: ${engineeringSummary.reset_time}\n\n`,
+          `Build Complexity (1–5): ${engineeringSummary.build_complexity.rating_1_to_5} — ${engineeringSummary.build_complexity.rationale}\n\n`,
+          `Reality Checks:\n- Weight/Transport: ${engineeringSummary.reality_checks.weight_transport}\n- Crew: ${engineeringSummary.reality_checks.crew}\n- Setup Time: ${engineeringSummary.reality_checks.setup_time}\n\n`,
+          `Angle Risk Summary:\n- Front: ${engineeringSummary.angle_risk_summary.front}\n- Sides: ${engineeringSummary.angle_risk_summary.sides}\n- Balcony: ${engineeringSummary.angle_risk_summary.balcony}\n\n`,
+          `Feasibility Verdict: ${engineeringSummary.feasibility_verdict.level} — ${engineeringSummary.feasibility_verdict.why}\n`,
+        ].join('');
       }
+
       case 'concept':
-        return (
-          header +
-          meta +
-          `### Concept Art
+        return [
+          header,
+          meta,
+          '### Concept Art\n\n',
+          lastArtPrompt ? `Prompt used: ${lastArtPrompt}\n\n` : '',
+          conceptArt ? `Image URL: ${conceptArt}\n` : 'No concept art generated.',
+        ].join('');
 
-` +
-          (lastArtPrompt ? `Prompt used: ${lastArtPrompt}
-
-` : '') +
-          (conceptArt ? `Image URL: ${conceptArt}
-` : 'No concept art generated.')
-        );
       case 'blueprint':
-        return header + meta + `### Blueprint Sheet
+        return [header, meta, '### Blueprint Sheet\n\n', blueprintSheet ? `Image URL: ${blueprintSheet}\n` : 'No blueprint sheet generated.'].join('');
 
-` + (blueprintSheet ? `Image URL: ${blueprintSheet}
-` : 'No blueprint sheet generated.');
-      case 'principles':
-        return header + meta + `### Potential Principles
+      case 'principles': {
+        const principlesText = (stagingBlueprint.potential_principles || []).map((p) => `- ${p.name}: ${p.description}`).join('\n');
+        return [header, meta, '### Potential Principles\n\n', principlesText, '\n'].join('');
+      }
 
-` + safePrinciples.map((p) => `- ${p.name}: ${p.description}`).join('
-') + `
-`;
       case 'staging':
-        return header + meta + `### Staging Blueprint
+        return [header, meta, `### Staging Blueprint\n\n${stagingBlueprint.blueprint_description}\n`].join('');
 
-${stagingBlueprint.blueprint_description}
-`;
       case 'buildpack':
-        return buildPack
-          ? header + meta + `### Build Blueprint Pack (JSON)
+        return [header, meta, `### Build Blueprint Pack (JSON)\n\n${JSON.stringify(buildPack, null, 2)}\n`].join('');
 
-${JSON.stringify(buildPack, null, 2)}
-`
-          : header + meta + `### Build Blueprint Pack
-
-Not generated yet.
-`;
       case 'cutlist': {
-        const lines = filteredCutList.map((c) => `- ${c.part} (${c.material}, ${c.thickness}) x${c.qty} — ${c.size_in} / ${c.size_mm}${c.notes ? ` — ${c.notes}` : ''}`);
-        return buildPack ? header + meta + `### Cut List
-
-${lines.join('
-')}
-` : header + meta + `### Cut List
-
-Not generated yet.
-`;
+        const lines = filteredCutList.map((c) => `- ${c.part} (${c.material}, ${c.thickness}) x${c.qty} — ${c.size_in} / ${c.size_mm}${c.notes ? ` — ${c.notes}` : ''}`).join('\n');
+        return [header, meta, '### Cut List\n\n', lines, '\n'].join('');
       }
+
       case 'assembly': {
-        const steps = filteredSteps.map((s) => `${s.step}. ${s.text}`);
-        return buildPack ? header + meta + `### Assembly Steps
-
-${steps.join('
-')}
-` : header + meta + `### Assembly Steps
-
-Not generated yet.
-`;
+        const steps = filteredSteps.map((s) => `${s.step}. ${s.text}`).join('\n');
+        return [header, meta, '### Assembly Steps\n\n', steps, '\n'].join('');
       }
+
       case 'safety': {
-        const merged = Array.from(new Set([...(engineeringSummary.safety_notes || []), ...((buildPack?.safety_notes) || [])]));
-        return header + meta + `### Safety Notes
-
-${merged.map((s) => `- ${s}`).join('
-')}
-`;
+        const merged = Array.from(new Set([...(engineeringSummary.safety_notes || []), ...(buildPack.safety_notes || [])]));
+        const safetyLines = merged.map((s) => `- ${s}`).join('\n');
+        return [header, meta, '### Safety Notes\n\n', safetyLines, '\n'].join('');
       }
+
       case 'json':
-        return buildPack ? header + meta + `### Raw JSON
+        return [header, meta, `### Raw JSON\n\n${rawJson}\n`].join('');
 
-${rawJson}
-` : header + meta + `### Raw JSON
-
-Not generated yet.
-`;
       default:
         return '';
     }
