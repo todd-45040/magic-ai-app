@@ -203,6 +203,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
   const [loadingStage, setLoadingStage] = useState('');
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [copyStatus, setCopyStatus] = useState<CopyStatus>('idle');
+  const [selectedConceptIndex, setSelectedConceptIndex] = useState<number | null>(null);
   const [openSections, setOpenSections] = useState({
     plan: true,
     construction: true,
@@ -302,6 +303,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     setWarning(null);
     setSaveStatus('idle');
     setCopyStatus('idle');
+    setSelectedConceptIndex(null);
     setLoadingStage('');
     setOpenSections({
       plan: true,
@@ -451,6 +453,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     setImageOptions([]);
     setSaveStatus('idle');
     setCopyStatus('idle');
+    setSelectedConceptIndex(null);
 
     const planPrompt = [
       'Create a realistic builder plan for the following illusion request.',
@@ -886,17 +889,62 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                     }
                   >
                     {imageOptions.length ? (
-                      <div className="grid grid-cols-1 gap-4">
-                        {imageOptions.map((src, idx) => (
-                          <div key={`${src.slice(0, 30)}-${idx}`} className="rounded-xl border border-slate-800 bg-slate-950/20 p-2">
-                            <img
-                              src={src}
-                              alt={`Illusion concept option ${idx + 1}`}
-                              className="w-full rounded-lg border border-slate-700"
-                            />
-                            <div className="text-xs text-slate-400 mt-2">Concept option {idx + 1}</div>
-                          </div>
-                        ))}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                        {imageOptions.map((src, idx) => {
+                          const conceptLabel = `Concept ${String.fromCharCode(65 + idx)}`;
+                          const isSelected = selectedConceptIndex === idx;
+
+                          return (
+                            <button
+                              key={`${src.slice(0, 30)}-${idx}`}
+                              type="button"
+                              onClick={() => setSelectedConceptIndex(idx)}
+                              className={`group relative overflow-hidden rounded-xl border bg-white/5 text-left transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-violet-400/70 ${
+                                isSelected
+                                  ? 'border-violet-400 ring-2 ring-violet-400 shadow-lg shadow-violet-500/20'
+                                  : 'border-white/10 hover:border-violet-300/60 hover:shadow-md hover:shadow-black/20 hover:-translate-y-0.5'
+                              }`}
+                              aria-pressed={isSelected}
+                            >
+                              <div className="aspect-[4/3] overflow-hidden bg-slate-950/40">
+                                <img
+                                  src={src}
+                                  alt={`Illusion concept ${conceptLabel}`}
+                                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                                />
+                              </div>
+
+                              <div className="p-3">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div>
+                                    <div className="text-sm font-semibold text-slate-100">{conceptLabel}</div>
+                                    <div className="mt-1 text-xs text-slate-400">
+                                      {isSelected ? 'Selected for Build' : 'Click to select this build direction'}
+                                    </div>
+                                  </div>
+                                  {isSelected ? (
+                                    <span className="shrink-0 rounded-full border border-violet-400/70 bg-violet-500/15 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-violet-200">
+                                      Selected for Build
+                                    </span>
+                                  ) : null}
+                                </div>
+
+                                <div className="mt-3 flex items-center justify-between gap-3">
+                                  <span className="text-[11px] text-slate-500">Builder concept image</span>
+                                  <span
+                                    className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                                      isSelected
+                                        ? 'bg-violet-500/20 text-violet-200 border border-violet-400/60'
+                                        : 'border border-slate-700 bg-slate-900/50 text-slate-300 group-hover:border-violet-300/50 group-hover:text-violet-200'
+                                    }`}
+                                  >
+                                    {isSelected ? 'Selected' : 'Select Concept'}
+                                  </span>
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
                       </div>
                     ) : (
                       <div className="rounded-lg border border-dashed border-slate-700 bg-slate-950/20 p-4 text-sm text-slate-400">
