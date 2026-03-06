@@ -715,8 +715,8 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
         </p>
       </header>
 
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 overflow-hidden">
-        <div className="rounded-2xl border border-slate-800 bg-slate-950/20 p-4 md:p-5 overflow-y-auto">
+      <div className="flex-1 grid grid-cols-1 xl:grid-cols-2 gap-6 overflow-hidden">
+        <div className="min-w-0 rounded-2xl border border-slate-800 bg-slate-950/20 p-4 md:p-5 overflow-y-auto">
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <div className="text-xs text-slate-400">Curated demo presets:</div>
             {DEMO_PRESETS.map((preset) => (
@@ -732,7 +732,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
             <button
               type="button"
               onClick={resetAll}
-              className="ml-auto px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border bg-slate-900/40 border-slate-700 text-slate-200 hover:border-slate-500"
+              className="w-full sm:w-auto sm:ml-auto px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border bg-slate-900/40 border-slate-700 text-slate-200 hover:border-slate-500"
             >
               Reset
             </button>
@@ -914,8 +914,8 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
           {warning ? <p className="text-yellow-300 mt-2 text-sm">{warning}</p> : null}
         </div>
 
-        <div className="rounded-2xl border border-slate-800 bg-slate-950/20 overflow-hidden flex flex-col">
-          <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between gap-3">
+        <div className="min-w-0 rounded-2xl border border-slate-800 bg-slate-950/20 overflow-hidden flex flex-col">
+          <div className="px-4 py-3 border-b border-slate-800 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
             <div>
               <div className="text-sm font-semibold text-slate-200">Builder Output</div>
               <div className="text-xs text-slate-500">Realistic plan first. Multiple image concepts second.</div>
@@ -941,7 +941,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
             ) : (
               <div className="space-y-5">
                 <div className="sticky top-0 z-20 -mx-4 md:-mx-5 px-4 md:px-5 py-3 bg-slate-950/80 backdrop-blur border-b border-slate-800">
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap items-stretch gap-2">
                     {[
                       ['plan', 'Overview'],
                       ['construction', 'Construction'],
@@ -955,7 +955,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                           const el = document.getElementById(`ib-${key}`);
                           el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                         }}
-                        className="px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border bg-slate-900/40 border-slate-700 text-slate-300 hover:border-slate-500"
+                        className="px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border bg-slate-900/40 border-slate-700 text-slate-300 hover:border-slate-500 whitespace-normal text-center leading-tight"
                       >
                         {label}
                       </button>
@@ -983,7 +983,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap items-stretch gap-2">
                         {[
                           `Complexity ${buildSummary.complexity}/5`,
                           `Crew ${buildSummary.crew}`,
@@ -999,7 +999,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                         ))}
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                         <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
                           <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Effect Category</div>
                           <p className="mt-1 text-sm text-slate-100">{buildSummary.effectCategory}</p>
@@ -1060,7 +1060,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                         </div>
                         <div className="rounded-xl border border-slate-800 bg-slate-950/20 p-4 space-y-3">
                           <div className="text-xs text-slate-400">Build Complexity</div>
-                          <div className="flex flex-wrap gap-2">
+                          <div className="flex flex-wrap items-stretch gap-2">
                             <MetricChip label="Complexity" value={`${builderPlan.build_complexity.rating_1_to_5} / 5`} />
                             <MetricChip label="Crew" value={buildSummary?.crew ?? crewSize} />
                             <MetricChip label="Reset" value={buildSummary?.reset ?? resetRequirement} />
@@ -1183,7 +1183,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                         subtitle="Compare build directions visually, then select the concept that best matches the practical plan above."
                       />
                     {imageOptions.length ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
                         {imageOptions.map((src, idx) => {
                           const conceptLabel = `Concept ${String.fromCharCode(65 + idx)}`;
                           const isSelected = selectedConceptIndex === idx;
@@ -1263,7 +1263,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                   }
                 />
 
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap items-stretch gap-2">
                   <CohesionActions
                     content={planMarkdown}
                     defaultTitle={builderPlan.project_title}
@@ -1274,7 +1274,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                   <button
                     type="button"
                     onClick={handleCopy}
-                    className="px-3 py-2 rounded-md text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200"
+                    className="w-full sm:w-auto px-3 py-2 rounded-md text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200"
                   >
                     {copyStatus === 'copied' ? 'Copied!' : 'Copy Plan'}
                   </button>
