@@ -595,26 +595,6 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     build_notes: Array.isArray(pack?.build_notes) ? pack.build_notes : [],
   });
 
-
-  const normalizeStagingBlueprint = (blueprint: any, summary?: EngineeringSummary | null): StagingBlueprint => {
-    const principles = Array.isArray(blueprint?.potential_principles) ? blueprint.potential_principles.filter(Boolean) : [];
-    const fallbackPrinciples = summary
-      ? [
-          { name: 'Method A', description: summary.secret_method_possibilities.method_a },
-          { name: 'Method B', description: summary.secret_method_possibilities.method_b },
-          { name: 'Method C', description: summary.secret_method_possibilities.method_c },
-        ].filter((p) => p.description && p.description.trim())
-      : [];
-
-    return {
-      potential_principles: principles.length ? principles : fallbackPrinciples,
-      blueprint_description:
-        blueprint?.blueprint_description ||
-        summary?.stage_staging?.blocking ||
-        'Staging notes were not returned. Try regenerating staging for a fuller performance plan.',
-    };
-  };
-
   const buildContext = () => [
     `Effect Type: ${effectType}`,
     `Venue Size: ${venueSize}`,
@@ -629,167 +609,23 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
       return;
     }
     const context = buildContext();
-    const buildPrompt = `Create a BUILD BLUEPRINT PACK for this illusion request.
-
-${context}
-
-${REALISM_GUARDRAILS}
-
-Provide realistic dimensions and a concise cut list. Include mechanism ids and tag parts/steps that differ by option.`;
-    const fullOptions = { speedMode: fastMode ? 'fast' : 'full', maxOutputTokens: fastMode ? 2600 : 3800 };
-    const liteSchema = {
-      type: Type.OBJECT,
-      properties: {
-        title: { type: Type.STRING },
-        intended_effect: { type: Type.STRING },
-        overall_dimensions: {
-          type: Type.OBJECT,
-          properties: {
-            width_in: { type: Type.NUMBER },
-            depth_in: { type: Type.NUMBER },
-            height_in: { type: Type.NUMBER },
-            width_mm: { type: Type.NUMBER },
-            depth_mm: { type: Type.NUMBER },
-            height_mm: { type: Type.NUMBER },
-            tolerance_in: { type: Type.NUMBER },
-            tolerance_mm: { type: Type.NUMBER },
-          },
-          required: ['width_in', 'depth_in', 'height_in', 'width_mm', 'depth_mm', 'height_mm'],
-        },
-        breakdown_modules: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              id: { type: Type.STRING },
-              name: { type: Type.STRING },
-              notes: { type: Type.STRING },
-            },
-            required: ['id', 'name', 'notes'],
-          },
-        },
-        mechanism_options: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              id: { type: Type.STRING },
-              name: { type: Type.STRING },
-              difficulty: { type: Type.STRING },
-              description: { type: Type.STRING },
-              key_components: { type: Type.ARRAY, items: { type: Type.STRING } },
-              pros: { type: Type.ARRAY, items: { type: Type.STRING } },
-              cons: { type: Type.ARRAY, items: { type: Type.STRING } },
-            },
-            required: ['id', 'name', 'difficulty', 'description', 'key_components', 'pros', 'cons'],
-          },
-        },
-        materials: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              item: { type: Type.STRING },
-              spec: { type: Type.STRING },
-              qty: { type: Type.NUMBER },
-              notes: { type: Type.STRING },
-            },
-            required: ['item', 'spec', 'qty'],
-          },
-        },
-        hardware: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              item: { type: Type.STRING },
-              spec: { type: Type.STRING },
-              qty: { type: Type.NUMBER },
-              notes: { type: Type.STRING },
-            },
-            required: ['item', 'spec', 'qty'],
-          },
-        },
-        cut_list: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              part: { type: Type.STRING },
-              material: { type: Type.STRING },
-              thickness: { type: Type.STRING },
-              qty: { type: Type.NUMBER },
-              size_in: { type: Type.STRING },
-              size_mm: { type: Type.STRING },
-              notes: { type: Type.STRING },
-            },
-            required: ['part', 'material', 'thickness', 'qty', 'size_in', 'size_mm'],
-          },
-        },
-        assembly_steps: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              step: { type: Type.NUMBER },
-              text: { type: Type.STRING },
-            },
-            required: ['step', 'text'],
-          },
-        },
-        safety_notes: { type: Type.ARRAY, items: { type: Type.STRING } },
-        build_notes: { type: Type.ARRAY, items: { type: Type.STRING } },
-      },
-      required: [
-        'title',
-        'intended_effect',
-        'overall_dimensions',
-        'breakdown_modules',
-        'mechanism_options',
-        'materials',
-        'hardware',
-        'cut_list',
-        'assembly_steps',
-        'safety_notes',
-        'build_notes',
-      ],
-    };
+    const buildProfile = fastMode
+      ? 'FAST BUILD PACK: keep output concise. Use 1-2 mechanism options, 8 cut-list rows max, and 8 assembly steps max.'
+      : 'FULL BUILD PACK: include practical detail, but keep it readable and stage-realistic.';
+    const buildPrompt = `Create a BUILD BLUEPRINT PACK for this illusion request.\n\n${context}\n\n${buildProfile}\n\n${REALISM_GUARDRAILS}\n\nProvide realistic dimensions and a concise cut list. Include mechanism ids and tag parts/steps that differ by option.`;
     try {
       setIsBuildPackLoading(true);
       setGenerationStage('Generating build pack…');
       setError(null);
-      let buildResult: any;
-      try {
-        buildResult = await generateStructuredResponse(
-          buildPrompt,
-          `${BUILD_BLUEPRINT_SYSTEM_INSTRUCTION}
-
-${REALISM_GUARDRAILS}`,
-          buildPackSchema,
-          user,
-          fullOptions
-        );
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (!/JSON\.parse|Unexpected end|end of data|not valid JSON/i.test(msg)) {
-          throw err;
-        }
-        setGenerationStage('Retrying with compact build pack…');
-        const compactPrompt = `${buildPrompt}
-
-COMPACT JSON ONLY: return 1 mechanism option, 6 materials max, 6 hardware items max, 8 cut-list rows max, and 8 assembly steps max.`;
-        buildResult = await generateStructuredResponse(
-          compactPrompt,
-          `${BUILD_BLUEPRINT_SYSTEM_INSTRUCTION}
-
-${REALISM_GUARDRAILS}`,
-          liteSchema,
-          user,
-          { speedMode: 'fast', maxOutputTokens: 1800 }
-        );
-      }
+      const buildResult = await generateStructuredResponse(
+        buildPrompt,
+        `${BUILD_BLUEPRINT_SYSTEM_INSTRUCTION}\n\n${REALISM_GUARDRAILS}`,
+        buildPackSchema,
+        user,
+        { speedMode: fastMode ? 'fast' : 'full', maxOutputTokens: fastMode ? 1600 : 3200 }
+      );
       setBuildPack(normalizeBuildPack(buildResult));
-      setOpenSections((prev) => ({ ...prev, buildpack: true, cutlist: true, assembly: true, safety: true, blueprint: true }));
+      setOpenSections((prev) => ({ ...prev, buildpack: true, cutlist: true, assembly: true, safety: true }));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate build pack. Please try again.');
     } finally {
@@ -879,7 +715,7 @@ ${REALISM_GUARDRAILS}`,
         user,
         { speedMode: fastMode ? 'fast' : 'full', maxOutputTokens: fastMode ? 1000 : 1800 }
       );
-      setStagingBlueprint(normalizeStagingBlueprint(stagingResult, engineeringResult as EngineeringSummary));
+      setStagingBlueprint(stagingResult as StagingBlueprint);
 
       if (!fastMode) {
         await handleGenerateBuildPack();
@@ -952,36 +788,105 @@ const handleRegenerateConceptArt = async () => {
   const filteredCutList = useMemo(() => (buildPack ? toFiltered(buildPack.cut_list || []) : []), [buildPack, selectedMechanismId]);
   const filteredSteps = useMemo(() => (buildPack ? toFiltered(buildPack.assembly_steps || []) : []), [buildPack, selectedMechanismId]);
 
+  const safeBlueprintTitle =
+    buildPack?.title ||
+    engineeringSummary?.title ||
+    prompt.trim() ||
+    'Untitled Illusion Blueprint';
+
+  const safeIntendedEffect =
+    buildPack?.intended_effect ||
+    engineeringSummary?.audience_experience ||
+    prompt.trim() ||
+    'Illusion concept in progress';
+
+  const safePrinciples =
+    Array.isArray(stagingBlueprint?.potential_principles) && stagingBlueprint.potential_principles.length
+      ? stagingBlueprint.potential_principles
+      : [
+          {
+            name: 'Method Framing Pending',
+            description:
+              'Potential principles were not returned in this pass. Use the engineering summary as the primary reference and regenerate staging if needed.',
+          },
+        ];
+
   const buildFullContent = () => {
     if (!engineeringSummary || !stagingBlueprint) return '';
-    let fullContent = `## Illusion Blueprint: ${prompt}\n\n`;
-    fullContent += `**Effect Type:** ${effectType}\n\n`;
-    fullContent += `**Venue Size:** ${venueSize}\n\n`;
-    fullContent += `**Performer Style:** ${performerStyle}\n\n`;
-    if (constraints.trim()) fullContent += `**Constraints:** ${constraints.trim()}\n\n`;
-    fullContent += `### Engineering Summary\n\n`;
-    fullContent += `**Title:** ${engineeringSummary.title}\n\n`;
-    fullContent += `**Audience Experience:** ${engineeringSummary.audience_experience}\n\n`;
-    fullContent += `**Build Complexity (1–5):** ${engineeringSummary.build_complexity.rating_1_to_5} — ${engineeringSummary.build_complexity.rationale}\n\n`;
-    fullContent += `**Reset Time:** ${engineeringSummary.reset_time}\n\n`;
-    fullContent += `**Angle Risk Summary:**\n- Front: ${engineeringSummary.angle_risk_summary.front}\n- Sides: ${engineeringSummary.angle_risk_summary.sides}\n- Balcony: ${engineeringSummary.angle_risk_summary.balcony}\n\n`;
-    fullContent += `**Reality Checks:**\n- Weight/Transport: ${engineeringSummary.reality_checks.weight_transport}\n- Crew: ${engineeringSummary.reality_checks.crew}\n- Setup Time: ${engineeringSummary.reality_checks.setup_time}\n\n`;
-    fullContent += `**Feasibility Verdict:** ${engineeringSummary.feasibility_verdict.level} — ${engineeringSummary.feasibility_verdict.why}\n\n`;
-    if (conceptArt) fullContent += `![Concept Art](${conceptArt})\n\n`;
-    fullContent += `### Potential Principles\n\n`;
-    stagingBlueprint.potential_principles.forEach((p) => {
-      fullContent += `**${p.name}:** ${p.description}\n\n`;
+    let fullContent = `## Illusion Blueprint: ${safeBlueprintTitle}
+
+`;
+    fullContent += `**Effect Type:** ${effectType}
+
+`;
+    fullContent += `**Venue Size:** ${venueSize}
+
+`;
+    fullContent += `**Performer Style:** ${performerStyle}
+
+`;
+    if (constraints.trim()) fullContent += `**Constraints:** ${constraints.trim()}
+
+`;
+    fullContent += `### Engineering Summary
+
+`;
+    fullContent += `**Title:** ${engineeringSummary.title}
+
+`;
+    fullContent += `**Audience Experience:** ${engineeringSummary.audience_experience}
+
+`;
+    fullContent += `**Build Complexity (1–5):** ${engineeringSummary.build_complexity.rating_1_to_5} — ${engineeringSummary.build_complexity.rationale}
+
+`;
+    fullContent += `**Reset Time:** ${engineeringSummary.reset_time}
+
+`;
+    fullContent += `**Angle Risk Summary:**
+- Front: ${engineeringSummary.angle_risk_summary.front}
+- Sides: ${engineeringSummary.angle_risk_summary.sides}
+- Balcony: ${engineeringSummary.angle_risk_summary.balcony}
+
+`;
+    fullContent += `**Reality Checks:**
+- Weight/Transport: ${engineeringSummary.reality_checks.weight_transport}
+- Crew: ${engineeringSummary.reality_checks.crew}
+- Setup Time: ${engineeringSummary.reality_checks.setup_time}
+
+`;
+    fullContent += `**Feasibility Verdict:** ${engineeringSummary.feasibility_verdict.level} — ${engineeringSummary.feasibility_verdict.why}
+
+`;
+    if (conceptArt) fullContent += `![Concept Art](${conceptArt})
+
+`;
+    fullContent += `### Potential Principles
+
+`;
+    safePrinciples.forEach((p) => {
+      fullContent += `**${p.name}:** ${p.description}
+
+`;
     });
-    fullContent += `### Staging Blueprint\n\n${stagingBlueprint.blueprint_description}\n\n`;
-    fullContent += `### Build Blueprint Pack (JSON)\n\n`;
-    fullContent += JSON.stringify(buildPack, null, 2);
+    fullContent += `### Staging Blueprint
+
+${stagingBlueprint.blueprint_description}
+
+`;
+    if (buildPack) {
+      fullContent += `### Build Blueprint Pack (JSON)
+
+`;
+      fullContent += JSON.stringify(buildPack, null, 2);
+    }
     return fullContent;
   };
 
   const handleSave = () => {
     if (!engineeringSummary || !stagingBlueprint) return;
     const fullContent = buildFullContent();
-    const titleBase = prompt.trim() ? prompt.trim() : buildPack.title;
+    const titleBase = prompt.trim() || safeBlueprintTitle;
     saveIdea('text', fullContent, `Illusion Blueprint (${effectType}) — ${titleBase}`);
     onIdeaSaved();
     setSaveStatus('saved');
@@ -1001,70 +906,169 @@ const handleRegenerateConceptArt = async () => {
   };
 
   const buildSectionContent = (id: SectionId) => {
-    if (!engineeringSummary || !stagingBlueprint || !buildPack) return '';
-    const header = `## Illusion Blueprint: ${prompt || buildPack.title}\n`;
-    const meta = `Effect Type: ${effectType}\nVenue: ${venueSize}\nStyle: ${performerStyle}${constraints.trim() ? `\nConstraints: ${constraints.trim()}` : ''}\n\n`;
+    if (!engineeringSummary || !stagingBlueprint) return '';
+    const header = `## Illusion Blueprint: ${safeBlueprintTitle}
+`;
+    const meta = `Effect Type: ${effectType}
+Venue: ${venueSize}
+Style: ${performerStyle}${constraints.trim() ? `
+Constraints: ${constraints.trim()}` : ''}
+
+`;
 
     switch (id) {
       case 'engineering': {
         return (
           header +
           meta +
-          `### Engineering Summary\n\n` +
-          `Title: ${engineeringSummary.title}\n\n` +
-          `Audience Experience: ${engineeringSummary.audience_experience}\n\n` +
-          `Method Possibilities (non-exposure):\n- A: ${engineeringSummary.secret_method_possibilities.method_a}\n- B: ${engineeringSummary.secret_method_possibilities.method_b}\n- C: ${engineeringSummary.secret_method_possibilities.method_c}\n\n` +
-          `Stage Staging:\n- Lighting: ${engineeringSummary.stage_staging.lighting}\n- Blocking: ${engineeringSummary.stage_staging.blocking}\n- Angles: ${engineeringSummary.stage_staging.angles}\n\n` +
-          `Technical Requirements:\n- Assistants: ${engineeringSummary.technical_requirements.assistants}\n- Props: ${engineeringSummary.technical_requirements.props.join(', ')}\n- Mechanics: ${engineeringSummary.technical_requirements.mechanics.join(', ')}\n\n` +
-          `Safety Notes:\n${engineeringSummary.safety_notes.map((s) => `- ${s}`).join('\n')}\n\n` +
-          `Reset Time: ${engineeringSummary.reset_time}\n\n` +
-          `Build Complexity (1–5): ${engineeringSummary.build_complexity.rating_1_to_5} — ${engineeringSummary.build_complexity.rationale}\n\n` +
-          `Reality Checks:\n- Weight/Transport: ${engineeringSummary.reality_checks.weight_transport}\n- Crew: ${engineeringSummary.reality_checks.crew}\n- Setup Time: ${engineeringSummary.reality_checks.setup_time}\n\n` +
-          `Angle Risk Summary:\n- Front: ${engineeringSummary.angle_risk_summary.front}\n- Sides: ${engineeringSummary.angle_risk_summary.sides}\n- Balcony: ${engineeringSummary.angle_risk_summary.balcony}\n\n` +
-          `Feasibility Verdict: ${engineeringSummary.feasibility_verdict.level} — ${engineeringSummary.feasibility_verdict.why}\n`
+          `### Engineering Summary
+
+` +
+          `Title: ${engineeringSummary.title}
+
+` +
+          `Audience Experience: ${engineeringSummary.audience_experience}
+
+` +
+          `Method Possibilities (non-exposure):
+- A: ${engineeringSummary.secret_method_possibilities.method_a}
+- B: ${engineeringSummary.secret_method_possibilities.method_b}
+- C: ${engineeringSummary.secret_method_possibilities.method_c}
+
+` +
+          `Stage Staging:
+- Lighting: ${engineeringSummary.stage_staging.lighting}
+- Blocking: ${engineeringSummary.stage_staging.blocking}
+- Angles: ${engineeringSummary.stage_staging.angles}
+
+` +
+          `Technical Requirements:
+- Assistants: ${engineeringSummary.technical_requirements.assistants}
+- Props: ${engineeringSummary.technical_requirements.props.join(', ')}
+- Mechanics: ${engineeringSummary.technical_requirements.mechanics.join(', ')}
+
+` +
+          `Safety Notes:
+${engineeringSummary.safety_notes.map((s) => `- ${s}`).join('
+')}
+
+` +
+          `Reset Time: ${engineeringSummary.reset_time}
+
+` +
+          `Build Complexity (1–5): ${engineeringSummary.build_complexity.rating_1_to_5} — ${engineeringSummary.build_complexity.rationale}
+
+` +
+          `Reality Checks:
+- Weight/Transport: ${engineeringSummary.reality_checks.weight_transport}
+- Crew: ${engineeringSummary.reality_checks.crew}
+- Setup Time: ${engineeringSummary.reality_checks.setup_time}
+
+` +
+          `Angle Risk Summary:
+- Front: ${engineeringSummary.angle_risk_summary.front}
+- Sides: ${engineeringSummary.angle_risk_summary.sides}
+- Balcony: ${engineeringSummary.angle_risk_summary.balcony}
+
+` +
+          `Feasibility Verdict: ${engineeringSummary.feasibility_verdict.level} — ${engineeringSummary.feasibility_verdict.why}
+`
         );
       }
       case 'concept': {
         return (
           header +
           meta +
-          `### Concept Art\n\n` +
-          (lastArtPrompt ? `Prompt used: ${lastArtPrompt}\n\n` : '') +
-          (conceptArt ? `Image URL: ${conceptArt}\n` : 'No concept art generated.')
+          `### Concept Art
+
+` +
+          (lastArtPrompt ? `Prompt used: ${lastArtPrompt}
+
+` : '') +
+          (conceptArt ? `Image URL: ${conceptArt}
+` : 'No concept art generated.')
         );
       }
       case 'blueprint': {
-        return header + meta + `### Blueprint Sheet\n\n` + (blueprintSheet ? `Image URL: ${blueprintSheet}\n` : 'No blueprint sheet generated.');
+        return header + meta + `### Blueprint Sheet
+
+` + (blueprintSheet ? `Image URL: ${blueprintSheet}
+` : 'No blueprint sheet generated.');
       }
       case 'principles': {
         return (
           header +
           meta +
-          `### Potential Principles\n\n` +
-          stagingBlueprint.potential_principles.map((p) => `- ${p.name}: ${p.description}`).join('\n') +
-          `\n`
+          `### Potential Principles
+
+` +
+          safePrinciples.map((p) => `- ${p.name}: ${p.description}`).join('
+') +
+          `
+`
         );
       }
       case 'staging': {
-        return header + meta + `### Staging Blueprint\n\n${stagingBlueprint.blueprint_description}\n`;
+        return header + meta + `### Staging Blueprint
+
+${stagingBlueprint.blueprint_description}
+`;
       }
       case 'buildpack': {
-        return header + meta + `### Build Blueprint Pack (JSON)\n\n${JSON.stringify(buildPack, null, 2)}\n`;
+        return buildPack
+          ? header + meta + `### Build Blueprint Pack (JSON)
+
+${JSON.stringify(buildPack, null, 2)}
+`
+          : header + meta + `### Build Blueprint Pack
+
+Not generated yet. Current intended effect: ${safeIntendedEffect}
+`;
       }
       case 'cutlist': {
-        const lines = filteredCutList.map((c) => `- ${c.part} (${c.material}, ${c.thickness}) x${c.qty} — ${c.size_in} / ${c.size_mm}${c.notes ? ` — ${c.notes}` : ''}`);
-        return header + meta + `### Cut List\n\n${lines.join('\n')}\n`;
+        return buildPack
+          ? header + meta + `### Cut List
+
+${filteredCutList.map((c) => `- ${c.part} (${c.material}, ${c.thickness}) x${c.qty} — ${c.size_in} / ${c.size_mm}${c.notes ? ` — ${c.notes}` : ''}`).join('
+')}
+`
+          : header + meta + `### Cut List
+
+Not generated yet.
+`;
       }
       case 'assembly': {
-        const steps = filteredSteps.map((s) => `${s.step}. ${s.text}`);
-        return header + meta + `### Assembly Steps\n\n${steps.join('\n')}\n`;
+        return buildPack
+          ? header + meta + `### Assembly Steps
+
+${filteredSteps.map((s) => `${s.step}. ${s.text}`).join('
+')}
+`
+          : header + meta + `### Assembly Steps
+
+Not generated yet.
+`;
       }
       case 'safety': {
-        const merged = Array.from(new Set([...(engineeringSummary.safety_notes || []), ...(buildPack.safety_notes || [])]));
-        return header + meta + `### Safety Notes\n\n${merged.map((s) => `- ${s}`).join('\n')}\n`;
+        const merged = Array.from(
+          new Set([...(engineeringSummary.safety_notes || []), ...((buildPack?.safety_notes) || [])])
+        );
+        return header + meta + `### Safety Notes
+
+${merged.map((s) => `- ${s}`).join('
+')}
+`;
       }
       case 'json': {
-        return header + meta + `### Raw JSON\n\n${rawJson}\n`;
+        return buildPack
+          ? header + meta + `### Raw JSON
+
+${rawJson}
+`
+          : header + meta + `### Raw JSON
+
+Not generated yet.
+`;
       }
       default:
         return '';
@@ -1380,16 +1384,6 @@ const handleRegenerateConceptArt = async () => {
                   {isBuildPackLoading ? 'Generating Build…' : 'Generate Build Pack'}
                 </button>
               ) : null}
-              {buildPack ? (
-                <button
-                  type="button"
-                  onClick={handleGenerateBlueprint}
-                  disabled={isBlueprintLoading || isBuildPackLoading}
-                  className="px-3 py-1.5 rounded-md text-[11px] font-semibold border border-slate-700 bg-slate-900/60 text-slate-200 hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isBlueprintLoading ? 'Generating Sheet…' : (blueprintSheet ? 'Regenerate Sheet' : 'Generate Blueprint Sheet')}
-                </button>
-              ) : null}
               <div className="text-[11px] text-slate-500">Version: {APP_VERSION}</div>
             </div>
           </div>
@@ -1682,7 +1676,7 @@ const handleRegenerateConceptArt = async () => {
             copied={sectionCopyStatus.principles === 'copied'}
           >
             <div className="space-y-3">
-                {stagingBlueprint.potential_principles.map((principle, i) => (
+                {safePrinciples.map((principle, i) => (
                   <div key={i} className="bg-slate-800/50 p-3 rounded-md border border-slate-700/50">
                     <h4 className="font-semibold text-purple-300">{principle.name}</h4>
                     <p className="text-sm text-slate-400">{principle.description}</p>
@@ -1706,6 +1700,8 @@ const handleRegenerateConceptArt = async () => {
           </CollapsibleSection>
 
           {/* Build Pack */}
+          {buildPack ? (
+          <>
           <CollapsibleSection
             id="buildpack"
             title="Build Blueprint Pack"
@@ -1988,6 +1984,9 @@ const handleRegenerateConceptArt = async () => {
                 </pre>
           </CollapsibleSection>
 
+          </>
+          ) : null}
+
               </div>
             )}
           </div>
@@ -2009,7 +2008,7 @@ const handleRegenerateConceptArt = async () => {
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
                   <CohesionActions
                     content={buildFullContent()}
-                    defaultTitle={`Illusion Blueprint: ${prompt || 'Untitled'}`}
+                    defaultTitle={`Illusion Blueprint: ${safeBlueprintTitle}`}
                     defaultTags={["illusion-blueprint", "build"]}
                     compact
                   />
