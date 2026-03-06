@@ -1435,78 +1435,77 @@ Fast mode skips the build pack by default for speed. Use “Generate Build Pack�
               ))}
 
               {buildPack ? (
-              {/* Mechanism selector (always accessible) */}
-                            <div className="flex items-center gap-2 ml-1">
-                              <span className="text-[11px] text-slate-400">Mechanism:</span>
-                              <select
-                                value={selectedMechanismId}
-                                onChange={(e) => setSelectedMechanismId(e.target.value)}
-                                className="bg-slate-900 border border-slate-700 text-slate-200 text-[11px] rounded-md px-2 py-1 focus:outline-none focus:border-purple-500"
-                              >
-                                <option value="all">All</option>
-                                {buildPack.mechanism_options.map((m) => (
-                                  <option key={m.id} value={m.id}>
-                                    {m.name}
-                                  </option>
-                                ))}
-                              </select>
-              
-              {/* Blueprint sheet quick action */}
-              <button
-                type="button"
-                onClick={handleGenerateBlueprint}
-                disabled={!buildPack || isBlueprintLoading}
-                className="px-3 py-1.5 rounded-md text-[11px] font-semibold border border-slate-700 bg-slate-900/60 text-slate-200 hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                title={!buildPack ? "Generate an illusion first" : "Generate blueprint-style orthographic plan image"}
-              >
-                {isBlueprintLoading ? "Generating Blueprint…" : "Generate Blueprint Sheet"}
-              </button>
-                            </div>
-              
-                            
-                            {/* View controls (booth-friendly) */}
-                            <div className="flex items-center gap-2 ml-1">
-                              <span className="text-[11px] text-slate-400">View:</span>
-                              <button
-                                type="button"
-                                onClick={() => setViewMode('compact')}
-                                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
-                                  viewMode === 'compact'
-                                    ? 'bg-purple-600/30 border-purple-500 text-purple-200'
-                                    : 'bg-slate-900/40 border-slate-700 text-slate-300 hover:border-slate-500'
-                                }`}
-                              >
-                                Compact
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setViewMode('full')}
-                                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
-                                  viewMode === 'full'
-                                    ? 'bg-purple-600/30 border-purple-500 text-purple-200'
-                                    : 'bg-slate-900/40 border-slate-700 text-slate-300 hover:border-slate-500'
-                                }`}
-                              >
-                                Full
-                              </button>
-              
-                              <span className="text-[11px] text-slate-400 ml-2">Accordion:</span>
-                              <button
-                                type="button"
-                                onClick={() => setAccordionMode((v) => !v)}
-                                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
-                                  accordionMode
-                                    ? 'bg-purple-600/30 border-purple-500 text-purple-200'
-                                    : 'bg-slate-900/40 border-slate-700 text-slate-300 hover:border-slate-500'
-                                }`}
-                                title="Accordion keeps one section open at a time"
-                              >
-                                {accordionMode ? 'On' : 'Off'}
-                              </button>
-                            </div>
-              
-              
-            ) : null}
+                <>
+                  {/* Mechanism selector (always accessible) */}
+                  <div className="flex items-center gap-2 ml-1">
+                    <span className="text-[11px] text-slate-400">Mechanism:</span>
+                    <select
+                      value={selectedMechanismId}
+                      onChange={(e) => setSelectedMechanismId(e.target.value)}
+                      className="bg-slate-900 border border-slate-700 text-slate-200 text-[11px] rounded-md px-2 py-1 focus:outline-none focus:border-purple-500"
+                    >
+                      <option value="all">All</option>
+                      {buildPack.mechanism_options.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name}
+                        </option>
+                      ))}
+                    </select>
+
+                    {/* Blueprint sheet quick action */}
+                    <button
+                      type="button"
+                      onClick={handleGenerateBlueprint}
+                      disabled={!buildPack || isBlueprintLoading}
+                      className="px-3 py-1.5 rounded-md text-[11px] font-semibold border border-slate-700 bg-slate-900/60 text-slate-200 hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title={!buildPack ? 'Generate an illusion first' : 'Generate blueprint-style orthographic plan image'}
+                    >
+                      {isBlueprintLoading ? 'Generating Blueprint…' : 'Generate Blueprint Sheet'}
+                    </button>
+                  </div>
+
+                  {/* View controls (booth-friendly) */}
+                  <div className="flex items-center gap-2 ml-1">
+                    <span className="text-[11px] text-slate-400">View:</span>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('compact')}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
+                        viewMode === 'compact'
+                          ? 'bg-purple-600/30 border-purple-500 text-purple-200'
+                          : 'bg-slate-900/40 border-slate-700 text-slate-300 hover:border-slate-500'
+                      }`}
+                    >
+                      Compact
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('full')}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
+                        viewMode === 'full'
+                          ? 'bg-purple-600/30 border-purple-500 text-purple-200'
+                          : 'bg-slate-900/40 border-slate-700 text-slate-300 hover:border-slate-500'
+                      }`}
+                    >
+                      Full
+                    </button>
+
+                    <span className="text-[11px] text-slate-400 ml-2">Accordion:</span>
+                    <button
+                      type="button"
+                      onClick={() => setAccordionMode((v) => !v)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
+                        accordionMode
+                          ? 'bg-purple-600/30 border-purple-500 text-purple-200'
+                          : 'bg-slate-900/40 border-slate-700 text-slate-300 hover:border-slate-500'
+                      }`}
+                      title="Accordion keeps one section open at a time"
+                    >
+                      {accordionMode ? 'On' : 'Off'}
+                    </button>
+                  </div>
+                </>
+              ) : null}
 {/* Expand/collapse controls */}
               <button
                 type="button"
