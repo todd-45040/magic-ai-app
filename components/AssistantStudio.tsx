@@ -220,15 +220,15 @@ const SECTION_LABELS: Record<Exclude<SectionKey, 'fullText'>, string> = {
 };
 
 const SECTION_PROFILES: Record<string, Array<Exclude<SectionKey, 'fullText'>>> = {
-  'routine-staging': ['stageLayout', 'blockingPlan', 'assistantPositions', 'cueTimeline', 'propMovement', 'revealChoreography', 'volunteerManagement', 'safetyNotes', 'contingencyPlan'],
+  'routine-staging': ['stageLayout', 'assistantPositions', 'blockingPlan', 'cueTimeline', 'propMovement', 'safetyNotes'],
   'cue-sheet': ['assistantPositions', 'cueTimeline', 'transitionPlan', 'propMovement', 'safetyNotes', 'contingencyPlan'],
   'volunteer-flow': ['stageLayout', 'volunteerPlan', 'assistantInstructions', 'volunteerManagement', 'safetyNotes', 'contingencyPlan'],
   'misdirection-timing': ['blockingPlan', 'assistantPositions', 'misdirectionWindows', 'transitionPlan', 'safetyNotes', 'contingencyPlan'],
-  'prop-table-layout': ['propTableLayout', 'resetOrder', 'assistantAccessPath', 'propMovement', 'transitionPlan'],
+  'prop-table-layout': ['propTableLayout', 'resetOrder', 'assistantAccessPath', 'propMovement', 'transitionPlan', 'safetyNotes'],
   'transition-flow': ['cueTimeline', 'propMovement', 'transitionPlan', 'lightingCues', 'safetyNotes', 'contingencyPlan'],
   'safety-check': ['assistantPositions', 'volunteerPlan', 'transitionPlan', 'safetyNotes', 'safetyRiskAnalysis', 'contingencyPlan'],
   'admc-demo': ['stageLayout', 'assistantPositions', 'cueTimeline', 'propMovement', 'transitionPlan', 'safetyNotes'],
-  default: ['stageLayout', 'blockingPlan', 'assistantPositions', 'cueTimeline', 'propMovement', 'transitionPlan', 'safetyNotes', 'contingencyPlan'],
+  default: ['stageLayout', 'assistantPositions', 'blockingPlan', 'cueTimeline', 'transitionPlan', 'safetyNotes'],
 };
 
 const FAST_SECTION_PROFILES: Record<string, Array<Exclude<SectionKey, 'fullText'>>> = {
@@ -377,11 +377,11 @@ ${SECTION_LABELS[key]}`)
 - Prioritize speed, clarity, and instant booth readability.`;
 
   const fullRule = `
-- FULL MODE: generate a professional assistant operations plan.
-- Include richer operational detail useful for rehearsals.
-- Describe assistant choreography, volunteer handling, prop management, and contingency planning when relevant.
-- Use 4-6 bullets or short operational lines per section.
-- Short explanations are allowed when they improve rehearsal usefulness.`;
+- FULL MODE: generate a professional assistant operations plan that is richer than Fast but still compact.
+- Return exactly 6 strong sections.
+- Use about 4 short bullets or operational lines per section.
+- Keep details practical: blocking, cue ownership, prop flow, volunteer handling, and fallback actions when relevant.
+- No long prose, no filler, and no narrative paragraphs.`;
 
   const demoRule = demoMode
     ? `
@@ -410,7 +410,8 @@ IMPORTANT RULES:` +
     demoRule +
     toolSpecificRule +
     `
-- Return ONLY the requested headings below, in the same order, and no extra introduction or conclusion.` +
+- Return ONLY the requested headings below, in the same order, and no extra introduction or conclusion.
+- Every requested section must contain useful content; do not leave sections blank.` +
     `
 
 Return your answer in EXACTLY this format using only these headings:` +
@@ -448,7 +449,7 @@ function getRequestedSections(focusTag?: string | null, responseMode: ResponseMo
   if (demoMode) return fastSections.slice(0, Math.min(4, fastSections.length));
   if (responseMode === 'fast') return fastSections.slice(0, Math.min(4, fastSections.length));
 
-  return baseSections.slice(0, Math.min(9, baseSections.length));
+  return baseSections.slice(0, Math.min(6, baseSections.length));
 }
 
 function getToolSpecificInstruction(focusTag?: string | null, responseMode: ResponseMode = 'fast', demoMode = false) {
@@ -459,37 +460,56 @@ function getToolSpecificInstruction(focusTag?: string | null, responseMode: Resp
         ? `
 - For CUE_TIMELINE, return exactly 5 numbered cues in chronological order. Each cue should be one short line with the action and who owns it.`
         : `
-- For CUE_TIMELINE, return 10-15 numbered cues in chronological order. Each cue should include timing, assistant responsibility, and a backup or hold note where useful.`;
+- For CUE_TIMELINE, return 8-10 numbered cues in chronological order. Each cue should include timing, assistant responsibility, and a short backup or hold note where useful.`;
     case 'routine-staging':
       return mode === 'fast'
         ? `
 - Treat this like a quick rehearsal cheat sheet. Focus on stage picture, assistant anchors, key cues, safety, and one practical note for the reveal.`
         : `
-- Treat this like a professional assistant operations plan. Include blocking, assistant choreography, prop management, reveal sequence, volunteer handling if relevant, and contingency notes.`;
+- Treat this like a professional assistant operations plan. Keep it tight but premium: stage picture, blocking, cue timing, prop flow, safety, and one fallback note where relevant.`;
     case 'volunteer-flow':
       return mode === 'fast'
         ? `
 - Keep volunteer guidance compact and practical.`
         : `
-- Include exposure prevention, audience management, assistant backup handling, and calm volunteer recovery steps.`;
+- Include exposure prevention, audience management, assistant backup handling, and calm volunteer recovery steps in concise operational bullets.`;
     case 'transition-flow':
       return mode === 'fast'
         ? `
 - Focus on the cleanest transition path and reset sequence.`
         : `
-- Include traffic flow, reset choreography, cue support, and what happens if applause or timing runs long.`;
+- Include traffic flow, reset choreography, cue support, and what happens if applause or timing runs long using short operational bullets.`;
     case 'safety-check':
       return mode === 'fast'
         ? `
 - Flag only the most important staging hazards and fixes.`
         : `
-- Review collision risks, heavy props, crowd proximity, timing hazards, and practical mitigation steps with contingency notes.`;
+- Review collision risks, heavy props, crowd proximity, timing hazards, and practical mitigation steps with concise contingency notes.`;
     default:
       return mode === 'fast'
         ? `
 - Make this feel like a quick rehearsal cheat sheet.`
         : `
 - Make this feel like a professional assistant planning document.`;
+  }
+}
+
+function getAssistantStudioSpeedMode(focusTag?: string | null, responseMode: ResponseMode = 'fast', demoMode = false): 'fast' | 'full' {
+  if (demoMode || responseMode === 'fast') return 'fast';
+
+  // Phase 9B: keep Full richer than Fast, but prefer Flash routing for reliability.
+  // Assistant's Studio benefits more from consistent structured output than maximal reasoning depth.
+  switch (focusTag) {
+    case 'routine-staging':
+    case 'cue-sheet':
+    case 'volunteer-flow':
+    case 'misdirection-timing':
+    case 'prop-table-layout':
+    case 'transition-flow':
+    case 'safety-check':
+    case 'admc-demo':
+    default:
+      return 'fast';
   }
 }
 
@@ -691,6 +711,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
       });
 
       const requestedSections = getRequestedSections(lastPreset || null, effectiveResponseMode, demoMode);
+      const assistantStudioSpeedMode = getAssistantStudioSpeedMode(lastPreset || null, effectiveResponseMode, demoMode);
       const text = await withTimeout(
         generateStructuredResponse(
           prompt,
@@ -699,7 +720,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
           currentUser,
           effectiveResponseMode === 'fast'
             ? { maxOutputTokens: demoMode ? 650 : 900, speedMode: 'fast' }
-            : { maxOutputTokens: 2800, speedMode: 'full' }
+            : { maxOutputTokens: 1700, speedMode: assistantStudioSpeedMode }
         ).then((obj) => structuredResultToText(obj || {}, requestedSections)),
         REQUEST_TIMEOUT_MS
       );
