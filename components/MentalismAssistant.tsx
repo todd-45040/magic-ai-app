@@ -176,7 +176,25 @@ type AudienceReactionModel = {
     notes: string;
 };
 
+type MentalismPerformanceScript = {
+    opening_frame: string;
+    build_suspense: string;
+    spectator_interaction: string;
+    reveal_moment: string;
+};
+
+type MentalismAudienceManagement = {
+    spectator_selection: string;
+    handling_skepticism: string;
+    managing_volunteers: string;
+};
+
 type MentalismBlueprint = {
+    effect_summary: string;
+    audience_experience: string;
+    method_concepts: string[];
+    performance_script: MentalismPerformanceScript;
+    audience_management: MentalismAudienceManagement;
     premise: string;
     psychological_frame: string;
     phase_structure: string[];
@@ -308,7 +326,21 @@ function clamp1to10(v: any, fallback = 5): number {
 
 function toBlueprint(v: any): MentalismBlueprint {
     return {
-        premise: String(v?.premise ?? '').trim(),
+        effect_summary: String(v?.effect_summary ?? v?.premise ?? '').trim(),
+        audience_experience: String(v?.audience_experience ?? '').trim(),
+        method_concepts: safeList(v?.method_concepts),
+        performance_script: {
+            opening_frame: String(v?.performance_script?.opening_frame ?? '').trim(),
+            build_suspense: String(v?.performance_script?.build_suspense ?? '').trim(),
+            spectator_interaction: String(v?.performance_script?.spectator_interaction ?? '').trim(),
+            reveal_moment: String(v?.performance_script?.reveal_moment ?? '').trim(),
+        },
+        audience_management: {
+            spectator_selection: String(v?.audience_management?.spectator_selection ?? '').trim(),
+            handling_skepticism: String(v?.audience_management?.handling_skepticism ?? '').trim(),
+            managing_volunteers: String(v?.audience_management?.managing_volunteers ?? '').trim(),
+        },
+        premise: String(v?.premise ?? v?.effect_summary ?? '').trim(),
         psychological_frame: String(v?.psychological_frame ?? '').trim(),
         phase_structure: safeList(v?.phase_structure),
         audience_control_points: safeList(v?.audience_control_points),
@@ -331,6 +363,36 @@ function blueprintToText(topic: string, b: MentalismBlueprint): string {
     lines.push(`# Mentalism Blueprint`);
     if (topic?.trim()) lines.push(`**Topic:** ${topic.trim()}`);
     lines.push('');
+    if (b.effect_summary) {
+        lines.push('## Effect Summary');
+        lines.push(b.effect_summary);
+        lines.push('');
+    }
+    if (b.audience_experience) {
+        lines.push('## Audience Experience');
+        lines.push(b.audience_experience);
+        lines.push('');
+    }
+    if (b.method_concepts?.length) {
+        lines.push('## Method Concepts');
+        b.method_concepts.forEach((x) => lines.push(`- ${x}`));
+        lines.push('');
+    }
+    if (b.performance_script && (b.performance_script.opening_frame || b.performance_script.build_suspense || b.performance_script.spectator_interaction || b.performance_script.reveal_moment)) {
+        lines.push('## Performance Script');
+        if (b.performance_script.opening_frame) lines.push(`- Opening Frame: ${b.performance_script.opening_frame}`);
+        if (b.performance_script.build_suspense) lines.push(`- Build Suspense: ${b.performance_script.build_suspense}`);
+        if (b.performance_script.spectator_interaction) lines.push(`- Spectator Interaction: ${b.performance_script.spectator_interaction}`);
+        if (b.performance_script.reveal_moment) lines.push(`- Reveal Moment: ${b.performance_script.reveal_moment}`);
+        lines.push('');
+    }
+    if (b.audience_management && (b.audience_management.spectator_selection || b.audience_management.handling_skepticism || b.audience_management.managing_volunteers)) {
+        lines.push('## Audience Management');
+        if (b.audience_management.spectator_selection) lines.push(`- Spectator Selection: ${b.audience_management.spectator_selection}`);
+        if (b.audience_management.handling_skepticism) lines.push(`- Handling Skepticism: ${b.audience_management.handling_skepticism}`);
+        if (b.audience_management.managing_volunteers) lines.push(`- Managing Volunteers: ${b.audience_management.managing_volunteers}`);
+        lines.push('');
+    }
     if (b.premise) {
         lines.push('## Premise');
         lines.push(b.premise);
@@ -500,6 +562,28 @@ const MentalismAssistant: React.FC<MentalismAssistantProps> = ({ onIdeaSaved, on
         () => ({
             type: Type.OBJECT,
             properties: {
+                effect_summary: { type: Type.STRING },
+                audience_experience: { type: Type.STRING },
+                method_concepts: { type: Type.ARRAY, items: { type: Type.STRING } },
+                performance_script: {
+                    type: Type.OBJECT,
+                    properties: {
+                        opening_frame: { type: Type.STRING },
+                        build_suspense: { type: Type.STRING },
+                        spectator_interaction: { type: Type.STRING },
+                        reveal_moment: { type: Type.STRING },
+                    },
+                    required: ['opening_frame', 'build_suspense', 'spectator_interaction', 'reveal_moment'],
+                },
+                audience_management: {
+                    type: Type.OBJECT,
+                    properties: {
+                        spectator_selection: { type: Type.STRING },
+                        handling_skepticism: { type: Type.STRING },
+                        managing_volunteers: { type: Type.STRING },
+                    },
+                    required: ['spectator_selection', 'handling_skepticism', 'managing_volunteers'],
+                },
                 premise: { type: Type.STRING },
                 psychological_frame: { type: Type.STRING },
                 phase_structure: { type: Type.ARRAY, items: { type: Type.STRING } },
@@ -527,6 +611,11 @@ const MentalismAssistant: React.FC<MentalismAssistantProps> = ({ onIdeaSaved, on
                 },
             },
             required: [
+                'effect_summary',
+                'audience_experience',
+                'method_concepts',
+                'performance_script',
+                'audience_management',
                 'premise',
                 'psychological_frame',
                 'phase_structure',
@@ -649,8 +738,13 @@ ${ethicalBlock}
 Output guidelines:
 - Keep it practical and performance-ready.
 - NON-EXPOSURE: do not reveal methods, gimmicks, or step-by-step secrets.
+- effect_summary should describe what the performer appears to accomplish in 1-2 sentences.
+- audience_experience should describe what the spectator believes happened and why it feels impossible.
+- method_concepts should list 3 concise approach frameworks only, not secrets.
+- performance_script should give short, usable lines for opening_frame, build_suspense, spectator_interaction, and reveal_moment.
 - phase_structure should read like a sequence of beats/phases (short, actionable lines).
 - audience_control_points should name moments where attention, choices, and framing are managed.
+- audience_management should cover spectator_selection, handling_skepticism, and managing_volunteers.
 - conviction_builders should be subtle convincers (timing, language, justification, props handling).
 - outs should be safe, non-exposure failure paths.
 - ethical_flags should list any potential ethical pitfalls (and how to avoid them).
@@ -1478,21 +1572,25 @@ Output guidelines:
 
                             <div className="space-y-3">
                                 <details open className="bg-slate-950/30 border border-slate-700 rounded-lg p-3">
-                                    <summary className="cursor-pointer text-slate-200 font-semibold">Premise</summary>
-                                    <div className="mt-2 text-sm text-slate-300 whitespace-pre-wrap">{blueprint.premise || '—'}</div>
+                                    <summary className="cursor-pointer text-slate-200 font-semibold">Effect Summary</summary>
+                                    <div className="mt-2 space-y-3 text-sm text-slate-300">
+                                        <div>
+                                            <div className="text-xs uppercase tracking-wide text-slate-500">Effect</div>
+                                            <div className="mt-1 whitespace-pre-wrap">{blueprint.effect_summary || blueprint.premise || '—'}</div>
+                                        </div>
+                                        <div>
+                                            <div className="text-xs uppercase tracking-wide text-slate-500">Audience Experience</div>
+                                            <div className="mt-1 whitespace-pre-wrap">{blueprint.audience_experience || '—'}</div>
+                                        </div>
+                                    </div>
                                 </details>
 
                                 <details open className="bg-slate-950/30 border border-slate-700 rounded-lg p-3">
-                                    <summary className="cursor-pointer text-slate-200 font-semibold">Psychological Frame</summary>
-                                    <div className="mt-2 text-sm text-slate-300 whitespace-pre-wrap">{blueprint.psychological_frame || '—'}</div>
-                                </details>
-
-                                <details open className="bg-slate-950/30 border border-slate-700 rounded-lg p-3">
-                                    <summary className="cursor-pointer text-slate-200 font-semibold">Phase Structure</summary>
+                                    <summary className="cursor-pointer text-slate-200 font-semibold">Method Concepts</summary>
                                     <div className="mt-2 text-sm text-slate-300">
-                                        {blueprint.phase_structure?.length ? (
+                                        {blueprint.method_concepts?.length ? (
                                             <ul className="list-disc pl-5 space-y-1">
-                                                {blueprint.phase_structure.map((x, i) => (
+                                                {blueprint.method_concepts.map((x, i) => (
                                                     <li key={i} className="whitespace-pre-wrap">{x}</li>
                                                 ))}
                                             </ul>
@@ -1502,38 +1600,96 @@ Output guidelines:
                                     </div>
                                 </details>
 
-                                <details className="bg-slate-950/30 border border-slate-700 rounded-lg p-3">
-                                    <summary className="cursor-pointer text-slate-200 font-semibold">Audience Control Points</summary>
-                                    <div className="mt-2 text-sm text-slate-300">
+                                <details open className="bg-slate-950/30 border border-slate-700 rounded-lg p-3">
+                                    <summary className="cursor-pointer text-slate-200 font-semibold">Performance Script</summary>
+                                    <div className="mt-2 space-y-3 text-sm text-slate-300">
+                                        {[
+                                            ['Opening Frame', blueprint.performance_script?.opening_frame],
+                                            ['Build Suspense', blueprint.performance_script?.build_suspense],
+                                            ['Spectator Interaction', blueprint.performance_script?.spectator_interaction],
+                                            ['Reveal Moment', blueprint.performance_script?.reveal_moment],
+                                        ].map(([label, value]) => (
+                                            <div key={String(label)}>
+                                                <div className="text-xs uppercase tracking-wide text-slate-500">{label}</div>
+                                                <div className="mt-1 whitespace-pre-wrap">{String(value || '—')}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </details>
+
+                                <details open className="bg-slate-950/30 border border-slate-700 rounded-lg p-3">
+                                    <summary className="cursor-pointer text-slate-200 font-semibold">Psychological Layers</summary>
+                                    <div className="mt-3 space-y-3">
+                                        <PsychologicalLayerVisualizer compact />
+                                        <div className="grid grid-cols-1 gap-3 text-sm text-slate-300">
+                                            <div>
+                                                <div className="text-xs uppercase tracking-wide text-slate-500">Effect Surface</div>
+                                                <div className="mt-1 whitespace-pre-wrap">{blueprint.effect_summary || blueprint.premise || '—'}</div>
+                                            </div>
+                                            <div>
+                                                <div className="text-xs uppercase tracking-wide text-slate-500">Psychological Justification</div>
+                                                <div className="mt-1 whitespace-pre-wrap">{blueprint.psychological_frame || '—'}</div>
+                                            </div>
+                                            <div>
+                                                <div className="text-xs uppercase tracking-wide text-slate-500">Conviction Layer</div>
+                                                <div className="mt-1">
+                                                    {blueprint.conviction_builders?.length ? (
+                                                        <ul className="list-disc pl-5 space-y-1">
+                                                            {blueprint.conviction_builders.map((x, i) => (
+                                                                <li key={i} className="whitespace-pre-wrap">{x}</li>
+                                                            ))}
+                                                        </ul>
+                                                    ) : <span className="text-slate-500">—</span>}
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <div className="text-xs uppercase tracking-wide text-slate-500">Memory Distortion Layer</div>
+                                                <div className="mt-1 whitespace-pre-wrap">{blueprint.audience_reaction_model?.notes || '—'}</div>
+                                            </div>
+                                            <div>
+                                                <div className="text-xs uppercase tracking-wide text-slate-500">Impossible Climax</div>
+                                                <div className="mt-1">
+                                                    {blueprint.escalation_options?.length ? (
+                                                        <ul className="list-disc pl-5 space-y-1">
+                                                            {blueprint.escalation_options.map((x, i) => (
+                                                                <li key={i} className="whitespace-pre-wrap">{x}</li>
+                                                            ))}
+                                                        </ul>
+                                                    ) : <span className="text-slate-500">—</span>}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </details>
+
+                                <details open className="bg-slate-950/30 border border-slate-700 rounded-lg p-3">
+                                    <summary className="cursor-pointer text-slate-200 font-semibold">Audience Management</summary>
+                                    <div className="mt-2 space-y-3 text-sm text-slate-300">
+                                        {[
+                                            ['Spectator Selection', blueprint.audience_management?.spectator_selection],
+                                            ['Handling Skepticism', blueprint.audience_management?.handling_skepticism],
+                                            ['Managing Volunteers', blueprint.audience_management?.managing_volunteers],
+                                        ].map(([label, value]) => (
+                                            <div key={String(label)}>
+                                                <div className="text-xs uppercase tracking-wide text-slate-500">{label}</div>
+                                                <div className="mt-1 whitespace-pre-wrap">{String(value || '—')}</div>
+                                            </div>
+                                        ))}
                                         {blueprint.audience_control_points?.length ? (
-                                            <ul className="list-disc pl-5 space-y-1">
-                                                {blueprint.audience_control_points.map((x, i) => (
-                                                    <li key={i} className="whitespace-pre-wrap">{x}</li>
-                                                ))}
-                                            </ul>
-                                        ) : (
-                                            <div className="text-slate-500">—</div>
-                                        )}
+                                            <div>
+                                                <div className="text-xs uppercase tracking-wide text-slate-500">Audience Control Points</div>
+                                                <ul className="mt-1 list-disc pl-5 space-y-1">
+                                                    {blueprint.audience_control_points.map((x, i) => (
+                                                        <li key={i} className="whitespace-pre-wrap">{x}</li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        ) : null}
                                     </div>
                                 </details>
 
-                                <details className="bg-slate-950/30 border border-slate-700 rounded-lg p-3">
-                                    <summary className="cursor-pointer text-slate-200 font-semibold">Conviction Builders</summary>
-                                    <div className="mt-2 text-sm text-slate-300">
-                                        {blueprint.conviction_builders?.length ? (
-                                            <ul className="list-disc pl-5 space-y-1">
-                                                {blueprint.conviction_builders.map((x, i) => (
-                                                    <li key={i} className="whitespace-pre-wrap">{x}</li>
-                                                ))}
-                                            </ul>
-                                        ) : (
-                                            <div className="text-slate-500">—</div>
-                                        )}
-                                    </div>
-                                </details>
-
-                                <details className="bg-slate-950/30 border border-slate-700 rounded-lg p-3">
-                                    <summary className="cursor-pointer text-slate-200 font-semibold">Outs</summary>
+                                <details open className="bg-slate-950/30 border border-slate-700 rounded-lg p-3">
+                                    <summary className="cursor-pointer text-slate-200 font-semibold">Failure Outs</summary>
                                     <div className="mt-2 text-sm text-slate-300">
                                         {blueprint.outs?.length ? (
                                             <ul className="list-disc pl-5 space-y-1">
@@ -1548,67 +1704,39 @@ Output guidelines:
                                 </details>
 
                                 <details className="bg-slate-950/30 border border-slate-700 rounded-lg p-3">
-                                    <summary className="cursor-pointer text-slate-200 font-semibold">Ethical Flags</summary>
-                                    <div className="mt-2 text-sm text-slate-300">
-                                        {blueprint.ethical_flags?.length ? (
-                                            <ul className="list-disc pl-5 space-y-1">
-                                                {blueprint.ethical_flags.map((x, i) => (
-                                                    <li key={i} className="whitespace-pre-wrap">{x}</li>
-                                                ))}
-                                            </ul>
-                                        ) : (
-                                            <div className="text-slate-500">—</div>
-                                        )}
-                                    </div>
-                                </details>
-
-                                <details className="bg-slate-950/30 border border-slate-700 rounded-lg p-3">
-                                    <summary className="cursor-pointer text-slate-200 font-semibold">Escalation Options</summary>
-                                    <div className="mt-2 text-sm text-slate-300">
-                                        {blueprint.escalation_options?.length ? (
-                                            <ul className="list-disc pl-5 space-y-1">
-                                                {blueprint.escalation_options.map((x, i) => (
-                                                    <li key={i} className="whitespace-pre-wrap">{x}</li>
-                                                ))}
-                                            </ul>
-                                        ) : (
-                                            <div className="text-slate-500">—</div>
-                                        )}
-                                    </div>
-                                </details>
-                                <details className="bg-slate-950/30 border border-slate-700 rounded-lg p-3">
-                                    <summary className="cursor-pointer text-slate-200 font-semibold">Audience Reaction Model</summary>
-                                    <div className="mt-2 text-sm text-slate-300">
-                                        {blueprint.audience_reaction_model ? (
-                                            <div className="space-y-2">
-                                                <div className="flex items-center justify-between text-xs">
-                                                    <span className="text-slate-400">Gasps likelihood</span>
-                                                    <span className="text-slate-200 font-semibold">{blueprint.audience_reaction_model.gasps_likelihood_1_to_10}/10</span>
-                                                </div>
-                                                <div className="flex items-center justify-between text-xs">
-                                                    <span className="text-slate-400">Skeptic resistance probability</span>
-                                                    <span className="text-slate-200 font-semibold">{blueprint.audience_reaction_model.skeptic_resistance_probability_0_to_1}</span>
-                                                </div>
-                                                <div className="flex items-center justify-between text-xs">
-                                                    <span className="text-slate-400">Confusion risk</span>
-                                                    <span className="text-slate-200 font-semibold">{blueprint.audience_reaction_model.confusion_risk_0_to_1}</span>
-                                                </div>
-                                                <div className="flex items-center justify-between text-xs">
-                                                    <span className="text-slate-400">Memory distortion strength</span>
-                                                    <span className="text-slate-200 font-semibold">{blueprint.audience_reaction_model.memory_distortion_strength_1_to_10}/10</span>
-                                                </div>
-                                                {blueprint.audience_reaction_model.notes ? (
-                                                    <div className="text-xs text-slate-300 whitespace-pre-wrap border-t border-slate-800 pt-2">
-                                                        {blueprint.audience_reaction_model.notes}
-                                                    </div>
-                                                ) : null}
+                                    <summary className="cursor-pointer text-slate-200 font-semibold">Routine Architecture</summary>
+                                    <div className="mt-2 space-y-3 text-sm text-slate-300">
+                                        {blueprint.phase_structure?.length ? (
+                                            <div>
+                                                <div className="text-xs uppercase tracking-wide text-slate-500">Phase Structure</div>
+                                                <ul className="mt-1 list-disc pl-5 space-y-1">
+                                                    {blueprint.phase_structure.map((x, i) => (
+                                                        <li key={i} className="whitespace-pre-wrap">{x}</li>
+                                                    ))}
+                                                </ul>
                                             </div>
-                                        ) : (
-                                            <div className="text-slate-500">—</div>
-                                        )}
+                                        ) : null}
+                                        {blueprint.ethical_flags?.length ? (
+                                            <div>
+                                                <div className="text-xs uppercase tracking-wide text-slate-500">Ethical Flags</div>
+                                                <ul className="mt-1 list-disc pl-5 space-y-1">
+                                                    {blueprint.ethical_flags.map((x, i) => (
+                                                        <li key={i} className="whitespace-pre-wrap">{x}</li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        ) : null}
+                                        <details className="bg-slate-900/30 border border-slate-700 rounded-md p-2">
+                                            <summary className="cursor-pointer text-slate-200 text-sm font-semibold">Audience Reaction Model</summary>
+                                            <div className="mt-2 space-y-2 text-xs">
+                                                <div className="flex items-center justify-between"><span className="text-slate-400">Gasps likelihood</span><span className="text-slate-200 font-semibold">{blueprint.audience_reaction_model.gasps_likelihood_1_to_10}/10</span></div>
+                                                <div className="flex items-center justify-between"><span className="text-slate-400">Skeptic resistance probability</span><span className="text-slate-200 font-semibold">{blueprint.audience_reaction_model.skeptic_resistance_probability_0_to_1}</span></div>
+                                                <div className="flex items-center justify-between"><span className="text-slate-400">Confusion risk</span><span className="text-slate-200 font-semibold">{blueprint.audience_reaction_model.confusion_risk_0_to_1}</span></div>
+                                                <div className="flex items-center justify-between"><span className="text-slate-400">Memory distortion strength</span><span className="text-slate-200 font-semibold">{blueprint.audience_reaction_model.memory_distortion_strength_1_to_10}/10</span></div>
+                                            </div>
+                                        </details>
                                     </div>
                                 </details>
-
                             </div>
                         </div>
 
