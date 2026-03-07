@@ -365,13 +365,15 @@ function buildStructuredPrompt(opts: {
   const requestedSections = getRequestedSections(focusTag, responseMode, demoMode);
 
   const fastRule = `
-- FAST MODE: generate a compact but complete rehearsal assistant summary.
+- FAST MODE: generate a compact but operational rehearsal card.
 - Return exactly the 3 requested sections and make every section useful.
-- Each section must contain 3-4 bullet points.
-- Each bullet should contain useful rehearsal or staging information, not short fragments.
+- Each section must contain exactly 3 concise but specific bullet lines.
+- Every bullet must describe a concrete assistant action, position, cue, traffic path, volunteer handling step, or prop-handling instruction.
+- Do not use generic filler like "keep the area clear," "assistant helps as needed," or "maintain good flow."
 - Each bullet may be 1-2 short sentences, but keep it tight, actionable, and easy to scan.
 - Do not leave any requested section blank or nearly empty.
 - Avoid long explanations and narrative paragraphs.
+- Write like a quick rehearsal cheat sheet, not a summary.
 - Prioritize speed, clarity, and instant booth readability.`;
 
   const fullRule = `
@@ -472,31 +474,36 @@ function getToolSpecificInstruction(focusTag?: string | null, responseMode: Resp
     case 'routine-staging':
       return mode === 'fast'
         ? `
-- Treat this like a quick rehearsal cheat sheet. Focus on stage picture, assistant anchors, key cues, safety, and practical reveal handling using fuller rehearsal bullets instead of fragments.`
+- Treat this like a quick rehearsal cheat sheet. Focus on stage picture, assistant anchors, key cues, safety, and practical reveal handling using fuller rehearsal bullets instead of fragments.
+- In Fast mode, every bullet should contain a concrete placement, movement, or cue the assistant can follow immediately.`
         : `
 - Treat this like a professional assistant operations plan. Keep it tight but premium: stage picture, blocking, cue timing, prop flow, safety, and one fallback note where relevant.`;
     case 'volunteer-flow':
       return mode === 'fast'
         ? `
-- Keep volunteer guidance compact and practical, but make each bullet complete enough to use during rehearsal.`
+- Keep volunteer guidance compact and practical, but make each bullet complete enough to use during rehearsal.
+- Each Fast bullet should tell the assistant where to stand, when to move, or how to guide the volunteer safely.`
         : `
 - Include exposure prevention, audience management, assistant backup handling, and calm volunteer recovery steps in concise operational bullets.`;
     case 'transition-flow':
       return mode === 'fast'
         ? `
-- Focus on the cleanest transition path and reset sequence, with short but complete rehearsal-ready instructions.`
+- Focus on the cleanest transition path and reset sequence, with short but complete rehearsal-ready instructions.
+- In Fast mode, each bullet should include who moves, what gets carried or cleared, and the cue for that move.`
         : `
 - Include traffic flow, reset choreography, cue support, and what happens if applause or timing runs long using short operational bullets.`;
     case 'safety-check':
       return mode === 'fast'
         ? `
-- Flag only the most important staging hazards and fixes, but make each note specific enough to act on during rehearsal.`
+- Flag only the most important staging hazards and fixes, but make each note specific enough to act on during rehearsal.
+- In Fast mode, pair each hazard with a concrete fix or positioning adjustment.`
         : `
 - Review collision risks, heavy props, crowd proximity, timing hazards, and practical mitigation steps with concise contingency notes.`;
     default:
       return mode === 'fast'
         ? `
-- Make this feel like a quick rehearsal cheat sheet with complete, actionable bullets.`
+- Make this feel like a quick rehearsal cheat sheet with complete, actionable bullets.
+- For Fast mode, prefer specific assistant movements, prop locations, and timing cues over general summaries.`
         : `
 - Make this feel like a professional assistant planning document.`;
   }
