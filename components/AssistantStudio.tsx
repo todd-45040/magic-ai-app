@@ -375,6 +375,9 @@ ${SECTION_LABELS[key]}`)
 - Bullets should be 1–2 instructional sentences explaining what the assistant does and when.
 - Focus only on the most important operational beats of the routine.
 - Prioritize assistant movement, prop handling, volunteer positioning, cue timing, and resets.
+- HARD RULE: do not write high-level summaries.
+- HARD RULE: every bullet must describe a physical action taken by an assistant.
+- Use concrete stage-direction language such as “Assistant A moves…”, “Assistant B prepares…”, “Escort the volunteer…”, “Place the prop…”, or “Signal the magician…”.
 - Avoid vague summaries. Every bullet must describe a physical action assistants perform.
 - Write like quick rehearsal notes a magician could use immediately.
 `;
@@ -387,6 +390,9 @@ ${SECTION_LABELS[key]}`)
 - Each bullet should be 1–2 instructional sentences describing what assistants physically do, when they do it, and how it supports the routine.
 - Emphasize assistant movement, prop handling, volunteer positioning, timing cues, backstage preparation, reset flow, and contingency actions.
 - Include specific rehearsal-ready guidance such as escorting volunteers, placing or clearing props, signaling the magician, managing sightlines, or preparing fallback actions.
+- HARD RULE: do not write high-level summaries.
+- HARD RULE: every bullet must describe a physical action taken by an assistant.
+- Use concrete stage-direction language such as “Assistant A moves…”, “Assistant B prepares…”, “Escort the volunteer…”, “Place the prop…”, or “Signal the magician…”.
 - Avoid vague summaries, short fragments, and generic advice. Write like a rehearsal document assistants can actually follow.
 - Keep the output dense and practical, but do not write long narrative paragraphs or filler.`;
 
@@ -413,6 +419,12 @@ IMPORTANT RULES:` +
 - Do not assume trap doors, fly systems, hidden infrastructure, or stage modifications unless the context explicitly allows them.` +
     `
 - Write for real assistants, stage managers, and rehearsal use.` +
+    `
+- HARD RULE: do not write high-level summaries.` +
+    `
+- HARD RULE: every bullet must describe a physical action taken by an assistant.` +
+    `
+- Use concrete stage-direction language whenever possible.` +
     (responseMode === 'fast' ? fastRule : fullRule) +
     demoRule +
     toolSpecificRule +
