@@ -123,6 +123,19 @@ function safeJsonParse(text: string): any {
   throw lastErr || new Error('Invalid JSON');
 }
 
+function isAssistantStudioStructuredRequest(prompt: string, systemInstruction: string): boolean {
+  const haystack = `${String(prompt || '')}
+${String(systemInstruction || '')}`.toLowerCase();
+  return (
+    haystack.includes("assistant studio") ||
+    haystack.includes("assistant-operations") ||
+    haystack.includes("assistant operations") ||
+    haystack.includes("assistant choreography") ||
+    haystack.includes("stage director") ||
+    haystack.includes("rehearsal notes")
+  );
+}
+
 function buildSchemaFallback(responseSchema: any, rawText: string): any {
   const props = responseSchema?.properties && typeof responseSchema.properties === 'object'
     ? responseSchema.properties
@@ -452,7 +465,59 @@ export const generateStructuredResponse = async (
     try {
       return safeJsonParse(retryText || '{}');
     } catch (err2: any) {
-      // Fast mode should stay fast, but do not surface raw JSON parse failures to the UI.
+      const isAssistantStudio = isAssistantStudioStructuredRequest(prompt, systemInstruction);
+
+      // Assistant's Studio Fast mode should not silently fake success with thin fallback stubs.
+      // Give it one shorter-string recovery attempt and then surface a real error.
+      if (speedMode === 'fast' && isAssistantStudio) {
+        const msg2 = String(err2?.message || err2 || 'Invalid JSON');
+        const shorterPrompt =
+          `The JSON is still invalid after a repair attempt (error: ${msg2}).
+
+` +
+          `Re-emit a SHORTER but still useful JSON object that fits the schema exactly.
+` +
+          `Hard requirements:
+` +
+          `- JSON ONLY (no markdown, no prose).
+` +
+          `- Keep every required field populated.
+` +
+          `- Shorten string values aggressively, but do not leave fields blank.
+` +
+          `- Every field must remain usable rehearsal content.
+` +
+          `- The JSON MUST be complete and MUST end with } or ].
+
+` +
+          `Here is the invalid output to shorten and repair:
+` +
+          `${clampForPrompt(retryText || text || '', 5000)}
+
+` +
+          `Now output the corrected SHORTER JSON only.`;
+
+        const shorterBody: GeminiGenerateBody = {
+          model,
+          contents: [{ role: 'user', parts: [{ text: shorterPrompt }] }],
+          config: {
+            systemInstruction,
+            responseMimeType: "application/json",
+            responseSchema,
+            maxOutputTokens: Math.max(Number(options?.maxOutputTokens ?? 900), 1200),
+          },
+        };
+
+        const shorterResult = await postJson<any>('/api/generate', shorterBody, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 1 });
+        const shorterText = extractText(shorterResult);
+        try {
+          return safeJsonParse(shorterText || '{}');
+        } catch (err3: any) {
+          throw new Error(`Assistant Studio JSON parse failed after repair retry: ${String(err3?.message || err3 || 'Invalid JSON')}`);
+        }
+      }
+
+      // Fast mode should stay fast for other tools, but do not surface raw JSON parse failures to the UI.
       if (speedMode === 'fast') {
         return buildSchemaFallback(responseSchema, retryText || text || '');
       }
@@ -487,7 +552,10 @@ export const generateStructuredResponse = async (
       const fallbackText = extractText(fallbackResult);
       try {
         return safeJsonParse(fallbackText || '{}');
-      } catch {
+      } catch (err3: any) {
+        if (isAssistantStudioStructuredRequest(prompt, systemInstruction)) {
+          throw new Error(`Assistant Studio JSON parse failed after final repair attempt: ${String(err3?.message || err3 || 'Invalid JSON')}`);
+        }
         return buildSchemaFallback(responseSchema, fallbackText || retryText || text || '');
       }
     }
