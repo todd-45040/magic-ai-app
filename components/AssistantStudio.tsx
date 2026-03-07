@@ -361,54 +361,30 @@ function buildStructuredPrompt(opts: {
       : '';
 
   const requestedSections = getRequestedSections(focusTag, responseMode, demoMode);
-  const sectionBlock = requestedSections
-    .map((key) => `
-### ${String(key).toUpperCase()}
-${SECTION_LABELS[key]}`)
-    .join('');
 
   const fastRule = `
-- FAST MODE: generate a quick rehearsal planning sheet for assistants.
-- Return exactly the requested sections in the requested order.
-- Each section must contain 3–4 bullet points unless demo mode explicitly asks for a smaller floor.
-- Each bullet must describe a concrete assistant action during the routine.
-- Bullets should be 1–2 instructional sentences explaining what the assistant does and when.
-- Focus only on the most important operational beats of the routine.
-- Prioritize assistant movement, prop handling, volunteer positioning, cue timing, and resets.
-- HARD RULE: do not write high-level summaries.
-- HARD RULE: every bullet must describe a physical action taken by an assistant.
-- Prefer practical choreography wording such as “Assistant A moves…”, “Assistant B prepares…”, “Escort the volunteer…”, “Place the prop…”, “Signal the magician…”, “Reset the table…”, or “If the volunteer hesitates…”.
-- Start bullets with concrete stage-action verbs whenever possible so the output sounds like blocking notes.
-- Avoid vague summaries. Every bullet must describe a physical action assistants perform.
-- Write like quick rehearsal notes a magician could use immediately.
-`;
+- FAST MODE: generate a compact but complete rehearsal assistant summary.
+- Return exactly the 4 requested sections and make every section useful.
+- Each section must contain 3-4 bullet points.
+- Each bullet should contain useful rehearsal or staging information, not short fragments.
+- Each bullet may be 1-2 short sentences, but keep it tight, actionable, and easy to scan.
+- Do not leave any requested section blank or nearly empty.
+- Avoid long explanations and narrative paragraphs.
+- Prioritize speed, clarity, and instant booth readability.`;
 
   const fullRule = `
-- FULL MODE: generate a professional assistant operations document that is clearly richer than Fast.
+- FULL MODE: generate a professional assistant operations plan that is richer than Fast but still compact.
 - Return exactly 6 strong sections.
-- Each section must contain 4–5 bullets.
-- Every bullet must be an operational direction, not commentary or summary.
-- Each bullet should be 1–2 instructional sentences describing what assistants physically do, when they do it, and how it supports the routine.
-- Emphasize assistant movement, prop handling, volunteer positioning, timing cues, backstage preparation, reset flow, and contingency actions.
-- Include specific rehearsal-ready guidance such as escorting volunteers, placing or clearing props, signaling the magician, managing sightlines, or preparing fallback actions.
-- HARD RULE: do not write high-level summaries.
-- HARD RULE: every bullet must describe a physical action taken by an assistant.
-- Prefer practical choreography wording such as “Assistant A moves…”, “Assistant B prepares…”, “Escort the volunteer…”, “Place the prop…”, “Signal the magician…”, “Reset the table…”, or “If the volunteer hesitates…”.
-- Start bullets with concrete stage-action verbs whenever possible so the output sounds like a real rehearsal document.
-- Avoid vague summaries, short fragments, and generic advice. Write like a rehearsal document assistants can actually follow.
-- Keep the output dense and practical, but do not write long narrative paragraphs or filler.`;
+- Use 4-5 short bullets or operational lines per section.
+- Each bullet should contain a clear operational instruction for assistants, staging, timing, prop flow, volunteer handling, or fallback actions.
+- Short explanatory notes are encouraged when they improve rehearsal clarity.
+- Bullets should contain useful rehearsal or staging information, not short fragments.
+- No long prose, no filler, and no narrative paragraphs.`;
 
   const demoRule = demoMode
     ? `
-- DEMO MODE: optimize for booth reliability, but do not collapse into fragments or headings-only output.
-- Demo Mode must still produce a usable rehearsal sheet.
-- Return at least 3 populated sections with at least 2 bullets per section.
-- If space is limited, shorten each bullet to one sentence, but do not leave sections empty.
-- Compress bullet length before reducing content coverage. Demo mode should compress bullet length, not content existence.
-- Do not return headings without bullets.
-- Do not return summary paragraphs without assistant actions.
-- Every bullet must describe a concrete assistant action.
-- Use compact section labels and keep the content dense, practical, and rehearsal-ready.`
+- DEMO MODE: optimize for booth reliability. Keep output compact, practical, and instantly scannable.
+- In demo mode, aim for 3 bullets per section and allow up to 4 when needed for clarity.`
     : '';
 
   const toolSpecificRule = getToolSpecificInstruction(focusTag, responseMode, demoMode);
@@ -428,24 +404,21 @@ IMPORTANT RULES:` +
 - Do not assume trap doors, fly systems, hidden infrastructure, or stage modifications unless the context explicitly allows them.` +
     `
 - Write for real assistants, stage managers, and rehearsal use.` +
-    `
-- HARD RULE: do not write high-level summaries.` +
-    `
-- HARD RULE: every bullet must describe a physical action taken by an assistant.` +
-    `
-- Use concrete stage-direction language whenever possible.` +
     (responseMode === 'fast' ? fastRule : fullRule) +
     demoRule +
     toolSpecificRule +
     `
-- Return ONLY the requested headings below, in the same order, and no extra introduction or conclusion.
+- Return a JSON object matching the requested schema.
+- Do not include markdown headings inside any field.
+- Do not repeat the section title inside the field value.
+- Each field should contain only the bullet content for that section.
+- Every field must contain usable rehearsal notes, not summaries.
 - Every requested section must contain useful content; do not leave sections blank.` +
-    `
-
-Return your answer in EXACTLY this format using only these headings:` +
-    sectionBlock +
     contextBlock +
     `
+
+REQUESTED SECTIONS:
+${requestedSections.map((key) => `- ${SECTION_LABELS[key]} (${key})`).join('\n')}
 
 ROUTINE DESCRIPTION / OUTLINE:
 ${userInput}` +
@@ -474,7 +447,7 @@ function getRequestedSections(focusTag?: string | null, responseMode: ResponseMo
   const baseSections = SECTION_PROFILES[focusTag || ''] || SECTION_PROFILES.default;
   const fastSections = FAST_SECTION_PROFILES[focusTag || ''] || FAST_SECTION_PROFILES.default;
 
-  if (demoMode) return fastSections.slice(0, Math.min(3, fastSections.length));
+  if (demoMode) return fastSections.slice(0, Math.min(4, fastSections.length));
   if (responseMode === 'fast') return fastSections.slice(0, Math.min(4, fastSections.length));
 
   return baseSections.slice(0, Math.min(6, baseSections.length));
@@ -567,25 +540,6 @@ function structuredResultToText(obj: Record<string, any>, keys: Array<Exclude<Se
     .join('\n\n')
     .trim();
 }
-
-function compactStructuredResultToText(obj: Record<string, any>, keys: Array<Exclude<SectionKey, 'fullText'>>) {
-  return keys
-    .map((key) => {
-      const value = String(obj?.[key] || '').trim();
-      return value ? `${String(key).replace(/([A-Z])/g, ' $1').trim().toUpperCase()}\n${value}` : '';
-    })
-    .filter(Boolean)
-    .join('\n\n')
-    .trim();
-}
-
-function objFromStructured(parsed: StructuredOutput, keys: Array<Exclude<SectionKey, 'fullText'>>) {
-  return keys.reduce<Record<string, string>>((acc, key) => {
-    acc[key] = String(parsed?.[key] || '').trim();
-    return acc;
-  }, {});
-}
-
 
 export default function AssistantStudio({ user, onIdeaSaved }: Props) {
   const currentUser = useMemo(() => user || GUEST_USER, [user]);
@@ -759,14 +713,14 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
 
       const requestedSections = getRequestedSections(lastPreset || null, effectiveResponseMode, demoMode);
       const assistantStudioSpeedMode = getAssistantStudioSpeedMode(lastPreset || null, effectiveResponseMode, demoMode);
-      const rawText = await withTimeout(
+      const text = await withTimeout(
         generateStructuredResponse(
           prompt,
           ASSISTANT_STUDIO_SYSTEM_INSTRUCTION,
           buildStructuredSchema(requestedSections),
           currentUser,
           effectiveResponseMode === 'fast'
-            ? { maxOutputTokens: demoMode ? 950 : 1100, speedMode: 'fast' }
+            ? { maxOutputTokens: demoMode ? 650 : 900, speedMode: 'fast' }
             : { maxOutputTokens: 1700, speedMode: assistantStudioSpeedMode }
         ).then((obj) => structuredResultToText(obj || {}, requestedSections)),
         REQUEST_TIMEOUT_MS
@@ -774,11 +728,8 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
 
       if (cancelledUpToRef.current >= myId) return;
 
-      const parsed = parseStructured(rawText);
-      const displayText = demoMode && effectiveResponseMode === 'fast'
-        ? compactStructuredResultToText(objFromStructured(parsed, requestedSections), requestedSections)
-        : rawText;
-      setOutputRaw(displayText);
+      setOutputRaw(text);
+      const parsed = parseStructured(text);
       setOutput(parsed);
       const firstAvailable = TABS.find((t) => t.key !== 'fullText' && parsed[t.key]);
       setActiveTab(firstAvailable?.key || 'fullText');
