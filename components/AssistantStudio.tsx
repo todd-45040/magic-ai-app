@@ -346,10 +346,10 @@ ${SECTION_LABELS[key]}`)
 
   const brevityRule =
     focusTag === 'admc-demo'
-      ? '
-- Keep it convention-demo fast: each section should be 2-4 bullets or 2-4 short lines max.'
-      : '
-- Keep each section concise: usually 3-6 bullets or short lines. Avoid long paragraphs.';
+      ? `
+- Keep it convention-demo fast: each section should be 2-4 bullets or 2-4 short lines max.`
+      : `
+- Keep each section concise: usually 3-6 bullets or short lines. Avoid long paragraphs.`;
 
   return (
     `You are building a practical assistant-operations plan for a magic routine. Return useful, stage-ready guidance with no fluff.` +
