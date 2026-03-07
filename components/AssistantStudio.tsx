@@ -870,9 +870,10 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
     setLightingNotes(scenario.lightingNotes);
     setInput(scenario.input);
     setLastPreset(scenario.tag);
+    setResponseMode('fast');
     clearErrors();
-    setToast(`Demo loaded: ${scenario.label}`);
-    window.setTimeout(() => setToast(null), 1200);
+    setToast(`Demo loaded: ${scenario.label} • Fast mode forced for booth reliability`);
+    window.setTimeout(() => setToast(null), 1400);
   };
 
   const reportIssue = async () => {
