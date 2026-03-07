@@ -368,14 +368,16 @@ ${SECTION_LABELS[key]}`)
     .join('');
 
   const fastRule = `
-- FAST MODE: generate a compact but complete rehearsal assistant summary.
-- Return exactly the 4 requested sections and make every section useful.
-- Each section must contain 3-4 bullet points.
-- Each bullet should contain useful rehearsal or staging information, not short fragments.
-- Each bullet may be 1-2 short sentences, but keep it tight, actionable, and easy to scan.
-- Do not leave any requested section blank or nearly empty.
-- Avoid long explanations and narrative paragraphs.
-- Prioritize speed, clarity, and instant booth readability.`;
+- FAST MODE: generate a quick rehearsal planning sheet for assistants.
+- Return exactly the 4 requested sections.
+- Each section must contain 3–4 bullet points.
+- Each bullet must describe a concrete assistant action during the routine.
+- Bullets should be 1–2 instructional sentences explaining what the assistant does and when.
+- Focus only on the most important operational beats of the routine.
+- Prioritize assistant movement, prop handling, volunteer positioning, cue timing, and resets.
+- Avoid vague summaries. Every bullet must describe a physical action assistants perform.
+- Write like quick rehearsal notes a magician could use immediately.
+`;
 
   const fullRule = `
 - FULL MODE: generate a professional assistant operations plan that is richer than Fast but still compact.
