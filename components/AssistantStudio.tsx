@@ -380,13 +380,15 @@ ${SECTION_LABELS[key]}`)
 `;
 
   const fullRule = `
-- FULL MODE: generate a professional assistant operations plan that is richer than Fast but still compact.
+- FULL MODE: generate a professional assistant operations document that is clearly richer than Fast.
 - Return exactly 6 strong sections.
-- Use 4-5 short bullets or operational lines per section.
-- Each bullet should contain a clear operational instruction for assistants, staging, timing, prop flow, volunteer handling, or fallback actions.
-- Short explanatory notes are encouraged when they improve rehearsal clarity.
-- Bullets should contain useful rehearsal or staging information, not short fragments.
-- No long prose, no filler, and no narrative paragraphs.`;
+- Each section must contain 4–5 bullets.
+- Every bullet must be an operational direction, not commentary or summary.
+- Each bullet should be 1–2 instructional sentences describing what assistants physically do, when they do it, and how it supports the routine.
+- Emphasize assistant movement, prop handling, volunteer positioning, timing cues, backstage preparation, reset flow, and contingency actions.
+- Include specific rehearsal-ready guidance such as escorting volunteers, placing or clearing props, signaling the magician, managing sightlines, or preparing fallback actions.
+- Avoid vague summaries, short fragments, and generic advice. Write like a rehearsal document assistants can actually follow.
+- Keep the output dense and practical, but do not write long narrative paragraphs or filler.`;
 
   const demoRule = demoMode
     ? `
