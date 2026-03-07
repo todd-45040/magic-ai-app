@@ -201,6 +201,7 @@ type MentalismBlueprint = {
     audience_control_points: string[];
     conviction_builders: string[];
     outs: string[];
+    performance_tips: string[];
     ethical_flags: string[];
     escalation_options: string[];
     audience_reaction_model: AudienceReactionModel;
@@ -346,6 +347,7 @@ function toBlueprint(v: any): MentalismBlueprint {
         audience_control_points: safeList(v?.audience_control_points),
         conviction_builders: safeList(v?.conviction_builders),
         outs: safeList(v?.outs),
+        performance_tips: safeList(v?.performance_tips),
         ethical_flags: safeList(v?.ethical_flags),
         escalation_options: safeList(v?.escalation_options),
         audience_reaction_model: {
@@ -504,6 +506,7 @@ const MentalismAssistant: React.FC<MentalismAssistantProps> = ({ onIdeaSaved, on
     // Tier-1 controls
     const [intensityIdx, setIntensityIdx] = useState<number>(2);
     const [performanceEnvironment, setPerformanceEnvironment] = useState<typeof PERFORMANCE_ENVIRONMENTS[number]>('Parlor');
+    const [routineDepth, setRoutineDepth] = useState<'fast' | 'full'>('full');
     const [methodPreferences, setMethodPreferences] = useState<Record<typeof METHOD_PREFERENCE_OPTIONS[number], boolean>>({
         'Psychological Force': true,
         'Dual Reality': true,
@@ -558,7 +561,7 @@ const MentalismAssistant: React.FC<MentalismAssistantProps> = ({ onIdeaSaved, on
             .slice(0, 8);
     }, [ideas]);
 
-    const blueprintSchema = useMemo(
+    const fullBlueprintSchema = useMemo(
         () => ({
             type: Type.OBJECT,
             properties: {
@@ -590,6 +593,7 @@ const MentalismAssistant: React.FC<MentalismAssistantProps> = ({ onIdeaSaved, on
                 audience_control_points: { type: Type.ARRAY, items: { type: Type.STRING } },
                 conviction_builders: { type: Type.ARRAY, items: { type: Type.STRING } },
                 outs: { type: Type.ARRAY, items: { type: Type.STRING } },
+                performance_tips: { type: Type.ARRAY, items: { type: Type.STRING } },
                 ethical_flags: { type: Type.ARRAY, items: { type: Type.STRING } },
                 escalation_options: { type: Type.ARRAY, items: { type: Type.STRING } },
                 audience_reaction_model: {
@@ -622,6 +626,7 @@ const MentalismAssistant: React.FC<MentalismAssistantProps> = ({ onIdeaSaved, on
                 'audience_control_points',
                 'conviction_builders',
                 'outs',
+                'performance_tips',
                 'ethical_flags',
                 'escalation_options',
                 'audience_reaction_model',
@@ -629,6 +634,30 @@ const MentalismAssistant: React.FC<MentalismAssistantProps> = ({ onIdeaSaved, on
         }),
         []
     );
+
+    const fastBlueprintSchema = useMemo(
+        () => ({
+            type: Type.OBJECT,
+            properties: {
+                effect_summary: { type: Type.STRING },
+                audience_experience: { type: Type.STRING },
+                method_concepts: { type: Type.ARRAY, items: { type: Type.STRING } },
+                performance_script: {
+                    type: Type.OBJECT,
+                    properties: {
+                        opening_frame: { type: Type.STRING },
+                        build_suspense: { type: Type.STRING },
+                        spectator_interaction: { type: Type.STRING },
+                        reveal_moment: { type: Type.STRING },
+                    },
+                    required: ['opening_frame', 'build_suspense', 'spectator_interaction', 'reveal_moment'],
+                },
+            },
+            required: ['effect_summary', 'audience_experience', 'method_concepts', 'performance_script'],
+        }),
+        []
+    );
+
 
 
     const stressTestSchema = useMemo(
@@ -719,6 +748,25 @@ Ethical Performance Mode: ON
 Ethical Performance Mode: OFF (Still keep it entertainment-safe.)
 `;
 
+            const depthLabel = routineDepth === 'fast' ? 'Fast Inspiration' : 'Full Professional Routine';
+            const depthInstructions = routineDepth === 'fast'
+                ? `
+Routine depth: ${depthLabel}
+- Return a compact, fast-response routine concept.
+- Keep method_concepts to exactly 3 concise framework ideas.
+- Keep performance_script brief and practical.
+- Focus on quick inspiration, not exhaustive analysis.
+- Do not include long explanations.
+`
+                : `
+Routine depth: ${depthLabel}
+- Return a rich, performance-ready routine construction.
+- Include multiple strong method frameworks.
+- Make performance_script more developed and specific.
+- Fill out psychological layers, audience management, failure outs, and performance tips with practical detail.
+- Keep it professional, concise, and stage-usable rather than verbose.
+`;
+
             const prompt = `
 Generate a mentalism routine blueprint in STRICT JSON that matches the schema provided.
 
@@ -734,19 +782,22 @@ ${performanceEnvironment}
 Method preferences (${selectedMethodPreferences.length ? 'optional guidance provided' : 'open choice'}):
 ${selectedMethodPreferences.length ? selectedMethodPreferences.join(', ') : 'No specific method preferences selected.'}
 ${ethicalBlock}
+${depthInstructions}
 
 Output guidelines:
 - Keep it practical and performance-ready.
 - NON-EXPOSURE: do not reveal methods, gimmicks, or step-by-step secrets.
 - effect_summary should describe what the performer appears to accomplish in 1-2 sentences.
 - audience_experience should describe what the spectator believes happened and why it feels impossible.
-- method_concepts should list 3 concise approach frameworks only, not secrets.
-- performance_script should give short, usable lines for opening_frame, build_suspense, spectator_interaction, and reveal_moment.
+- method_concepts should list concise approach frameworks only, not secrets.
+- performance_script should give usable lines for opening_frame, build_suspense, spectator_interaction, and reveal_moment.
+- If the schema includes advanced fields, populate them with practical detail rather than fluff.
 - phase_structure should read like a sequence of beats/phases (short, actionable lines).
 - audience_control_points should name moments where attention, choices, and framing are managed.
 - audience_management should cover spectator_selection, handling_skepticism, and managing_volunteers.
 - conviction_builders should be subtle convincers (timing, language, justification, props handling).
 - outs should be safe, non-exposure failure paths.
+- performance_tips should provide short professional staging or handling notes.
 - ethical_flags should list any potential ethical pitfalls (and how to avoid them).
 - escalation_options should give upgrades (bigger climax, stronger impossibility) without exposure.
 - audience_reaction_model should provide semi-theoretical predictions: gasps_likelihood_1_to_10, skeptic_resistance_probability_0_to_1, confusion_risk_0_to_1, memory_distortion_strength_1_to_10, plus a short notes field explaining why.
@@ -755,7 +806,7 @@ Output guidelines:
             const raw = await generateStructuredResponse(
                 prompt,
                 MENTALISM_ASSISTANT_SYSTEM_INSTRUCTION,
-                blueprintSchema,
+                routineDepth === 'fast' ? fastBlueprintSchema : fullBlueprintSchema,
                 currentUser || { email: '', membership: 'free', generationCount: 0, lastResetDate: '' }
             );
 
@@ -1238,6 +1289,33 @@ Output guidelines:
                         </div>
                     </label>
 
+                    <div className="bg-slate-900/40 border border-slate-700 rounded-lg p-3">
+                        <div className="text-sm font-semibold text-slate-200">Routine Depth</div>
+                        <div className="text-xs text-slate-400 mt-1">Choose quick inspiration for demos or a richer professional routine build.</div>
+                        <div className="mt-3 grid grid-cols-1 gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setRoutineDepth('fast')}
+                                className={`rounded-md border px-3 py-2 text-left transition-colors ${routineDepth === 'fast'
+                                    ? 'border-purple-500 bg-purple-600/20 text-white'
+                                    : 'border-slate-700 bg-slate-900/40 text-slate-300 hover:border-slate-500'}`}
+                            >
+                                <div className="text-sm font-semibold">○ Fast Inspiration</div>
+                                <div className="text-xs text-slate-400 mt-1">Effect summary, 3 method concepts, and a basic routine structure.</div>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setRoutineDepth('full')}
+                                className={`rounded-md border px-3 py-2 text-left transition-colors ${routineDepth === 'full'
+                                    ? 'border-purple-500 bg-purple-600/20 text-white'
+                                    : 'border-slate-700 bg-slate-900/40 text-slate-300 hover:border-slate-500'}`}
+                            >
+                                <div className="text-sm font-semibold">● Full Professional Routine</div>
+                                <div className="text-xs text-slate-400 mt-1">Adds deeper scripting, psychology, audience management, outs, and performance tips.</div>
+                            </button>
+                        </div>
+                    </div>
+
                     {/* Tier-1: Primary Blueprint Button */}
                     <button
                         onClick={() => handleGenerate()}
@@ -1245,7 +1323,7 @@ Output guidelines:
                         className="w-full py-3 mt-1 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
                     >
                         <WandIcon className="w-5 h-5" />
-                        <span>Generate Mentalism Routine</span>
+                        <span>{routineDepth === 'fast' ? 'Generate Fast Mentalism Routine' : 'Generate Mentalism Routine'}</span>
                     </button>
 
                     {error && <p className="text-red-400 mt-2 text-sm text-center">{error}</p>}
@@ -1571,6 +1649,12 @@ Output guidelines:
                             )}
 
                             <div className="space-y-3">
+                                {routineDepth === 'fast' ? (
+                                    <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                                        Fast Inspiration mode keeps the routine compact for quick ideation and booth demos.
+                                    </div>
+                                ) : null}
+
                                 <details open className="bg-slate-950/30 border border-slate-700 rounded-lg p-3">
                                     <summary className="cursor-pointer text-slate-200 font-semibold">Effect Summary</summary>
                                     <div className="mt-2 space-y-3 text-sm text-slate-300">
@@ -1617,6 +1701,7 @@ Output guidelines:
                                     </div>
                                 </details>
 
+                                {routineDepth === 'full' ? (
                                 <details open className="bg-slate-950/30 border border-slate-700 rounded-lg p-3">
                                     <summary className="cursor-pointer text-slate-200 font-semibold">Psychological Layers</summary>
                                     <div className="mt-3 space-y-3">
@@ -1661,7 +1746,9 @@ Output guidelines:
                                         </div>
                                     </div>
                                 </details>
+                                ) : null}
 
+                                {routineDepth === 'full' ? (
                                 <details open className="bg-slate-950/30 border border-slate-700 rounded-lg p-3">
                                     <summary className="cursor-pointer text-slate-200 font-semibold">Audience Management</summary>
                                     <div className="mt-2 space-y-3 text-sm text-slate-300">
@@ -1687,7 +1774,9 @@ Output guidelines:
                                         ) : null}
                                     </div>
                                 </details>
+                                ) : null}
 
+                                {routineDepth === 'full' ? (
                                 <details open className="bg-slate-950/30 border border-slate-700 rounded-lg p-3">
                                     <summary className="cursor-pointer text-slate-200 font-semibold">Failure Outs</summary>
                                     <div className="mt-2 text-sm text-slate-300">
@@ -1702,6 +1791,20 @@ Output guidelines:
                                         )}
                                     </div>
                                 </details>
+                                ) : null}
+
+                                {routineDepth === 'full' && blueprint.performance_tips?.length ? (
+                                    <details open className="bg-slate-950/30 border border-slate-700 rounded-lg p-3">
+                                        <summary className="cursor-pointer text-slate-200 font-semibold">Performance Tips</summary>
+                                        <div className="mt-2 text-sm text-slate-300">
+                                            <ul className="list-disc pl-5 space-y-1">
+                                                {blueprint.performance_tips.map((x, i) => (
+                                                    <li key={i} className="whitespace-pre-wrap">{x}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    </details>
+                                ) : null}
 
                                 <details className="bg-slate-950/30 border border-slate-700 rounded-lg p-3">
                                     <summary className="cursor-pointer text-slate-200 font-semibold">Routine Architecture</summary>
