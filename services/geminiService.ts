@@ -517,8 +517,9 @@ export const generateStructuredResponse = async (
         }
       }
 
-      // Fast mode should stay fast for other tools, but do not surface raw JSON parse failures to the UI.
-      if (speedMode === 'fast') {
+      // Assistant Studio must not silently fake success with fallback stubs.
+      // For other fast tools, keep the lightweight schema fallback.
+      if (speedMode === 'fast' && !isAssistantStudio) {
         return buildSchemaFallback(responseSchema, retryText || text || '');
       }
       // Final fallback: force a SHORTER JSON re-emit. This is specifically for truncation

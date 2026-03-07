@@ -64,7 +64,8 @@ const PRESETS: Array<{ label: string; tag: string; template: (input: string) => 
 
 const DRAFT_KEY = 'maw_assistant_studio_draft_v8';
 const CONTEXT_KEY = 'maw_assistant_studio_context_v8';
-const REQUEST_TIMEOUT_MS = 45_000;
+const FAST_REQUEST_TIMEOUT_MS = 45_000;
+const FULL_REQUEST_TIMEOUT_MS = 75_000;
 
 type ErrorKind = 'timeout' | 'quota' | 'other' | null;
 type ResponseMode = 'fast' | 'full';
@@ -221,27 +222,27 @@ const SECTION_LABELS: Record<Exclude<SectionKey, 'fullText'>, string> = {
 };
 
 const SECTION_PROFILES: Record<string, Array<Exclude<SectionKey, 'fullText'>>> = {
-  'routine-staging': ['stageLayout', 'assistantPositions', 'blockingPlan', 'cueTimeline', 'propMovement', 'safetyNotes'],
-  'cue-sheet': ['assistantPositions', 'cueTimeline', 'transitionPlan', 'propMovement', 'safetyNotes', 'contingencyPlan'],
-  'volunteer-flow': ['stageLayout', 'volunteerPlan', 'assistantInstructions', 'volunteerManagement', 'safetyNotes', 'contingencyPlan'],
-  'misdirection-timing': ['blockingPlan', 'assistantPositions', 'misdirectionWindows', 'transitionPlan', 'safetyNotes', 'contingencyPlan'],
-  'prop-table-layout': ['propTableLayout', 'resetOrder', 'assistantAccessPath', 'propMovement', 'transitionPlan', 'safetyNotes'],
-  'transition-flow': ['cueTimeline', 'propMovement', 'transitionPlan', 'lightingCues', 'safetyNotes', 'contingencyPlan'],
-  'safety-check': ['assistantPositions', 'volunteerPlan', 'transitionPlan', 'safetyNotes', 'safetyRiskAnalysis', 'contingencyPlan'],
-  'admc-demo': ['stageLayout', 'assistantPositions', 'cueTimeline', 'propMovement', 'transitionPlan', 'safetyNotes'],
-  default: ['stageLayout', 'assistantPositions', 'blockingPlan', 'cueTimeline', 'transitionPlan', 'safetyNotes'],
+  'routine-staging': ['stageLayout', 'assistantPositions', 'cueTimeline', 'propMovement', 'contingencyPlan', 'safetyNotes'],
+  'cue-sheet': ['stageLayout', 'assistantPositions', 'cueTimeline', 'propMovement', 'contingencyPlan', 'safetyNotes'],
+  'volunteer-flow': ['stageLayout', 'assistantPositions', 'cueTimeline', 'volunteerManagement', 'contingencyPlan', 'safetyNotes'],
+  'misdirection-timing': ['stageLayout', 'assistantPositions', 'cueTimeline', 'misdirectionWindows', 'contingencyPlan', 'safetyNotes'],
+  'prop-table-layout': ['stageLayout', 'assistantPositions', 'cueTimeline', 'propMovement', 'contingencyPlan', 'safetyNotes'],
+  'transition-flow': ['stageLayout', 'assistantPositions', 'cueTimeline', 'propMovement', 'contingencyPlan', 'safetyNotes'],
+  'safety-check': ['stageLayout', 'assistantPositions', 'cueTimeline', 'contingencyPlan', 'safetyNotes', 'safetyRiskAnalysis'],
+  'admc-demo': ['stageLayout', 'assistantPositions', 'cueTimeline', 'propMovement', 'contingencyPlan', 'safetyNotes'],
+  default: ['stageLayout', 'assistantPositions', 'cueTimeline', 'propMovement', 'contingencyPlan', 'safetyNotes'],
 };
 
 const FAST_SECTION_PROFILES: Record<string, Array<Exclude<SectionKey, 'fullText'>>> = {
-  'routine-staging': ['stageLayout', 'assistantPositions', 'cueTimeline', 'safetyNotes'],
-  'cue-sheet': ['assistantPositions', 'cueTimeline', 'propMovement', 'safetyNotes'],
-  'volunteer-flow': ['stageLayout', 'volunteerPlan', 'assistantInstructions', 'safetyNotes'],
-  'misdirection-timing': ['blockingPlan', 'assistantPositions', 'misdirectionWindows', 'safetyNotes'],
-  'prop-table-layout': ['propTableLayout', 'resetOrder', 'assistantAccessPath', 'propMovement'],
-  'transition-flow': ['cueTimeline', 'propMovement', 'transitionPlan', 'safetyNotes'],
-  'safety-check': ['assistantPositions', 'volunteerPlan', 'transitionPlan', 'safetyNotes'],
-  'admc-demo': ['stageLayout', 'assistantPositions', 'cueTimeline', 'safetyNotes'],
-  default: ['stageLayout', 'assistantPositions', 'cueTimeline', 'safetyNotes'],
+  'routine-staging': ['stageLayout', 'assistantPositions', 'cueTimeline'],
+  'cue-sheet': ['stageLayout', 'assistantPositions', 'cueTimeline'],
+  'volunteer-flow': ['stageLayout', 'assistantPositions', 'cueTimeline'],
+  'misdirection-timing': ['stageLayout', 'assistantPositions', 'cueTimeline'],
+  'prop-table-layout': ['stageLayout', 'assistantPositions', 'cueTimeline'],
+  'transition-flow': ['stageLayout', 'assistantPositions', 'cueTimeline'],
+  'safety-check': ['stageLayout', 'assistantPositions', 'cueTimeline'],
+  'admc-demo': ['stageLayout', 'assistantPositions', 'cueTimeline'],
+  default: ['stageLayout', 'assistantPositions', 'cueTimeline'],
 };
 
 function Skeleton() {
@@ -365,7 +366,7 @@ function buildStructuredPrompt(opts: {
 
   const fastRule = `
 - FAST MODE: generate a compact but complete rehearsal assistant summary.
-- Return exactly the 4 requested sections and make every section useful.
+- Return exactly the 3 requested sections and make every section useful.
 - Each section must contain 3-4 bullet points.
 - Each bullet should contain useful rehearsal or staging information, not short fragments.
 - Each bullet may be 1-2 short sentences, but keep it tight, actionable, and easy to scan.
@@ -410,6 +411,8 @@ IMPORTANT RULES:` +
     toolSpecificRule +
     `
 - Return a JSON object matching the requested schema.
+- Every requested field in the JSON schema is an array of strings.
+- Each array item must be one clean bullet line, with no markdown bullets or numbering characters.
 - Do not include markdown headings inside any field.
 - Do not repeat the section title inside the field value.
 - Each field should contain only the bullet content for that section.
@@ -428,7 +431,7 @@ ${userInput}` +
 }
 
 function combineRunNotes(output: StructuredOutput, fallback: string) {
-  const sections: Array<[string, string | undefined]> = [
+  const sections: Array<[string, StructuredFieldValue | undefined]> = [
     ['STAGE LAYOUT', output.stageLayout],
     ['BLOCKING PLAN', output.blockingPlan],
     ['ASSISTANT POSITIONS', output.assistantPositions],
@@ -440,7 +443,10 @@ function combineRunNotes(output: StructuredOutput, fallback: string) {
     ['CONTINGENCY PLAN', output.contingencyPlan],
     ['SAFETY & RISK ANALYSIS', output.safetyRiskAnalysis],
   ];
-  const parts = sections.filter(([, value]) => value?.trim()).map(([title, value]) => `${title}\n${value}`);
+  const parts = sections
+    .map(([title, value]) => [title, formatStructuredField(value)] as const)
+    .filter(([, value]) => value.trim())
+    .map(([title, value]) => `${title}\n${value}`);
   return parts.length ? parts.join('\n\n') : fallback;
 }
 
@@ -448,8 +454,8 @@ function getRequestedSections(focusTag?: string | null, responseMode: ResponseMo
   const baseSections = SECTION_PROFILES[focusTag || ''] || SECTION_PROFILES.default;
   const fastSections = FAST_SECTION_PROFILES[focusTag || ''] || FAST_SECTION_PROFILES.default;
 
-  if (demoMode) return fastSections.slice(0, Math.min(4, fastSections.length));
-  if (responseMode === 'fast') return fastSections.slice(0, Math.min(4, fastSections.length));
+  if (demoMode) return fastSections.slice(0, Math.min(3, fastSections.length));
+  if (responseMode === 'fast') return fastSections.slice(0, Math.min(3, fastSections.length));
 
   return baseSections.slice(0, Math.min(6, baseSections.length));
 }
@@ -505,12 +511,21 @@ function getAssistantStudioSpeedMode(
   return responseMode === 'full' ? 'full' : 'fast';
 }
 
-function buildStructuredSchema(keys: Array<Exclude<SectionKey, 'fullText'>>) {
+function buildStructuredSchema(
+  keys: Array<Exclude<SectionKey, 'fullText'>>,
+  speedMode: 'fast' | 'full' = 'fast'
+) {
   const properties: Record<string, any> = {};
   keys.forEach((key) => {
+    const minItems = key === 'safetyNotes'
+      ? (speedMode === 'fast' ? 2 : 3)
+      : (speedMode === 'fast' ? 2 : 4);
+
     properties[key] = {
-      type: 'string',
+      type: 'array',
       description: SECTION_LABELS[key],
+      items: { type: 'string' },
+      minItems,
     };
   });
 
@@ -521,10 +536,21 @@ function buildStructuredSchema(keys: Array<Exclude<SectionKey, 'fullText'>>) {
   };
 }
 
+function formatStructuredField(value: unknown) {
+  if (Array.isArray(value)) {
+    return value
+      .map((line) => String(line || '').trim())
+      .filter(Boolean)
+      .map((line) => `• ${line}`)
+      .join('\n');
+  }
+  return String(value || '').trim();
+}
+
 function structuredResultToText(obj: Record<string, any>, keys: Array<Exclude<SectionKey, 'fullText'>>) {
   return keys
     .map((key) => {
-      const value = String(obj?.[key] || '').trim();
+      const value = formatStructuredField(obj?.[key]);
       return value ? `### ${String(key).toUpperCase()}\n${value}` : '';
     })
     .filter(Boolean)
@@ -532,11 +558,10 @@ function structuredResultToText(obj: Record<string, any>, keys: Array<Exclude<Se
     .trim();
 }
 
-
 function compactStructuredResultToText(obj: Record<string, any>, keys: Array<Exclude<SectionKey, 'fullText'>>) {
   return keys
     .map((key) => {
-      const value = String(obj?.[key] || '').trim();
+      const value = formatStructuredField(obj?.[key]);
       return value ? `${SECTION_LABELS[key]}\n${value}` : '';
     })
     .filter(Boolean)
@@ -720,13 +745,13 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
         generateStructuredResponse(
           prompt,
           ASSISTANT_STUDIO_SYSTEM_INSTRUCTION,
-          buildStructuredSchema(requestedSections),
+          buildStructuredSchema(requestedSections, assistantStudioSpeedMode),
           currentUser,
           effectiveResponseMode === 'fast'
             ? { maxOutputTokens: demoMode ? 950 : 1100, speedMode: 'fast' }
             : { maxOutputTokens: 1700, speedMode: assistantStudioSpeedMode }
         ),
-        REQUEST_TIMEOUT_MS
+        assistantStudioSpeedMode === 'full' ? FULL_REQUEST_TIMEOUT_MS : FAST_REQUEST_TIMEOUT_MS
       );
 
       if (cancelledUpToRef.current >= myId) return;
@@ -744,9 +769,13 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
       setOutput(normalized);
       setOutputRaw(displayText);
 
-      const firstAvailable = TABS.find(
-        (t) => t.key !== 'fullText' && String((obj || {})[t.key] || '').trim()
-      );
+      const firstAvailable = TABS.find((t) => {
+        if (t.key === 'fullText') return false;
+        const value = (obj || {})[t.key];
+        return Array.isArray(value)
+          ? value.some((line) => String(line || '').trim())
+          : !!String(value || '').trim();
+      });
       setActiveTab(firstAvailable?.key || 'fullText');
     } catch (e: any) {
       console.error(e);
@@ -754,7 +783,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
       if (e?.message === 'TIMEOUT') {
         setErrorKind('timeout');
         setErrorMsg('This took too long and was stopped to keep the app responsive.');
-        setErrorDebug(`timeout_ms=${REQUEST_TIMEOUT_MS}; reqId=${myId}`);
+        setErrorDebug(`timeout_ms=${assistantStudioSpeedMode === 'full' ? FULL_REQUEST_TIMEOUT_MS : FAST_REQUEST_TIMEOUT_MS}; reqId=${myId}`);
       } else {
         const msg = e?.message || 'Something went wrong.';
         const isQuota = detectQuotaError(msg);
