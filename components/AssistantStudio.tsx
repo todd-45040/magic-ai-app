@@ -400,8 +400,10 @@ ${SECTION_LABELS[key]}`)
 
   const demoRule = demoMode
     ? `
-- DEMO MODE: optimize for booth reliability. Keep output compact, practical, and instantly scannable.
-- In demo mode, aim for 3 bullets per section and allow up to 4 when needed for clarity.`
+- DEMO MODE: optimize for booth reliability, but do not collapse into fragments or headings-only output.
+- In demo mode, keep all 4 requested sections populated with practical assistant actions.
+- Aim for 3 bullets per section and allow up to 4 when needed for clarity.
+- If space is tight, shorten sentence length slightly, but never leave sections empty.`
     : '';
 
   const toolSpecificRule = getToolSpecificInstruction(focusTag, responseMode, demoMode);
@@ -740,7 +742,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
           buildStructuredSchema(requestedSections),
           currentUser,
           effectiveResponseMode === 'fast'
-            ? { maxOutputTokens: demoMode ? 650 : 900, speedMode: 'fast' }
+            ? { maxOutputTokens: demoMode ? 950 : 1100, speedMode: 'fast' }
             : { maxOutputTokens: 1700, speedMode: assistantStudioSpeedMode }
         ).then((obj) => structuredResultToText(obj || {}, requestedSections)),
         REQUEST_TIMEOUT_MS
