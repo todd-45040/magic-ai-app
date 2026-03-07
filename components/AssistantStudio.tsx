@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ASSISTANT_STUDIO_SYSTEM_INSTRUCTION } from '../constants';
-import { generateStructuredResponse } from '../services/geminiService';
+import { generateResponse, generateStructuredResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
 import { getShows, addTasksToShow } from '../services/showsService';
 import type { Show, Task, User } from '../types';
@@ -430,11 +430,8 @@ function buildStructuredSchema(keys: Array<Exclude<SectionKey, 'fullText'>>) {
 
 function structuredResultToText(obj: Record<string, any>, keys: Array<Exclude<SectionKey, 'fullText'>>) {
   return keys
-    .map((key) => `### ${String(key).toUpperCase()}
-${String(obj?.[key] || '').trim()}`)
-    .join('
-
-')
+    .map((key) => `### ${String(key).toUpperCase()}\n${String(obj?.[key] || '').trim()}`)
+    .join('\n\n')
     .trim();
 }
 
@@ -590,15 +587,16 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
       });
 
       const requestedSections = getRequestedSections(lastPreset || null, responseMode);
-      const outputBudget = responseMode === 'fast' ? 700 : 1800;
       const text = await withTimeout(
-        generateStructuredResponse(
-          prompt,
-          ASSISTANT_STUDIO_SYSTEM_INSTRUCTION,
-          buildStructuredSchema(requestedSections),
-          currentUser,
-          { maxOutputTokens: outputBudget, speedMode: responseMode }
-        ).then((obj) => structuredResultToText(obj || {}, requestedSections)),
+        responseMode === 'fast'
+          ? generateStructuredResponse(
+              prompt,
+              ASSISTANT_STUDIO_SYSTEM_INSTRUCTION,
+              buildStructuredSchema(requestedSections),
+              currentUser,
+              { maxOutputTokens: 700, speedMode: 'fast' }
+            ).then((obj) => structuredResultToText(obj || {}, requestedSections))
+          : generateResponse(prompt, ASSISTANT_STUDIO_SYSTEM_INSTRUCTION, currentUser),
         REQUEST_TIMEOUT_MS
       );
 
