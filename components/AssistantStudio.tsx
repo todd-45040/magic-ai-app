@@ -78,9 +78,6 @@ type SectionKey =
   | 'revealChoreography'
   | 'volunteerPlan'
   | 'assistantInstructions'
-  | 'exposurePrevention'
-  | 'audienceManagement'
-  | 'assistantBackupPlan'
   | 'safetyNotes'
   | 'misdirectionWindows'
   | 'propTableLayout'
@@ -102,9 +99,6 @@ const TABS: Array<{ key: SectionKey; label: string }> = [
   { key: 'revealChoreography', label: 'Reveal Choreography' },
   { key: 'volunteerPlan', label: 'Volunteer Plan' },
   { key: 'assistantInstructions', label: 'Assistant Instructions' },
-  { key: 'exposurePrevention', label: 'Exposure Prevention' },
-  { key: 'audienceManagement', label: 'Audience Management' },
-  { key: 'assistantBackupPlan', label: 'Assistant Backup Plan' },
   { key: 'safetyNotes', label: 'Safety Notes' },
   { key: 'misdirectionWindows', label: 'Misdirection Windows' },
   { key: 'propTableLayout', label: 'Prop Table Layout' },
@@ -209,9 +203,6 @@ const SECTION_LABELS: Record<Exclude<SectionKey, 'fullText'>, string> = {
   revealChoreography: 'Reveal sequence and who does what.',
   volunteerPlan: 'Volunteer entry, standing positions, exits, and no-go areas.',
   assistantInstructions: 'Concise operator-style instructions the assistant can follow.',
-  exposurePrevention: 'How assistants keep methods protected and audience sightlines safe.',
-  audienceManagement: 'How assistants control volunteer pacing, spacing, and crowd focus.',
-  assistantBackupPlan: 'Fallback assistant actions if a volunteer, prop, or timing beat goes off plan.',
   safetyNotes: 'Short safety reminders and spacing notes.',
   misdirectionWindows: '2-4 critical windows with Moment / Assistant Action / Recommended Timing.',
   propTableLayout: 'Prop table rows or zones.',
@@ -222,59 +213,16 @@ const SECTION_LABELS: Record<Exclude<SectionKey, 'fullText'>, string> = {
   safetyRiskAnalysis: 'Collision, heavy prop, crowd proximity, and timing hazard review with fixes.',
 };
 
-const TOOL_MODE_PROMPTS: Record<string, string> = {
-  'routine-staging': 'Routine Staging Optimizer: produce a practical staging plan centered on stage layout, blocking, assistant positions, cue timing, prop movement, reveal choreography, and realistic safety-conscious movement.',
-  'cue-sheet': 'Assistant Cue Sheet Generator: produce a timestamped cue sheet for assistants with entrances, handoffs, resets, prop movement, reveal prep, and any volunteer support.',
-  'volunteer-flow': 'Volunteer Management Planner: focus on volunteer positions, assistant guidance, exposure prevention, audience handling, and safe helper flow on and off stage.',
-  'misdirection-timing': 'Misdirection Timing Analyzer: identify the best distraction windows, what the audience perceives, what the assistant does quietly, and the safest practical timing.',
-  'prop-table-layout': 'Prop Table Optimization: design an efficient prop table layout with access zones, reset order, assistant retrieval path, and practical traffic flow.',
-  'transition-flow': 'Transition Flow Planner: improve transitions between routines with assistant movement, reset order, lighting support, and clean show pacing.',
-  'safety-check': 'Safety and Risk Analysis: review assistant path collisions, heavy props, audience proximity, reveal timing, and other staging hazards, then provide corrective actions.',
-  'admc-demo': 'ADMC Demo Scenario: create a booth-friendly practical assistant plan that reads quickly, highlights movement and cues, and keeps safety visible.',
-  default: "Assistant's Studio: create a practical assistant-operations plan for a magic routine with realistic staging, cueing, traffic flow, and safety guidance.",
-};
-
-function getToolModePrompt(focusTag?: string | null) {
-  return TOOL_MODE_PROMPTS[focusTag || ''] || TOOL_MODE_PROMPTS.default;
-}
-
-const SECTION_PROFILES: Record<string, { fast: Array<Exclude<SectionKey, 'fullText'>>; full: Array<Exclude<SectionKey, 'fullText'>> }> = {
-  'routine-staging': {
-    fast: ['stageLayout', 'assistantPositions', 'cueTimeline'],
-    full: ['stageLayout', 'assistantPositions', 'blockingPlan', 'cueTimeline', 'propMovement', 'revealChoreography', 'safetyNotes'],
-  },
-  'cue-sheet': {
-    fast: ['cueTimeline'],
-    full: ['assistantPositions', 'cueTimeline', 'propMovement', 'transitionPlan', 'safetyNotes'],
-  },
-  'volunteer-flow': {
-    fast: ['volunteerPlan', 'assistantInstructions', 'safetyNotes'],
-    full: ['volunteerPlan', 'assistantInstructions', 'exposurePrevention', 'audienceManagement', 'assistantBackupPlan', 'safetyNotes'],
-  },
-  'misdirection-timing': {
-    fast: ['blockingPlan', 'assistantPositions', 'misdirectionWindows', 'safetyNotes'],
-    full: ['blockingPlan', 'assistantPositions', 'misdirectionWindows', 'safetyNotes'],
-  },
-  'prop-table-layout': {
-    fast: ['propTableLayout', 'resetOrder', 'assistantAccessPath', 'propMovement'],
-    full: ['propTableLayout', 'resetOrder', 'assistantAccessPath', 'propMovement'],
-  },
-  'transition-flow': {
-    fast: ['cueTimeline', 'propMovement', 'transitionPlan', 'lightingCues'],
-    full: ['cueTimeline', 'propMovement', 'transitionPlan', 'lightingCues', 'safetyNotes'],
-  },
-  'safety-check': {
-    fast: ['assistantPositions', 'transitionPlan', 'safetyNotes', 'safetyRiskAnalysis'],
-    full: ['assistantPositions', 'volunteerPlan', 'transitionPlan', 'safetyNotes', 'safetyRiskAnalysis'],
-  },
-  'admc-demo': {
-    fast: ['stageLayout', 'assistantPositions', 'cueTimeline', 'safetyNotes'],
-    full: ['stageLayout', 'assistantPositions', 'cueTimeline', 'propMovement', 'transitionPlan', 'safetyNotes'],
-  },
-  default: {
-    fast: ['stageLayout', 'assistantPositions', 'cueTimeline', 'safetyNotes'],
-    full: ['stageLayout', 'blockingPlan', 'assistantPositions', 'cueTimeline', 'propMovement', 'transitionPlan', 'safetyNotes'],
-  },
+const SECTION_PROFILES: Record<string, Array<Exclude<SectionKey, 'fullText'>>> = {
+  'routine-staging': ['stageLayout', 'blockingPlan', 'assistantPositions', 'cueTimeline', 'propMovement', 'revealChoreography', 'safetyNotes'],
+  'cue-sheet': ['assistantPositions', 'cueTimeline', 'propMovement', 'transitionPlan', 'safetyNotes'],
+  'volunteer-flow': ['stageLayout', 'volunteerPlan', 'assistantInstructions', 'safetyNotes'],
+  'misdirection-timing': ['blockingPlan', 'assistantPositions', 'misdirectionWindows', 'safetyNotes'],
+  'prop-table-layout': ['propTableLayout', 'resetOrder', 'assistantAccessPath', 'propMovement'],
+  'transition-flow': ['cueTimeline', 'propMovement', 'transitionPlan', 'lightingCues', 'safetyNotes'],
+  'safety-check': ['assistantPositions', 'volunteerPlan', 'transitionPlan', 'safetyNotes', 'safetyRiskAnalysis'],
+  'admc-demo': ['stageLayout', 'assistantPositions', 'cueTimeline', 'propMovement', 'transitionPlan', 'safetyNotes'],
+  default: ['stageLayout', 'blockingPlan', 'assistantPositions', 'cueTimeline', 'propMovement', 'transitionPlan', 'safetyNotes'],
 };
 
 function Skeleton() {
@@ -338,9 +286,6 @@ const HEADERS = {
   revealChoreography: '### REVEAL_CHOREOGRAPHY',
   volunteerPlan: '### VOLUNTEER_PLAN',
   assistantInstructions: '### ASSISTANT_INSTRUCTIONS',
-  exposurePrevention: '### EXPOSURE_PREVENTION',
-  audienceManagement: '### AUDIENCE_MANAGEMENT',
-  assistantBackupPlan: '### ASSISTANT_BACKUP_PLAN',
   safetyNotes: '### SAFETY_NOTES',
   misdirectionWindows: '### MISDIRECTION_WINDOWS',
   propTableLayout: '### PROP_TABLE_LAYOUT',
@@ -388,43 +333,63 @@ function buildStructuredPrompt(opts: {
   if (context?.audienceDistance) contextLines.push(`Audience distance / proximity: ${context.audienceDistance}`);
   if (context?.lightingNotes) contextLines.push(`Lighting notes / cue limits: ${context.lightingNotes}`);
 
-  const contextBlock = contextLines.length ? `CONTEXT:
-${contextLines.join('
-')}` : '';
-  const requestedSections = getRequestedSections(focusTag, responseMode);
-  const headingBlock = requestedSections.map((key) => `### ${String(key).toUpperCase()}`).join('
-');
-  const modeLine =
-    responseMode === 'fast'
-      ? 'FAST MODE: prioritize speed, only essential operational guidance, short lines, and no fluff.'
-      : 'FULL MODE: include fuller practical detail while staying concise and stage-ready.';
-  const ruleLine = getToolSpecificRules(focusTag, responseMode).replace(/^[
-\s-]+/, '').trim();
+  const contextBlock = contextLines.length ? `\n\nCONTEXT:\n${contextLines.join('\n')}` : '';
   const refineBlock =
     refineInstruction && previousOutput
-      ? `REFINE REQUEST: ${refineInstruction}
-PREVIOUS OUTPUT:
-${previousOutput}`
+      ? `\n\nREFINE REQUEST: ${refineInstruction}\n\nPREVIOUS OUTPUT:\n${previousOutput}`
       : '';
 
-  return [
-    getToolModePrompt(focusTag),
-    'Do not expose methods or secret workings.',
-    'Keep recommendations realistic. Do not assume traps, fly systems, hidden infrastructure, or stage modifications unless context allows them.',
-    modeLine,
-    ruleLine ? `Tool rule: ${ruleLine}` : '',
-    'Return only the requested headings below, in the same order, with no introduction or conclusion.',
-    `HEADINGS:
-${headingBlock}`,
-    contextBlock,
-    `ROUTINE DESCRIPTION / OUTLINE:
-${userInput}`,
-    refineBlock,
-  ]
-    .filter(Boolean)
-    .join('
+  const requestedSections = getRequestedSections(focusTag, responseMode);
+  const sectionBlock = requestedSections
+    .map((key) => `
+### ${String(key).toUpperCase()}
+${SECTION_LABELS[key]}`)
+    .join('');
 
-');
+  const brevityRule =
+    focusTag === 'admc-demo' || responseMode === 'fast'
+      ? `
+- Keep it convention-demo fast: each section should be 2-4 bullets or 2-4 short lines max.`
+      : `
+- Keep each section concise: usually 3-6 bullets or short lines. Avoid long paragraphs.`;
+
+  const modeRule =
+    responseMode === 'fast'
+      ? `
+- FAST MODE: prioritize speed. Skip anything optional and give only the most useful operational guidance.`
+      : `
+- FULL MODE: include fuller practical detail while still staying concise.`;
+
+  return (
+    `You are building a practical assistant-operations plan for a magic routine. Return useful, stage-ready guidance with no fluff.` +
+    `
+
+IMPORTANT RULES:` +
+    `
+- Do not expose methods, gimmicks, or secret workings.` +
+    `
+- Prioritize realistic staging, safe traffic flow, and practical assistant movement.` +
+    `
+- If a routine element sounds unrealistic, revise it into a practical version rather than leaving it as fantasy.` +
+    `
+- Do not assume trap doors, fly systems, hidden infrastructure, or stage modifications unless the context explicitly allows them.` +
+    `
+- Write for real assistants, stage managers, and rehearsal use.` +
+    modeRule +
+    brevityRule +
+    `
+- Return ONLY the requested headings below, in the same order, and no extra introduction or conclusion.` +
+    `
+
+Return your answer in EXACTLY this format using only these headings:` +
+    sectionBlock +
+    contextBlock +
+    `
+
+ROUTINE DESCRIPTION / OUTLINE:
+${userInput}` +
+    refineBlock
+  );
 }
 
 function combineRunNotes(output: StructuredOutput, fallback: string) {
@@ -443,36 +408,8 @@ function combineRunNotes(output: StructuredOutput, fallback: string) {
 }
 
 function getRequestedSections(focusTag?: string | null, responseMode: ResponseMode = 'fast') {
-  const profile = SECTION_PROFILES[focusTag || ''] || SECTION_PROFILES.default;
-  return responseMode === 'fast' ? profile.fast : profile.full;
-}
-
-function getToolSpecificRules(focusTag?: string | null, responseMode: ResponseMode = 'fast') {
-  if (focusTag === 'routine-staging') {
-    return responseMode === 'fast'
-      ? `
-- Routine Staging Optimizer FAST: focus only on stage layout, assistant positions, and 3-5 cue highlights.`
-      : `
-- Routine Staging Optimizer FULL: include practical blocking notes, cue timing, prop management, reveal choreography, and safety notes.`;
-  }
-
-  if (focusTag === 'cue-sheet') {
-    return responseMode === 'fast'
-      ? `
-- Cue Sheet Generator FAST: return exactly 5 cues total inside CUE_TIMELINE using timestamp format like 00:00 — action.`
-      : `
-- Cue Sheet Generator FULL: return 10-15 cues total inside CUE_TIMELINE using timestamp format like 00:00 — action.`;
-  }
-
-  if (focusTag === 'volunteer-flow') {
-    return responseMode === 'fast'
-      ? `
-- Volunteer Planner FAST: focus only on volunteer positions, assistant instructions, and one clear safety warning section.`
-      : `
-- Volunteer Planner FULL: also include exposure prevention, audience management, and an assistant backup plan.`;
-  }
-
-  return '';
+  const baseSections = SECTION_PROFILES[focusTag || ''] || SECTION_PROFILES.default;
+  return responseMode === 'fast' ? baseSections.slice(0, Math.min(4, baseSections.length)) : baseSections;
 }
 
 function buildStructuredSchema(keys: Array<Exclude<SectionKey, 'fullText'>>) {
@@ -650,23 +587,16 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
       });
 
       const requestedSections = getRequestedSections(lastPreset || null, responseMode);
-      const maxOutputTokens =
-        responseMode === 'fast'
-          ? lastPreset === 'cue-sheet'
-            ? 450
-            : 600
-          : lastPreset === 'cue-sheet'
-            ? 1200
-            : 1600;
-
       const text = await withTimeout(
-        generateStructuredResponse(
-          prompt,
-          ASSISTANT_STUDIO_SYSTEM_INSTRUCTION,
-          buildStructuredSchema(requestedSections),
-          currentUser,
-          { maxOutputTokens, speedMode: responseMode }
-        ).then((obj) => structuredResultToText(obj || {}, requestedSections)),
+        responseMode === 'fast'
+          ? generateStructuredResponse(
+              prompt,
+              ASSISTANT_STUDIO_SYSTEM_INSTRUCTION,
+              buildStructuredSchema(requestedSections),
+              currentUser,
+              { maxOutputTokens: 700, speedMode: 'fast' }
+            ).then((obj) => structuredResultToText(obj || {}, requestedSections))
+          : generateResponse(prompt, ASSISTANT_STUDIO_SYSTEM_INSTRUCTION, currentUser),
         REQUEST_TIMEOUT_MS
       );
 
@@ -877,9 +807,6 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
         ['Reveal Choreography', output.revealChoreography],
         ['Volunteer Plan', output.volunteerPlan],
         ['Assistant Instructions', output.assistantInstructions],
-        ['Exposure Prevention', output.exposurePrevention],
-        ['Audience Management', output.audienceManagement],
-        ['Assistant Backup Plan', output.assistantBackupPlan],
         ['Safety Notes', output.safetyNotes],
         ['Misdirection Windows', output.misdirectionWindows],
         ['Prop Table Layout', output.propTableLayout],
