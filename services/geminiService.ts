@@ -303,7 +303,7 @@ export const generateStructuredResponse = async (
   options?: { extraHeaders?: Record<string, string>; maxOutputTokens?: number; speedMode?: 'fast' | 'full' }
 ): Promise<any> => {
   const speedMode = options?.speedMode ?? 'full';
-  const model = speedMode === 'fast' ? 'gemini-2.0-flash' : 'gemini-3-pro-preview';
+  const model = speedMode === 'fast' ? 'gemini-2.5-flash' : 'gemini-2.5-pro';
   const body: GeminiGenerateBody = {
     model,
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
