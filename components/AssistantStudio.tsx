@@ -369,8 +369,8 @@ ${SECTION_LABELS[key]}`)
 
   const fastRule = `
 - FAST MODE: generate a quick rehearsal planning sheet for assistants.
-- Return exactly the 4 requested sections.
-- Each section must contain 3–4 bullet points.
+- Return exactly the requested sections in the requested order.
+- Each section must contain 3–4 bullet points unless demo mode explicitly asks for a smaller floor.
 - Each bullet must describe a concrete assistant action during the routine.
 - Bullets should be 1–2 instructional sentences explaining what the assistant does and when.
 - Focus only on the most important operational beats of the routine.
@@ -401,9 +401,14 @@ ${SECTION_LABELS[key]}`)
   const demoRule = demoMode
     ? `
 - DEMO MODE: optimize for booth reliability, but do not collapse into fragments or headings-only output.
-- In demo mode, keep all 4 requested sections populated with practical assistant actions.
-- Aim for 3 bullets per section and allow up to 4 when needed for clarity.
-- If space is tight, shorten sentence length slightly, but never leave sections empty.`
+- Demo Mode must still produce a usable rehearsal sheet.
+- Return at least 3 populated sections with at least 2 bullets per section.
+- If space is limited, shorten each bullet to one sentence, but do not leave sections empty.
+- Compress bullet length before reducing content coverage. Demo mode should compress bullet length, not content existence.
+- Do not return headings without bullets.
+- Do not return summary paragraphs without assistant actions.
+- Every bullet must describe a concrete assistant action.
+- Use compact section labels and keep the content dense, practical, and rehearsal-ready.`
     : '';
 
   const toolSpecificRule = getToolSpecificInstruction(focusTag, responseMode, demoMode);
@@ -469,7 +474,7 @@ function getRequestedSections(focusTag?: string | null, responseMode: ResponseMo
   const baseSections = SECTION_PROFILES[focusTag || ''] || SECTION_PROFILES.default;
   const fastSections = FAST_SECTION_PROFILES[focusTag || ''] || FAST_SECTION_PROFILES.default;
 
-  if (demoMode) return fastSections.slice(0, Math.min(4, fastSections.length));
+  if (demoMode) return fastSections.slice(0, Math.min(3, fastSections.length));
   if (responseMode === 'fast') return fastSections.slice(0, Math.min(4, fastSections.length));
 
   return baseSections.slice(0, Math.min(6, baseSections.length));
@@ -562,6 +567,25 @@ function structuredResultToText(obj: Record<string, any>, keys: Array<Exclude<Se
     .join('\n\n')
     .trim();
 }
+
+function compactStructuredResultToText(obj: Record<string, any>, keys: Array<Exclude<SectionKey, 'fullText'>>) {
+  return keys
+    .map((key) => {
+      const value = String(obj?.[key] || '').trim();
+      return value ? `${String(key).replace(/([A-Z])/g, ' $1').trim().toUpperCase()}\n${value}` : '';
+    })
+    .filter(Boolean)
+    .join('\n\n')
+    .trim();
+}
+
+function objFromStructured(parsed: StructuredOutput, keys: Array<Exclude<SectionKey, 'fullText'>>) {
+  return keys.reduce<Record<string, string>>((acc, key) => {
+    acc[key] = String(parsed?.[key] || '').trim();
+    return acc;
+  }, {});
+}
+
 
 export default function AssistantStudio({ user, onIdeaSaved }: Props) {
   const currentUser = useMemo(() => user || GUEST_USER, [user]);
@@ -735,7 +759,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
 
       const requestedSections = getRequestedSections(lastPreset || null, effectiveResponseMode, demoMode);
       const assistantStudioSpeedMode = getAssistantStudioSpeedMode(lastPreset || null, effectiveResponseMode, demoMode);
-      const text = await withTimeout(
+      const rawText = await withTimeout(
         generateStructuredResponse(
           prompt,
           ASSISTANT_STUDIO_SYSTEM_INSTRUCTION,
@@ -750,8 +774,11 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
 
       if (cancelledUpToRef.current >= myId) return;
 
-      setOutputRaw(text);
-      const parsed = parseStructured(text);
+      const parsed = parseStructured(rawText);
+      const displayText = demoMode && effectiveResponseMode === 'fast'
+        ? compactStructuredResultToText(objFromStructured(parsed, requestedSections), requestedSections)
+        : rawText;
+      setOutputRaw(displayText);
       setOutput(parsed);
       const firstAvailable = TABS.find((t) => t.key !== 'fullText' && parsed[t.key]);
       setActiveTab(firstAvailable?.key || 'fullText');
