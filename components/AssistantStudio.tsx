@@ -1160,7 +1160,12 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
     <div className="relative p-6 pb-24 space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1">
-          <h1 className="text-2xl font-bold">Assistant&apos;s Studio</h1>
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="text-2xl font-bold">Assistant&apos;s Studio</h1>
+            <span className="text-[11px] px-2 py-1 rounded-md bg-amber-500/20 text-amber-300 border border-amber-400/30">
+              BETA
+            </span>
+          </div>
           {contextSummary ? (
             <div className="text-xs text-slate-400">
               Context: <span className="text-slate-200">{contextSummary}</span>
@@ -1171,6 +1176,15 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
         </div>
 
         <div className="text-sm text-slate-400 min-h-[1.25rem]">{toast ? <span className="text-emerald-400">{toast}</span> : null}</div>
+      </div>
+
+      <div className="rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-3 flex items-start gap-3">
+        <div className="text-amber-400 text-lg leading-none">⚠️</div>
+        <div className="text-sm text-amber-100 leading-relaxed">
+          <strong className="text-amber-300">Development Preview</strong> — Assistant&apos;s Studio is currently under active development.
+          Results may vary while we refine assistant planning logic and rehearsal workflows.
+          Use generated plans as guidance, not final staging instructions.
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
