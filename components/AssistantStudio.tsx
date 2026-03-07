@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ASSISTANT_STUDIO_SYSTEM_INSTRUCTION } from '../constants';
-import { generateResponse } from '../services/geminiService';
+import { generateResponse, generateStructuredResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
 import { getShows, addTasksToShow } from '../services/showsService';
 import type { Show, Task, User } from '../types';
@@ -339,11 +339,7 @@ function buildStructuredPrompt(opts: {
       ? `\n\nREFINE REQUEST: ${refineInstruction}\n\nPREVIOUS OUTPUT:\n${previousOutput}`
       : '';
 
-  const baseSections = SECTION_PROFILES[focusTag || ''] || SECTION_PROFILES.default;
-  const requestedSections =
-    responseMode === 'fast'
-      ? baseSections.slice(0, Math.min(4, baseSections.length))
-      : baseSections;
+  const requestedSections = getRequestedSections(focusTag, responseMode);
   const sectionBlock = requestedSections
     .map((key) => `
 ### ${String(key).toUpperCase()}
@@ -414,7 +410,39 @@ function combineRunNotes(output: StructuredOutput, fallback: string) {
 export default function AssistantStudio({ user, onIdeaSaved }: Props) {
   const currentUser = useMemo(() => user || GUEST_USER, [user]);
 
-  const [input, setInput] = useState('');
+  const [input
+
+function getRequestedSections(focusTag?: string | null, responseMode: ResponseMode = 'fast') {
+  const baseSections = SECTION_PROFILES[focusTag || ''] || SECTION_PROFILES.default;
+  return responseMode === 'fast' ? baseSections.slice(0, Math.min(4, baseSections.length)) : baseSections;
+}
+
+function buildStructuredSchema(keys: Array<Exclude<SectionKey, 'fullText'>>) {
+  const properties: Record<string, any> = {};
+  keys.forEach((key) => {
+    properties[key] = {
+      type: 'string',
+      description: SECTION_LABELS[key],
+    };
+  });
+
+  return {
+    type: 'object',
+    properties,
+    required: keys,
+  };
+}
+
+function structuredResultToText(obj: Record<string, any>, keys: Array<Exclude<SectionKey, 'fullText'>>) {
+  return keys
+    .map((key) => `### ${String(key).toUpperCase()}
+${String(obj?.[key] || '').trim()}`)
+    .join('
+
+')
+    .trim();
+}
+, setInput] = useState('');
   const [outputRaw, setOutputRaw] = useState('');
   const [output, setOutput] = useState<StructuredOutput>({});
   const [activeTab, setActiveTab] = useState<SectionKey>('stageLayout');
@@ -562,8 +590,17 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
         responseMode,
       });
 
+      const requestedSections = getRequestedSections(lastPreset || null, responseMode);
       const text = await withTimeout(
-        generateResponse(prompt, ASSISTANT_STUDIO_SYSTEM_INSTRUCTION, currentUser),
+        responseMode === 'fast'
+          ? generateStructuredResponse(
+              prompt,
+              ASSISTANT_STUDIO_SYSTEM_INSTRUCTION,
+              buildStructuredSchema(requestedSections),
+              currentUser,
+              { maxOutputTokens: 700, speedMode: 'fast' }
+            ).then((obj) => structuredResultToText(obj || {}, requestedSections))
+          : generateResponse(prompt, ASSISTANT_STUDIO_SYSTEM_INSTRUCTION, currentUser),
         REQUEST_TIMEOUT_MS
       );
 
