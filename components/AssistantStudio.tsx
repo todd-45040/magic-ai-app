@@ -231,7 +231,7 @@ const TOOL_MODE_PROMPTS: Record<string, string> = {
   'transition-flow': 'Transition Flow Planner: improve transitions between routines with assistant movement, reset order, lighting support, and clean show pacing.',
   'safety-check': 'Safety and Risk Analysis: review assistant path collisions, heavy props, audience proximity, reveal timing, and other staging hazards, then provide corrective actions.',
   'admc-demo': 'ADMC Demo Scenario: create a booth-friendly practical assistant plan that reads quickly, highlights movement and cues, and keeps safety visible.',
-  default: 'Assistant's Studio: create a practical assistant-operations plan for a magic routine with realistic staging, cueing, traffic flow, and safety guidance.',
+  default: "Assistant's Studio: create a practical assistant-operations plan for a magic routine with realistic staging, cueing, traffic flow, and safety guidance.",
 };
 
 function getToolModePrompt(focusTag?: string | null) {
