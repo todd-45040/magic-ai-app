@@ -222,6 +222,22 @@ const SECTION_LABELS: Record<Exclude<SectionKey, 'fullText'>, string> = {
   safetyRiskAnalysis: 'Collision, heavy prop, crowd proximity, and timing hazard review with fixes.',
 };
 
+const TOOL_MODE_PROMPTS: Record<string, string> = {
+  'routine-staging': 'Routine Staging Optimizer: produce a practical staging plan centered on stage layout, blocking, assistant positions, cue timing, prop movement, reveal choreography, and realistic safety-conscious movement.',
+  'cue-sheet': 'Assistant Cue Sheet Generator: produce a timestamped cue sheet for assistants with entrances, handoffs, resets, prop movement, reveal prep, and any volunteer support.',
+  'volunteer-flow': 'Volunteer Management Planner: focus on volunteer positions, assistant guidance, exposure prevention, audience handling, and safe helper flow on and off stage.',
+  'misdirection-timing': 'Misdirection Timing Analyzer: identify the best distraction windows, what the audience perceives, what the assistant does quietly, and the safest practical timing.',
+  'prop-table-layout': 'Prop Table Optimization: design an efficient prop table layout with access zones, reset order, assistant retrieval path, and practical traffic flow.',
+  'transition-flow': 'Transition Flow Planner: improve transitions between routines with assistant movement, reset order, lighting support, and clean show pacing.',
+  'safety-check': 'Safety and Risk Analysis: review assistant path collisions, heavy props, audience proximity, reveal timing, and other staging hazards, then provide corrective actions.',
+  'admc-demo': 'ADMC Demo Scenario: create a booth-friendly practical assistant plan that reads quickly, highlights movement and cues, and keeps safety visible.',
+  default: 'Assistant's Studio: create a practical assistant-operations plan for a magic routine with realistic staging, cueing, traffic flow, and safety guidance.',
+};
+
+function getToolModePrompt(focusTag?: string | null) {
+  return TOOL_MODE_PROMPTS[focusTag || ''] || TOOL_MODE_PROMPTS.default;
+}
+
 const SECTION_PROFILES: Record<string, { fast: Array<Exclude<SectionKey, 'fullText'>>; full: Array<Exclude<SectionKey, 'fullText'>> }> = {
   'routine-staging': {
     fast: ['stageLayout', 'assistantPositions', 'cueTimeline'],
@@ -372,66 +388,43 @@ function buildStructuredPrompt(opts: {
   if (context?.audienceDistance) contextLines.push(`Audience distance / proximity: ${context.audienceDistance}`);
   if (context?.lightingNotes) contextLines.push(`Lighting notes / cue limits: ${context.lightingNotes}`);
 
-  const contextBlock = contextLines.length ? `\n\nCONTEXT:\n${contextLines.join('\n')}` : '';
+  const contextBlock = contextLines.length ? `CONTEXT:
+${contextLines.join('
+')}` : '';
+  const requestedSections = getRequestedSections(focusTag, responseMode);
+  const headingBlock = requestedSections.map((key) => `### ${String(key).toUpperCase()}`).join('
+');
+  const modeLine =
+    responseMode === 'fast'
+      ? 'FAST MODE: prioritize speed, only essential operational guidance, short lines, and no fluff.'
+      : 'FULL MODE: include fuller practical detail while staying concise and stage-ready.';
+  const ruleLine = getToolSpecificRules(focusTag, responseMode).replace(/^[
+\s-]+/, '').trim();
   const refineBlock =
     refineInstruction && previousOutput
-      ? `\n\nREFINE REQUEST: ${refineInstruction}\n\nPREVIOUS OUTPUT:\n${previousOutput}`
+      ? `REFINE REQUEST: ${refineInstruction}
+PREVIOUS OUTPUT:
+${previousOutput}`
       : '';
 
-  const requestedSections = getRequestedSections(focusTag, responseMode);
-  const sectionBlock = requestedSections
-    .map((key) => `
-### ${String(key).toUpperCase()}
-${SECTION_LABELS[key]}`)
-    .join('');
+  return [
+    getToolModePrompt(focusTag),
+    'Do not expose methods or secret workings.',
+    'Keep recommendations realistic. Do not assume traps, fly systems, hidden infrastructure, or stage modifications unless context allows them.',
+    modeLine,
+    ruleLine ? `Tool rule: ${ruleLine}` : '',
+    'Return only the requested headings below, in the same order, with no introduction or conclusion.',
+    `HEADINGS:
+${headingBlock}`,
+    contextBlock,
+    `ROUTINE DESCRIPTION / OUTLINE:
+${userInput}`,
+    refineBlock,
+  ]
+    .filter(Boolean)
+    .join('
 
-  const brevityRule =
-    focusTag === 'admc-demo' || responseMode === 'fast'
-      ? `
-- Keep it convention-demo fast: each section should be 2-4 bullets or 2-4 short lines max.`
-      : `
-- Keep each section concise: usually 3-6 bullets or short lines. Avoid long paragraphs.`;
-
-  const modeRule =
-    responseMode === 'fast'
-      ? `
-- FAST MODE: prioritize speed. Skip anything optional and give only the most useful operational guidance.`
-      : `
-- FULL MODE: include fuller practical detail while still staying concise.`;
-
-  const toolSpecificRules = getToolSpecificRules(focusTag, responseMode);
-
-  return (
-    `You are building a practical assistant-operations plan for a magic routine. Return useful, stage-ready guidance with no fluff.` +
-    `
-
-IMPORTANT RULES:` +
-    `
-- Do not expose methods, gimmicks, or secret workings.` +
-    `
-- Prioritize realistic staging, safe traffic flow, and practical assistant movement.` +
-    `
-- If a routine element sounds unrealistic, revise it into a practical version rather than leaving it as fantasy.` +
-    `
-- Do not assume trap doors, fly systems, hidden infrastructure, or stage modifications unless the context explicitly allows them.` +
-    `
-- Write for real assistants, stage managers, and rehearsal use.` +
-    modeRule +
-    brevityRule +
-    toolSpecificRules +
-    `
-- Return ONLY the requested headings below, in the same order, and no extra introduction or conclusion.` +
-    `
-
-Return your answer in EXACTLY this format using only these headings:` +
-    sectionBlock +
-    contextBlock +
-    `
-
-ROUTINE DESCRIPTION / OUTLINE:
-${userInput}` +
-    refineBlock
-  );
+');
 }
 
 function combineRunNotes(output: StructuredOutput, fallback: string) {
