@@ -2970,6 +2970,7 @@ ${action.payload.content}`;
               onIdeaSaved={() => handleIdeaSaved('Mentalism idea saved!')}
               onOpenShowPlanner={(showId, taskId) => handleOpenShowPlannerFromClient(showId ?? null, taskId ?? null)}
               onOpenLiveRehearsal={() => setActiveView('live-rehearsal')}
+              onOpenDirectorMode={() => setActiveView('director-mode')}
             />
           );
         case 'client-management': return <ClientManagement onClientsUpdate={handleClientsUpdate} onAiSpark={handleAiSpark} onOpenShowPlanner={handleOpenShowPlannerFromClient} />;

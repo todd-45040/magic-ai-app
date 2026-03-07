@@ -13,6 +13,7 @@ interface MentalismAssistantProps {
     onIdeaSaved: () => void;
     onOpenShowPlanner?: (showId?: string | null, taskId?: string | null) => void;
     onOpenLiveRehearsal?: () => void;
+    onOpenDirectorMode?: () => void;
 }
 
 const LoadingIndicator: React.FC = () => (
@@ -495,7 +496,7 @@ function toColdReading(v: any): ColdReadingPhrases {
     };
 }
 
-const MentalismAssistant: React.FC<MentalismAssistantProps> = ({ onIdeaSaved, onOpenShowPlanner, onOpenLiveRehearsal }) => {
+const MentalismAssistant: React.FC<MentalismAssistantProps> = ({ onIdeaSaved, onOpenShowPlanner, onOpenLiveRehearsal, onOpenDirectorMode }) => {
     const appState = useAppState() as any;
     const { currentUser, ideas } = appState;
 
@@ -880,6 +881,15 @@ Output guidelines:
         navigator.clipboard.writeText(fullContent);
         setCopyStatus('copied');
         setTimeout(() => setCopyStatus('idle'), 2000);
+    };
+
+    const handleSendToDirectorMode = () => {
+        if (typeof window !== 'undefined' && blueprint) {
+            try {
+                window.sessionStorage.setItem('maw-director-mode-seed', blueprintToText(query, blueprint));
+            } catch {}
+        }
+        onOpenDirectorMode?.();
     };
 
     const handleLoadSavedBlueprint = (idea: any) => {
@@ -1929,6 +1939,35 @@ Output guidelines:
 
                         <div className="sticky bottom-0 right-0 mt-auto p-2 bg-slate-900/50 flex flex-wrap justify-end gap-2 border-t border-slate-800">
                             <button
+                                onClick={handleSave}
+                                disabled={saveStatus === 'saved'}
+                                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-fuchsia-700/80 hover:bg-fuchsia-600 border border-fuchsia-400/40 rounded-md text-white disabled:bg-fuchsia-900/30 disabled:text-slate-400 disabled:cursor-default transition-colors"
+                                title="Save this routine to your Idea Vault"
+                            >
+                                {saveStatus === 'saved' ? (
+                                    <>
+                                        <CheckIcon className="w-4 h-4 text-green-300" />
+                                        <span>Saved to Idea Vault!</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <SaveIcon className="w-4 h-4" />
+                                        <span>Save to Idea Vault</span>
+                                    </>
+                                )}
+                            </button>
+
+                            <button
+                                onClick={handleSendToDirectorMode}
+                                disabled={!blueprint}
+                                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-indigo-700/80 hover:bg-indigo-600 border border-indigo-400/40 rounded-md text-white transition-colors disabled:bg-indigo-900/30 disabled:text-slate-400 disabled:cursor-not-allowed"
+                                title="Open Director Mode and continue shaping this routine into a show"
+                            >
+                                <WandIcon className="w-4 h-4" />
+                                <span>Send to Director Mode</span>
+                            </button>
+
+                            <button
                                 onClick={handleSendToShowPlanner}
                                 disabled={isSendingToPlanner || !blueprint}
                                 className="flex items-center gap-2 px-3 py-1.5 text-sm bg-purple-700/70 hover:bg-purple-600/80 border border-purple-500/40 rounded-md text-white transition-colors disabled:bg-purple-900/30 disabled:text-slate-400 disabled:cursor-not-allowed"
@@ -2013,23 +2052,6 @@ Output guidelines:
                                     <>
                                         <CopyIcon className="w-4 h-4" />
                                         <span>Copy</span>
-                                    </>
-                                )}
-                            </button>
-                            <button
-                                onClick={handleSave}
-                                disabled={saveStatus === 'saved'}
-                                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 disabled:cursor-default transition-colors"
-                            >
-                                {saveStatus === 'saved' ? (
-                                    <>
-                                        <CheckIcon className="w-4 h-4 text-green-400" />
-                                        <span>Saved!</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <SaveIcon className="w-4 h-4" />
-                                        <span>Save Blueprint</span>
                                     </>
                                 )}
                             </button>
