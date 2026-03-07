@@ -19,77 +19,65 @@ const GUEST_USER: User = {
 
 const PRESETS: Array<{ label: string; template: (input: string) => string; tag?: string }> = [
   {
-    label: 'Tighten Script',
-    tag: 'tighten',
+    label: 'Routine Staging Optimizer',
+    tag: 'staging-optimizer',
     template: (input) =>
-      `Tighten this script. Keep my voice, remove fluff, sharpen phrasing, and improve clarity.\n\nSCRIPT/NOTES:\n${input}`,
+      `Create a practical staging optimization plan for this routine. Focus on stage layout, assistant blocking, positions, cue timing, prop movement, and final reveal choreography.\n\nROUTINE DESCRIPTION:\n${input}`,
   },
   {
-    label: 'Add Callbacks',
-    tag: 'callbacks',
+    label: 'Tighten Blocking',
+    tag: 'tighten-blocking',
     template: (input) =>
-      `Add 2–4 strong callbacks and running gags that pay off later. Show exactly where they land.\n\nSCRIPT/NOTES:\n${input}`,
+      `Tighten the blocking for this routine. Reduce wasted movement, clarify assistant jobs, and improve sightlines.\n\nROUTINE DESCRIPTION:\n${input}`,
   },
   {
-    label: 'Improve Transitions',
-    tag: 'transitions',
+    label: 'Safer Prop Flow',
+    tag: 'prop-flow',
     template: (input) =>
-      `Improve transitions between beats/props. Give clean, motivated bridges and one-liners that justify the next effect.\n\nSCRIPT/NOTES:\n${input}`,
+      `Improve prop movement and backstage flow for this routine. Emphasize safety, reset practicality, and clean handoffs.\n\nROUTINE DESCRIPTION:\n${input}`,
   },
   {
-    label: 'Comedy Pass',
-    tag: 'comedy',
+    label: 'Stronger Reveal',
+    tag: 'stronger-reveal',
     template: (input) =>
-      `Do a comedy pass: add laughs without undercutting the magic. Provide options: dry, playful, and cheeky (family-safe).\n\nSCRIPT/NOTES:\n${input}`,
-  },
-  {
-    label: 'Walkaround Version',
-    tag: 'walkaround',
-    template: (input) =>
-      `Rewrite/adjust this for walkaround/close-up: quick reset, angle safety, audience management, pocket management, and louder lines.\n\nSCRIPT/NOTES:\n${input}`,
-  },
-  {
-    label: 'Family-Friendly Pass',
-    tag: 'family',
-    template: (input) =>
-      `Make this 100% family-friendly while staying funny and strong. Remove anything edgy and replace with clean alternatives.\n\nSCRIPT/NOTES:\n${input}`,
+      `Strengthen the reveal choreography for this routine. Improve timing, framing, assistant position, and visual impact.\n\nROUTINE DESCRIPTION:\n${input}`,
   },
 ];
 
-const DRAFT_KEY = 'maw_assistant_studio_draft_v3';
+const DRAFT_KEY = 'maw_assistant_studio_draft_v4';
 const WALKAROUND_KEY = 'maw_assistant_studio_walkaround_v1';
-const CONTEXT_KEY = 'maw_assistant_studio_context_v1';
+const CONTEXT_KEY = 'maw_assistant_studio_context_v2';
 const REQUEST_TIMEOUT_MS = 45_000;
 
 type ErrorKind = 'timeout' | 'quota' | 'other' | null;
 
 type SectionKey =
-  | 'quickWins'
-  | 'lineEdits'
-  | 'structureNotes'
-  | 'audienceFit'
-  | 'rehearsalTasks'
-  | 'walkaroundRewrite'
+  | 'stageLayout'
+  | 'blockingPlan'
+  | 'assistantPositions'
+  | 'cueTiming'
+  | 'propMovement'
+  | 'revealChoreography'
   | 'fullText';
 
 type StructuredOutput = Partial<Record<SectionKey, string>>;
 
 const TABS: Array<{ key: SectionKey; label: string }> = [
-  { key: 'quickWins', label: 'Quick Wins' },
-  { key: 'lineEdits', label: 'Line Edits' },
-  { key: 'structureNotes', label: 'Director Notes' },
-  { key: 'audienceFit', label: 'Audience Fit' },
-  { key: 'rehearsalTasks', label: 'Rehearsal Tasks' },
-  { key: 'walkaroundRewrite', label: 'Walkaround Rewrite' },
+  { key: 'stageLayout', label: 'Stage Layout' },
+  { key: 'blockingPlan', label: 'Blocking Plan' },
+  { key: 'assistantPositions', label: 'Assistant Positions' },
+  { key: 'cueTiming', label: 'Cue Timing' },
+  { key: 'propMovement', label: 'Prop Movement' },
+  { key: 'revealChoreography', label: 'Reveal Choreography' },
   { key: 'fullText', label: 'Full Text' },
 ];
 
 const REFINE_ACTIONS: Array<{ label: string; instruction: string }> = [
-  { label: 'Make it punchier', instruction: 'Make it punchier: tighten phrasing, stronger verbs, faster rhythm.' },
-  { label: 'More wonder', instruction: 'Increase wonder: elevate mystery and amazement, strengthen reveals.' },
-  { label: 'More comedy', instruction: 'Increase comedy: add laughs without undercutting the magic.' },
-  { label: 'Shorter', instruction: 'Make it shorter: remove repetition, cut fluff, keep strongest lines.' },
-  { label: 'Cleaner', instruction: 'Make it cleaner: simplify wording, clarify actions, remove ambiguity.' },
+  { label: 'Tighter blocking', instruction: 'Tighten the blocking. Remove wasted movement and simplify assistant travel paths.' },
+  { label: 'Clearer cues', instruction: 'Make the cue timing clearer and more precise for the assistant team.' },
+  { label: 'More visual reveal', instruction: 'Make the reveal choreography more visual and stageworthy without adding unsafe complexity.' },
+  { label: 'Safer prop flow', instruction: 'Improve safety and prop traffic. Reduce collisions, awkward handoffs, and reset confusion.' },
+  { label: 'Simpler staging', instruction: 'Simplify the staging plan so it is easier to execute reliably in real venues.' },
 ];
 
 const VENUE_TYPES = [
@@ -158,45 +146,49 @@ function extractSection(raw: string, header: string, nextHeaders: string[]) {
 
 function parseStructured(raw: string): StructuredOutput {
   const headers = {
-    quickWins: '### QUICK_WINS',
-    lineEdits: '### LINE_EDITS',
-    structureNotes: '### STRUCTURE_NOTES',
-    audienceFit: '### AUDIENCE_FIT',
-    rehearsalTasks: '### REHEARSAL_TASKS',
-    walkaroundRewrite: '### WALKAROUND_REWRITE',
+    stageLayout: '### STAGE_LAYOUT',
+    blockingPlan: '### BLOCKING_PLAN',
+    assistantPositions: '### ASSISTANT_POSITIONS',
+    cueTiming: '### CUE_TIMING',
+    propMovement: '### PROP_MOVEMENT',
+    revealChoreography: '### REVEAL_CHOREOGRAPHY',
   } as const;
 
   const out: StructuredOutput = { fullText: raw?.trim() || '' };
 
-  if (!raw.includes(headers.quickWins)) return out;
+  if (!raw.includes(headers.stageLayout)) return out;
 
   const all = Object.values(headers);
 
-  out.quickWins = extractSection(raw, headers.quickWins, all.filter((h) => h !== headers.quickWins));
-  out.lineEdits = extractSection(raw, headers.lineEdits, all.filter((h) => h !== headers.lineEdits));
-  out.structureNotes = extractSection(raw, headers.structureNotes, all.filter((h) => h !== headers.structureNotes));
-  out.audienceFit = extractSection(raw, headers.audienceFit, all.filter((h) => h !== headers.audienceFit));
-  out.rehearsalTasks = extractSection(raw, headers.rehearsalTasks, all.filter((h) => h !== headers.rehearsalTasks));
-  out.walkaroundRewrite = extractSection(
+  out.stageLayout = extractSection(raw, headers.stageLayout, all.filter((h) => h !== headers.stageLayout));
+  out.blockingPlan = extractSection(raw, headers.blockingPlan, all.filter((h) => h !== headers.blockingPlan));
+  out.assistantPositions = extractSection(raw, headers.assistantPositions, all.filter((h) => h !== headers.assistantPositions));
+  out.cueTiming = extractSection(raw, headers.cueTiming, all.filter((h) => h !== headers.cueTiming));
+  out.propMovement = extractSection(raw, headers.propMovement, all.filter((h) => h !== headers.propMovement));
+  out.revealChoreography = extractSection(
     raw,
-    headers.walkaroundRewrite,
-    all.filter((h) => h !== headers.walkaroundRewrite)
+    headers.revealChoreography,
+    all.filter((h) => h !== headers.revealChoreography)
   );
 
   return out;
 }
 
 function formatNotesBlock(output: StructuredOutput, fallback: string) {
-  const director = output.structureNotes?.trim();
-  const lines = output.lineEdits?.trim();
-  const audience = output.audienceFit?.trim();
-  const tasks = output.rehearsalTasks?.trim();
+  const stageLayout = output.stageLayout?.trim();
+  const blockingPlan = output.blockingPlan?.trim();
+  const assistantPositions = output.assistantPositions?.trim();
+  const cueTiming = output.cueTiming?.trim();
+  const propMovement = output.propMovement?.trim();
+  const revealChoreography = output.revealChoreography?.trim();
 
   const parts: string[] = [];
-  if (director) parts.push(`DIRECTOR NOTES\n${director}`);
-  if (lines) parts.push(`LINE EDITS\n${lines}`);
-  if (audience) parts.push(`AUDIENCE FIT\n${audience}`);
-  if (tasks) parts.push(`REHEARSAL TASKS\n${tasks}`);
+  if (stageLayout) parts.push(`STAGE LAYOUT\n${stageLayout}`);
+  if (blockingPlan) parts.push(`BLOCKING PLAN\n${blockingPlan}`);
+  if (assistantPositions) parts.push(`ASSISTANT POSITIONS\n${assistantPositions}`);
+  if (cueTiming) parts.push(`CUE TIMING\n${cueTiming}`);
+  if (propMovement) parts.push(`PROP MOVEMENT\n${propMovement}`);
+  if (revealChoreography) parts.push(`REVEAL CHOREOGRAPHY\n${revealChoreography}`);
 
   return parts.length ? parts.join('\n\n') : fallback;
 }
@@ -206,19 +198,29 @@ function buildStructuredPrompt(opts: {
   walkaroundOn: boolean;
   refineInstruction?: string | null;
   previousOutput?: string | null;
-  context?: { clientName?: string; venueType?: string; audienceSize?: string };
+  context?: {
+    clientName?: string;
+    venueType?: string;
+    audienceSize?: string;
+    stageSize?: string;
+    numberOfAssistants?: string;
+    audienceDistance?: string;
+  };
 }) {
   const { userInput, walkaroundOn, refineInstruction, previousOutput, context } = opts;
 
   const contextLines: string[] = [];
-  if (context?.clientName) contextLines.push(`Client: ${context.clientName}`);
+  if (context?.clientName) contextLines.push(`Client / Show: ${context.clientName}`);
   if (context?.venueType) contextLines.push(`Venue type: ${context.venueType}`);
   if (context?.audienceSize) contextLines.push(`Audience size: ${context.audienceSize}`);
+  if (context?.stageSize) contextLines.push(`Stage size: ${context.stageSize}`);
+  if (context?.numberOfAssistants) contextLines.push(`Number of assistants: ${context.numberOfAssistants}`);
+  if (context?.audienceDistance) contextLines.push(`Audience distance: ${context.audienceDistance}`);
 
   const contextBlock = contextLines.length ? `\n\nCONTEXT:\n${contextLines.join('\n')}` : '';
 
   const walkaroundGuidance = walkaroundOn
-    ? `\n\nWALKAROUND OPTIMIZER (ON): Rewrite/adjust for walkaround/close-up with: quick reset speed, angle safety, audience management, pocket management, louder lines, and smooth transitions between groups. Include a WALKAROUND_REWRITE section.`
+    ? `\n\nWALKAROUND / TIGHT-SPACE OPTIMIZER (ON): prefer shorter travel paths, louder visual cueing, tighter audience management, and reduced prop spread.`
     : '';
 
   const refineBlock =
@@ -227,21 +229,25 @@ function buildStructuredPrompt(opts: {
       : '';
 
   return (
-    `You are a magic performance writing assistant. Produce clean, structured, practical suggestions.` +
-    `\n\nReturn your answer in EXACTLY this format, using these headings (no extra headings):` +
-    `\n### QUICK_WINS` +
-    `\n- (exactly 3 bullets, 1 line each)` +
-    `\n### LINE_EDITS` +
-    `\nProvide direct line edits + replacement lines. Use short bullet points.` +
-    `\n### STRUCTURE_NOTES` +
-    `\nBeats, pacing, callbacks, escalation, clarity. Think like a director.` +
-    `\n### AUDIENCE_FIT` +
-    `\nAdjustments for family, corporate, close-up. Be specific.` +
-    `\n### REHEARSAL_TASKS` +
-    `\n- [ ] Actionable checklist items (6–10).` +
-    (walkaroundOn ? `\n### WALKAROUND_REWRITE\nGive a cleaned-up walkaround-ready rewrite.` : '') +
+    `You are creating a practical Routine Staging Optimizer plan for a magician and their assistant team.` +
+    ` Prioritize real-world staging, reliable cueing, clean traffic flow, safety, and visual clarity.` +
+    ` Do not expose secret methods. Do not invent trap doors, overhead rigging, hidden infrastructure, or stage modifications unless the user explicitly provides them.` +
+    ` If anything sounds unrealistic for the venue, crew, distance, or reset demands, revise it to the most practical version.` +
+    `\n\nReturn your answer in EXACTLY this format, using these headings and no extra headings:` +
+    `\n### STAGE_LAYOUT` +
+    `\nDescribe stage zones, prop-table placement, assistant lanes, and reveal position.` +
+    `\n### BLOCKING_PLAN` +
+    `\nGive a beat-by-beat blocking plan for the performer and assistant team.` +
+    `\n### ASSISTANT_POSITIONS` +
+    `\nList where each assistant begins, where they move, and why their placement works.` +
+    `\n### CUE_TIMING` +
+    `\nProvide a cue sheet with labeled beats or approximate timestamps.` +
+    `\n### PROP_MOVEMENT` +
+    `\nExplain handoffs, resets, traffic flow, and prop handling safety.` +
+    `\n### REVEAL_CHOREOGRAPHY` +
+    `\nDescribe the final reveal picture, assistant framing, timing, and cleanup path.` +
     contextBlock +
-    `\n\nUSER INPUT:\n${userInput}` +
+    `\n\nROUTINE DESCRIPTION:\n${userInput}` +
     walkaroundGuidance +
     refineBlock
   );
@@ -253,7 +259,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
   const [input, setInput] = useState('');
   const [outputRaw, setOutputRaw] = useState('');
   const [output, setOutput] = useState<StructuredOutput>({});
-  const [activeTab, setActiveTab] = useState<SectionKey>('quickWins');
+  const [activeTab, setActiveTab] = useState<SectionKey>('stageLayout');
 
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -269,6 +275,9 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
   const [clientName, setClientName] = useState('');
   const [venueType, setVenueType] = useState('');
   const [audienceSize, setAudienceSize] = useState('');
+  const [stageSize, setStageSize] = useState('');
+  const [numberOfAssistants, setNumberOfAssistants] = useState('');
+  const [audienceDistance, setAudienceDistance] = useState('');
   const [lastPreset, setLastPreset] = useState<string>('');
 
   // Walkaround optimizer toggle
@@ -306,6 +315,9 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
         setClientName(parsed?.clientName || '');
         setVenueType(parsed?.venueType || '');
         setAudienceSize(parsed?.audienceSize || '');
+        setStageSize(parsed?.stageSize || '');
+        setNumberOfAssistants(parsed?.numberOfAssistants || '');
+        setAudienceDistance(parsed?.audienceDistance || '');
       }
     } catch {
       // ignore
@@ -330,11 +342,11 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
 
   useEffect(() => {
     try {
-      localStorage.setItem(CONTEXT_KEY, JSON.stringify({ clientName, venueType, audienceSize }));
+      localStorage.setItem(CONTEXT_KEY, JSON.stringify({ clientName, venueType, audienceSize, stageSize, numberOfAssistants, audienceDistance }));
     } catch {
       // ignore
     }
-  }, [clientName, venueType, audienceSize]);
+  }, [clientName, venueType, audienceSize, stageSize, numberOfAssistants, audienceDistance]);
 
   useEffect(() => {
     let mounted = true;
@@ -398,7 +410,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
         walkaroundOn,
         refineInstruction: opts?.refineInstruction || null,
         previousOutput: opts?.usePrevious ? outputRaw : null,
-        context: { clientName, venueType, audienceSize },
+        context: { clientName, venueType, audienceSize, stageSize, numberOfAssistants, audienceDistance },
       });
 
       const text = await withTimeout(
@@ -412,7 +424,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
       const parsed = parseStructured(text);
       setOutput(parsed);
 
-      if (parsed.quickWins) setActiveTab('quickWins');
+      if (parsed.stageLayout) setActiveTab('stageLayout');
       else setActiveTab('fullText');
     } catch (e: any) {
       console.error(e);
@@ -451,6 +463,9 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
     setClientName('');
     setVenueType('');
     setAudienceSize('');
+    setStageSize('');
+    setNumberOfAssistants('');
+    setAudienceDistance('');
     setToast('Context cleared');
     window.setTimeout(() => setToast(null), 900);
   };
@@ -461,7 +476,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
     clearErrors();
     setOutputRaw('');
     setOutput({});
-    setActiveTab('quickWins');
+    setActiveTab('stageLayout');
     setInput('');
     setCopied(false);
     setLastPreset('');
@@ -507,7 +522,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
 
       await saveIdea({
         type: 'text',
-        title: 'Assistant Studio Output',
+        title: 'Assistant Studio – Staging Plan',
         content: outputRaw,
         tags,
       });
@@ -540,7 +555,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
     setToast(null);
 
     const header = [
-      `BLUEPRINT: ${blueprintName || 'Assistant Studio Blueprint'}`,
+      `BLUEPRINT: ${blueprintName || 'Assistant Studio Staging Blueprint'}`,
       `Preset: ${lastPreset || '—'}`,
       `Walkaround Optimizer: ${walkaroundOn ? 'ON' : 'OFF'}`,
       clientName ? `Client: ${clientName}` : '',
@@ -566,7 +581,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
     try {
       await saveIdea({
         type: 'text',
-        title: blueprintName || 'Assistant Studio Blueprint',
+        title: blueprintName || 'Assistant Studio Staging Blueprint',
         content,
         tags,
       });
@@ -594,15 +609,14 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
     clearErrors();
 
     const directorAndLines = formatNotesBlock(output, outputRaw);
-    const quick = output.quickWins?.trim();
-    const walk = output.walkaroundRewrite?.trim();
+    const cueTiming = output.cueTiming?.trim();
 
     const makeRunNotes = (part: string) => {
       const parts: string[] = [];
       parts.push(`PART: ${part}`);
-      if (quick) parts.push(`\nQUICK WINS\n${quick}`);
+      if (cueTiming) parts.push(`\nCUE TIMING\n${cueTiming}`);
       parts.push(`\n${directorAndLines}`);
-      if (walkaroundOn && walk) parts.push(`\nWALKAROUND NOTES\n${walk}`);
+      if (walkaroundOn) parts.push(`\nTIGHT-SPACE MODE\nPrefer shorter travel paths, visible cueing, and compact prop spread.`);
       return parts.join('\n');
     };
 
@@ -617,19 +631,13 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
       ];
     } else {
       tasks = [
-        { title: 'Assistant Studio – Quick Wins', notes: output.quickWins || outputRaw, priority: 'medium' as any },
-        { title: 'Assistant Studio – Line Edits', notes: output.lineEdits || outputRaw, priority: 'medium' as any },
-        { title: 'Assistant Studio – Director Notes', notes: output.structureNotes || outputRaw, priority: 'medium' as any },
-        { title: 'Assistant Studio – Audience Fit', notes: output.audienceFit || outputRaw, priority: 'medium' as any },
-        { title: 'Assistant Studio – Rehearsal Tasks', notes: output.rehearsalTasks || outputRaw, priority: 'medium' as any },
+        { title: 'Assistant Studio – Stage Layout', notes: output.stageLayout || outputRaw, priority: 'medium' as any },
+        { title: 'Assistant Studio – Blocking Plan', notes: output.blockingPlan || outputRaw, priority: 'high' as any },
+        { title: 'Assistant Studio – Assistant Positions', notes: output.assistantPositions || outputRaw, priority: 'medium' as any },
+        { title: 'Assistant Studio – Cue Timing', notes: output.cueTiming || outputRaw, priority: 'high' as any },
+        { title: 'Assistant Studio – Prop Movement', notes: output.propMovement || outputRaw, priority: 'medium' as any },
+        { title: 'Assistant Studio – Reveal Choreography', notes: output.revealChoreography || outputRaw, priority: 'medium' as any },
       ];
-      if (walkaroundOn && output.walkaroundRewrite) {
-        tasks.push({
-          title: 'Assistant Studio – Walkaround Rewrite',
-          notes: output.walkaroundRewrite,
-          priority: 'medium' as any,
-        });
-      }
     }
 
     try {
@@ -707,12 +715,11 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
 
   const availableTabs = useMemo(() => {
     const base = TABS.filter((t) => {
-      if (t.key === 'walkaroundRewrite') return walkaroundOn && !!output.walkaroundRewrite;
       if (t.key === 'fullText') return true;
       return !!output?.[t.key];
     });
     if (!outputRaw) return base;
-    if (!output.quickWins && !output.lineEdits && !output.structureNotes && !output.audienceFit && !output.rehearsalTasks) {
+    if (!output.stageLayout && !output.blockingPlan && !output.assistantPositions && !output.cueTiming && !output.propMovement && !output.revealChoreography) {
       return [{ key: 'fullText', label: 'Full Text' }];
     }
     if (!base.find((t) => t.key === 'fullText')) base.push({ key: 'fullText', label: 'Full Text' });
@@ -723,9 +730,12 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
     const parts: string[] = [];
     if (clientName) parts.push(clientName);
     if (venueType) parts.push(venueType);
+    if (stageSize) parts.push(stageSize);
+    if (numberOfAssistants) parts.push(`${numberOfAssistants} assistants`);
+    if (audienceDistance) parts.push(audienceDistance);
     if (audienceSize) parts.push(`${audienceSize} ppl`);
     return parts.join(' • ');
-  }, [clientName, venueType, audienceSize]);
+  }, [clientName, venueType, audienceSize, stageSize, numberOfAssistants, audienceDistance]);
 
   return (
     <div className="relative p-6 pb-24 space-y-6">
@@ -737,7 +747,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
               Context: <span className="text-slate-200">{contextSummary}</span>
             </div>
           ) : (
-            <div className="text-[11px] italic text-slate-500/80">Optional context makes results feel more “made for this gig.”</div>
+            <div className="text-[11px] italic text-slate-500/80">Build a practical staging plan for assistants, cueing, traffic flow, and reveal choreography.</div>
           )}
         </div>
 
@@ -762,12 +772,12 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
 
           {/* Context selectors */}
           <div className="flex items-center justify-between">
-            <div className="text-xs text-slate-400">This is for (optional):</div>
+            <div className="text-xs text-slate-400">Routine staging context:</div>
             <button
               type="button"
               onClick={clearContext}
               className="text-xs px-2 py-1 rounded border border-slate-700 hover:border-slate-500 text-slate-200"
-              disabled={!clientName && !venueType && !audienceSize}
+              disabled={!clientName && !venueType && !audienceSize && !stageSize && !numberOfAssistants && !audienceDistance}
             >
               Clear context
             </button>
@@ -777,7 +787,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
             <input
               value={clientName}
               onChange={(e) => setClientName(e.target.value)}
-              placeholder="Client"
+              placeholder="Routine / client"
               className="p-2 rounded bg-slate-950/50 border border-slate-700 text-white placeholder:text-slate-500"
             />
             <select
@@ -792,6 +802,24 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
                 </option>
               ))}
             </select>
+            <input
+              value={stageSize}
+              onChange={(e) => setStageSize(e.target.value)}
+              placeholder="Stage size"
+              className="p-2 rounded bg-slate-950/50 border border-slate-700 text-white placeholder:text-slate-500"
+            />
+            <input
+              value={numberOfAssistants}
+              onChange={(e) => setNumberOfAssistants(e.target.value)}
+              placeholder="# of assistants"
+              className="p-2 rounded bg-slate-950/50 border border-slate-700 text-white placeholder:text-slate-500"
+            />
+            <input
+              value={audienceDistance}
+              onChange={(e) => setAudienceDistance(e.target.value)}
+              placeholder="Audience distance"
+              className="p-2 rounded bg-slate-950/50 border border-slate-700 text-white placeholder:text-slate-500"
+            />
             <input
               value={audienceSize}
               onChange={(e) => setAudienceSize(e.target.value)}
@@ -808,13 +836,13 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
               onChange={(e) => setWalkaroundOn(e.target.checked)}
               className="h-4 w-4 accent-purple-500"
             />
-            Optimize for walkaround <span className="text-slate-400">(reset, angles, crowd mgmt, louder lines)</span>
+            Optimize for tight spaces <span className="text-slate-400">(shorter travel paths, cue visibility, crowd mgmt)</span>
           </label>
 
           <textarea
             className="w-full p-3 border border-slate-700 rounded bg-slate-950/50 text-white min-h-[260px] placeholder:text-slate-500"
             rows={10}
-            placeholder="Paste your script, notes, or outline here…"
+            placeholder="Describe the routine, effect flow, props, reveal, and anything the assistant team currently does or struggles with…"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={onTextKeyDown}
@@ -828,7 +856,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
           {/* Refine controls */}
           <div className="pt-3 border-t border-slate-800/60">
             <div className="flex items-center justify-between gap-2 mb-2">
-              <div className="text-xs text-slate-400">Refine this draft:</div>
+              <div className="text-xs text-slate-400">Refine this staging plan:</div>
               {lastPreset ? (
                 <div className="text-xs text-slate-500">
                   Preset: <span className="text-slate-300">{lastPreset}</span>
@@ -954,8 +982,8 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
               <div className="text-slate-400 text-sm space-y-2">
                 <div>Your results will appear here.</div>
                 <div className="text-slate-500">
-                  Try: <span className="text-slate-300">“Tighten Script”</span> or{' '}
-                  <span className="text-slate-300">“Improve Transitions”</span>, then hit Generate.
+                  Try: <span className="text-slate-300">“Routine Staging Optimizer”</span> or{' '}
+                  <span className="text-slate-300">“Tighten Blocking”</span>, then hit Generate.
                 </div>
               </div>
             )}
@@ -990,7 +1018,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
                     checked={sendMode === 'sections'}
                     onChange={() => setSendMode('sections')}
                   />
-                  Create section tasks (Quick Wins / Line Edits / Director Notes / etc.)
+                  Create section tasks (Stage Layout / Blocking / Cue Timing / etc.)
                 </label>
               </div>
 
@@ -1018,7 +1046,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
                     disabled={!selectedShowId || sending}
                     onClick={sendToShowPlanner}
                   >
-                    {sending ? 'Sending…' : sendMode === 'run' ? 'Create Opener/Middles/Closer' : 'Create Section Tasks'}
+                    {sending ? 'Sending…' : sendMode === 'run' ? 'Create Opener/Middles/Closer' : 'Create Staging Tasks'}
                   </button>
                 </>
               )}
@@ -1051,7 +1079,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
               />
 
               <div className="text-xs text-slate-400">
-                Includes output + preset + walkaround toggle + context (client/venue/audience) + tags.
+                Includes output + preset + tight-space toggle + context (routine, venue, stage, assistants, audience) + tags.
               </div>
 
               <button
