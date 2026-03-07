@@ -255,11 +255,29 @@ type ColdReadingPhrases = {
 };
 
 const INTENSITY_LABELS = [
-    'Subtle Psychological',
+    'Psychological / Suggestion',
     'Suggestion-Based',
-    'Influence / Pre-show',
+    'Mixed Methods',
     'Direct Mind Reading',
-    'Paranormal Framing',
+    'Paranormal Presentation',
+] as const;
+
+const PERFORMANCE_ENVIRONMENTS = [
+    'Close-up',
+    'Parlor',
+    'Stage',
+    'Walkaround',
+    'Camera / Social Media',
+] as const;
+
+const METHOD_PREFERENCE_OPTIONS = [
+    'Psychological Force',
+    'Dual Reality',
+    'Billet Work',
+    'Equivoque',
+    'Memory System',
+    'Technology Assisted',
+    'Prediction Method',
 ] as const;
 
 function safeList(v: any): string[] {
@@ -267,6 +285,7 @@ function safeList(v: any): string[] {
     return v
         .map((x) => String(x ?? '').trim())
         .filter(Boolean);
+}
 
 function safeNumber(v: any, fallback = 0): number {
     const n = Number(v);
@@ -285,8 +304,6 @@ function clamp1to10(v: any, fallback = 5): number {
     if (n < 1) return 1;
     if (n > 10) return 10;
     return n;
-}
-
 }
 
 function toBlueprint(v: any): MentalismBlueprint {
@@ -423,7 +440,17 @@ const MentalismAssistant: React.FC<MentalismAssistantProps> = ({ onIdeaSaved, on
     const [copyStatus, setCopyStatus] = useState<'idle' | 'copied'>('idle');
 
     // Tier-1 controls
-    const [intensityIdx, setIntensityIdx] = useState<number>(1);
+    const [intensityIdx, setIntensityIdx] = useState<number>(2);
+    const [performanceEnvironment, setPerformanceEnvironment] = useState<typeof PERFORMANCE_ENVIRONMENTS[number]>('Parlor');
+    const [methodPreferences, setMethodPreferences] = useState<Record<typeof METHOD_PREFERENCE_OPTIONS[number], boolean>>({
+        'Psychological Force': true,
+        'Dual Reality': true,
+        'Billet Work': false,
+        'Equivoque': false,
+        'Memory System': false,
+        'Technology Assisted': false,
+        'Prediction Method': true,
+    });
     const [ethicalMode, setEthicalMode] = useState<boolean>(true);
 
     // Tier-2: Stress test
@@ -456,6 +483,11 @@ const MentalismAssistant: React.FC<MentalismAssistantProps> = ({ onIdeaSaved, on
         const idx = Math.min(Math.max(Number(intensityIdx) || 0, 0), INTENSITY_LABELS.length - 1);
         return INTENSITY_LABELS[idx];
     }, [intensityIdx]);
+
+    const selectedMethodPreferences = useMemo(
+        () => METHOD_PREFERENCE_OPTIONS.filter((option) => methodPreferences[option]),
+        [methodPreferences]
+    );
 
     const savedMentalismBlueprints = useMemo(() => {
         const all = Array.isArray(ideas) ? ideas : [];
@@ -586,17 +618,32 @@ const MentalismAssistant: React.FC<MentalismAssistantProps> = ({ onIdeaSaved, on
 
         try {
             const ethicalBlock = ethicalMode
-                ? `\nEthical Performance Mode: ON\n- Avoid medical claims.\n- Avoid real psychic claims (frame as entertainment / psychological illusion).\n- Avoid grief exploitation / vulnerable subjects.\n- Prefer respectful disclaimers tone.\n`
-                : `\nEthical Performance Mode: OFF (Still keep it entertainment-safe.)\n`;
+                ? `
+Ethical Performance Mode: ON
+- Use respectful psychological framing.
+- Avoid medical claims.
+- Avoid real psychic claims (frame as entertainment / psychological illusion).
+- Avoid grief exploitation / vulnerable subjects.
+- Maintain an entertainment-first tone.
+`
+                : `
+Ethical Performance Mode: OFF (Still keep it entertainment-safe.)
+`;
 
             const prompt = `
 Generate a mentalism routine blueprint in STRICT JSON that matches the schema provided.
 
-User topic/question:
+Effect goal / audience experience:
 ${currentQuery}
 
-Mentalism style intensity:
+Mentalism style spectrum:
 ${intensityLabel}
+
+Performance environment:
+${performanceEnvironment}
+
+Method preferences (${selectedMethodPreferences.length ? 'optional guidance provided' : 'open choice'}):
+${selectedMethodPreferences.length ? selectedMethodPreferences.join(', ') : 'No specific method preferences selected.'}
 ${ethicalBlock}
 
 Output guidelines:
@@ -999,8 +1046,11 @@ Output guidelines:
                 <div className="space-y-4">
                     <div>
                         <label htmlFor="mentalism-prompt" className="block text-sm font-medium text-slate-300 mb-1">
-                            Your Question or Topic
+                            What effect should the audience experience?
                         </label>
+                        <div className="text-xs text-slate-400 mb-2">
+                            Example: Reveal a thought-of word from a book. Predict a drawing. Influence a spectator’s decision.
+                        </div>
                         <textarea
                             id="mentalism-prompt"
                             rows={5}
@@ -1009,7 +1059,7 @@ Output guidelines:
                                 setQuery(e.target.value);
                                 setError(null);
                             }}
-                            placeholder="e.g., How can I structure a routine around a 'book test'?"
+                            placeholder="Describe the audience experience you want to create..."
                             className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
                         />
                     </div>
@@ -1018,10 +1068,10 @@ Output guidelines:
                     <div className="bg-slate-900/40 border border-slate-700 rounded-lg p-3">
                         <div className="flex items-center justify-between gap-3">
                             <div>
-                                <div className="text-sm font-semibold text-slate-200">Mentalism Style</div>
+                                <div className="text-sm font-semibold text-slate-200">Mentalism Style Spectrum</div>
                                 <div className="text-xs text-slate-400">{intensityLabel}</div>
                             </div>
-                            <div className="text-xs text-slate-500">Low → High</div>
+                            <div className="text-xs text-slate-500">Subtle Psychological ← → Paranormal Demonstration</div>
                         </div>
                         <input
                             type="range"
@@ -1033,8 +1083,46 @@ Output guidelines:
                             className="w-full mt-3 accent-purple-500"
                         />
                         <div className="mt-2 flex justify-between text-[11px] text-slate-500">
-                            <span>Subtle</span>
-                            <span>Paranormal</span>
+                            <span>Psychological / Suggestion</span>
+                            <span>Mixed Methods</span>
+                            <span>Paranormal Presentation</span>
+                        </div>
+                    </div>
+
+                    <div className="bg-slate-900/40 border border-slate-700 rounded-lg p-3">
+                        <div className="text-sm font-semibold text-slate-200">Performance Environment</div>
+                        <div className="text-xs text-slate-400 mt-1">Mentalism methods shift depending on venue, sightlines, and audience distance.</div>
+                        <div className="mt-3 grid grid-cols-2 gap-2">
+                            {PERFORMANCE_ENVIRONMENTS.map((option) => (
+                                <button
+                                    key={option}
+                                    type="button"
+                                    onClick={() => setPerformanceEnvironment(option)}
+                                    className={`rounded-md border px-3 py-2 text-sm transition-colors ${performanceEnvironment === option
+                                        ? 'border-purple-500 bg-purple-600/20 text-white'
+                                        : 'border-slate-700 bg-slate-900/40 text-slate-300 hover:border-slate-500'}`}
+                                >
+                                    {option}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="bg-slate-900/40 border border-slate-700 rounded-lg p-3">
+                        <div className="text-sm font-semibold text-slate-200">Method Preferences <span className="text-slate-500 font-normal">(optional)</span></div>
+                        <div className="text-xs text-slate-400 mt-1">Guide the thinking without locking the routine into a single path.</div>
+                        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                            {METHOD_PREFERENCE_OPTIONS.map((option) => (
+                                <label key={option} className="flex items-center gap-2 text-slate-300 cursor-pointer select-none">
+                                    <input
+                                        type="checkbox"
+                                        checked={methodPreferences[option]}
+                                        onChange={(e) => setMethodPreferences((prev) => ({ ...prev, [option]: e.target.checked }))}
+                                        className="accent-purple-500"
+                                    />
+                                    <span>{option}</span>
+                                </label>
+                            ))}
                         </div>
                     </div>
 
@@ -1048,8 +1136,10 @@ Output guidelines:
                         />
                         <div>
                             <div className="text-sm font-semibold text-slate-200">Ethical Performance Mode</div>
-                            <div className="text-xs text-slate-400 leading-relaxed">
-                                Avoid medical claims • avoid “real psychic” framing • avoid grief exploitation • prefer respectful disclaimers tone
+                            <div className="mt-2 space-y-1 text-xs text-slate-300 leading-relaxed">
+                                <div>✓ Respectful psychological framing</div>
+                                <div>✓ Avoid medical / psychic claims</div>
+                                <div>✓ Maintain entertainment framing</div>
                             </div>
                         </div>
                     </label>
@@ -1061,7 +1151,7 @@ Output guidelines:
                         className="w-full py-3 mt-1 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
                     >
                         <WandIcon className="w-5 h-5" />
-                        <span>Build Mentalism Blueprint</span>
+                        <span>Generate Mentalism Routine</span>
                     </button>
 
                     {error && <p className="text-red-400 mt-2 text-sm text-center">{error}</p>}
