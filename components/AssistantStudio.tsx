@@ -713,25 +713,37 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
 
       const requestedSections = getRequestedSections(lastPreset || null, effectiveResponseMode, demoMode);
       const assistantStudioSpeedMode = getAssistantStudioSpeedMode(lastPreset || null, effectiveResponseMode, demoMode);
-      const text = await withTimeout(
+      const obj = await withTimeout(
         generateStructuredResponse(
           prompt,
           ASSISTANT_STUDIO_SYSTEM_INSTRUCTION,
           buildStructuredSchema(requestedSections),
           currentUser,
           effectiveResponseMode === 'fast'
-            ? { maxOutputTokens: demoMode ? 650 : 900, speedMode: 'fast' }
+            ? { maxOutputTokens: demoMode ? 950 : 1100, speedMode: 'fast' }
             : { maxOutputTokens: 1700, speedMode: assistantStudioSpeedMode }
-        ).then((obj) => structuredResultToText(obj || {}, requestedSections)),
+        ),
         REQUEST_TIMEOUT_MS
       );
 
       if (cancelledUpToRef.current >= myId) return;
 
-      setOutputRaw(text);
-      const parsed = parseStructured(text);
-      setOutput(parsed);
-      const firstAvailable = TABS.find((t) => t.key !== 'fullText' && parsed[t.key]);
+      const displayText =
+        demoMode && effectiveResponseMode === 'fast'
+          ? compactStructuredResultToText(obj || {}, requestedSections)
+          : structuredResultToText(obj || {}, requestedSections);
+
+      const normalized = {
+        ...(obj || {}),
+        fullText: displayText,
+      };
+
+      setOutput(normalized);
+      setOutputRaw(displayText);
+
+      const firstAvailable = TABS.find(
+        (t) => t.key !== 'fullText' && String((obj || {})[t.key] || '').trim()
+      );
       setActiveTab(firstAvailable?.key || 'fullText');
     } catch (e: any) {
       console.error(e);
