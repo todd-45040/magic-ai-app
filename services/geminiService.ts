@@ -63,16 +63,89 @@ function escapeNewlinesInsideStrings(jsonLike: string): string {
   return out;
 }
 
+function stripTrailingCommas(jsonLike: string): string {
+  return String(jsonLike || '').replace(/,\s*([}\]])/g, '$1');
+}
+
+function closeLikelyTruncatedJson(jsonLike: string): string {
+  const src = String(jsonLike || '');
+  let out = '';
+  let inStr = false;
+  let esc = false;
+  const closers: string[] = [];
+
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    out += ch;
+
+    if (esc) {
+      esc = false;
+      continue;
+    }
+    if (ch === '\') {
+      esc = true;
+      continue;
+    }
+    if (ch === '"') {
+      inStr = !inStr;
+      continue;
+    }
+    if (inStr) continue;
+
+    if (ch === '{') closers.push('}');
+    else if (ch === '[') closers.push(']');
+    else if ((ch === '}' || ch === ']') && closers.length) closers.pop();
+  }
+
+  if (inStr) out += '"';
+  if (closers.length) out += closers.reverse().join('');
+  return out;
+}
+
 function safeJsonParse(text: string): any {
   const candidate = extractJsonBlock(text);
-  try {
-    return JSON.parse(candidate || '{}');
-  } catch {
-    const repaired = escapeNewlinesInsideStrings(candidate);
-    // If the second parse still fails (common with malformed model output),
-    // allow callers to catch and perform a "re-emit valid JSON" retry.
-    return JSON.parse(repaired || '{}');
+  const attempts = [
+    candidate || '{}',
+    escapeNewlinesInsideStrings(candidate || '{}'),
+    stripTrailingCommas(escapeNewlinesInsideStrings(candidate || '{}')),
+    closeLikelyTruncatedJson(stripTrailingCommas(escapeNewlinesInsideStrings(candidate || '{}'))),
+  ];
+
+  let lastErr: any = null;
+  for (const attempt of attempts) {
+    try {
+      return JSON.parse(attempt || '{}');
+    } catch (err) {
+      lastErr = err;
+    }
   }
+  throw lastErr || new Error('Invalid JSON');
+}
+
+function buildSchemaFallback(responseSchema: any, rawText: string): any {
+  const props = responseSchema?.properties && typeof responseSchema.properties === 'object'
+    ? responseSchema.properties
+    : {};
+
+  const lines = String(rawText || '')
+    .split(/?
++/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !/^```/.test(line))
+    .slice(0, 8);
+
+  const shortText = lines.length ? lines.join('\n') : 'Plan generated, but structured formatting failed. Please regenerate for a cleaner layout.';
+
+  const out: Record<string, any> = {};
+  Object.keys(props).forEach((key, idx) => {
+    const propType = String(props[key]?.type || '').toLowerCase();
+    if (propType === 'array') out[key] = lines.length ? lines.slice(idx, idx + 3) : [];
+    else if (propType === 'number' || propType === 'integer') out[key] = 0;
+    else if (propType === 'boolean') out[key] = false;
+    else out[key] = shortText;
+  });
+  return out;
 }
 
 
@@ -378,9 +451,9 @@ export const generateStructuredResponse = async (
     try {
       return safeJsonParse(retryText || '{}');
     } catch (err2: any) {
-      // Fast mode should stay fast: do not escalate into longer Pro retries.
+      // Fast mode should stay fast, but do not surface raw JSON parse failures to the UI.
       if (speedMode === 'fast') {
-        throw err2;
+        return buildSchemaFallback(responseSchema, retryText || text || '');
       }
       // Final fallback: force a SHORTER JSON re-emit. This is specifically for truncation
       // where even the first re-emit attempt was cut off.
@@ -411,7 +484,11 @@ export const generateStructuredResponse = async (
 
       const fallbackResult = await postJson<any>('/api/generate', fallbackBody, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 1 });
       const fallbackText = extractText(fallbackResult);
-      return safeJsonParse(fallbackText || '{}');
+      try {
+        return safeJsonParse(fallbackText || '{}');
+      } catch {
+        return buildSchemaFallback(responseSchema, fallbackText || retryText || text || '');
+      }
     }
   }
 };

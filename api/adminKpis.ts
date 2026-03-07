@@ -134,107 +134,7 @@ export default async function handler(req: any, res: any) {
       // Do not fail dashboard
     }
 
-    // Assistant Studio KPIs (fixed 7d window)
-    // Client telemetry is stored in ai_usage_events with tool='assistant_studio' and endpoint='client:<action>'.
-    let assistantStudioKpis: any = {
-      window_days: 7,
-      requests: 0,
-      successes: 0,
-      errors: 0,
-      refine_clicks: 0,
-      save_clicks: 0,
-      save_successes: 0,
-      save_blueprint: 0,
-      send_to_planner: 0,
-      success_rate: null as number | null,
-      refine_rate: null as number | null,
-      save_rate: null as number | null,
-      send_to_planner_rate: null as number | null,
-      avg_sections_per_success: null as number | null,
-    };
 
-    let assistantStudioHealth24h: any = {
-      window_hours: 24,
-      requests: 0,
-      successes: 0,
-      errors: 0,
-      success_rate: null as number | null,
-      last_error: null as any,
-    };
-
-    try {
-      const { data: asEvents, error: asErr } = await admin
-        .from('ai_usage_events')
-        .select('endpoint, units, created_at, error_code')
-        .eq('tool', 'assistant_studio')
-        .gte('created_at', sinceIso7)
-        .limit(50000);
-
-      if (!asErr) {
-        let sectionsTotal = 0;
-        let sectionsCounted = 0;
-
-        for (const ev of (asEvents || []) as any[]) {
-          const ep = String(ev?.endpoint || '');
-          if (ep === 'client:assistant_request_start') assistantStudioKpis.requests += 1;
-          else if (ep === 'client:assistant_request_success') {
-            assistantStudioKpis.successes += 1;
-            const u = Number(ev?.units);
-            if (Number.isFinite(u)) {
-              sectionsTotal += u;
-              sectionsCounted += 1;
-            }
-          } else if (ep === 'client:assistant_request_error') assistantStudioKpis.errors += 1;
-          else if (ep === 'client:assistant_refine_click') assistantStudioKpis.refine_clicks += 1;
-          else if (ep === 'client:assistant_save_click') assistantStudioKpis.save_clicks += 1;
-          else if (ep === 'client:assistant_save_success') assistantStudioKpis.save_successes += 1;
-          else if (ep === 'client:assistant_save_blueprint') assistantStudioKpis.save_blueprint += 1;
-          else if (ep === 'client:assistant_send_to_show_planner') assistantStudioKpis.send_to_planner += 1;
-        }
-
-        const req = assistantStudioKpis.requests || 0;
-        const ok = assistantStudioKpis.successes || 0;
-        assistantStudioKpis.success_rate = req ? ok / req : null;
-        assistantStudioKpis.refine_rate = ok ? assistantStudioKpis.refine_clicks / ok : null;
-        assistantStudioKpis.save_rate = ok ? assistantStudioKpis.save_successes / ok : null;
-        assistantStudioKpis.send_to_planner_rate = ok ? assistantStudioKpis.send_to_planner / ok : null;
-        assistantStudioKpis.avg_sections_per_success = sectionsCounted ? sectionsTotal / sectionsCounted : null;
-      }
-
-      const sinceIso24 = isoDaysAgo(1);
-      const { data: asEvents24, error: asErr24 } = await admin
-        .from('ai_usage_events')
-        .select('endpoint, created_at, error_code')
-        .eq('tool', 'assistant_studio')
-        .gte('created_at', sinceIso24)
-        .limit(20000);
-
-      if (!asErr24) {
-        for (const ev of (asEvents24 || []) as any[]) {
-          const ep = String(ev?.endpoint || '');
-          if (ep === 'client:assistant_request_start') assistantStudioHealth24h.requests += 1;
-          else if (ep === 'client:assistant_request_success') assistantStudioHealth24h.successes += 1;
-          else if (ep === 'client:assistant_request_error') assistantStudioHealth24h.errors += 1;
-        }
-        assistantStudioHealth24h.success_rate = assistantStudioHealth24h.requests
-          ? assistantStudioHealth24h.successes / assistantStudioHealth24h.requests
-          : null;
-
-        const { data: lastErr, error: lastErrQ } = await admin
-          .from('ai_usage_events')
-          .select('created_at, error_code, endpoint')
-          .eq('tool', 'assistant_studio')
-          .eq('endpoint', 'client:assistant_request_error')
-          .order('created_at', { ascending: false })
-          .limit(1);
-
-        if (!lastErrQ && Array.isArray(lastErr) && lastErr.length) {
-          assistantStudioHealth24h.last_error = lastErr[0];
-        }
-      }
-    } catch {
-      // Do not fail dashboard
-    }
 
     // Phase DM — Director Mode KPIs (fixed 7d window)
     // Client telemetry is stored in ai_usage_events with tool='director_mode' and endpoint='client:<action>'.
@@ -2049,8 +1949,6 @@ const provider_breakdown = Object.entries(providerReliability)
         top_by_cost: topToolsByCost,
       },
       visual_brainstorm_kpis: visualBrainstormKpis,
-      assistant_studio_kpis: assistantStudioKpis,
-      assistant_studio_health_24h: assistantStudioHealth24h,
       director_mode_kpis: directorModeKpis,
       director_mode_health_24h: directorModeHealth24h,
     });

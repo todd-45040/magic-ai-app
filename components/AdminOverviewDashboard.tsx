@@ -1051,54 +1051,6 @@ const kUsers = data?.users || {};
       </div>
 
 
-      {/* Assistant Studio — Health (24h) + KPIs (7d) */}
-      <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="text-sm opacity-80">Assistant Studio Health</div>
-          <div className="text-[11px] text-white/50">Last 24h</div>
-        </div>
-
-        {(() => {
-          const asH = (data as any)?.assistant_studio_health_24h;
-          const asK = (data as any)?.assistant_studio_kpis;
-          if (!asH && !asK) return <div className="mt-2 text-sm text-white/60">—</div>;
-
-          return (
-            <div className="mt-3 grid grid-cols-1 md:grid-cols-4 gap-3">
-              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                <div className="text-xs text-white/60">Requests (24h)</div>
-                <div className="text-xl font-bold text-white">{Number(asH?.requests || 0)}</div>
-              </div>
-              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                <div className="text-xs text-white/60">Success % (24h)</div>
-                <div className="text-xl font-bold text-white">{pct(asH?.success_rate, 0)}</div>
-              </div>
-              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                <div className="text-xs text-white/60">Last error</div>
-                <div className="text-[12px] text-white/80 mt-1">
-                  {asH?.last_error ? `${String(asH.last_error.error_code || 'ERROR')} · ${String(asH.last_error.created_at || '').slice(0, 19).replace('T', ' ')}` : '—'}
-                </div>
-              </div>
-              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                <div className="text-xs text-white/60">Send-to-planner (7d)</div>
-                <div className="text-xl font-bold text-white">{pct(asK?.send_to_planner_rate, 0)}</div>
-              </div>
-
-              {asK && (
-                <div className="md:col-span-4 text-[11px] text-white/50 flex flex-wrap gap-x-4 gap-y-1">
-                  <span>7d Requests: <span className="text-white/70">{Number(asK.requests || 0)}</span></span>
-                  <span>7d Success: <span className="text-white/70">{pct(asK.success_rate, 0)}</span></span>
-                  <span>Refine: <span className="text-white/70">{pct(asK.refine_rate, 0)}</span></span>
-                  <span>Save: <span className="text-white/70">{pct(asK.save_rate, 0)}</span></span>
-                  <span>Blueprints: <span className="text-white/70">{Number(asK.save_blueprint || 0)}</span></span>
-                  <span>Avg sections: <span className="text-white/70">{asK.avg_sections_per_success != null ? Number(asK.avg_sections_per_success).toFixed(1) : '—'}</span></span>
-                </div>
-              )}
-            </div>
-          );
-        })()}
-      </div>
-
       {/* Director Mode — Health (24h) + KPIs (7d) */}
       <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 p-4">
         <div className="flex items-center justify-between gap-3">
