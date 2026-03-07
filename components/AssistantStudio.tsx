@@ -495,23 +495,14 @@ function getToolSpecificInstruction(focusTag?: string | null, responseMode: Resp
   }
 }
 
-function getAssistantStudioSpeedMode(focusTag?: string | null, responseMode: ResponseMode = 'fast', demoMode = false): 'fast' | 'full' {
-  if (demoMode || responseMode === 'fast') return 'fast';
-
-  // Phase 9B: keep Full richer than Fast, but prefer Flash routing for reliability.
-  // Assistant's Studio benefits more from consistent structured output than maximal reasoning depth.
-  switch (focusTag) {
-    case 'routine-staging':
-    case 'cue-sheet':
-    case 'volunteer-flow':
-    case 'misdirection-timing':
-    case 'prop-table-layout':
-    case 'transition-flow':
-    case 'safety-check':
-    case 'admc-demo':
-    default:
-      return 'fast';
-  }
+function getAssistantStudioSpeedMode(
+  focusTag?: string | null,
+  responseMode: ResponseMode = 'fast',
+  demoMode = false
+): 'fast' | 'full' {
+  if (demoMode) return 'fast';
+  return responseMode === 'full' ? 'full' : 'fast';
+}
 }
 
 function buildStructuredSchema(keys: Array<Exclude<SectionKey, 'fullText'>>) {
