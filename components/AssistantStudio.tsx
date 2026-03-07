@@ -64,10 +64,10 @@ const PRESETS: Array<{ label: string; tag: string; template: (input: string) => 
 
 const DRAFT_KEY = 'maw_assistant_studio_draft_v8';
 const CONTEXT_KEY = 'maw_assistant_studio_context_v8';
-const STANDARD_REQUEST_TIMEOUT_MS = 50_000;
+const REQUEST_TIMEOUT_MS = 50_000;
 
 type ErrorKind = 'timeout' | 'quota' | 'other' | null;
-type ResponseMode = 'standard';
+type ResponseMode = 'fast' | 'full';
 
 type SectionKey =
   | 'stageLayout'
@@ -90,7 +90,12 @@ type SectionKey =
   | 'safetyRiskAnalysis'
   | 'fullText';
 
-type StructuredFieldValue = string | string[];
+type DetailedSection = {
+  summary?: string;
+  bullets?: string[];
+};
+
+type StructuredFieldValue = string | string[] | DetailedSection;
 type StructuredOutput = Partial<Record<SectionKey, StructuredFieldValue>>;
 
 const TABS: Array<{ key: SectionKey; label: string }> = [
@@ -220,36 +225,28 @@ const SECTION_LABELS: Record<Exclude<SectionKey, 'fullText'>, string> = {
   safetyRiskAnalysis: 'Collision, heavy prop, crowd proximity, and timing hazard review with fixes.',
 };
 
-const STANDARD_SECTIONS: Array<Exclude<SectionKey, 'fullText'>> = [
-  'stageLayout',
-  'assistantPositions',
-  'cueTimeline',
-  'safetyNotes',
-];
-
-
 const SECTION_PROFILES: Record<string, Array<Exclude<SectionKey, 'fullText'>>> = {
-  'routine-staging': ['stageLayout', 'assistantPositions', 'cueTimeline', 'propMovement', 'contingencyPlan', 'safetyNotes'],
-  'cue-sheet': ['stageLayout', 'assistantPositions', 'cueTimeline', 'propMovement', 'contingencyPlan', 'safetyNotes'],
-  'volunteer-flow': ['stageLayout', 'assistantPositions', 'cueTimeline', 'volunteerManagement', 'contingencyPlan', 'safetyNotes'],
-  'misdirection-timing': ['stageLayout', 'assistantPositions', 'cueTimeline', 'misdirectionWindows', 'contingencyPlan', 'safetyNotes'],
-  'prop-table-layout': ['stageLayout', 'assistantPositions', 'cueTimeline', 'propMovement', 'contingencyPlan', 'safetyNotes'],
-  'transition-flow': ['stageLayout', 'assistantPositions', 'cueTimeline', 'propMovement', 'contingencyPlan', 'safetyNotes'],
-  'safety-check': ['stageLayout', 'assistantPositions', 'cueTimeline', 'contingencyPlan', 'safetyNotes', 'safetyRiskAnalysis'],
-  'admc-demo': ['stageLayout', 'assistantPositions', 'cueTimeline', 'propMovement', 'contingencyPlan', 'safetyNotes'],
-  default: ['stageLayout', 'assistantPositions', 'cueTimeline', 'propMovement', 'contingencyPlan', 'safetyNotes'],
+  'routine-staging': ['stageLayout', 'assistantPositions', 'blockingPlan', 'cueTimeline', 'propMovement', 'safetyNotes'],
+  'cue-sheet': ['assistantPositions', 'cueTimeline', 'transitionPlan', 'propMovement', 'safetyNotes', 'contingencyPlan'],
+  'volunteer-flow': ['stageLayout', 'volunteerPlan', 'assistantInstructions', 'volunteerManagement', 'safetyNotes', 'contingencyPlan'],
+  'misdirection-timing': ['blockingPlan', 'assistantPositions', 'misdirectionWindows', 'transitionPlan', 'safetyNotes', 'contingencyPlan'],
+  'prop-table-layout': ['propTableLayout', 'resetOrder', 'assistantAccessPath', 'propMovement', 'transitionPlan', 'safetyNotes'],
+  'transition-flow': ['cueTimeline', 'propMovement', 'transitionPlan', 'lightingCues', 'safetyNotes', 'contingencyPlan'],
+  'safety-check': ['assistantPositions', 'volunteerPlan', 'transitionPlan', 'safetyNotes', 'safetyRiskAnalysis', 'contingencyPlan'],
+  'admc-demo': ['stageLayout', 'assistantPositions', 'cueTimeline', 'propMovement', 'transitionPlan', 'safetyNotes'],
+  default: ['stageLayout', 'assistantPositions', 'blockingPlan', 'cueTimeline', 'transitionPlan', 'safetyNotes'],
 };
 
 const FAST_SECTION_PROFILES: Record<string, Array<Exclude<SectionKey, 'fullText'>>> = {
-  'routine-staging': ['stageLayout', 'assistantPositions', 'cueTimeline'],
-  'cue-sheet': ['stageLayout', 'assistantPositions', 'cueTimeline'],
-  'volunteer-flow': ['stageLayout', 'assistantPositions', 'cueTimeline'],
-  'misdirection-timing': ['stageLayout', 'assistantPositions', 'cueTimeline'],
-  'prop-table-layout': ['stageLayout', 'assistantPositions', 'cueTimeline'],
-  'transition-flow': ['stageLayout', 'assistantPositions', 'cueTimeline'],
-  'safety-check': ['stageLayout', 'assistantPositions', 'cueTimeline'],
-  'admc-demo': ['stageLayout', 'assistantPositions', 'cueTimeline'],
-  default: ['stageLayout', 'assistantPositions', 'cueTimeline'],
+  'routine-staging': ['stageLayout', 'assistantPositions', 'cueTimeline', 'safetyNotes'],
+  'cue-sheet': ['assistantPositions', 'cueTimeline', 'propMovement', 'safetyNotes'],
+  'volunteer-flow': ['stageLayout', 'volunteerPlan', 'assistantInstructions', 'safetyNotes'],
+  'misdirection-timing': ['blockingPlan', 'assistantPositions', 'misdirectionWindows', 'safetyNotes'],
+  'prop-table-layout': ['propTableLayout', 'resetOrder', 'assistantAccessPath', 'propMovement'],
+  'transition-flow': ['cueTimeline', 'propMovement', 'transitionPlan', 'safetyNotes'],
+  'safety-check': ['assistantPositions', 'volunteerPlan', 'transitionPlan', 'safetyNotes'],
+  'admc-demo': ['stageLayout', 'assistantPositions', 'cueTimeline', 'safetyNotes'],
+  default: ['stageLayout', 'assistantPositions', 'cueTimeline', 'safetyNotes'],
 };
 
 function Skeleton() {
@@ -337,6 +334,37 @@ function parseStructured(raw: string): StructuredOutput {
   return out;
 }
 
+function getSectionBullets(value: StructuredFieldValue | undefined): string[] {
+  if (Array.isArray(value)) return value.map((line) => String(line || '').trim()).filter(Boolean);
+  if (value && typeof value === 'object') {
+    return Array.isArray((value as DetailedSection).bullets)
+      ? ((value as DetailedSection).bullets || []).map((line) => String(line || '').trim()).filter(Boolean)
+      : [];
+  }
+  const plain = String(value || '').trim();
+  return plain ? [plain] : [];
+}
+
+function getSectionSummary(value: StructuredFieldValue | undefined): string {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return String((value as DetailedSection).summary || '').trim();
+  }
+  return '';
+}
+
+function hasStructuredValue(value: StructuredFieldValue | undefined): boolean {
+  return !!getSectionSummary(value) || getSectionBullets(value).length > 0;
+}
+
+function formatStructuredField(value: StructuredFieldValue | undefined): string {
+  const summary = getSectionSummary(value);
+  const bullets = getSectionBullets(value);
+  const parts: string[] = [];
+  if (summary) parts.push(summary);
+  if (bullets.length) parts.push(...bullets.map((line) => `• ${line}`));
+  return parts.join('\n').trim();
+}
+
 function buildStructuredPrompt(opts: {
   userInput: string;
   refineInstruction?: string | null;
@@ -353,7 +381,7 @@ function buildStructuredPrompt(opts: {
   responseMode?: ResponseMode;
   demoMode?: boolean;
 }) {
-  const { userInput, refineInstruction, previousOutput, focusTag, context, demoMode = false } = opts;
+  const { userInput, refineInstruction, previousOutput, context, demoMode = false } = opts;
 
   const contextLines: string[] = [];
   if (context?.clientName) contextLines.push(`Client / show: ${context.clientName}`);
@@ -369,60 +397,36 @@ function buildStructuredPrompt(opts: {
       ? `\n\nREFINE REQUEST: ${refineInstruction}\n\nPREVIOUS OUTPUT:\n${previousOutput}`
       : '';
 
-  const requestedSections = getRequestedSections();
-
-  const standardRule = `
-- STANDARD MODE: generate a quick operational rehearsal sheet.
-- Return exactly these 4 sections: stageLayout, assistantPositions, cueTimeline, safetyNotes.
-- Each section must contain exactly 3 concise but specific bullet lines.
-- Every bullet must describe a concrete assistant action, position, cue, traffic path, volunteer handling step, prop-handling instruction, or safety reminder.
-- Do not use generic filler like "keep the area clear," "assistant helps as needed," or "maintain good flow."
-- Keep every bullet short, practical, and immediately useful in rehearsal.
-- Avoid long explanations and narrative paragraphs.
-- Write like a quick operational rehearsal card, not a summary.`;
-
-  const demoRule = demoMode
+  const requestedSections = getRequestedSections(null, 'full', demoMode);
+  const detailRule = demoMode
     ? `
-- DEMO MODE: keep wording compact and instantly scannable for booth demos, but do not reduce section count or quality.`
-    : '';
-
-  const toolSpecificRule = getToolSpecificInstruction(focusTag);
+- DEMO MODE: keep wording slightly shorter for booth reliability, but still return complete operational guidance.
+- For each section, return 1 short summary sentence and 2-3 bullet lines.
+- Each bullet must contain a concrete assistant action, position, cue, handoff, traffic note, or safety step.`
+    : `
+- NORMAL MODE: return a detailed assistant operations plan that is genuinely useful during rehearsal.
+- For each section, return 1 short summary sentence and 4-5 detailed bullet lines.
+- Every bullet must describe a concrete assistant action, position, cue, prop-handling instruction, volunteer-management note, traffic path, or safety step.
+- Avoid vague filler such as “keep the area clear,” “assistant helps as needed,” or “maintain good flow” unless paired with a specific action.`;
 
   return (
     `You are building a practical assistant-operations plan for a magic routine. Return useful, stage-ready guidance with no fluff.` +
-    `
-
-IMPORTANT RULES:` +
-    `
-- Do not expose methods, gimmicks, or secret workings.` +
-    `
-- Prioritize realistic staging, safe traffic flow, and practical assistant movement.` +
-    `
-- If a routine element sounds unrealistic, revise it into a practical version rather than leaving it as fantasy.` +
-    `
-- Do not assume trap doors, fly systems, hidden infrastructure, or stage modifications unless the context explicitly allows them.` +
-    `
-- Write for real assistants, stage managers, and rehearsal use.` +
-    standardRule +
-    demoRule +
-    toolSpecificRule +
-    `
-- Return a JSON object matching the requested schema.
-- Every requested field in the JSON schema is an array of strings.
-- Each array item must be one clean bullet line, with no markdown bullets or numbering characters.
-- Do not include markdown headings inside any field.
-- Do not repeat the section title inside the field value.
-- Each field should contain only the bullet content for that section.
-- Every field must contain usable rehearsal notes, not summaries.
-- Every requested section must contain useful content; do not leave sections blank.` +
+    `\n\nIMPORTANT RULES:` +
+    `\n- Do not expose methods, gimmicks, or secret workings.` +
+    `\n- Prioritize realistic staging, safe traffic flow, practical assistant movement, and usable rehearsal notes.` +
+    `\n- If a routine element sounds unrealistic, revise it into a practical version rather than leaving it as fantasy.` +
+    `\n- Do not assume trap doors, fly systems, hidden infrastructure, or stage modifications unless the context explicitly allows them.` +
+    `\n- Write for real assistants, stage managers, and rehearsal use.` +
+    detailRule +
+    `\n- Return a JSON object matching the requested schema.` +
+    `\n- Every requested section must be an object with two fields: summary and bullets.` +
+    `\n- summary must be one short sentence.` +
+    `\n- bullets must contain the detailed operational lines for that section.` +
+    `\n- Do not include markdown headings inside any field.` +
+    `\n- Do not repeat the section title inside the field value.` +
+    `\n- Every requested section must contain useful content; do not leave sections blank.` +
     contextBlock +
-    `
-
-REQUESTED SECTIONS:
-${requestedSections.map((key) => `- ${SECTION_LABELS[key]} (${key})`).join('\n')}
-
-ROUTINE DESCRIPTION / OUTLINE:
-${userInput}` +
+    `\n\nREQUESTED SECTIONS:\n${requestedSections.map((key) => `- ${SECTION_LABELS[key]} (${key})`).join('\n')}\n\nROUTINE DESCRIPTION / OUTLINE:\n${userInput}` +
     refineBlock
   );
 }
@@ -430,65 +434,57 @@ ${userInput}` +
 function combineRunNotes(output: StructuredOutput, fallback: string) {
   const sections: Array<[string, StructuredFieldValue | undefined]> = [
     ['STAGE LAYOUT', output.stageLayout],
-    ['BLOCKING PLAN', output.blockingPlan],
     ['ASSISTANT POSITIONS', output.assistantPositions],
     ['CUE TIMELINE', output.cueTimeline],
-    ['PROP MOVEMENT', output.propMovement],
-    ['VOLUNTEER MANAGEMENT', output.volunteerManagement],
-    ['MISDIRECTION WINDOWS', output.misdirectionWindows],
-    ['TRANSITION PLAN', output.transitionPlan],
-    ['CONTINGENCY PLAN', output.contingencyPlan],
-    ['SAFETY & RISK ANALYSIS', output.safetyRiskAnalysis],
+    ['SAFETY CHECK', output.safetyNotes],
   ];
   const parts = sections
-    .map(([title, value]) => [title, formatStructuredField(value)] as const)
-    .filter(([, value]) => value.trim())
-    .map(([title, value]) => `${title}\n${value}`);
+    .map(([title, value]) => {
+      const block = formatStructuredField(value);
+      return block ? `${title}\n${block}` : '';
+    })
+    .filter(Boolean);
   return parts.length ? parts.join('\n\n') : fallback;
 }
 
-function getRequestedSections() {
-  return STANDARD_SECTIONS;
+function getRequestedSections(focusTag?: string | null, responseMode: ResponseMode = 'full', demoMode = false) {
+  return ['stageLayout', 'assistantPositions', 'cueTimeline', 'safetyNotes'] as Array<Exclude<SectionKey, 'fullText'>>;
 }
 
-function getToolSpecificInstruction(focusTag?: string | null) {
-  switch (focusTag) {
-    case 'cue-sheet':
-      return `
-- For CUE_TIMELINE, use short chronological cues with clear action ownership and practical timing anchors.`;
-    case 'routine-staging':
-      return `
-- Treat this like a quick rehearsal cheat sheet. Focus on stage picture, assistant anchors, key cues, and practical safety notes.`;
-    case 'volunteer-flow':
-      return `
-- Include assistant placement, volunteer guidance, and exposure-safe handling in compact operational bullets.`;
-    case 'transition-flow':
-      return `
-- Focus on who moves, what gets carried or cleared, and the cue that triggers each move.`;
-    case 'safety-check':
-      return `
-- Pair each safety note with a concrete fix, spacing rule, or positioning adjustment.`;
-    default:
-      return `
-- Make this feel like a quick operational rehearsal sheet with specific assistant actions, positions, cues, and safety notes.`;
-  }
+function getToolSpecificInstruction(focusTag?: string | null, responseMode: ResponseMode = 'full', demoMode = false) {
+  return '';
 }
 
-function getAssistantStudioSpeedMode(): 'fast' | 'full' {
+function getAssistantStudioSpeedMode(
+  focusTag?: string | null,
+  responseMode: ResponseMode = 'full',
+  demoMode = false
+): 'fast' | 'full' {
   return 'fast';
 }
 
-function buildStructuredSchema(
-  keys: Array<Exclude<SectionKey, 'fullText'>>
-) {
+function buildStructuredSchema(keys: Array<Exclude<SectionKey, 'fullText'>>, demoMode = false) {
+  const bulletMin = demoMode ? 2 : 4;
+  const bulletMax = demoMode ? 3 : 5;
   const properties: Record<string, any> = {};
   keys.forEach((key) => {
     properties[key] = {
-      type: 'array',
+      type: 'object',
       description: SECTION_LABELS[key],
-      items: { type: 'string' },
-      minItems: 3,
-      maxItems: 3,
+      properties: {
+        summary: {
+          type: 'string',
+          description: `One short summary sentence for ${key}`,
+        },
+        bullets: {
+          type: 'array',
+          items: { type: 'string' },
+          minItems: bulletMin,
+          maxItems: bulletMax,
+          description: `Detailed operational bullets for ${key}`,
+        },
+      },
+      required: ['summary', 'bullets'],
     };
   });
 
@@ -497,17 +493,6 @@ function buildStructuredSchema(
     properties,
     required: keys,
   };
-}
-
-function formatStructuredField(value: unknown) {
-  if (Array.isArray(value)) {
-    return value
-      .map((line) => String(line || '').trim())
-      .filter(Boolean)
-      .map((line) => `• ${line}`)
-      .join('\n');
-  }
-  return String(value || '').trim();
 }
 
 function structuredResultToText(obj: Record<string, any>, keys: Array<Exclude<SectionKey, 'fullText'>>) {
@@ -522,14 +507,7 @@ function structuredResultToText(obj: Record<string, any>, keys: Array<Exclude<Se
 }
 
 function compactStructuredResultToText(obj: Record<string, any>, keys: Array<Exclude<SectionKey, 'fullText'>>) {
-  return keys
-    .map((key) => {
-      const value = formatStructuredField(obj?.[key]);
-      return value ? `${SECTION_LABELS[key]}\n${value}` : '';
-    })
-    .filter(Boolean)
-    .join('\n\n')
-    .trim();
+  return structuredResultToText(obj, keys);
 }
 
 export default function AssistantStudio({ user, onIdeaSaved }: Props) {
@@ -558,7 +536,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
   const [audienceDistance, setAudienceDistance] = useState('');
   const [lightingNotes, setLightingNotes] = useState('');
   const [lastPreset, setLastPreset] = useState<string>('');
-  const responseMode: ResponseMode = 'standard';
+  const [responseMode, setResponseMode] = useState<ResponseMode>('full');
   const [demoMode, setDemoMode] = useState(false);
 
   const requestIdRef = useRef(0);
@@ -690,27 +668,29 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
       clearErrors();
       setToast(null);
 
+      const effectiveResponseMode: ResponseMode = 'full';
+
       const prompt = buildStructuredPrompt({
         userInput: input.trim(),
         refineInstruction: opts?.refineInstruction || null,
         previousOutput: opts?.usePrevious ? outputRaw : null,
         context: { clientName, venueType, stageSize, numberOfAssistants, audienceDistance, lightingNotes },
         focusTag: lastPreset || null,
-        responseMode,
+        responseMode: effectiveResponseMode,
         demoMode,
       });
 
-      const requestedSections = getRequestedSections();
-      const assistantStudioSpeedMode = getAssistantStudioSpeedMode();
+      const requestedSections = getRequestedSections(lastPreset || null, effectiveResponseMode, demoMode);
+      const assistantStudioSpeedMode = getAssistantStudioSpeedMode(lastPreset || null, effectiveResponseMode, demoMode);
       const obj = await withTimeout(
         generateStructuredResponse(
           prompt,
           ASSISTANT_STUDIO_SYSTEM_INSTRUCTION,
-          buildStructuredSchema(requestedSections),
+          buildStructuredSchema(requestedSections, demoMode),
           currentUser,
-          { maxOutputTokens: demoMode ? 1100 : 1300, speedMode: 'fast' }
+          { maxOutputTokens: demoMode ? 1100 : 1800, speedMode: 'fast' }
         ),
-        STANDARD_REQUEST_TIMEOUT_MS
+        REQUEST_TIMEOUT_MS
       );
 
       if (cancelledUpToRef.current >= myId) return;
@@ -725,13 +705,9 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
       setOutput(normalized);
       setOutputRaw(displayText);
 
-      const firstAvailable = TABS.find((t) => {
-        if (t.key === 'fullText') return false;
-        const value = (obj || {})[t.key];
-        return Array.isArray(value)
-          ? value.some((line) => String(line || '').trim())
-          : !!String(value || '').trim();
-      });
+      const firstAvailable = TABS.find(
+        (t) => t.key !== 'fullText' && hasStructuredValue((obj || {})[t.key])
+      );
       setActiveTab(firstAvailable?.key || 'fullText');
     } catch (e: any) {
       console.error(e);
@@ -739,7 +715,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
       if (e?.message === 'TIMEOUT') {
         setErrorKind('timeout');
         setErrorMsg('This took too long and was stopped to keep the app responsive.');
-        setErrorDebug(`timeout_ms=${STANDARD_REQUEST_TIMEOUT_MS}; reqId=${myId}`);
+        setErrorDebug(`timeout_ms=${REQUEST_TIMEOUT_MS}; reqId=${myId}`);
       } else {
         const msg = e?.message || 'Something went wrong.';
         const isQuota = detectQuotaError(msg);
@@ -946,7 +922,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
         ['Safety & Risk Analysis', output.safetyRiskAnalysis],
       ];
       tasks = sectionTasks
-        .filter(([, value]) => !!formatStructuredField(value).trim())
+        .filter(([, value]) => hasStructuredValue(value))
         .map(([title, notes]) => ({ title: `Assistant Studio – ${title}`, notes: formatStructuredField(notes), priority: 'medium' as any }));
       if (tasks.length === 0) {
         tasks = [{ title: 'Assistant Studio – Output', notes: outputRaw, priority: 'medium' as any }];
@@ -1001,10 +977,10 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
     setLightingNotes(scenario.lightingNotes);
     setInput(scenario.input);
     setLastPreset(scenario.tag);
-    setDemoMode(false);
+    setDemoMode(true);
     clearErrors();
-    setToast(`Demo loaded: ${scenario.label} • Demo Mode OFF for Standard Plan testing`);
-    window.setTimeout(() => setToast(null), 1400);
+    setToast(`Demo loaded: ${scenario.label} • Demo Mode ON`);
+    window.setTimeout(() => setToast(null), 1200);
   };
 
   const reportIssue = async () => {
@@ -1065,11 +1041,11 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
 
   const renderTabContent = () => {
     const value: StructuredFieldValue = activeTab === 'fullText' ? outputRaw : output?.[activeTab] || '';
-    const hasValue = Array.isArray(value) ? value.some((line) => String(line || '').trim()) : !!String(value || '').trim();
+    const hasValue = activeTab === 'fullText' ? !!String(outputRaw || '').trim() : hasStructuredValue(value);
     if (!hasValue && activeTab !== 'fullText') {
       return (
         <div className="text-slate-400 text-sm">
-          This section isn’t available yet. Try generating again — the model sometimes returns fewer sections.
+          This section isn’t available yet. Generate again if the model skipped a section.
         </div>
       );
     }
@@ -1077,6 +1053,21 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
     const displayValue = hasValue ? value : outputRaw;
     if (activeTab === 'fullText' && typeof displayValue === 'string' && displayValue) {
       return renderAccordionText(displayValue);
+    }
+
+    if (displayValue && typeof displayValue === 'object' && !Array.isArray(displayValue)) {
+      const summary = getSectionSummary(displayValue);
+      const bullets = getSectionBullets(displayValue);
+      return (
+        <div className="space-y-3 text-slate-100 leading-relaxed">
+          {summary ? <div className="text-slate-200">{summary}</div> : null}
+          <ul className="list-disc pl-5 space-y-2 text-slate-100 leading-relaxed">
+            {bullets.map((line, i) => (
+              <li key={`${activeTab}-${i}`}>{line}</li>
+            ))}
+          </ul>
+        </div>
+      );
     }
 
     if (Array.isArray(displayValue)) {
@@ -1094,12 +1085,9 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
   };
 
   const availableTabs = useMemo(() => {
-    const hasContent = (value: StructuredFieldValue | undefined) =>
-      Array.isArray(value) ? value.some((line) => String(line || '').trim()) : !!String(value || '').trim();
-
-    const base = TABS.filter((t) => (t.key === 'fullText' ? true : hasContent(output?.[t.key])));
+    const base = TABS.filter((t) => (t.key === 'fullText' ? true : hasStructuredValue(output?.[t.key])));
     if (!outputRaw) return base;
-    const hasStructured = (Object.keys(HEADERS) as Array<keyof typeof HEADERS>).some((k) => hasContent(output[k]));
+    const hasStructured = (Object.keys(HEADERS) as Array<keyof typeof HEADERS>).some((k) => hasStructuredValue(output[k] as any));
     if (!hasStructured) return [{ key: 'fullText', label: 'Full Text' }];
     if (!base.find((t) => t.key === 'fullText')) base.push({ key: 'fullText', label: 'Full Text' });
     return base;
@@ -1223,25 +1211,25 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
           <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-800/80 bg-slate-950/35 px-3 py-2">
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Plan mode</div>
-              <div className="text-xs text-slate-500">Standard Plan uses structured Gemini Flash output with 4 sections and 3 bullets per section.</div>
+              <div className="text-xs text-slate-500">Detailed Assistant Plan uses structured Gemini Flash output with 4 sections, a short summary, and 4-5 detailed bullets per section.</div>
             </div>
-            <div className="px-3 py-1.5 rounded-lg border border-purple-600/70 bg-purple-600/15 text-sm text-purple-200">Standard Plan</div>
+            <div className="px-3 py-2 rounded-lg border border-purple-500/70 bg-purple-500/10 text-sm text-purple-200 cursor-default select-none">
+              Detailed Assistant Plan
+            </div>
           </div>
 
           <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-800/80 bg-slate-950/35 px-3 py-2">
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Demo mode</div>
-              <div className="text-xs text-slate-500">Demo Mode stays separate from quality logic and only keeps wording compact for booth demos.</div>
+              <div className="text-xs text-slate-500">Demo Mode keeps the same plan structure but allows slightly shorter wording for booth demos.</div>
             </div>
             <button
               type="button"
               onClick={() => {
                 setDemoMode((v) => {
                   const next = !v;
-                  if (next) {
-                    setToast('Demo Mode ON • Standard Plan kept active with compact booth-friendly wording.');
-                    window.setTimeout(() => setToast(null), 1600);
-                  }
+                  setToast(next ? 'Demo Mode ON • Booth wording shortened slightly.' : 'Demo Mode OFF • Full detail restored.');
+                  window.setTimeout(() => setToast(null), 1600);
                   return next;
                 });
               }}
@@ -1270,7 +1258,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
               <div className="text-xs text-slate-400">Refine this plan:</div>
               {lastPreset ? (
                 <div className="text-xs text-slate-500">
-                  Preset: <span className="text-slate-300">{lastPreset}</span> • Mode: <span className="text-slate-300">{demoMode ? 'demo' : 'standard'}</span>
+                  Preset: <span className="text-slate-300">{lastPreset}</span> • Mode: <span className="text-slate-300">{demoMode ? 'demo' : 'detailed'}</span>
                 </div>
               ) : null}
             </div>
@@ -1305,7 +1293,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
 
                   <div className="mt-1 text-sm text-slate-300">
                     {errorKind === 'timeout'
-                      ? `The request was stopped after ${Math.round(STANDARD_REQUEST_TIMEOUT_MS / 1000)} seconds so the app never gets stuck. Try again or use Demo Mode for a slightly tighter booth-friendly response.`
+                      ? 'The request was stopped after 50 seconds so the app never gets stuck. Try again or switch on Demo Mode for a slightly shorter booth-friendly version.'
                       : errorKind === 'quota'
                       ? quotaMessage()
                       : 'Please try again. If it keeps happening, report it so we can fix it fast.'}
@@ -1375,9 +1363,9 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
               <>
                 <div className="flex items-center gap-2 mb-3 flex-wrap">
                   <div className={`px-3 py-1 rounded-full text-xs font-semibold border ${demoMode ? 'border-amber-500/40 bg-amber-500/10 text-amber-200' : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'}`}>
-                    {demoMode ? '⚡ Standard Plan (Demo)' : '📋 Standard Assistant Plan'}
+                    {demoMode ? '⚡ Detailed Assistant Plan (Demo)' : '📋 Detailed Assistant Plan'}
                   </div>
-                  {demoMode ? <div className="text-[11px] text-slate-500">Demo Mode keeps the same 4-section structured plan with slightly tighter booth-friendly wording.</div> : null}
+                  {demoMode ? <div className="text-[11px] text-slate-500">Demo Mode keeps the same structure but shortens wording slightly.</div> : null}
                 </div>
 
                 <div className="flex flex-wrap gap-2 mb-3">
@@ -1406,7 +1394,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
                 <div className="text-slate-500">
                   Try: <span className="text-slate-300">“Routine Staging”</span>,{' '}
                   <span className="text-slate-300">“Generate Cue Sheet”</span>, or{' '}
-                  <span className="text-slate-300">“Safety Check”</span>, then hit Generate. Fast mode is best for demos.
+                  <span className="text-slate-300">“Safety Check”</span>, then hit Generate. 
                 </div>
               </div>
             )}
