@@ -370,8 +370,9 @@ ${SECTION_LABELS[key]}`)
   const fastRule = `
 - FAST MODE: generate a compact but complete rehearsal assistant summary.
 - Return exactly the 4 requested sections and make every section useful.
-- Each section must contain 2-3 bullet points.
-- Each bullet may be one short sentence, but keep it tight and actionable.
+- Each section must contain 3-4 bullet points.
+- Each bullet should contain useful rehearsal or staging information, not short fragments.
+- Each bullet may be 1-2 short sentences, but keep it tight, actionable, and easy to scan.
 - Do not leave any requested section blank or nearly empty.
 - Avoid long explanations and narrative paragraphs.
 - Prioritize speed, clarity, and instant booth readability.`;
@@ -379,14 +380,16 @@ ${SECTION_LABELS[key]}`)
   const fullRule = `
 - FULL MODE: generate a professional assistant operations plan that is richer than Fast but still compact.
 - Return exactly 6 strong sections.
-- Use about 4 short bullets or operational lines per section.
-- Keep details practical: blocking, cue ownership, prop flow, volunteer handling, and fallback actions when relevant.
+- Use 4-5 short bullets or operational lines per section.
+- Each bullet should contain a clear operational instruction for assistants, staging, timing, prop flow, volunteer handling, or fallback actions.
+- Short explanatory notes are encouraged when they improve rehearsal clarity.
+- Bullets should contain useful rehearsal or staging information, not short fragments.
 - No long prose, no filler, and no narrative paragraphs.`;
 
   const demoRule = demoMode
     ? `
 - DEMO MODE: optimize for booth reliability. Keep output compact, practical, and instantly scannable.
-- In demo mode, aim for 2-3 bullets per section and never exceed 3 bullets per section.`
+- In demo mode, aim for 3 bullets per section and allow up to 4 when needed for clarity.`
     : '';
 
   const toolSpecificRule = getToolSpecificInstruction(focusTag, responseMode, demoMode);
@@ -458,37 +461,37 @@ function getToolSpecificInstruction(focusTag?: string | null, responseMode: Resp
     case 'cue-sheet':
       return mode === 'fast'
         ? `
-- For CUE_TIMELINE, return exactly 5 numbered cues in chronological order. Each cue should be one short line with the action and who owns it.`
+- For CUE_TIMELINE, return exactly 6 numbered cues in chronological order. Each cue should be one short operational line with the action, who owns it, and a brief timing anchor when useful.`
         : `
 - For CUE_TIMELINE, return 8-10 numbered cues in chronological order. Each cue should include timing, assistant responsibility, and a short backup or hold note where useful.`;
     case 'routine-staging':
       return mode === 'fast'
         ? `
-- Treat this like a quick rehearsal cheat sheet. Focus on stage picture, assistant anchors, key cues, safety, and one practical note for the reveal.`
+- Treat this like a quick rehearsal cheat sheet. Focus on stage picture, assistant anchors, key cues, safety, and practical reveal handling using fuller rehearsal bullets instead of fragments.`
         : `
 - Treat this like a professional assistant operations plan. Keep it tight but premium: stage picture, blocking, cue timing, prop flow, safety, and one fallback note where relevant.`;
     case 'volunteer-flow':
       return mode === 'fast'
         ? `
-- Keep volunteer guidance compact and practical.`
+- Keep volunteer guidance compact and practical, but make each bullet complete enough to use during rehearsal.`
         : `
 - Include exposure prevention, audience management, assistant backup handling, and calm volunteer recovery steps in concise operational bullets.`;
     case 'transition-flow':
       return mode === 'fast'
         ? `
-- Focus on the cleanest transition path and reset sequence.`
+- Focus on the cleanest transition path and reset sequence, with short but complete rehearsal-ready instructions.`
         : `
 - Include traffic flow, reset choreography, cue support, and what happens if applause or timing runs long using short operational bullets.`;
     case 'safety-check':
       return mode === 'fast'
         ? `
-- Flag only the most important staging hazards and fixes.`
+- Flag only the most important staging hazards and fixes, but make each note specific enough to act on during rehearsal.`
         : `
 - Review collision risks, heavy props, crowd proximity, timing hazards, and practical mitigation steps with concise contingency notes.`;
     default:
       return mode === 'fast'
         ? `
-- Make this feel like a quick rehearsal cheat sheet.`
+- Make this feel like a quick rehearsal cheat sheet with complete, actionable bullets.`
         : `
 - Make this feel like a professional assistant planning document.`;
   }
