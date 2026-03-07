@@ -367,7 +367,7 @@ function buildStructuredPrompt(opts: {
   const fastRule = `
 - FAST MODE: generate a compact but operational rehearsal card.
 - Return exactly the 3 requested sections and make every section useful.
-- Each section must contain exactly 3 concise but specific bullet lines.
+- Each section must contain exactly 3 concise but specific bullet lines. Do not return 1-2 bullets.
 - Every bullet must describe a concrete assistant action, position, cue, traffic path, volunteer handling step, or prop-handling instruction.
 - Do not use generic filler like "keep the area clear," "assistant helps as needed," or "maintain good flow."
 - Each bullet may be 1-2 short sentences, but keep it tight, actionable, and easy to scan.
@@ -378,8 +378,8 @@ function buildStructuredPrompt(opts: {
 
   const fullRule = `
 - FULL MODE: generate a professional assistant operations plan that is richer than Fast but still compact.
-- Return exactly 6 strong sections.
-- Use 4-5 short bullets or operational lines per section.
+- Return exactly the requested sections and fill all of them completely.
+- Use 4-5 short bullets or operational lines per section. Do not leave any requested section under-filled.
 - Each bullet should contain a clear operational instruction for assistants, staging, timing, prop flow, volunteer handling, or fallback actions.
 - Short explanatory notes are encouraged when they improve rehearsal clarity.
 - Bullets should contain useful rehearsal or staging information, not short fragments.
@@ -524,15 +524,15 @@ function buildStructuredSchema(
 ) {
   const properties: Record<string, any> = {};
   keys.forEach((key) => {
-    const minItems = key === 'safetyNotes'
-      ? (speedMode === 'fast' ? 2 : 3)
-      : (speedMode === 'fast' ? 2 : 3);
+    const minItems = speedMode === 'fast' ? 3 : 3;
+    const maxItems = speedMode === 'fast' ? 3 : (key === 'cueTimeline' ? 5 : 5);
 
     properties[key] = {
       type: 'array',
       description: SECTION_LABELS[key],
       items: { type: 'string' },
       minItems,
+      maxItems,
     };
   });
 
