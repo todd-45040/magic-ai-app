@@ -5,10 +5,7 @@ import { saveIdea } from '../services/ideasService';
 import { getShows, addTasksToShow } from '../services/showsService';
 import type { Show, Task, User } from '../types';
 
-type Props = {
-  user?: User;
-  onIdeaSaved?: () => void;
-};
+type Props = { user?: User; onIdeaSaved?: () => void };
 
 const GUEST_USER: User = {
   email: '',
@@ -17,8 +14,8 @@ const GUEST_USER: User = {
   lastResetDate: '',
 };
 
-const DRAFT_KEY = 'maw_assistant_studio_draft_v5';
-const CONTEXT_KEY = 'maw_assistant_studio_context_v3';
+const DRAFT_KEY = 'maw_assistant_studio_draft_v6';
+const CONTEXT_KEY = 'maw_assistant_studio_context_v4';
 const REQUEST_TIMEOUT_MS = 45_000;
 
 type ErrorKind = 'timeout' | 'quota' | 'other' | null;
@@ -32,6 +29,7 @@ type SectionKey =
   | 'volunteerPlan'
   | 'assistantInstructions'
   | 'safetyNotes'
+  | 'misdirectionWindows'
   | 'fullText';
 
 type StructuredOutput = Partial<Record<SectionKey, string>>;
@@ -46,6 +44,7 @@ const TABS: Array<{ key: SectionKey; label: string }> = [
   { key: 'volunteerPlan', label: 'Volunteer Plan' },
   { key: 'assistantInstructions', label: 'Assistant Instructions' },
   { key: 'safetyNotes', label: 'Safety Notes' },
+  { key: 'misdirectionWindows', label: 'Misdirection Windows' },
   { key: 'fullText', label: 'Full Text' },
 ];
 
@@ -59,6 +58,11 @@ const PRESETS: Array<{ label: string; template: (input: string) => string; tag: 
     label: 'Volunteer Flow',
     tag: 'volunteer-flow',
     template: (input) => `Plan volunteer management for this routine. Include where volunteers stand, how the assistant guides them, and how to avoid exposure.\n\nROUTINE:\n${input}`,
+  },
+  {
+    label: 'Misdirection Timing',
+    tag: 'misdirection-timing',
+    template: (input) => `Identify the critical misdirection windows in this routine. For each one, specify the moment, the assistant action, and the recommended timing.\n\nROUTINE:\n${input}`,
   },
   {
     label: 'Tighten Blocking',
@@ -86,8 +90,8 @@ const REFINE_ACTIONS = [
   { label: 'Tighten blocking', instruction: 'Tighten the blocking: reduce wasted movement and simplify paths.' },
   { label: 'Cleaner cues', instruction: 'Make the cueing cleaner: tighten timing, handoffs, and stage crossings.' },
   { label: 'Volunteer flow', instruction: 'Strengthen volunteer flow and clarify where assistants guide volunteers.' },
+  { label: 'Stronger misdirection', instruction: 'Clarify the strongest misdirection windows, assistant positioning, and exact timing during those moments.' },
   { label: 'Safer staging', instruction: 'Increase safety: identify collisions, awkward traffic, and unsafe volunteer positions.' },
-  { label: 'More portable', instruction: 'Make the routine more portable and efficient with simpler prop movement and resets.' },
 ] as const;
 
 const VENUE_TYPES = [
@@ -149,6 +153,7 @@ function parseStructured(raw: string): StructuredOutput {
     volunteerPlan: '### VOLUNTEER_PLAN',
     assistantInstructions: '### ASSISTANT_INSTRUCTIONS',
     safetyNotes: '### SAFETY_NOTES',
+    misdirectionWindows: '### MISDIRECTION_WINDOWS',
   } as const;
 
   const out: StructuredOutput = { fullText: raw?.trim() || '' };
@@ -173,10 +178,7 @@ function buildStructuredPrompt(opts: {
   if (context?.audienceDistance) contextLines.push(`Audience distance: ${context.audienceDistance}`);
   if (context?.venueType) contextLines.push(`Venue type: ${context.venueType}`);
   const contextBlock = contextLines.length ? `\n\nCONTEXT:\n${contextLines.join('\n')}` : '';
-  const refineBlock =
-    refineInstruction && previousOutput
-      ? `\n\nREFINE REQUEST: ${refineInstruction}\n\nPREVIOUS OUTPUT:\n${previousOutput}`
-      : '';
+  const refineBlock = refineInstruction && previousOutput ? `\n\nREFINE REQUEST: ${refineInstruction}\n\nPREVIOUS OUTPUT:\n${previousOutput}` : '';
 
   return (
     `Return your answer in EXACTLY this format with no extra headings:` +
@@ -189,6 +191,7 @@ function buildStructuredPrompt(opts: {
     `\n### VOLUNTEER_PLAN\nExplain where volunteers stand, how assistants guide them, and how exposure is avoided.` +
     `\n### ASSISTANT_INSTRUCTIONS\nGive practical assistant coaching notes in short bullets.` +
     `\n### SAFETY_NOTES\nList safety notes, visibility concerns, collision risks, and volunteer reminders.` +
+    `\n### MISDIRECTION_WINDOWS\nList 2–4 critical misdirection windows. For each one, provide Moment:, Assistant Action:, and Recommended Timing:.` +
     contextBlock +
     `\n\nROUTINE SCRIPT OR OUTLINE:\n${userInput}` +
     refineBlock
@@ -202,6 +205,7 @@ function formatNotesBlock(output: StructuredOutput, fallback: string) {
   if (output.cueTimeline?.trim()) parts.push(`CUE TIMELINE\n${output.cueTimeline.trim()}`);
   if (output.volunteerPlan?.trim()) parts.push(`VOLUNTEER PLAN\n${output.volunteerPlan.trim()}`);
   if (output.safetyNotes?.trim()) parts.push(`SAFETY NOTES\n${output.safetyNotes.trim()}`);
+  if (output.misdirectionWindows?.trim()) parts.push(`MISDIRECTION WINDOWS\n${output.misdirectionWindows.trim()}`);
   return parts.length ? parts.join('\n\n') : fallback;
 }
 
@@ -254,9 +258,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
   }, [input]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(CONTEXT_KEY, JSON.stringify({ stageSize, venueType, audienceDistance, numberOfAssistants }));
-    } catch {}
+    try { localStorage.setItem(CONTEXT_KEY, JSON.stringify({ stageSize, venueType, audienceDistance, numberOfAssistants })); } catch {}
   }, [stageSize, venueType, audienceDistance, numberOfAssistants]);
 
   useEffect(() => {
@@ -366,7 +368,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
         type: 'text',
         title: 'Assistant Studio Output',
         content: outputRaw,
-        tags: ['assistant-studio', 'staging', 'volunteer-plan', ...(lastPreset ? [lastPreset] : [])],
+        tags: ['assistant-studio', 'staging', 'volunteer-plan', 'misdirection', ...(lastPreset ? [lastPreset] : [])],
       });
       onIdeaSaved?.();
       setToast('Saved to Ideas ✓');
@@ -399,7 +401,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
         type: 'text',
         title: blueprintName || 'Assistant Studio Blueprint',
         content: `${header}${outputRaw}`,
-        tags: ['assistant-studio', 'blueprint', 'staging'],
+        tags: ['assistant-studio', 'blueprint', 'staging', 'misdirection'],
       });
       setBlueprintOpen(false);
       setToast('Blueprint saved ✓');
@@ -433,6 +435,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
           { title: 'Assistant Studio – Cue Timeline', notes: output.cueTimeline || outputRaw, priority: 'Medium' as any },
           { title: 'Assistant Studio – Volunteer Plan', notes: output.volunteerPlan || outputRaw, priority: 'Medium' as any },
           { title: 'Assistant Studio – Safety Notes', notes: output.safetyNotes || outputRaw, priority: 'Medium' as any },
+          { title: 'Assistant Studio – Misdirection Windows', notes: output.misdirectionWindows || outputRaw, priority: 'Medium' as any },
         ];
       }
       await addTasksToShow(selectedShowId, tasks);
@@ -502,7 +505,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
           {contextSummary ? (
             <div className="text-xs text-slate-400">Context: <span className="text-slate-200">{contextSummary}</span></div>
           ) : (
-            <div className="text-[11px] italic text-slate-500/80">Optional context makes staging and volunteer guidance feel made for this performance.</div>
+            <div className="text-[11px] italic text-slate-500/80">Optional context makes staging, volunteer guidance, and misdirection analysis feel made for this performance.</div>
           )}
         </div>
         <div className="text-sm text-slate-400 min-h-[1.25rem]">{toast ? <span className="text-emerald-400">{toast}</span> : null}</div>
@@ -535,7 +538,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
             <input value={audienceDistance} onChange={(e) => setAudienceDistance(e.target.value)} placeholder="Audience distance" className="p-2 rounded bg-slate-950/50 border border-slate-700 text-white placeholder:text-slate-500" />
           </div>
 
-          <textarea className="w-full p-3 border border-slate-700 rounded bg-slate-950/50 text-white min-h-[260px] placeholder:text-slate-500" rows={10} placeholder="Paste the routine script or outline here. Include volunteer moments, reveals, prop handoffs, and any assistant responsibilities…" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={onTextKeyDown} />
+          <textarea className="w-full p-3 border border-slate-700 rounded bg-slate-950/50 text-white min-h-[260px] placeholder:text-slate-500" rows={10} placeholder="Paste the routine description or outline here. Include reveal moments, volunteer moments, prop handoffs, and assistant responsibilities…" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={onTextKeyDown} />
 
           <div className="text-xs text-slate-500">Shortcut: <span className="text-slate-300">Ctrl/Cmd + Enter</span> to generate • <span className="text-slate-300">Esc</span> to cancel</div>
 
@@ -580,7 +583,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
             ) : (
               <div className="text-slate-400 text-sm space-y-2">
                 <div>Your results will appear here.</div>
-                <div className="text-slate-500">Try: <span className="text-slate-300">“Generate Cue Sheet”</span> or <span className="text-slate-300">“Volunteer Flow”</span>, then hit Generate.</div>
+                <div className="text-slate-500">Try: <span className="text-slate-300">“Generate Cue Sheet”</span>, <span className="text-slate-300">“Volunteer Flow”</span>, or <span className="text-slate-300">“Misdirection Timing”</span>, then hit Generate.</div>
               </div>
             )}
           </div>
@@ -597,7 +600,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
             <div className="mt-4 space-y-4">
               <div className="flex flex-col gap-2 text-sm text-slate-200">
                 <label className="flex items-center gap-2"><input type="radio" name="sendMode" checked={sendMode === 'run'} onChange={() => setSendMode('run')} />Create 4-part staging run (Opening / Middle A / Middle B / Reveal)</label>
-                <label className="flex items-center gap-2"><input type="radio" name="sendMode" checked={sendMode === 'sections'} onChange={() => setSendMode('sections')} />Create section tasks (Layout / Blocking / Cue Timeline / Volunteer Plan / Safety)</label>
+                <label className="flex items-center gap-2"><input type="radio" name="sendMode" checked={sendMode === 'sections'} onChange={() => setSendMode('sections')} />Create section tasks (Layout / Blocking / Cue Timeline / Volunteer Plan / Safety / Misdirection)</label>
               </div>
               {shows.length === 0 ? (
                 <div className="text-slate-300 text-sm">No shows found. Create a show in <span className="text-slate-100">Show Planner</span> first.</div>
@@ -626,7 +629,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
             </div>
             <div className="mt-4 space-y-3">
               <label className="text-sm text-slate-300">Blueprint name</label>
-              <input value={blueprintName} onChange={(e) => setBlueprintName(e.target.value)} placeholder="e.g., Levitation Assistant Cue Blueprint" className="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white placeholder:text-slate-500" />
+              <input value={blueprintName} onChange={(e) => setBlueprintName(e.target.value)} placeholder="e.g., Levitation Misdirection Blueprint" className="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white placeholder:text-slate-500" />
               <div className="text-xs text-slate-400">Includes output + preset + context (stage size / assistants / audience distance / venue) + tags.</div>
               <button className="w-full mt-2 px-4 py-2 rounded bg-emerald-700 hover:bg-emerald-600 text-white disabled:opacity-40" disabled={!outputRaw || savingBlueprint} onClick={saveBlueprint}>
                 {savingBlueprint ? 'Saving…' : 'Save Blueprint'}
