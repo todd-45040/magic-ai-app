@@ -168,6 +168,9 @@ const CATEGORY_QUERIES = [
     },
 ];
 
+const WOW_DEMO_PROMPT = 'Create a drawing duplication routine using a borrowed phone.';
+const WOW_DEMO_METHODS = ['Psychological Force', 'Dual Reality', 'Peek Principle'];
+
 type AudienceReactionModel = {
     gasps_likelihood_1_to_10: number;
     skeptic_resistance_probability_0_to_1: number;
@@ -767,6 +770,21 @@ Routine depth: ${depthLabel}
 - Keep it professional, concise, and stage-usable rather than verbose.
 `;
 
+            const wowDemoInstructions = currentQuery.trim().toLowerCase() === WOW_DEMO_PROMPT.toLowerCase()
+                ? `
+Convention WOW Demo priority:
+- This is a signature booth-style demonstration prompt.
+- Make the routine feel instantly impressive and clearly mentalism-specific.
+- Include three method_concepts framed as concise labeled approaches such as:
+  Method A — Psychological Force
+  Method B — Dual Reality Structure
+  Method C — Peek Principle
+- Keep the approaches non-exposure and high level.
+- Make the performance_script sound like a real performance, not a generic summary.
+- Ensure the routine structure feels strong enough to stop a convention attendee and make them think, "this actually understands mentalism."
+`
+                : '';
+
             const prompt = `
 Generate a mentalism routine blueprint in STRICT JSON that matches the schema provided.
 
@@ -783,13 +801,14 @@ Method preferences (${selectedMethodPreferences.length ? 'optional guidance prov
 ${selectedMethodPreferences.length ? selectedMethodPreferences.join(', ') : 'No specific method preferences selected.'}
 ${ethicalBlock}
 ${depthInstructions}
+${wowDemoInstructions}
 
 Output guidelines:
 - Keep it practical and performance-ready.
 - NON-EXPOSURE: do not reveal methods, gimmicks, or step-by-step secrets.
 - effect_summary should describe what the performer appears to accomplish in 1-2 sentences.
 - audience_experience should describe what the spectator believes happened and why it feels impossible.
-- method_concepts should list concise approach frameworks only, not secrets.
+- method_concepts should list concise approach frameworks only, not secrets. When appropriate, label them in a compelling way (for example: Method A — Psychological Force).
 - performance_script should give usable lines for opening_frame, build_suspense, spectator_interaction, and reveal_moment.
 - If the schema includes advanced fields, populate them with practical detail rather than fluff.
 - phase_structure should read like a sequence of beats/phases (short, actionable lines).
@@ -825,6 +844,25 @@ Output guidelines:
     const handleExampleClick = (exampleQuery: string) => {
         setQuery(exampleQuery);
         handleGenerate(exampleQuery);
+    };
+
+    const handleWowDemo = () => {
+        setQuery(WOW_DEMO_PROMPT);
+        setRoutineDepth('full');
+        setPerformanceEnvironment('Close-up');
+        setIntensityIdx(2);
+        setEthicalMode(true);
+        setMethodPreferences({
+            'Psychological Force': true,
+            'Dual Reality': true,
+            'Billet Work': false,
+            'Equivoque': false,
+            'Memory System': false,
+            'Technology Assisted': true,
+            'Prediction Method': false,
+        });
+        setError(null);
+        setTimeout(() => handleGenerate(WOW_DEMO_PROMPT), 0);
     };
 
     const handleSave = () => {
@@ -1207,6 +1245,30 @@ Output guidelines:
                             placeholder="Describe the audience experience you want to create..."
                             className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
                         />
+                        <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+                            <div className="flex items-start justify-between gap-3">
+                                <div>
+                                    <div className="text-sm font-semibold text-amber-200">Convention WOW Demo</div>
+                                    <div className="text-xs text-amber-100/80 mt-1">Instantly load the signature prompt that shows magicians this tool understands mentalism.</div>
+                                    <div className="mt-2 text-xs text-slate-200 italic">{WOW_DEMO_PROMPT}</div>
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                        {WOW_DEMO_METHODS.map((method) => (
+                                            <span key={method} className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[11px] text-amber-100">
+                                                {method}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={handleWowDemo}
+                                    disabled={isLoading}
+                                    className="shrink-0 rounded-md border border-amber-400/40 bg-amber-400/15 px-3 py-2 text-xs font-semibold text-amber-100 hover:bg-amber-400/25 disabled:opacity-60 disabled:cursor-not-allowed"
+                                >
+                                    Run WOW Demo
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
                     {/* Tier-1: Routine Intensity Slider */}
@@ -1652,6 +1714,12 @@ Output guidelines:
                                 {routineDepth === 'fast' ? (
                                     <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
                                         Fast Inspiration mode keeps the routine compact for quick ideation and booth demos.
+                                    </div>
+                                ) : null}
+
+                                {String(query || '').trim().toLowerCase() === WOW_DEMO_PROMPT.toLowerCase() ? (
+                                    <div className="rounded-lg border border-fuchsia-500/30 bg-fuchsia-500/10 px-3 py-2 text-xs text-fuchsia-100">
+                                        Convention WOW Demo active — this output is tuned to create an immediate “this actually understands mentalism” reaction.
                                     </div>
                                 ) : null}
 
