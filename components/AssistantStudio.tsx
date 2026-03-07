@@ -849,6 +849,41 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
     }
   };
 
+  const renderAccordionText = (text: string) => {
+    const normalized = text.replace(/\r\n/g, '\n');
+    const matches = [...normalized.matchAll(/^###\s*(\d+\.[^\n]*)$/gm)];
+    if (matches.length < 2) {
+      return <div className="whitespace-pre-wrap text-slate-100 leading-relaxed">{text}</div>;
+    }
+
+    const panels = matches.map((match, idx) => {
+      const start = match.index ?? 0;
+      const end = idx + 1 < matches.length ? (matches[idx + 1].index ?? normalized.length) : normalized.length;
+      const rawBlock = normalized.slice(start, end).trim();
+      const lines = rawBlock.split('\n');
+      const title = lines[0].replace(/^###\s*/, '').trim();
+      const body = lines.slice(1).join('\n').trim();
+
+      return (
+        <details
+          key={title || idx}
+          className="rounded-xl border border-slate-800 bg-slate-950/40 overflow-hidden"
+          open={idx === 0}
+        >
+          <summary className="cursor-pointer list-none select-none px-4 py-3 flex items-center justify-between gap-3 text-slate-100 font-medium">
+            <span>{title || `Part ${idx + 1}`}</span>
+            <span className="text-xs text-slate-500">Show / Hide</span>
+          </summary>
+          <div className="border-t border-slate-800 px-4 py-3 whitespace-pre-wrap text-slate-100 leading-relaxed">
+            {body}
+          </div>
+        </details>
+      );
+    });
+
+    return <div className="space-y-3">{panels}</div>;
+  };
+
   const renderTabContent = () => {
     const value = activeTab === 'fullText' ? outputRaw : output?.[activeTab] || '';
     if (!value && activeTab !== 'fullText') {
@@ -858,7 +893,13 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
         </div>
       );
     }
-    return <div className="whitespace-pre-wrap text-slate-100 leading-relaxed">{value || outputRaw}</div>;
+
+    const displayValue = value || outputRaw;
+    if (activeTab === 'fullText' && displayValue) {
+      return renderAccordionText(displayValue);
+    }
+
+    return <div className="whitespace-pre-wrap text-slate-100 leading-relaxed">{displayValue}</div>;
   };
 
   const availableTabs = useMemo(() => {
