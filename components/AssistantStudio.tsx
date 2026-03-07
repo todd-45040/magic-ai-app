@@ -62,11 +62,12 @@ const PRESETS: Array<{ label: string; tag: string; template: (input: string) => 
   },
 ];
 
-const DRAFT_KEY = 'maw_assistant_studio_draft_v7';
-const CONTEXT_KEY = 'maw_assistant_studio_context_v7';
+const DRAFT_KEY = 'maw_assistant_studio_draft_v8';
+const CONTEXT_KEY = 'maw_assistant_studio_context_v8';
 const REQUEST_TIMEOUT_MS = 45_000;
 
 type ErrorKind = 'timeout' | 'quota' | 'other' | null;
+type ResponseMode = 'fast' | 'full';
 
 type SectionKey =
   | 'stageLayout'
@@ -320,8 +321,9 @@ function buildStructuredPrompt(opts: {
     audienceDistance?: string;
     lightingNotes?: string;
   };
+  responseMode?: ResponseMode;
 }) {
-  const { userInput, refineInstruction, previousOutput, focusTag, context } = opts;
+  const { userInput, refineInstruction, previousOutput, focusTag, context, responseMode = 'fast' } = opts;
 
   const contextLines: string[] = [];
   if (context?.clientName) contextLines.push(`Client / show: ${context.clientName}`);
@@ -337,7 +339,11 @@ function buildStructuredPrompt(opts: {
       ? `\n\nREFINE REQUEST: ${refineInstruction}\n\nPREVIOUS OUTPUT:\n${previousOutput}`
       : '';
 
-    const requestedSections = SECTION_PROFILES[focusTag || ''] || SECTION_PROFILES.default;
+  const baseSections = SECTION_PROFILES[focusTag || ''] || SECTION_PROFILES.default;
+  const requestedSections =
+    responseMode === 'fast'
+      ? baseSections.slice(0, Math.min(4, baseSections.length))
+      : baseSections;
   const sectionBlock = requestedSections
     .map((key) => `
 ### ${String(key).toUpperCase()}
@@ -345,11 +351,18 @@ ${SECTION_LABELS[key]}`)
     .join('');
 
   const brevityRule =
-    focusTag === 'admc-demo'
+    focusTag === 'admc-demo' || responseMode === 'fast'
       ? `
 - Keep it convention-demo fast: each section should be 2-4 bullets or 2-4 short lines max.`
       : `
 - Keep each section concise: usually 3-6 bullets or short lines. Avoid long paragraphs.`;
+
+  const modeRule =
+    responseMode === 'fast'
+      ? `
+- FAST MODE: prioritize speed. Skip anything optional and give only the most useful operational guidance.`
+      : `
+- FULL MODE: include fuller practical detail while still staying concise.`;
 
   return (
     `You are building a practical assistant-operations plan for a magic routine. Return useful, stage-ready guidance with no fluff.` +
@@ -366,6 +379,7 @@ IMPORTANT RULES:` +
 - Do not assume trap doors, fly systems, hidden infrastructure, or stage modifications unless the context explicitly allows them.` +
     `
 - Write for real assistants, stage managers, and rehearsal use.` +
+    modeRule +
     brevityRule +
     `
 - Return ONLY the requested headings below, in the same order, and no extra introduction or conclusion.` +
@@ -422,6 +436,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
   const [audienceDistance, setAudienceDistance] = useState('');
   const [lightingNotes, setLightingNotes] = useState('');
   const [lastPreset, setLastPreset] = useState<string>('');
+  const [responseMode, setResponseMode] = useState<ResponseMode>('fast');
 
   const requestIdRef = useRef(0);
   const cancelledUpToRef = useRef(0);
@@ -544,6 +559,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
         previousOutput: opts?.usePrevious ? outputRaw : null,
         context: { clientName, venueType, stageSize, numberOfAssistants, audienceDistance, lightingNotes },
         focusTag: lastPreset || null,
+        responseMode,
       });
 
       const text = await withTimeout(
@@ -1026,6 +1042,28 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
             />
           </div>
 
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-800/80 bg-slate-950/35 px-3 py-2">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Response mode</div>
+              <div className="text-xs text-slate-500">Fast is best for ADMC demos. Full asks for more detail and may take longer.</div>
+            </div>
+            <div className="flex rounded-lg border border-slate-700/80 overflow-hidden">
+              {(['fast', 'full'] as ResponseMode[]).map((mode) => {
+                const active = responseMode === mode;
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setResponseMode(mode)}
+                    className={`px-3 py-1.5 text-sm ${active ? 'bg-purple-600 text-white' : 'bg-slate-950/40 text-slate-300 hover:bg-slate-900/70'}`}
+                  >
+                    {mode === 'fast' ? 'Fast' : 'Full'}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <textarea
             className="w-full p-3 border border-slate-700 rounded bg-slate-950/50 text-white min-h-[280px] placeholder:text-slate-500"
             rows={12}
@@ -1045,7 +1083,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
               <div className="text-xs text-slate-400">Refine this plan:</div>
               {lastPreset ? (
                 <div className="text-xs text-slate-500">
-                  Preset: <span className="text-slate-300">{lastPreset}</span>
+                  Preset: <span className="text-slate-300">{lastPreset}</span> • Mode: <span className="text-slate-300">{responseMode}</span>
                 </div>
               ) : null}
             </div>
@@ -1080,7 +1118,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
 
                   <div className="mt-1 text-sm text-slate-300">
                     {errorKind === 'timeout'
-                      ? 'The request was stopped after 45 seconds so the app never gets stuck. Try a preset or demo scenario for a faster, smaller response.'
+                      ? 'The request was stopped after 45 seconds so the app never gets stuck. Try Fast mode or a demo scenario for a faster, smaller response.'
                       : errorKind === 'quota'
                       ? quotaMessage()
                       : 'Please try again. If it keeps happening, report it so we can fix it fast.'}
@@ -1092,6 +1130,15 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
                 </div>
 
                 <div className="flex flex-col gap-2 min-w-[140px]">
+                  {errorKind === 'timeout' && responseMode === 'full' && (
+                    <button
+                      className="px-3 py-2 rounded bg-fuchsia-700 hover:bg-fuchsia-600 text-white"
+                      onClick={() => { setResponseMode('fast'); handleGenerate(); }}
+                      disabled={!input.trim() || loading}
+                    >
+                      Retry Fast
+                    </button>
+                  )}
                   <button
                     className="px-3 py-2 rounded bg-purple-600 hover:bg-purple-500 text-white"
                     onClick={handleGenerate}
@@ -1168,7 +1215,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
                 <div className="text-slate-500">
                   Try: <span className="text-slate-300">“Routine Staging”</span>,{' '}
                   <span className="text-slate-300">“Generate Cue Sheet”</span>, or{' '}
-                  <span className="text-slate-300">“Safety Check”</span>, then hit Generate.
+                  <span className="text-slate-300">“Safety Check”</span>, then hit Generate. Fast mode is best for demos.
                 </div>
               </div>
             )}
