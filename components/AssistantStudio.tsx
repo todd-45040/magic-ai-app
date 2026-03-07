@@ -377,7 +377,8 @@ ${SECTION_LABELS[key]}`)
 - Prioritize assistant movement, prop handling, volunteer positioning, cue timing, and resets.
 - HARD RULE: do not write high-level summaries.
 - HARD RULE: every bullet must describe a physical action taken by an assistant.
-- Use concrete stage-direction language such as “Assistant A moves…”, “Assistant B prepares…”, “Escort the volunteer…”, “Place the prop…”, or “Signal the magician…”.
+- Prefer practical choreography wording such as “Assistant A moves…”, “Assistant B prepares…”, “Escort the volunteer…”, “Place the prop…”, “Signal the magician…”, “Reset the table…”, or “If the volunteer hesitates…”.
+- Start bullets with concrete stage-action verbs whenever possible so the output sounds like blocking notes.
 - Avoid vague summaries. Every bullet must describe a physical action assistants perform.
 - Write like quick rehearsal notes a magician could use immediately.
 `;
@@ -392,7 +393,8 @@ ${SECTION_LABELS[key]}`)
 - Include specific rehearsal-ready guidance such as escorting volunteers, placing or clearing props, signaling the magician, managing sightlines, or preparing fallback actions.
 - HARD RULE: do not write high-level summaries.
 - HARD RULE: every bullet must describe a physical action taken by an assistant.
-- Use concrete stage-direction language such as “Assistant A moves…”, “Assistant B prepares…”, “Escort the volunteer…”, “Place the prop…”, or “Signal the magician…”.
+- Prefer practical choreography wording such as “Assistant A moves…”, “Assistant B prepares…”, “Escort the volunteer…”, “Place the prop…”, “Signal the magician…”, “Reset the table…”, or “If the volunteer hesitates…”.
+- Start bullets with concrete stage-action verbs whenever possible so the output sounds like a real rehearsal document.
 - Avoid vague summaries, short fragments, and generic advice. Write like a rehearsal document assistants can actually follow.
 - Keep the output dense and practical, but do not write long narrative paragraphs or filler.`;
 
