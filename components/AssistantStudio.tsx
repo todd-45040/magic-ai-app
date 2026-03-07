@@ -1017,10 +1017,10 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
     setInput(scenario.input);
     setLastPreset(scenario.tag);
     setResponseMode('fast');
-    setDemoMode(true);
+    setDemoMode(false);
     clearErrors();
-    setToast(`Demo loaded: ${scenario.label} • Demo Mode ON`);
-    window.setTimeout(() => setToast(null), 1200);
+    setToast(`Demo loaded: ${scenario.label} • Demo Mode OFF for Fast/Full testing`);
+    window.setTimeout(() => setToast(null), 1400);
   };
 
   const reportIssue = async () => {
