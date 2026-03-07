@@ -502,8 +502,6 @@ function getAssistantStudioSpeedMode(
 ): 'fast' | 'full' {
   if (demoMode) return 'fast';
   return responseMode === 'full' ? 'full' : 'fast';
-}
-}
 
 function buildStructuredSchema(keys: Array<Exclude<SectionKey, 'fullText'>>) {
   const properties: Record<string, any> = {};
