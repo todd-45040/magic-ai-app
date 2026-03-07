@@ -322,8 +322,9 @@ function buildStructuredPrompt(opts: {
     lightingNotes?: string;
   };
   responseMode?: ResponseMode;
+  demoMode?: boolean;
 }) {
-  const { userInput, refineInstruction, previousOutput, focusTag, context, responseMode = 'fast' } = opts;
+  const { userInput, refineInstruction, previousOutput, focusTag, context, responseMode = 'fast', demoMode = false } = opts;
 
   const contextLines: string[] = [];
   if (context?.clientName) contextLines.push(`Client / show: ${context.clientName}`);
@@ -339,7 +340,7 @@ function buildStructuredPrompt(opts: {
       ? `\n\nREFINE REQUEST: ${refineInstruction}\n\nPREVIOUS OUTPUT:\n${previousOutput}`
       : '';
 
-  const requestedSections = getRequestedSections(focusTag, responseMode);
+  const requestedSections = getRequestedSections(focusTag, responseMode, demoMode);
   const sectionBlock = requestedSections
     .map((key) => `
 ### ${String(key).toUpperCase()}
@@ -358,6 +359,11 @@ ${SECTION_LABELS[key]}`)
       : `
 - FULL MODE: include fuller practical detail while still staying concise.`;
 
+  const demoRule = demoMode
+    ? `
+- DEMO MODE: optimize for booth reliability. Keep output compact, practical, and instantly scannable.`
+    : '';
+
   return (
     `You are building a practical assistant-operations plan for a magic routine. Return useful, stage-ready guidance with no fluff.` +
     `
@@ -374,6 +380,7 @@ IMPORTANT RULES:` +
     `
 - Write for real assistants, stage managers, and rehearsal use.` +
     modeRule +
+    demoRule +
     brevityRule +
     `
 - Return ONLY the requested headings below, in the same order, and no extra introduction or conclusion.` +
@@ -405,8 +412,9 @@ function combineRunNotes(output: StructuredOutput, fallback: string) {
   return parts.length ? parts.join('\n\n') : fallback;
 }
 
-function getRequestedSections(focusTag?: string | null, responseMode: ResponseMode = 'fast') {
+function getRequestedSections(focusTag?: string | null, responseMode: ResponseMode = 'fast', demoMode = false) {
   const baseSections = SECTION_PROFILES[focusTag || ''] || SECTION_PROFILES.default;
+  if (demoMode) return baseSections.slice(0, Math.min(6, baseSections.length));
   return responseMode === 'fast' ? baseSections.slice(0, Math.min(4, baseSections.length)) : baseSections;
 }
 
@@ -459,6 +467,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
   const [lightingNotes, setLightingNotes] = useState('');
   const [lastPreset, setLastPreset] = useState<string>('');
   const [responseMode, setResponseMode] = useState<ResponseMode>('fast');
+  const [demoMode, setDemoMode] = useState(false);
 
   const requestIdRef = useRef(0);
   const cancelledUpToRef = useRef(0);
@@ -575,24 +584,27 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
       clearErrors();
       setToast(null);
 
+      const effectiveResponseMode: ResponseMode = demoMode ? 'fast' : responseMode;
+
       const prompt = buildStructuredPrompt({
         userInput: input.trim(),
         refineInstruction: opts?.refineInstruction || null,
         previousOutput: opts?.usePrevious ? outputRaw : null,
         context: { clientName, venueType, stageSize, numberOfAssistants, audienceDistance, lightingNotes },
         focusTag: lastPreset || null,
-        responseMode,
+        responseMode: effectiveResponseMode,
+        demoMode,
       });
 
-      const requestedSections = getRequestedSections(lastPreset || null, responseMode);
+      const requestedSections = getRequestedSections(lastPreset || null, effectiveResponseMode, demoMode);
       const text = await withTimeout(
         generateStructuredResponse(
           prompt,
           ASSISTANT_STUDIO_SYSTEM_INSTRUCTION,
           buildStructuredSchema(requestedSections),
           currentUser,
-          responseMode === 'fast'
-            ? { maxOutputTokens: 700, speedMode: 'fast' }
+          effectiveResponseMode === 'fast'
+            ? { maxOutputTokens: demoMode ? 550 : 700, speedMode: 'fast' }
             : { maxOutputTokens: 2400, speedMode: 'full' }
         ).then((obj) => structuredResultToText(obj || {}, requestedSections)),
         REQUEST_TIMEOUT_MS
@@ -659,6 +671,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
     setInput('');
     setCopied(false);
     setLastPreset('');
+    setDemoMode(false);
     try {
       localStorage.removeItem(DRAFT_KEY);
     } catch {
@@ -871,9 +884,10 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
     setInput(scenario.input);
     setLastPreset(scenario.tag);
     setResponseMode('fast');
+    setDemoMode(true);
     clearErrors();
-    setToast(`Demo loaded: ${scenario.label} • Fast mode forced for booth reliability`);
-    window.setTimeout(() => setToast(null), 1400);
+    setToast(`Demo loaded: ${scenario.label} • Demo Mode ON`);
+    window.setTimeout(() => setToast(null), 1200);
   };
 
   const reportIssue = async () => {
@@ -1096,6 +1110,20 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
             </div>
           </div>
 
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-800/80 bg-slate-950/35 px-3 py-2">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Demo mode</div>
+              <div className="text-xs text-slate-500">Convention-safe mode forces Flash routing, tighter output caps, and a maximum of 6 sections.</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setDemoMode((v) => !v)}
+              className={`px-3 py-1.5 rounded-lg border text-sm ${demoMode ? 'border-emerald-500/70 bg-emerald-500/15 text-emerald-300' : 'border-slate-700/80 bg-slate-950/40 text-slate-300 hover:bg-slate-900/70'}`}
+            >
+              {demoMode ? 'Demo Mode ON' : 'Demo Mode OFF'}
+            </button>
+          </div>
+
           <textarea
             className="w-full p-3 border border-slate-700 rounded bg-slate-950/50 text-white min-h-[280px] placeholder:text-slate-500"
             rows={12}
@@ -1115,7 +1143,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
               <div className="text-xs text-slate-400">Refine this plan:</div>
               {lastPreset ? (
                 <div className="text-xs text-slate-500">
-                  Preset: <span className="text-slate-300">{lastPreset}</span> • Mode: <span className="text-slate-300">{responseMode}</span>
+                  Preset: <span className="text-slate-300">{lastPreset}</span> • Mode: <span className="text-slate-300">{demoMode ? 'demo' : responseMode}</span>
                 </div>
               ) : null}
             </div>
