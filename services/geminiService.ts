@@ -50,7 +50,6 @@ function escapeNewlinesInsideStrings(jsonLike: string): string {
     }
     if (inStr && (ch === '\n' || ch === '\r')) {
       out += '\\n';
-      // swallow paired \r\n
       if (ch === '\r' && jsonLike[i + 1] === '\n') i++;
       continue;
     }
@@ -82,7 +81,7 @@ function closeLikelyTruncatedJson(jsonLike: string): string {
       esc = false;
       continue;
     }
-    if (ch === '\') {
+    if (ch === '\\') {
       esc = true;
       continue;
     }
@@ -104,11 +103,13 @@ function closeLikelyTruncatedJson(jsonLike: string): string {
 
 function safeJsonParse(text: string): any {
   const candidate = extractJsonBlock(text);
+  const base = candidate || '{}';
+  const repaired = escapeNewlinesInsideStrings(base);
   const attempts = [
-    candidate || '{}',
-    escapeNewlinesInsideStrings(candidate || '{}'),
-    stripTrailingCommas(escapeNewlinesInsideStrings(candidate || '{}')),
-    closeLikelyTruncatedJson(stripTrailingCommas(escapeNewlinesInsideStrings(candidate || '{}'))),
+    base,
+    repaired,
+    stripTrailingCommas(repaired),
+    closeLikelyTruncatedJson(stripTrailingCommas(repaired)),
   ];
 
   let lastErr: any = null;
@@ -128,14 +129,15 @@ function buildSchemaFallback(responseSchema: any, rawText: string): any {
     : {};
 
   const lines = String(rawText || '')
-    .split(/?
-+/)
+    .split(/\r?\n+/)
     .map((line) => line.trim())
     .filter(Boolean)
     .filter((line) => !/^```/.test(line))
     .slice(0, 8);
 
-  const shortText = lines.length ? lines.join('\n') : 'Plan generated, but structured formatting failed. Please regenerate for a cleaner layout.';
+  const shortText = lines.length
+    ? lines.join('\n')
+    : 'Plan generated, but structured formatting failed. Please regenerate for a cleaner layout.';
 
   const out: Record<string, any> = {};
   Object.keys(props).forEach((key, idx) => {
@@ -147,7 +149,6 @@ function buildSchemaFallback(responseSchema: any, rawText: string): any {
   });
   return out;
 }
-
 
 /**
  * IMPORTANT (Blank-screen fix):
