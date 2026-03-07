@@ -519,7 +519,7 @@ function buildStructuredSchema(
   keys.forEach((key) => {
     const minItems = key === 'safetyNotes'
       ? (speedMode === 'fast' ? 2 : 3)
-      : (speedMode === 'fast' ? 2 : 4);
+      : (speedMode === 'fast' ? 2 : 3);
 
     properties[key] = {
       type: 'array',
@@ -842,7 +842,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
   const handleCopy = async () => {
     if (!outputRaw) return;
     try {
-      const textToCopy = activeTab === 'fullText' ? outputRaw : output?.[activeTab] || outputRaw;
+      const textToCopy = activeTab === 'fullText' ? outputRaw : formatStructuredField(output?.[activeTab]) || outputRaw;
       await navigator.clipboard.writeText(textToCopy);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1200);
@@ -990,8 +990,8 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
         ['Safety & Risk Analysis', output.safetyRiskAnalysis],
       ];
       tasks = sectionTasks
-        .filter(([, value]) => !!value?.trim())
-        .map(([title, notes]) => ({ title: `Assistant Studio – ${title}`, notes: notes!, priority: 'medium' as any }));
+        .filter(([, value]) => !!formatStructuredField(value).trim())
+        .map(([title, notes]) => ({ title: `Assistant Studio – ${title}`, notes: formatStructuredField(notes), priority: 'medium' as any }));
       if (tasks.length === 0) {
         tasks = [{ title: 'Assistant Studio – Output', notes: outputRaw, priority: 'medium' as any }];
       }
@@ -1139,9 +1139,12 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
   };
 
   const availableTabs = useMemo(() => {
-    const base = TABS.filter((t) => (t.key === 'fullText' ? true : !!output?.[t.key]));
+    const hasContent = (value: StructuredFieldValue | undefined) =>
+      Array.isArray(value) ? value.some((line) => String(line || '').trim()) : !!String(value || '').trim();
+
+    const base = TABS.filter((t) => (t.key === 'fullText' ? true : hasContent(output?.[t.key])));
     if (!outputRaw) return base;
-    const hasStructured = (Object.keys(HEADERS) as Array<keyof typeof HEADERS>).some((k) => !!output[k]);
+    const hasStructured = (Object.keys(HEADERS) as Array<keyof typeof HEADERS>).some((k) => hasContent(output[k]));
     if (!hasStructured) return [{ key: 'fullText', label: 'Full Text' }];
     if (!base.find((t) => t.key === 'fullText')) base.push({ key: 'fullText', label: 'Full Text' });
     return base;
@@ -1370,7 +1373,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
 
                   <div className="mt-1 text-sm text-slate-300">
                     {errorKind === 'timeout'
-                      ? 'The request was stopped after 45 seconds so the app never gets stuck. Try Fast mode or a demo scenario for a faster, smaller response.'
+                      ? `The request was stopped after ${(responseMode === 'full' && !demoMode) ? Math.round(FULL_REQUEST_TIMEOUT_MS / 1000) : Math.round(FAST_REQUEST_TIMEOUT_MS / 1000)} seconds so the app never gets stuck. Try Fast mode or a demo scenario for a faster, smaller response.`
                       : errorKind === 'quota'
                       ? quotaMessage()
                       : 'Please try again. If it keeps happening, report it so we can fix it fast.'}
