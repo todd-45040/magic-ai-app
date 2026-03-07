@@ -532,6 +532,10 @@ const MentalismAssistant: React.FC<MentalismAssistantProps> = ({ onIdeaSaved, on
     const [sendPlannerError, setSendPlannerError] = useState<string | null>(null);
     const [sendPlannerSuccess, setSendPlannerSuccess] = useState(false);
 
+    const [isGeneratingAlternateMethod, setIsGeneratingAlternateMethod] = useState(false);
+    const [alternateMethodStatus, setAlternateMethodStatus] = useState<'idle' | 'done'>('idle');
+    const [alternateMethodError, setAlternateMethodError] = useState<string | null>(null);
+
     const [isPreparingRehearsal, setIsPreparingRehearsal] = useState(false);
     const [rehearsalPrepError, setRehearsalPrepError] = useState<string | null>(null);
 
@@ -737,6 +741,8 @@ const MentalismAssistant: React.FC<MentalismAssistantProps> = ({ onIdeaSaved, on
         setStressError(null);
         setSaveStatus('idle');
         setCopyStatus('idle');
+        setAlternateMethodStatus('idle');
+        setAlternateMethodError(null);
 
         try {
             const ethicalBlock = ethicalMode
@@ -864,6 +870,93 @@ Output guidelines:
         });
         setError(null);
         setTimeout(() => handleGenerate(WOW_DEMO_PROMPT), 0);
+    };
+
+    const handleGenerateAlternateMethod = async () => {
+        if (!blueprint) return;
+
+        const currentQuery = String(query || '').trim() || 'Mentalism routine';
+        setIsGeneratingAlternateMethod(true);
+        setAlternateMethodError(null);
+        setAlternateMethodStatus('idle');
+
+        try {
+            const prompt = `
+Generate an alternate mentalism method package in STRICT JSON that matches the schema provided.
+
+Primary effect goal:
+${currentQuery}
+
+Performance environment:
+${performanceEnvironment}
+
+Mentalism style spectrum:
+${intensityLabel}
+
+Current method concepts to avoid repeating too closely:
+${blueprint.method_concepts?.length ? blueprint.method_concepts.join(' | ') : 'None provided.'}
+
+Current effect summary:
+${blueprint.effect_summary || blueprint.premise || 'N/A'}
+
+Instructions:
+- Create a clearly different alternate solution path from the current version.
+- Keep the same audience effect, but shift the method thinking and scripting emphasis.
+- NON-EXPOSURE: do not reveal secrets or step-by-step methods.
+- method_concepts should contain exactly 3 concise alternate framework labels.
+- performance_script should be short, practical, and distinct from the current framing.
+- outs should be safe, non-exposure fallback paths.
+- performance_tips should be concise professional notes.
+`;
+
+            const altSchema = {
+                type: Type.OBJECT,
+                properties: {
+                    method_concepts: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    performance_script: {
+                        type: Type.OBJECT,
+                        properties: {
+                            opening_frame: { type: Type.STRING },
+                            build_suspense: { type: Type.STRING },
+                            spectator_interaction: { type: Type.STRING },
+                            reveal_moment: { type: Type.STRING },
+                        },
+                        required: ['opening_frame', 'build_suspense', 'spectator_interaction', 'reveal_moment'],
+                    },
+                    outs: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    performance_tips: { type: Type.ARRAY, items: { type: Type.STRING } },
+                },
+                required: ['method_concepts', 'performance_script', 'outs', 'performance_tips'],
+            };
+
+            const raw = await generateStructuredResponse(
+                prompt,
+                MENTALISM_ASSISTANT_SYSTEM_INSTRUCTION,
+                altSchema,
+                currentUser || { email: '', membership: 'free', generationCount: 0, lastResetDate: '' }
+            );
+
+            setBlueprint((prev) => {
+                if (!prev) return prev;
+                return {
+                    ...prev,
+                    method_concepts: safeList(raw?.method_concepts).length ? safeList(raw?.method_concepts) : prev.method_concepts,
+                    performance_script: {
+                        opening_frame: String(raw?.performance_script?.opening_frame ?? prev.performance_script?.opening_frame ?? '').trim(),
+                        build_suspense: String(raw?.performance_script?.build_suspense ?? prev.performance_script?.build_suspense ?? '').trim(),
+                        spectator_interaction: String(raw?.performance_script?.spectator_interaction ?? prev.performance_script?.spectator_interaction ?? '').trim(),
+                        reveal_moment: String(raw?.performance_script?.reveal_moment ?? prev.performance_script?.reveal_moment ?? '').trim(),
+                    },
+                    outs: safeList(raw?.outs).length ? safeList(raw?.outs) : prev.outs,
+                    performance_tips: safeList(raw?.performance_tips).length ? safeList(raw?.performance_tips) : prev.performance_tips,
+                };
+            });
+            setAlternateMethodStatus('done');
+        } catch (err) {
+            setAlternateMethodError(err instanceof Error ? err.message : 'Unable to generate an alternate method right now.');
+        } finally {
+            setIsGeneratingAlternateMethod(false);
+        }
     };
 
     const handleSave = () => {
@@ -1921,6 +2014,16 @@ Output guidelines:
                             </div>
                         </div>
 
+                        {alternateMethodError ? (
+                            <div className="mt-3 mb-1 text-sm text-red-300 bg-red-950/30 border border-red-900/40 rounded-md p-2">
+                                {alternateMethodError}
+                            </div>
+                        ) : null}
+                        {alternateMethodStatus === 'done' ? (
+                            <div className="mt-3 mb-1 text-sm text-cyan-200 bg-cyan-950/20 border border-cyan-900/40 rounded-md p-2">
+                                Alternate method generated ✓
+                            </div>
+                        ) : null}
                         {sendPlannerError ? (
                             <div className="mt-3 mb-1 text-sm text-red-300 bg-red-950/30 border border-red-900/40 rounded-md p-2">
                                 {sendPlannerError}
@@ -2027,6 +2130,24 @@ Output guidelines:
                                     <>
                                         <SearchIcon className="w-4 h-4" />
                                         <span>Stress Test</span>
+                                    </>
+                                )}
+                            </button>
+                            <button
+                                onClick={handleGenerateAlternateMethod}
+                                disabled={isGeneratingAlternateMethod || !blueprint}
+                                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-cyan-700/80 hover:bg-cyan-600 border border-cyan-400/40 rounded-md text-white transition-colors disabled:bg-cyan-900/30 disabled:text-slate-400 disabled:cursor-not-allowed"
+                                title="Generate a different high-level method path for the same effect"
+                            >
+                                {isGeneratingAlternateMethod ? (
+                                    <>
+                                        <div className="w-4 h-4 border-t-2 border-white/80 rounded-full animate-spin" />
+                                        <span>Generating Alternate…</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <LightbulbIcon className="w-4 h-4" />
+                                        <span>Generate Alternate Method</span>
                                     </>
                                 )}
                             </button>
