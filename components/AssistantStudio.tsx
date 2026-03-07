@@ -19,33 +19,44 @@ const GUEST_USER: User = {
 
 const PRESETS: Array<{ label: string; template: (input: string) => string; tag?: string }> = [
   {
-    label: 'Routine Staging Optimizer',
-    tag: 'staging-optimizer',
+    label: 'Generate Cue Sheet',
+    tag: 'cue-sheet',
     template: (input) =>
-      `Create a practical staging optimization plan for this routine. Focus on stage layout, assistant blocking, positions, cue timing, prop movement, and final reveal choreography.\n\nROUTINE DESCRIPTION:\n${input}`,
+      `Build an assistant cue sheet timeline for this routine. Include simple time stamps, movement cues, prop handoffs, and reveal preparation.\n\nROUTINE:\n${input}`,
   },
   {
     label: 'Tighten Blocking',
-    tag: 'tighten-blocking',
+    tag: 'blocking',
     template: (input) =>
-      `Tighten the blocking for this routine. Reduce wasted movement, clarify assistant jobs, and improve sightlines.\n\nROUTINE DESCRIPTION:\n${input}`,
+      `Improve the blocking for this routine. Simplify movement, reduce dead time, and make assistant positions cleaner and more motivated.\n\nROUTINE:\n${input}`,
   },
   {
-    label: 'Safer Prop Flow',
-    tag: 'prop-flow',
+    label: 'Improve Transitions',
+    tag: 'transitions',
     template: (input) =>
-      `Improve prop movement and backstage flow for this routine. Emphasize safety, reset practicality, and clean handoffs.\n\nROUTINE DESCRIPTION:\n${input}`,
+      `Improve transitions between moments in this routine. Focus on assistant movement, prop flow, handoffs, and stage traffic.\n\nROUTINE:\n${input}`,
   },
   {
-    label: 'Stronger Reveal',
-    tag: 'stronger-reveal',
+    label: 'Prop Flow Pass',
+    tag: 'props',
     template: (input) =>
-      `Strengthen the reveal choreography for this routine. Improve timing, framing, assistant position, and visual impact.\n\nROUTINE DESCRIPTION:\n${input}`,
+      `Optimize prop movement for this routine. Clarify where props start, who moves them, and how resets happen smoothly.\n\nROUTINE:\n${input}`,
+  },
+  {
+    label: 'Reveal Choreography',
+    tag: 'reveal',
+    template: (input) =>
+      `Design cleaner reveal choreography for this routine. Focus on timing, assistant framing, audience sightlines, and clean final picture.\n\nROUTINE:\n${input}`,
+  },
+  {
+    label: 'Safety Check',
+    tag: 'safety',
+    template: (input) =>
+      `Review this routine for assistant safety, collision risks, traffic flow, rushed handoffs, and awkward stage crossings.\n\nROUTINE:\n${input}`,
   },
 ];
 
 const DRAFT_KEY = 'maw_assistant_studio_draft_v4';
-const WALKAROUND_KEY = 'maw_assistant_studio_walkaround_v1';
 const CONTEXT_KEY = 'maw_assistant_studio_context_v2';
 const REQUEST_TIMEOUT_MS = 45_000;
 
@@ -58,6 +69,7 @@ type SectionKey =
   | 'cueTiming'
   | 'propMovement'
   | 'revealChoreography'
+  | 'cueTimeline'
   | 'fullText';
 
 type StructuredOutput = Partial<Record<SectionKey, string>>;
@@ -69,26 +81,28 @@ const TABS: Array<{ key: SectionKey; label: string }> = [
   { key: 'cueTiming', label: 'Cue Timing' },
   { key: 'propMovement', label: 'Prop Movement' },
   { key: 'revealChoreography', label: 'Reveal Choreography' },
+  { key: 'cueTimeline', label: 'Cue Timeline' },
   { key: 'fullText', label: 'Full Text' },
 ];
 
 const REFINE_ACTIONS: Array<{ label: string; instruction: string }> = [
-  { label: 'Tighter blocking', instruction: 'Tighten the blocking. Remove wasted movement and simplify assistant travel paths.' },
-  { label: 'Clearer cues', instruction: 'Make the cue timing clearer and more precise for the assistant team.' },
-  { label: 'More visual reveal', instruction: 'Make the reveal choreography more visual and stageworthy without adding unsafe complexity.' },
-  { label: 'Safer prop flow', instruction: 'Improve safety and prop traffic. Reduce collisions, awkward handoffs, and reset confusion.' },
-  { label: 'Simpler staging', instruction: 'Simplify the staging plan so it is easier to execute reliably in real venues.' },
+  { label: 'Tighter cues', instruction: 'Tighten the cue timeline. Make each cue shorter, clearer, and easier for an assistant to follow in rehearsal.' },
+  { label: 'Cleaner blocking', instruction: 'Improve blocking. Reduce unnecessary crossings and make every assistant movement feel motivated.' },
+  { label: 'Simpler staging', instruction: 'Simplify the staging for a practical real-world performance with less complexity and fewer moving parts.' },
+  { label: 'Safer traffic', instruction: 'Improve safety and traffic flow. Flag risky crossings, collisions, rushed turns, or awkward prop movement.' },
+  { label: 'Stronger reveal', instruction: 'Strengthen the reveal choreography and final stage picture without adding unrealistic complexity.' },
 ];
 
 const VENUE_TYPES = [
-  'Corporate',
-  'Birthday / Family',
-  'School',
-  'Wedding',
-  'Restaurant',
-  'Festival / Street',
   'Theater / Stage',
+  'Parlor',
   'Close-up / Walkaround',
+  'Corporate',
+  'School',
+  'Festival / Street',
+  'Restaurant',
+  'Wedding',
+  'Birthday / Family',
   'Other',
 ];
 
@@ -152,76 +166,43 @@ function parseStructured(raw: string): StructuredOutput {
     cueTiming: '### CUE_TIMING',
     propMovement: '### PROP_MOVEMENT',
     revealChoreography: '### REVEAL_CHOREOGRAPHY',
+    cueTimeline: '### CUE_TIMELINE',
   } as const;
 
   const out: StructuredOutput = { fullText: raw?.trim() || '' };
-
   if (!raw.includes(headers.stageLayout)) return out;
 
   const all = Object.values(headers);
-
   out.stageLayout = extractSection(raw, headers.stageLayout, all.filter((h) => h !== headers.stageLayout));
   out.blockingPlan = extractSection(raw, headers.blockingPlan, all.filter((h) => h !== headers.blockingPlan));
   out.assistantPositions = extractSection(raw, headers.assistantPositions, all.filter((h) => h !== headers.assistantPositions));
   out.cueTiming = extractSection(raw, headers.cueTiming, all.filter((h) => h !== headers.cueTiming));
   out.propMovement = extractSection(raw, headers.propMovement, all.filter((h) => h !== headers.propMovement));
-  out.revealChoreography = extractSection(
-    raw,
-    headers.revealChoreography,
-    all.filter((h) => h !== headers.revealChoreography)
-  );
-
+  out.revealChoreography = extractSection(raw, headers.revealChoreography, all.filter((h) => h !== headers.revealChoreography));
+  out.cueTimeline = extractSection(raw, headers.cueTimeline, all.filter((h) => h !== headers.cueTimeline));
   return out;
-}
-
-function formatNotesBlock(output: StructuredOutput, fallback: string) {
-  const stageLayout = output.stageLayout?.trim();
-  const blockingPlan = output.blockingPlan?.trim();
-  const assistantPositions = output.assistantPositions?.trim();
-  const cueTiming = output.cueTiming?.trim();
-  const propMovement = output.propMovement?.trim();
-  const revealChoreography = output.revealChoreography?.trim();
-
-  const parts: string[] = [];
-  if (stageLayout) parts.push(`STAGE LAYOUT\n${stageLayout}`);
-  if (blockingPlan) parts.push(`BLOCKING PLAN\n${blockingPlan}`);
-  if (assistantPositions) parts.push(`ASSISTANT POSITIONS\n${assistantPositions}`);
-  if (cueTiming) parts.push(`CUE TIMING\n${cueTiming}`);
-  if (propMovement) parts.push(`PROP MOVEMENT\n${propMovement}`);
-  if (revealChoreography) parts.push(`REVEAL CHOREOGRAPHY\n${revealChoreography}`);
-
-  return parts.length ? parts.join('\n\n') : fallback;
 }
 
 function buildStructuredPrompt(opts: {
   userInput: string;
-  walkaroundOn: boolean;
   refineInstruction?: string | null;
   previousOutput?: string | null;
   context?: {
-    clientName?: string;
-    venueType?: string;
-    audienceSize?: string;
     stageSize?: string;
-    numberOfAssistants?: string;
+    assistantsCount?: string;
     audienceDistance?: string;
+    venueType?: string;
   };
 }) {
-  const { userInput, walkaroundOn, refineInstruction, previousOutput, context } = opts;
+  const { userInput, refineInstruction, previousOutput, context } = opts;
 
   const contextLines: string[] = [];
-  if (context?.clientName) contextLines.push(`Client / Show: ${context.clientName}`);
-  if (context?.venueType) contextLines.push(`Venue type: ${context.venueType}`);
-  if (context?.audienceSize) contextLines.push(`Audience size: ${context.audienceSize}`);
   if (context?.stageSize) contextLines.push(`Stage size: ${context.stageSize}`);
-  if (context?.numberOfAssistants) contextLines.push(`Number of assistants: ${context.numberOfAssistants}`);
+  if (context?.assistantsCount) contextLines.push(`Number of assistants: ${context.assistantsCount}`);
   if (context?.audienceDistance) contextLines.push(`Audience distance: ${context.audienceDistance}`);
+  if (context?.venueType) contextLines.push(`Venue type: ${context.venueType}`);
 
   const contextBlock = contextLines.length ? `\n\nCONTEXT:\n${contextLines.join('\n')}` : '';
-
-  const walkaroundGuidance = walkaroundOn
-    ? `\n\nWALKAROUND / TIGHT-SPACE OPTIMIZER (ON): prefer shorter travel paths, louder visual cueing, tighter audience management, and reduced prop spread.`
-    : '';
 
   const refineBlock =
     refineInstruction && previousOutput
@@ -229,26 +210,25 @@ function buildStructuredPrompt(opts: {
       : '';
 
   return (
-    `You are creating a practical Routine Staging Optimizer plan for a magician and their assistant team.` +
-    ` Prioritize real-world staging, reliable cueing, clean traffic flow, safety, and visual clarity.` +
-    ` Do not expose secret methods. Do not invent trap doors, overhead rigging, hidden infrastructure, or stage modifications unless the user explicitly provides them.` +
-    ` If anything sounds unrealistic for the venue, crew, distance, or reset demands, revise it to the most practical version.` +
-    `\n\nReturn your answer in EXACTLY this format, using these headings and no extra headings:` +
+    `You are building a practical assistant cue plan for a magician's routine.` +
+    `\n\nReturn your answer in EXACTLY this format, using these headings only:` +
     `\n### STAGE_LAYOUT` +
-    `\nDescribe stage zones, prop-table placement, assistant lanes, and reveal position.` +
+    `\nDescribe the playing area, tables, entrances, reveal zones, and general positioning.` +
     `\n### BLOCKING_PLAN` +
-    `\nGive a beat-by-beat blocking plan for the performer and assistant team.` +
+    `\nGive a simple beat-by-beat blocking plan for performer and assistant movement.` +
     `\n### ASSISTANT_POSITIONS` +
-    `\nList where each assistant begins, where they move, and why their placement works.` +
+    `\nList assistant starting positions and where they move during key beats.` +
     `\n### CUE_TIMING` +
-    `\nProvide a cue sheet with labeled beats or approximate timestamps.` +
+    `\nExplain the important timing moments, cue triggers, and what the assistant watches/listens for.` +
     `\n### PROP_MOVEMENT` +
-    `\nExplain handoffs, resets, traffic flow, and prop handling safety.` +
+    `\nExplain how props move on/off stage, handoffs, and reset-friendly flow.` +
     `\n### REVEAL_CHOREOGRAPHY` +
-    `\nDescribe the final reveal picture, assistant framing, timing, and cleanup path.` +
+    `\nDescribe reveal preparation, framing, body positioning, and final picture.` +
+    `\n### CUE_TIMELINE` +
+    `\nProvide a practical assistant cue sheet timeline using simple mm:ss style stamps, one cue per line.` +
+    `\nUse practical stage language. Favor realistic staging. Do not assume trap doors, rigging, hidden infrastructure, or special stage modifications unless clearly provided. Keep guidance safe, concise, and rehearsal-ready.` +
     contextBlock +
-    `\n\nROUTINE DESCRIPTION:\n${userInput}` +
-    walkaroundGuidance +
+    `\n\nROUTINE DESCRIPTION / SCRIPT / OUTLINE:\n${userInput}` +
     refineBlock
   );
 }
@@ -271,53 +251,36 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
 
   const [toast, setToast] = useState<string | null>(null);
 
-  // Context + Blueprint metadata
-  const [clientName, setClientName] = useState('');
-  const [venueType, setVenueType] = useState('');
-  const [audienceSize, setAudienceSize] = useState('');
   const [stageSize, setStageSize] = useState('');
-  const [numberOfAssistants, setNumberOfAssistants] = useState('');
+  const [assistantsCount, setAssistantsCount] = useState('');
   const [audienceDistance, setAudienceDistance] = useState('');
-  const [lastPreset, setLastPreset] = useState<string>('');
+  const [venueType, setVenueType] = useState('');
+  const [lastPreset, setLastPreset] = useState('');
 
-  // Walkaround optimizer toggle
-  const [walkaroundOn, setWalkaroundOn] = useState(false);
-
-  // “Cancel” support: we can’t abort the network call here,
-  // but we can ignore its result and immediately unlock the UI.
   const requestIdRef = useRef(0);
   const cancelledUpToRef = useRef(0);
-
-  // Auto-scroll target
   const outputRef = useRef<HTMLDivElement | null>(null);
 
-  // Show planner modal
   const [shows, setShows] = useState<Show[]>([]);
   const [showPickerOpen, setShowPickerOpen] = useState(false);
   const [selectedShowId, setSelectedShowId] = useState<string>('');
-  const [sendMode, setSendMode] = useState<'run' | 'sections'>('run');
+  const [sendMode, setSendMode] = useState<'run' | 'sections'>('sections');
 
-  // Blueprint modal
   const [blueprintOpen, setBlueprintOpen] = useState(false);
   const [blueprintName, setBlueprintName] = useState('');
   const [savingBlueprint, setSavingBlueprint] = useState(false);
 
-  // Autosave draft prompt + context + walkaround toggle
   useEffect(() => {
     try {
       const saved = localStorage.getItem(DRAFT_KEY);
       if (saved) setInput(saved);
-      const w = localStorage.getItem(WALKAROUND_KEY);
-      if (w === '1') setWalkaroundOn(true);
       const ctx = localStorage.getItem(CONTEXT_KEY);
       if (ctx) {
         const parsed = JSON.parse(ctx);
-        setClientName(parsed?.clientName || '');
-        setVenueType(parsed?.venueType || '');
-        setAudienceSize(parsed?.audienceSize || '');
         setStageSize(parsed?.stageSize || '');
-        setNumberOfAssistants(parsed?.numberOfAssistants || '');
+        setAssistantsCount(parsed?.assistantsCount || '');
         setAudienceDistance(parsed?.audienceDistance || '');
+        setVenueType(parsed?.venueType || '');
       }
     } catch {
       // ignore
@@ -334,19 +297,11 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
 
   useEffect(() => {
     try {
-      localStorage.setItem(WALKAROUND_KEY, walkaroundOn ? '1' : '0');
+      localStorage.setItem(CONTEXT_KEY, JSON.stringify({ stageSize, assistantsCount, audienceDistance, venueType }));
     } catch {
       // ignore
     }
-  }, [walkaroundOn]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(CONTEXT_KEY, JSON.stringify({ clientName, venueType, audienceSize, stageSize, numberOfAssistants, audienceDistance }));
-    } catch {
-      // ignore
-    }
-  }, [clientName, venueType, audienceSize, stageSize, numberOfAssistants, audienceDistance]);
+  }, [stageSize, assistantsCount, audienceDistance, venueType]);
 
   useEffect(() => {
     let mounted = true;
@@ -373,7 +328,6 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
   }, [outputRaw]);
 
   const canGenerate = !!input.trim() && !loading;
-  const canCopySave = !!outputRaw && !loading;
 
   const clearErrors = () => {
     setErrorKind(null);
@@ -407,10 +361,9 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
 
       const prompt = buildStructuredPrompt({
         userInput: input.trim(),
-        walkaroundOn,
         refineInstruction: opts?.refineInstruction || null,
         previousOutput: opts?.usePrevious ? outputRaw : null,
-        context: { clientName, venueType, audienceSize, stageSize, numberOfAssistants, audienceDistance },
+        context: { stageSize, assistantsCount, audienceDistance, venueType },
       });
 
       const text = await withTimeout(
@@ -423,9 +376,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
       setOutputRaw(text);
       const parsed = parseStructured(text);
       setOutput(parsed);
-
-      if (parsed.stageLayout) setActiveTab('stageLayout');
-      else setActiveTab('fullText');
+      setActiveTab(parsed.stageLayout ? 'stageLayout' : 'fullText');
     } catch (e: any) {
       console.error(e);
 
@@ -460,12 +411,10 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
   };
 
   const clearContext = () => {
-    setClientName('');
-    setVenueType('');
-    setAudienceSize('');
     setStageSize('');
-    setNumberOfAssistants('');
+    setAssistantsCount('');
     setAudienceDistance('');
+    setVenueType('');
     setToast('Context cleared');
     window.setTimeout(() => setToast(null), 900);
   };
@@ -499,30 +448,20 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
     }
   };
 
-  const copyPrompt = async () => {
-    if (!input) return;
-    try {
-      await navigator.clipboard.writeText(input);
-      setToast('Prompt copied ✓');
-      window.setTimeout(() => setToast(null), 1200);
-    } catch {
-      // ignore
-    }
-  };
-
   const handleSaveIdea = async () => {
     if (!outputRaw) return;
     try {
       const tags = [
         'assistant-studio',
-        ...(walkaroundOn ? ['walkaround'] : []),
+        'staging-plan',
+        'cue-sheet',
         ...(lastPreset ? [lastPreset] : []),
         ...(venueType ? [venueType.toLowerCase().replace(/\s+/g, '-')] : []),
       ];
 
       await saveIdea({
         type: 'text',
-        title: 'Assistant Studio – Staging Plan',
+        title: 'Assistant Studio Output',
         content: outputRaw,
         tags,
       });
@@ -538,7 +477,6 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
     }
   };
 
-  // Save as Blueprint (stored in Ideas with blueprint tag + metadata header)
   const openBlueprint = () => {
     setBlueprintName(
       blueprintName ||
@@ -555,12 +493,12 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
     setToast(null);
 
     const header = [
-      `BLUEPRINT: ${blueprintName || 'Assistant Studio Staging Blueprint'}`,
+      `BLUEPRINT: ${blueprintName || 'Assistant Studio Blueprint'}`,
       `Preset: ${lastPreset || '—'}`,
-      `Walkaround Optimizer: ${walkaroundOn ? 'ON' : 'OFF'}`,
-      clientName ? `Client: ${clientName}` : '',
+      stageSize ? `Stage size: ${stageSize}` : '',
+      assistantsCount ? `Assistants: ${assistantsCount}` : '',
+      audienceDistance ? `Audience distance: ${audienceDistance}` : '',
       venueType ? `Venue: ${venueType}` : '',
-      audienceSize ? `Audience: ${audienceSize}` : '',
       '',
       '---',
       '',
@@ -568,12 +506,10 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
       .filter(Boolean)
       .join('\n');
 
-    const content = header + outputRaw;
-
     const tags = [
       'assistant-studio',
       'blueprint',
-      ...(walkaroundOn ? ['walkaround'] : []),
+      'cue-sheet',
       ...(lastPreset ? [lastPreset] : []),
       ...(venueType ? [venueType.toLowerCase().replace(/\s+/g, '-')] : []),
     ];
@@ -581,8 +517,8 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
     try {
       await saveIdea({
         type: 'text',
-        title: blueprintName || 'Assistant Studio Staging Blueprint',
-        content,
+        title: blueprintName || 'Assistant Studio Blueprint',
+        content: header + outputRaw,
         tags,
       });
 
@@ -601,42 +537,30 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
 
   const openSend = () => setShowPickerOpen(true);
 
-  // Send to Show Planner as 4-part run OR sections
   const sendToShowPlanner = async () => {
     if (!selectedShowId || !outputRaw) return;
     setSending(true);
     setToast(null);
     clearErrors();
 
-    const directorAndLines = formatNotesBlock(output, outputRaw);
-    const cueTiming = output.cueTiming?.trim();
-
-    const makeRunNotes = (part: string) => {
-      const parts: string[] = [];
-      parts.push(`PART: ${part}`);
-      if (cueTiming) parts.push(`\nCUE TIMING\n${cueTiming}`);
-      parts.push(`\n${directorAndLines}`);
-      if (walkaroundOn) parts.push(`\nTIGHT-SPACE MODE\nPrefer shorter travel paths, visible cueing, and compact prop spread.`);
-      return parts.join('\n');
-    };
-
     let tasks: Partial<Task>[] = [];
 
     if (sendMode === 'run') {
       tasks = [
-        { title: 'Opener', notes: makeRunNotes('Opener'), priority: 'high' as any },
-        { title: 'Middle 1', notes: makeRunNotes('Middle 1'), priority: 'medium' as any },
-        { title: 'Middle 2', notes: makeRunNotes('Middle 2'), priority: 'medium' as any },
-        { title: 'Closer', notes: makeRunNotes('Closer'), priority: 'high' as any },
+        { title: 'Assistant Studio – Stage Layout', notes: output.stageLayout || outputRaw, priority: 'medium' as any },
+        { title: 'Assistant Studio – Blocking Plan', notes: output.blockingPlan || outputRaw, priority: 'medium' as any },
+        { title: 'Assistant Studio – Cue Timing', notes: output.cueTiming || outputRaw, priority: 'high' as any },
+        { title: 'Assistant Studio – Cue Timeline', notes: output.cueTimeline || outputRaw, priority: 'high' as any },
       ];
     } else {
       tasks = [
         { title: 'Assistant Studio – Stage Layout', notes: output.stageLayout || outputRaw, priority: 'medium' as any },
-        { title: 'Assistant Studio – Blocking Plan', notes: output.blockingPlan || outputRaw, priority: 'high' as any },
+        { title: 'Assistant Studio – Blocking Plan', notes: output.blockingPlan || outputRaw, priority: 'medium' as any },
         { title: 'Assistant Studio – Assistant Positions', notes: output.assistantPositions || outputRaw, priority: 'medium' as any },
         { title: 'Assistant Studio – Cue Timing', notes: output.cueTiming || outputRaw, priority: 'high' as any },
         { title: 'Assistant Studio – Prop Movement', notes: output.propMovement || outputRaw, priority: 'medium' as any },
         { title: 'Assistant Studio – Reveal Choreography', notes: output.revealChoreography || outputRaw, priority: 'medium' as any },
+        { title: 'Assistant Studio – Cue Timeline', notes: output.cueTimeline || outputRaw, priority: 'high' as any },
       ];
     }
 
@@ -655,7 +579,6 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
     }
   };
 
-  // Keyboard shortcuts
   const onTextKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/i.test(navigator.platform);
     const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
@@ -674,7 +597,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
   const applyPreset = (presetIndex: number) => {
     const preset = PRESETS[presetIndex];
     const base = input.trim();
-    setInput(preset.template(base || '[Paste your script/notes here]'));
+    setInput(preset.template(base || '[Paste the routine description here]'));
     setLastPreset(preset.tag || preset.label.toLowerCase().replace(/\s+/g, '-'));
     setToast(`Preset: ${preset.label}`);
     window.setTimeout(() => setToast(null), 900);
@@ -719,23 +642,19 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
       return !!output?.[t.key];
     });
     if (!outputRaw) return base;
-    if (!output.stageLayout && !output.blockingPlan && !output.assistantPositions && !output.cueTiming && !output.propMovement && !output.revealChoreography) {
-      return [{ key: 'fullText', label: 'Full Text' }];
-    }
+    if (!output.stageLayout) return [{ key: 'fullText', label: 'Full Text' }];
     if (!base.find((t) => t.key === 'fullText')) base.push({ key: 'fullText', label: 'Full Text' });
     return base;
-  }, [output, outputRaw, walkaroundOn]);
+  }, [output, outputRaw]);
 
   const contextSummary = useMemo(() => {
     const parts: string[] = [];
-    if (clientName) parts.push(clientName);
-    if (venueType) parts.push(venueType);
     if (stageSize) parts.push(stageSize);
-    if (numberOfAssistants) parts.push(`${numberOfAssistants} assistants`);
+    if (assistantsCount) parts.push(`${assistantsCount} assistants`);
     if (audienceDistance) parts.push(audienceDistance);
-    if (audienceSize) parts.push(`${audienceSize} ppl`);
+    if (venueType) parts.push(venueType);
     return parts.join(' • ');
-  }, [clientName, venueType, audienceSize, stageSize, numberOfAssistants, audienceDistance]);
+  }, [stageSize, assistantsCount, audienceDistance, venueType]);
 
   return (
     <div className="relative p-6 pb-24 space-y-6">
@@ -747,7 +666,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
               Context: <span className="text-slate-200">{contextSummary}</span>
             </div>
           ) : (
-            <div className="text-[11px] italic text-slate-500/80">Build a practical staging plan for assistants, cueing, traffic flow, and reveal choreography.</div>
+            <div className="text-[11px] italic text-slate-500/80">Design the choreography behind the magic.</div>
           )}
         </div>
 
@@ -755,7 +674,6 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* LEFT: Input */}
         <div className="space-y-3">
           <div className="flex flex-wrap gap-2">
             {PRESETS.map((p, idx) => (
@@ -770,24 +688,35 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
             ))}
           </div>
 
-          {/* Context selectors */}
           <div className="flex items-center justify-between">
-            <div className="text-xs text-slate-400">Routine staging context:</div>
+            <div className="text-xs text-slate-400">Routine staging context (optional):</div>
             <button
               type="button"
               onClick={clearContext}
               className="text-xs px-2 py-1 rounded border border-slate-700 hover:border-slate-500 text-slate-200"
-              disabled={!clientName && !venueType && !audienceSize && !stageSize && !numberOfAssistants && !audienceDistance}
+              disabled={!stageSize && !assistantsCount && !audienceDistance && !venueType}
             >
               Clear context
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             <input
-              value={clientName}
-              onChange={(e) => setClientName(e.target.value)}
-              placeholder="Routine / client"
+              value={stageSize}
+              onChange={(e) => setStageSize(e.target.value)}
+              placeholder="Stage size"
+              className="p-2 rounded bg-slate-950/50 border border-slate-700 text-white placeholder:text-slate-500"
+            />
+            <input
+              value={assistantsCount}
+              onChange={(e) => setAssistantsCount(e.target.value)}
+              placeholder="Number of assistants"
+              className="p-2 rounded bg-slate-950/50 border border-slate-700 text-white placeholder:text-slate-500"
+            />
+            <input
+              value={audienceDistance}
+              onChange={(e) => setAudienceDistance(e.target.value)}
+              placeholder="Audience distance"
               className="p-2 rounded bg-slate-950/50 border border-slate-700 text-white placeholder:text-slate-500"
             />
             <select
@@ -802,47 +731,13 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
                 </option>
               ))}
             </select>
-            <input
-              value={stageSize}
-              onChange={(e) => setStageSize(e.target.value)}
-              placeholder="Stage size"
-              className="p-2 rounded bg-slate-950/50 border border-slate-700 text-white placeholder:text-slate-500"
-            />
-            <input
-              value={numberOfAssistants}
-              onChange={(e) => setNumberOfAssistants(e.target.value)}
-              placeholder="# of assistants"
-              className="p-2 rounded bg-slate-950/50 border border-slate-700 text-white placeholder:text-slate-500"
-            />
-            <input
-              value={audienceDistance}
-              onChange={(e) => setAudienceDistance(e.target.value)}
-              placeholder="Audience distance"
-              className="p-2 rounded bg-slate-950/50 border border-slate-700 text-white placeholder:text-slate-500"
-            />
-            <input
-              value={audienceSize}
-              onChange={(e) => setAudienceSize(e.target.value)}
-              placeholder="Audience size"
-              className="p-2 rounded bg-slate-950/50 border border-slate-700 text-white placeholder:text-slate-500"
-            />
           </div>
 
-          {/* Walkaround toggle */}
-          <label className="flex items-center gap-2 text-sm text-slate-200 select-none">
-            <input
-              type="checkbox"
-              checked={walkaroundOn}
-              onChange={(e) => setWalkaroundOn(e.target.checked)}
-              className="h-4 w-4 accent-purple-500"
-            />
-            Optimize for tight spaces <span className="text-slate-400">(shorter travel paths, cue visibility, crowd mgmt)</span>
-          </label>
-
+          <div className="text-xs font-medium text-slate-300">Routine / illusion description</div>
           <textarea
             className="w-full p-3 border border-slate-700 rounded bg-slate-950/50 text-white min-h-[260px] placeholder:text-slate-500"
             rows={10}
-            placeholder="Describe the routine, effect flow, props, reveal, and anything the assistant team currently does or struggles with…"
+            placeholder="Paste your routine script, staging notes, or illusion outline here…"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={onTextKeyDown}
@@ -853,10 +748,9 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
             <span className="text-slate-300">Esc</span> to cancel
           </div>
 
-          {/* Refine controls */}
           <div className="pt-3 border-t border-slate-800/60">
             <div className="flex items-center justify-between gap-2 mb-2">
-              <div className="text-xs text-slate-400">Refine this staging plan:</div>
+              <div className="text-xs text-slate-400">Refine this assistant plan:</div>
               {lastPreset ? (
                 <div className="text-xs text-slate-500">
                   Preset: <span className="text-slate-300">{lastPreset}</span>
@@ -879,9 +773,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
           </div>
         </div>
 
-        {/* RIGHT: Output */}
         <div ref={outputRef} className="space-y-3">
-          {/* Inline tool-level error boundary */}
           {errorKind && (
             <div className="maw-card p-4">
               <div className="flex items-start justify-between gap-3">
@@ -927,165 +819,206 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
                   >
                     Report issue
                   </button>
-
-                  {(errorKind === 'timeout' || errorKind === 'quota') && (
-                    <button
-                      className="px-3 py-2 rounded border border-slate-600 hover:border-slate-400 text-slate-200"
-                      onClick={copyPrompt}
-                    >
-                      Copy prompt
-                    </button>
-                  )}
                 </div>
               </div>
-
-              {errorKind === 'quota' && (
-                <div className="mt-3 text-sm text-slate-300">
-                  Tip: click <span className="text-slate-100">Membership Types</span> in the footer to upgrade.
-                </div>
-              )}
             </div>
           )}
 
-          <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4 min-h-[260px]">
-            {loading ? (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm text-purple-300">Generating…</div>
-                  <div className="h-2 w-24 rounded bg-slate-800 animate-pulse" />
-                </div>
+          <div className="maw-card p-3 min-h-[380px]">
+            {!outputRaw && !loading ? (
+              <div className="text-slate-400 text-sm">
+                <div>Your results will appear here.</div>
+                <div className="mt-2">Try: “Generate Cue Sheet” or “Tighten Blocking”, then hit Generate.</div>
+              </div>
+            ) : loading ? (
+              <div className="space-y-3">
+                <div className="text-sm text-slate-300">Generating assistant staging plan and cue timeline…</div>
                 <Skeleton />
               </div>
-            ) : outputRaw ? (
+            ) : (
               <>
-                <div className="flex flex-wrap gap-2 mb-3">
+                <div className="flex flex-wrap gap-2 mb-3 border-b border-slate-800 pb-3">
                   {availableTabs.map((t) => (
                     <button
                       key={t.key}
-                      type="button"
                       onClick={() => setActiveTab(t.key)}
-                      className={
-                        'px-3 py-1.5 rounded-full border text-sm ' +
-                        (activeTab === t.key
-                          ? 'border-purple-500 bg-purple-500/10 text-purple-200'
-                          : 'border-slate-700 bg-slate-950/40 hover:border-slate-500 text-slate-200')
-                      }
+                      className={`px-3 py-1.5 rounded-full text-sm border ${
+                        activeTab === t.key
+                          ? 'bg-purple-600 border-purple-500 text-white'
+                          : 'bg-slate-950/50 border-slate-700 hover:border-slate-500 text-slate-200'
+                      }`}
                     >
                       {t.label}
                     </button>
                   ))}
                 </div>
-
                 {renderTabContent()}
               </>
-            ) : (
-              <div className="text-slate-400 text-sm space-y-2">
-                <div>Your results will appear here.</div>
-                <div className="text-slate-500">
-                  Try: <span className="text-slate-300">“Routine Staging Optimizer”</span> or{' '}
-                  <span className="text-slate-300">“Tighten Blocking”</span>, then hit Generate.
-                </div>
-              </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* Send to Show Planner modal */}
-      {showPickerOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-lg maw-card p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div className="text-lg font-semibold">Send to Show Planner</div>
+      <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-slate-800 bg-[#050816]/95 backdrop-blur">
+        <div className="max-w-[1600px] mx-auto px-6 py-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleReset}
+              className="px-4 py-2 rounded border border-slate-700 hover:border-slate-500 text-slate-100"
+            >
+              Reset / Clear
+            </button>
+            {loading ? (
               <button
-                className="px-2 py-1 rounded border border-slate-700 hover:border-slate-500"
-                onClick={() => setShowPickerOpen(false)}
+                type="button"
+                onClick={handleCancel}
+                className="px-4 py-2 rounded bg-rose-600 hover:bg-rose-500 text-white"
               >
-                Close
+                Cancel
               </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleGenerate}
+                disabled={!canGenerate}
+                className="px-6 py-2 rounded bg-purple-700 hover:bg-purple-600 disabled:opacity-40 text-white"
+              >
+                Generate
+              </button>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleCopy}
+              disabled={!outputRaw || loading}
+              className="px-4 py-2 rounded border border-slate-700 hover:border-slate-500 text-slate-100 disabled:opacity-40"
+            >
+              {copied ? 'Copied ✓' : 'Copy'}
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveIdea}
+              disabled={!outputRaw || loading}
+              className="px-4 py-2 rounded bg-emerald-700 hover:bg-emerald-600 text-white disabled:opacity-40"
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              onClick={openBlueprint}
+              disabled={!outputRaw || loading}
+              className="px-4 py-2 rounded border border-slate-700 hover:border-slate-500 text-slate-100 disabled:opacity-40"
+            >
+              Save Blueprint
+            </button>
+            <button
+              type="button"
+              onClick={openSend}
+              disabled={!outputRaw || loading}
+              className="px-4 py-2 rounded border border-slate-700 hover:border-slate-500 text-slate-100 disabled:opacity-40"
+            >
+              Send to Show Planner
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {showPickerOpen && (
+        <div className="fixed inset-0 z-40 bg-black/60 flex items-center justify-center p-4">
+          <div className="w-full max-w-xl maw-card p-5 space-y-4">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-100">Send to Show Planner</h3>
+              <p className="text-sm text-slate-400">Choose a show and how to convert this assistant plan into tasks.</p>
             </div>
 
-            <div className="mt-4 space-y-4">
-              <div className="flex flex-col gap-2 text-sm text-slate-200">
+            <div className="space-y-3">
+              <select
+                value={selectedShowId}
+                onChange={(e) => setSelectedShowId(e.target.value)}
+                className="w-full p-2 rounded bg-slate-950/50 border border-slate-700 text-white"
+              >
+                <option value="">Select a show</option>
+                {shows.map((show) => (
+                  <option key={show.id} value={show.id}>
+                    {show.title}
+                  </option>
+                ))}
+              </select>
+
+              <div className="flex flex-wrap gap-3 text-sm text-slate-200">
                 <label className="flex items-center gap-2">
-                  <input type="radio" name="sendMode" checked={sendMode === 'run'} onChange={() => setSendMode('run')} />
-                  Create 4-part run (Opener / Middle 1 / Middle 2 / Closer)
+                  <input
+                    type="radio"
+                    checked={sendMode === 'sections'}
+                    onChange={() => setSendMode('sections')}
+                    className="accent-purple-500"
+                  />
+                  Send each section as its own task
                 </label>
                 <label className="flex items-center gap-2">
                   <input
                     type="radio"
-                    name="sendMode"
-                    checked={sendMode === 'sections'}
-                    onChange={() => setSendMode('sections')}
+                    checked={sendMode === 'run'}
+                    onChange={() => setSendMode('run')}
+                    className="accent-purple-500"
                   />
-                  Create section tasks (Stage Layout / Blocking / Cue Timing / etc.)
+                  Send condensed run plan
                 </label>
               </div>
+            </div>
 
-              {shows.length === 0 ? (
-                <div className="text-slate-300 text-sm">
-                  No shows found. Create a show in <span className="text-slate-100">Show Planner</span> first.
-                </div>
-              ) : (
-                <>
-                  <label className="text-sm text-slate-300">Choose a show</label>
-                  <select
-                    className="w-full p-2 rounded bg-slate-900 border border-slate-700"
-                    value={selectedShowId}
-                    onChange={(e) => setSelectedShowId(e.target.value)}
-                  >
-                    {shows.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.title}
-                      </option>
-                    ))}
-                  </select>
-
-                  <button
-                    className="w-full mt-2 px-4 py-2 rounded bg-purple-600 hover:bg-purple-500 text-white disabled:opacity-40"
-                    disabled={!selectedShowId || sending}
-                    onClick={sendToShowPlanner}
-                  >
-                    {sending ? 'Sending…' : sendMode === 'run' ? 'Create Opener/Middles/Closer' : 'Create Staging Tasks'}
-                  </button>
-                </>
-              )}
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowPickerOpen(false)}
+                className="px-4 py-2 rounded border border-slate-700 hover:border-slate-500 text-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={sendToShowPlanner}
+                disabled={!selectedShowId || sending}
+                className="px-4 py-2 rounded bg-purple-700 hover:bg-purple-600 disabled:opacity-40 text-white"
+              >
+                {sending ? 'Sending…' : 'Send'}
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Blueprint modal */}
       {blueprintOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-lg maw-card p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div className="text-lg font-semibold">Save as Blueprint</div>
-              <button
-                className="px-2 py-1 rounded border border-slate-700 hover:border-slate-500"
-                onClick={() => setBlueprintOpen(false)}
-              >
-                Close
-              </button>
+        <div className="fixed inset-0 z-40 bg-black/60 flex items-center justify-center p-4">
+          <div className="w-full max-w-lg maw-card p-5 space-y-4">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-100">Save Blueprint</h3>
+              <p className="text-sm text-slate-400">Save this assistant staging plan as a reusable blueprint.</p>
             </div>
 
-            <div className="mt-4 space-y-3">
-              <label className="text-sm text-slate-300">Blueprint name</label>
-              <input
-                value={blueprintName}
-                onChange={(e) => setBlueprintName(e.target.value)}
-                placeholder="e.g., Corporate Opener Blueprint"
-                className="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white placeholder:text-slate-500"
-              />
+            <input
+              value={blueprintName}
+              onChange={(e) => setBlueprintName(e.target.value)}
+              placeholder="Blueprint name"
+              className="w-full p-2 rounded bg-slate-950/50 border border-slate-700 text-white placeholder:text-slate-500"
+            />
 
-              <div className="text-xs text-slate-400">
-                Includes output + preset + tight-space toggle + context (routine, venue, stage, assistants, audience) + tags.
-              </div>
-
+            <div className="flex justify-end gap-2 pt-2">
               <button
-                className="w-full mt-2 px-4 py-2 rounded bg-emerald-700 hover:bg-emerald-600 text-white disabled:opacity-40"
-                disabled={!outputRaw || savingBlueprint}
+                type="button"
+                onClick={() => setBlueprintOpen(false)}
+                className="px-4 py-2 rounded border border-slate-700 hover:border-slate-500 text-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
                 onClick={saveBlueprint}
+                disabled={!outputRaw || savingBlueprint}
+                className="px-4 py-2 rounded bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40 text-white"
               >
                 {savingBlueprint ? 'Saving…' : 'Save Blueprint'}
               </button>
@@ -1093,75 +1026,6 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
           </div>
         </div>
       )}
-
-      {/* Sticky footer controls */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-800 bg-slate-950/80 backdrop-blur">
-        <div className="mx-auto max-w-7xl px-6 py-3 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleReset}
-              className="px-3 py-2 rounded bg-transparent border border-slate-600 hover:border-slate-400 text-slate-200"
-            >
-              Reset / Clear
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleGenerate}
-              disabled={!canGenerate}
-              className={
-                'px-5 py-2 rounded bg-purple-600 hover:bg-purple-500 text-white transition-transform duration-150 ' +
-                (!canGenerate
-                  ? 'opacity-30'
-                  : 'hover:scale-[1.02] shadow-[0_0_18px_0_rgba(168,85,247,0.25)]')
-              }
-            >
-              {loading ? 'Generating…' : 'Generate'}
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {loading ? (
-              <button
-                onClick={handleCancel}
-                className="px-3 py-2 rounded border border-slate-600 hover:border-slate-400 text-slate-200"
-              >
-                Cancel
-              </button>
-            ) : null}
-
-            <button
-              onClick={handleCopy}
-              disabled={!canCopySave}
-              className="px-3 py-2 rounded border border-slate-600 hover:border-slate-400 text-slate-200 disabled:opacity-40"
-            >
-              {copied ? 'Copied ✓' : 'Copy'}
-            </button>
-            <button
-              onClick={handleSaveIdea}
-              disabled={!canCopySave}
-              className="px-3 py-2 rounded bg-emerald-700 hover:bg-emerald-600 text-white disabled:opacity-40"
-            >
-              Save
-            </button>
-            <button
-              onClick={openBlueprint}
-              disabled={!canCopySave}
-              className="px-3 py-2 rounded border border-slate-600 hover:border-slate-400 text-slate-200 disabled:opacity-40"
-            >
-              Save Blueprint
-            </button>
-            <button
-              onClick={() => (!canCopySave ? null : openSend())}
-              disabled={!canCopySave}
-              className="px-3 py-2 rounded border border-slate-600 hover:border-slate-400 text-slate-200 disabled:opacity-40"
-            >
-              Send to Show Planner
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
