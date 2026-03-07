@@ -231,6 +231,18 @@ const SECTION_PROFILES: Record<string, Array<Exclude<SectionKey, 'fullText'>>> =
   default: ['stageLayout', 'blockingPlan', 'assistantPositions', 'cueTimeline', 'propMovement', 'transitionPlan', 'safetyNotes', 'contingencyPlan'],
 };
 
+const FAST_SECTION_PROFILES: Record<string, Array<Exclude<SectionKey, 'fullText'>>> = {
+  'routine-staging': ['stageLayout', 'assistantPositions', 'cueTimeline', 'safetyNotes'],
+  'cue-sheet': ['assistantPositions', 'cueTimeline', 'propMovement', 'safetyNotes'],
+  'volunteer-flow': ['stageLayout', 'volunteerPlan', 'assistantInstructions', 'safetyNotes'],
+  'misdirection-timing': ['blockingPlan', 'assistantPositions', 'misdirectionWindows', 'safetyNotes'],
+  'prop-table-layout': ['propTableLayout', 'resetOrder', 'assistantAccessPath', 'propMovement'],
+  'transition-flow': ['cueTimeline', 'propMovement', 'transitionPlan', 'safetyNotes'],
+  'safety-check': ['assistantPositions', 'volunteerPlan', 'transitionPlan', 'safetyNotes'],
+  'admc-demo': ['stageLayout', 'assistantPositions', 'cueTimeline', 'safetyNotes'],
+  default: ['stageLayout', 'assistantPositions', 'cueTimeline', 'safetyNotes'],
+};
+
 function Skeleton() {
   return (
     <div className="space-y-3">
@@ -356,9 +368,11 @@ ${SECTION_LABELS[key]}`)
     .join('');
 
   const fastRule = `
-- FAST MODE: generate a quick rehearsal assistant summary.
-- Use concise bullets only.
-- Max 2-4 bullets per section.
+- FAST MODE: generate a compact but complete rehearsal assistant summary.
+- Return exactly the 4 requested sections and make every section useful.
+- Each section must contain 2-3 bullet points.
+- Each bullet may be one short sentence, but keep it tight and actionable.
+- Do not leave any requested section blank or nearly empty.
 - Avoid long explanations and narrative paragraphs.
 - Prioritize speed, clarity, and instant booth readability.`;
 
@@ -372,7 +386,7 @@ ${SECTION_LABELS[key]}`)
   const demoRule = demoMode
     ? `
 - DEMO MODE: optimize for booth reliability. Keep output compact, practical, and instantly scannable.
-- In demo mode, never exceed 4 bullets per section.`
+- In demo mode, aim for 2-3 bullets per section and never exceed 3 bullets per section.`
     : '';
 
   const toolSpecificRule = getToolSpecificInstruction(focusTag, responseMode, demoMode);
@@ -429,12 +443,10 @@ function combineRunNotes(output: StructuredOutput, fallback: string) {
 
 function getRequestedSections(focusTag?: string | null, responseMode: ResponseMode = 'fast', demoMode = false) {
   const baseSections = SECTION_PROFILES[focusTag || ''] || SECTION_PROFILES.default;
-  if (demoMode) return baseSections.slice(0, Math.min(5, baseSections.length));
+  const fastSections = FAST_SECTION_PROFILES[focusTag || ''] || FAST_SECTION_PROFILES.default;
 
-  if (responseMode === 'fast') {
-    if ((focusTag || '') === 'cue-sheet') return baseSections.slice(0, Math.min(4, baseSections.length));
-    return baseSections.slice(0, Math.min(5, baseSections.length));
-  }
+  if (demoMode) return fastSections.slice(0, Math.min(4, fastSections.length));
+  if (responseMode === 'fast') return fastSections.slice(0, Math.min(4, fastSections.length));
 
   return baseSections.slice(0, Math.min(9, baseSections.length));
 }
@@ -499,7 +511,11 @@ function buildStructuredSchema(keys: Array<Exclude<SectionKey, 'fullText'>>) {
 
 function structuredResultToText(obj: Record<string, any>, keys: Array<Exclude<SectionKey, 'fullText'>>) {
   return keys
-    .map((key) => `### ${String(key).toUpperCase()}\n${String(obj?.[key] || '').trim()}`)
+    .map((key) => {
+      const value = String(obj?.[key] || '').trim();
+      return value ? `### ${String(key).toUpperCase()}\n${value}` : '';
+    })
+    .filter(Boolean)
     .join('\n\n')
     .trim();
 }
