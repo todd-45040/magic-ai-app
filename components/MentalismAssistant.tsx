@@ -150,6 +150,57 @@ const PsychologicalLayerVisualizer: React.FC<{ compact?: boolean }> = ({ compact
     );
 };
 
+
+
+type MentalismSectionKey =
+    | 'stress'
+    | 'effectSummary'
+    | 'methodConcepts'
+    | 'performanceScript'
+    | 'psychologicalLayers'
+    | 'audienceManagement'
+    | 'failureOuts'
+    | 'performanceTips'
+    | 'routineArchitecture';
+
+const DEFAULT_OPEN_SECTIONS: Record<MentalismSectionKey, boolean> = {
+    stress: false,
+    effectSummary: true,
+    methodConcepts: true,
+    performanceScript: false,
+    psychologicalLayers: false,
+    audienceManagement: false,
+    failureOuts: false,
+    performanceTips: false,
+    routineArchitecture: false,
+};
+
+const CollapsiblePanel: React.FC<{
+    title: string;
+    panelKey: MentalismSectionKey;
+    openSections: Record<MentalismSectionKey, boolean>;
+    setOpenSections: React.Dispatch<React.SetStateAction<Record<MentalismSectionKey, boolean>>>;
+    children: React.ReactNode;
+}> = ({ title, panelKey, openSections, setOpenSections, children }) => {
+    const isOpen = openSections[panelKey];
+    return (
+        <details
+            open={isOpen}
+            onToggle={(e) => {
+                const nextOpen = (e.currentTarget as HTMLDetailsElement).open;
+                setOpenSections((prev) => ({ ...prev, [panelKey]: nextOpen }));
+            }}
+            className="bg-slate-950/30 border border-slate-700 rounded-lg p-3"
+        >
+            <summary className="cursor-pointer text-slate-200 font-semibold flex items-center justify-between gap-3 list-none [&::-webkit-details-marker]:hidden">
+                <span>{title}</span>
+                <span className="text-xs text-slate-500">{isOpen ? 'Hide' : 'Show'}</span>
+            </summary>
+            <div className="mt-2">{children}</div>
+        </details>
+    );
+};
+
 const CATEGORY_QUERIES = [
     {
         name: 'Core Principles',
@@ -511,6 +562,7 @@ const MentalismAssistant: React.FC<MentalismAssistantProps> = ({ onIdeaSaved, on
     const [intensityIdx, setIntensityIdx] = useState<number>(2);
     const [performanceEnvironment, setPerformanceEnvironment] = useState<typeof PERFORMANCE_ENVIRONMENTS[number]>('Parlor');
     const [routineDepth, setRoutineDepth] = useState<'fast' | 'full'>('full');
+    const [openSections, setOpenSections] = useState<Record<MentalismSectionKey, boolean>>(DEFAULT_OPEN_SECTIONS);
     const [methodPreferences, setMethodPreferences] = useState<Record<typeof METHOD_PREFERENCE_OPTIONS[number], boolean>>({
         'Psychological Force': true,
         'Dual Reality': true,
@@ -1724,14 +1776,8 @@ Output guidelines:
                 ) : blueprint ? (
                     <div className="relative group flex-1 flex flex-col">
                         <div className="p-4 overflow-y-auto">
-                            <div className="mb-4">
-                                <PsychologicalLayerVisualizer compact />
-                            </div>
-
                             {(stressError || stressReport) && (
-                                <details open className="bg-slate-950/30 border border-slate-700 rounded-lg p-3 mb-4">
-                                    <summary className="cursor-pointer text-slate-200 font-semibold">Stress Test Report</summary>
-
+                                <CollapsiblePanel title="Stress Test Report" panelKey="stress" openSections={openSections} setOpenSections={setOpenSections}>
                                     {stressError ? (
                                         <div className="mt-2 text-sm text-red-400">{stressError}</div>
                                     ) : stressReport ? (
@@ -1810,7 +1856,7 @@ Output guidelines:
                                             ) : null}
                                         </div>
                                     ) : null}
-                                </details>
+                                </CollapsiblePanel>
                             )}
 
                             <div className="space-y-3">
@@ -1826,9 +1872,23 @@ Output guidelines:
                                     </div>
                                 ) : null}
 
-                                <details open className="bg-slate-950/30 border border-slate-700 rounded-lg p-3">
-                                    <summary className="cursor-pointer text-slate-200 font-semibold">Effect Summary</summary>
-                                    <div className="mt-2 space-y-3 text-sm text-slate-300">
+                                <div className="flex items-center justify-end gap-2">
+                                    <button
+                                        onClick={() => setOpenSections((prev) => Object.fromEntries(Object.keys(prev).map((key) => [key, true])) as Record<MentalismSectionKey, boolean>)}
+                                        className="px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md text-slate-200"
+                                    >
+                                        Expand all
+                                    </button>
+                                    <button
+                                        onClick={() => setOpenSections((prev) => Object.fromEntries(Object.keys(prev).map((key) => [key, false])) as Record<MentalismSectionKey, boolean>)}
+                                        className="px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md text-slate-200"
+                                    >
+                                        Collapse all
+                                    </button>
+                                </div>
+
+                                <CollapsiblePanel title="Effect Summary" panelKey="effectSummary" openSections={openSections} setOpenSections={setOpenSections}>
+                                    <div className="space-y-3 text-sm text-slate-300">
                                         <div>
                                             <div className="text-xs uppercase tracking-wide text-slate-500">Effect</div>
                                             <div className="mt-1 whitespace-pre-wrap">{blueprint.effect_summary || blueprint.premise || '—'}</div>
@@ -1838,11 +1898,10 @@ Output guidelines:
                                             <div className="mt-1 whitespace-pre-wrap">{blueprint.audience_experience || '—'}</div>
                                         </div>
                                     </div>
-                                </details>
+                                </CollapsiblePanel>
 
-                                <details open className="bg-slate-950/30 border border-slate-700 rounded-lg p-3">
-                                    <summary className="cursor-pointer text-slate-200 font-semibold">Method Concepts</summary>
-                                    <div className="mt-2 text-sm text-slate-300">
+                                <CollapsiblePanel title="Method Concepts" panelKey="methodConcepts" openSections={openSections} setOpenSections={setOpenSections}>
+                                    <div className="text-sm text-slate-300">
                                         {blueprint.method_concepts?.length ? (
                                             <ul className="list-disc pl-5 space-y-1">
                                                 {blueprint.method_concepts.map((x, i) => (
@@ -1853,11 +1912,10 @@ Output guidelines:
                                             <div className="text-slate-500">—</div>
                                         )}
                                     </div>
-                                </details>
+                                </CollapsiblePanel>
 
-                                <details open className="bg-slate-950/30 border border-slate-700 rounded-lg p-3">
-                                    <summary className="cursor-pointer text-slate-200 font-semibold">Performance Script</summary>
-                                    <div className="mt-2 space-y-3 text-sm text-slate-300">
+                                <CollapsiblePanel title="Performance Script" panelKey="performanceScript" openSections={openSections} setOpenSections={setOpenSections}>
+                                    <div className="space-y-3 text-sm text-slate-300">
                                         {[
                                             ['Opening Frame', blueprint.performance_script?.opening_frame],
                                             ['Build Suspense', blueprint.performance_script?.build_suspense],
@@ -1870,12 +1928,11 @@ Output guidelines:
                                             </div>
                                         ))}
                                     </div>
-                                </details>
+                                </CollapsiblePanel>
 
                                 {routineDepth === 'full' ? (
-                                <details open className="bg-slate-950/30 border border-slate-700 rounded-lg p-3">
-                                    <summary className="cursor-pointer text-slate-200 font-semibold">Psychological Layers</summary>
-                                    <div className="mt-3 space-y-3">
+                                <CollapsiblePanel title="Psychological Layers" panelKey="psychologicalLayers" openSections={openSections} setOpenSections={setOpenSections}>
+                                    <div className="space-y-3">
                                         <PsychologicalLayerVisualizer compact />
                                         <div className="grid grid-cols-1 gap-3 text-sm text-slate-300">
                                             <div>
@@ -1916,13 +1973,12 @@ Output guidelines:
                                             </div>
                                         </div>
                                     </div>
-                                </details>
+                                </CollapsiblePanel>
                                 ) : null}
 
                                 {routineDepth === 'full' ? (
-                                <details open className="bg-slate-950/30 border border-slate-700 rounded-lg p-3">
-                                    <summary className="cursor-pointer text-slate-200 font-semibold">Audience Management</summary>
-                                    <div className="mt-2 space-y-3 text-sm text-slate-300">
+                                <CollapsiblePanel title="Audience Management" panelKey="audienceManagement" openSections={openSections} setOpenSections={setOpenSections}>
+                                    <div className="space-y-3 text-sm text-slate-300">
                                         {[
                                             ['Spectator Selection', blueprint.audience_management?.spectator_selection],
                                             ['Handling Skepticism', blueprint.audience_management?.handling_skepticism],
@@ -1944,13 +2000,12 @@ Output guidelines:
                                             </div>
                                         ) : null}
                                     </div>
-                                </details>
+                                </CollapsiblePanel>
                                 ) : null}
 
                                 {routineDepth === 'full' ? (
-                                <details open className="bg-slate-950/30 border border-slate-700 rounded-lg p-3">
-                                    <summary className="cursor-pointer text-slate-200 font-semibold">Failure Outs</summary>
-                                    <div className="mt-2 text-sm text-slate-300">
+                                <CollapsiblePanel title="Failure Outs" panelKey="failureOuts" openSections={openSections} setOpenSections={setOpenSections}>
+                                    <div className="text-sm text-slate-300">
                                         {blueprint.outs?.length ? (
                                             <ul className="list-disc pl-5 space-y-1">
                                                 {blueprint.outs.map((x, i) => (
@@ -1961,25 +2016,23 @@ Output guidelines:
                                             <div className="text-slate-500">—</div>
                                         )}
                                     </div>
-                                </details>
+                                </CollapsiblePanel>
                                 ) : null}
 
                                 {routineDepth === 'full' && blueprint.performance_tips?.length ? (
-                                    <details open className="bg-slate-950/30 border border-slate-700 rounded-lg p-3">
-                                        <summary className="cursor-pointer text-slate-200 font-semibold">Performance Tips</summary>
-                                        <div className="mt-2 text-sm text-slate-300">
+                                    <CollapsiblePanel title="Performance Tips" panelKey="performanceTips" openSections={openSections} setOpenSections={setOpenSections}>
+                                        <div className="text-sm text-slate-300">
                                             <ul className="list-disc pl-5 space-y-1">
                                                 {blueprint.performance_tips.map((x, i) => (
                                                     <li key={i} className="whitespace-pre-wrap">{x}</li>
                                                 ))}
                                             </ul>
                                         </div>
-                                    </details>
+                                    </CollapsiblePanel>
                                 ) : null}
 
-                                <details className="bg-slate-950/30 border border-slate-700 rounded-lg p-3">
-                                    <summary className="cursor-pointer text-slate-200 font-semibold">Routine Architecture</summary>
-                                    <div className="mt-2 space-y-3 text-sm text-slate-300">
+                                <CollapsiblePanel title="Routine Architecture" panelKey="routineArchitecture" openSections={openSections} setOpenSections={setOpenSections}>
+                                    <div className="space-y-3 text-sm text-slate-300">
                                         {blueprint.phase_structure?.length ? (
                                             <div>
                                                 <div className="text-xs uppercase tracking-wide text-slate-500">Phase Structure</div>
@@ -2010,7 +2063,7 @@ Output guidelines:
                                             </div>
                                         </details>
                                     </div>
-                                </details>
+                                </CollapsiblePanel>
                             </div>
                         </div>
 
