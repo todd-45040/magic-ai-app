@@ -194,7 +194,7 @@ const CollapsiblePanel: React.FC<{
         >
             <summary className="cursor-pointer text-slate-200 font-semibold flex items-center justify-between gap-3 list-none [&::-webkit-details-marker]:hidden">
                 <span>{title}</span>
-                <span className="text-xs text-slate-500">{isOpen ? 'Hide' : 'Show'}</span>
+                <span className="text-xs text-slate-500">{isOpen ? 'Hide' : 'View'}</span>
             </summary>
             <div className="mt-2">{children}</div>
         </details>
@@ -1877,13 +1877,13 @@ Output guidelines:
                                         onClick={() => setOpenSections((prev) => Object.fromEntries(Object.keys(prev).map((key) => [key, true])) as Record<MentalismSectionKey, boolean>)}
                                         className="px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md text-slate-200"
                                     >
-                                        Expand all
+                                        Expand Routine
                                     </button>
                                     <button
                                         onClick={() => setOpenSections((prev) => Object.fromEntries(Object.keys(prev).map((key) => [key, false])) as Record<MentalismSectionKey, boolean>)}
                                         className="px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md text-slate-200"
                                     >
-                                        Collapse all
+                                        Collapse Routine
                                     </button>
                                 </div>
 
