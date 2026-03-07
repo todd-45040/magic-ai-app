@@ -346,12 +346,10 @@ function buildStructuredPrompt(opts: {
 ${SECTION_LABELS[key]}`)
     .join('');
 
-  const brevityRule =
-    focusTag === 'admc-demo' || responseMode === 'fast'
-      ? `
-- Keep it convention-demo fast: each section should be 2-4 bullets or 2-4 short lines max.`
-      : `
-- Keep each section concise: usually 3-6 bullets or short lines. Avoid long paragraphs.`;
+  const brevityRule = `
+- Return concise sections.
+- Avoid long narrative text.
+- Limit each section to 3-5 bullet points or short lines.`;
 
   const modeRule =
     responseMode === 'fast'
