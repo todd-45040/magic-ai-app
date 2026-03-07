@@ -253,7 +253,7 @@ export const generateResponse = async (
   })) || [];
 
   const body: GeminiGenerateBody = {
-    model: 'gemini-3-pro-preview',
+    model: 'gemini-2.5-pro',
     contents: [...apiHistory, { role: 'user', parts: [{ text: prompt }] }],
     config: { systemInstruction },
   };
@@ -281,7 +281,7 @@ export const generateResponseWithParts = async (
   })) || [];
 
   const body: GeminiGenerateBody = {
-    model: 'gemini-3-pro-preview',
+    model: 'gemini-2.5-pro',
     contents: [...apiHistory, { role: 'user', parts }],
     config: { systemInstruction },
   };
@@ -303,7 +303,7 @@ export const generateStructuredResponse = async (
   options?: { extraHeaders?: Record<string, string>; maxOutputTokens?: number; speedMode?: 'fast' | 'full' }
 ): Promise<any> => {
   const speedMode = options?.speedMode ?? 'full';
-  const model = speedMode === 'fast' ? 'gemini-2.0-flash' : 'gemini-3-pro-preview';
+  const model = speedMode === 'fast' ? 'gemini-2.5-flash' : 'gemini-2.5-pro';
   const body: GeminiGenerateBody = {
     model,
     contents: [{ role: 'user', parts: [{ text: prompt }] }],

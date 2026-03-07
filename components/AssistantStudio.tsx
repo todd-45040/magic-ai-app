@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ASSISTANT_STUDIO_SYSTEM_INSTRUCTION } from '../constants';
-import { generateResponse, generateStructuredResponse } from '../services/geminiService';
+import { generateStructuredResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
 import { getShows, addTasksToShow } from '../services/showsService';
 import type { Show, Task, User } from '../types';
@@ -590,16 +590,15 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
       });
 
       const requestedSections = getRequestedSections(lastPreset || null, responseMode);
+      const outputBudget = responseMode === 'fast' ? 700 : 1800;
       const text = await withTimeout(
-        responseMode === 'fast'
-          ? generateStructuredResponse(
-              prompt,
-              ASSISTANT_STUDIO_SYSTEM_INSTRUCTION,
-              buildStructuredSchema(requestedSections),
-              currentUser,
-              { maxOutputTokens: 700, speedMode: 'fast' }
-            ).then((obj) => structuredResultToText(obj || {}, requestedSections))
-          : generateResponse(prompt, ASSISTANT_STUDIO_SYSTEM_INSTRUCTION, currentUser),
+        generateStructuredResponse(
+          prompt,
+          ASSISTANT_STUDIO_SYSTEM_INSTRUCTION,
+          buildStructuredSchema(requestedSections),
+          currentUser,
+          { maxOutputTokens: outputBudget, speedMode: responseMode }
+        ).then((obj) => structuredResultToText(obj || {}, requestedSections)),
         REQUEST_TIMEOUT_MS
       );
 
