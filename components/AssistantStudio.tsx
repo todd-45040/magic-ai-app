@@ -75,13 +75,11 @@ type SectionKey =
   | 'assistantPositions'
   | 'cueTimeline'
   | 'propMovement'
-  | 'propFlow'
   | 'revealChoreography'
   | 'volunteerPlan'
   | 'assistantInstructions'
   | 'volunteerManagement'
   | 'contingencyPlan'
-  | 'contingencies'
   | 'safetyNotes'
   | 'misdirectionWindows'
   | 'propTableLayout'
@@ -101,13 +99,11 @@ const TABS: Array<{ key: SectionKey; label: string }> = [
   { key: 'assistantPositions', label: 'Assistant Positions' },
   { key: 'cueTimeline', label: 'Cue Timeline' },
   { key: 'propMovement', label: 'Prop Movement' },
-  { key: 'propFlow', label: 'Prop Flow' },
   { key: 'revealChoreography', label: 'Reveal Choreography' },
   { key: 'volunteerPlan', label: 'Volunteer Plan' },
   { key: 'assistantInstructions', label: 'Assistant Instructions' },
   { key: 'volunteerManagement', label: 'Volunteer Management' },
   { key: 'contingencyPlan', label: 'Contingency Plan' },
-  { key: 'contingencies', label: 'Contingencies' },
   { key: 'safetyNotes', label: 'Safety Notes' },
   { key: 'misdirectionWindows', label: 'Misdirection Windows' },
   { key: 'propTableLayout', label: 'Prop Table Layout' },
@@ -209,13 +205,11 @@ const SECTION_LABELS: Record<Exclude<SectionKey, 'fullText'>, string> = {
   assistantPositions: 'Assistant starting positions and movement anchors.',
   cueTimeline: 'Timeline cue sheet using timestamps like 00:00, 00:15, 00:40.',
   propMovement: 'Prop handoffs, travel paths, and reset-sensitive items.',
-  propFlow: 'Prop flow, reveal prep sequence, and reset-sensitive movement.',
   revealChoreography: 'Reveal sequence and who does what.',
   volunteerPlan: 'Volunteer entry, standing positions, exits, and no-go areas.',
   assistantInstructions: 'Concise operator-style instructions the assistant can follow.',
   volunteerManagement: 'Volunteer control, exposure prevention, audience management, and backup handling.',
   contingencyPlan: 'What assistants do if a cue slips, applause runs long, or a prop/reset issue appears.',
-  contingencies: 'Fallback actions if a cue slips, timing shifts, or prop handling changes unexpectedly.',
   safetyNotes: 'Short safety reminders and spacing notes.',
   misdirectionWindows: '2-4 critical windows with Moment / Assistant Action / Recommended Timing.',
   propTableLayout: 'Prop table rows or zones.',
@@ -227,27 +221,27 @@ const SECTION_LABELS: Record<Exclude<SectionKey, 'fullText'>, string> = {
 };
 
 const SECTION_PROFILES: Record<string, Array<Exclude<SectionKey, 'fullText'>>> = {
-  'routine-staging': ['stageLayout', 'assistantPositions', 'cueTimeline', 'propFlow', 'contingencies', 'safetyNotes'],
-  'cue-sheet': ['assistantPositions', 'cueTimeline', 'propFlow', 'transitionPlan', 'safetyNotes', 'contingencies'],
-  'volunteer-flow': ['stageLayout', 'assistantPositions', 'cueTimeline', 'volunteerManagement', 'safetyNotes', 'contingencies'],
-  'misdirection-timing': ['stageLayout', 'assistantPositions', 'cueTimeline', 'misdirectionWindows', 'safetyNotes', 'contingencies'],
-  'prop-table-layout': ['stageLayout', 'assistantPositions', 'cueTimeline', 'propFlow', 'safetyNotes', 'contingencies'],
-  'transition-flow': ['stageLayout', 'assistantPositions', 'cueTimeline', 'propFlow', 'safetyNotes', 'contingencies'],
-  'safety-check': ['stageLayout', 'assistantPositions', 'cueTimeline', 'contingencies', 'safetyNotes', 'safetyRiskAnalysis'],
-  'admc-demo': ['stageLayout', 'assistantPositions', 'cueTimeline', 'propFlow', 'contingencies', 'safetyNotes'],
-  default: ['stageLayout', 'assistantPositions', 'cueTimeline', 'propFlow', 'contingencies', 'safetyNotes'],
+  'routine-staging': ['stageLayout', 'assistantPositions', 'blockingPlan', 'cueTimeline', 'propMovement', 'safetyNotes'],
+  'cue-sheet': ['assistantPositions', 'cueTimeline', 'transitionPlan', 'propMovement', 'safetyNotes', 'contingencyPlan'],
+  'volunteer-flow': ['stageLayout', 'volunteerPlan', 'assistantInstructions', 'volunteerManagement', 'safetyNotes', 'contingencyPlan'],
+  'misdirection-timing': ['blockingPlan', 'assistantPositions', 'misdirectionWindows', 'transitionPlan', 'safetyNotes', 'contingencyPlan'],
+  'prop-table-layout': ['propTableLayout', 'resetOrder', 'assistantAccessPath', 'propMovement', 'transitionPlan', 'safetyNotes'],
+  'transition-flow': ['cueTimeline', 'propMovement', 'transitionPlan', 'lightingCues', 'safetyNotes', 'contingencyPlan'],
+  'safety-check': ['assistantPositions', 'volunteerPlan', 'transitionPlan', 'safetyNotes', 'safetyRiskAnalysis', 'contingencyPlan'],
+  'admc-demo': ['stageLayout', 'assistantPositions', 'cueTimeline', 'propMovement', 'transitionPlan', 'safetyNotes'],
+  default: ['stageLayout', 'assistantPositions', 'blockingPlan', 'cueTimeline', 'transitionPlan', 'safetyNotes'],
 };
 
 const FAST_SECTION_PROFILES: Record<string, Array<Exclude<SectionKey, 'fullText'>>> = {
-  'routine-staging': ['stageLayout', 'assistantPositions', 'cueTimeline'],
-  'cue-sheet': ['assistantPositions', 'cueTimeline', 'propFlow'],
-  'volunteer-flow': ['stageLayout', 'assistantPositions', 'cueTimeline'],
-  'misdirection-timing': ['stageLayout', 'assistantPositions', 'cueTimeline'],
-  'prop-table-layout': ['stageLayout', 'assistantPositions', 'cueTimeline'],
-  'transition-flow': ['stageLayout', 'assistantPositions', 'cueTimeline'],
-  'safety-check': ['stageLayout', 'assistantPositions', 'cueTimeline'],
-  'admc-demo': ['stageLayout', 'assistantPositions', 'cueTimeline'],
-  default: ['stageLayout', 'assistantPositions', 'cueTimeline'],
+  'routine-staging': ['stageLayout', 'assistantPositions', 'cueTimeline', 'safetyNotes'],
+  'cue-sheet': ['assistantPositions', 'cueTimeline', 'propMovement', 'safetyNotes'],
+  'volunteer-flow': ['stageLayout', 'volunteerPlan', 'assistantInstructions', 'safetyNotes'],
+  'misdirection-timing': ['blockingPlan', 'assistantPositions', 'misdirectionWindows', 'safetyNotes'],
+  'prop-table-layout': ['propTableLayout', 'resetOrder', 'assistantAccessPath', 'propMovement'],
+  'transition-flow': ['cueTimeline', 'propMovement', 'transitionPlan', 'safetyNotes'],
+  'safety-check': ['assistantPositions', 'volunteerPlan', 'transitionPlan', 'safetyNotes'],
+  'admc-demo': ['stageLayout', 'assistantPositions', 'cueTimeline', 'safetyNotes'],
+  default: ['stageLayout', 'assistantPositions', 'cueTimeline', 'safetyNotes'],
 };
 
 function Skeleton() {
@@ -308,13 +302,11 @@ const HEADERS = {
   assistantPositions: '### ASSISTANT_POSITIONS',
   cueTimeline: '### CUE_TIMELINE',
   propMovement: '### PROP_MOVEMENT',
-  propFlow: '### PROP_FLOW',
   revealChoreography: '### REVEAL_CHOREOGRAPHY',
   volunteerPlan: '### VOLUNTEER_PLAN',
   assistantInstructions: '### ASSISTANT_INSTRUCTIONS',
   volunteerManagement: '### VOLUNTEER_MANAGEMENT',
   contingencyPlan: '### CONTINGENCY_PLAN',
-  contingencies: '### CONTINGENCIES',
   safetyNotes: '### SAFETY_NOTES',
   misdirectionWindows: '### MISDIRECTION_WINDOWS',
   propTableLayout: '### PROP_TABLE_LAYOUT',
@@ -435,38 +427,20 @@ ${userInput}` +
   );
 }
 
-function formatStructuredField(value: unknown) {
-  if (Array.isArray(value)) {
-    return value
-      .map((line) => String(line || '').trim())
-      .filter(Boolean)
-      .map((line) => `• ${line}`)
-      .join('\n');
-  }
-  return String(value || '').trim();
-}
-
-function hasStructuredFieldValue(value: unknown) {
-  if (Array.isArray(value)) return value.some((line) => String(line || '').trim());
-  return !!String(value || '').trim();
-}
-
 function combineRunNotes(output: StructuredOutput, fallback: string) {
-  const sections: Array<[string, StructuredFieldValue | undefined]> = [
+  const sections: Array<[string, string | undefined]> = [
     ['STAGE LAYOUT', output.stageLayout],
     ['BLOCKING PLAN', output.blockingPlan],
     ['ASSISTANT POSITIONS', output.assistantPositions],
     ['CUE TIMELINE', output.cueTimeline],
-    ['PROP FLOW', output.propFlow || output.propMovement],
+    ['PROP MOVEMENT', output.propMovement],
     ['VOLUNTEER MANAGEMENT', output.volunteerManagement],
     ['MISDIRECTION WINDOWS', output.misdirectionWindows],
     ['TRANSITION PLAN', output.transitionPlan],
-    ['CONTINGENCIES', output.contingencies || output.contingencyPlan],
-    ['SAFETY & RISK ANALYSIS', output.safetyRiskAnalysis || output.safetyNotes],
+    ['CONTINGENCY PLAN', output.contingencyPlan],
+    ['SAFETY & RISK ANALYSIS', output.safetyRiskAnalysis],
   ];
-  const parts = sections
-    .filter(([, value]) => hasStructuredFieldValue(value))
-    .map(([title, value]) => `${title}\n${formatStructuredField(value)}`);
+  const parts = sections.filter(([, value]) => value?.trim()).map(([title, value]) => `${title}\n${value}`);
   return parts.length ? parts.join('\n\n') : fallback;
 }
 
@@ -474,10 +448,10 @@ function getRequestedSections(focusTag?: string | null, responseMode: ResponseMo
   const baseSections = SECTION_PROFILES[focusTag || ''] || SECTION_PROFILES.default;
   const fastSections = FAST_SECTION_PROFILES[focusTag || ''] || FAST_SECTION_PROFILES.default;
 
-  if (demoMode) return fastSections.slice(0, 3);
-  if (responseMode === 'fast') return fastSections.slice(0, 3);
+  if (demoMode) return fastSections.slice(0, Math.min(4, fastSections.length));
+  if (responseMode === 'fast') return fastSections.slice(0, Math.min(4, fastSections.length));
 
-  return baseSections.slice(0, 6);
+  return baseSections.slice(0, Math.min(6, baseSections.length));
 }
 
 function getToolSpecificInstruction(focusTag?: string | null, responseMode: ResponseMode = 'fast', demoMode = false) {
@@ -531,20 +505,11 @@ function getAssistantStudioSpeedMode(
   return responseMode === 'full' ? 'full' : 'fast';
 }
 
-function buildStructuredSchema(
-  keys: Array<Exclude<SectionKey, 'fullText'>>,
-  speedMode: 'fast' | 'full' = 'fast'
-) {
+function buildStructuredSchema(keys: Array<Exclude<SectionKey, 'fullText'>>) {
   const properties: Record<string, any> = {};
   keys.forEach((key) => {
-    let minItems = speedMode === 'fast' ? 2 : 4;
-    if (key === 'propFlow') minItems = 4;
-    if (key === 'contingencies') minItems = 3;
-
     properties[key] = {
-      type: 'array',
-      items: { type: 'string' },
-      minItems,
+      type: 'string',
       description: SECTION_LABELS[key],
     };
   });
@@ -559,7 +524,7 @@ function buildStructuredSchema(
 function structuredResultToText(obj: Record<string, any>, keys: Array<Exclude<SectionKey, 'fullText'>>) {
   return keys
     .map((key) => {
-      const value = formatStructuredField(obj?.[key]);
+      const value = String(obj?.[key] || '').trim();
       return value ? `### ${String(key).toUpperCase()}\n${value}` : '';
     })
     .filter(Boolean)
@@ -567,10 +532,11 @@ function structuredResultToText(obj: Record<string, any>, keys: Array<Exclude<Se
     .trim();
 }
 
+
 function compactStructuredResultToText(obj: Record<string, any>, keys: Array<Exclude<SectionKey, 'fullText'>>) {
   return keys
     .map((key) => {
-      const value = formatStructuredField(obj?.[key]);
+      const value = String(obj?.[key] || '').trim();
       return value ? `${SECTION_LABELS[key]}\n${value}` : '';
     })
     .filter(Boolean)
@@ -754,7 +720,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
         generateStructuredResponse(
           prompt,
           ASSISTANT_STUDIO_SYSTEM_INSTRUCTION,
-          buildStructuredSchema(requestedSections, assistantStudioSpeedMode),
+          buildStructuredSchema(requestedSections),
           currentUser,
           effectiveResponseMode === 'fast'
             ? { maxOutputTokens: demoMode ? 950 : 1100, speedMode: 'fast' }
@@ -779,7 +745,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
       setOutputRaw(displayText);
 
       const firstAvailable = TABS.find(
-        (t) => t.key !== 'fullText' && hasStructuredFieldValue((obj || {})[t.key])
+        (t) => t.key !== 'fullText' && String((obj || {})[t.key] || '').trim()
       );
       setActiveTab(firstAvailable?.key || 'fullText');
     } catch (e: any) {
@@ -847,9 +813,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
   const handleCopy = async () => {
     if (!outputRaw) return;
     try {
-      const textToCopy = activeTab === 'fullText'
-        ? outputRaw
-        : formatStructuredField(output?.[activeTab]) || outputRaw;
+      const textToCopy = activeTab === 'fullText' ? outputRaw : output?.[activeTab] || outputRaw;
       await navigator.clipboard.writeText(textToCopy);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1200);
@@ -976,17 +940,17 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
         { title: 'Assistant Run – Safety Check', notes: `PART: Safety Check\n\n${output.safetyRiskAnalysis || output.safetyNotes || outputRaw}`, priority: 'high' as any },
       ];
     } else {
-      const sectionTasks: Array<[string, StructuredFieldValue | undefined]> = [
+      const sectionTasks: Array<[string, string | undefined]> = [
         ['Stage Layout', output.stageLayout],
         ['Blocking Plan', output.blockingPlan],
         ['Assistant Positions', output.assistantPositions],
         ['Cue Timeline', output.cueTimeline],
-        ['Prop Flow', output.propFlow || output.propMovement],
+        ['Prop Movement', output.propMovement],
         ['Reveal Choreography', output.revealChoreography],
         ['Volunteer Plan', output.volunteerPlan],
         ['Assistant Instructions', output.assistantInstructions],
         ['Volunteer Management', output.volunteerManagement],
-        ['Contingencies', output.contingencies || output.contingencyPlan],
+        ['Contingency Plan', output.contingencyPlan],
         ['Safety Notes', output.safetyNotes],
         ['Misdirection Windows', output.misdirectionWindows],
         ['Prop Table Layout', output.propTableLayout],
@@ -997,8 +961,8 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
         ['Safety & Risk Analysis', output.safetyRiskAnalysis],
       ];
       tasks = sectionTasks
-        .filter(([, value]) => hasStructuredFieldValue(value))
-        .map(([title, notes]) => ({ title: `Assistant Studio – ${title}`, notes: formatStructuredField(notes), priority: 'medium' as any }));
+        .filter(([, value]) => !!value?.trim())
+        .map(([title, notes]) => ({ title: `Assistant Studio – ${title}`, notes: notes!, priority: 'medium' as any }));
       if (tasks.length === 0) {
         tasks = [{ title: 'Assistant Studio – Output', notes: outputRaw, priority: 'medium' as any }];
       }
@@ -1116,8 +1080,9 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
   };
 
   const renderTabContent = () => {
-    const value = activeTab === 'fullText' ? outputRaw : output?.[activeTab];
-    if (!value && activeTab !== 'fullText') {
+    const value: StructuredFieldValue = activeTab === 'fullText' ? outputRaw : output?.[activeTab] || '';
+    const hasValue = Array.isArray(value) ? value.some((line) => String(line || '').trim()) : !!String(value || '').trim();
+    if (!hasValue && activeTab !== 'fullText') {
       return (
         <div className="text-slate-400 text-sm">
           This section isn’t available yet. Try generating again — the model sometimes returns fewer sections.
@@ -1125,18 +1090,29 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
       );
     }
 
-    const displayValue = activeTab === 'fullText' ? outputRaw : formatStructuredField(value) || outputRaw;
-    if (activeTab === 'fullText' && displayValue) {
+    const displayValue = hasValue ? value : outputRaw;
+    if (activeTab === 'fullText' && typeof displayValue === 'string' && displayValue) {
       return renderAccordionText(displayValue);
+    }
+
+    if (Array.isArray(displayValue)) {
+      const lines = displayValue.map((line) => String(line || '').trim()).filter(Boolean);
+      return (
+        <ul className="list-disc pl-5 space-y-1 text-slate-100 leading-relaxed">
+          {lines.map((line, i) => (
+            <li key={`${activeTab}-${i}`}>{line}</li>
+          ))}
+        </ul>
+      );
     }
 
     return <div className="whitespace-pre-wrap text-slate-100 leading-relaxed">{displayValue}</div>;
   };
 
   const availableTabs = useMemo(() => {
-    const base = TABS.filter((t) => (t.key === 'fullText' ? true : hasStructuredFieldValue(output?.[t.key])));
+    const base = TABS.filter((t) => (t.key === 'fullText' ? true : !!output?.[t.key]));
     if (!outputRaw) return base;
-    const hasStructured = (Object.keys(HEADERS) as Array<keyof typeof HEADERS>).some((k) => hasStructuredFieldValue(output[k]));
+    const hasStructured = (Object.keys(HEADERS) as Array<keyof typeof HEADERS>).some((k) => !!output[k]);
     if (!hasStructured) return [{ key: 'fullText', label: 'Full Text' }];
     if (!base.find((t) => t.key === 'fullText')) base.push({ key: 'fullText', label: 'Full Text' });
     return base;
