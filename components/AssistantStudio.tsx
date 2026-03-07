@@ -502,6 +502,7 @@ function getAssistantStudioSpeedMode(
 ): 'fast' | 'full' {
   if (demoMode) return 'fast';
   return responseMode === 'full' ? 'full' : 'fast';
+}
 
 function buildStructuredSchema(keys: Array<Exclude<SectionKey, 'fullText'>>) {
   const properties: Record<string, any> = {};
@@ -524,6 +525,18 @@ function structuredResultToText(obj: Record<string, any>, keys: Array<Exclude<Se
     .map((key) => {
       const value = String(obj?.[key] || '').trim();
       return value ? `### ${String(key).toUpperCase()}\n${value}` : '';
+    })
+    .filter(Boolean)
+    .join('\n\n')
+    .trim();
+}
+
+
+function compactStructuredResultToText(obj: Record<string, any>, keys: Array<Exclude<SectionKey, 'fullText'>>) {
+  return keys
+    .map((key) => {
+      const value = String(obj?.[key] || '').trim();
+      return value ? `${SECTION_LABELS[key]}\n${value}` : '';
     })
     .filter(Boolean)
     .join('\n\n')
