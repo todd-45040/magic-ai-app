@@ -452,6 +452,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showLongLoadingHint, setShowLongLoadingHint] = useState(false);
 
   const [errorKind, setErrorKind] = useState<ErrorKind>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -551,6 +552,19 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
     }, 50);
   }, [outputRaw]);
 
+  useEffect(() => {
+    if (!loading) {
+      setShowLongLoadingHint(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setShowLongLoadingHint(true);
+    }, 12_000);
+
+    return () => window.clearTimeout(timer);
+  }, [loading]);
+
   const canGenerate = !!input.trim() && !loading;
   const canCopySave = !!outputRaw && !loading;
 
@@ -581,6 +595,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
 
     try {
       setLoading(true);
+      setShowLongLoadingHint(false);
       clearErrors();
       setToast(null);
 
@@ -1246,6 +1261,12 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
                   <div className="h-2 w-24 rounded bg-slate-800 animate-pulse" />
                 </div>
                 <Skeleton />
+                {showLongLoadingHint ? (
+                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+                    <div>Assistant is preparing your stage plan...</div>
+                    <div className="text-amber-100/80">Complex routines may take a few seconds.</div>
+                  </div>
+                ) : null}
               </div>
             ) : outputRaw ? (
               <>
