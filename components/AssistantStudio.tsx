@@ -407,11 +407,6 @@ function combineRunNotes(output: StructuredOutput, fallback: string) {
   return parts.length ? parts.join('\n\n') : fallback;
 }
 
-export default function AssistantStudio({ user, onIdeaSaved }: Props) {
-  const currentUser = useMemo(() => user || GUEST_USER, [user]);
-
-  const [input
-
 function getRequestedSections(focusTag?: string | null, responseMode: ResponseMode = 'fast') {
   const baseSections = SECTION_PROFILES[focusTag || ''] || SECTION_PROFILES.default;
   return responseMode === 'fast' ? baseSections.slice(0, Math.min(4, baseSections.length)) : baseSections;
@@ -442,7 +437,11 @@ ${String(obj?.[key] || '').trim()}`)
 ')
     .trim();
 }
-, setInput] = useState('');
+
+export default function AssistantStudio({ user, onIdeaSaved }: Props) {
+  const currentUser = useMemo(() => user || GUEST_USER, [user]);
+
+  const [input, setInput] = useState('');
   const [outputRaw, setOutputRaw] = useState('');
   const [output, setOutput] = useState<StructuredOutput>({});
   const [activeTab, setActiveTab] = useState<SectionKey>('stageLayout');
