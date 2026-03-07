@@ -10,6 +10,17 @@ type Props = {
   onIdeaSaved?: () => void;
 };
 
+type DemoScenario = {
+  label: string;
+  routineName: string;
+  venueType: string;
+  stageSize: string;
+  numberOfAssistants: string;
+  audienceDistance: string;
+  lightingNotes?: string;
+  description: string;
+};
+
 const GUEST_USER: User = {
   email: '',
   membership: 'free',
@@ -59,6 +70,64 @@ const PRESETS: Array<{ label: string; tag: string; template: (input: string) => 
     tag: 'safety-check',
     template: (input) =>
       `Run a safety and risk analysis for this routine. Check assistant path collisions, heavy prop safety, crowd proximity, reveal risks, and timing hazards.\n\nROUTINE DESCRIPTION:\n${input}`,
+  },
+];
+
+const DEMO_SCENARIOS: DemoScenario[] = [
+  {
+    label: 'Levitation Illusion',
+    routineName: 'Floating Assistant Illusion',
+    venueType: 'Theater / Stage',
+    stageSize: '30 ft stage',
+    numberOfAssistants: '2',
+    audienceDistance: '25 ft',
+    lightingNotes: 'Simple spot cue on levitation moment; avoid full blackout.',
+    description:
+      'Magician levitates an assistant on stage using a floating platform illusion. Assistant begins concealed within the staging area, enters for the presentation, rises during the levitation sequence, then dismounts and bows. Need staging, cue timing, reveal choreography, and safety checks for platform travel and audience sightlines.',
+  },
+  {
+    label: 'Audience Prediction',
+    routineName: 'Volunteer Prediction Routine',
+    venueType: 'Corporate',
+    stageSize: 'Small hotel stage',
+    numberOfAssistants: '1',
+    audienceDistance: '10 ft',
+    lightingNotes: 'No complex board-op cues available; assume house wash only.',
+    description:
+      'Magician invites two volunteers on stage for a sealed prediction routine. Assistant manages envelopes, a prediction board, and volunteer placement while keeping the stage picture clean and avoiding accidental exposure. Need a volunteer plan, cue sheet, transitions, and assistant instructions.',
+  },
+  {
+    label: 'Silk Production',
+    routineName: 'Silk Fountain Production',
+    venueType: 'Parlor',
+    stageSize: '12 ft playing area',
+    numberOfAssistants: '1',
+    audienceDistance: '8 ft',
+    lightingNotes: 'Warm wash only; no timed lighting changes.',
+    description:
+      'Magician performs a silk production routine from a prop table, building to a silk fountain finale. Assistant manages hidden loads, table organization, reset order, and final reveal timing. Need prop table optimization, cue timing, and a practical assistant movement plan.',
+  },
+  {
+    label: 'Motorcycle Appearance',
+    routineName: 'Motorcycle Appearance',
+    venueType: 'Theater / Stage',
+    stageSize: '40 ft stage',
+    numberOfAssistants: '3',
+    audienceDistance: '30 ft',
+    lightingNotes: 'Smoke burst and reveal cue available; keep transitions clean and safe around heavy prop.',
+    description:
+      'Magician appears a full motorcycle from a stage frame after a smoke burst. Assistants manage frame movement, sightline protection, heavy prop safety, and reveal timing. Need transition flow, safety analysis, prop traffic, and assistant positions during the appearance.',
+  },
+  {
+    label: 'Walkaround Card',
+    routineName: 'Walkaround Card Routine',
+    venueType: 'Close-up / Walkaround',
+    stageSize: 'No stage / roaming',
+    numberOfAssistants: '1',
+    audienceDistance: '1-2 ft',
+    lightingNotes: 'Ambient room lighting only.',
+    description:
+      'Magician performs an ambitious card sequence in a cocktail-party environment. Assistant helps manage volunteer positioning, pocket-space issues, reset items, and audience proximity while keeping the flow natural. Need misdirection timing, volunteer handling, and practical assistant support in a walkaround setting.',
   },
 ];
 
@@ -507,6 +576,19 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
     window.setTimeout(() => setToast(null), 900);
   };
 
+  const loadDemoScenario = (scenario: DemoScenario) => {
+    setClientName(scenario.routineName);
+    setVenueType(scenario.venueType);
+    setStageSize(scenario.stageSize);
+    setNumberOfAssistants(scenario.numberOfAssistants);
+    setAudienceDistance(scenario.audienceDistance);
+    setLightingNotes(scenario.lightingNotes || '');
+    setInput(scenario.description);
+    setLastPreset('admc-demo');
+    setToast(`Demo loaded: ${scenario.label}`);
+    window.setTimeout(() => setToast(null), 1100);
+  };
+
   const handleReset = () => {
     cancelledUpToRef.current = requestIdRef.current;
     hardUnlock();
@@ -800,6 +882,23 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
                 {p.label}
               </button>
             ))}
+          </div>
+
+          <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-950/30 p-3">
+            <div className="text-xs font-medium tracking-wide text-slate-300 uppercase">Demo Scenarios (ADMC)</div>
+            <div className="text-xs text-slate-500">One click fills the form so you can demo Assistant&apos;s Studio fast at the booth.</div>
+            <div className="flex flex-wrap gap-2">
+              {DEMO_SCENARIOS.map((scenario) => (
+                <button
+                  key={scenario.label}
+                  type="button"
+                  onClick={() => loadDemoScenario(scenario)}
+                  className="px-3 py-1.5 rounded-full border border-purple-700/60 bg-purple-950/20 hover:bg-purple-900/30 hover:border-purple-500 text-sm text-purple-100"
+                >
+                  {scenario.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="flex items-center justify-between">
