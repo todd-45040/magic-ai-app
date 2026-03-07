@@ -64,11 +64,10 @@ const PRESETS: Array<{ label: string; tag: string; template: (input: string) => 
 
 const DRAFT_KEY = 'maw_assistant_studio_draft_v8';
 const CONTEXT_KEY = 'maw_assistant_studio_context_v8';
-const FAST_REQUEST_TIMEOUT_MS = 45_000;
-const FULL_REQUEST_TIMEOUT_MS = 75_000;
+const STANDARD_REQUEST_TIMEOUT_MS = 50_000;
 
 type ErrorKind = 'timeout' | 'quota' | 'other' | null;
-type ResponseMode = 'fast' | 'full';
+type ResponseMode = 'standard';
 
 type SectionKey =
   | 'stageLayout'
@@ -221,6 +220,14 @@ const SECTION_LABELS: Record<Exclude<SectionKey, 'fullText'>, string> = {
   safetyRiskAnalysis: 'Collision, heavy prop, crowd proximity, and timing hazard review with fixes.',
 };
 
+const STANDARD_SECTIONS: Array<Exclude<SectionKey, 'fullText'>> = [
+  'stageLayout',
+  'assistantPositions',
+  'cueTimeline',
+  'safetyNotes',
+];
+
+
 const SECTION_PROFILES: Record<string, Array<Exclude<SectionKey, 'fullText'>>> = {
   'routine-staging': ['stageLayout', 'assistantPositions', 'cueTimeline', 'propMovement', 'contingencyPlan', 'safetyNotes'],
   'cue-sheet': ['stageLayout', 'assistantPositions', 'cueTimeline', 'propMovement', 'contingencyPlan', 'safetyNotes'],
@@ -346,7 +353,7 @@ function buildStructuredPrompt(opts: {
   responseMode?: ResponseMode;
   demoMode?: boolean;
 }) {
-  const { userInput, refineInstruction, previousOutput, focusTag, context, responseMode = 'fast', demoMode = false } = opts;
+  const { userInput, refineInstruction, previousOutput, focusTag, context, demoMode = false } = opts;
 
   const contextLines: string[] = [];
   if (context?.clientName) contextLines.push(`Client / show: ${context.clientName}`);
@@ -362,36 +369,24 @@ function buildStructuredPrompt(opts: {
       ? `\n\nREFINE REQUEST: ${refineInstruction}\n\nPREVIOUS OUTPUT:\n${previousOutput}`
       : '';
 
-  const requestedSections = getRequestedSections(focusTag, responseMode, demoMode);
+  const requestedSections = getRequestedSections();
 
-  const fastRule = `
-- FAST MODE: generate a compact but operational rehearsal card.
-- Return exactly the 3 requested sections and make every section useful.
-- Each section must contain exactly 3 concise but specific bullet lines. Do not return 1-2 bullets.
-- Every bullet must describe a concrete assistant action, position, cue, traffic path, volunteer handling step, or prop-handling instruction.
+  const standardRule = `
+- STANDARD MODE: generate a quick operational rehearsal sheet.
+- Return exactly these 4 sections: stageLayout, assistantPositions, cueTimeline, safetyNotes.
+- Each section must contain exactly 3 concise but specific bullet lines.
+- Every bullet must describe a concrete assistant action, position, cue, traffic path, volunteer handling step, prop-handling instruction, or safety reminder.
 - Do not use generic filler like "keep the area clear," "assistant helps as needed," or "maintain good flow."
-- Each bullet may be 1-2 short sentences, but keep it tight, actionable, and easy to scan.
-- Do not leave any requested section blank or nearly empty.
+- Keep every bullet short, practical, and immediately useful in rehearsal.
 - Avoid long explanations and narrative paragraphs.
-- Write like a quick rehearsal cheat sheet, not a summary.
-- Prioritize speed, clarity, and instant booth readability.`;
-
-  const fullRule = `
-- FULL MODE: generate a professional assistant operations plan that is richer than Fast but still compact.
-- Return exactly the requested sections and fill all of them completely.
-- Use 4-5 short bullets or operational lines per section. Do not leave any requested section under-filled.
-- Each bullet should contain a clear operational instruction for assistants, staging, timing, prop flow, volunteer handling, or fallback actions.
-- Short explanatory notes are encouraged when they improve rehearsal clarity.
-- Bullets should contain useful rehearsal or staging information, not short fragments.
-- No long prose, no filler, and no narrative paragraphs.`;
+- Write like a quick operational rehearsal card, not a summary.`;
 
   const demoRule = demoMode
     ? `
-- DEMO MODE: optimize for booth reliability. Keep output compact, practical, and instantly scannable.
-- In demo mode, aim for 3 bullets per section and allow up to 4 when needed for clarity.`
+- DEMO MODE: keep wording compact and instantly scannable for booth demos, but do not reduce section count or quality.`
     : '';
 
-  const toolSpecificRule = getToolSpecificInstruction(focusTag, responseMode, demoMode);
+  const toolSpecificRule = getToolSpecificInstruction(focusTag);
 
   return (
     `You are building a practical assistant-operations plan for a magic routine. Return useful, stage-ready guidance with no fluff.` +
@@ -408,7 +403,7 @@ IMPORTANT RULES:` +
 - Do not assume trap doors, fly systems, hidden infrastructure, or stage modifications unless the context explicitly allows them.` +
     `
 - Write for real assistants, stage managers, and rehearsal use.` +
-    (responseMode === 'fast' ? fastRule : fullRule) +
+    standardRule +
     demoRule +
     toolSpecificRule +
     `
@@ -452,87 +447,48 @@ function combineRunNotes(output: StructuredOutput, fallback: string) {
   return parts.length ? parts.join('\n\n') : fallback;
 }
 
-function getRequestedSections(focusTag?: string | null, responseMode: ResponseMode = 'fast', demoMode = false) {
-  const baseSections = SECTION_PROFILES[focusTag || ''] || SECTION_PROFILES.default;
-  const fastSections = FAST_SECTION_PROFILES[focusTag || ''] || FAST_SECTION_PROFILES.default;
-
-  if (demoMode) return fastSections.slice(0, Math.min(3, fastSections.length));
-  if (responseMode === 'fast') return fastSections.slice(0, Math.min(3, fastSections.length));
-
-  return baseSections.slice(0, Math.min(6, baseSections.length));
+function getRequestedSections() {
+  return STANDARD_SECTIONS;
 }
 
-function getToolSpecificInstruction(focusTag?: string | null, responseMode: ResponseMode = 'fast', demoMode = false) {
-  const mode = demoMode ? 'fast' : responseMode;
+function getToolSpecificInstruction(focusTag?: string | null) {
   switch (focusTag) {
     case 'cue-sheet':
-      return mode === 'fast'
-        ? `
-- For CUE_TIMELINE, return exactly 6 numbered cues in chronological order. Each cue should be one short operational line with the action, who owns it, and a brief timing anchor when useful.`
-        : `
-- For CUE_TIMELINE, return 8-10 numbered cues in chronological order. Each cue should include timing, assistant responsibility, and a short backup or hold note where useful.`;
+      return `
+- For CUE_TIMELINE, use short chronological cues with clear action ownership and practical timing anchors.`;
     case 'routine-staging':
-      return mode === 'fast'
-        ? `
-- Treat this like a quick rehearsal cheat sheet. Focus on stage picture, assistant anchors, key cues, safety, and practical reveal handling using fuller rehearsal bullets instead of fragments.
-- In Fast mode, every bullet should contain a concrete placement, movement, or cue the assistant can follow immediately.`
-        : `
-- Treat this like a professional assistant operations plan. Keep it tight but premium: stage picture, blocking, cue timing, prop flow, safety, and one fallback note where relevant.`;
+      return `
+- Treat this like a quick rehearsal cheat sheet. Focus on stage picture, assistant anchors, key cues, and practical safety notes.`;
     case 'volunteer-flow':
-      return mode === 'fast'
-        ? `
-- Keep volunteer guidance compact and practical, but make each bullet complete enough to use during rehearsal.
-- Each Fast bullet should tell the assistant where to stand, when to move, or how to guide the volunteer safely.`
-        : `
-- Include exposure prevention, audience management, assistant backup handling, and calm volunteer recovery steps in concise operational bullets.`;
+      return `
+- Include assistant placement, volunteer guidance, and exposure-safe handling in compact operational bullets.`;
     case 'transition-flow':
-      return mode === 'fast'
-        ? `
-- Focus on the cleanest transition path and reset sequence, with short but complete rehearsal-ready instructions.
-- In Fast mode, each bullet should include who moves, what gets carried or cleared, and the cue for that move.`
-        : `
-- Include traffic flow, reset choreography, cue support, and what happens if applause or timing runs long using short operational bullets.`;
+      return `
+- Focus on who moves, what gets carried or cleared, and the cue that triggers each move.`;
     case 'safety-check':
-      return mode === 'fast'
-        ? `
-- Flag only the most important staging hazards and fixes, but make each note specific enough to act on during rehearsal.
-- In Fast mode, pair each hazard with a concrete fix or positioning adjustment.`
-        : `
-- Review collision risks, heavy props, crowd proximity, timing hazards, and practical mitigation steps with concise contingency notes.`;
+      return `
+- Pair each safety note with a concrete fix, spacing rule, or positioning adjustment.`;
     default:
-      return mode === 'fast'
-        ? `
-- Make this feel like a quick rehearsal cheat sheet with complete, actionable bullets.
-- For Fast mode, prefer specific assistant movements, prop locations, and timing cues over general summaries.`
-        : `
-- Make this feel like a professional assistant planning document.`;
+      return `
+- Make this feel like a quick operational rehearsal sheet with specific assistant actions, positions, cues, and safety notes.`;
   }
 }
 
-function getAssistantStudioSpeedMode(
-  focusTag?: string | null,
-  responseMode: ResponseMode = 'fast',
-  demoMode = false
-): 'fast' | 'full' {
-  if (demoMode) return 'fast';
-  return responseMode === 'full' ? 'full' : 'fast';
+function getAssistantStudioSpeedMode(): 'fast' | 'full' {
+  return 'fast';
 }
 
 function buildStructuredSchema(
-  keys: Array<Exclude<SectionKey, 'fullText'>>,
-  speedMode: 'fast' | 'full' = 'fast'
+  keys: Array<Exclude<SectionKey, 'fullText'>>
 ) {
   const properties: Record<string, any> = {};
   keys.forEach((key) => {
-    const minItems = speedMode === 'fast' ? 3 : 3;
-    const maxItems = speedMode === 'fast' ? 3 : (key === 'cueTimeline' ? 5 : 5);
-
     properties[key] = {
       type: 'array',
       description: SECTION_LABELS[key],
       items: { type: 'string' },
-      minItems,
-      maxItems,
+      minItems: 3,
+      maxItems: 3,
     };
   });
 
@@ -602,7 +558,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
   const [audienceDistance, setAudienceDistance] = useState('');
   const [lightingNotes, setLightingNotes] = useState('');
   const [lastPreset, setLastPreset] = useState<string>('');
-  const [responseMode, setResponseMode] = useState<ResponseMode>('fast');
+  const responseMode: ResponseMode = 'standard';
   const [demoMode, setDemoMode] = useState(false);
 
   const requestIdRef = useRef(0);
@@ -734,39 +690,32 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
       clearErrors();
       setToast(null);
 
-      const effectiveResponseMode: ResponseMode = demoMode ? 'fast' : responseMode;
-
       const prompt = buildStructuredPrompt({
         userInput: input.trim(),
         refineInstruction: opts?.refineInstruction || null,
         previousOutput: opts?.usePrevious ? outputRaw : null,
         context: { clientName, venueType, stageSize, numberOfAssistants, audienceDistance, lightingNotes },
         focusTag: lastPreset || null,
-        responseMode: effectiveResponseMode,
+        responseMode,
         demoMode,
       });
 
-      const requestedSections = getRequestedSections(lastPreset || null, effectiveResponseMode, demoMode);
-      const assistantStudioSpeedMode = getAssistantStudioSpeedMode(lastPreset || null, effectiveResponseMode, demoMode);
+      const requestedSections = getRequestedSections();
+      const assistantStudioSpeedMode = getAssistantStudioSpeedMode();
       const obj = await withTimeout(
         generateStructuredResponse(
           prompt,
           ASSISTANT_STUDIO_SYSTEM_INSTRUCTION,
-          buildStructuredSchema(requestedSections, assistantStudioSpeedMode),
+          buildStructuredSchema(requestedSections),
           currentUser,
-          effectiveResponseMode === 'fast'
-            ? { maxOutputTokens: demoMode ? 950 : 1100, speedMode: 'fast' }
-            : { maxOutputTokens: 1700, speedMode: assistantStudioSpeedMode }
+          { maxOutputTokens: demoMode ? 1100 : 1300, speedMode: 'fast' }
         ),
-        assistantStudioSpeedMode === 'full' ? FULL_REQUEST_TIMEOUT_MS : FAST_REQUEST_TIMEOUT_MS
+        STANDARD_REQUEST_TIMEOUT_MS
       );
 
       if (cancelledUpToRef.current >= myId) return;
 
-      const displayText =
-        demoMode && effectiveResponseMode === 'fast'
-          ? compactStructuredResultToText(obj || {}, requestedSections)
-          : structuredResultToText(obj || {}, requestedSections);
+      const displayText = structuredResultToText(obj || {}, requestedSections);
 
       const normalized = {
         ...(obj || {}),
@@ -790,7 +739,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
       if (e?.message === 'TIMEOUT') {
         setErrorKind('timeout');
         setErrorMsg('This took too long and was stopped to keep the app responsive.');
-        setErrorDebug(`timeout_ms=${assistantStudioSpeedMode === 'full' ? FULL_REQUEST_TIMEOUT_MS : FAST_REQUEST_TIMEOUT_MS}; reqId=${myId}`);
+        setErrorDebug(`timeout_ms=${STANDARD_REQUEST_TIMEOUT_MS}; reqId=${myId}`);
       } else {
         const msg = e?.message || 'Something went wrong.';
         const isQuota = detectQuotaError(msg);
@@ -1052,10 +1001,9 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
     setLightingNotes(scenario.lightingNotes);
     setInput(scenario.input);
     setLastPreset(scenario.tag);
-    setResponseMode('fast');
     setDemoMode(false);
     clearErrors();
-    setToast(`Demo loaded: ${scenario.label} • Demo Mode OFF for Fast/Full testing`);
+    setToast(`Demo loaded: ${scenario.label} • Demo Mode OFF for Standard Plan testing`);
     window.setTimeout(() => setToast(null), 1400);
   };
 
@@ -1274,38 +1222,16 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
 
           <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-800/80 bg-slate-950/35 px-3 py-2">
             <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Response mode</div>
-              <div className="text-xs text-slate-500">Fast is best for ADMC demos. Full asks for more detail and may take longer.</div>
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Plan mode</div>
+              <div className="text-xs text-slate-500">Standard Plan uses structured Gemini Flash output with 4 sections and 3 bullets per section.</div>
             </div>
-            <div className="flex rounded-lg border border-slate-700/80 overflow-hidden">
-              {(['fast', 'full'] as ResponseMode[]).map((mode) => {
-                const active = responseMode === mode;
-                return (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => {
-                    if (demoMode && mode === 'full') {
-                      setToast('Demo Mode uses Fast generation to ensure reliable booth demos.');
-                      window.setTimeout(() => setToast(null), 1600);
-                      setResponseMode('fast');
-                      return;
-                    }
-                    setResponseMode(mode);
-                  }}
-                    className={`px-3 py-1.5 text-sm ${active ? 'bg-purple-600 text-white' : 'bg-slate-950/40 text-slate-300 hover:bg-slate-900/70'}`}
-                  >
-                    {mode === 'fast' ? 'Fast' : 'Full'}
-                  </button>
-                );
-              })}
-            </div>
+            <div className="px-3 py-1.5 rounded-lg border border-purple-600/70 bg-purple-600/15 text-sm text-purple-200">Standard Plan</div>
           </div>
 
           <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-800/80 bg-slate-950/35 px-3 py-2">
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Demo mode</div>
-              <div className="text-xs text-slate-500">Convention-safe mode forces Flash routing, tighter output caps, and a maximum of 6 sections.</div>
+              <div className="text-xs text-slate-500">Demo Mode stays separate from quality logic and only keeps wording compact for booth demos.</div>
             </div>
             <button
               type="button"
@@ -1313,8 +1239,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
                 setDemoMode((v) => {
                   const next = !v;
                   if (next) {
-                    setResponseMode('fast');
-                    setToast('Demo Mode ON • Fast mode enforced for booth reliability.');
+                    setToast('Demo Mode ON • Standard Plan kept active with compact booth-friendly wording.');
                     window.setTimeout(() => setToast(null), 1600);
                   }
                   return next;
@@ -1345,7 +1270,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
               <div className="text-xs text-slate-400">Refine this plan:</div>
               {lastPreset ? (
                 <div className="text-xs text-slate-500">
-                  Preset: <span className="text-slate-300">{lastPreset}</span> • Mode: <span className="text-slate-300">{demoMode ? 'demo' : responseMode}</span>
+                  Preset: <span className="text-slate-300">{lastPreset}</span> • Mode: <span className="text-slate-300">{demoMode ? 'demo' : 'standard'}</span>
                 </div>
               ) : null}
             </div>
@@ -1380,7 +1305,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
 
                   <div className="mt-1 text-sm text-slate-300">
                     {errorKind === 'timeout'
-                      ? `The request was stopped after ${(responseMode === 'full' && !demoMode) ? Math.round(FULL_REQUEST_TIMEOUT_MS / 1000) : Math.round(FAST_REQUEST_TIMEOUT_MS / 1000)} seconds so the app never gets stuck. Try Fast mode or a demo scenario for a faster, smaller response.`
+                      ? `The request was stopped after ${Math.round(STANDARD_REQUEST_TIMEOUT_MS / 1000)} seconds so the app never gets stuck. Try again or use Demo Mode for a slightly tighter booth-friendly response.`
                       : errorKind === 'quota'
                       ? quotaMessage()
                       : 'Please try again. If it keeps happening, report it so we can fix it fast.'}
@@ -1392,15 +1317,6 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
                 </div>
 
                 <div className="flex flex-col gap-2 min-w-[140px]">
-                  {errorKind === 'timeout' && responseMode === 'full' && (
-                    <button
-                      className="px-3 py-2 rounded bg-fuchsia-700 hover:bg-fuchsia-600 text-white"
-                      onClick={() => { setResponseMode('fast'); handleGenerate(); }}
-                      disabled={!input.trim() || loading}
-                    >
-                      Retry Fast
-                    </button>
-                  )}
                   <button
                     className="px-3 py-2 rounded bg-purple-600 hover:bg-purple-500 text-white"
                     onClick={handleGenerate}
@@ -1458,10 +1374,10 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
             ) : outputRaw ? (
               <>
                 <div className="flex items-center gap-2 mb-3 flex-wrap">
-                  <div className={`px-3 py-1 rounded-full text-xs font-semibold border ${demoMode || responseMode === 'fast' ? 'border-amber-500/40 bg-amber-500/10 text-amber-200' : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'}`}>
-                    {demoMode || responseMode === 'fast' ? '⚡ Quick Assistant Plan' : '📋 Professional Assistant Operations Plan'}
+                  <div className={`px-3 py-1 rounded-full text-xs font-semibold border ${demoMode ? 'border-amber-500/40 bg-amber-500/10 text-amber-200' : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'}`}>
+                    {demoMode ? '⚡ Standard Plan (Demo)' : '📋 Standard Assistant Plan'}
                   </div>
-                  {demoMode ? <div className="text-[11px] text-slate-500">Demo Mode is using Fast generation for reliability.</div> : null}
+                  {demoMode ? <div className="text-[11px] text-slate-500">Demo Mode keeps the same 4-section structured plan with slightly tighter booth-friendly wording.</div> : null}
                 </div>
 
                 <div className="flex flex-wrap gap-2 mb-3">
