@@ -26,6 +26,14 @@ export type ClientTelemetryAction =
   | 'director_save_blueprint'
   | 'director_create_show'
   | 'director_send_to_show_planner'
+  | 'assistant_request_start'
+  | 'assistant_request_success'
+  | 'assistant_request_error'
+  | 'assistant_refine_click'
+  | 'assistant_save_click'
+  | 'assistant_save_success'
+  | 'assistant_save_blueprint'
+  | 'assistant_send_to_show_planner'
 ;
 
 export async function trackClientEvent(input: {

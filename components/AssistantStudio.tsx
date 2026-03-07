@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ASSISTANT_STUDIO_SYSTEM_INSTRUCTION } from '../constants';
 import { generateStructuredResponse } from '../services/geminiService';
+import { trackClientEvent } from '../services/telemetryClient';
 import { saveIdea } from '../services/ideasService';
 import { getShows, addTasksToShow } from '../services/showsService';
 import type { Show, Task, User } from '../types';
@@ -592,6 +593,9 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
   const runGenerate = async (opts?: { refineInstruction?: string; usePrevious?: boolean }) => {
     if (!input.trim()) return;
     const myId = ++requestIdRef.current;
+    const effectiveResponseMode: ResponseMode = demoMode ? 'fast' : responseMode;
+    const telemetryTool = lastPreset || 'custom';
+    const startedAt = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
 
     try {
       setLoading(true);
@@ -599,7 +603,16 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
       clearErrors();
       setToast(null);
 
-      const effectiveResponseMode: ResponseMode = demoMode ? 'fast' : responseMode;
+      void trackClientEvent({
+        tool: 'assistant_studio',
+        action: 'assistant_request_start',
+        units: getRequestedSections(lastPreset || null, effectiveResponseMode, demoMode).length,
+        metadata: {
+          tool_mode: telemetryTool,
+          speed_mode: effectiveResponseMode,
+          demo_mode: demoMode,
+        },
+      });
 
       const prompt = buildStructuredPrompt({
         userInput: input.trim(),
@@ -627,6 +640,21 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
 
       if (cancelledUpToRef.current >= myId) return;
 
+      const endedAt = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+      const elapsedMs = Math.max(0, Math.round(Number(endedAt) - Number(startedAt)));
+      void trackClientEvent({
+        tool: 'assistant_studio',
+        action: 'assistant_request_success',
+        units: requestedSections.length,
+        metadata: {
+          tool_mode: telemetryTool,
+          speed_mode: effectiveResponseMode,
+          demo_mode: demoMode,
+          latency_ms: elapsedMs,
+        },
+        outcome: 'SUCCESS_NOT_CHARGED',
+      });
+
       setOutputRaw(text);
       const parsed = parseStructured(text);
       setOutput(parsed);
@@ -636,12 +664,36 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
       console.error(e);
 
       if (e?.message === 'TIMEOUT') {
+        void trackClientEvent({
+          tool: 'assistant_studio',
+          action: 'assistant_request_error',
+          metadata: {
+            tool_mode: telemetryTool,
+            speed_mode: effectiveResponseMode,
+            demo_mode: demoMode,
+          },
+          outcome: 'ERROR_UPSTREAM',
+          error_code: 'TIMEOUT',
+          retryable: true,
+        });
         setErrorKind('timeout');
         setErrorMsg('This took too long and was stopped to keep the app responsive.');
         setErrorDebug(`timeout_ms=${REQUEST_TIMEOUT_MS}; reqId=${myId}`);
       } else {
         const msg = e?.message || 'Something went wrong.';
         const isQuota = detectQuotaError(msg);
+        void trackClientEvent({
+          tool: 'assistant_studio',
+          action: 'assistant_request_error',
+          metadata: {
+            tool_mode: telemetryTool,
+            speed_mode: effectiveResponseMode,
+            demo_mode: demoMode,
+          },
+          outcome: 'ERROR_UPSTREAM',
+          error_code: isQuota ? 'QUOTA' : (e instanceof Error ? e.name : 'UNKNOWN'),
+          retryable: !isQuota,
+        });
         setErrorKind(isQuota ? 'quota' : 'other');
         setErrorMsg(msg);
         setErrorDebug(`reqId=${myId}; membership=${currentUser?.membership || 'unknown'}`);
@@ -655,6 +707,15 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
 
   const handleRefine = async (instruction: string) => {
     if (!outputRaw) return;
+    void trackClientEvent({
+      tool: 'assistant_studio',
+      action: 'assistant_refine_click',
+      metadata: {
+        tool_mode: lastPreset || 'custom',
+        speed_mode: demoMode ? 'fast' : responseMode,
+        demo_mode: demoMode,
+      },
+    });
     await runGenerate({ refineInstruction: instruction, usePrevious: true });
     setToast('Refined ✓');
     window.setTimeout(() => setToast(null), 900);
@@ -719,6 +780,15 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
 
   const handleSaveIdea = async () => {
     if (!outputRaw) return;
+    void trackClientEvent({
+      tool: 'assistant_studio',
+      action: 'assistant_save_click',
+      metadata: {
+        tool_mode: lastPreset || 'custom',
+        speed_mode: demoMode ? 'fast' : responseMode,
+        demo_mode: demoMode,
+      },
+    });
     try {
       const tags = [
         'assistant-studio',
@@ -735,6 +805,15 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
       });
 
       onIdeaSaved?.();
+      void trackClientEvent({
+        tool: 'assistant_studio',
+        action: 'assistant_save_success',
+        metadata: {
+          tool_mode: lastPreset || 'custom',
+          speed_mode: demoMode ? 'fast' : responseMode,
+          demo_mode: demoMode,
+        },
+      });
       setToast('Saved to Ideas ✓');
       window.setTimeout(() => setToast(null), 1400);
     } catch (e) {
@@ -793,6 +872,15 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
       });
 
       setBlueprintOpen(false);
+      void trackClientEvent({
+        tool: 'assistant_studio',
+        action: 'assistant_save_blueprint',
+        metadata: {
+          tool_mode: lastPreset || 'custom',
+          speed_mode: demoMode ? 'fast' : responseMode,
+          demo_mode: demoMode,
+        },
+      });
       setToast('Blueprint saved ✓');
       window.setTimeout(() => setToast(null), 1500);
     } catch (e: any) {
@@ -853,6 +941,17 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
     try {
       await addTasksToShow(selectedShowId, tasks);
       setShowPickerOpen(false);
+      void trackClientEvent({
+        tool: 'assistant_studio',
+        action: 'assistant_send_to_show_planner',
+        units: tasks.length,
+        metadata: {
+          tool_mode: lastPreset || 'custom',
+          speed_mode: demoMode ? 'fast' : responseMode,
+          demo_mode: demoMode,
+          send_mode: sendMode,
+        },
+      });
       setToast('Sent to Show Planner ✓');
       window.setTimeout(() => setToast(null), 1600);
     } catch (e: any) {
