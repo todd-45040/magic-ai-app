@@ -120,9 +120,22 @@ type RehearsalFeedback = {
     sections: FeedbackSection[];
 };
 
+type CoachingFollowUpSectionKey = 'Suggested Rewrite' | 'Pacing Adjustment' | 'Audience Interaction Upgrade' | 'Priority Fixes';
+
+type CoachingFollowUpRequest = {
+    instruction: string;
+    takeTitle: string;
+    transcript: Transcription[];
+    markers?: SegmentMarker[];
+    metrics: RehearsalMetrics;
+    startedAt?: number;
+    endedAt?: number;
+};
+
 type CoachingFollowUpResult = {
     prompt: string;
-    sections: FeedbackSection[];
+    takeTitle: string;
+    sections: Array<FeedbackSection & { key: CoachingFollowUpSectionKey }>;
 };
 
 type SegmentMarker = {
@@ -405,14 +418,16 @@ const buildRehearsalFeedback = (transcript: Transcription[], markers: SegmentMar
     };
 };
 
-const buildCoachingFollowUp = (
-    prompt: string,
-    transcript: Transcription[],
-    markers: SegmentMarker[] = [],
-    startedAt?: number,
-    endedAt?: number,
-): CoachingFollowUpResult => {
-    const normalizedPrompt = (prompt || '').trim();
+const buildCoachingFollowUp = ({
+    instruction,
+    takeTitle,
+    transcript,
+    markers = [],
+    metrics,
+    startedAt,
+    endedAt,
+}: CoachingFollowUpRequest): CoachingFollowUpResult => {
+    const normalizedPrompt = (instruction || '').trim();
     const lowerPrompt = normalizedPrompt.toLowerCase();
     const userText = (transcript || [])
         .filter((t) => t?.source === 'user')
@@ -420,59 +435,102 @@ const buildCoachingFollowUp = (
         .join(' ')
         .replace(/\s+/g, ' ')
         .trim();
+
+    const sentences = userText
+        .split(/(?<=[.!?])\s+/)
+        .map((part) => part.trim())
+        .filter(Boolean);
     const feedback = buildRehearsalFeedback(transcript, markers, startedAt, endedAt);
-    const metrics = buildRehearsalMetrics(transcript, startedAt, endedAt);
     const timeline = buildSessionTimeline(transcript, markers, startedAt, endedAt);
-    const openerLine = userText.split(/[.!?]+/).map((part) => part.trim()).filter(Boolean)[0] || 'Open with one clean, audience-facing line that establishes the premise immediately.';
+    const openerSentence = sentences[0] || 'Open with one direct line that frames the effect immediately.';
+    const revealLine = sentences.find((sentence) => /reveal|impossible|now|memory|change|vanish|appear/i.test(sentence)) || sentences[sentences.length - 1] || openerSentence;
+    const audienceLine = sentences.find((sentence) => /you|your|spectator|remember|watch|look|trust/i.test(sentence)) || openerSentence;
     const revealTimeline = timeline.find((item) => /reveal|climax/i.test(item.label)) || timeline[timeline.length - 1];
     const revealMarker = markers.find((marker) => /reveal/i.test(marker.label));
     const audienceMarker = markers.find((marker) => /spectator|audience/i.test(marker.label));
+    const clarityNote = feedback.sections.find((section) => section.title === 'Clarity of Effect')?.bullets?.[0] || 'State the magical change in one clean sentence.';
 
-    const rewriteFocus = lowerPrompt.includes('opening') || lowerPrompt.includes('opener')
-        ? 'opening'
-        : lowerPrompt.includes('confidence')
-            ? 'confidence'
-            : lowerPrompt.includes('family') || lowerPrompt.includes('interactive') || lowerPrompt.includes('audience')
-                ? 'audience'
-                : lowerPrompt.includes('reveal') || lowerPrompt.includes('pause') || lowerPrompt.includes('pacing')
-                    ? 'reveal'
-                    : 'general';
+    const style = lowerPrompt.includes('myster')
+        ? 'mysterious'
+        : lowerPrompt.includes('confiden')
+            ? 'confident'
+            : lowerPrompt.includes('family')
+                ? 'family-friendly'
+                : lowerPrompt.includes('dramatic')
+                    ? 'dramatic'
+                    : 'clear';
 
-    const suggestedRewrite = rewriteFocus === 'opening'
-        ? `Try this opener: “${openerLine.replace(/^(good evening,?\s*)?/i, '').trim() || 'I want to show you how attention can create impossibility'} — and the more certain you feel, the harder this moment will hit.”`
-        : rewriteFocus == 'confidence'
-            ? 'Try a firmer version: “Watch carefully. I want your first impression, because that instinct is about to be tested.”'
-            : rewriteFocus == 'audience'
-                ? 'Add audience connection: “In a moment, I want one of you to trust your first impression — because that choice is going to matter.”'
-                : rewriteFocus == 'reveal'
-                    ? 'Try a cleaner payoff line: “Now lock in what you think you saw... because this is the moment your memory should fail.”'
-                    : 'Trim one sentence from the middle and replace it with a cleaner cue line so the script feels more controlled live.';
+    const tightenSentence = (sentence: string) => {
+        const words = sentence.replace(/[“”"]/g, '').split(/\s+/).filter(Boolean);
+        return words.slice(0, Math.min(words.length, 16)).join(' ').replace(/[,:;]$/, '');
+    };
 
-    const pacingAdjustment = revealTimeline
-        ? `At ${revealTimeline.timestampLabel}, the routine reaches ${revealTimeline.label.toLowerCase()}. Slow down one beat before that line and leave a visible pause before the payoff.`
-        : 'Add one deliberate pause before the strongest magical sentence so the reveal has room to land.';
+    const buildRewrite = () => {
+        if (!userText) return 'Record a short spoken pass first so the follow-up rewrite can lock to your actual wording.';
+        if (lowerPrompt.includes('opening') || lowerPrompt.includes('opener')) {
+            const base = tightenSentence(openerSentence.replace(/^(good evening[,!]?)\s*/i, ''));
+            if (style === 'mysterious') return `Try this opener: “In the next few seconds, your first impression is going to matter more than you think.”`;
+            if (style === 'confident') return `Try this opener: “Stay with me. What feels ordinary right now is the exact moment the effect begins.”`;
+            return `Try this opener: “${base}. Keep that first impression, because we are about to test it.”`;
+        }
+        if (lowerPrompt.includes('reveal') || lowerPrompt.includes('pause') || lowerPrompt.includes('pacing')) {
+            return `Use this reveal line: “${tightenSentence(revealLine)}” — then stop for one full beat before continuing.`;
+        }
+        if (lowerPrompt.includes('clear') || lowerPrompt.includes('instruction')) {
+            return `Clarify the audience line to: “${tightenSentence(audienceLine)} — and commit to that first impression.”`;
+        }
+        if (lowerPrompt.includes('audience') || lowerPrompt.includes('interactive') || lowerPrompt.includes('family')) {
+            return `Add this audience line: “Keep your eyes on this moment, because in a second I’m going to ask what you think you saw.”`;
+        }
+        if (lowerPrompt.includes('confidence')) {
+            return `Firm up the wording: “Watch closely. I want your first impression, because that instinct is about to be challenged.”`;
+        }
+        return `Refined line: “${tightenSentence(openerSentence)} — and the more certain you feel, the stronger the reveal becomes.”`;
+    };
 
-    const audienceUpgrade = audienceMarker
-        ? `Your ${audienceMarker.label.toLowerCase()} is a good interaction anchor. Add one short confirmation question there so the spectator participates without feeling rushed.`
-        : 'Add one direct audience question in the middle section so the rehearsal feels more interactive and less narrated.';
+    const buildPacing = () => {
+        const timestamp = revealTimeline?.timestampLabel || 'the reveal beat';
+        const revealLabel = revealTimeline?.label || 'reveal';
+        const speedNote = metrics.averageSpeakingSpeed > 165
+            ? `Your current speed (${metrics.averageSpeakingSpeed} WPM) is a little fast for the payoff. Slow the final sentence by about 10–15%.`
+            : metrics.averageSpeakingSpeed < 105
+                ? `Your speed (${metrics.averageSpeakingSpeed} WPM) is measured. Keep the setup moving so the reveal does not feel underpowered.`
+                : `Your speed (${metrics.averageSpeakingSpeed} WPM) is workable. The main gain comes from a cleaner pause before the payoff.`;
+        return [
+            `At ${timestamp}, the routine reaches the ${revealLabel.toLowerCase()}. Leave one visible pause before the final line.`,
+            speedNote,
+        ];
+    };
+
+    const buildAudienceUpgrade = () => {
+        const markerLabel = audienceMarker?.label || 'middle beat';
+        const promptLine = lowerPrompt.includes('family')
+            ? 'Use a simple participation cue: “Point to the moment you think everything changed.”'
+            : 'Add one short spectator question so the audience has a job before the reveal.';
+        return [
+            `${markerLabel.charAt(0).toUpperCase() + markerLabel.slice(1)} is your best interaction moment. ${promptLine}`,
+            `Keep the participation line under 12 words so it feels intentional, not chatty.`,
+        ];
+    };
 
     const priorityFixes = [
+        clarityNote,
         metrics.fillerWords > 0
-            ? `Remove ${metrics.fillerWords} filler word${metrics.fillerWords === 1 ? '' : 's'} from the take to sharpen authority.`
-            : 'Keep the current wording lean — filler language is already well controlled.',
-        metrics.averageSpeakingSpeed > 165
-            ? 'Slow the reveal section slightly so the audience has time to process the impossible moment.'
-            : 'Keep the current speaking speed, but add one cleaner pause before the climax.',
-        feedback.sections.find((section) => section.title === 'Clarity of Effect')?.bullets?.[0] || 'Clarify the effect statement so the audience knows exactly what changed.',
+            ? `Remove ${metrics.fillerWords} filler word${metrics.fillerWords === 1 ? '' : 's'} from this take before the next pass.`
+            : 'Keep the language trimmed — filler words are already under control.',
+        revealMarker
+            ? `Treat ${revealMarker.label} as the slowest beat in the routine.`
+            : 'Mark your reveal beat on the next take so pacing notes can lock to a performer-defined moment.',
     ];
 
     return {
         prompt: normalizedPrompt,
+        takeTitle,
         sections: [
-            { title: 'Suggested Rewrite', bullets: [suggestedRewrite] },
-            { title: 'Pacing Adjustment', bullets: [pacingAdjustment, revealMarker ? `Marker focus: ${revealMarker.label} should feel slightly slower than the previous beat.` : 'Use your reveal beat as the slowest, most controlled line in the routine.'] },
-            { title: 'Audience Interaction Upgrade', bullets: [audienceUpgrade, metrics.confidenceScore < 80 ? 'Ask one short question, then pause before answering it yourself to sound more in command.' : 'Keep the audience prompt compact so the momentum stays strong.'] },
-            { title: 'Priority Fixes', bullets: priorityFixes },
+            { key: 'Suggested Rewrite', title: 'Suggested Rewrite', bullets: [buildRewrite()] },
+            { key: 'Pacing Adjustment', title: 'Pacing Adjustment', bullets: buildPacing() },
+            { key: 'Audience Interaction Upgrade', title: 'Audience Interaction Upgrade', bullets: buildAudienceUpgrade() },
+            { key: 'Priority Fixes', title: 'Priority Fixes', bullets: priorityFixes },
         ],
     };
 };
@@ -2029,7 +2087,16 @@ const ReviewView: React.FC<{
         const promptToUse = (promptOverride ?? refinePrompt).trim();
         if (!promptToUse) return;
         setRefinePrompt(promptToUse);
-        setRefineResult(buildCoachingFollowUp(promptToUse, current.transcript, current.markers || [], current.startedAt, current.endedAt));
+        const metrics = buildRehearsalMetrics(current.transcript, current.startedAt, current.endedAt);
+        setRefineResult(buildCoachingFollowUp({
+            instruction: promptToUse,
+            takeTitle: `${sessionTitle} — Take ${current.takeNumber}`,
+            transcript: current.transcript,
+            markers: current.markers || [],
+            metrics,
+            startedAt: current.startedAt,
+            endedAt: current.endedAt,
+        }));
         setRefineOpen(true);
     };
 
@@ -2138,15 +2205,27 @@ const ReviewView: React.FC<{
 
                         {refineResult ? (
                             <div className="space-y-3">
-                                <div className="text-sm text-slate-300">
-                                    <span className="text-slate-400">Latest coaching request:</span> {refineResult.prompt}
+                                <div className="bg-slate-950/40 border border-slate-700 rounded-xl px-4 py-3">
+                                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                                        <div>
+                                            <div className="text-slate-100 font-semibold">AI Coaching Follow-Up Result</div>
+                                            <div className="text-xs text-slate-400 mt-1">Context locked to {refineResult.takeTitle}</div>
+                                        </div>
+                                        <div className="text-xs text-purple-200/80 uppercase tracking-wide">Structured coaching cards</div>
+                                    </div>
+                                    <div className="text-sm text-slate-300 mt-3">
+                                        <span className="text-slate-400">Latest coaching request:</span> {refineResult.prompt}
+                                    </div>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {refineResult.sections.map((section) => (
-                                        <div key={section.title} className="bg-slate-800/60 border border-slate-700 rounded-xl p-4">
-                                            <div className="text-slate-100 font-semibold">{section.title}</div>
+                                        <div key={section.key} className="bg-slate-800/60 border border-slate-700 rounded-xl p-4">
+                                            <div className="flex items-center justify-between gap-3">
+                                                <div className="text-slate-100 font-semibold">{section.title}</div>
+                                                <div className="text-[10px] uppercase tracking-wide text-slate-400">take-local</div>
+                                            </div>
                                             <ul className="mt-3 space-y-2 text-sm text-slate-300 list-disc pl-5">
-                                                {section.bullets.map((bullet, idx) => (
+                                                {section.bullets.slice(0, 3).map((bullet, idx) => (
                                                     <li key={idx}>{bullet}</li>
                                                 ))}
                                             </ul>
