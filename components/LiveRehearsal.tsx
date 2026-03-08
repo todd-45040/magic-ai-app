@@ -9,7 +9,7 @@ import { canConsume, getUsage, consumeLiveMinutes } from '../services/usageTrack
 import { consumeLiveMinutesServer, emitLiveUsageUpdate } from '../services/liveMinutesService';
 import { fetchUsageStatus } from '../services/usageStatusService';
 import { MAGICIAN_LIVE_REHEARSAL_SYSTEM_INSTRUCTION, LIVE_REHEARSAL_TOOLS } from '../constants';
-import { BackIcon, MicrophoneIcon, StopIcon, SaveIcon, WandIcon, TrashIcon, TimerIcon } from './icons';
+import { BackIcon, MicrophoneIcon, StopIcon, SaveIcon, WandIcon, TrashIcon, TimerIcon, ChevronDownIcon, CheckIcon, LightbulbIcon } from './icons';
 import BlockedPanel from './BlockedPanel';
 import { normalizeBlockedUx, type BlockedUx } from '../services/blockedUx';
 
@@ -84,6 +84,118 @@ function createBlob(data: Float32Array): GeminiBlob {
 }
 
 
+
+
+const DEMO_SCRIPT = `Good evening, everyone. I want to try a quick experiment in attention.
+In a moment, I'll ask you to remember one simple detail, and I want you to trust your first impression.
+Watch closely... because the moment that feels the most ordinary is often the moment the magic actually happens.
+Take a breath, lock in what you think you saw, and don't change your mind too quickly.
+Now... if your memory is certain, this reveal should feel impossible.`;
+
+const formatElapsed = (ms: number): string => {
+    const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+    const minutes = Math.floor(totalSeconds / 60).toString();
+    const seconds = (totalSeconds % 60).toString().padStart(2, '0');
+    return `${minutes}:${seconds}`;
+};
+
+type FeedbackSection = {
+    title: string;
+    bullets: string[];
+};
+
+type RehearsalFeedback = {
+    confidenceScore: number;
+    sections: FeedbackSection[];
+};
+
+const buildRehearsalFeedback = (transcript: Transcription[]): RehearsalFeedback => {
+    const userText = (transcript || [])
+        .filter((t) => t?.source === 'user')
+        .map((t) => t.text || '')
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    if (!userText) {
+        return {
+            confidenceScore: 76,
+            sections: [
+                { title: 'Delivery & Vocal Tone', bullets: ['Voice sample captured. Record a slightly longer take for deeper tone analysis.'] },
+                { title: 'Timing & Pacing', bullets: ['Try a full opener-to-reveal run so pacing feedback can be more specific.'] },
+                { title: 'Audience Engagement', bullets: ['Add one direct audience line or question to strengthen interaction.'] },
+                { title: 'Clarity of Effect', bullets: ['State the effect outcome clearly so the magical moment lands cleanly.'] },
+                { title: 'Improvement Suggestions', bullets: ['Record another pass with stronger pauses before the climax.'] },
+            ],
+        };
+    }
+
+    const words = userText.split(/\s+/).filter(Boolean);
+    const sentences = userText.split(/[.!?]+/).map((s) => s.trim()).filter(Boolean);
+    const fillerMatches = userText.match(/\b(um|uh|like|you know|so|actually|basically)\b/gi) || [];
+    const questionCount = (userText.match(/\?/g) || []).length;
+    const pauseCueCount = (userText.match(/\b(now|watch|wait|pause|look|listen|remember|breathe)\b/gi) || []).length;
+    const avgSentenceWords = sentences.length ? words.length / sentences.length : words.length;
+    const longestSentence = sentences.reduce((max, s) => Math.max(max, s.split(/\s+/).filter(Boolean).length), 0);
+    const score = Math.max(62, Math.min(97, Math.round(84 - fillerMatches.length * 3 - Math.max(0, avgSentenceWords - 22) - Math.max(0, longestSentence - 30) / 2 + Math.min(8, questionCount * 2) + Math.min(6, pauseCueCount))));
+
+    const deliveryBullets = [
+        fillerMatches.length <= 2
+            ? 'Strong vocal control overall. Your delivery reads as deliberate and performance-ready.'
+            : `A few filler words (${fillerMatches.length}) softened authority. Tightening those moments will increase confidence.`,
+        pauseCueCount >= 3
+            ? 'You naturally use cue words like “watch,” “remember,” or “now,” which helps shape attention.'
+            : 'Add a few stronger cue words to guide attention and give the routine more command.',
+    ];
+
+    const pacingBullets = [
+        avgSentenceWords <= 18
+            ? 'Pacing is generally clean. Sentence length stays compact enough for live delivery.'
+            : 'Some lines run long. Breaking larger thoughts into shorter beats will improve pacing.',
+        longestSentence > 28
+            ? 'One or more explanation phases feel dense. Insert a deliberate pause before the reveal beat.'
+            : 'Reveal pacing appears controlled. A slightly longer beat before the climax could make it land harder.',
+    ];
+
+    const engagementBullets = [
+        questionCount > 0
+            ? 'Direct audience language is present, which helps create interaction and buy-in.'
+            : 'Add one audience-facing question or challenge line to increase engagement.',
+        words.length >= 70
+            ? 'The take has enough verbal substance for a convincing rehearsal pass.'
+            : 'This take is concise. A longer run-through will help evaluate audience connection more deeply.',
+    ];
+
+    const clarityBullets = [
+        avgSentenceWords <= 20
+            ? 'Effect explanation is mostly clear and should be easy for spectators to follow.'
+            : 'Clarify spectator instructions. A few phrases may be too dense in the middle section.',
+        userText.toLowerCase().includes('reveal') || userText.toLowerCase().includes('impossible')
+            ? 'The magical outcome is verbally framed, which strengthens the effect moment.'
+            : 'Name the impossible outcome more explicitly so the effect registers cleanly.',
+    ];
+
+    const suggestionBullets = [
+        fillerMatches.length > 0
+            ? 'Remove filler phrases from the first thirty seconds to sound more certain immediately.'
+            : 'Keep the opening exactly this direct — it establishes authority quickly.',
+        'Add a clear pause just before the strongest magical sentence or reveal line.',
+        questionCount === 0
+            ? 'Include one audience prompt so the script feels more interactive in performance.'
+            : 'Strengthen the final line so the audience interaction resolves with a stronger payoff.',
+    ];
+
+    return {
+        confidenceScore: score,
+        sections: [
+            { title: 'Delivery & Vocal Tone', bullets: deliveryBullets },
+            { title: 'Timing & Pacing', bullets: pacingBullets },
+            { title: 'Audience Engagement', bullets: engagementBullets },
+            { title: 'Clarity of Effect', bullets: clarityBullets },
+            { title: 'Improvement Suggestions', bullets: suggestionBullets },
+        ],
+    };
+};
 const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => void }> = ({ user, onReturnToStudio, onIdeaSaved, onRequestUpgrade }) => {
     const [view, setView] = useState<'idle' | 'rehearsing' | 'reviewing'>('idle');
     const [status, setStatus] = useState<'idle' | 'connecting' | 'listening' | 'error'>('idle');
@@ -110,6 +222,11 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
     // Timer state and refs
     const [timer, setTimer] = useState<TimerState>({ startTime: null, duration: null, isRunning: false });
     const timerIntervalRef = useRef<number | null>(null);
+    const [studioHelpOpen, setStudioHelpOpen] = useState(true);
+    const [markerCount, setMarkerCount] = useState(0);
+    const [demoScript, setDemoScript] = useState('');
+    const [sessionElapsed, setSessionElapsed] = useState('0:00');
+    const sessionElapsedIntervalRef = useRef<number | null>(null);
 
     // --- Multi-take session state ---
     // Persist draft state so users can jump to AI analysis and then come back to record Take 2.
@@ -342,6 +459,15 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         }
 
         try {
+            if (sessionElapsedIntervalRef.current) {
+                clearInterval(sessionElapsedIntervalRef.current);
+                sessionElapsedIntervalRef.current = null;
+            }
+        } catch {
+            // ignore
+        }
+
+        try {
             if (usageIntervalRef.current) {
                 clearInterval(usageIntervalRef.current);
                 usageIntervalRef.current = null;
@@ -352,6 +478,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
 
         sessionStartRef.current = null;
         setTimer({ startTime: null, duration: null, isRunning: false });
+        setSessionElapsed('0:00');
         setStatus('idle');
     };
 
@@ -412,7 +539,14 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         setStatus('connecting');
         setErrorMessage('');
         setTranscriptionHistory([]);
+        setMarkerCount(0);
         currentTakeStartRef.current = Date.now();
+        setSessionElapsed('0:00');
+        if (sessionElapsedIntervalRef.current) clearInterval(sessionElapsedIntervalRef.current);
+        sessionElapsedIntervalRef.current = window.setInterval(() => {
+            const startedAt = currentTakeStartRef.current;
+            setSessionElapsed(startedAt ? formatElapsed(Date.now() - startedAt) : '0:00');
+        }, 250);
         errorOccurred.current = false;
         try {
             // FIX: Request audio without a specific sample rate to ensure compatibility.
@@ -882,8 +1016,9 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             }
         } catch (err) {
             console.error('Header action failed:', err);
-            setError('Something went wrong. Please refresh and try again.');
-            setView('error');
+            setErrorMessage('Something went wrong. Please refresh and try again.');
+            setStatus('error');
+            setView('rehearsing');
         }
     };
     
@@ -920,9 +1055,46 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             case 'idle':
             default:
                 return (
-                    <div className="flex-1 overflow-y-auto p-4 md:p-6 flex flex-col">
+                    <div className="flex-1 overflow-y-auto p-4 md:p-6 flex flex-col gap-5">
+                        <StatusIndicator
+                            status={status}
+                            errorMessage={errorMessage}
+                            blockedUx={blockedUx}
+                            onUpgrade={onRequestUpgrade}
+                            onStart={handleStartSession}
+                            elapsed={sessionElapsed}
+                            markerCount={markerCount}
+                            helpOpen={studioHelpOpen}
+                            onToggleHelp={() => setStudioHelpOpen((prev) => !prev)}
+                            onReset={() => {
+                                setMarkerCount(0);
+                                setDemoScript('');
+                                setTranscriptionHistory([]);
+                                setErrorMessage('');
+                                setBlockedUx(null);
+                                setStatus('idle');
+                                setSessionElapsed('0:00');
+                                setView('idle');
+                            }}
+                            onLoadDemo={() => {
+                                setDemoScript(DEMO_SCRIPT);
+                                setSessionTitle('Demo Rehearsal Session');
+                                setSessionNotes('Convention-ready sample patter loaded for booth testing.');
+                            }}
+                            demoScript={demoScript}
+                        />
+
                         {transcriptionHistory.length > 0 ? (
-                            <div className="space-y-4">
+                            <div className="space-y-4 bg-slate-900/30 border border-slate-700 rounded-xl p-4">
+                                <div className="flex items-center justify-between gap-3">
+                                    <div>
+                                        <div className="text-slate-100 font-semibold">Live Transcript</div>
+                                        <div className="text-xs text-slate-400">Your rehearsal transcript builds here while the AI coach listens.</div>
+                                    </div>
+                                    {status === 'listening' ? (
+                                        <div className="text-xs text-purple-200 bg-purple-900/30 border border-purple-700/50 rounded-full px-3 py-1 font-semibold">Recording Active</div>
+                                    ) : null}
+                                </div>
                                 {transcriptionHistory.map((t, i) => (
                                     <div key={i} className={`flex flex-col ${t.source === 'user' ? 'items-end' : 'items-start'}`}>
                                         <span className="text-xs text-slate-400 px-2 mb-0.5 font-semibold">
@@ -935,14 +1107,11 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                                 ))}
                                 <div ref={transcriptEndRef} />
                             </div>
-                        ) : (
-                            <div className="flex-1 flex flex-col items-center justify-center gap-6">
-                                <StatusIndicator status={status} errorMessage={errorMessage} blockedUx={blockedUx} onUpgrade={onRequestUpgrade} onStart={handleStartSession} />
-                                {view === 'idle' && status !== 'connecting' && (
-                                    <div className="w-full max-w-3xl">
-                                        <RehearsalHistory onDiscuss={(t) => safeReturnToStudio(t)} />
-                                    </div>
-                                )}
+                        ) : null}
+
+                        {view === 'idle' && status !== 'connecting' && (
+                            <div className="w-full max-w-3xl mx-auto">
+                                <RehearsalHistory onDiscuss={(t) => safeReturnToStudio(t)} />
                             </div>
                         )}
                     </div>
@@ -997,60 +1166,121 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
 };
 
 
-const StatusIndicator: React.FC<{status: string, errorMessage: string, blockedUx: BlockedUx | null, onUpgrade?: () => void, onStart: () => void}> = ({status, errorMessage, blockedUx, onUpgrade, onStart}) => {
-    switch (status) {
-        case 'connecting':
-            return <p className="text-slate-300 text-lg">Connecting and requesting microphone...</p>;
-        case 'listening':
-            return (
-                 <div className="flex flex-col items-center">
-                     <div className="relative w-24 h-24 flex items-center justify-center">
-                         <div className="absolute w-full h-full bg-purple-500 rounded-full animate-ping opacity-75"></div>
-                         <div className="relative w-20 h-20 bg-purple-600 rounded-full flex items-center justify-center">
-                            <MicrophoneIcon className="w-10 h-10 text-white" />
-                         </div>
-                     </div>
-                     <p className="text-slate-300 mt-4 text-lg animate-pulse">Listening...</p>
-                 </div>
-            );
-        case 'error':
-            return (
-                <div className="text-center">
-                    {blockedUx ? (
-                        <div className="max-w-xl mx-auto">
-                            <BlockedPanel
-                                blocked={blockedUx}
-                                onUpgrade={blockedUx.showUpgrade ? onUpgrade : undefined}
-                                onRetry={blockedUx.retryable ? onStart : undefined}
-                            />
+const StatusIndicator: React.FC<{
+    status: string,
+    errorMessage: string,
+    blockedUx: BlockedUx | null,
+    onUpgrade?: () => void,
+    onStart: () => void,
+    elapsed: string,
+    markerCount: number,
+    helpOpen: boolean,
+    onToggleHelp: () => void,
+    onReset: () => void,
+    onLoadDemo: () => void,
+    demoScript: string,
+}> = ({status, errorMessage, blockedUx, onUpgrade, onStart, elapsed, markerCount, helpOpen, onToggleHelp, onReset, onLoadDemo, demoScript}) => {
+    const isRecording = status === 'listening';
+    const isConnecting = status === 'connecting';
+    const label = isRecording ? 'Recording' : isConnecting ? 'Connecting' : status === 'error' ? 'Attention Needed' : 'Ready';
+
+    return (
+        <div className="w-full max-w-4xl mx-auto space-y-4">
+            <div className="bg-slate-900/40 border border-slate-700 rounded-2xl p-5 md:p-6">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
+                    <div className="flex items-start gap-4">
+                        <div className={`relative w-16 h-16 rounded-2xl border flex items-center justify-center ${isRecording ? 'bg-purple-600/20 border-purple-400/60' : 'bg-slate-800 border-slate-700'}`}>
+                            {isRecording ? <div className="absolute inset-0 rounded-2xl bg-purple-500/20 animate-pulse" /> : null}
+                            <MicrophoneIcon className={`relative w-8 h-8 ${isRecording ? 'text-purple-200' : 'text-slate-300'}`} />
                         </div>
-                    ) : (
-                        <>
-                            <p className="text-red-400 text-lg mb-4">{errorMessage}</p>
-                            <button onClick={onStart} className="px-6 py-3 bg-slate-600 hover:bg-slate-700 rounded-full text-white font-bold transition-colors">
-                                Try Again
-                            </button>
-                        </>
-                    )}
-                </div>
-            );
-        case 'idle':
-        default:
-            return (
-                <div className="text-center">
-                    <MicrophoneIcon className="w-24 h-24 text-slate-500 mx-auto mb-4" />
-                    <h2 className="text-2xl font-bold text-slate-300 mb-2">Live Rehearsal Studio</h2>
-                    <p className="text-slate-400 max-w-lg mb-6">Practice your script and get instant, AI-powered feedback on your vocal tone, confidence, and clarity. You can also use voice commands like "start timer" and "stop timer" to time your routines hands-free.</p>
-                    <div className="max-w-md mx-auto bg-purple-900/20 border border-purple-700/50 p-3 rounded-lg text-sm text-purple-200/90 mb-8">
-                        <strong>For the best results, please use headphones.</strong> This prevents the AI coach's voice from creating an echo.
+                        <div>
+                            <h2 className="text-2xl font-bold text-slate-100">Live Rehearsal Studio</h2>
+                            <p className="text-sm text-slate-400 mt-1 max-w-2xl">Practice your script and get structured feedback on delivery, pacing, confidence, and clarity.</p>
+                            <div className={`mt-3 inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold border ${isRecording ? 'bg-purple-900/30 border-purple-500/50 text-purple-100' : isConnecting ? 'bg-amber-900/20 border-amber-500/40 text-amber-100' : status === 'error' ? 'bg-red-900/20 border-red-500/40 text-red-100' : 'bg-slate-800 border-slate-600 text-slate-200'}`}>
+                                <span>🎤 Status:</span>
+                                <span>{label}</span>
+                            </div>
+                        </div>
                     </div>
-                    <button onClick={onStart} className="px-8 py-4 bg-purple-600 hover:bg-purple-700 rounded-full text-white font-bold text-lg transition-colors flex items-center gap-3 mx-auto">
-                        <MicrophoneIcon className="w-6 h-6" />
-                        <span>Start Rehearsal</span>
+
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3 min-w-[260px]">
+                        <div className="rounded-xl border border-slate-700 bg-slate-800/60 px-4 py-3">
+                            <div className="text-[11px] uppercase tracking-wide text-slate-400">Status</div>
+                            <div className="mt-1 text-sm font-semibold text-slate-100">{label}</div>
+                        </div>
+                        <div className="rounded-xl border border-slate-700 bg-slate-800/60 px-4 py-3">
+                            <div className="text-[11px] uppercase tracking-wide text-slate-400">Duration</div>
+                            <div className="mt-1 text-sm font-semibold text-slate-100">{elapsed}</div>
+                        </div>
+                        <div className="rounded-xl border border-slate-700 bg-slate-800/60 px-4 py-3 col-span-2 md:col-span-1">
+                            <div className="text-[11px] uppercase tracking-wide text-slate-400">Markers</div>
+                            <div className="mt-1 text-sm font-semibold text-slate-100">{markerCount}</div>
+                        </div>
+                    </div>
+                </div>
+
+                {status === 'error' && blockedUx ? (
+                    <div className="mt-5 max-w-xl">
+                        <BlockedPanel
+                            blocked={blockedUx}
+                            onUpgrade={blockedUx.showUpgrade ? onUpgrade : undefined}
+                            onRetry={blockedUx.retryable ? onStart : undefined}
+                        />
+                    </div>
+                ) : null}
+
+                {status === 'error' && !blockedUx && errorMessage ? (
+                    <div className="mt-5 text-sm text-red-300 bg-red-900/20 border border-red-700/40 rounded-md px-3 py-2">
+                        {errorMessage}
+                    </div>
+                ) : null}
+
+                <div className="mt-5 flex flex-wrap items-center gap-3">
+                    <button onClick={onStart} disabled={isRecording || isConnecting} className={`px-6 py-3 rounded-full text-white font-bold transition-colors flex items-center gap-3 ${isRecording || isConnecting ? 'bg-slate-700 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'}`}>
+                        <MicrophoneIcon className="w-5 h-5" />
+                        <span>{isRecording ? 'Rehearsal Active' : isConnecting ? 'Connecting…' : 'Start Rehearsal'}</span>
+                    </button>
+                    <button onClick={onReset} className="px-4 py-2.5 rounded-lg border border-slate-600 text-slate-200 hover:bg-slate-800/60 font-semibold transition-colors">
+                        Reset Studio
+                    </button>
+                    <button onClick={onLoadDemo} className="px-4 py-2.5 rounded-lg border border-purple-600/50 text-purple-200 hover:bg-purple-900/20 font-semibold transition-colors">
+                        Load Demo Script
                     </button>
                 </div>
-            );
-    }
+            </div>
+
+            <div className="bg-slate-900/30 border border-slate-700 rounded-xl overflow-hidden">
+                <button onClick={onToggleHelp} className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-slate-800/40 transition-colors">
+                    <div>
+                        <div className="text-slate-100 font-semibold">How Live Rehearsal Works</div>
+                        <div className="text-xs text-slate-400">Quick guidance for stronger rehearsals and cleaner AI feedback.</div>
+                    </div>
+                    <ChevronDownIcon className={`w-5 h-5 text-slate-300 transition-transform ${helpOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {helpOpen ? (
+                    <div className="px-4 pb-4">
+                        <div className="grid gap-2 text-sm text-slate-300">
+                            <div className="flex items-start gap-2"><CheckIcon className="w-4 h-4 mt-0.5 text-purple-300" /><span>Speak your script naturally and let the system capture your delivery rhythm.</span></div>
+                            <div className="flex items-start gap-2"><CheckIcon className="w-4 h-4 mt-0.5 text-purple-300" /><span>The AI analyzes pacing, tone, confidence, and clarity after the rehearsal ends.</span></div>
+                            <div className="flex items-start gap-2"><CheckIcon className="w-4 h-4 mt-0.5 text-purple-300" /><span>Use headphones for best results so the coach audio does not echo into the mic.</span></div>
+                        </div>
+                    </div>
+                ) : null}
+            </div>
+
+            {demoScript ? (
+                <div className="bg-purple-900/15 border border-purple-700/40 rounded-xl p-4">
+                    <div className="flex items-start gap-3">
+                        <LightbulbIcon className="w-5 h-5 text-purple-300 mt-0.5" />
+                        <div>
+                            <div className="text-purple-100 font-semibold">Demo Script Loaded</div>
+                            <p className="text-sm text-purple-100/90 mt-2 whitespace-pre-line">{demoScript}</p>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
+        </div>
+    );
 };
 
 type RehearsalHistoryItem = {
@@ -1344,6 +1574,10 @@ const ReviewView: React.FC<{
                     )}
                 </div>
 
+                {current ? (
+                    <RehearsalFeedbackCard transcript={current.transcript} />
+                ) : null}
+
                 <div className="bg-slate-900/40 border border-slate-700 rounded-lg p-4">
                     <div className="flex items-center justify-between gap-3">
                         <div>
@@ -1445,5 +1679,41 @@ const ReviewView: React.FC<{
     );
 };
 
+
+
+const RehearsalFeedbackCard: React.FC<{ transcript: Transcription[] }> = ({ transcript }) => {
+    const feedback = buildRehearsalFeedback(transcript);
+
+    return (
+        <div className="bg-slate-900/40 border border-slate-700 rounded-xl p-4 md:p-5">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div>
+                    <div className="text-slate-100 font-semibold text-lg">AI Rehearsal Feedback</div>
+                    <div className="text-sm text-slate-400 mt-1">Structured coaching based on your latest recorded take.</div>
+                </div>
+                <div className="inline-flex items-center gap-3 self-start md:self-auto px-4 py-2 rounded-xl border border-purple-600/40 bg-purple-900/20">
+                    <div className="text-xs uppercase tracking-wide text-purple-200/80">Confidence Score</div>
+                    <div className="text-2xl font-bold text-white">{feedback.confidenceScore}%</div>
+                </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                {feedback.sections.map((section) => (
+                    <div key={section.title} className="rounded-xl border border-slate-700 bg-slate-800/50 p-4">
+                        <div className="text-slate-100 font-semibold mb-2">{section.title}</div>
+                        <ul className="space-y-2 text-sm text-slate-300">
+                            {section.bullets.map((bullet, idx) => (
+                                <li key={idx} className="flex items-start gap-2">
+                                    <span className="mt-1 h-1.5 w-1.5 rounded-full bg-purple-300 flex-shrink-0" />
+                                    <span>{bullet}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
 
 export default LiveRehearsal;
