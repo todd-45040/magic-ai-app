@@ -165,10 +165,12 @@ const PHRASE_TONES: PhraseTone[] = [
 ];
 
 const EXAMPLE_QUERIES = [
-  "Create a routine for 'Torn and Restored Newspaper' about God's forgiveness.",
-  "What Bible verse would fit with a 'Linking Rings' routine about unity?",
-  'Brainstorm an effect to illustrate the story of the Loaves and Fishes.',
-  "Help me script a message about 'new life in Christ' using a change bag.",
+  "Create a children's church object lesson about forgiveness using a torn-and-restored effect.",
+  "Build a sermon illustration about unity in Christ using linking rings.",
+  "Create a gentle outreach routine about hope and restoration using a rope effect.",
+  "Help me present a youth-service illustration about choices and consequences with clear biblical application.",
+  "Create a hospital-room encouragement illustration about peace and God's presence with a soft, non-showy tone.",
+  "Create a simple object lesson that supports the Scripture without making the effect feel like spiritual proof.",
 ];
 
 const LoadingIndicator: React.FC = () => (
@@ -1495,7 +1497,7 @@ Populate arrays for categories the user selected; for unselected categories, ret
           {error && <p className="text-red-400 mt-2 text-sm text-center">{error}</p>}
 
           <div className="pt-4">
-            <h3 className="text-sm font-semibold text-slate-400 mb-2 text-center">Or try an example...</h3>
+            <h3 className="text-sm font-semibold text-slate-400 mb-2 text-center">Try a ministry-ready example...</h3>
             <div className="w-full space-y-2">
               {EXAMPLE_QUERIES.map((ex) => (
                 <button
