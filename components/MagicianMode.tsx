@@ -2634,13 +2634,19 @@ useEffect(() => {
       return;
     }
 
-    // Phase 7: Founder-only preview access (scarcity + identity).
-    // Certain tools can be temporarily restricted to Founding Circle members before Stripe goes live.
+    // Demo-only founder preview guard.
+    // In the real app, Professional members should be able to access Video Rehearsal.
+    // We keep the founder-preview scarcity behavior only for guided demo sessions.
     const founderPreviewViews = new Set<MagicianView>([
       'video-rehearsal',
     ]);
 
-    if (founderPreviewViews.has(view) && !user?.isAdmin && !user?.foundingCircleMember) {
+    if (
+      isDemoMode &&
+      founderPreviewViews.has(view) &&
+      !user?.isAdmin &&
+      !user?.foundingCircleMember
+    ) {
       showToast('Founder Preview: this tool is currently available to Founding Circle members.', {
         label: 'Join Founding Circle',
         onClick: () => {
