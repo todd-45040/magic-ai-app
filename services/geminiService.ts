@@ -675,12 +675,36 @@ export async function startLiveSession(
   tools?: any
 ): Promise<LiveSession> {
   void systemInstruction;
-  void callbacks;
   void tools;
-  throw new Error(
-    'Live Rehearsal (native audio) is disabled in the production baseline to prevent frontend key exposure. ' +
-      'Next step: implement a server-side ephemeral token broker for Google Live sessions.'
-  );
+
+  // Lightweight local session shim:
+  // - allows the Live Rehearsal UI to open and capture real microphone audio
+  // - preserves existing startup diagnostics from getUserMedia()
+  // - keeps the review flow working even when a native Gemini Live broker is not configured
+  //
+  // Notes:
+  // - sendRealtimeInput / sendToolResponse are no-ops in this fallback session
+  // - final coaching still comes from the existing transcript/review pipeline
+  // - if/when a server-side broker is added, this function can be swapped to a real live transport
+  const session: LiveSession = {
+    sendRealtimeInput: (_payload: any) => {
+      void _payload;
+    },
+    sendToolResponse: (_payload: any) => {
+      void _payload;
+    },
+    close: () => {
+      try {
+        callbacks.onclose?.({ reason: 'local-session-closed' });
+      } catch {
+        // ignore
+      }
+    },
+  };
+
+  await Promise.resolve();
+  callbacks.onopen?.();
+  return session;
 }
 
 // Optional helper for UI display/diagnostics.

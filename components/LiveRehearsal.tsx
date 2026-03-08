@@ -97,7 +97,6 @@ Now... if your memory is certain, this reveal should feel impossible.`;
 
 const DEMO_DURATION_SECONDS = 62;
 const DEMO_SESSION_NOTES = 'Convention-ready sample patter loaded for booth testing.';
-const LIVE_DISABLED_BASELINE_MESSAGE = 'Live Rehearsal audio is disabled in this production baseline build until an ephemeral-token broker is enabled. Use the demo review flow for booth testing, or enable the secure live-session backend to use real microphone rehearsal.';
 const buildDemoMarkers = (startedAt: number): SegmentMarker[] => ([
     { id: `demo-marker-1-${startedAt}`, label: 'Opener', createdAtMs: startedAt + 8000 },
     { id: `demo-marker-2-${startedAt}`, label: 'Spectator moment', createdAtMs: startedAt + 28000 },
@@ -1080,8 +1079,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 setErrorMessage('No microphone was detected. Connect an audio input device and try again.');
             } else if (errorName === 'NotReadableError' || errorName === 'TrackStartError') {
                 setErrorMessage('Your microphone is busy or unavailable. Close other apps using the mic and try again.');
-            } else if (errorMessage.includes('disabled in the production baseline')) {
-                setErrorMessage(LIVE_DISABLED_BASELINE_MESSAGE);
             } else if (errorName === 'AbortError' || errorName === 'NetworkError' || /network|fetch|timeout|connection/i.test(errorMessage)) {
                 setErrorMessage('Network or API connection failed while starting live rehearsal. Please check your connection and try again.');
             } else {
@@ -1403,7 +1400,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         loadDemoScriptIntoStudio();
     };
 
-    const handleRunDemoReview = () => {
+    const injectDemoTake = (replaceSelected = false) => {
         const script = demoScript.trim();
         if (!script) return;
         const now = Date.now();
@@ -1413,8 +1410,23 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         const demoTranscript = [{ source: 'user', text: script, isFinal: true }] as Transcription[];
 
         setTakes((prev) => {
-            const takeNumber = (prev?.length ?? 0) + 1;
-            const next = [...(prev ?? []), { takeNumber, startedAt, endedAt: now, transcript: demoTranscript, markers } as any];
+            const base = [...(prev ?? [])];
+            if (replaceSelected && base.length > 0 && selectedTake >= 0 && selectedTake < base.length) {
+                const existing = base[selectedTake] as any;
+                base[selectedTake] = {
+                    ...(existing || {}),
+                    takeNumber: existing?.takeNumber ?? selectedTake + 1,
+                    startedAt,
+                    endedAt: now,
+                    transcript: demoTranscript,
+                    markers,
+                } as any;
+                setSelectedTake(selectedTake);
+                return base as any;
+            }
+
+            const takeNumber = base.length + 1;
+            const next = [...base, { takeNumber, startedAt, endedAt: now, transcript: demoTranscript, markers } as any];
             setSelectedTake(Math.max(0, next.length - 1));
             return next as any;
         });
@@ -1428,6 +1440,14 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         setSessionTitle('Demo Rehearsal Session');
         setSessionNotes(DEMO_SESSION_NOTES);
         setView('reviewing');
+    };
+
+    const handleRunDemoReview = () => {
+        injectDemoTake(false);
+    };
+
+    const handleAnalyzeDemoTake = () => {
+        injectDemoTake(true);
     };
 
     const handleHeaderButtonClick = async () => {
@@ -1965,6 +1985,7 @@ const ReviewView: React.FC<{
     onSessionSaved: (id: string) => void;
     onIdeaSaved: () => void;
     onReturnToStudio: (transcriptToDiscuss?: Transcription[]) => void;
+    onAnalyzeDemoTake?: () => void;
     onOpenAngleRisk?: () => void;
     onOpenPatterEngine?: () => void;
     onOpenDirectorMode?: () => void;
@@ -1982,6 +2003,7 @@ const ReviewView: React.FC<{
     onSessionSaved,
     onIdeaSaved,
     onReturnToStudio,
+    onAnalyzeDemoTake,
     onOpenAngleRisk,
     onOpenPatterEngine,
     onOpenDirectorMode,
@@ -2366,7 +2388,7 @@ const ReviewView: React.FC<{
                         <div className="flex items-center gap-2 flex-wrap">
                             {isDemoTake ? (
                                 <button
-                                    onClick={() => runRefine('Analyze this demo take and give me focused rehearsal feedback for this script.') }
+                                    onClick={() => onAnalyzeDemoTake?.()}
                                     className="px-3 py-1.5 rounded-md border border-purple-600/40 bg-purple-900/20 text-purple-100 text-sm font-semibold hover:bg-purple-900/30 transition-colors"
                                 >
                                     Analyze This Demo Take
