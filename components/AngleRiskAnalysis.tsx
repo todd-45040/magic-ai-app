@@ -898,9 +898,7 @@ ${routineSteps.trim()}` : null,
                         keyName: 'angle-risk-analysis',
                         title: 'Angle Risk Analysis',
                         subtitle: 'Overview plus direct sightline pressure points across the routine.',
-                        children: <FormattedText text={[parsedAnalysis?.overview?.body, parsedAnalysis?.sightlines?.body].filter(Boolean).join('
-
-')} />
+                        children: <FormattedText text={[parsedAnalysis?.overview?.body, parsedAnalysis?.sightlines?.body].filter(Boolean).join('\n\n')} />
                       })}
 
                       {parsedAnalysis?.handling?.body && renderPanel({
