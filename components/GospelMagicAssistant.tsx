@@ -23,6 +23,8 @@ type MinistryTone =
   | 'Hospital / Pastoral Care'
   | 'VBS / Camp Setting';
 
+type PhraseTone = 'Gentle' | 'Reflective' | 'Encouraging' | 'Evangelistic' | 'Devotional' | 'Child-friendly';
+
 interface MinistryBlueprint {
   scripture_focus: string;
   theological_theme: string;
@@ -122,6 +124,8 @@ interface PhraseCategorySelection {
   gentle_invitations: boolean;
   clarity_disclaimers: boolean;
   encouragement_lines: boolean;
+  scripture_transition_lines: boolean;
+  humble_closing_lines: boolean;
 }
 
 interface MinistryPhrasesResult {
@@ -130,6 +134,8 @@ interface MinistryPhrasesResult {
   gentle_invitations: string[];
   clarity_disclaimers: string[];
   encouragement_lines: string[];
+  scripture_transition_lines: string[];
+  humble_closing_lines: string[];
 }
 
 
@@ -140,6 +146,15 @@ const MINISTRY_TONES: MinistryTone[] = [
   'Outreach / Evangelism',
   'Hospital / Pastoral Care',
   'VBS / Camp Setting',
+];
+
+const PHRASE_TONES: PhraseTone[] = [
+  'Gentle',
+  'Reflective',
+  'Encouraging',
+  'Evangelistic',
+  'Devotional',
+  'Child-friendly',
 ];
 
 const EXAMPLE_QUERIES = [
@@ -267,6 +282,8 @@ const ministryPhrasesSchema = {
     gentle_invitations: { type: Type.ARRAY, items: { type: Type.STRING } },
     clarity_disclaimers: { type: Type.ARRAY, items: { type: Type.STRING } },
     encouragement_lines: { type: Type.ARRAY, items: { type: Type.STRING } },
+    scripture_transition_lines: { type: Type.ARRAY, items: { type: Type.STRING } },
+    humble_closing_lines: { type: Type.ARRAY, items: { type: Type.STRING } },
   },
   required: [
     'bridge_phrases',
@@ -274,6 +291,8 @@ const ministryPhrasesSchema = {
     'gentle_invitations',
     'clarity_disclaimers',
     'encouragement_lines',
+    'scripture_transition_lines',
+    'humble_closing_lines',
   ],
 };
 const mdEscape = (s: string) => (s || '').replace(/\r/g, '').trim();
@@ -406,7 +425,10 @@ const GospelMagicAssistant: React.FC<GospelMagicAssistantProps> = ({ onIdeaSaved
     gentle_invitations: true,
     clarity_disclaimers: true,
     encouragement_lines: true,
+    scripture_transition_lines: true,
+    humble_closing_lines: true,
   });
+  const [phraseTone, setPhraseTone] = useState<PhraseTone>('Gentle');
   const [phrasesPerCategory, setPhrasesPerCategory] = useState(5);
   const [phrasesResult, setPhrasesResult] = useState<MinistryPhrasesResult | null>(null);
   const [isPhrasesLoading, setIsPhrasesLoading] = useState(false);
@@ -748,6 +770,7 @@ Generate ministry-safe performance phrasing to support a Gospel magic illustrati
 
 Context:
 - Ministry Tone: ${ministryTone}
+- Phrase Tone: ${phraseTone}
 - Scripture (optional): ${passage?.trim() || '(none)'}
 - Theme / Effect (optional): ${theme?.trim() || '(none)'}
 - Selected categories: ${selected}
@@ -755,9 +778,12 @@ Context:
 
 Guidelines:
 - Keep phrases respectful, non-manipulative, and appropriate for church/ministry settings.
+- Match the requested phrase tone while remaining humble and speakable.
 - Do NOT claim supernatural power or performer authority.
 - Do NOT include exposure of magic methods.
 - Keep phrases usable on stage (short, speakable).
+- Scripture transition lines should help move naturally from illustration to Bible text.
+- Humble closing lines should end with reverence, humility, and message-centered focus.
 ${doctrinalGuardrails}${ministrySensitivityGuardrails}
 
 Populate arrays for categories the user selected; for unselected categories, return an empty array.
@@ -1130,8 +1156,26 @@ Populate arrays for categories the user selected; for unselected categories, ret
               <p className="text-[10px] text-slate-500">mini-tool</p>
             </div>
             <p className="text-xs text-slate-400 mt-1">
-              Generate respectful, message-safe lines for transitions, reflection, and clarity (no method exposure).
+              Generate respectful, message-safe lines for transitions, Scripture moments, reflection, and humble closings (no method exposure).
             </p>
+
+            <div className="mt-3">
+              <label htmlFor="phrase-tone" className="block text-xs font-medium text-slate-300 mb-1">
+                Phrase Tone
+              </label>
+              <select
+                id="phrase-tone"
+                value={phraseTone}
+                onChange={(e) => setPhraseTone(e.target.value as PhraseTone)}
+                className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white text-sm focus:outline-none focus:border-purple-500 transition-colors"
+              >
+                {PHRASE_TONES.map((tone) => (
+                  <option key={tone} value={tone}>
+                    {tone}
+                  </option>
+                ))}
+              </select>
+            </div>
 
             <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-200">
               <label className="flex items-center gap-2">
@@ -1170,7 +1214,7 @@ Populate arrays for categories the user selected; for unselected categories, ret
                 />
                 Clarity disclaimers
               </label>
-              <label className="flex items-center gap-2 col-span-2">
+              <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
                   checked={phraseSelection.encouragement_lines}
@@ -1178,6 +1222,24 @@ Populate arrays for categories the user selected; for unselected categories, ret
                   className="accent-purple-500"
                 />
                 Encouragement lines
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={phraseSelection.scripture_transition_lines}
+                  onChange={(e) => setPhraseSelection((p) => ({ ...p, scripture_transition_lines: e.target.checked }))}
+                  className="accent-purple-500"
+                />
+                Scripture transition lines
+              </label>
+              <label className="flex items-center gap-2 col-span-2">
+                <input
+                  type="checkbox"
+                  checked={phraseSelection.humble_closing_lines}
+                  onChange={(e) => setPhraseSelection((p) => ({ ...p, humble_closing_lines: e.target.checked }))}
+                  className="accent-purple-500"
+                />
+                Humble closing lines
               </label>
             </div>
 
@@ -1216,6 +1278,8 @@ Populate arrays for categories the user selected; for unselected categories, ret
                     ['Gentle invitations', phrasesResult.gentle_invitations],
                     ['Clarity disclaimers', phrasesResult.clarity_disclaimers],
                     ['Encouragement lines', phrasesResult.encouragement_lines],
+                    ['Scripture transition lines', phrasesResult.scripture_transition_lines],
+                    ['Humble closing lines', phrasesResult.humble_closing_lines],
                   ] as Array<[string, string[]]>
                 ).map(([label, arr]) => (
                   <details key={label} className="group rounded-lg border border-slate-800 bg-slate-950/30" open={label === 'Bridge phrases'}>
