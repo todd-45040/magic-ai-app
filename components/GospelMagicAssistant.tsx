@@ -29,6 +29,13 @@ interface MinistryBlueprint {
   scripture_focus: string;
   theological_theme: string;
   central_truth: string;
+  why_this_effect_serves_the_message: {
+    why_this_illustration_works: string;
+    message_support: string;
+    should_not_imply: string[];
+    humble_introduction: string;
+    scripture_transition: string;
+  };
   ministry_use_case: string;
   effect_fit_assessment: string;
   reverence_risk_notes: string[];
@@ -183,6 +190,23 @@ const ministryBlueprintSchema = {
     scripture_focus: { type: Type.STRING },
     theological_theme: { type: Type.STRING },
     central_truth: { type: Type.STRING },
+    why_this_effect_serves_the_message: {
+      type: Type.OBJECT,
+      properties: {
+        why_this_illustration_works: { type: Type.STRING },
+        message_support: { type: Type.STRING },
+        should_not_imply: { type: Type.ARRAY, items: { type: Type.STRING } },
+        humble_introduction: { type: Type.STRING },
+        scripture_transition: { type: Type.STRING },
+      },
+      required: [
+        'why_this_illustration_works',
+        'message_support',
+        'should_not_imply',
+        'humble_introduction',
+        'scripture_transition',
+      ],
+    },
     ministry_use_case: { type: Type.STRING },
     effect_fit_assessment: { type: Type.STRING },
     reverence_risk_notes: { type: Type.ARRAY, items: { type: Type.STRING } },
@@ -233,6 +257,7 @@ const ministryBlueprintSchema = {
     'scripture_focus',
     'theological_theme',
     'central_truth',
+    'why_this_effect_serves_the_message',
     'ministry_use_case',
     'effect_fit_assessment',
     'reverence_risk_notes',
@@ -319,6 +344,16 @@ const toMarkdownBlueprint = (
   lines.push('');
   lines.push('### Central Truth');
   lines.push(mdEscape(bp.central_truth));
+  lines.push('');
+  lines.push('### Why This Effect Serves the Message');
+  lines.push(`- Why this illustration works: ${mdEscape(bp.why_this_effect_serves_the_message?.why_this_illustration_works || '')}`);
+  lines.push(`- What part of the message it supports: ${mdEscape(bp.why_this_effect_serves_the_message?.message_support || '')}`);
+  if (bp.why_this_effect_serves_the_message?.should_not_imply?.length) {
+    lines.push('- What it should not imply:');
+    bp.why_this_effect_serves_the_message.should_not_imply.forEach((x) => lines.push(`  - ${mdEscape(x)}`));
+  }
+  lines.push(`- How to introduce it humbly: ${mdEscape(bp.why_this_effect_serves_the_message?.humble_introduction || '')}`);
+  lines.push(`- How to transition back to Scripture: ${mdEscape(bp.why_this_effect_serves_the_message?.scripture_transition || '')}`);
   lines.push('');
   lines.push('### Ministry Use Case');
   lines.push(mdEscape(bp.ministry_use_case));
@@ -489,11 +524,13 @@ Requirements:
 - routine_structure should be practical and step-by-step: stage_action + teaching_point for each phase.
 - Provide age_adjustments for at least: Children, Youth, Adults.
 - Include potential_misinterpretations (what someone might wrongly conclude) and how to avoid them.
+- Include why_this_effect_serves_the_message with: why_this_illustration_works, message_support, should_not_imply, humble_introduction, scripture_transition.
 - Include ministry_use_case explaining where this routine best fits in ministry.
 - Include effect_fit_assessment explaining why the chosen illustration supports the message without implying supernatural power.
 - Include reverence_risk_notes warning where the effect could feel gimmicky, manipulative, or spiritually confusing.
 - Include performer_humility_lines with 2-4 short lines that keep the performer humble and avoid self-importance.
 - Include scripture_handling_notes to help the performer treat the passage carefully and avoid overclaiming.
+- Make the Why This Effect Serves the Message section especially practical, humble, and message-first.
 - altar_call_sensitivity must include: guidance, do, dont.
 - closing_prayer_option should be gentle and appropriate for the selected tone.
 ${doctrinalGuardrails}${ministrySensitivityGuardrails}
@@ -605,6 +642,7 @@ ${doctrinalGuardrails}${ministrySensitivityGuardrails}
       const descParts: string[] = [];
       if (blueprint.scripture_focus) descParts.push(`Scripture: ${blueprint.scripture_focus}`);
       if (blueprint.central_truth) descParts.push(`Central Truth: ${blueprint.central_truth}`);
+      if (blueprint.why_this_effect_serves_the_message?.message_support) descParts.push(`Message Support: ${blueprint.why_this_effect_serves_the_message.message_support}`);
       if (blueprint.ministry_use_case) descParts.push(`Use Case: ${blueprint.ministry_use_case}`);
       if (blueprint.theological_theme) descParts.push(`Theme: ${blueprint.theological_theme}`);
       const show = await createShow(showTitle, descParts.join('\n').slice(0, 800) || null);
