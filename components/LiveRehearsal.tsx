@@ -103,6 +103,39 @@ const buildDemoMarkers = (startedAt: number): SegmentMarker[] => ([
     { id: `demo-marker-3-${startedAt}`, label: 'Reveal', createdAtMs: startedAt + 50000 },
 ]);
 
+const deriveLiveStartErrorMessage = (error: any): string => {
+    const name = String(error?.name || '');
+    const message = String(error?.message || '').toLowerCase();
+
+    if (name === 'NotAllowedError' || name === 'PermissionDeniedError' || message.includes('permission')) {
+        return 'Microphone permission denied. Please allow microphone access in your browser settings and try again.';
+    }
+    if (name === 'NotFoundError' || name === 'DevicesNotFoundError' || message.includes('no audio input') || message.includes('no microphone')) {
+        return 'No microphone was detected. Connect an audio input device and try again.';
+    }
+    if (name === 'NotReadableError' || message.includes('device in use') || message.includes('could not start audio source')) {
+        return 'Your microphone is busy or unavailable. Close other apps using the mic, then try again.';
+    }
+    if (message.includes('network') || message.includes('fetch') || message.includes('offline')) {
+        return 'Network connection issue detected. Check your internet connection and try again.';
+    }
+    if (message.includes('websocket') || message.includes('session') || message.includes('connect')) {
+        return 'Live session failed to initialize. Please try again in a moment.';
+    }
+    return 'Failed to connect. Please check your connection and microphone, then try again.';
+};
+
+const isDemoTranscript = (transcript: Transcription[] = []): boolean => {
+    const joined = (transcript || [])
+        .filter((t) => t?.source === 'user')
+        .map((t) => t?.text || '')
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    const demo = DEMO_SCRIPT.replace(/\s+/g, ' ').trim();
+    return !!joined && joined === demo;
+};
+
 const formatElapsed = (ms: number): string => {
     const totalSeconds = Math.max(0, Math.floor(ms / 1000));
     const minutes = Math.floor(totalSeconds / 60).toString();
@@ -892,6 +925,22 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         }
         errorOccurred.current = false;
         try {
+            if (!navigator?.mediaDevices?.getUserMedia) {
+                throw new Error('No microphone support available in this browser context.');
+            }
+
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const audioInputs = devices.filter((device) => device.kind === 'audioinput');
+                if (audioInputs.length === 0) {
+                    const noMicError = new Error('No audio input device detected.');
+                    (noMicError as any).name = 'NotFoundError';
+                    throw noMicError;
+                }
+            } catch (deviceErr: any) {
+                if (String(deviceErr?.name || '') === 'NotFoundError') throw deviceErr;
+            }
+
             // FIX: Request audio without a specific sample rate to ensure compatibility.
             // The audio will be resampled later if needed.
             const stream = await navigator.mediaDevices.getUserMedia({
@@ -1071,11 +1120,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             } catch {
                 // ignore
             }
-            if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-                setErrorMessage('Microphone permission denied. Please allow microphone access in your browser settings.');
-            } else {
-                setErrorMessage('Failed to connect. Please check your connection and microphone, then try again.');
-            }
+            setErrorMessage(deriveLiveStartErrorMessage(error));
             await safeCleanupSession();
             setStatus('error');
             setView('idle');
@@ -1393,7 +1438,27 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         setSessionElapsed('0:00');
         setSessionTitle('Demo Rehearsal Session');
         setSessionNotes(DEMO_SESSION_NOTES);
+        setRefineOpen(false);
+        setRefineResult(null);
         setView('reviewing');
+    };
+
+    const handleAnalyzeLoadedDemoTake = () => {
+        const script = demoScript.trim();
+        if (!script) return;
+
+        const selected = current;
+        if (selected && isDemoTranscript(selected.transcript)) {
+            setSessionTitle('Demo Rehearsal Session');
+            setSessionNotes(DEMO_SESSION_NOTES);
+            setSelectedTake(Math.max(0, Math.min(selectedTake, takes.length - 1)));
+            setView('reviewing');
+            setErrorMessage('');
+            setBlockedUx(null);
+            return;
+        }
+
+        handleRunDemoReview();
     };
 
     const handleHeaderButtonClick = async () => {
@@ -1974,8 +2039,6 @@ const ReviewView: React.FC<{
     const [refinePrompt, setRefinePrompt] = useState('');
     const [refineResult, setRefineResult] = useState<CoachingFollowUpResult | null>(null);
 
-    const current = takes?.[selectedTake] ?? null;
-
     useEffect(() => {
         setRefinePrompt('');
         setRefineResult(null);
@@ -2027,6 +2090,8 @@ const ReviewView: React.FC<{
     };
 
     const hasAnyTakes = (takes?.length ?? 0) > 0;
+    const current = hasAnyTakes ? takes[Math.max(0, Math.min(selectedTake, takes.length - 1))] : null;
+    const currentTakeIsDemo = !!current && isDemoTranscript(current.transcript);
 
     const handleAnalyzeAngles = () => {
         if (!current) return;
