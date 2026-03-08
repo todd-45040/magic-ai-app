@@ -594,6 +594,15 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
     const [takes, setTakes] = useState<Take[]>([]);
     const [selectedTake, setSelectedTake] = useState<number>(0);
 
+    const isDemoTranscript = (transcript?: Transcription[]) =>
+        Boolean(transcript?.some((seg) => String(seg?.text || '').includes('quick experiment in attention')));
+
+    const isDemoTakeEntry = (take?: Take | null) =>
+        Boolean(take && sessionTitle === 'Demo Rehearsal Session' && isDemoTranscript(take.transcript));
+
+    const hasDemoLoaded = Boolean(demoScript.trim());
+    const hasLiveTake = takes.some((take) => !isDemoTakeEntry(take));
+
     // Phase 6.5: show daily live rehearsal remaining (server-backed when available)
     const [dailyLive, setDailyLive] = useState<{ used: number; limit: number; remaining: number; source: 'server' | 'local' } | null>(null);
     const dailyLiveStartRemainingRef = useRef<number | null>(null);
@@ -834,6 +843,20 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
 
     const handleStartSession = async () => {
         setBlockedUx(null);
+
+        // Group 1 stabilization: if the current review state only contains a demo take,
+        // clear it before starting a real live recording so the first live take is always Take 1.
+        if (hasDemoLoaded && !hasLiveTake) {
+            setTakes([]);
+            setSelectedTake(0);
+            setDemoScript('');
+            setDemoDurationSeconds(0);
+            setDemoMarkers([]);
+            setSessionTitle(`Live Rehearsal Session - ${new Date().toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`);
+            setSessionNotes('');
+            clearDraft();
+        }
+
         // Server-backed cap for live rehearsal minutes (daily), consistent across devices.
         try {
             const s = await fetchUsageStatus();
@@ -1388,6 +1411,10 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         setStatus('idle');
         setErrorMessage('');
         setBlockedUx(null);
+        setTranscriptionHistory([]);
+        setTakes([]);
+        setSelectedTake(0);
+        clearDraft();
         setSessionTitle('Demo Rehearsal Session');
         setSessionNotes(DEMO_SESSION_NOTES);
     };
@@ -1410,23 +1437,26 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         const demoTranscript = [{ source: 'user', text: script, isFinal: true }] as Transcription[];
 
         setTakes((prev) => {
-            const base = [...(prev ?? [])];
-            if (replaceSelected && base.length > 0 && selectedTake >= 0 && selectedTake < base.length) {
-                const existing = base[selectedTake] as any;
-                base[selectedTake] = {
-                    ...(existing || {}),
-                    takeNumber: existing?.takeNumber ?? selectedTake + 1,
-                    startedAt,
-                    endedAt: now,
-                    transcript: demoTranscript,
-                    markers,
-                } as any;
-                setSelectedTake(selectedTake);
-                return base as any;
+            const incomingDemoTake = { takeNumber: 1, startedAt, endedAt: now, transcript: demoTranscript, markers } as any;
+            const existing = [...(prev ?? [])];
+            const liveOnly = existing.filter((take) => !isDemoTranscript((take as any)?.transcript));
+            const hasOnlyDemoState = existing.length > 0 && liveOnly.length === 0;
+
+            if (replaceSelected && existing.length > 0 && selectedTake >= 0 && selectedTake < existing.length) {
+                const target = existing[selectedTake] as any;
+                if (isDemoTranscript(target?.transcript) || hasOnlyDemoState) {
+                    setSelectedTake(0);
+                    return [incomingDemoTake] as any;
+                }
             }
 
-            const takeNumber = base.length + 1;
-            const next = [...base, { takeNumber, startedAt, endedAt: now, transcript: demoTranscript, markers } as any];
+            if (hasOnlyDemoState || existing.length === 0) {
+                setSelectedTake(0);
+                return [incomingDemoTake] as any;
+            }
+
+            const takeNumber = liveOnly.length + 1;
+            const next = [...liveOnly, { ...incomingDemoTake, takeNumber } as any];
             setSelectedTake(Math.max(0, next.length - 1));
             return next as any;
         });
@@ -1488,6 +1518,9 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                         setSessionNotes('');
                         setTakes([]);
                         setSelectedTake(0);
+                        setDemoScript('');
+                        setDemoDurationSeconds(0);
+                        setDemoMarkers([]);
                         setTranscriptionHistory([]);
                         setErrorMessage('');
                         setStatus('idle');
@@ -1521,6 +1554,11 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                                 setDemoScript('');
                                 setDemoDurationSeconds(0);
                                 setDemoMarkers([]);
+                                setTakes([]);
+                                setSelectedTake(0);
+                                setSessionTitle(`Live Rehearsal Session - ${new Date().toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`);
+                                setSessionNotes('');
+                                clearDraft();
                                 setTranscriptionHistory([]);
                                 setErrorMessage('');
                                 setBlockedUx(null);
@@ -2019,6 +2057,7 @@ const ReviewView: React.FC<{
     const [refineResult, setRefineResult] = useState<CoachingFollowUpResult | null>(null);
 
     const current = takes?.[selectedTake] ?? null;
+    const displayTakeNumber = current ? selectedTake + 1 : 0;
     const isDemoTake = Boolean(current && sessionTitle === 'Demo Rehearsal Session' && current.transcript?.some((seg) => String(seg?.text || '').includes('quick experiment in attention')));
 
     useEffect(() => {
@@ -2371,7 +2410,7 @@ const ReviewView: React.FC<{
                                         : 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700/60'
                                 }`}
                             >
-                                Take {t.takeNumber}
+                                Take {idx + 1}
                             </button>
                         ))}
                         {!hasAnyTakes ? (
@@ -2383,7 +2422,7 @@ const ReviewView: React.FC<{
                 <div className="space-y-4 bg-slate-800/40 border border-slate-700 rounded-lg p-4">
                     <div className="flex items-center justify-between gap-3 flex-wrap">
                         <div className="text-slate-200 font-semibold">
-                            {current ? `Transcript — Take ${current.takeNumber}` : 'Transcript'}
+                            {current ? `Transcript — Take ${displayTakeNumber}` : 'Transcript'}
                         </div>
                         <div className="flex items-center gap-2 flex-wrap">
                             {isDemoTake ? (
