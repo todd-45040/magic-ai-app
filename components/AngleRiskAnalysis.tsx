@@ -6,6 +6,7 @@ import { saveIdea } from '../services/ideasService';
 import { createShow, addTaskToShow } from '../services/showsService';
 import { ChevronDownIcon, EyeIcon, SaveIcon, ShareIcon, ShieldIcon, VideoIcon, WandIcon } from './icons';
 import FormattedText from './FormattedText';
+import StageDiagram, { type Zone } from './rehearsal/StageDiagram';
 import { useToast } from './ToastProvider';
 import { trackClientEvent } from '../services/telemetryClient';
 
@@ -106,6 +107,9 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved, onDeepLinkShowPla
       questions: findSection('questions', 'refine'),
       critical: findSection('critical', 'exposure'),
       coaching: findSection('professional', 'coaching'),
+      spectator: findSection('spectator', 'view') ?? findSection('spectator'),
+      resetVulnerability: findSection('reset', 'vulnerability'),
+      summary: findSection('exposure', 'probability') ?? findSection('summary'),
     };
   }, [analysis]);
 
@@ -200,7 +204,49 @@ const exposureSummaryItems = useMemo(() => {
 
 const canAnalyze = routineName.trim().length > 0;
 
-const PANEL_KEYS = ['risk-profile', 'angle-risk-analysis', 'posture-signals', 'timing-vulnerabilities', 'critical-exposure-points', 'spectator-view-simulation', 'reset-vulnerability-analysis', 'professional-coaching', 'mitigations', 'exposure-probability-summary', 'refinement-questions'] as const;
+const stageDiagramData = useMemo(() => {
+  const stageWidth = mode === 'Stage' ? 360 : mode === 'Parlor' ? 320 : 280;
+  const audienceDistanceValue = audienceDistance === '10+ ft' ? 192 : audienceDistance === '3–10 ft' ? 168 : 146;
+  const performerX = setup === 'Standing (close-up)' ? 0 : setup === 'Stage (wide)' ? -10 : 0;
+  const performerY = mode === 'Walkaround' ? -8 : mode === 'Stage' ? 8 : 0;
+
+  const overallLevel = riskProfile?.overall.label ?? 'Medium';
+  let exposureZones: Zone[] = [
+    { angleStart: -58, angleEnd: -24, risk: 'medium' },
+    { angleStart: -24, angleEnd: 24, risk: 'low' },
+    { angleStart: 24, angleEnd: 58, risk: 'medium' },
+  ];
+
+  if (setup === 'Surrounded / 360°') {
+    exposureZones = [
+      { angleStart: -58, angleEnd: -18, risk: 'high' },
+      { angleStart: -18, angleEnd: 18, risk: overallLevel === 'Low' ? 'medium' : 'high' },
+      { angleStart: 18, angleEnd: 58, risk: 'high' },
+    ];
+  } else if (setup === 'Stage (wide)' || mode === 'Stage') {
+    exposureZones = [
+      { angleStart: -58, angleEnd: -20, risk: 'medium' },
+      { angleStart: -20, angleEnd: 20, risk: 'low' },
+      { angleStart: 20, angleEnd: 58, risk: 'medium' },
+    ];
+  }
+
+  const boostHigh = overallLevel === 'High';
+  const boostMedium = overallLevel === 'Medium';
+  exposureZones = exposureZones.map((zone, index) => {
+    if (boostHigh && index !== 1 && zone.risk === 'medium') return { ...zone, risk: 'high' as const };
+    if (boostMedium && index === 1 && zone.risk === 'low') return { ...zone, risk: 'medium' as const };
+    return zone;
+  });
+
+  if (riskProfile?.topRisks.includes('Angles')) {
+    exposureZones = exposureZones.map((zone, index) => index === 1 ? zone : { ...zone, risk: zone.risk === 'low' ? 'medium' : 'high' });
+  }
+
+  return { stageWidth, audienceDistance: audienceDistanceValue, performerX, performerY, exposureZones };
+}, [audienceDistance, mode, riskProfile, setup]);
+
+const PANEL_KEYS = ['risk-profile', 'angle-risk-analysis', 'spatial-blocking-analysis', 'posture-signals', 'timing-vulnerabilities', 'critical-exposure-points', 'spectator-view-simulation', 'reset-vulnerability-analysis', 'professional-coaching', 'mitigations', 'exposure-probability-summary', 'refinement-questions'] as const;
 type PanelKey = typeof PANEL_KEYS[number];
 
 const [expandedPanels, setExpandedPanels] = useState<Record<PanelKey, boolean>>(() =>
@@ -891,6 +937,32 @@ ${routineSteps.trim()}` : null,
                               ))}
                             </div>
                           </>
+                        )
+                      })}
+
+                      {renderPanel({
+                        keyName: 'spatial-blocking-analysis',
+                        title: 'Spatial Blocking Analysis',
+                        subtitle: 'Simple stage geometry diagram for audience arc, performer position, sightlines, and exposure zones.',
+                        children: (
+                          <div className="space-y-4">
+                            <StageDiagram
+                              stageWidth={stageDiagramData.stageWidth}
+                              audienceDistance={stageDiagramData.audienceDistance}
+                              performerX={stageDiagramData.performerX}
+                              performerY={stageDiagramData.performerY}
+                              exposureZones={stageDiagramData.exposureZones}
+                            />
+                            <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+                              <p className="text-sm font-semibold text-white">Legend</p>
+                              <div className="mt-3 flex flex-wrap gap-3 text-sm text-white/75">
+                                <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1.5">🟢 Safe Angle</span>
+                                <span className="rounded-full border border-yellow-400/20 bg-yellow-500/10 px-3 py-1.5">🟡 Risk</span>
+                                <span className="rounded-full border border-red-400/20 bg-red-500/10 px-3 py-1.5">🔴 Exposure</span>
+                              </div>
+                              <p className="mt-3 text-xs text-white/55">Use this diagram as a rehearsal reference for where the audience is safest, where side angles become risky, and where movement or cover may be required.</p>
+                            </div>
+                          </div>
                         )
                       })}
 
