@@ -667,13 +667,13 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
 
     /**
      * "Back to Studio" navigation is handled by the MagicianMode shell.
-     * (This project does not use react-router.)
+     * Keep Live Rehearsal self-contained: do not hand off to the global chat renderer
+     * from this page. Preserve the current session draft, then return to the shell.
      */
-    const safeReturnToStudio = (transcriptToDiscuss?: Transcription[]) => {
+    const safeReturnToStudio = () => {
         try {
-            // If the user is leaving to run AI analysis, preserve the current session so they can return for Take 2.
             persistDraft();
-            onReturnToStudio?.(transcriptToDiscuss);
+            onReturnToStudio?.();
         } catch {
             // ignore
         }
@@ -884,13 +884,12 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         setTranscriptionHistory([]);
         setMarkerCount(0);
         setCurrentMarkers([]);
-        currentTakeStartRef.current = Date.now();
+        currentTakeStartRef.current = null;
         setSessionElapsed('0:00');
-        if (sessionElapsedIntervalRef.current) clearInterval(sessionElapsedIntervalRef.current);
-        sessionElapsedIntervalRef.current = window.setInterval(() => {
-            const startedAt = currentTakeStartRef.current;
-            setSessionElapsed(startedAt ? formatElapsed(Date.now() - startedAt) : '0:00');
-        }, 250);
+        if (sessionElapsedIntervalRef.current) {
+            clearInterval(sessionElapsedIntervalRef.current);
+            sessionElapsedIntervalRef.current = null;
+        }
         errorOccurred.current = false;
         try {
             // FIX: Request audio without a specific sample rate to ensure compatibility.
@@ -1003,6 +1002,15 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                         scriptProcessor.connect(zeroGain);
                         zeroGain.connect(inputAudioContext.destination);
 
+                        currentTakeStartRef.current = Date.now();
+                        if (sessionElapsedIntervalRef.current) {
+                            clearInterval(sessionElapsedIntervalRef.current);
+                        }
+                        sessionElapsedIntervalRef.current = window.setInterval(() => {
+                            const startedAt = currentTakeStartRef.current;
+                            setSessionElapsed(startedAt ? formatElapsed(Date.now() - startedAt) : '0:00');
+                        }, 250);
+
                         setStatus('listening');
                         setView('rehearsing');
 
@@ -1023,12 +1031,13 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                         }, 5000);
                     },
                     onmessage: handleServerMessage,
-                    onerror: (e) => {
+                    onerror: async (e) => {
                         console.error('Live session error:', e);
                         errorOccurred.current = true;
                         setErrorMessage('A live session error occurred. The connection may have been interrupted.');
+                        await safeCleanupSession();
                         setStatus('error');
-                        setView('rehearsing');
+                        setView(transcriptionHistoryRef.current.length > 0 ? 'rehearsing' : 'idle');
                     },
                     onclose: () => {
                         if (!errorOccurred.current) {
@@ -1067,8 +1076,9 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             } else {
                 setErrorMessage('Failed to connect. Please check your connection and microphone, then try again.');
             }
+            await safeCleanupSession();
             setStatus('error');
-            setView('rehearsing');
+            setView('idle');
         }
     };
     
@@ -1513,7 +1523,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
 
                         {view === 'idle' && status !== 'connecting' && (
                             <div className="w-full max-w-3xl mx-auto">
-                                <RehearsalHistory onDiscuss={(t) => safeReturnToStudio(t)} />
+                                <RehearsalHistory />
                             </div>
                         )}
                     </div>
@@ -1747,7 +1757,7 @@ type RehearsalHistoryItem = {
     markerLabels: string[];
 };
 
-const RehearsalHistory: React.FC<{ onDiscuss: (transcript: Transcription[]) => void }> = ({ onDiscuss }) => {
+const RehearsalHistory: React.FC = () => {
     const [expanded, setExpanded] = useState(true);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string>('');
@@ -1905,12 +1915,9 @@ const RehearsalHistory: React.FC<{ onDiscuss: (transcript: Transcription[]) => v
                                     ) : null}
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <button
-                                        onClick={() => onDiscuss(it.transcript)}
-                                        className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 rounded-md text-white text-sm font-semibold transition-colors"
-                                    >
-                                        Discuss with AI
-                                    </button>
+                                    <div className="px-3 py-1.5 rounded-md border border-slate-700 bg-slate-900/40 text-slate-300 text-sm font-semibold">
+                                        Review saved session
+                                    </div>
                                 </div>
                             </div>
                         ))}
@@ -1979,25 +1986,6 @@ const ReviewView: React.FC<{
         transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [selectedTake, takes]);
 
-    const buildCombinedTranscript = (allTakes: typeof takes): Transcription[] => {
-        const out: Transcription[] = [];
-        for (const t of allTakes ?? []) {
-            out.push({ source: 'model', text: `— Take ${t.takeNumber} —`, isFinal: true } as any);
-
-            const segs = Array.isArray(t?.transcript) ? t.transcript : [];
-            const hasUser = segs.some((s) => s?.source === 'user');
-
-            // If a take somehow has no user segments (e.g., transcription fallback failed),
-            // coerce remaining text segments to `user` so downstream “Discuss with AI”
-            // still has something to analyze.
-            const normalized = hasUser
-                ? segs
-                : segs.map((s) => ({ ...(s as any), source: 'user', isFinal: true }));
-
-            for (const seg of normalized) out.push(seg as any);
-        }
-        return out;
-    };
 
     const handleSaveSession = async () => {
         setSaveError('');
@@ -2353,12 +2341,9 @@ const ReviewView: React.FC<{
                             {current ? `Transcript — Take ${current.takeNumber}` : 'Transcript'}
                         </div>
                         {hasAnyTakes ? (
-                            <button
-                                onClick={() => onReturnToStudio(buildCombinedTranscript(takes))}
-                                className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-md text-slate-100 text-sm font-semibold transition-colors"
-                            >
-                                Discuss all takes with AI
-                            </button>
+                            <div className="px-3 py-1.5 rounded-md border border-slate-700 bg-slate-900/40 text-slate-300 text-sm font-semibold">
+                                In-page refinement active
+                            </div>
                         ) : null}
                     </div>
 
@@ -2395,7 +2380,7 @@ const ReviewView: React.FC<{
                 </button>
 
                 <button
-                    onClick={() => onReturnToStudio(hasAnyTakes ? buildCombinedTranscript(takes) : undefined)}
+                    onClick={() => onReturnToStudio()}
                     className="w-full md:w-auto flex items-center justify-center gap-2 px-5 py-2.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 font-bold transition-colors"
                 >
                     <BackIcon className="w-5 h-5" />
