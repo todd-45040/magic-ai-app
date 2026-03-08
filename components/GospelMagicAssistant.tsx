@@ -8,6 +8,7 @@ import { GOSPEL_MAGIC_SYSTEM_INSTRUCTION } from '../constants';
 import { WandIcon, SaveIcon, CheckIcon, ShareIcon } from './icons';
 import ShareButton from './ShareButton';
 import { useAppState } from '../store';
+import { trackClientEvent } from '../services/telemetryClient';
 
 interface GospelMagicAssistantProps {
   onIdeaSaved: () => void;
@@ -531,6 +532,19 @@ const buildIdeaVaultMetadataBlock = (
 const GospelMagicAssistant: React.FC<GospelMagicAssistantProps> = ({ onIdeaSaved, onOpenShowPlanner, onOpenLiveRehearsal }) => {
   const { currentUser } = useAppState() as any;
 
+  const trackGospelEvent = (action: string, extras?: { outcome?: 'SUCCESS_NOT_CHARGED' | 'ERROR_UPSTREAM' | 'ALLOWED' | 'SUCCESS_CHARGED'; http_status?: number; error_code?: string; retryable?: boolean; units?: number; metadata?: any }) => {
+    void trackClientEvent({
+      tool: 'gospel_magic',
+      action,
+      outcome: extras?.outcome,
+      http_status: extras?.http_status,
+      error_code: extras?.error_code,
+      retryable: extras?.retryable,
+      units: extras?.units,
+      metadata: extras?.metadata,
+    });
+  };
+
   const [theme, setTheme] = useState('');
   const [passage, setPassage] = useState('');
   const [ministryTone, setMinistryTone] = useState<MinistryTone>('Sunday Service');
@@ -588,6 +602,8 @@ const GospelMagicAssistant: React.FC<GospelMagicAssistantProps> = ({ onIdeaSaved
     const userQuery = passagePart && themePart ? `${passagePart}: ${themePart}` : passagePart || themePart;
     setLastQuery(userQuery);
 
+    trackGospelEvent('gospel_magic_generate_start', { outcome: 'ALLOWED' });
+
     setIsLoading(true);
     setError(null);
     setBlueprint(null);
@@ -639,8 +655,18 @@ ${doctrinalGuardrails}${ministrySensitivityGuardrails}
         currentUser || { email: '', membership: 'free', generationCount: 0, lastResetDate: '' }
       );
 
-      setBlueprint(response as MinistryBlueprint);
+      const nextBlueprint = response as MinistryBlueprint;
+      setBlueprint(nextBlueprint);
+      trackGospelEvent('gospel_magic_generate_success', {
+        outcome: 'SUCCESS_NOT_CHARGED',
+        units: Array.isArray(nextBlueprint?.routine_structure) ? nextBlueprint.routine_structure.length : 0,
+      });
     } catch (err: any) {
+      trackGospelEvent('gospel_magic_generate_error', {
+        outcome: 'ERROR_UPSTREAM',
+        error_code: 'generate_error',
+        retryable: true,
+      });
       setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
       setIsLoading(false);
@@ -650,6 +676,7 @@ ${doctrinalGuardrails}${ministrySensitivityGuardrails}
   };
 
   const handleExampleClick = (exampleQuery: string) => {
+    trackGospelEvent('gospel_magic_example_prompt_used', { outcome: 'ALLOWED' });
     setTheme(exampleQuery);
     setPassage('');
     handleGenerate(exampleQuery);
@@ -678,15 +705,19 @@ ${doctrinalGuardrails}${ministrySensitivityGuardrails}
         stressReport
       );
       await saveIdea({ type: 'text', content: fullContent, title: lastQuery, tags });
+      trackGospelEvent('gospel_magic_save_idea', { outcome: 'SUCCESS_NOT_CHARGED' });
       onIdeaSaved();
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (err) {
+      trackGospelEvent('gospel_magic_save_error', { outcome: 'ERROR_UPSTREAM', error_code: 'save_error', retryable: true });
       console.error('Failed to save Gospel Magic idea', err);
     }
   };
   const handleStressTest = async () => {
     if (!blueprint) return;
+
+    trackGospelEvent('gospel_magic_clarity_review_start', { outcome: 'ALLOWED' });
 
     setIsStressLoading(true);
     setStressError(null);
@@ -740,8 +771,14 @@ ${doctrinalGuardrails}${ministrySensitivityGuardrails}
         currentUser || { email: '', membership: 'free', generationCount: 0, lastResetDate: '' }
       );
 
-      setStressReport(response as StressTestReport);
+      const nextStressReport = response as StressTestReport;
+      setStressReport(nextStressReport);
+      trackGospelEvent('gospel_magic_clarity_review_success', {
+        outcome: 'SUCCESS_NOT_CHARGED',
+        units: Array.isArray(nextStressReport?.persona_results) ? nextStressReport.persona_results.length : 0,
+      });
     } catch (err: any) {
+      trackGospelEvent('gospel_magic_clarity_review_error', { outcome: 'ERROR_UPSTREAM', error_code: 'clarity_review_error', retryable: true });
       setStressError(err instanceof Error ? err.message : 'Unable to run ministry clarity review.');
     } finally {
       setIsStressLoading(false);
@@ -865,8 +902,10 @@ ${doctrinalGuardrails}${ministrySensitivityGuardrails}
 
       await addTasksToShow(show.id, tasks);
       setSendPlannerSuccess(true);
+      trackGospelEvent('gospel_magic_send_to_show_planner', { outcome: 'SUCCESS_NOT_CHARGED', units: tasks.length });
       onOpenShowPlanner?.(show.id, null);
     } catch (err: any) {
+      trackGospelEvent('gospel_magic_send_to_show_planner_error', { outcome: 'ERROR_UPSTREAM', error_code: 'show_planner_error', retryable: true });
       setSendPlannerError(err?.message ? String(err.message) : 'Failed to send to Show Planner.');
     } finally {
       setIsSendingToPlanner(false);
@@ -920,6 +959,7 @@ ${doctrinalGuardrails}${ministrySensitivityGuardrails}
 
       onOpenLiveRehearsal?.();
     } catch (err: any) {
+      trackGospelEvent('gospel_magic_open_live_rehearsal_error', { outcome: 'ERROR_UPSTREAM', error_code: 'live_rehearsal_error', retryable: true });
       setRehearsalError(err?.message ? String(err.message) : 'Failed to prepare rehearsal.');
     } finally {
       setIsPreparingRehearsal(false);
@@ -936,6 +976,8 @@ ${doctrinalGuardrails}${ministrySensitivityGuardrails}
       setPhrasesError('Select at least one phrase type.');
       return;
     }
+
+    trackGospelEvent('gospel_magic_phrase_builder_start', { outcome: 'ALLOWED' });
 
     setIsPhrasesLoading(true);
     setPhrasesError(null);
@@ -982,8 +1024,20 @@ Populate arrays for categories the user selected; for unselected categories, ret
         currentUser || { email: '', membership: 'free', generationCount: 0, lastResetDate: '' }
       );
 
-      setPhrasesResult(response as MinistryPhrasesResult);
+      const nextPhrases = response as MinistryPhrasesResult;
+      setPhrasesResult(nextPhrases);
+      const phraseUnits = [
+        nextPhrases.bridge_phrases,
+        nextPhrases.reflection_questions,
+        nextPhrases.gentle_invitations,
+        nextPhrases.clarity_disclaimers,
+        nextPhrases.encouragement_lines,
+        nextPhrases.scripture_transition_lines,
+        nextPhrases.humble_closing_lines,
+      ].reduce((sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0), 0);
+      trackGospelEvent('gospel_magic_phrase_builder_success', { outcome: 'SUCCESS_NOT_CHARGED', units: phraseUnits });
     } catch (err: any) {
+      trackGospelEvent('gospel_magic_phrase_builder_error', { outcome: 'ERROR_UPSTREAM', error_code: 'phrase_builder_error', retryable: true });
       setPhrasesError(err instanceof Error ? err.message : 'Unable to generate phrases.');
     } finally {
       setIsPhrasesLoading(false);

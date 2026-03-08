@@ -8,6 +8,7 @@ import { WandIcon, SaveIcon, CheckIcon, CopyIcon, ShareIcon, SearchIcon, Lightbu
 import ShareButton from './ShareButton';
 import { CohesionActions } from './CohesionActions';
 import { useAppState } from '../store';
+import { trackClientEvent } from '../services/telemetryClient';
 
 interface MentalismAssistantProps {
     onIdeaSaved: () => void;
@@ -551,6 +552,19 @@ const MentalismAssistant: React.FC<MentalismAssistantProps> = ({ onIdeaSaved, on
     const appState = useAppState() as any;
     const { currentUser, ideas } = appState;
 
+    const trackMentalismEvent = (action: string, extras?: { outcome?: 'SUCCESS_NOT_CHARGED' | 'ERROR_UPSTREAM' | 'ALLOWED' | 'SUCCESS_CHARGED'; http_status?: number; error_code?: string; retryable?: boolean; units?: number; metadata?: any }) => {
+        void trackClientEvent({
+            tool: 'mentalism_assistant',
+            action,
+            outcome: extras?.outcome,
+            http_status: extras?.http_status,
+            error_code: extras?.error_code,
+            retryable: extras?.retryable,
+            units: extras?.units,
+            metadata: extras?.metadata,
+        });
+    };
+
     const [query, setQuery] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -786,6 +800,8 @@ const MentalismAssistant: React.FC<MentalismAssistantProps> = ({ onIdeaSaved, on
             return;
         }
 
+        trackMentalismEvent('mentalism_generate_start', { outcome: 'ALLOWED' });
+
         setIsLoading(true);
         setError(null);
         setBlueprint(null);
@@ -893,7 +909,12 @@ Output guidelines:
                 throw new Error('The AI returned an empty blueprint. Please try again with a bit more context (venue, audience, effect type).');
             }
             setBlueprint(next);
+            trackMentalismEvent('mentalism_generate_success', {
+                outcome: 'SUCCESS_NOT_CHARGED',
+                units: Array.isArray(next?.phase_structure) ? next.phase_structure.length : 0,
+            });
         } catch (err) {
+            trackMentalismEvent('mentalism_generate_error', { outcome: 'ERROR_UPSTREAM', error_code: 'generate_error', retryable: true });
             setError(err instanceof Error ? err.message : 'An unknown error occurred.');
         } finally {
             setIsLoading(false);
@@ -901,11 +922,13 @@ Output guidelines:
     };
 
     const handleExampleClick = (exampleQuery: string) => {
+        trackMentalismEvent('mentalism_example_prompt_used', { outcome: 'ALLOWED' });
         setQuery(exampleQuery);
         handleGenerate(exampleQuery);
     };
 
     const handleWowDemo = () => {
+        trackMentalismEvent('mentalism_wow_demo_used', { outcome: 'ALLOWED' });
         setQuery(WOW_DEMO_PROMPT);
         setRoutineDepth('full');
         setPerformanceEnvironment('Close-up');
@@ -928,6 +951,8 @@ Output guidelines:
         if (!blueprint) return;
 
         const currentQuery = String(query || '').trim() || 'Mentalism routine';
+        trackMentalismEvent('mentalism_alternate_method_start', { outcome: 'ALLOWED' });
+
         setIsGeneratingAlternateMethod(true);
         setAlternateMethodError(null);
         setAlternateMethodStatus('idle');
@@ -1004,7 +1029,12 @@ Instructions:
                 };
             });
             setAlternateMethodStatus('done');
+            trackMentalismEvent('mentalism_alternate_method_success', {
+                outcome: 'SUCCESS_NOT_CHARGED',
+                units: Array.isArray(raw?.method_concepts) ? raw.method_concepts.length : 0,
+            });
         } catch (err) {
+            trackMentalismEvent('mentalism_alternate_method_error', { outcome: 'ERROR_UPSTREAM', error_code: 'alternate_method_error', retryable: true });
             setAlternateMethodError(err instanceof Error ? err.message : 'Unable to generate an alternate method right now.');
         } finally {
             setIsGeneratingAlternateMethod(false);
@@ -1015,6 +1045,7 @@ Instructions:
         if (!blueprint) return;
         const fullContent = blueprintToText(query, blueprint);
         saveIdea('text', fullContent, `Mentalism Blueprint — ${query}`, ['mentalism', 'blueprint', 'mentalism-blueprint']);
+        trackMentalismEvent('mentalism_save_blueprint', { outcome: 'SUCCESS_NOT_CHARGED' });
         onIdeaSaved();
         setSaveStatus('saved');
         setTimeout(() => setSaveStatus('idle'), 2000);
@@ -1034,6 +1065,7 @@ Instructions:
                 window.sessionStorage.setItem('maw-director-mode-seed', blueprintToText(query, blueprint));
             } catch {}
         }
+        trackMentalismEvent('mentalism_send_to_director_mode', { outcome: 'SUCCESS_NOT_CHARGED' });
         onOpenDirectorMode?.();
     };
 
@@ -1057,6 +1089,8 @@ Instructions:
 
     const handleStressTest = async () => {
         if (!blueprint) return;
+        trackMentalismEvent('mentalism_stress_test_start', { outcome: 'ALLOWED' });
+
         setIsStressTesting(true);
         setStressError(null);
         setStressReport(null);
@@ -1105,7 +1139,12 @@ Output requirements:
                 throw new Error('The AI returned an empty stress test report. Try again or add more context to the routine.');
             }
             setStressReport(next);
+            trackMentalismEvent('mentalism_stress_test_success', {
+                outcome: 'SUCCESS_NOT_CHARGED',
+                units: Array.isArray(next?.persona_reports) ? next.persona_reports.length : (Array.isArray(next?.suspicion_points) ? next.suspicion_points.length : 0),
+            });
         } catch (err) {
+            trackMentalismEvent('mentalism_stress_test_error', { outcome: 'ERROR_UPSTREAM', error_code: 'stress_test_error', retryable: true });
             setStressError(err instanceof Error ? err.message : 'An unknown error occurred.');
         } finally {
             setIsStressTesting(false);
@@ -1286,8 +1325,10 @@ Output requirements:
                 })
             );
 
+            trackMentalismEvent('mentalism_open_live_rehearsal', { outcome: 'SUCCESS_NOT_CHARGED' });
             onOpenLiveRehearsal?.();
         } catch (e: any) {
+            trackMentalismEvent('mentalism_open_live_rehearsal_error', { outcome: 'ERROR_UPSTREAM', error_code: 'live_rehearsal_error', retryable: true });
             setRehearsalPrepError(String(e?.message ?? e ?? 'Failed to prepare rehearsal preload.'));
         } finally {
             setIsPreparingRehearsal(false);
@@ -1307,6 +1348,8 @@ Output requirements:
             setPhraseError('Select at least one phrase type.');
             return;
         }
+
+        trackMentalismEvent('mentalism_phrase_builder_start', { outcome: 'ALLOWED' });
 
         setIsPhraseLoading(true);
         setPhraseError(null);
@@ -1365,7 +1408,9 @@ Output guidelines:
 
             if (!total) throw new Error('No phrases were generated. Try widening the topic or selecting more categories.');
             setPhrases(next);
+            trackMentalismEvent('mentalism_phrase_builder_success', { outcome: 'SUCCESS_NOT_CHARGED', units: total });
         } catch (err) {
+            trackMentalismEvent('mentalism_phrase_builder_error', { outcome: 'ERROR_UPSTREAM', error_code: 'phrase_builder_error', retryable: true });
             setPhraseError(err instanceof Error ? err.message : 'An unknown error occurred.');
         } finally {
             setIsPhraseLoading(false);
