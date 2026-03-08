@@ -32,6 +32,20 @@ export type ClientTelemetryAction =
   | 'angle_risk_analysis_saved'
   | 'angle_risk_send_to_director'
   | 'angle_risk_send_to_rehearsal'
+  | 'live_rehearsal_session_start'
+  | 'live_rehearsal_session_error'
+  | 'live_rehearsal_start_blocked'
+  | 'live_rehearsal_take_complete'
+  | 'live_rehearsal_demo_loaded'
+  | 'live_rehearsal_demo_review'
+  | 'live_rehearsal_analyze_click'
+  | 'live_rehearsal_session_saved'
+  | 'live_rehearsal_next_take'
+  | 'live_rehearsal_take_selected'
+  | 'live_rehearsal_send_to_angle_risk'
+  | 'live_rehearsal_send_to_patter'
+  | 'live_rehearsal_send_to_director'
+  | 'live_rehearsal_save_routine'
 ;
 
 export async function trackClientEvent(input: {

@@ -12,6 +12,7 @@ import { MAGICIAN_LIVE_REHEARSAL_SYSTEM_INSTRUCTION, LIVE_REHEARSAL_TOOLS } from
 import { BackIcon, MicrophoneIcon, StopIcon, SaveIcon, WandIcon, TrashIcon, TimerIcon, ChevronDownIcon, CheckIcon, LightbulbIcon } from './icons';
 import BlockedPanel from './BlockedPanel';
 import { normalizeBlockedUx, type BlockedUx } from '../services/blockedUx';
+import { trackClientEvent } from '../services/telemetryClient';
 
 // ---- Debug instrumentation (enabled via ?debugRehearsal=1 or localStorage MAW_DEBUG_REHEARSAL=1) ----
 type DebugEvent = { ts: number; event: string; data?: any };
@@ -535,6 +536,19 @@ const buildCoachingFollowUp = ({
     };
 };
 
+const trackLiveRehearsalEvent = (action: string, metadata?: Record<string, any>, extra?: Partial<{ outcome: 'SUCCESS_NOT_CHARGED' | 'ERROR_UPSTREAM' | 'ALLOWED' | 'SUCCESS_CHARGED'; http_status: number; error_code: string; retryable: boolean; units: number; }>) => {
+    void trackClientEvent({
+        tool: 'live_rehearsal',
+        action,
+        metadata,
+        outcome: extra?.outcome,
+        http_status: extra?.http_status,
+        error_code: extra?.error_code,
+        retryable: extra?.retryable,
+        units: extra?.units,
+    });
+};
+
 const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => void }> = ({ user, onReturnToStudio, onIdeaSaved, onOpenAngleRisk, onOpenPatterEngine, onOpenDirectorMode, onRequestUpgrade }) => {
     const [view, setView] = useState<'idle' | 'rehearsing' | 'reviewing'>('idle');
     const [status, setStatus] = useState<'idle' | 'connecting' | 'listening' | 'error'>('idle');
@@ -902,6 +916,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 setErrorMessage(
                     `Daily live rehearsal minutes limit reached (${Number(daily.used ?? 0)}/${Number(daily.limit ?? 0)} min). This is separate from the AI message limit. Upgrade to continue.`
                 );
+                trackLiveRehearsalEvent('live_rehearsal_start_blocked', { source: 'server', used: Number(daily.used ?? 0), limit: Number(daily.limit ?? 0) }, { outcome: 'ERROR_UPSTREAM', http_status: 429, error_code: 'quota_exceeded', retryable: false });
                 return;
             }
         } catch {
@@ -921,6 +936,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                     setErrorMessage(
                         `Daily live rehearsal minutes limit reached (${cur.used}/${cur.limit} min). This is separate from the AI message limit. Upgrade to continue.`
                     );
+                    trackLiveRehearsalEvent('live_rehearsal_start_blocked', { source: 'local', used: Number(cur.used ?? 0), limit: Number(cur.limit ?? 0) }, { outcome: 'ERROR_UPSTREAM', http_status: 429, error_code: 'quota_exceeded', retryable: false });
                     return;
                 }
             } catch {
@@ -1061,6 +1077,10 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
 
                         setStatus('listening');
                         setView('rehearsing');
+                        trackLiveRehearsalEvent('live_rehearsal_session_start', {
+                            mode: 'live',
+                            daily_remaining: dailyLiveStartRemainingRef.current,
+                        }, { outcome: 'ALLOWED' });
 
                         // Start usage timer
                         sessionStartRef.current = Date.now();
@@ -1084,6 +1104,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                         errorOccurred.current = true;
                         setErrorMessage('A live session error occurred. The connection may have been interrupted.');
                         await safeCleanupSession();
+                        trackLiveRehearsalEvent('live_rehearsal_session_error', { phase: 'live_session', has_transcript: transcriptionHistoryRef.current.length > 0 }, { outcome: 'ERROR_UPSTREAM', error_code: 'live_session_error', retryable: true });
                         setStatus('error');
                         setView(transcriptionHistoryRef.current.length > 0 ? 'rehearsing' : 'idle');
                     },
@@ -1132,6 +1153,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             } else {
                 setErrorMessage('Live session failed to initialize. Please try again in a moment.');
             }
+            trackLiveRehearsalEvent('live_rehearsal_session_error', { phase: 'session_start', error_name: errorName || 'unknown' }, { outcome: 'ERROR_UPSTREAM', error_code: errorName || 'live_start_failed', retryable: true });
             await safeCleanupSession();
             setStatus('error');
             setView('idle');
@@ -1412,6 +1434,17 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             setCurrentMarkers([]);
         }
 
+        const completedTake = takesRef.current[takesRef.current.length - 1];
+        trackLiveRehearsalEvent('live_rehearsal_take_complete', {
+            mode: isDemoTranscript(completedTake?.transcript) ? 'demo' : 'live',
+            take_number: completedTake?.takeNumber ?? takesRef.current.length,
+            markers: Array.isArray(completedTake?.markers) ? completedTake.markers.length : 0,
+            transcript_chars: buildTakeTranscriptText(completedTake).length,
+        }, {
+            outcome: 'SUCCESS_NOT_CHARGED',
+            units: completedTake?.startedAt && completedTake?.endedAt ? Math.max(1, Math.round((completedTake.endedAt - completedTake.startedAt) / 1000)) : undefined,
+        });
+
         await safeCleanupSession();
         openReviewForTake(Math.max(0, takesRef.current.length - 1));
     };
@@ -1427,6 +1460,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
     };
 
     const loadDemoScriptIntoStudio = () => {
+        trackLiveRehearsalEvent('live_rehearsal_demo_loaded', { mode: 'demo' }, { outcome: 'SUCCESS_NOT_CHARGED' });
         const startedAt = Date.now() - (DEMO_DURATION_SECONDS * 1000);
         const markers = buildDemoMarkers(startedAt);
         setDemoScript(DEMO_SCRIPT);
@@ -1499,17 +1533,21 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
     };
 
     const handleRunDemoReview = () => {
+        trackLiveRehearsalEvent('live_rehearsal_demo_review', { mode: 'demo' }, { outcome: 'SUCCESS_NOT_CHARGED' });
         injectDemoTake(false);
         openReviewForTake(0);
     };
 
     const handleAnalyzeDemoTake = () => {
+        trackLiveRehearsalEvent('live_rehearsal_analyze_click', { mode: 'demo', selected_take: 1 }, { outcome: 'SUCCESS_NOT_CHARGED' });
         injectDemoTake(true);
         openReviewForTake(0);
     };
 
     const handleAnalyzeCurrentTake = () => {
         const activeIndex = Math.max(0, Math.min(selectedTakeRef.current, Math.max(0, takesRef.current.length - 1)));
+        const activeTake = takesRef.current[activeIndex];
+        trackLiveRehearsalEvent('live_rehearsal_analyze_click', { mode: isDemoTranscript(activeTake?.transcript) ? 'demo' : 'live', selected_take: activeIndex + 1 }, { outcome: 'SUCCESS_NOT_CHARGED' });
         openReviewForTake(activeIndex);
     };
 
@@ -2171,6 +2209,7 @@ const ReviewView: React.FC<{
                 // ignore
             }
 
+            trackLiveRehearsalEvent('live_rehearsal_session_saved', { takes: takes?.length ?? 0, session_title: sessionTitle || 'untitled' }, { outcome: 'SUCCESS_NOT_CHARGED' });
             setSaveSuccess('Saved successfully. You can start another take or continue refining your notes.');
         } catch (err: any) {
             setSaveError(String(err?.message || err || 'Failed to save rehearsal session.'));
@@ -2185,6 +2224,7 @@ const ReviewView: React.FC<{
         if (!current) return;
         try {
             localStorage.setItem('maw_angle_risk_prefill_v1', JSON.stringify(buildAngleRiskPrefill(current, sessionTitle, sessionNotes)));
+            trackLiveRehearsalEvent('live_rehearsal_send_to_angle_risk', { selected_take: current?.takeNumber ?? null }, { outcome: 'SUCCESS_NOT_CHARGED' });
             setIntegrationMessage('Sent to Angle & Risk. Your latest rehearsal transcript is ready as context.');
             onOpenAngleRisk?.();
         } catch (err: any) {
@@ -2196,6 +2236,7 @@ const ReviewView: React.FC<{
         if (!current) return;
         try {
             localStorage.setItem('maw_patter_engine_prefill_v1', JSON.stringify(buildPatterPrefill(current, sessionTitle, sessionNotes)));
+            trackLiveRehearsalEvent('live_rehearsal_send_to_patter', { selected_take: current?.takeNumber ?? null }, { outcome: 'SUCCESS_NOT_CHARGED' });
             setIntegrationMessage('Sent to Patter Engine. The rehearsal transcript has been loaded for script refinement.');
             onOpenPatterEngine?.();
         } catch (err: any) {
@@ -2207,6 +2248,7 @@ const ReviewView: React.FC<{
         if (!current) return;
         try {
             localStorage.setItem('maw_director_mode_prefill_v1', JSON.stringify(buildDirectorPrefill(current, sessionTitle, sessionNotes)));
+            trackLiveRehearsalEvent('live_rehearsal_send_to_director', { selected_take: current?.takeNumber ?? null }, { outcome: 'SUCCESS_NOT_CHARGED' });
             setIntegrationMessage('Sent to Director Mode. The current take is ready for show-level evaluation.');
             onOpenDirectorMode?.();
         } catch (err: any) {
@@ -2248,6 +2290,7 @@ const ReviewView: React.FC<{
         setIsSavingRoutine(true);
         try {
             await saveIdea(buildRoutineIdeaPayload(current, sessionTitle, sessionNotes));
+            trackLiveRehearsalEvent('live_rehearsal_save_routine', { selected_take: current?.takeNumber ?? null }, { outcome: 'SUCCESS_NOT_CHARGED' });
             setIntegrationMessage('Routine saved to Idea Vault.');
             try { onIdeaSaved(); } catch {}
         } catch (err: any) {
@@ -2462,7 +2505,7 @@ const ReviewView: React.FC<{
                             <div className="text-xs text-slate-400">Record multiple takes in one session (Take 1, Take 2, Take 3…)</div>
                         </div>
                         <button
-                            onClick={onStartNewTake}
+                            onClick={() => { trackLiveRehearsalEvent('live_rehearsal_next_take', { current_take_count: takes?.length ?? 0 }, { outcome: 'SUCCESS_NOT_CHARGED' }); onStartNewTake(); }}
                             className="px-3 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white text-sm font-semibold transition-colors"
                         >
                             Start Next Take
@@ -2473,7 +2516,7 @@ const ReviewView: React.FC<{
                         {(takes ?? []).map((t, idx) => (
                             <button
                                 key={t.takeNumber}
-                                onClick={() => onSelectTake(idx)}
+                                onClick={() => { trackLiveRehearsalEvent('live_rehearsal_take_selected', { selected_take: idx + 1 }, { outcome: 'SUCCESS_NOT_CHARGED' }); onSelectTake(idx); }}
                                 className={`px-3 py-1.5 rounded-full text-sm font-semibold border transition-colors ${
                                     idx === selectedTake
                                         ? 'bg-[#7c3aed] border-purple-400/80 text-white shadow-[0_0_8px_rgba(124,58,237,.4)]'
