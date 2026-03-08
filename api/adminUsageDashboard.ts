@@ -1,6 +1,16 @@
 import { requireSupabaseAuth } from './_auth.js';
 import { ADMIN_WINDOW_OPTIONS_DAYS, adminWindowLabel, isoDaysAgo, parseAdminWindowDays, ymdDaysAgo } from './_adminWindow.js';
 
+
+function canonicalizeTool(raw: any): string {
+  const s = String(raw || '').trim();
+  if (!s) return 'unknown';
+  const lower = s.toLowerCase();
+  if (lower === 'angle-risk' || lower === 'angle_risk') return 'angle_risk';
+  if (lower === 'identifytrick' || lower === 'identify_trick') return 'identify_trick';
+  return lower;
+}
+
 export default async function handler(req: any, res: any) {
   try {
     const auth = await requireSupabaseAuth(req);
@@ -59,7 +69,7 @@ export default async function handler(req: any, res: any) {
       totals2.byStatus['429'] = s429;
 
       for (const r of rollups) {
-        const t = String(r.tool || 'unknown');
+        const t = canonicalizeTool(r.tool);
         totals2.byTool[t] = (totals2.byTool[t] || 0) + (Number(r.total_events) || 0);
         const m = String(r.membership || 'unknown');
         totals2.byMembership[m] = (totals2.byMembership[m] || 0) + (Number(r.total_events) || 0);
@@ -80,7 +90,7 @@ export default async function handler(req: any, res: any) {
     for (const e of events || []) {
       const s = String(e.http_status ?? 'NA');
       totals.byStatus[s] = (totals.byStatus[s] || 0) + 1;
-      const t = String(e.tool || 'unknown');
+      const t = canonicalizeTool(e.tool);
       totals.byTool[t] = (totals.byTool[t] || 0) + 1;
       const m = String(e.membership || 'unknown');
       totals.byMembership[m] = (totals.byMembership[m] || 0) + 1;

@@ -39,48 +39,6 @@ const DEFAULT_ROUTINE_STEPS = [
   'Cleanup / reset',
 ];
 
-const DEMO_PRESETS = {
-  zombieBall: {
-    label: 'Zombie Ball',
-    routineName: 'Zombie Ball',
-    mode: 'Parlor' as PerformanceMode,
-    setup: 'Seated (front)' as AudienceSetup,
-    venueType: 'Parlor room' as VenueType,
-    lighting: 'Mixed / uneven' as LightingType,
-    audienceDistance: '3–10 ft' as AudienceDistance,
-    keyMoments: ['Load', 'Secret action', 'Reset'],
-    propsText: 'Floating sphere, foulard cloth, side table, limited backstage space.',
-    routineSteps: ['Introduction with cloth display', 'Secret setup under the foulard', 'Floating sequence and audience focus shifts', 'Reveal and applause cue', 'Cleanup and reset before next piece'].join('\n'),
-    focusText: 'Watch right-side exposure during the float, posture tells during the secret setup, and reset safety between routines.',
-  },
-  cardToWallet: {
-    label: 'Card to Wallet',
-    routineName: 'Signed Card to Wallet',
-    mode: 'Close-up' as PerformanceMode,
-    setup: 'Standing (close-up)' as AudienceSetup,
-    venueType: 'Walk-around floor' as VenueType,
-    lighting: 'Bright / direct' as LightingType,
-    audienceDistance: '1–3 ft' as AudienceDistance,
-    keyMoments: ['Load', 'Ditch', 'Secret action'],
-    propsText: 'Signed card, loading wallet, jacket pockets, cocktail-hour crowd moving around the performer.',
-    routineSteps: ['Introduce signed card premise', 'Control card and manage spectator focus', 'Load card into wallet under cover of gesture', 'Reveal wallet location and open it clearly', 'Reset deck and wallet for next group'].join('\n'),
-    focusText: 'Check jacket-side exposure during the load, pocket management in walk-around conditions, and body turn during the reveal.',
-  },
-  spoonBend: {
-    label: 'Spoon Bend',
-    routineName: 'Interactive Spoon Bend',
-    mode: 'Parlor' as PerformanceMode,
-    setup: 'Seated (front)' as AudienceSetup,
-    venueType: 'Street / outdoor' as VenueType,
-    lighting: 'Bright / direct' as LightingType,
-    audienceDistance: '3–10 ft' as AudienceDistance,
-    keyMoments: ['Secret action', 'Volunteer management', 'Reset'],
-    propsText: 'Metal spoon, audience volunteer on one side, unpredictable outdoor lighting and spectator drift.',
-    routineSteps: ['Build belief and frame the object', 'Place volunteer attention on the spoon', 'Execute secret bend timing under eye contact cue', 'Reveal bend progressively', 'Clear hands and reset while managing follow-up examination'].join('\n'),
-    focusText: 'Test side-angle safety during the bend, volunteer eye-line control, and how to reset without broadcasting the method moment.',
-  },
-} as const;
-
 type Props = {
   user: User;
   onIdeaSaved?: () => void;
@@ -148,9 +106,6 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved, onDeepLinkShowPla
       questions: findSection('questions', 'refine'),
       critical: findSection('critical', 'exposure'),
       coaching: findSection('professional', 'coaching'),
-      spectator: findSection('spectator', 'view') ?? findSection('spectator'),
-      resetVulnerability: findSection('reset', 'vulnerability'),
-      summary: findSection('exposure', 'probability', 'summary') ?? findSection('summary'),
     };
   }, [analysis]);
 
@@ -437,7 +392,7 @@ const togglePanel = (key: PanelKey) => {
         tags: normalizedTags,
       } as any);
       toast.showToast('Saved to My Ideas', 'success');
-      void trackClientEvent({ tool: 'angle-risk', action: 'angle_risk_analysis_saved', metadata: { routineName: routineName.trim(), mode, setup } });
+      void trackClientEvent({ tool: 'angle_risk', action: 'angle_risk_analysis_saved', metadata: { routineName: routineName.trim(), mode, setup } });
       onIdeaSaved?.();
     } catch (e) {
       console.error(e);
@@ -510,15 +465,15 @@ ${routineSteps.trim()}` : null,
       `11) Questions to refine this analysis (3–6 targeted questions)`,
     ].filter(Boolean).join('\n');
 
-    void trackClientEvent({ tool: 'angle-risk', action: 'angle_risk_analysis_start', metadata: { routineName: routineName.trim(), mode, setup, venueType, lighting, audienceDistance, keyMoments, focusLength: focusToUse.length } });
+    void trackClientEvent({ tool: 'angle_risk', action: 'angle_risk_analysis_start', metadata: { routineName: routineName.trim(), mode, setup, venueType, lighting, audienceDistance, keyMoments, focusLength: focusToUse.length } });
 
     try {
       const text = await generateResponse(prompt, ANGLE_RISK_ANALYSIS_SYSTEM_INSTRUCTION, user);
       setAnalysis(text);
-      void trackClientEvent({ tool: 'angle-risk', action: 'angle_risk_analysis_success', metadata: { routineName: routineName.trim(), mode, setup } });
+      void trackClientEvent({ tool: 'angle_risk', action: 'angle_risk_analysis_success', metadata: { routineName: routineName.trim(), mode, setup } });
     } catch (e: any) {
       console.error(e);
-      void trackClientEvent({ tool: 'angle-risk', action: 'angle_risk_analysis_error', metadata: { routineName: routineName.trim(), mode, setup, message: e?.message || 'unknown error' }, outcome: 'ERROR_UPSTREAM', error_code: 'ANGLE_RISK_ANALYSIS_ERROR' });
+      void trackClientEvent({ tool: 'angle_risk', action: 'angle_risk_analysis_error', metadata: { routineName: routineName.trim(), mode, setup, message: e?.message || 'unknown error' }, outcome: 'ERROR_UPSTREAM', error_code: 'ANGLE_RISK_ANALYSIS_ERROR' });
       toast.showToast('Angle/Risk analysis failed. Please try again.', 'error');
     } finally {
       setIsLoading(false);
@@ -595,85 +550,19 @@ ${routineSteps.trim()}` : null,
     }
   };
 
-  const loadDemoPreset = (presetKey: keyof typeof DEMO_PRESETS = 'zombieBall') => {
-    const preset = DEMO_PRESETS[presetKey];
-    setRoutineName(preset.routineName);
-    setMode(preset.mode);
-    setSetup(preset.setup);
-    setVenueType(preset.venueType);
-    setLighting(preset.lighting);
-    setAudienceDistance(preset.audienceDistance);
-    setKeyMoments([...preset.keyMoments]);
-    setPropsText(preset.propsText);
-    setRoutineSteps(preset.routineSteps);
-    setFocusText(preset.focusText);
-    toast.showToast(`${preset.label} demo routine loaded`, 'success');
+  const loadDemoPreset = () => {
+    setRoutineName('Zombie Ball');
+    setMode('Parlor');
+    setSetup('Seated (front)');
+    setVenueType('Parlor room');
+    setLighting('Mixed / uneven');
+    setAudienceDistance('3–10 ft');
+    setKeyMoments(['Load', 'Secret action', 'Reset']);
+    setPropsText('Floating sphere, foulard cloth, side table, limited backstage space.');
+    setRoutineSteps(['Introduction with cloth display', 'Secret setup under the foulard', 'Floating sequence and audience focus shifts', 'Reveal and applause cue', 'Cleanup and reset before next piece'].join('\n'));
+    setFocusText('Watch right-side exposure during the float, posture tells during the secret setup, and reset safety between routines.');
+    toast.showToast('Demo routine loaded', 'success');
     setTimeout(() => routineNameRef.current?.focus(), 0);
-  };
-
-  const buildAngleRiskAnalysisText = () => {
-    const sections = [
-      `Routine: ${routineName.trim() || 'Routine'}`,
-      `Mode: ${mode}`,
-      `Audience setup: ${setup}`,
-      `Venue: ${venueType}`,
-      `Lighting: ${lighting}`,
-      `Audience distance: ${audienceDistance}`,
-      keyMoments.length ? `Key moments: ${keyMoments.join(', ')}` : '',
-      focusText.trim() ? `Focus areas:\n${focusText.trim()}` : '',
-      routineSteps.trim() ? `Routine phases:\n${routineSteps.trim()}` : '',
-      propsText.trim() ? `Props / setup notes:\n${propsText.trim()}` : '',
-      analysis.trim() ? `Analysis:\n${analysis.trim()}` : '',
-    ].filter(Boolean);
-    return sections.join('\n\n');
-  };
-
-  const handleSaveAnalysis = async () => {
-    await handleSaveIdea();
-  };
-
-  const handleSendToDirectorMode = () => {
-    if (!analysis.trim()) return;
-    try {
-      if (typeof window !== 'undefined') {
-        window.sessionStorage.setItem('maw-director-mode-seed', buildAngleRiskAnalysisText());
-      }
-      void trackClientEvent({ tool: 'angle-risk', action: 'angle_risk_send_to_director', metadata: { routineName: routineName.trim(), mode, setup } });
-      toast.showToast('Angle/Risk notes sent to Director Mode', 'success');
-      onNavigate?.('director-mode' as any);
-    } catch (e) {
-      console.error(e);
-      toast.showToast('Could not send to Director Mode.', 'error');
-    }
-  };
-
-  const handleSendToRehearsalPlan = () => {
-    if (!analysis.trim()) return;
-    try {
-      if (typeof window !== 'undefined') {
-        const payload = {
-          version: 1,
-          title: routineName.trim() ? `${routineName.trim()} — Angle/Risk Rehearsal` : 'Angle/Risk Rehearsal',
-          notes: [
-            `Use this rehearsal session to reduce exposure risk for ${routineName.trim() || 'this routine'}.`,
-            '',
-            'Priority rehearsal tasks:',
-            ...(criticalExposurePoints.length ? criticalExposurePoints.map((item, idx) => `${idx + 1}. ${item}`) : []),
-            ...(coachingNotes.length ? ['', 'Coaching notes:', ...coachingNotes.map((item, idx) => `- ${item}`)] : []),
-            '',
-            'Full analysis:',
-            buildAngleRiskAnalysisText(),
-          ].filter(Boolean).join('\n'),
-        };
-        window.localStorage.setItem('maw_live_rehearsal_prefill_v1', JSON.stringify(payload));
-      }
-      void trackClientEvent({ tool: 'angle-risk', action: 'angle_risk_send_to_rehearsal', metadata: { routineName: routineName.trim(), mode, setup } });
-      toast.showToast('Angle/Risk notes sent to Live Rehearsal', 'success');
-      onNavigate?.('live-rehearsal' as any);
-    } catch (e) {
-      console.error(e);
-      toast.showToast('Could not prepare rehearsal plan.', 'error');
-    }
   };
 
   const handleStartOver = () => {
@@ -711,21 +600,11 @@ ${routineSteps.trim()}` : null,
           <div className="mt-4 flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => loadDemoPreset('zombieBall')}
+              onClick={loadDemoPreset}
               className="rounded-full border border-purple-400/30 bg-purple-500/10 px-3 py-1.5 text-xs font-semibold text-purple-100 hover:bg-purple-500/20"
             >
               Load Demo Routine
             </button>
-            {(Object.entries(DEMO_PRESETS) as Array<[keyof typeof DEMO_PRESETS, typeof DEMO_PRESETS[keyof typeof DEMO_PRESETS]]>).map(([key, preset]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => loadDemoPreset(key)}
-                className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-semibold text-white/75 hover:bg-white/[0.06]"
-              >
-                {preset.label}
-              </button>
-            ))}
           </div>
 
           <div className="mt-5 space-y-4">
@@ -1159,28 +1038,28 @@ ${routineSteps.trim()}` : null,
               <div className="mt-4 rounded-xl border border-white/10 bg-black/10 p-3">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                   <div className="flex-1">
-                    <p className="text-xs font-semibold tracking-wide text-white/60">Workflow Actions</p>
+                    <p className="text-xs font-semibold tracking-wide text-white/60">Next Steps</p>
                     <div className="mt-2 flex flex-wrap gap-2">
                       <button
-                        onClick={handleSaveAnalysis}
+                        onClick={handleSaveToShowPlanner}
                         className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-3 py-2 text-xs font-semibold text-white hover:bg-purple-700"
                       >
                         <SaveIcon className="h-4 w-4" />
-                        Save Analysis
+                        Save to Show Planner
                       </button>
                       <button
-                        onClick={handleSendToDirectorMode}
+                        onClick={handleRefineWithAI}
                         className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-white/85 hover:bg-white/[0.07]"
                       >
                         <WandIcon className="h-4 w-4" />
-                        Send to Director Mode
+                        Refine with AI
                       </button>
                       <button
-                        onClick={handleSendToRehearsalPlan}
+                        onClick={handleRunVideoRehearsal}
                         className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-white/85 hover:bg-white/[0.07]"
                       >
                         <VideoIcon className="h-4 w-4" />
-                        Send to Rehearsal Plan
+                        Run Video Rehearsal
                       </button>
                     </div>
                   </div>
@@ -1189,25 +1068,11 @@ ${routineSteps.trim()}` : null,
                     <p className="text-xs font-semibold tracking-wide text-white/50">Utilities</p>
                     <div className="mt-2 flex flex-wrap gap-2 lg:justify-end">
                       <button
-                        onClick={handleSaveToShowPlanner}
+                        onClick={handleSaveIdea}
                         className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs font-semibold text-white/70 hover:bg-white/[0.05]"
                       >
                         <SaveIcon className="h-4 w-4" />
-                        Save to Show Planner
-                      </button>
-                      <button
-                        onClick={handleRefineWithAI}
-                        className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs font-semibold text-white/70 hover:bg-white/[0.05]"
-                      >
-                        <WandIcon className="h-4 w-4" />
-                        Refine with AI
-                      </button>
-                      <button
-                        onClick={handleRunVideoRehearsal}
-                        className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs font-semibold text-white/70 hover:bg-white/[0.05]"
-                      >
-                        <VideoIcon className="h-4 w-4" />
-                        Run Video Rehearsal
+                        Save Idea
                       </button>
                       <button
                         onClick={handleShare}

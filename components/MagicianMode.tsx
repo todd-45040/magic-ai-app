@@ -2883,7 +2883,7 @@ ${action.payload.content}`;
             />
           );
         case 'video-rehearsal': return <VideoRehearsal onIdeaSaved={() => handleIdeaSaved('Video analysis saved!')} user={user} />;
-        case 'angle-risk': return <AngleRiskAnalysis user={user} onIdeaSaved={() => handleIdeaSaved('Angle/Risk analysis saved!')} onNavigate={handleNavigate as any} onDeepLinkShowPlanner={(showId) => handleDeepLink('show-planner', showId)} onAiSpark={handleAiSpark} />;
+        case 'angle-risk': return <AngleRiskAnalysis user={user} onIdeaSaved={() => handleIdeaSaved('Angle/Risk analysis saved!')} />;
         case 'visual-brainstorm': return <VisualBrainstorm onIdeaSaved={() => handleIdeaSaved('Image idea saved!')} user={user} />;
         case 'saved-ideas': return <SavedIdeas onAiSpark={handleAiSpark} initialIdeaId={initialIdeaId || undefined} />;
         case 'prop-checklists': return <PropChecklists user={user} onIdeaSaved={() => handleIdeaSaved('Checklist saved!')} onNavigateShowPlanner={() => setActiveView('show-planner')} />;

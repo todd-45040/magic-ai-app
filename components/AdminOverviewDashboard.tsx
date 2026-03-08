@@ -1051,6 +1051,53 @@ const kUsers = data?.users || {};
       </div>
 
 
+      {/* Angle & Risk — Health (24h) + KPIs (7d) */}
+      <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-sm opacity-80">Angle &amp; Risk Health</div>
+          <div className="text-[11px] text-white/50">24h health + 7d KPIs</div>
+        </div>
+
+        {(() => {
+          const arH = (data as any)?.angle_risk_health_24h;
+          const arK = (data as any)?.angle_risk_kpis;
+          if (!arH && !arK) return <div className="mt-2 text-sm text-white/60">—</div>;
+
+          return (
+            <div className="mt-3 grid grid-cols-1 md:grid-cols-4 gap-3">
+              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                <div className="text-xs text-white/60">Requests (24h)</div>
+                <div className="text-xl font-bold text-white">{Number(arH?.requests || 0)}</div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                <div className="text-xs text-white/60">Success % (24h)</div>
+                <div className="text-xl font-bold text-white">{pct(arH?.success_rate, 0)}</div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                <div className="text-xs text-white/60">Last error</div>
+                <div className="text-[12px] text-white/80 mt-1">
+                  {arH?.last_error ? `${String(arH.last_error.error_code || 'ERROR')} · ${String(arH.last_error.created_at || '').slice(0, 19).replace('T', ' ')}` : '—'}
+                </div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                <div className="text-xs text-white/60">Save rate (7d)</div>
+                <div className="text-xl font-bold text-white">{pct(arK?.save_rate, 0)}</div>
+              </div>
+
+              {arK && (
+                <div className="md:col-span-4 text-[11px] text-white/50 flex flex-wrap gap-x-4 gap-y-1">
+                  <span>7d Requests: <span className="text-white/70">{Number(arK.requests || 0)}</span></span>
+                  <span>7d Success: <span className="text-white/70">{pct(arK.success_rate, 0)}</span></span>
+                  <span>Errors: <span className="text-white/70">{Number(arK.errors || 0)}</span></span>
+                  <span>Saves: <span className="text-white/70">{Number(arK.save_successes || 0)}</span></span>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+      </div>
+
+
       {/* Director Mode — Health (24h) + KPIs (7d) */}
       <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 p-4">
         <div className="flex items-center justify-between gap-3">

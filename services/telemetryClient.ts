@@ -26,6 +26,12 @@ export type ClientTelemetryAction =
   | 'director_save_blueprint'
   | 'director_create_show'
   | 'director_send_to_show_planner'
+  | 'angle_risk_analysis_start'
+  | 'angle_risk_analysis_success'
+  | 'angle_risk_analysis_error'
+  | 'angle_risk_analysis_saved'
+  | 'angle_risk_send_to_director'
+  | 'angle_risk_send_to_rehearsal'
 ;
 
 export async function trackClientEvent(input: {

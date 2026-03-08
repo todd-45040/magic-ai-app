@@ -24,6 +24,17 @@ function isoDaysAgo(days: number): string {
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 }
 
+
+function canonicalizeTool(raw: any): string {
+  const s = String(raw || '').trim();
+  if (!s) return 'unknown';
+  const lower = s.toLowerCase();
+  if (lower === 'angle-risk' || lower === 'angle_risk') return 'angle_risk';
+  if (lower === 'identifytrick' || lower === 'identify_trick') return 'identify_trick';
+  if (lower === "assistant's studio" || lower === 'assistant_studio') return 'assistant_studio';
+  return lower;
+}
+
 function percentile(values: number[], p: number): number | null {
 
   if (!values || values.length === 0) return null;
@@ -385,6 +396,86 @@ function classifyEvent(e: any): {
   return { isSuccess, isRateLimit, isQuota, isUnauthorized, isTimeout, isError };
 }
 
+    // Phase AR — Angle & Risk KPIs (fixed 7d window) + 24h health
+    // Support both legacy tool='angle-risk' and canonical tool='angle_risk'.
+    let angleRiskKpis: any = {
+      window_days: 7,
+      requests: 0,
+      successes: 0,
+      errors: 0,
+      save_successes: 0,
+      success_rate: null as number | null,
+      save_rate: null as number | null,
+    };
+
+    let angleRiskHealth24h: any = {
+      window_hours: 24,
+      requests: 0,
+      successes: 0,
+      errors: 0,
+      success_rate: null as number | null,
+      last_error: null as any,
+    };
+
+    try {
+      const { data: arEvents, error: arErr } = await admin
+        .from('ai_usage_events')
+        .select('tool, endpoint, created_at, error_code')
+        .in('tool', ['angle_risk', 'angle-risk'])
+        .gte('created_at', sinceIso7)
+        .limit(50000);
+
+      if (!arErr) {
+        for (const ev of (arEvents || []) as any[]) {
+          const ep = String(ev?.endpoint || '');
+          if (ep === 'client:angle_risk_analysis_start') angleRiskKpis.requests += 1;
+          else if (ep === 'client:angle_risk_analysis_success') angleRiskKpis.successes += 1;
+          else if (ep === 'client:angle_risk_analysis_error') angleRiskKpis.errors += 1;
+          else if (ep === 'client:angle_risk_analysis_saved') angleRiskKpis.save_successes += 1;
+        }
+
+        const req = angleRiskKpis.requests || 0;
+        const ok = angleRiskKpis.successes || 0;
+        angleRiskKpis.success_rate = req ? ok / req : null;
+        angleRiskKpis.save_rate = ok ? angleRiskKpis.save_successes / ok : null;
+      }
+
+      const sinceIso24 = isoDaysAgo(1);
+      const { data: arEvents24, error: arErr24 } = await admin
+        .from('ai_usage_events')
+        .select('tool, endpoint, created_at, error_code')
+        .in('tool', ['angle_risk', 'angle-risk'])
+        .gte('created_at', sinceIso24)
+        .limit(20000);
+
+      if (!arErr24) {
+        for (const ev of (arEvents24 || []) as any[]) {
+          const ep = String(ev?.endpoint || '');
+          if (ep === 'client:angle_risk_analysis_start') angleRiskHealth24h.requests += 1;
+          else if (ep === 'client:angle_risk_analysis_success') angleRiskHealth24h.successes += 1;
+          else if (ep === 'client:angle_risk_analysis_error') angleRiskHealth24h.errors += 1;
+        }
+        angleRiskHealth24h.success_rate = angleRiskHealth24h.requests
+          ? angleRiskHealth24h.successes / angleRiskHealth24h.requests
+          : null;
+
+        const { data: lastErr, error: lastErrQ } = await admin
+          .from('ai_usage_events')
+          .select('created_at, error_code, endpoint, tool')
+          .in('tool', ['angle_risk', 'angle-risk'])
+          .eq('endpoint', 'client:angle_risk_analysis_error')
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (!lastErrQ && Array.isArray(lastErr) && lastErr.length) {
+          angleRiskHealth24h.last_error = lastErr[0];
+        }
+      }
+    } catch {
+      // Do not fail dashboard
+    }
+
+
     // Outcome buckets
     let totalEvents = 0;
     let successEvents = 0;
@@ -407,7 +498,7 @@ function classifyEvent(e: any): {
       if (uid && !userAgg[uid]) userAgg[uid] = { cost: 0, events: 0, success_sessions: 0, latencies: [] };
       if (uid) userAgg[uid].events += 1;
 
-      const tool = String(e?.tool || 'unknown');
+      const tool = canonicalizeTool(e?.tool);
       if (!toolAgg[tool]) toolAgg[tool] = { events: 0, cost: 0, users: new Set<string>() };
       toolAgg[tool].events += 1;
       if (uid) toolAgg[tool].users.add(uid);
@@ -698,7 +789,7 @@ if (!cls.isSuccess && recentFailures.length < 25) {
           const c = Number(e?.estimated_cost_usd || 0);
           agg[uid].cost += Number.isFinite(c) ? c : 0;
           agg[uid].events += 1;
-          const tool = String(e?.tool || 'unknown');
+          const tool = canonicalizeTool(e?.tool);
           if (tool) agg[uid].tools.add(tool);
         }
 
@@ -743,7 +834,7 @@ if (!cls.isSuccess && recentFailures.length < 25) {
 
         for (const e of (ev8 || []) as any[]) {
           const day = e?.occurred_at ? String(e.occurred_at).slice(0, 10) : null;
-          const tool = String(e?.tool || 'unknown');
+          const tool = canonicalizeTool(e?.tool);
           if (!day) continue;
           const c = Number(e?.estimated_cost_usd || 0);
           const cv = Number.isFinite(c) ? c : 0;
@@ -1131,7 +1222,7 @@ if (!cls.isSuccess && recentFailures.length < 25) {
           if (!dailyUsers[dayKey]) dailyUsers[dayKey] = new Set<string>();
           dailyUsers[dayKey].add(uid);
 
-          const tool = String(e?.tool || 'unknown');
+          const tool = canonicalizeTool(e?.tool);
           if (!dailyToolUsers[tool]) dailyToolUsers[tool] = {};
           if (!dailyToolUsers[tool][dayKey]) dailyToolUsers[tool][dayKey] = new Set<string>();
           dailyToolUsers[tool][dayKey].add(uid);
@@ -1580,7 +1671,7 @@ wauTrendWeekly12 = weeklyWau;
       for (const e of evs) {
         const uid = e?.user_id ? String(e.user_id) : null;
         if (!uid) continue;
-        const tool = String(e?.tool || 'unknown');
+        const tool = canonicalizeTool(e?.tool);
         const row = ensure(tool);
         const isFounder = founderSetActiveGlobal.has(uid);
         if (isFounder) {
@@ -1687,7 +1778,7 @@ wauTrendWeekly12 = weeklyWau;
             if (!meta) continue; // only founders
             const seg = meta.source;
             const cost = Number(ev?.estimated_cost_usd || 0) || 0;
-            const tool = String(ev?.tool_name || 'unknown');
+            const tool = canonicalizeTool(ev?.tool_name);
             foundersActiveUsersBySource[seg].add(uid);
             foundersCostBySource[seg] += cost;
             foundersEventsBySource[seg] += 1;
@@ -1951,6 +2042,8 @@ const provider_breakdown = Object.entries(providerReliability)
       visual_brainstorm_kpis: visualBrainstormKpis,
       director_mode_kpis: directorModeKpis,
       director_mode_health_24h: directorModeHealth24h,
+      angle_risk_kpis: angleRiskKpis,
+      angle_risk_health_24h: angleRiskHealth24h,
     });
   } catch (e: any) {
     return res.status(500).json({ ok: false, error: e?.message || 'Server error' });
