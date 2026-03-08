@@ -6,7 +6,7 @@
   "packageManager": "pnpm@10.0.0",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "node scripts/check-no-stale-js.mjs && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
