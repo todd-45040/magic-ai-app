@@ -560,8 +560,7 @@ ${focusToUse}` : null,
         '- risk must be low, medium, or high.',
         '- Green means safe audience, yellow means risky, red means exposure danger.',
         '- Keep it performance-safe and do not expose method.',
-      ].filter(Boolean).join('
-');
+      ].filter(Boolean).join('\n');
 
       try {
         const structured = await generateStructuredResponse(blockingPrompt, ANGLE_RISK_ANALYSIS_SYSTEM_INSTRUCTION, BLOCKING_MAP_SCHEMA, user, { speedMode: 'fast', maxOutputTokens: 900 });
