@@ -81,10 +81,10 @@ interface LayeredDiagramProps {
  * A calm, structured visualizer to communicate “engineered layering”
  * without flashy effects.
  */
-const PsychologicalLayerVisualizer: React.FC<LayeredDiagramProps> = ({ compact }) => (
+const MinistryLayerVisualizer: React.FC<LayeredDiagramProps> = ({ compact }) => (
   <div className={`rounded-xl border border-slate-800 bg-slate-950/30 ${compact ? 'p-3' : 'p-4'}`}>
     <div className="flex items-center justify-between">
-      <p className="text-xs font-semibold text-amber-200">Layered Construction</p>
+      <p className="text-xs font-semibold text-amber-200">Message Construction</p>
       <p className="text-[10px] text-slate-500">visualizer</p>
     </div>
     <p className="mt-1 text-[11px] text-slate-500">
@@ -432,7 +432,64 @@ const Card: React.FC<{ title: string; children: React.ReactNode; defaultOpen?: b
   </details>
 );
 
-const GospelMagicAssistant: React.FC<GospelMagicAssistantProps> = ({ onIdeaSaved }) => {
+
+const toTag = (s: string) =>
+  String(s || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+    .slice(0, 50);
+
+const buildIdeaVaultTags = (
+  bp: MinistryBlueprint,
+  tone: MinistryTone,
+  phraseTone: PhraseTone,
+  doctrinalMode: boolean,
+  ministrySensitivityMode: boolean,
+  stressReport: StressTestReport | null
+) => {
+  const tags = [
+    'gospel-magic',
+    'ministry',
+    `tone-${toTag(tone)}`,
+    doctrinalMode ? 'doctrinal-integrity-on' : 'doctrinal-integrity-off',
+    ministrySensitivityMode ? 'ministry-sensitivity-on' : 'ministry-sensitivity-off',
+  ];
+
+  if (bp.scripture_focus) tags.push(`scripture-${toTag(bp.scripture_focus)}`);
+  if (bp.ministry_use_case) tags.push(`use-case-${toTag(bp.ministry_use_case)}`);
+  if (phraseTone) tags.push(`phrase-tone-${toTag(phraseTone)}`);
+  if (stressReport?.overall_risk) tags.push(`clarity-review-${toTag(stressReport.overall_risk)}`);
+
+  return Array.from(new Set(tags.filter(Boolean))).slice(0, 12);
+};
+
+const buildIdeaVaultMetadataBlock = (
+  bp: MinistryBlueprint,
+  tone: MinistryTone,
+  phraseTone: PhraseTone,
+  doctrinalMode: boolean,
+  ministrySensitivityMode: boolean,
+  stressReport: StressTestReport | null
+) => {
+  const lines = [
+    '### Idea Vault Metadata',
+    `- Ministry Tone: ${tone}`,
+    `- Ministry Context: ${bp.ministry_use_case || 'Not specified'}`,
+    `- Doctrinal Integrity Mode: ${doctrinalMode ? 'On' : 'Off'}`,
+    `- Ministry Sensitivity Mode: ${ministrySensitivityMode ? 'On' : 'Off'}`,
+    `- Scripture Focus: ${bp.scripture_focus || 'Not specified'}`,
+    `- Phrase Tone: ${phraseTone || 'Not specified'}`,
+    `- Ministry Clarity Review: ${stressReport ? stressReport.overall_risk : 'Not run'}`,
+  ];
+  if (stressReport?.vulnerability_report) {
+    lines.push(`- Clarity Review Summary: ${mdEscape(stressReport.vulnerability_report)}`);
+  }
+  lines.push('');
+  return lines.join('\n');
+};
+
+const GospelMagicAssistant: React.FC<GospelMagicAssistantProps> = ({ onIdeaSaved, onOpenShowPlanner, onOpenLiveRehearsal }) => {
   const { currentUser } = useAppState() as any;
 
   const [theme, setTheme] = useState('');
@@ -559,13 +616,35 @@ ${doctrinalGuardrails}${ministrySensitivityGuardrails}
     handleGenerate(exampleQuery);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!blueprint) return;
-    const fullContent = toMarkdownBlueprint(lastQuery, ministryTone, doctrinalMode, ministrySensitivityMode, blueprint);
-    saveIdea('text', fullContent, lastQuery);
-    onIdeaSaved();
-    setSaveStatus('saved');
-    setTimeout(() => setSaveStatus('idle'), 2000);
+    try {
+      const fullContent = [
+        buildIdeaVaultMetadataBlock(
+          blueprint,
+          ministryTone,
+          phraseTone,
+          doctrinalMode,
+          ministrySensitivityMode,
+          stressReport
+        ),
+        toMarkdownBlueprint(lastQuery, ministryTone, doctrinalMode, ministrySensitivityMode, blueprint),
+      ].join('\n');
+      const tags = buildIdeaVaultTags(
+        blueprint,
+        ministryTone,
+        phraseTone,
+        doctrinalMode,
+        ministrySensitivityMode,
+        stressReport
+      );
+      await saveIdea({ type: 'text', content: fullContent, title: lastQuery, tags });
+      onIdeaSaved();
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    } catch (err) {
+      console.error('Failed to save Gospel Magic idea', err);
+    }
   };
   const handleStressTest = async () => {
     if (!blueprint) return;
@@ -595,22 +674,23 @@ Blueprint Summary:
 - Central Truth: ${blueprint.central_truth}
 - Illustration Bridge: ${blueprint.illustration_bridge}
 
-Evaluate against these simulated perspectives:
-1) Intelligent skeptic (friendly but discerning)
-2) Aggressive debunker (hostile, assumes deception)
-3) Corporate HR mindset (risk-averse, professionalism, consent)
-4) Teen audience (attention, authenticity, cynicism)
+Evaluate against these ministry-aware perspectives:
+1) New believer (still learning church language and spiritual concepts)
+2) Longtime church member (sensitive to biblical accuracy and tone)
+3) Teen listener (authenticity, clarity, attention)
+4) Outreach guest unfamiliar with church language
+5) Church leadership mindset (pastoral sensitivity, consent, appropriateness)
 
 Output:
 - overall_risk: Low/Medium/High
 - vulnerability_report: short paragraph
-- where_suspicion_forms: bullet list
-- recommended_patches: bullet list
+- where_suspicion_forms: places where the message may become unclear, overclaimed, manipulative, or too showy
+- recommended_patches: concrete wording or structure improvements
 - persona_results: list for each persona with likely_reaction + risks + patches
 
 Important:
 - Do NOT expose magic methods.
-- Keep critique constructive and respectful.
+- Keep critique constructive, ministry-aware, and respectful.
 ${doctrinalGuardrails}${ministrySensitivityGuardrails}
 `;
 
@@ -623,7 +703,7 @@ ${doctrinalGuardrails}${ministrySensitivityGuardrails}
 
       setStressReport(response as StressTestReport);
     } catch (err: any) {
-      setStressError(err instanceof Error ? err.message : 'Unable to run stress test.');
+      setStressError(err instanceof Error ? err.message : 'Unable to run ministry clarity review.');
     } finally {
       setIsStressLoading(false);
     }
@@ -643,93 +723,109 @@ ${doctrinalGuardrails}${ministrySensitivityGuardrails}
       if (blueprint.scripture_focus) descParts.push(`Scripture: ${blueprint.scripture_focus}`);
       if (blueprint.central_truth) descParts.push(`Central Truth: ${blueprint.central_truth}`);
       if (blueprint.why_this_effect_serves_the_message?.message_support) descParts.push(`Message Support: ${blueprint.why_this_effect_serves_the_message.message_support}`);
-      if (blueprint.ministry_use_case) descParts.push(`Use Case: ${blueprint.ministry_use_case}`);
+      if (blueprint.ministry_use_case) descParts.push(`Ministry Context: ${blueprint.ministry_use_case}`);
       if (blueprint.theological_theme) descParts.push(`Theme: ${blueprint.theological_theme}`);
       const show = await createShow(showTitle, descParts.join('\n').slice(0, 800) || null);
 
-      // Derive rough phases from the routine structure.
       const steps = Array.isArray(blueprint.routine_structure) ? blueprint.routine_structure : [];
-      const step0 = steps[0]?.title ? `${steps[0].title}` : '';
-      const step1 = steps[1]?.title ? `${steps[1].title}` : '';
-      const step2 = steps[2]?.title ? `${steps[2].title}` : '';
-      const lastStep = steps.length ? (steps[steps.length - 1]?.title ?? '') : '';
+      const volunteerNotes = steps
+        .filter((s) => /volunteer|participant|helper/i.test(`${s.stage_action || ''} ${s.illustration || ''} ${s.notes || ''}`))
+        .map((s) => `- ${s.title}: ${s.stage_action || s.notes || s.illustration}`)
+        .join('\n');
 
-      const list = (label: string, items?: string[]) =>
-        items && items.length ? `${label}\n- ${items.join('\n- ')}\n` : '';
-
-      const reaction = blueprint.audience_reaction_model;
-      const reactionText = reaction
-        ? `Audience Reaction Model\n- Gasps (1–10): ${reaction.gasps_likelihood_1_to_10}\n- Skeptic resistance (0–1): ${reaction.skeptic_resistance_probability_0_to_1}\n- Confusion risk (0–1): ${reaction.confusion_risk_0_to_1}\n- Memory distortion (1–10): ${reaction.memory_distortion_strength_1_to_10}\n${reaction.notes ? `- Notes: ${reaction.notes}\n` : ''}`
-        : '';
-
-      const doctrinalNote = doctrinalMode
-        ? `Doctrinal Integrity\n- Avoid overreach and performer-authority framing.\n- Avoid emotionally manipulative language.\n`
-        : '';
-      const sensitivityNote = ministrySensitivityMode
-        ? `Ministry Sensitivity\n- Avoid miracle implication or using the effect as spiritual proof.\n- Keep volunteer handling respectful and never embarrassing.\n`
-        : '';
-
-      const openerNotes = [
-        'OPENER FRAMING',
+      const scriptureFramingNotes = [
+        'SCRIPTURE FRAMING',
         blueprint.scripture_focus ? `Scripture Focus\n${blueprint.scripture_focus}\n` : '',
         blueprint.central_truth ? `Central Truth\n${blueprint.central_truth}\n` : '',
+        blueprint.scripture_handling_notes ? `Scripture Handling Notes\n${blueprint.scripture_handling_notes}\n` : '',
+        blueprint.pastoral_tone_guidance ? `Pastoral Tone Guidance\n${blueprint.pastoral_tone_guidance}\n` : '',
+        doctrinalMode ? `Doctrinal Integrity\n- Avoid theological overreach and performer-authority framing.\n- Keep the emphasis on Scripture rather than the effect.\n` : '',
+        ministrySensitivityMode ? `Ministry Sensitivity\n- Avoid emotional pressure, miracle implication, and manipulative tone.\n` : '',
+      ].filter(Boolean).join('\n');
+
+      const illustrationSetupNotes = [
+        'ILLUSTRATION SETUP',
+        blueprint.effect_fit_assessment ? `Effect Fit Assessment\n${blueprint.effect_fit_assessment}\n` : '',
         blueprint.illustration_bridge ? `Illustration Bridge\n${blueprint.illustration_bridge}\n` : '',
-        step0 ? `Suggested Opener Beat\n- ${step0}\n` : '',
-        list('Potential Misinterpretations', blueprint.potential_misinterpretations),
-        list('Reverence Risk Notes', blueprint.reverence_risk_notes),
-        reactionText ? `${reactionText}\n` : '',
-        doctrinalNote,
-        sensitivityNote
+        blueprint.why_this_effect_serves_the_message?.why_this_illustration_works
+          ? `Why This Illustration Works\n${blueprint.why_this_effect_serves_the_message.why_this_illustration_works}\n`
+          : '',
+        steps[0]?.stage_action ? `Opening Stage Action\n${steps[0].stage_action}\n` : '',
+        steps[0]?.illustration ? `Opening Illustration\n${steps[0].illustration}\n` : '',
+        blueprint.reverence_risk_notes?.length ? `Reverence Risk Notes\n- ${blueprint.reverence_risk_notes.join('\n- ')}\n` : '',
       ].filter(Boolean).join('\n');
 
-      const phase1Notes = [
-        'PHASE 1',
-        step1 ? `Beat\n- ${step1}\n` : '',
-        steps[1]?.stage_action ? `Stage Action\n${steps[1].stage_action}\n` : '',
-        steps[1]?.teaching_point ? `Teaching Point\n${steps[1].teaching_point}\n` : '',
-        list('Suggested Lines', steps[1]?.suggested_lines),
-        blueprint.pastoral_tone_guidance ? `Pastoral Tone\n${blueprint.pastoral_tone_guidance}\n` : ''
+      const messageTransitionNotes = [
+        'MESSAGE TRANSITION',
+        blueprint.why_this_effect_serves_the_message?.message_support
+          ? `Message Support\n${blueprint.why_this_effect_serves_the_message.message_support}\n`
+          : '',
+        blueprint.why_this_effect_serves_the_message?.humble_introduction
+          ? `Humble Introduction\n${blueprint.why_this_effect_serves_the_message.humble_introduction}\n`
+          : '',
+        blueprint.why_this_effect_serves_the_message?.scripture_transition
+          ? `Return to Scripture\n${blueprint.why_this_effect_serves_the_message.scripture_transition}\n`
+          : '',
+        steps[1]?.teaching_point ? `Suggested Teaching Point\n${steps[1].teaching_point}\n` : '',
+        blueprint.performer_humility_lines?.length ? `Humility Lines\n- ${blueprint.performer_humility_lines.join('\n- ')}\n` : '',
       ].filter(Boolean).join('\n');
 
-      const phase2Notes = [
-        'PHASE 2',
-        step2 ? `Beat\n- ${step2}\n` : '',
-        steps[2]?.stage_action ? `Stage Action\n${steps[2].stage_action}\n` : '',
-        steps[2]?.teaching_point ? `Teaching Point\n${steps[2].teaching_point}\n` : '',
-        list('Suggested Lines', steps[2]?.suggested_lines),
-        blueprint.scripture_handling_notes ? `Scripture Handling Notes
-${blueprint.scripture_handling_notes}
-` : ''
+      const reflectionMomentNotes = [
+        'AUDIENCE REFLECTION MOMENT',
+        blueprint.ministry_use_case ? `Ministry Use Case\n${blueprint.ministry_use_case}\n` : '',
+        blueprint.altar_call_sensitivity?.guidance ? `Pastoral Guidance\n${blueprint.altar_call_sensitivity.guidance}\n` : '',
+        blueprint.altar_call_sensitivity?.do?.length ? `Do\n- ${blueprint.altar_call_sensitivity.do.join('\n- ')}\n` : '',
+        blueprint.altar_call_sensitivity?.dont?.length ? `Avoid\n- ${blueprint.altar_call_sensitivity.dont.join('\n- ')}\n` : '',
+        stressReport?.vulnerability_report ? `Ministry Clarity Review\n${stressReport.vulnerability_report}\n` : '',
       ].filter(Boolean).join('\n');
 
-      const revealNotes = [
-        'REVEAL',
-        lastStep ? `Climax Beat\n- ${lastStep}\n` : '',
-        blueprint.emotional_arc?.length ? `Emotional Arc\n- ${blueprint.emotional_arc.join('\n- ')}\n` : '',
-        blueprint.altar_call_sensitivity?.guidance ? `Altar Call Sensitivity\n${blueprint.altar_call_sensitivity.guidance}\n` : '',
-        list('Do', blueprint.altar_call_sensitivity?.do),
-        list("Don't", blueprint.altar_call_sensitivity?.dont)
+      const closingThoughtNotes = [
+        'CLOSING THOUGHT',
+        blueprint.closing_prayer_option ? `Closing Prayer / Thought\n${blueprint.closing_prayer_option}\n` : '',
+        blueprint.why_this_effect_serves_the_message?.should_not_imply?.length
+          ? `Should Not Imply\n- ${blueprint.why_this_effect_serves_the_message.should_not_imply.join('\n- ')}\n`
+          : '',
+        blueprint.potential_misinterpretations?.length
+          ? `Potential Misinterpretations\n- ${blueprint.potential_misinterpretations.join('\n- ')}\n`
+          : '',
       ].filter(Boolean).join('\n');
 
-      const closerNotes = [
-        'CLOSER TAG',
-        blueprint.closing_prayer_option ? `Closing Prayer Option\n${blueprint.closing_prayer_option}\n` : '',
-        doctrinalNote,
-        sensitivityNote
+      const verseReadingPlacementNotes = [
+        'VERSE READING PLACEMENT',
+        blueprint.scripture_focus ? `Primary Passage\n${blueprint.scripture_focus}\n` : '',
+        blueprint.scripture_handling_notes ? `Handling Notes\n${blueprint.scripture_handling_notes}\n` : '',
+        blueprint.why_this_effect_serves_the_message?.scripture_transition
+          ? `Transition Line\n${blueprint.why_this_effect_serves_the_message.scripture_transition}\n`
+          : '',
+      ].filter(Boolean).join('\n');
+
+      const prayerInvitationNotes = [
+        'PRAYER / INVITATION CONSIDERATION',
+        blueprint.ministry_use_case ? `Use Case\n${blueprint.ministry_use_case}\n` : '',
+        blueprint.altar_call_sensitivity?.guidance ? `Sensitivity Guidance\n${blueprint.altar_call_sensitivity.guidance}\n` : '',
+        ministrySensitivityMode ? `Ministry Sensitivity\n- Keep any invitation gentle, voluntary, and free from emotional pressure.\n` : '',
       ].filter(Boolean).join('\n');
 
       const tasks = [
-        { title: 'Opener framing', notes: openerNotes, tags: ['ministry', 'blueprint'] },
-        { title: 'Phase 1', notes: phase1Notes, tags: ['ministry', 'blueprint'] },
-        { title: 'Phase 2', notes: phase2Notes, tags: ['ministry', 'blueprint'] },
-        { title: 'Reveal', notes: revealNotes, tags: ['ministry', 'blueprint'] },
-        { title: 'Closer tag', notes: closerNotes, tags: ['ministry', 'blueprint'] }
+        { title: 'Scripture framing', notes: scriptureFramingNotes, tags: ['ministry', 'gospel-magic', 'scripture'] },
+        { title: 'Illustration setup', notes: illustrationSetupNotes, tags: ['ministry', 'gospel-magic', 'illustration'] },
+        { title: 'Message transition', notes: messageTransitionNotes, tags: ['ministry', 'gospel-magic', 'transition'] },
+        { title: 'Audience reflection moment', notes: reflectionMomentNotes, tags: ['ministry', 'gospel-magic', 'reflection'] },
+        { title: 'Closing thought', notes: closingThoughtNotes, tags: ['ministry', 'gospel-magic', 'closing'] },
+        { title: 'Verse reading placement', notes: verseReadingPlacementNotes, tags: ['ministry', 'gospel-magic', 'scripture'] },
+        { title: 'Prayer or invitation consideration', notes: prayerInvitationNotes, tags: ['ministry', 'gospel-magic', 'pastoral'] },
       ];
+
+      if (volunteerNotes) {
+        tasks.splice(5, 0, {
+          title: 'Volunteer guidance',
+          notes: ['VOLUNTEER GUIDANCE', volunteerNotes, ministrySensitivityMode ? 'Keep volunteer handling gentle, clear, and never embarrassing.' : ''].filter(Boolean).join('\n\n'),
+          tags: ['ministry', 'gospel-magic', 'volunteer'],
+        });
+      }
 
       await addTasksToShow(show.id, tasks);
       setSendPlannerSuccess(true);
-
-      // Navigate to Show Planner with the created show.
       onOpenShowPlanner?.(show.id, null);
     } catch (err: any) {
       setSendPlannerError(err?.message ? String(err.message) : 'Failed to send to Show Planner.');
@@ -749,13 +845,27 @@ ${blueprint.scripture_handling_notes}
       if (blueprint.scripture_focus) blocks.push(`Scripture Focus\n${blueprint.scripture_focus}`);
       if (blueprint.central_truth) blocks.push(`Central Truth\n${blueprint.central_truth}`);
       if (blueprint.theological_theme) blocks.push(`Theme\n${blueprint.theological_theme}`);
+      if (blueprint.ministry_use_case) blocks.push(`Ministry Context\n${blueprint.ministry_use_case}`);
       if (blueprint.illustration_bridge) blocks.push(`Illustration Bridge\n${blueprint.illustration_bridge}`);
+      if (blueprint.effect_fit_assessment) blocks.push(`Effect Fit Assessment\n${blueprint.effect_fit_assessment}`);
+      if (blueprint.why_this_effect_serves_the_message?.humble_introduction) {
+        blocks.push(`Humble Introduction\n${blueprint.why_this_effect_serves_the_message.humble_introduction}`);
+      }
+      if (blueprint.why_this_effect_serves_the_message?.scripture_transition) {
+        blocks.push(`Return to Scripture\n${blueprint.why_this_effect_serves_the_message.scripture_transition}`);
+      }
       if (Array.isArray(blueprint.routine_structure) && blueprint.routine_structure.length) {
         const beats = blueprint.routine_structure
           .map((s, i) => `${i + 1}. ${s.title}${s.teaching_point ? ` — ${s.teaching_point}` : ''}`)
           .join('\n');
         blocks.push(`Routine Beats\n${beats}`);
       }
+      if (Array.isArray(blueprint.performer_humility_lines) && blueprint.performer_humility_lines.length) {
+        blocks.push(`Humility Lines\n- ${blueprint.performer_humility_lines.join('\n- ')}`);
+      }
+      blocks.push(
+        'Coaching Focus\n- clarity\n- humility\n- gentle tone\n- clean transitions\n- avoid overselling the effect\n- return clearly to Scripture'
+      );
       if (Array.isArray(blueprint.emotional_arc) && blueprint.emotional_arc.length) {
         blocks.push(`Emotional Arc\n- ${blueprint.emotional_arc.join('\n- ')}`);
       }
@@ -776,7 +886,6 @@ ${blueprint.scripture_handling_notes}
       setIsPreparingRehearsal(false);
     }
   };
-
 
   const handleGeneratePhrases = async () => {
     const selected = Object.entries(phraseSelection)
@@ -859,7 +968,7 @@ Populate arrays for categories the user selected; for unselected categories, ret
           </span>
         </div>
         <div className="mt-2">
-          <PsychologicalLayerVisualizer />
+          <MinistryLayerVisualizer />
         </div>
 
 
@@ -871,6 +980,37 @@ Populate arrays for categories the user selected; for unselected categories, ret
         </Card>
         <Card title="Central Truth" defaultOpen>
           <p className="whitespace-pre-wrap">{blueprint.central_truth}</p>
+        </Card>
+
+        <Card title="Why This Effect Serves the Message" defaultOpen>
+          <div className="space-y-3">
+            <div>
+              <p className="text-slate-400 text-xs">Why this illustration works</p>
+              <p className="whitespace-pre-wrap">{blueprint.why_this_effect_serves_the_message?.why_this_illustration_works}</p>
+            </div>
+            <div>
+              <p className="text-slate-400 text-xs">What part of the message it supports</p>
+              <p className="whitespace-pre-wrap">{blueprint.why_this_effect_serves_the_message?.message_support}</p>
+            </div>
+            {!!blueprint.why_this_effect_serves_the_message?.should_not_imply?.length && (
+              <div>
+                <p className="text-slate-400 text-xs">What it should not imply</p>
+                <ul className="list-disc ml-5 mt-1 space-y-1">
+                  {blueprint.why_this_effect_serves_the_message.should_not_imply.map((x, i) => (
+                    <li key={i}>{x}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <div>
+              <p className="text-slate-400 text-xs">How to introduce it humbly</p>
+              <p className="whitespace-pre-wrap">{blueprint.why_this_effect_serves_the_message?.humble_introduction}</p>
+            </div>
+            <div>
+              <p className="text-slate-400 text-xs">How to transition back to Scripture</p>
+              <p className="whitespace-pre-wrap">{blueprint.why_this_effect_serves_the_message?.scripture_transition}</p>
+            </div>
+          </div>
         </Card>
 
         <Card title="Ministry Use Case">
@@ -1011,10 +1151,10 @@ Populate arrays for categories the user selected; for unselected categories, ret
         </Card>
 
         
-        <Card title="Stress Test Against Skeptic">
+        <Card title="Ministry Clarity Review">
           {!stressReport && (
             <p className="text-slate-400 text-sm">
-              Run a simulated review to identify where suspicion could form and how to strengthen clarity and credibility.
+              Run a ministry-aware review to identify where the message may feel unclear, overly showy, or pastorally risky, and how to make it gentler and clearer.
             </p>
           )}
 
