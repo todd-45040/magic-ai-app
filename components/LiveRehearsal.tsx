@@ -109,6 +109,106 @@ type RehearsalFeedback = {
     sections: FeedbackSection[];
 };
 
+type TimelineItem = {
+    timestampLabel: string;
+    seconds: number;
+    label: string;
+    commentary?: string;
+};
+
+const formatTimelineTimestamp = (seconds: number): string => {
+    const safe = Math.max(0, Math.floor(seconds));
+    const minutes = Math.floor(safe / 60).toString();
+    const secs = (safe % 60).toString().padStart(2, '0');
+    return `${minutes}:${secs}`;
+};
+
+const buildSessionTimeline = (transcript: Transcription[], startedAt?: number, endedAt?: number): TimelineItem[] => {
+    const userText = (transcript || [])
+        .filter((t) => t?.source === 'user')
+        .map((t) => t.text || '')
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    const durationSeconds = Math.max(45, Math.round(((endedAt || 0) - (startedAt || 0)) / 1000) || 0);
+
+    if (!userText) {
+        const fallbackMid = Math.max(12, Math.round(durationSeconds * 0.45));
+        const fallbackEnd = Math.max(24, Math.round(durationSeconds * 0.82));
+        return [
+            {
+                timestampLabel: '0:00',
+                seconds: 0,
+                label: 'Opening beat',
+                commentary: 'Record a longer take to generate a fuller rehearsal timeline.',
+            },
+            {
+                timestampLabel: formatTimelineTimestamp(fallbackMid),
+                seconds: fallbackMid,
+                label: 'Effect explanation',
+                commentary: 'Try speaking your middle section more fully so pacing can be analyzed.',
+            },
+            {
+                timestampLabel: formatTimelineTimestamp(fallbackEnd),
+                seconds: fallbackEnd,
+                label: 'Reveal moment',
+                commentary: 'Add a cleaner pause before the climax to strengthen impact.',
+            },
+        ];
+    }
+
+    const sentences = userText.split(/[.!?]+/).map((s) => s.trim()).filter(Boolean);
+    const lower = userText.toLowerCase();
+    const hasQuestion = userText.includes('?');
+    const hasInstruction = /\b(look|watch|remember|imagine|hold|take|choose|think|breathe|focus)\b/i.test(userText);
+    const hasReveal = /\b(reveal|impossible|now|suddenly|changed|appears?|vanishes?|gone|inside|there it is)\b/i.test(lower);
+    const wordCount = userText.split(/\s+/).filter(Boolean).length;
+    const avgSentenceWords = sentences.length ? wordCount / sentences.length : wordCount;
+
+    const endSeconds = Math.max(1, Math.round(durationSeconds * 0.84));
+
+    const baseEvents = [
+        {
+            pos: 0,
+            label: 'Introduction',
+            commentary: 'Opening delivery is clear. Keep the first line calm and confident.',
+        },
+        {
+            pos: hasInstruction ? 0.34 : 0.42,
+            label: hasInstruction ? 'Audience setup' : 'Effect setup',
+            commentary: hasInstruction
+                ? 'This is where spectator instruction begins. Keep your wording short and deliberate.'
+                : 'The premise is introduced here. Add one crisp cue word to focus attention.',
+        },
+        {
+            pos: hasQuestion ? 0.6 : 0.66,
+            label: hasQuestion ? 'Audience interaction beat' : 'First magical moment',
+            commentary: hasQuestion
+                ? 'Pacing shifts during audience engagement. Leave a touch more space after the question.'
+                : 'This beat likely carries the first strong magical impression. Hold eye contact a fraction longer.',
+        },
+        {
+            pos: 0.84,
+            label: hasReveal ? 'Reveal' : 'Climax',
+            commentary:
+                avgSentenceWords > 18
+                    ? `At ${formatTimelineTimestamp(endSeconds)} pacing appears to accelerate. Consider adding a dramatic pause.`
+                    : `At ${formatTimelineTimestamp(endSeconds)} your reveal timing is close. A slightly longer pause would make it land harder.`,
+        },
+    ];
+
+    return baseEvents.map((event, index) => {
+        const rawSeconds = index === 0 ? 0 : Math.max(1, Math.round(durationSeconds * event.pos));
+        return {
+            timestampLabel: formatTimelineTimestamp(rawSeconds),
+            seconds: rawSeconds,
+            label: event.label,
+            commentary: event.commentary,
+        };
+    });
+};
+
 const buildRehearsalFeedback = (transcript: Transcription[]): RehearsalFeedback => {
     const userText = (transcript || [])
         .filter((t) => t?.source === 'user')
@@ -1575,7 +1675,14 @@ const ReviewView: React.FC<{
                 </div>
 
                 {current ? (
-                    <RehearsalFeedbackCard transcript={current.transcript} />
+                    <>
+                        <RehearsalFeedbackCard transcript={current.transcript} />
+                        <SessionTimelineCard
+                            transcript={current.transcript}
+                            startedAt={current.startedAt}
+                            endedAt={current.endedAt}
+                        />
+                    </>
                 ) : null}
 
                 <div className="bg-slate-900/40 border border-slate-700 rounded-lg p-4">
@@ -1711,6 +1818,56 @@ const RehearsalFeedbackCard: React.FC<{ transcript: Transcription[] }> = ({ tran
                         </ul>
                     </div>
                 ))}
+            </div>
+        </div>
+    );
+};
+
+
+const SessionTimelineCard: React.FC<{ transcript: Transcription[]; startedAt?: number; endedAt?: number }> = ({ transcript, startedAt, endedAt }) => {
+    const timeline = buildSessionTimeline(transcript, startedAt, endedAt);
+
+    return (
+        <div className="bg-slate-900/40 border border-slate-700 rounded-xl p-4 md:p-5">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div>
+                    <div className="text-slate-100 font-semibold text-lg">Session Timeline</div>
+                    <div className="text-sm text-slate-400 mt-1">See where the routine shifts and where the coaching notes matter most.</div>
+                </div>
+                <div className="text-xs uppercase tracking-wide text-purple-200/80 px-3 py-1.5 rounded-full border border-purple-600/30 bg-purple-900/15 self-start md:self-auto">
+                    Timeline Analysis
+                </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-4">
+                <div className="rounded-xl border border-slate-700 bg-slate-800/45 p-4">
+                    <div className="text-slate-100 font-semibold mb-3">Routine Beats</div>
+                    <div className="space-y-3">
+                        {timeline.map((item, idx) => (
+                            <div key={`${item.seconds}-${idx}`} className="flex items-start gap-3">
+                                <div className="w-14 shrink-0 rounded-md border border-purple-500/30 bg-purple-900/20 text-center text-sm font-bold text-white px-2 py-1">
+                                    {item.timestampLabel}
+                                </div>
+                                <div className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-900/35 px-3 py-2">
+                                    <div className="text-slate-100 font-medium">{item.label}</div>
+                                    <div className="text-xs text-slate-400 mt-1">Beat {idx + 1}</div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-700 bg-slate-800/45 p-4">
+                    <div className="text-slate-100 font-semibold mb-3">AI Commentary</div>
+                    <div className="space-y-3">
+                        {timeline.map((item, idx) => (
+                            <div key={`${item.label}-commentary-${idx}`} className="rounded-lg border border-slate-700 bg-slate-900/35 px-4 py-3">
+                                <div className="text-xs uppercase tracking-wide text-purple-200/80">{item.timestampLabel} · {item.label}</div>
+                                <div className="text-sm text-slate-300 mt-1">{item.commentary || 'Solid beat. Keep this transition clean and unhurried.'}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
             </div>
         </div>
     );
