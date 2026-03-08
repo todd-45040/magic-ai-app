@@ -840,6 +840,27 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         };
     }, []);
 
+    const scrollReviewIntoView = () => {
+        window.setTimeout(() => {
+            try {
+                const el = document.getElementById('live-rehearsal-review-anchor');
+                el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } catch {
+                // ignore
+            }
+        }, 80);
+    };
+
+    const openReviewForTake = (takeIndex?: number) => {
+        if (typeof takeIndex === 'number' && Number.isFinite(takeIndex)) {
+            setSelectedTake(Math.max(0, takeIndex));
+        }
+        setBlockedUx(null);
+        setErrorMessage('');
+        setStatus('idle');
+        setView('reviewing');
+        scrollReviewIntoView();
+    };
 
     const handleStartSession = async () => {
         setBlockedUx(null);
@@ -1387,7 +1408,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         }
 
         await safeCleanupSession();
-        setView('reviewing');
+        openReviewForTake(takesRef.current.length);
     };
     
 
@@ -1474,10 +1495,17 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
 
     const handleRunDemoReview = () => {
         injectDemoTake(false);
+        openReviewForTake(0);
     };
 
     const handleAnalyzeDemoTake = () => {
         injectDemoTake(true);
+        openReviewForTake(0);
+    };
+
+    const handleAnalyzeCurrentTake = () => {
+        const activeIndex = Math.max(0, Math.min(selectedTakeRef.current, Math.max(0, takesRef.current.length - 1)));
+        openReviewForTake(activeIndex);
     };
 
     const handleHeaderButtonClick = async () => {
@@ -1529,6 +1557,8 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                     onSessionSaved={(id) => setSessionIdeaId(id)}
                     onIdeaSaved={onIdeaSaved}
                     onReturnToStudio={safeReturnToStudio}
+                    onAnalyzeDemoTake={handleAnalyzeDemoTake}
+                    onAnalyzeTake={handleAnalyzeCurrentTake}
                     onOpenAngleRisk={onOpenAngleRisk}
                     onOpenPatterEngine={onOpenPatterEngine}
                     onOpenDirectorMode={onOpenDirectorMode}
@@ -2024,6 +2054,7 @@ const ReviewView: React.FC<{
     onIdeaSaved: () => void;
     onReturnToStudio: (transcriptToDiscuss?: Transcription[]) => void;
     onAnalyzeDemoTake?: () => void;
+    onAnalyzeTake?: () => void;
     onOpenAngleRisk?: () => void;
     onOpenPatterEngine?: () => void;
     onOpenDirectorMode?: () => void;
@@ -2042,6 +2073,7 @@ const ReviewView: React.FC<{
     onIdeaSaved,
     onReturnToStudio,
     onAnalyzeDemoTake,
+    onAnalyzeTake,
     onOpenAngleRisk,
     onOpenPatterEngine,
     onOpenDirectorMode,
@@ -2059,6 +2091,28 @@ const ReviewView: React.FC<{
     const current = takes?.[selectedTake] ?? null;
     const displayTakeNumber = current ? selectedTake + 1 : 0;
     const isDemoTake = Boolean(current && sessionTitle === 'Demo Rehearsal Session' && current.transcript?.some((seg) => String(seg?.text || '').includes('quick experiment in attention')));
+
+    const scrollToReviewCards = () => {
+        window.setTimeout(() => {
+            try {
+                const el = document.getElementById('live-rehearsal-review-anchor');
+                el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } catch {
+                // ignore
+            }
+        }, 50);
+    };
+
+    const handleAnalyzeSelectedTake = () => {
+        setIntegrationMessage('');
+        setSaveError('');
+        if (isDemoTake) {
+            onAnalyzeDemoTake?.();
+        } else {
+            onAnalyzeTake?.();
+        }
+        scrollToReviewCards();
+    };
 
     useEffect(() => {
         setRefinePrompt('');
@@ -2315,6 +2369,7 @@ const ReviewView: React.FC<{
 
                 {current ? (
                     <>
+                        <div id="live-rehearsal-review-anchor" className="h-px w-full" />
                         <RehearsalFeedbackCard transcript={current.transcript} markers={current.markers || []} startedAt={current.startedAt} endedAt={current.endedAt} />
                         <RehearsalMetricsCard transcript={current.transcript} startedAt={current.startedAt} endedAt={current.endedAt} />
                         <SessionTimelineCard
@@ -2425,12 +2480,12 @@ const ReviewView: React.FC<{
                             {current ? `Transcript — Take ${displayTakeNumber}` : 'Transcript'}
                         </div>
                         <div className="flex items-center gap-2 flex-wrap">
-                            {isDemoTake ? (
+                            {current ? (
                                 <button
-                                    onClick={() => onAnalyzeDemoTake?.()}
+                                    onClick={handleAnalyzeSelectedTake}
                                     className="px-3 py-1.5 rounded-md border border-purple-600/40 bg-purple-900/20 text-purple-100 text-sm font-semibold hover:bg-purple-900/30 transition-colors"
                                 >
-                                    Analyze This Demo Take
+                                    {isDemoTake ? 'Analyze This Demo Take' : 'Analyze This Take'}
                                 </button>
                             ) : null}
                             {hasAnyTakes ? (
