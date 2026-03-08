@@ -24,6 +24,7 @@ interface StageDiagramProps {
   blockingPath?: BlockingPoint[];
   simulateSeatView?: boolean;
   selectedSeat?: SeatView;
+  orientationDegrees?: number;
 }
 
 const WIDTH = 420;
@@ -33,10 +34,10 @@ const STAGE_Y = 108;
 const STAGE_W = 276;
 const STAGE_H = 106;
 
-const seatPoints: Record<SeatView, { x: number; y: number; label: string }> = {
-  left: { x: 96, y: 72, label: 'Left Seat' },
-  center: { x: 210, y: 40, label: 'Center Seat' },
-  right: { x: 324, y: 72, label: 'Right Seat' },
+const seatPoints: Record<SeatView, { x: number; y: number; label: string; seatNumber: number }> = {
+  left: { x: 112, y: 72, label: 'Seat 2', seatNumber: 2 },
+  center: { x: 210, y: 52, label: 'Seat 4', seatNumber: 4 },
+  right: { x: 308, y: 72, label: 'Seat 6', seatNumber: 6 },
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -79,6 +80,14 @@ function getRiskStroke(risk: StageDiagramRisk) {
   return 'rgba(74, 222, 128, 0.75)';
 }
 
+function quadraticPoint(x0: number, y0: number, cx: number, cy: number, x1: number, y1: number, t: number) {
+  const mt = 1 - t;
+  return {
+    x: mt * mt * x0 + 2 * mt * t * cx + t * t * x1,
+    y: mt * mt * y0 + 2 * mt * t * cy + t * t * y1,
+  };
+}
+
 export default function StageDiagram({
   stageWidth = 10,
   audienceDistance = 6,
@@ -88,6 +97,7 @@ export default function StageDiagram({
   blockingPath = [],
   simulateSeatView = false,
   selectedSeat = 'center',
+  orientationDegrees = 0,
 }: StageDiagramProps) {
   const stageCenterX = STAGE_X + STAGE_W / 2;
   const stageBottomY = STAGE_Y + STAGE_H - 22;
@@ -100,8 +110,27 @@ export default function StageDiagram({
     label: point.label || (index === 0 ? 'Start' : index === blockingPath.length - 1 ? 'Reveal' : 'Move'),
   }));
 
-  const selectedSeatPoint = seatPoints[selectedSeat];
   const audienceArc = `M ${seatPoints.left.x} ${seatPoints.left.y} Q ${seatPoints.center.x} ${seatPoints.center.y - 26} ${seatPoints.right.x} ${seatPoints.right.y}`;
+  const selectedSeatPoint = seatPoints[selectedSeat];
+
+  const seatDots = Array.from({ length: 8 }, (_, index) => {
+    const t = 0.06 + index * 0.125;
+    const point = quadraticPoint(seatPoints.left.x, seatPoints.left.y, seatPoints.center.x, seatPoints.center.y - 26, seatPoints.right.x, seatPoints.right.y, t);
+    return {
+      ...point,
+      seatNumber: index + 1,
+      highlighted: index + 1 === selectedSeatPoint.seatNumber,
+    };
+  });
+
+  const facingTip = polarToCartesian(performerPx, performerPy, 28, orientationDegrees);
+  const facingLeft = polarToCartesian(performerPx, performerPy, 12, orientationDegrees - 145);
+  const facingRight = polarToCartesian(performerPx, performerPy, 12, orientationDegrees + 145);
+  const shiftedZones = exposureZones.map((zone) => ({
+    ...zone,
+    angleStart: zone.angleStart + orientationDegrees,
+    angleEnd: zone.angleEnd + orientationDegrees,
+  }));
 
   return (
     <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#120d1f] p-3">
@@ -114,7 +143,7 @@ export default function StageDiagram({
 
         <rect x="18" y="18" width="384" height="224" rx="18" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.07)" />
 
-        {exposureZones.map((zone, idx) => (
+        {shiftedZones.map((zone, idx) => (
           <path
             key={`${idx}-${zone.angleStart}-${zone.angleEnd}`}
             d={describeWedge(performerPx, performerPy, 18, 130, zone.angleStart, zone.angleEnd)}
@@ -127,16 +156,21 @@ export default function StageDiagram({
         <path d={audienceArc} fill="none" stroke="rgba(255,255,255,0.30)" strokeWidth="2.4" strokeDasharray="6 5" />
         <text x={210} y={22} textAnchor="middle" fontSize="11" fill="rgba(255,255,255,0.62)">Audience Arc</text>
 
-        {(['left', 'center', 'right'] as SeatView[]).map((seat) => {
-          const point = seatPoints[seat];
-          const isSelected = selectedSeat === seat;
-          return (
-            <g key={seat}>
-              <circle cx={point.x} cy={point.y} r={isSelected ? 8 : 6} fill={isSelected ? 'rgba(196,181,253,0.95)' : 'rgba(255,255,255,0.45)'} />
-              <text x={point.x} y={point.y + 20} textAnchor="middle" fontSize="10" fill="rgba(255,255,255,0.62)">{point.label}</text>
-            </g>
-          );
-        })}
+        {seatDots.map((seat) => (
+          <g key={`seat-dot-${seat.seatNumber}`}>
+            <circle
+              cx={seat.x}
+              cy={seat.y}
+              r={seat.highlighted ? 7 : 4.25}
+              fill={seat.highlighted ? 'rgba(196,181,253,0.96)' : 'rgba(255,255,255,0.44)'}
+              stroke={seat.highlighted ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.15)'}
+              strokeWidth={seat.highlighted ? 1.2 : 0.8}
+            />
+            {(seat.seatNumber === 2 || seat.seatNumber === 4 || seat.seatNumber === 6) ? (
+              <text x={seat.x} y={seat.y + 18} textAnchor="middle" fontSize="9" fill="rgba(255,255,255,0.60)">{seat.seatNumber}</text>
+            ) : null}
+          </g>
+        ))}
 
         <rect x={STAGE_X} y={STAGE_Y} width={STAGE_W} height={STAGE_H} rx="16" fill="rgba(139,92,246,0.12)" stroke="rgba(196,181,253,0.45)" strokeWidth="1.5" />
         <text x={stageCenterX} y={STAGE_Y + STAGE_H - 12} textAnchor="middle" fontSize="12" fill="rgba(255,255,255,0.70)">Stage</text>
@@ -177,7 +211,9 @@ export default function StageDiagram({
         ) : null}
 
         <circle cx={performerPx} cy={performerPy} r="8" fill="rgba(255,255,255,0.96)" stroke="rgba(17,24,39,0.85)" strokeWidth="1.5" />
+        <path d={`M ${facingLeft.x} ${facingLeft.y} L ${facingTip.x} ${facingTip.y} L ${facingRight.x} ${facingRight.y} Z`} fill="rgba(255,255,255,0.92)" stroke="rgba(17,24,39,0.65)" strokeWidth="1" />
         <text x={performerPx} y={performerPy + 24} textAnchor="middle" fontSize="11" fill="rgba(255,255,255,0.74)">Performer</text>
+        <text x={performerPx + 28} y={performerPy - 18} textAnchor="start" fontSize="10" fill="rgba(255,255,255,0.60)">Facing</text>
       </svg>
     </div>
   );

@@ -262,6 +262,7 @@ const [expandedPanels, setExpandedPanels] = useState<Record<PanelKey, boolean>>(
 
 const [simulateSeatView, setSimulateSeatView] = useState(false);
 const [selectedSeat, setSelectedSeat] = useState<DiagramSeatView>('center');
+const [performerOrientation, setPerformerOrientation] = useState(0);
 
 const selectedSeatInsight = useMemo(() => {
   if (!simulateSeatView) return '';
@@ -1022,6 +1023,13 @@ ${routineSteps.trim()}` : null,
                               <div className="flex flex-wrap gap-2">
                                 <button
                                   type="button"
+                                  onClick={() => setPerformerOrientation(prev => (prev >= 30 ? -30 : prev + 15))}
+                                  className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold text-white/75 transition hover:bg-white/[0.06]"
+                                >
+                                  Rotate Performer
+                                </button>
+                                <button
+                                  type="button"
                                   onClick={() => setSimulateSeatView(prev => !prev)}
                                   className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${simulateSeatView ? 'border-purple-400/50 bg-purple-500/20 text-white' : 'border-white/10 bg-white/[0.03] text-white/75 hover:bg-white/[0.06]'}`}
                                 >
@@ -1029,14 +1037,18 @@ ${routineSteps.trim()}` : null,
                                 </button>
                                 {simulateSeatView ? (
                                   <div className="flex flex-wrap gap-2">
-                                    {(['left', 'center', 'right'] as DiagramSeatView[]).map(seat => (
+                                    {[
+                                      { key: 'left', label: 'Seat 2' },
+                                      { key: 'center', label: 'Seat 4' },
+                                      { key: 'right', label: 'Seat 6' },
+                                    ].map(seat => (
                                       <button
-                                        key={seat}
+                                        key={seat.key}
                                         type="button"
-                                        onClick={() => setSelectedSeat(seat)}
-                                        className={`rounded-lg border px-3 py-2 text-xs font-semibold capitalize transition ${selectedSeat === seat ? 'border-purple-400/60 bg-purple-500/20 text-white' : 'border-white/10 bg-white/[0.03] text-white/75 hover:bg-white/[0.06]'}`}
+                                        onClick={() => setSelectedSeat(seat.key as DiagramSeatView)}
+                                        className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${selectedSeat === seat.key ? 'border-purple-400/60 bg-purple-500/20 text-white' : 'border-white/10 bg-white/[0.03] text-white/75 hover:bg-white/[0.06]'}`}
                                       >
-                                        {seat} seat
+                                        {seat.label}
                                       </button>
                                     ))}
                                   </div>
@@ -1053,12 +1065,14 @@ ${routineSteps.trim()}` : null,
                               blockingPath={stageDiagramData.blockingPath}
                               simulateSeatView={simulateSeatView}
                               selectedSeat={selectedSeat}
+                              orientationDegrees={performerOrientation}
                             />
 
-                            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                              <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">🟢 Safe Angle</div>
-                              <div className="rounded-xl border border-yellow-400/20 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-100">🟡 Risk</div>
-                              <div className="rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm text-red-100">🔴 Exposure</div>
+                            <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+                              <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">🟢 Safe Viewing Angle</div>
+                              <div className="rounded-xl border border-yellow-400/20 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-100">🟡 Risk Zone</div>
+                              <div className="rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm text-red-100">🔴 Exposure Zone</div>
+                              <div className="rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2 text-sm text-white/80">Facing: {performerOrientation > 0 ? `+${performerOrientation}°` : `${performerOrientation}°`}</div>
                             </div>
 
                             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -1079,7 +1093,7 @@ ${routineSteps.trim()}` : null,
                                 <p className="mt-2 text-sm leading-relaxed text-white/80">
                                   {simulateSeatView
                                     ? selectedSeatInsight
-                                    : 'Turn on Simulate Seat View to inspect what a left, center, or right spectator is most likely to catch.'}
+                                    : 'Turn on Simulate Seat View to inspect what Seat 2, Seat 4, or Seat 6 is most likely to catch.'}
                                 </p>
                               </div>
                             </div>
