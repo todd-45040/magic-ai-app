@@ -3020,8 +3020,8 @@ ${action.payload.content}`;
       className={`relative flex items-center gap-2 whitespace-nowrap px-3 py-2 text-sm font-medium transition-colors ${isActive ? 'border-b-2 border-purple-400 text-purple-300' : 'border-b-2 border-transparent text-slate-400 hover:text-white'} ${isLocked ? 'text-slate-600 hover:text-slate-600' : ''}`}
     >
       <Icon className="w-4 h-4" />
-      <span className="hidden sm:inline">{label}</span>
-      <span className="sm:hidden text-[11px]">{label}</span>
+      <span className="hidden sm:inline">{label === "Assistant's Studio" ? (<span className="flex items-center gap-1">Assistant's Studio <span className="ml-1 text-[9px] px-1.5 py-0.5 rounded bg-indigo-500 text-white uppercase tracking-wide">BETA</span></span>) : label}</span>
+      <span className="sm:hidden text-[11px]">{label === "Assistant's Studio" ? (<span className="flex items-center gap-1">Assistant's Studio <span className="ml-1 text-[9px] px-1.5 py-0.5 rounded bg-indigo-500 text-white uppercase tracking-wide">BETA</span></span>) : label}</span>
       {isLocked && <LockIcon className="absolute top-1 right-1 w-3 h-3 text-amber-400/80" />}
     </button>
   );
@@ -3126,7 +3126,7 @@ const renderIntentSubnav = () => {
 
     const subBtn = (label: string, onClick: () => void, isActive?: boolean, locked?: boolean) => (
       <button
-        key={label}
+        key={label === "Assistant's Studio" ? (<span className="flex items-center gap-1">Assistant's Studio <span className="ml-1 text-[9px] px-1.5 py-0.5 rounded bg-indigo-500 text-white uppercase tracking-wide">BETA</span></span>) : label}
         onClick={onClick}
         className={[
           'whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold border transition-colors',
@@ -3135,7 +3135,7 @@ const renderIntentSubnav = () => {
         ].join(' ')}
         disabled={!!locked}
       >
-        {label}
+        {label === "Assistant's Studio" ? (<span className="flex items-center gap-1">Assistant's Studio <span className="ml-1 text-[9px] px-1.5 py-0.5 rounded bg-indigo-500 text-white uppercase tracking-wide">BETA</span></span>) : label}
       </button>
     );
 
@@ -3148,9 +3148,9 @@ const renderIntentSubnav = () => {
           {subBtn('Director Mode', () => handleNavigate('director-mode'), activeView === 'director-mode', !hasProfessionalAccess)}
           {subBtn('Patter Engine', () => handleNavigate('patter-engine'), activeView === 'patter-engine')}
           {subBtn('Illusion Blueprint', () => handleNavigate('illusion-blueprint'), activeView === 'illusion-blueprint', !hasProfessionalAccess)}
-          {subBtn("Assistant's Studio", () => handleNavigate('assistant-studio'), activeView === 'assistant-studio', !hasProfessionalAccess)}
-          {subBtn('Mentalism', () => handleNavigate('mentalism-assistant'), activeView === 'mentalism-assistant', !hasProfessionalAccess)}
           {subBtn('Gospel Magic', () => handleNavigate('gospel-magic-assistant'), activeView === 'gospel-magic-assistant', !hasProfessionalAccess)}
+          {subBtn('Mentalism', () => handleNavigate('mentalism-assistant'), activeView === 'mentalism-assistant', !hasProfessionalAccess)}
+          {subBtn("Assistant's Studio", () => handleNavigate('assistant-studio'), activeView === 'assistant-studio', !hasProfessionalAccess)}
         </div>
       );
     }
