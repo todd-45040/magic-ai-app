@@ -1408,7 +1408,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         }
 
         await safeCleanupSession();
-        openReviewForTake(takesRef.current.length);
+        openReviewForTake(Math.max(0, takesRef.current.length - 1));
     };
     
 
