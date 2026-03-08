@@ -541,6 +541,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
     const [errorMessage, setErrorMessage] = useState('');
     const [blockedUx, setBlockedUx] = useState<BlockedUx | null>(null);
     const [transcriptionHistory, setTranscriptionHistory] = useState<Transcription[]>([]);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
     
     const sessionRef = useRef<LiveSession | null>(null);
     const sessionPromiseRef = useRef<Promise<LiveSession> | null>(null);
@@ -832,6 +833,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         setTimer({ startTime: null, duration: null, isRunning: false });
         setSessionElapsed('0:00');
         setStatus('idle');
+        setIsAnalyzing(false);
     };
 
     useEffect(() => {
@@ -852,10 +854,12 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
     };
 
     const openReviewForTake = (takeIndex?: number) => {
+        const maxIndex = Math.max(0, takesRef.current.length - 1);
         if (typeof takeIndex === 'number' && Number.isFinite(takeIndex)) {
-            setSelectedTake(Math.max(0, takeIndex));
+            setSelectedTake(Math.max(0, Math.min(takeIndex, maxIndex)));
         }
         setBlockedUx(null);
+        setIsAnalyzing(false);
         setErrorMessage('');
         setStatus('idle');
         setView('reviewing');
@@ -1345,6 +1349,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
     };
 
     const handleStopRehearsal = async (reason?: string) => {
+        setIsAnalyzing(true);
         // Record minutes used for the current session.
         const start = sessionStartRef.current;
         if (start) {
@@ -1408,7 +1413,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         }
 
         await safeCleanupSession();
-        openReviewForTake(takesRef.current.length);
+        openReviewForTake(Math.max(0, takesRef.current.length - 1));
     };
     
 
@@ -1570,6 +1575,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                     <div className="flex-1 overflow-y-auto p-4 md:p-6 flex flex-col gap-5">
                         <StatusIndicator
                             status={status}
+                            isAnalyzing={isAnalyzing}
                             errorMessage={errorMessage}
                             blockedUx={blockedUx}
                             onUpgrade={onRequestUpgrade}
@@ -1644,7 +1650,9 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         <div className="flex flex-col h-full relative">
             <header className="p-4 border-b border-slate-800 flex items-center justify-between flex-shrink-0">
                 <div className="flex items-center gap-3">
-                    <MicrophoneIcon className="w-6 h-6 text-purple-400" />
+                    <div className={`rounded-full ${status === 'listening' ? 'animate-pulse shadow-[0_0_18px_rgba(168,85,247,0.5)]' : ''}`}>
+                        <MicrophoneIcon className={`w-6 h-6 ${status === 'listening' ? 'text-purple-300' : 'text-purple-400'}`} />
+                    </div>
                     <h2 className="text-xl font-bold text-white">Live Rehearsal Studio</h2>
                     {dailyLive && dailyLive.limit > 0 ? (
                         <div
@@ -1663,15 +1671,20 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                     ) : null}
                 </div>
                 <button 
-                    onClick={handleHeaderButtonClick} 
+                    onClick={handleHeaderButtonClick}
+                    disabled={isAnalyzing}
                     className={`flex items-center gap-2 px-4 py-2 text-sm rounded-md font-bold transition-colors ${
-                        view === 'rehearsing' 
-                            ? 'bg-red-600 hover:bg-red-700 text-white' 
+                        view === 'rehearsing'
+                            ? (isAnalyzing
+                                ? 'bg-amber-600 text-white cursor-wait animate-pulse'
+                                : 'bg-red-600 hover:bg-red-700 text-white')
                             : 'bg-slate-600 hover:bg-slate-700 text-white'
                     }`}
                 >
-                    {view === 'rehearsing' ? <StopIcon className="w-4 h-4" /> : <BackIcon className="w-4 h-4" />}
-                    <span>{view === 'rehearsing' ? 'Stop & Review' : 'Back to Studio'}</span>
+                    {view === 'rehearsing'
+                        ? (isAnalyzing ? <div className="w-4 h-4 rounded-full border-2 border-white/70 border-t-transparent animate-spin" /> : <StopIcon className="w-4 h-4" />)
+                        : <BackIcon className="w-4 h-4" />}
+                    <span>{view === 'rehearsing' ? (isAnalyzing ? 'Analyzing…' : 'Stop & Review') : 'Back to Studio'}</span>
                 </button>
             </header>
             {renderContent()}
@@ -1689,6 +1702,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
 
 const StatusIndicator: React.FC<{
     status: string,
+    isAnalyzing: boolean,
     errorMessage: string,
     blockedUx: BlockedUx | null,
     onUpgrade?: () => void,
@@ -1705,25 +1719,26 @@ const StatusIndicator: React.FC<{
     demoScript: string,
     demoDurationSeconds: number,
     demoMarkers: SegmentMarker[],
-}> = ({status, errorMessage, blockedUx, onUpgrade, onStart, elapsed, markerCount, helpOpen, onToggleHelp, onReset, onAddMarker, currentMarkers, onLoadDemo, onRunDemoReview, demoScript, demoDurationSeconds, demoMarkers}) => {
+}> = ({status, isAnalyzing, errorMessage, blockedUx, onUpgrade, onStart, elapsed, markerCount, helpOpen, onToggleHelp, onReset, onAddMarker, currentMarkers, onLoadDemo, onRunDemoReview, demoScript, demoDurationSeconds, demoMarkers}) => {
     const isDemoLoaded = Boolean(demoScript.trim());
     const isRecording = status === 'listening';
     const isConnecting = status === 'connecting';
-    const label = isRecording ? 'Recording' : isConnecting ? 'Connecting' : status === 'error' ? 'Attention Needed' : 'Ready';
+    const label = isAnalyzing ? 'Analyzing' : isRecording ? 'Recording' : isConnecting ? 'Connecting' : status === 'error' ? 'Attention Needed' : 'Ready';
 
     return (
         <div className="w-full max-w-4xl mx-auto space-y-4">
             <div className="bg-slate-900/40 border border-slate-700 rounded-2xl p-5 md:p-6">
                 <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
                     <div className="flex items-start gap-4">
-                        <div className={`relative w-16 h-16 rounded-2xl border flex items-center justify-center ${isRecording ? 'bg-purple-600/20 border-purple-400/60' : 'bg-slate-800 border-slate-700'}`}>
-                            {isRecording ? <div className="absolute inset-0 rounded-2xl bg-purple-500/20 animate-pulse" /> : null}
-                            <MicrophoneIcon className={`relative w-8 h-8 ${isRecording ? 'text-purple-200' : 'text-slate-300'}`} />
+                        <div className={`relative w-16 h-16 rounded-2xl border flex items-center justify-center ${isRecording ? 'bg-purple-600/20 border-purple-400/60 shadow-[0_0_18px_rgba(168,85,247,0.35)]' : isAnalyzing ? 'bg-amber-600/20 border-amber-400/60' : 'bg-slate-800 border-slate-700'}`}>
+                            {isRecording ? <div className="absolute inset-0 rounded-2xl bg-purple-500/20 animate-ping opacity-70" /> : null}
+                            {isRecording ? <div className="absolute inset-1 rounded-2xl border border-purple-300/30 animate-pulse" /> : null}
+                            <MicrophoneIcon className={`relative w-8 h-8 ${isRecording ? 'text-purple-200' : isAnalyzing ? 'text-amber-200' : 'text-slate-300'}`} />
                         </div>
                         <div>
                             <h2 className="text-2xl font-bold text-slate-100">Live Rehearsal Studio</h2>
                             <p className="text-sm text-slate-400 mt-1 max-w-2xl">Practice your script and get structured feedback on delivery, pacing, confidence, and clarity.</p>
-                            <div className={`mt-3 inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold border ${isRecording ? 'bg-purple-900/30 border-purple-500/50 text-purple-100' : isConnecting ? 'bg-amber-900/20 border-amber-500/40 text-amber-100' : status === 'error' ? 'bg-red-900/20 border-red-500/40 text-red-100' : 'bg-slate-800 border-slate-600 text-slate-200'}`}>
+                            <div className={`mt-3 inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold border ${isRecording ? 'bg-purple-900/30 border-purple-500/50 text-purple-100' : isAnalyzing ? 'bg-amber-900/20 border-amber-500/40 text-amber-100 animate-pulse' : isConnecting ? 'bg-amber-900/20 border-amber-500/40 text-amber-100' : status === 'error' ? 'bg-red-900/20 border-red-500/40 text-red-100' : 'bg-slate-800 border-slate-600 text-slate-200'}`}>
                                 <span>🎤 Status:</span>
                                 <span>{label}</span>
                             </div>
@@ -1763,11 +1778,11 @@ const StatusIndicator: React.FC<{
                 ) : null}
 
                 <div className="mt-5 flex flex-wrap items-center gap-3">
-                    <button onClick={onStart} disabled={isRecording || isConnecting} className={`px-6 py-3 rounded-full text-white font-bold transition-colors flex items-center gap-3 ${isRecording || isConnecting ? 'bg-slate-700 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'}`}>
+                    <button onClick={onStart} disabled={isRecording || isConnecting || isAnalyzing} className={`px-6 py-3 rounded-full text-white font-bold transition-colors flex items-center gap-3 ${isRecording || isConnecting || isAnalyzing ? 'bg-slate-700 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'}`}>
                         <MicrophoneIcon className="w-5 h-5" />
-                        <span>{isRecording ? 'Rehearsal Active' : isConnecting ? 'Connecting…' : 'Start Rehearsal'}</span>
+                        <span>{isRecording ? 'Rehearsal Active' : isAnalyzing ? 'Analysis in Progress…' : isConnecting ? 'Connecting…' : 'Start Rehearsal'}</span>
                     </button>
-                    <button onClick={onAddMarker} disabled={!isRecording} className={`px-4 py-2.5 rounded-lg border font-semibold transition-colors ${isRecording ? 'border-amber-500/50 text-amber-200 hover:bg-amber-900/15' : 'border-slate-700 text-slate-500 cursor-not-allowed'}`} >
+                    <button onClick={onAddMarker} disabled={!isRecording || isAnalyzing} className={`px-4 py-2.5 rounded-lg border font-semibold transition-colors ${isRecording ? 'border-amber-500/50 text-amber-200 hover:bg-amber-900/15' : 'border-slate-700 text-slate-500 cursor-not-allowed'}`} >
                         Add Marker
                     </button>
                     <button onClick={onReset} className="px-4 py-2.5 rounded-lg border border-slate-600 text-slate-200 hover:bg-slate-800/60 font-semibold transition-colors">
@@ -2461,7 +2476,7 @@ const ReviewView: React.FC<{
                                 onClick={() => onSelectTake(idx)}
                                 className={`px-3 py-1.5 rounded-full text-sm font-semibold border transition-colors ${
                                     idx === selectedTake
-                                        ? 'bg-purple-700/60 border-purple-500/60 text-white'
+                                        ? 'bg-[#7c3aed] border-purple-400/80 text-white shadow-[0_0_8px_rgba(124,58,237,.4)]'
                                         : 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700/60'
                                 }`}
                             >
@@ -2708,7 +2723,7 @@ const RehearsalMetricsCard: React.FC<{ transcript: Transcription[]; startedAt?: 
                     <div className="text-slate-100 font-semibold">Rehearsal Metrics</div>
                     <div className="text-sm text-slate-400 mt-1">Measured performance signals from this take.</div>
                 </div>
-                <div className="px-3 py-1 rounded-full shadow-[0_0_8px_rgba(124,58,237,.4)] bg-[#7c3aed] bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 text-sm font-semibold">
+                <div className="px-3 py-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-200 text-sm font-semibold">
                     Confidence {metrics.confidenceScore}%
                 </div>
             </div>
@@ -2740,7 +2755,7 @@ const SessionTimelineCard: React.FC<{ transcript: Transcription[]; markers?: Seg
             </div>
 
             <div className="mt-4 grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-4">
-                <div className="rounded-xl border border-slate-700 bg-slate-800/45 p-4">
+                <div className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
                     <div className="text-slate-100 font-semibold mb-3">Routine Beats</div>
                     <div className="space-y-3">
                         {timeline.map((item, idx) => (
@@ -2757,7 +2772,7 @@ const SessionTimelineCard: React.FC<{ transcript: Transcription[]; markers?: Seg
                     </div>
                 </div>
 
-                <div className="rounded-xl border border-slate-700 bg-slate-800/45 p-4">
+                <div className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
                     <div className="text-slate-100 font-semibold mb-3">AI Commentary</div>
                     <div className="space-y-3">
                         {timeline.map((item, idx) => (
