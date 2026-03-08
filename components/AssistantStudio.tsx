@@ -3,6 +3,7 @@ import { ASSISTANT_STUDIO_SYSTEM_INSTRUCTION } from '../constants';
 import { generateStructuredResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
 import { getShows, addTasksToShow } from '../services/showsService';
+import { trackClientEvent } from '../services/telemetryClient';
 import type { Show, Task, User } from '../types';
 
 type Props = {
@@ -720,14 +721,16 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
   const runGenerate = async (opts?: { refineInstruction?: string; usePrevious?: boolean }) => {
     if (!input.trim()) return;
     const myId = ++requestIdRef.current;
+    const effectiveResponseMode: ResponseMode = demoMode ? 'fast' : responseMode;
+    const requestedSections = getRequestedSections(lastPreset || null, effectiveResponseMode, demoMode);
+    const assistantStudioSpeedMode = getAssistantStudioSpeedMode(lastPreset || null, effectiveResponseMode, demoMode);
 
     try {
       setLoading(true);
       setShowLongLoadingHint(false);
       clearErrors();
       setToast(null);
-
-      const effectiveResponseMode: ResponseMode = demoMode ? 'fast' : responseMode;
+      void trackClientEvent({ tool: 'assistant_studio', action: 'assistant_generate_start', metadata: { responseMode: effectiveResponseMode, preset: lastPreset || null, inputLength: input.trim().length, refine: !!opts?.refineInstruction } });
 
       const prompt = buildStructuredPrompt({
         userInput: input.trim(),
@@ -739,8 +742,6 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
         demoMode,
       });
 
-      const requestedSections = getRequestedSections(lastPreset || null, effectiveResponseMode, demoMode);
-      const assistantStudioSpeedMode = getAssistantStudioSpeedMode(lastPreset || null, effectiveResponseMode, demoMode);
       const obj = await withTimeout(
         generateStructuredResponse(
           prompt,
@@ -777,7 +778,9 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
           : !!String(value || '').trim();
       });
       setActiveTab(firstAvailable?.key || 'fullText');
+      void trackClientEvent({ tool: 'assistant_studio', action: 'assistant_generate_success', outcome: 'SUCCESS_NOT_CHARGED', metadata: { responseMode: effectiveResponseMode, preset: lastPreset || null, refine: !!opts?.refineInstruction } });
     } catch (e: any) {
+      void trackClientEvent({ tool: 'assistant_studio', action: 'assistant_generate_error', outcome: 'ERROR_UPSTREAM', metadata: { responseMode, preset: lastPreset || null, refine: !!opts?.refineInstruction, message: e?.message || 'unknown' } });
       console.error(e);
 
       if (e?.message === 'TIMEOUT') {
@@ -879,6 +882,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
         tags,
       });
 
+      void trackClientEvent({ tool: 'assistant_studio', action: 'assistant_save_plan', outcome: 'SUCCESS_NOT_CHARGED', metadata: { title: planTitle, preset: lastPreset || null, responseMode } });
       onIdeaSaved?.();
       setToast('Saved to Ideas ✓');
       window.setTimeout(() => setToast(null), 1400);
@@ -937,6 +941,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
         tags,
       });
 
+      void trackClientEvent({ tool: 'assistant_studio', action: 'assistant_save_blueprint', outcome: 'SUCCESS_NOT_CHARGED', metadata: { blueprintName: blueprintName || 'Assistant Studio Blueprint', preset: lastPreset || null } });
       setBlueprintOpen(false);
       setToast('Blueprint saved ✓');
       window.setTimeout(() => setToast(null), 1500);
@@ -999,6 +1004,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
 
     try {
       await addTasksToShow(selectedShowId, tasks);
+      void trackClientEvent({ tool: 'assistant_studio', action: 'assistant_send_to_show_planner', outcome: 'SUCCESS_NOT_CHARGED', metadata: { showId: selectedShowId, taskCount: tasks.length, sendMode } });
       setShowPickerOpen(false);
       setToast('Sent to Show Planner ✓');
       window.setTimeout(() => setToast(null), 1600);

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { saveIdea } from "../services/ideasService";
 import { supabase } from "../supabase";
+import { trackClientEvent } from "../services/telemetryClient";
 import { CohesionActions } from "./CohesionActions";
 import SaveActionBar from "./shared/SaveActionBar";
 import { BookIcon, WandIcon, CheckIcon, CopyIcon } from "./icons";
@@ -96,6 +97,7 @@ Tones: ${tones}`;
     setIsLoading(true);
     setError(null);
     setResult(null);
+    void trackClientEvent({ tool: 'patter_engine', action: 'patter_generate_start', metadata: { tones, descriptionLength: desc.length } });
     setSaveStatus("idle");
     setCopyStatus("idle");
 
@@ -143,7 +145,9 @@ Tones: ${tones}`;
       }
 
       setResult(text);
+      void trackClientEvent({ tool: 'patter_engine', action: 'patter_generate_success', outcome: 'SUCCESS_NOT_CHARGED', metadata: { tones, descriptionLength: desc.length } });
     } catch (err: any) {
+      void trackClientEvent({ tool: 'patter_engine', action: 'patter_generate_error', outcome: 'ERROR_UPSTREAM', metadata: { tones, descriptionLength: desc.length, message: err?.message || 'unknown' } });
       console.error("Patter generation failed:", err);
       if (err?.name === "AbortError") {
         setError("Request timed out. Please try again.");
@@ -278,6 +282,7 @@ Tones: ${tones}`;
     try {
       const full = fullContentForSave();
       await saveIdea("text", full);
+      void trackClientEvent({ tool: 'patter_engine', action: 'patter_save_success', outcome: 'SUCCESS_NOT_CHARGED', metadata: { tones: selectedTones, descriptionLength: effectDescription.trim().length } });
       onIdeaSaved();
       setSaveStatus("saved");
       setTimeout(() => setSaveStatus("idle"), 2000);

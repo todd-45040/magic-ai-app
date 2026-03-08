@@ -3,6 +3,7 @@ import { Type } from '@google/genai';
 
 import { generateImages, generateStructuredResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
+import { trackClientEvent } from '../services/telemetryClient';
 import { CohesionActions } from './CohesionActions';
 import SaveActionBar from './shared/SaveActionBar';
 import type { User } from '../types';
@@ -638,6 +639,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
         content: exportBuilderPlanText,
         tags: ['illusion-blueprint', 'builder-plan'],
       });
+      void trackClientEvent({ tool: 'illusion_blueprint', action: 'illusion_blueprint_save_success', outcome: 'SUCCESS_NOT_CHARGED', metadata: { project_title: builderPlan?.project_title || '' } });
       onIdeaSaved();
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
@@ -666,6 +668,8 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     setIsGeneratingBlueprints(false);
     setIsGeneratingVisuals(false);
 
+    void trackClientEvent({ tool: 'illusion_blueprint', action: 'illusion_blueprint_start', metadata: { venueScale, performerStyle, budgetLevel, crewSize, resetRequirement } });
+
     const planPrompt = [
       'Create a realistic builder plan for the following illusion request.',
       '',
@@ -688,6 +692,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
       )) as BuilderPlan;
 
       setBuilderPlan(plan);
+      void trackClientEvent({ tool: 'illusion_blueprint', action: 'illusion_blueprint_success', outcome: 'SUCCESS_NOT_CHARGED', metadata: { project_title: plan?.project_title || '', venueScale, performerStyle } });
       setOpenSections({
         plan: true,
         construction: false,
@@ -747,6 +752,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
         setIsGeneratingVisuals(false);
       }
     } catch (err: any) {
+      void trackClientEvent({ tool: 'illusion_blueprint', action: 'illusion_blueprint_error', outcome: 'ERROR_UPSTREAM', metadata: { venueScale, performerStyle, message: err?.message || 'unknown' } });
       setError(err?.message || 'Unable to generate the builder plan.');
     } finally {
       setLoadingStage('');

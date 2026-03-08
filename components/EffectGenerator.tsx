@@ -10,6 +10,7 @@ import { useAppDispatch, useAppState } from '../store';
 import { addTaskToShow } from '../services/showsService';
 import { isDemoMode } from '../src/demo/demoEngine';
 import { markDemoToolCompleted } from '../services/demoTourService';
+import { trackClientEvent } from '../services/telemetryClient';
 
 type ParsedEffect = {
   name: string;
@@ -334,6 +335,8 @@ const handleTryExample = () => {
     setCopyStatus('idle');
     setIsStrongIdea(false);
 
+    void trackClientEvent({ tool: 'effect_generator', action: 'effect_generate_start', metadata: { fast: !!opts?.fast, creativeIntent, difficulty, itemCount: validItems.length } });
+
     const itemList = validItems.join(', ');
     // Phase 1: steer generations with intent + practicality constraints.
     const prompt = [
@@ -371,10 +374,12 @@ const handleTryExample = () => {
       }
 
       setDisplayIdeas(response);
+      void trackClientEvent({ tool: 'effect_generator', action: 'effect_generate_success', outcome: 'SUCCESS_NOT_CHARGED', metadata: { fast: !!opts?.fast, creativeIntent, difficulty, itemCount: validItems.length } });
       if (demoActive) {
         try { markDemoToolCompleted('effect_engine'); } catch {}
       }
     } catch (err) {
+      void trackClientEvent({ tool: 'effect_generator', action: 'effect_generate_error', outcome: 'ERROR_UPSTREAM', metadata: { fast: !!opts?.fast, creativeIntent, difficulty, itemCount: validItems.length, message: err instanceof Error ? err.message : 'unknown' } });
       setError(err instanceof Error ? err.message : "An unknown error occurred.");
     } finally {
       setIsLoading(false);
@@ -403,6 +408,7 @@ const handleTryExample = () => {
     setIsStrongIdea(false);
 
     const itemList = validItems.join(', ');
+    void trackClientEvent({ tool: 'effect_generator', action: 'effect_alternative_start', metadata: { creativeIntent, difficulty, itemCount: validItems.length } });
     const lastOutput = String(ideas).slice(0, 1500);
 
     const prompt = [
@@ -442,10 +448,12 @@ const handleTryExample = () => {
       }
 
       setDisplayIdeas(response);
+      void trackClientEvent({ tool: 'effect_generator', action: 'effect_alternative_success', outcome: 'SUCCESS_NOT_CHARGED', metadata: { creativeIntent, difficulty, itemCount: validItems.length } });
       if (demoActive) {
         try { markDemoToolCompleted('effect_engine'); } catch {}
       }
     } catch (err) {
+      void trackClientEvent({ tool: 'effect_generator', action: 'effect_alternative_error', outcome: 'ERROR_UPSTREAM', metadata: { creativeIntent, difficulty, itemCount: validItems.length, message: err instanceof Error ? err.message : 'unknown' } });
       setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
       setIsLoading(false);
@@ -488,6 +496,7 @@ const handleTryExample = () => {
 
     try {
       await saveIdea({ type: 'text', content: fullContent, title, tags });
+      void trackClientEvent({ tool: 'effect_generator', action: 'effect_save_success', outcome: 'SUCCESS_NOT_CHARGED', metadata: { title, strongIdea: isStrongIdea, creativeIntent, difficulty } });
       onIdeaSaved();
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
@@ -537,7 +546,7 @@ const handleTryExample = () => {
       `Rules: Keep the same structured format (Premise, The Experience, Method Overview, Performance Notes, Secret Hint).`,
       `Return exactly 3 effect concepts (no more, no less).`,
       `Keep each section concise: 2–4 sentences max per section.`,
-      `Avoid long intros. No filler.`,,
+      `Avoid long intros. No filler.`,
       `Also include Idea Strength (Strong Concept / Needs Work / Experimental) and Estimated Build Cost (Low / Medium / High).`,
       `Do NOT mention that you are an AI. Do NOT add safety disclaimers. Keep it concise and practical.`,
       `\nCURRENT OUTPUT TO REFINE:\n${base}`,
@@ -547,6 +556,7 @@ const handleTryExample = () => {
     setError(null);
     setSaveStatus('idle');
     setCopyStatus('idle');
+    void trackClientEvent({ tool: 'effect_generator', action: `effect_refine_${mode}_start`, metadata: { creativeIntent, difficulty } });
 
     try {
       const response = await generateResponse(
@@ -571,7 +581,9 @@ const handleTryExample = () => {
         await new Promise<void>((resolve) => window.setTimeout(() => resolve(), delay));
       }
       setDisplayIdeas(response);
+      void trackClientEvent({ tool: 'effect_generator', action: `effect_refine_${mode}_success`, outcome: 'SUCCESS_NOT_CHARGED', metadata: { creativeIntent, difficulty } });
     } catch (err) {
+      void trackClientEvent({ tool: 'effect_generator', action: `effect_refine_${mode}_error`, outcome: 'ERROR_UPSTREAM', metadata: { creativeIntent, difficulty, message: err instanceof Error ? err.message : 'unknown' } });
       setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
       setIsLoading(false);
@@ -650,6 +662,7 @@ const handleTryExample = () => {
     setTaskStatus('creating');
     try {
       const updatedShows = await addTaskToShow(taskShowId, {
+
         title,
         notes,
         priority: 'Medium',
@@ -672,6 +685,7 @@ const handleTryExample = () => {
         });
       } catch {}
 
+      void trackClientEvent({ tool: 'effect_generator', action: 'effect_convert_to_task', outcome: 'SUCCESS_NOT_CHARGED', metadata: { showId: taskShowId, title } });
       setTaskStatus('created');
       setTimeout(() => setTaskStatus('idle'), 1500);
       setIsTaskOpen(false);
@@ -735,6 +749,7 @@ const handleTryExample = () => {
         });
       } catch {}
 
+      void trackClientEvent({ tool: 'effect_generator', action: 'effect_send_to_show_planner', outcome: 'SUCCESS_NOT_CHARGED', metadata: { showId: selectedShowId, title } });
       setImportStatus('imported');
       setTimeout(() => setImportStatus('idle'), 2000);
       setIsImportOpen(false);
