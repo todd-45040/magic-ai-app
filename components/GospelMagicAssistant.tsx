@@ -111,7 +111,7 @@ const MinistryLayerVisualizer: React.FC<LayeredDiagramProps> = ({ compact }) => 
 );
 
 interface StressTestPersonaResult {
-  persona: 'Intelligent skeptic' | 'Aggressive debunker' | 'Corporate HR mindset' | 'Teen audience' | string;
+  persona: 'New believer' | 'Longtime church member' | 'Teen listener' | 'Outreach guest' | 'Church leadership mindset' | string;
   likely_reaction: string;
   where_suspicion_forms: string[];
   recommended_patches: string[];
@@ -434,6 +434,43 @@ const Card: React.FC<{ title: string; children: React.ReactNode; defaultOpen?: b
   </details>
 );
 
+const renderPhraseResultSections = (phrasesResult: MinistryPhrasesResult | null) => {
+  if (!phrasesResult) return <p className="text-slate-400 text-sm">Use the Ministry Phrase Builder to generate respectful transitions, Scripture moments, and humble closing lines.</p>;
+
+  return (
+    <div className="space-y-2">
+      {(
+        [
+          ['Bridge phrases', phrasesResult.bridge_phrases],
+          ['Reflection questions', phrasesResult.reflection_questions],
+          ['Gentle invitations', phrasesResult.gentle_invitations],
+          ['Clarity disclaimers', phrasesResult.clarity_disclaimers],
+          ['Encouragement lines', phrasesResult.encouragement_lines],
+          ['Scripture transition lines', phrasesResult.scripture_transition_lines],
+          ['Humble closing lines', phrasesResult.humble_closing_lines],
+        ] as Array<[string, string[]]>
+      ).map(([label, arr]) => (
+        <details key={label} className="group rounded-lg border border-slate-800 bg-slate-950/30" open={label === 'Bridge phrases'}>
+          <summary className="cursor-pointer select-none list-none px-3 py-2 flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-200">{label}</span>
+            <span className="text-slate-500 group-open:rotate-180 transition-transform">▾</span>
+          </summary>
+          <div className="px-3 pb-3 text-xs text-slate-200">
+            {arr?.length ? (
+              <ul className="list-disc ml-5 space-y-1">
+                {arr.map((x, i) => (
+                  <li key={i}>{x}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-slate-500">Not generated.</p>
+            )}
+          </div>
+        </details>
+      ))}
+    </div>
+  );
+};
 
 const toTag = (s: string) =>
   String(s || '')
@@ -959,27 +996,46 @@ Populate arrays for categories the user selected; for unselected categories, ret
     if (!blueprint) return null;
 
     return (
-      <div className="space-y-3 p-4 overflow-y-auto">
-        <div className="text-xs text-slate-500 flex flex-wrap gap-2">
-          <span className="px-2 py-1 rounded-full border border-slate-700 bg-slate-900/40">Tone: {ministryTone}</span>
-          <span className="px-2 py-1 rounded-full border border-slate-700 bg-slate-900/40">
-            Doctrinal Mode: {doctrinalMode ? 'On' : 'Off'}
-          </span>
-          <span className="px-2 py-1 rounded-full border border-slate-700 bg-slate-900/40">
-            Ministry Sensitivity: {ministrySensitivityMode ? 'On' : 'Off'}
-          </span>
+      <div className="space-y-3 p-4 pt-3 overflow-y-auto">
+        <div className="rounded-xl border border-amber-500/20 bg-gradient-to-r from-amber-500/10 via-slate-900/70 to-emerald-500/10 px-4 py-3">
+          <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-300">
+            <span className="px-2.5 py-1 rounded-full border border-amber-400/30 bg-amber-500/10 text-amber-100">Scripture-Centered Illustration Builder</span>
+            <span className="px-2.5 py-1 rounded-full border border-slate-700 bg-slate-900/70">Ministry Context: {blueprint.ministry_use_case || ministryTone}</span>
+            <span className="px-2.5 py-1 rounded-full border border-slate-700 bg-slate-900/70">Phrase Tone: {phraseTone}</span>
+            <span className={`px-2.5 py-1 rounded-full border ${doctrinalMode ? 'border-amber-400/30 bg-amber-500/10 text-amber-100' : 'border-slate-700 bg-slate-900/70 text-slate-400'}`}>
+              Doctrinal Integrity: {doctrinalMode ? 'On' : 'Off'}
+            </span>
+            <span className={`px-2.5 py-1 rounded-full border ${ministrySensitivityMode ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-100' : 'border-slate-700 bg-slate-900/70 text-slate-400'}`}>
+              Ministry Sensitivity: {ministrySensitivityMode ? 'On' : 'Off'}
+            </span>
+          </div>
         </div>
+
         <div className="mt-2">
           <MinistryLayerVisualizer />
         </div>
 
+        <Card title="Effect Summary" defaultOpen>
+          <div className="space-y-3">
+            <div>
+              <p className="text-slate-400 text-xs">Theological theme</p>
+              <p className="whitespace-pre-wrap">{blueprint.theological_theme}</p>
+            </div>
+            <div>
+              <p className="text-slate-400 text-xs">Effect fit assessment</p>
+              <p className="whitespace-pre-wrap">{blueprint.effect_fit_assessment}</p>
+            </div>
+            <div>
+              <p className="text-slate-400 text-xs">Ministry use case</p>
+              <p className="whitespace-pre-wrap">{blueprint.ministry_use_case}</p>
+            </div>
+          </div>
+        </Card>
 
         <Card title="Scripture Focus" defaultOpen>
           <p className="whitespace-pre-wrap">{blueprint.scripture_focus}</p>
         </Card>
-        <Card title="Theological Theme">
-          <p className="whitespace-pre-wrap">{blueprint.theological_theme}</p>
-        </Card>
+
         <Card title="Central Truth" defaultOpen>
           <p className="whitespace-pre-wrap">{blueprint.central_truth}</p>
         </Card>
@@ -1015,15 +1071,7 @@ Populate arrays for categories the user selected; for unselected categories, ret
           </div>
         </Card>
 
-        <Card title="Ministry Use Case">
-          <p className="whitespace-pre-wrap">{blueprint.ministry_use_case}</p>
-        </Card>
-
-        <Card title="Effect Fit Assessment">
-          <p className="whitespace-pre-wrap">{blueprint.effect_fit_assessment}</p>
-        </Card>
-
-        <Card title="Routine Structure" defaultOpen>
+        <Card title="Message Construction" defaultOpen>
           <div className="space-y-3">
             {(blueprint.routine_structure || []).map((p, idx) => (
               <div key={`${p.title}-${idx}`} className="rounded-lg border border-slate-800 bg-slate-950/30 p-3">
@@ -1032,7 +1080,7 @@ Populate arrays for categories the user selected; for unselected categories, ret
                 </p>
 
                 <div className="mt-2">
-                  <p className="text-slate-400 text-xs">Stage Action</p>
+                  <p className="text-slate-400 text-xs">Stage action</p>
                   <p className="whitespace-pre-wrap">{p.stage_action}</p>
                 </div>
 
@@ -1042,14 +1090,14 @@ Populate arrays for categories the user selected; for unselected categories, ret
                     <p className="whitespace-pre-wrap">{p.illustration}</p>
                   </div>
                   <div>
-                    <p className="text-slate-400 text-xs">Teaching Point</p>
+                    <p className="text-slate-400 text-xs">Teaching point</p>
                     <p className="whitespace-pre-wrap">{p.teaching_point}</p>
                   </div>
                 </div>
 
                 {!!p.suggested_lines?.length && (
                   <div className="mt-3">
-                    <p className="text-slate-400 text-xs">Suggested Lines</p>
+                    <p className="text-slate-400 text-xs">Suggested lines</p>
                     <ul className="list-disc ml-5 mt-1 space-y-1">
                       {p.suggested_lines.map((l, i) => (
                         <li key={i} className="text-slate-200">
@@ -1071,65 +1119,21 @@ Populate arrays for categories the user selected; for unselected categories, ret
           </div>
         </Card>
 
-        <Card title="Illustration Bridge">
-          <p className="whitespace-pre-wrap">{blueprint.illustration_bridge}</p>
-        </Card>
-
-        <Card title="Emotional Arc">
-          <ul className="list-disc ml-5 space-y-1">
-            {(blueprint.emotional_arc || []).map((x, i) => (
-              <li key={i}>{x}</li>
-            ))}
-          </ul>
-        </Card>
-
-        <Card title="Pastoral Tone Guidance">
-          <p className="whitespace-pre-wrap">{blueprint.pastoral_tone_guidance}</p>
-        </Card>
-
-        <Card title="Altar Call Sensitivity">
-          <p className="whitespace-pre-wrap">{blueprint.altar_call_sensitivity?.guidance}</p>
-          <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <p className="text-slate-400 text-xs">Do</p>
-              <ul className="list-disc ml-5 mt-1 space-y-1">
-                {(blueprint.altar_call_sensitivity?.do || []).map((x, i) => (
-                  <li key={i}>{x}</li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <p className="text-slate-400 text-xs">Avoid</p>
-              <ul className="list-disc ml-5 mt-1 space-y-1">
-                {(blueprint.altar_call_sensitivity?.dont || []).map((x, i) => (
-                  <li key={i}>{x}</li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </Card>
-
-        <Card title="Age Adjustments">
+        <Card title="Ministry Use Case & Effect Fit">
           <div className="space-y-3">
-            {(blueprint.age_adjustments || []).map((a, i) => (
-              <div key={`${a.audience}-${i}`} className="rounded-lg border border-slate-800 bg-slate-950/30 p-3">
-                <p className="font-semibold text-slate-200">{a.audience}</p>
-                <ul className="list-disc ml-5 mt-1 space-y-1">
-                  {(a.adjustments || []).map((x, j) => (
-                    <li key={j}>{x}</li>
-                  ))}
-                </ul>
-              </div>
-            ))}
+            <div>
+              <p className="text-slate-400 text-xs">Best ministry setting</p>
+              <p className="whitespace-pre-wrap">{blueprint.ministry_use_case}</p>
+            </div>
+            <div>
+              <p className="text-slate-400 text-xs">Why this effect fits</p>
+              <p className="whitespace-pre-wrap">{blueprint.effect_fit_assessment}</p>
+            </div>
+            <div>
+              <p className="text-slate-400 text-xs">Illustration bridge</p>
+              <p className="whitespace-pre-wrap">{blueprint.illustration_bridge}</p>
+            </div>
           </div>
-        </Card>
-
-        <Card title="Potential Misinterpretations">
-          <ul className="list-disc ml-5 space-y-1">
-            {(blueprint.potential_misinterpretations || []).map((x, i) => (
-              <li key={i}>{x}</li>
-            ))}
-          </ul>
         </Card>
 
         <Card title="Reverence Risk Notes">
@@ -1152,7 +1156,6 @@ Populate arrays for categories the user selected; for unselected categories, ret
           <p className="whitespace-pre-wrap">{blueprint.scripture_handling_notes}</p>
         </Card>
 
-        
         <Card title="Ministry Clarity Review">
           {!stressReport && (
             <p className="text-slate-400 text-sm">
@@ -1174,7 +1177,7 @@ Populate arrays for categories the user selected; for unselected categories, ret
 
               {!!stressReport.where_suspicion_forms?.length && (
                 <div>
-                  <p className="text-slate-400 text-xs">Where suspicion forms</p>
+                  <p className="text-slate-400 text-xs">Where clarity may break down</p>
                   <ul className="list-disc ml-5 mt-1 space-y-1">
                     {stressReport.where_suspicion_forms.map((x, i) => (
                       <li key={i}>{x}</li>
@@ -1196,7 +1199,7 @@ Populate arrays for categories the user selected; for unselected categories, ret
 
               {!!stressReport.persona_results?.length && (
                 <div className="space-y-2">
-                  <p className="text-slate-400 text-xs">Persona notes</p>
+                  <p className="text-slate-400 text-xs">Perspective notes</p>
                   {stressReport.persona_results.map((p, i) => (
                     <div key={i} className="rounded-lg border border-slate-800 bg-slate-950/30 p-3">
                       <p className="text-slate-200 font-semibold">{p.persona}</p>
@@ -1231,21 +1234,102 @@ Populate arrays for categories the user selected; for unselected categories, ret
           )}
         </Card>
 
-<Card title="Closing Prayer Option">
-          <p className="whitespace-pre-wrap">{blueprint.closing_prayer_option}</p>
+        <Card title="Phrase Builder Output">
+          {renderPhraseResultSections(phrasesResult)}
+        </Card>
+
+        <Card title="Practical Ministry Guidance">
+          <div className="space-y-4">
+            <div>
+              <p className="text-slate-400 text-xs">Pastoral tone guidance</p>
+              <p className="whitespace-pre-wrap">{blueprint.pastoral_tone_guidance}</p>
+            </div>
+
+            <div>
+              <p className="text-slate-400 text-xs">Emotional arc</p>
+              <ul className="list-disc ml-5 space-y-1">
+                {(blueprint.emotional_arc || []).map((x, i) => (
+                  <li key={i}>{x}</li>
+                ))}
+              </ul>
+            </div>
+
+            <div>
+              <p className="text-slate-400 text-xs">Altar call sensitivity</p>
+              <p className="whitespace-pre-wrap">{blueprint.altar_call_sensitivity?.guidance}</p>
+              <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <p className="text-slate-400 text-xs">Do</p>
+                  <ul className="list-disc ml-5 mt-1 space-y-1">
+                    {(blueprint.altar_call_sensitivity?.do || []).map((x, i) => (
+                      <li key={i}>{x}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <p className="text-slate-400 text-xs">Avoid</p>
+                  <ul className="list-disc ml-5 mt-1 space-y-1">
+                    {(blueprint.altar_call_sensitivity?.dont || []).map((x, i) => (
+                      <li key={i}>{x}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-slate-400 text-xs">Age adjustments</p>
+              <div className="space-y-3">
+                {(blueprint.age_adjustments || []).map((a, i) => (
+                  <div key={`${a.audience}-${i}`} className="rounded-lg border border-slate-800 bg-slate-950/30 p-3">
+                    <p className="font-semibold text-slate-200">{a.audience}</p>
+                    <ul className="list-disc ml-5 mt-1 space-y-1">
+                      {(a.adjustments || []).map((x, j) => (
+                        <li key={j}>{x}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-slate-400 text-xs">Potential misinterpretations</p>
+              <ul className="list-disc ml-5 space-y-1">
+                {(blueprint.potential_misinterpretations || []).map((x, i) => (
+                  <li key={i}>{x}</li>
+                ))}
+              </ul>
+            </div>
+
+            <div>
+              <p className="text-slate-400 text-xs">Closing prayer option</p>
+              <p className="whitespace-pre-wrap">{blueprint.closing_prayer_option}</p>
+            </div>
+          </div>
         </Card>
       </div>
     );
   };
 
   return (
-    <div className="flex-1 lg:grid lg:grid-cols-2 gap-6 overflow-y-auto p-4 md:p-6">
+    <div className="flex-1 lg:grid lg:grid-cols-2 gap-6 overflow-y-auto p-4 pt-4 md:p-6 md:pt-6">
       {/* Control Panel */}
       <div className="flex flex-col">
-        <h2 className="text-xl font-bold text-amber-200 mb-2">Ministry Architecture Lab</h2>
-        <p className="text-slate-400 mb-4">
-          Build a structured, message-first Gospel magic blueprint. Add a theme/effect, a Scripture reference, and choose the ministry setting.
-        </p>
+        <div className="mb-4 rounded-xl border border-amber-500/20 bg-gradient-to-r from-amber-500/10 via-slate-900/80 to-emerald-500/10 p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-xl font-bold text-amber-200">Ministry Architecture Lab</h2>
+            <span className="px-2.5 py-1 rounded-full border border-amber-400/30 bg-amber-500/10 text-[11px] font-semibold text-amber-100">
+              Message-First Ministry Tool
+            </span>
+          </div>
+          <p className="text-slate-300 mt-2">
+            Scripture-Centered Illustration Builder
+          </p>
+          <p className="text-slate-400 mt-1 text-sm">
+            Designed to support biblical communication with humility and clarity.
+          </p>
+        </div>
 
         <div className="space-y-4">
           <div>
@@ -1494,6 +1578,15 @@ Populate arrays for categories the user selected; for unselected categories, ret
             <span>Build Ministry Blueprint</span>
           </button>
 
+          <div className="rounded-lg border border-slate-800 bg-slate-950/30 px-3 py-2">
+            <p className="text-xs text-slate-300">
+              Designed to support Scripture-centered presentation, not replace pastoral leadership.
+            </p>
+            <p className="text-[11px] text-slate-500 mt-1">
+              Use illustration carefully so the truth remains central.
+            </p>
+          </div>
+
           {error && <p className="text-red-400 mt-2 text-sm text-center">{error}</p>}
 
           <div className="pt-4">
@@ -1579,7 +1672,7 @@ Populate arrays for categories the user selected; for unselected categories, ret
                   title="Review for clarity, sensitivity, and where confusion or skepticism may arise"
                 >
                   <span className="text-base leading-none">🔍</span>
-                  <span>{isStressLoading ? 'Reviewing…' : 'Review Clarity'}</span>
+                  <span>{isStressLoading ? 'Reviewing…' : 'Run Clarity Review'}</span>
                 </button>
 
                 <div className="hidden sm:block w-px self-stretch bg-slate-800 mx-1" />
@@ -1634,11 +1727,14 @@ Populate arrays for categories the user selected; for unselected categories, ret
 
             <div className="relative max-w-md">
               <div className="mx-auto mb-4 w-full max-w-md">
-                <PsychologicalLayerVisualizer compact />
+                <MinistryLayerVisualizer compact />
               </div>
               <p className="text-slate-300 font-semibold">Your ministry blueprint will appear here.</p>
               <p className="text-slate-500 text-sm mt-2">
-                Start with a Scripture reference or a message theme, choose the ministry tone, and generate a structured routine you can trust.
+                Build a ministry illustration that serves the message, supports Scripture, and remains pastorally sensitive.
+              </p>
+              <p className="text-slate-500 text-xs mt-2">
+                Start with a Scripture reference or a message theme, then shape a message-first routine with humility and clarity.
               </p>
               <div className="mt-4 text-xs text-slate-500">
                 <p className="italic opacity-60 tracking-wider text-amber-200/70">“Let all things be done decently and in order.”</p>
