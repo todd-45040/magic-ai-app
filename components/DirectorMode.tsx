@@ -222,6 +222,24 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
 
     // Advanced Options (optional)
     const [showAdvanced, setShowAdvanced] = useState(false);
+
+    useEffect(() => {
+        try {
+            const raw = typeof window !== 'undefined' ? window.sessionStorage.getItem('maw-director-mode-seed') : null;
+            if (!raw) return;
+            if (!showTitle.trim()) setShowTitle('Angle & Risk Follow-Up');
+            if (!theme.trim()) setTheme('Refine blocking, timing, and audience management');
+            setConstraintNotes((prev) => {
+                const seedBlock = `Angle & Risk Notes:\n${raw}`;
+                return prev.trim() ? `${prev.trim()}\n\n${seedBlock}` : seedBlock;
+            });
+            window.sessionStorage.removeItem('maw-director-mode-seed');
+        } catch {
+            // ignore best-effort prefill
+        }
+        // intentionally run once on mount
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
     const [pacing, setPacing] = useState<'Relaxed' | 'Balanced' | 'High-energy' | ''>('');
     const [comedyLevel, setComedyLevel] = useState<'Low' | 'Medium' | 'High' | ''>('');
     const [participation, setParticipation] = useState<'Low' | 'Medium' | 'High' | ''>('');
