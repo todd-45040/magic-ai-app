@@ -97,44 +97,12 @@ Now... if your memory is certain, this reveal should feel impossible.`;
 
 const DEMO_DURATION_SECONDS = 62;
 const DEMO_SESSION_NOTES = 'Convention-ready sample patter loaded for booth testing.';
+const LIVE_DISABLED_BASELINE_MESSAGE = 'Live Rehearsal audio is disabled in this production baseline build until an ephemeral-token broker is enabled. Use the demo review flow for booth testing, or enable the secure live-session backend to use real microphone rehearsal.';
 const buildDemoMarkers = (startedAt: number): SegmentMarker[] => ([
     { id: `demo-marker-1-${startedAt}`, label: 'Opener', createdAtMs: startedAt + 8000 },
     { id: `demo-marker-2-${startedAt}`, label: 'Spectator moment', createdAtMs: startedAt + 28000 },
     { id: `demo-marker-3-${startedAt}`, label: 'Reveal', createdAtMs: startedAt + 50000 },
 ]);
-
-const deriveLiveStartErrorMessage = (error: any): string => {
-    const name = String(error?.name || '');
-    const message = String(error?.message || '').toLowerCase();
-
-    if (name === 'NotAllowedError' || name === 'PermissionDeniedError' || message.includes('permission')) {
-        return 'Microphone permission denied. Please allow microphone access in your browser settings and try again.';
-    }
-    if (name === 'NotFoundError' || name === 'DevicesNotFoundError' || message.includes('no audio input') || message.includes('no microphone')) {
-        return 'No microphone was detected. Connect an audio input device and try again.';
-    }
-    if (name === 'NotReadableError' || message.includes('device in use') || message.includes('could not start audio source')) {
-        return 'Your microphone is busy or unavailable. Close other apps using the mic, then try again.';
-    }
-    if (message.includes('network') || message.includes('fetch') || message.includes('offline')) {
-        return 'Network connection issue detected. Check your internet connection and try again.';
-    }
-    if (message.includes('websocket') || message.includes('session') || message.includes('connect')) {
-        return 'Live session failed to initialize. Please try again in a moment.';
-    }
-    return 'Failed to connect. Please check your connection and microphone, then try again.';
-};
-
-const isDemoTranscript = (transcript: Transcription[] = []): boolean => {
-    const joined = (transcript || [])
-        .filter((t) => t?.source === 'user')
-        .map((t) => t?.text || '')
-        .join(' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-    const demo = DEMO_SCRIPT.replace(/\s+/g, ' ').trim();
-    return !!joined && joined === demo;
-};
 
 const formatElapsed = (ms: number): string => {
     const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -925,22 +893,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         }
         errorOccurred.current = false;
         try {
-            if (!navigator?.mediaDevices?.getUserMedia) {
-                throw new Error('No microphone support available in this browser context.');
-            }
-
-            try {
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                const audioInputs = devices.filter((device) => device.kind === 'audioinput');
-                if (audioInputs.length === 0) {
-                    const noMicError = new Error('No audio input device detected.');
-                    (noMicError as any).name = 'NotFoundError';
-                    throw noMicError;
-                }
-            } catch (deviceErr: any) {
-                if (String(deviceErr?.name || '') === 'NotFoundError') throw deviceErr;
-            }
-
             // FIX: Request audio without a specific sample rate to ensure compatibility.
             // The audio will be resampled later if needed.
             const stream = await navigator.mediaDevices.getUserMedia({
@@ -1120,7 +1072,21 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             } catch {
                 // ignore
             }
-            setErrorMessage(deriveLiveStartErrorMessage(error));
+            const errorName = String(error?.name || '');
+            const errorMessage = String(error?.message || error || '');
+            if (errorName === 'NotAllowedError' || errorName === 'PermissionDeniedError') {
+                setErrorMessage('Microphone permission denied. Please allow microphone access in your browser settings.');
+            } else if (errorName === 'NotFoundError' || errorName === 'DevicesNotFoundError') {
+                setErrorMessage('No microphone was detected. Connect an audio input device and try again.');
+            } else if (errorName === 'NotReadableError' || errorName === 'TrackStartError') {
+                setErrorMessage('Your microphone is busy or unavailable. Close other apps using the mic and try again.');
+            } else if (errorMessage.includes('disabled in the production baseline')) {
+                setErrorMessage(LIVE_DISABLED_BASELINE_MESSAGE);
+            } else if (errorName === 'AbortError' || errorName === 'NetworkError' || /network|fetch|timeout|connection/i.test(errorMessage)) {
+                setErrorMessage('Network or API connection failed while starting live rehearsal. Please check your connection and try again.');
+            } else {
+                setErrorMessage('Live session failed to initialize. Please try again in a moment.');
+            }
             await safeCleanupSession();
             setStatus('error');
             setView('idle');
@@ -1414,6 +1380,29 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         });
     };
 
+    const loadDemoScriptIntoStudio = () => {
+        const startedAt = Date.now() - (DEMO_DURATION_SECONDS * 1000);
+        const markers = buildDemoMarkers(startedAt);
+        setDemoScript(DEMO_SCRIPT);
+        setDemoDurationSeconds(DEMO_DURATION_SECONDS);
+        setDemoMarkers(markers);
+        setMarkerCount(markers.length);
+        setSessionElapsed('0:00');
+        setStatus('idle');
+        setErrorMessage('');
+        setBlockedUx(null);
+        setSessionTitle('Demo Rehearsal Session');
+        setSessionNotes(DEMO_SESSION_NOTES);
+    };
+
+    const handleAddDemoButton = () => {
+        if (demoScript.trim()) {
+            handleRunDemoReview();
+            return;
+        }
+        loadDemoScriptIntoStudio();
+    };
+
     const handleRunDemoReview = () => {
         const script = demoScript.trim();
         if (!script) return;
@@ -1438,27 +1427,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         setSessionElapsed('0:00');
         setSessionTitle('Demo Rehearsal Session');
         setSessionNotes(DEMO_SESSION_NOTES);
-        setRefineOpen(false);
-        setRefineResult(null);
         setView('reviewing');
-    };
-
-    const handleAnalyzeLoadedDemoTake = () => {
-        const script = demoScript.trim();
-        if (!script) return;
-
-        const selected = current;
-        if (selected && isDemoTranscript(selected.transcript)) {
-            setSessionTitle('Demo Rehearsal Session');
-            setSessionNotes(DEMO_SESSION_NOTES);
-            setSelectedTake(Math.max(0, Math.min(selectedTake, takes.length - 1)));
-            setView('reviewing');
-            setErrorMessage('');
-            setBlockedUx(null);
-            return;
-        }
-
-        handleRunDemoReview();
     };
 
     const handleHeaderButtonClick = async () => {
@@ -1541,20 +1510,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                             }}
                             onAddMarker={handleAddMarker}
                             currentMarkers={currentMarkers}
-                            onLoadDemo={() => {
-                                const startedAt = Date.now() - (DEMO_DURATION_SECONDS * 1000);
-                                const markers = buildDemoMarkers(startedAt);
-                                setDemoScript(DEMO_SCRIPT);
-                                setDemoDurationSeconds(DEMO_DURATION_SECONDS);
-                                setDemoMarkers(markers);
-                                setMarkerCount(markers.length);
-                                setSessionElapsed(formatElapsed(DEMO_DURATION_SECONDS * 1000));
-                                setStatus('idle');
-                                setErrorMessage('');
-                                setBlockedUx(null);
-                                setSessionTitle('Demo Rehearsal Session');
-                                setSessionNotes(DEMO_SESSION_NOTES);
-                            }}
+                            onLoadDemo={handleAddDemoButton}
                             onRunDemoReview={handleRunDemoReview}
                             demoScript={demoScript}
                             demoDurationSeconds={demoDurationSeconds}
@@ -1662,6 +1618,7 @@ const StatusIndicator: React.FC<{
     demoDurationSeconds: number,
     demoMarkers: SegmentMarker[],
 }> = ({status, errorMessage, blockedUx, onUpgrade, onStart, elapsed, markerCount, helpOpen, onToggleHelp, onReset, onAddMarker, currentMarkers, onLoadDemo, onRunDemoReview, demoScript, demoDurationSeconds, demoMarkers}) => {
+    const isDemoLoaded = Boolean(demoScript.trim());
     const isRecording = status === 'listening';
     const isConnecting = status === 'connecting';
     const label = isRecording ? 'Recording' : isConnecting ? 'Connecting' : status === 'error' ? 'Attention Needed' : 'Ready';
@@ -1729,7 +1686,7 @@ const StatusIndicator: React.FC<{
                         Reset Studio
                     </button>
                     <button onClick={onLoadDemo} className="px-4 py-2.5 rounded-lg border border-purple-600/50 text-purple-200 hover:bg-purple-900/20 font-semibold transition-colors">
-                        Load Demo Script
+                        {isDemoLoaded ? 'Analyze Loaded Demo' : 'Load Demo Script'}
                     </button>
                 </div>
             </div>
@@ -1801,7 +1758,7 @@ const StatusIndicator: React.FC<{
                                 <button onClick={onRunDemoReview} className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-semibold transition-colors">
                                     Run Demo Review
                                 </button>
-                                <div className="text-xs text-purple-100/75">Generate the same structured rehearsal review used after a real take, without leaving this page.</div>
+                                <div className="text-xs text-purple-100/75">Generate the same structured rehearsal review used after a real take, without leaving this page. The main demo button above also becomes Analyze Loaded Demo after the script is loaded.</div>
                             </div>
                         </div>
                     </div>
@@ -2039,6 +1996,9 @@ const ReviewView: React.FC<{
     const [refinePrompt, setRefinePrompt] = useState('');
     const [refineResult, setRefineResult] = useState<CoachingFollowUpResult | null>(null);
 
+    const current = takes?.[selectedTake] ?? null;
+    const isDemoTake = Boolean(current && sessionTitle === 'Demo Rehearsal Session' && current.transcript?.some((seg) => String(seg?.text || '').includes('quick experiment in attention')));
+
     useEffect(() => {
         setRefinePrompt('');
         setRefineResult(null);
@@ -2090,8 +2050,6 @@ const ReviewView: React.FC<{
     };
 
     const hasAnyTakes = (takes?.length ?? 0) > 0;
-    const current = hasAnyTakes ? takes[Math.max(0, Math.min(selectedTake, takes.length - 1))] : null;
-    const currentTakeIsDemo = !!current && isDemoTranscript(current.transcript);
 
     const handleAnalyzeAngles = () => {
         if (!current) return;
@@ -2401,15 +2359,25 @@ const ReviewView: React.FC<{
                 </div>
 
                 <div className="space-y-4 bg-slate-800/40 border border-slate-700 rounded-lg p-4">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
                         <div className="text-slate-200 font-semibold">
                             {current ? `Transcript — Take ${current.takeNumber}` : 'Transcript'}
                         </div>
-                        {hasAnyTakes ? (
-                            <div className="px-3 py-1.5 rounded-md border border-slate-700 bg-slate-900/40 text-slate-300 text-sm font-semibold">
-                                In-page refinement active
-                            </div>
-                        ) : null}
+                        <div className="flex items-center gap-2 flex-wrap">
+                            {isDemoTake ? (
+                                <button
+                                    onClick={() => runRefine('Analyze this demo take and give me focused rehearsal feedback for this script.') }
+                                    className="px-3 py-1.5 rounded-md border border-purple-600/40 bg-purple-900/20 text-purple-100 text-sm font-semibold hover:bg-purple-900/30 transition-colors"
+                                >
+                                    Analyze This Demo Take
+                                </button>
+                            ) : null}
+                            {hasAnyTakes ? (
+                                <div className="px-3 py-1.5 rounded-md border border-slate-700 bg-slate-900/40 text-slate-300 text-sm font-semibold">
+                                    In-page refinement active
+                                </div>
+                            ) : null}
+                        </div>
                     </div>
 
                     {current?.transcript?.length ? (
