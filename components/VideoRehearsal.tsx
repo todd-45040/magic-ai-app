@@ -43,9 +43,9 @@ const GuidedPlaceholder: React.FC = () => (
                 <div className="mx-auto w-14 h-14 rounded-2xl bg-slate-800/70 border border-slate-700 flex items-center justify-center">
                     <VideoIcon className="w-8 h-8 text-slate-300" />
                 </div>
-                <h3 className="mt-4 text-lg font-semibold text-slate-200">Ready when you are</h3>
+                <h3 className="mt-4 text-lg font-semibold text-slate-200">Upload a video to get performance coaching</h3>
                 <p className="mt-1 text-sm text-slate-400">
-                    Upload a rehearsal video and click <span className="text-slate-200 font-medium">Analyze</span>. Your feedback will appear here.
+                    Your rehearsal feedback will appear here. AI review will highlight <span className="text-slate-200 font-medium">posture, timing, blocking, and angles</span>.
                 </p>
             </div>
 
@@ -557,6 +557,7 @@ const deriveAutoTags = (): string[] => {
 
                     <div>
                         <label htmlFor="analysis-prompt" className="block text-sm font-medium text-slate-300 mb-1">Analysis Focus (Optional)</label>
+                        <p className="text-xs text-slate-500 mb-2">Tell the AI what to watch for: posture, pacing, angles, blocking, tension.</p>
                         <textarea id="analysis-prompt" rows={3} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="e.g., Check my posture and hand movements during the vanish." className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500" />
 
 {/* Phase 5: saved focus templates */}
@@ -669,7 +670,7 @@ const deriveAutoTags = (): string[] => {
 
                         <div className="mt-auto p-3 bg-slate-900/50 flex flex-col gap-3 border-t border-slate-800">
                             <div className="flex items-center justify-between">
-                                <p className="text-xs text-slate-400">Next steps</p>
+                                <p className="text-xs text-slate-400">Use this feedback</p>
                                 <p className="text-xs text-slate-500">Tip: use Analysis Focus chips to steer the feedback</p>
                             </div>
 
