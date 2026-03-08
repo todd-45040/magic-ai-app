@@ -914,8 +914,7 @@ ${routineSteps.trim()}` : null,
                         subtitle: 'User-directed focus areas that may need better offbeats or attention cover.',
                         children: (
                           <div className="space-y-2 text-sm text-white/80">
-                            {focusText.split('
-').filter(Boolean).map((item, idx) => (
+                            {focusText.split('\n').filter(Boolean).map((item, idx) => (
                               <div key={`${idx}-${item.slice(0, 12)}`} className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2">{item}</div>
                             ))}
                           </div>
