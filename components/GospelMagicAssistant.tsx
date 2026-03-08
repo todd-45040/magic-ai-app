@@ -23,6 +23,15 @@ type MinistryTone =
   | 'Hospital / Pastoral Care'
   | 'VBS / Camp Setting';
 
+type MinistryContext =
+  | 'Sermon Support'
+  | 'Standalone Object Lesson'
+  | 'Invitation / Response Moment'
+  | 'Outreach Event'
+  | "Children's Lesson"
+  | 'Hospital / Bedside Encouragement'
+  | 'Youth Service Illustration';
+
 interface MinistryBlueprint {
   scripture_focus: string;
   theological_theme: string;
@@ -67,10 +76,10 @@ interface LayeredDiagramProps {
  * A calm, structured visualizer to communicate “engineered layering”
  * without flashy effects.
  */
-const PsychologicalLayerVisualizer: React.FC<LayeredDiagramProps> = ({ compact }) => (
+const MinistryLayerVisualizer: React.FC<LayeredDiagramProps> = ({ compact }) => (
   <div className={`rounded-xl border border-slate-800 bg-slate-950/30 ${compact ? 'p-3' : 'p-4'}`}>
     <div className="flex items-center justify-between">
-      <p className="text-xs font-semibold text-amber-200">Layered Construction</p>
+      <p className="text-xs font-semibold text-amber-200">Message Construction</p>
       <p className="text-[10px] text-slate-500">visualizer</p>
     </div>
     <p className="mt-1 text-[11px] text-slate-500">
@@ -96,19 +105,19 @@ const PsychologicalLayerVisualizer: React.FC<LayeredDiagramProps> = ({ compact }
   </div>
 );
 
-interface StressTestPersonaResult {
-  persona: 'Intelligent skeptic' | 'Aggressive debunker' | 'Corporate HR mindset' | 'Teen audience' | string;
+interface ClarityReviewPersonaResult {
+  persona: 'New believer' | 'Longtime church member' | 'Teen listener' | 'Outreach guest unfamiliar with church language' | 'Church leadership mindset' | string;
   likely_reaction: string;
   where_suspicion_forms: string[];
   recommended_patches: string[];
 }
 
-interface StressTestReport {
+interface ClarityReviewReport {
   overall_risk: 'Low' | 'Medium' | 'High' | string;
   vulnerability_report: string;
   where_suspicion_forms: string[];
   recommended_patches: string[];
-  persona_results: StressTestPersonaResult[];
+  persona_results: ClarityReviewPersonaResult[];
 }
 
 interface PhraseCategorySelection {
@@ -135,6 +144,16 @@ const MINISTRY_TONES: MinistryTone[] = [
   'Outreach / Evangelism',
   'Hospital / Pastoral Care',
   'VBS / Camp Setting',
+];
+
+const MINISTRY_CONTEXTS: MinistryContext[] = [
+  'Sermon Support',
+  'Standalone Object Lesson',
+  'Invitation / Response Moment',
+  'Outreach Event',
+  "Children's Lesson",
+  'Hospital / Bedside Encouragement',
+  'Youth Service Illustration',
 ];
 
 const EXAMPLE_QUERIES = [
@@ -220,7 +239,7 @@ const ministryBlueprintSchema = {
 };
 
 
-const stressTestSchema = {
+const clarityReviewSchema = {
   type: Type.OBJECT,
   properties: {
     overall_risk: { type: Type.STRING },
@@ -266,6 +285,7 @@ const mdEscape = (s: string) => (s || '').replace(/\r/g, '').trim();
 const toMarkdownBlueprint = (
   q: string,
   tone: MinistryTone,
+  ministryContext: MinistryContext,
   doctrinalMode: boolean,
   bp: MinistryBlueprint
 ) => {
@@ -273,6 +293,7 @@ const toMarkdownBlueprint = (
   lines.push(`## Ministry Blueprint: ${mdEscape(q)}`);
   lines.push('');
   lines.push(`**Ministry Tone:** ${tone}`);
+  lines.push(`**Ministry Context:** ${ministryContext}`);
   lines.push(`**Doctrinal Integrity Mode:** ${doctrinalMode ? 'On' : 'Off'}`);
   lines.push('');
   lines.push('### Scripture Focus');
@@ -346,18 +367,19 @@ const Card: React.FC<{ title: string; children: React.ReactNode; defaultOpen?: b
   </details>
 );
 
-const GospelMagicAssistant: React.FC<GospelMagicAssistantProps> = ({ onIdeaSaved }) => {
+const GospelMagicAssistant: React.FC<GospelMagicAssistantProps> = ({ onIdeaSaved, onOpenShowPlanner, onOpenLiveRehearsal }) => {
   const { currentUser } = useAppState() as any;
 
   const [theme, setTheme] = useState('');
   const [passage, setPassage] = useState('');
-  const [ministryTone, setMinistryTone] = useState<MinistryTone>('Sunday Service');
+    const [ministryTone, setMinistryTone] = useState<MinistryTone>('Sunday Service');
+  const [ministryContext, setMinistryContext] = useState<MinistryContext>('Sermon Support');
   const [doctrinalMode, setDoctrinalMode] = useState(true);
 
 
   // Tier-2: Intelligence Layer
-  const [stressReport, setStressReport] = useState<StressTestReport | null>(null);
-  const [isStressLoading, setIsStressLoading] = useState(false);
+  const [clarityReview, setClarityReview] = useState<ClarityReviewReport | null>(null);
+    const [isClarityReviewLoading, setIsClarityReviewLoading] = useState(false);
 
   const [isSendingToPlanner, setIsSendingToPlanner] = useState(false);
   const [sendPlannerError, setSendPlannerError] = useState<string | null>(null);
@@ -365,7 +387,7 @@ const GospelMagicAssistant: React.FC<GospelMagicAssistantProps> = ({ onIdeaSaved
 
   const [isPreparingRehearsal, setIsPreparingRehearsal] = useState(false);
   const [rehearsalError, setRehearsalError] = useState<string | null>(null);
-  const [stressError, setStressError] = useState<string | null>(null);
+    const [clarityReviewError, setClarityReviewError] = useState<string | null>(null);
 
   const [phraseSelection, setPhraseSelection] = useState<PhraseCategorySelection>({
     bridge_phrases: true,
@@ -405,8 +427,8 @@ const GospelMagicAssistant: React.FC<GospelMagicAssistantProps> = ({ onIdeaSaved
     setIsLoading(true);
     setError(null);
     setBlueprint(null);
-    setStressReport(null);
-    setStressError(null);
+    setClarityReview(null);
+    setClarityReviewError(null);
     setSaveStatus('idle');
 
     try {
@@ -419,11 +441,12 @@ Return STRICT JSON that matches the provided schema. Do not include markdown, pr
 
 Context:
 - Ministry Tone: ${ministryTone}
+- Ministry Context: ${ministryContext}
 - Bible Passage (if provided): ${passagePart || '(none)'}
 - Theme / Effect / Message (if provided): ${themePart || '(none)'}
 
 Task:
-Create a ministry-ready Gospel magic blueprint that connects an illustration (magic effect) to a biblical message.
+Create a ministry-ready Gospel magic blueprint that connects an illustration (magic effect) to a biblical message and suits the selected ministry context.
 
 Requirements:
 - Stay respectful and pastoral in tone.
@@ -432,7 +455,8 @@ Requirements:
 - Provide age_adjustments for at least: Children, Youth, Adults.
 - Include potential_misinterpretations (what someone might wrongly conclude) and how to avoid them.
 - altar_call_sensitivity must include: guidance, do, dont.
-- closing_prayer_option should be gentle and appropriate for the selected tone.
+- closing_prayer_option should be gentle and appropriate for the selected tone and ministry context.
+- Make the routine feel suitable for the selected ministry context (service support, outreach, bedside encouragement, etc.).
 ${doctrinalGuardrails}
 `;
 
@@ -461,18 +485,18 @@ ${doctrinalGuardrails}
 
   const handleSave = () => {
     if (!blueprint) return;
-    const fullContent = toMarkdownBlueprint(lastQuery, ministryTone, doctrinalMode, blueprint);
+    const fullContent = toMarkdownBlueprint(lastQuery, ministryTone, ministryContext, doctrinalMode, blueprint);
     saveIdea('text', fullContent, lastQuery);
     onIdeaSaved();
     setSaveStatus('saved');
     setTimeout(() => setSaveStatus('idle'), 2000);
   };
-  const handleStressTest = async () => {
+  const handleRunClarityReview = async () => {
     if (!blueprint) return;
 
-    setIsStressLoading(true);
-    setStressError(null);
-    setStressReport(null);
+    setIsClarityReviewLoading(true);
+    setClarityReviewError(null);
+    setClarityReview(null);
 
     try {
       const doctrinalGuardrails = doctrinalMode
@@ -482,9 +506,10 @@ ${doctrinalGuardrails}
       const prompt = `
 Return STRICT JSON that matches the provided schema. No markdown. No extra keys.
 
-You are reviewing a Gospel magic ministry blueprint for clarity, sensitivity, and credibility.
+You are reviewing a Gospel magic ministry blueprint for ministry clarity, pastoral sensitivity, and respectful communication.
 
 Ministry Tone: ${ministryTone}
+Ministry Context: ${ministryContext}
 
 Blueprint Summary:
 - Scripture Focus: ${blueprint.scripture_focus}
@@ -492,37 +517,38 @@ Blueprint Summary:
 - Central Truth: ${blueprint.central_truth}
 - Illustration Bridge: ${blueprint.illustration_bridge}
 
-Evaluate against these simulated perspectives:
-1) Intelligent skeptic (friendly but discerning)
-2) Aggressive debunker (hostile, assumes deception)
-3) Corporate HR mindset (risk-averse, professionalism, consent)
-4) Teen audience (attention, authenticity, cynicism)
+Evaluate against these ministry review perspectives:
+1) New believer (needs clarity and gentle framing)
+2) Longtime church member (values biblical faithfulness and humility)
+3) Teen listener (responds to authenticity and clear language)
+4) Outreach guest unfamiliar with church language (needs accessibility and respect)
+5) Church leadership mindset (pastoral sensitivity, appropriateness, and reverence)
 
 Output:
 - overall_risk: Low/Medium/High
-- vulnerability_report: short paragraph
-- where_suspicion_forms: bullet list
-- recommended_patches: bullet list
+- vulnerability_report: short paragraph about clarity and sensitivity risks
+- where_suspicion_forms: list places where confusion, distraction, or awkwardness may form
+- recommended_patches: list practical wording or structure improvements
 - persona_results: list for each persona with likely_reaction + risks + patches
 
 Important:
 - Do NOT expose magic methods.
-- Keep critique constructive and respectful.
+- Keep critique constructive, respectful, and ministry-minded.
 ${doctrinalGuardrails}
 `;
 
       const response = await generateStructuredResponse(
         prompt,
         GOSPEL_MAGIC_SYSTEM_INSTRUCTION,
-        stressTestSchema,
+        clarityReviewSchema,
         currentUser || { email: '', membership: 'free', generationCount: 0, lastResetDate: '' }
       );
 
-      setStressReport(response as StressTestReport);
+      setClarityReview(response as ClarityReviewReport);
     } catch (err: any) {
-      setStressError(err instanceof Error ? err.message : 'Unable to run stress test.');
+      setClarityReviewError(err instanceof Error ? err.message : 'Unable to run ministry clarity review.');
     } finally {
-      setIsStressLoading(false);
+      setIsClarityReviewLoading(false);
     }
   };
 
@@ -729,12 +755,13 @@ Populate arrays for categories the user selected; for unselected categories, ret
       <div className="space-y-3 p-4 overflow-y-auto">
         <div className="text-xs text-slate-500 flex flex-wrap gap-2">
           <span className="px-2 py-1 rounded-full border border-slate-700 bg-slate-900/40">Tone: {ministryTone}</span>
+          <span className="px-2 py-1 rounded-full border border-slate-700 bg-slate-900/40">Context: {ministryContext}</span>
           <span className="px-2 py-1 rounded-full border border-slate-700 bg-slate-900/40">
             Doctrinal Mode: {doctrinalMode ? 'On' : 'Off'}
           </span>
         </div>
         <div className="mt-2">
-          <PsychologicalLayerVisualizer />
+          <MinistryLayerVisualizer />
         </div>
 
 
@@ -858,58 +885,58 @@ Populate arrays for categories the user selected; for unselected categories, ret
         </Card>
 
         
-        <Card title="Stress Test Against Skeptic">
-          {!stressReport && (
+        <Card title="Ministry Clarity Review">
+          {!clarityReview && (
             <p className="text-slate-400 text-sm">
-              Run a simulated review to identify where suspicion could form and how to strengthen clarity and credibility.
+              Run a ministry-minded review to identify where confusion, awkwardness, or credibility concerns could form and how to strengthen clarity and sensitivity.
             </p>
           )}
 
-          {stressError && <p className="text-red-400 text-sm">{stressError}</p>}
+          {clarityReviewError && <p className="text-red-400 text-sm">{clarityReviewError}</p>}
 
-          {stressReport && (
+          {clarityReview && (
             <div className="space-y-3">
               <div className="flex flex-wrap gap-2 text-xs">
                 <span className="px-2 py-1 rounded-full border border-slate-700 bg-slate-900/40">
-                  Overall Risk: <span className="text-slate-200 font-semibold">{stressReport.overall_risk}</span>
+                  Overall Risk: <span className="text-slate-200 font-semibold">{clarityReview.overall_risk}</span>
                 </span>
               </div>
 
-              <p className="whitespace-pre-wrap">{stressReport.vulnerability_report}</p>
+              <p className="whitespace-pre-wrap">{clarityReview.vulnerability_report}</p>
 
-              {!!stressReport.where_suspicion_forms?.length && (
+              {!!clarityReview.where_suspicion_forms?.length && (
                 <div>
-                  <p className="text-slate-400 text-xs">Where suspicion forms</p>
+                  <p className="text-slate-400 text-xs">Where confusion may form</p>
                   <ul className="list-disc ml-5 mt-1 space-y-1">
-                    {stressReport.where_suspicion_forms.map((x, i) => (
+                    {clarityReview.where_suspicion_forms.map((x, i) => (
                       <li key={i}>{x}</li>
                     ))}
                   </ul>
                 </div>
               )}
 
-              {!!stressReport.recommended_patches?.length && (
+              {!!clarityReview.recommended_patches?.length && (
                 <div>
                   <p className="text-slate-400 text-xs">Recommended patches</p>
                   <ul className="list-disc ml-5 mt-1 space-y-1">
-                    {stressReport.recommended_patches.map((x, i) => (
+                    {clarityReview.recommended_patches.map((x, i) => (
                       <li key={i}>{x}</li>
                     ))}
                   </ul>
                 </div>
               )}
 
-              {!!stressReport.persona_results?.length && (
+              {!!clarityReview.persona_results?.length && (
                 <div className="space-y-2">
-                  <p className="text-slate-400 text-xs">Persona notes</p>
-                  {stressReport.persona_results.map((p, i) => (
+                  <p className="text-slate-400 text-xs">Review perspectives</p>
+                  {clarityReview.persona_results.map((p, i) => (
                     <div key={i} className="rounded-lg border border-slate-800 bg-slate-950/30 p-3">
                       <p className="text-slate-200 font-semibold">{p.persona}</p>
                       <p className="mt-1 text-slate-200 whitespace-pre-wrap">{p.likely_reaction}</p>
 
                       {!!p.where_suspicion_forms?.length && (
                         <div className="mt-2">
-                          <p className="text-slate-400 text-xs">Risk points</p>
+                          <p className="text-slate-400 text-xs">Clarity concerns</p>
                           <ul className="list-disc ml-5 mt-1 space-y-1">
                             {p.where_suspicion_forms.map((x, j) => (
                               <li key={j}>{x}</li>
@@ -949,7 +976,7 @@ Populate arrays for categories the user selected; for unselected categories, ret
       <div className="flex flex-col">
         <h2 className="text-xl font-bold text-amber-200 mb-2">Ministry Architecture Lab</h2>
         <p className="text-slate-400 mb-4">
-          Build a structured, message-first Gospel magic blueprint. Add a theme/effect, a Scripture reference, and choose the ministry setting.
+          Build a structured, message-first Gospel magic blueprint. Add a theme or effect, a Scripture reference, and choose the ministry tone and context.
         </p>
 
         <div className="space-y-4">
@@ -1003,6 +1030,27 @@ Populate arrays for categories the user selected; for unselected categories, ret
                 </option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <label htmlFor="ministry-context" className="block text-sm font-medium text-slate-300 mb-1">
+              Ministry Context
+            </label>
+            <select
+              id="ministry-context"
+              value={ministryContext}
+              onChange={(e) => setMinistryContext(e.target.value as MinistryContext)}
+              className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500 transition-colors"
+            >
+              {MINISTRY_CONTEXTS.map((context) => (
+                <option key={context} value={context}>
+                  {context}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-slate-500">
+              Helps the blueprint fit the setting, tone, and pastoral purpose of the routine.
+            </p>
           </div>
 
           <label className={`flex items-start gap-3 rounded-lg border bg-slate-900/40 p-3 transition-shadow ${doctrinalMode ? "border-amber-500/50 shadow-[0_0_0_1px_rgba(245,158,11,0.25),0_0_20px_rgba(245,158,11,0.12)]" : "border-slate-700"}`}>
@@ -1181,7 +1229,7 @@ Populate arrays for categories the user selected; for unselected categories, ret
 
               <div className="flex items-center justify-end gap-2 flex-wrap">
                 <CohesionActions
-                  content={toMarkdownBlueprint(lastQuery, ministryTone, doctrinalMode, blueprint)}
+                  content={toMarkdownBlueprint(lastQuery, ministryTone, ministryContext, doctrinalMode, blueprint)}
                   defaultTitle={`Gospel Blueprint — ${lastQuery || 'Untitled'}`}
                   defaultTags={["gospel", "ministry", "blueprint"]}
                   compact
@@ -1225,20 +1273,20 @@ Populate arrays for categories the user selected; for unselected categories, ret
                 </button>
 
                 <button
-                  onClick={handleStressTest}
-                  disabled={isStressLoading}
+                  onClick={handleRunClarityReview}
+                  disabled={isClarityReviewLoading}
                   className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-md bg-slate-700 hover:bg-slate-600 text-slate-100 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-                  title="Review for clarity, sensitivity, and where confusion or skepticism may arise"
+                  title="Review for ministry clarity, sensitivity, and places where confusion may arise"
                 >
                   <span className="text-base leading-none">🔍</span>
-                  <span>{isStressLoading ? 'Reviewing…' : 'Review Clarity'}</span>
+                  <span>{isClarityReviewLoading ? 'Reviewing…' : 'Run Clarity Review'}</span>
                 </button>
 
                 <div className="hidden sm:block w-px self-stretch bg-slate-800 mx-1" />
 
                 <ShareButton
                   title={`Ministry Blueprint: ${lastQuery}`}
-                  text={toMarkdownBlueprint(lastQuery, ministryTone, doctrinalMode, blueprint)}
+                  text={toMarkdownBlueprint(lastQuery, ministryTone, ministryContext, doctrinalMode, blueprint)}
                   className="flex items-center gap-2 px-3 py-1.5 text-sm bg-transparent border border-slate-600 text-slate-300 hover:border-slate-400 hover:text-white rounded-md transition-colors"
                 >
                   <ShareIcon className="w-4 h-4" />
@@ -1286,11 +1334,11 @@ Populate arrays for categories the user selected; for unselected categories, ret
 
             <div className="relative max-w-md">
               <div className="mx-auto mb-4 w-full max-w-md">
-                <PsychologicalLayerVisualizer compact />
+                <MinistryLayerVisualizer compact />
               </div>
               <p className="text-slate-300 font-semibold">Your ministry blueprint will appear here.</p>
               <p className="text-slate-500 text-sm mt-2">
-                Start with a Scripture reference or a message theme, choose the ministry tone, and generate a structured routine you can trust.
+                Start with a Scripture reference or a message theme, choose the ministry tone and context, and generate a structured routine you can trust.
               </p>
               <div className="mt-4 text-xs text-slate-500">
                 <p className="italic opacity-60 tracking-wider text-amber-200/70">“Let all things be done decently and in order.”</p>
