@@ -109,6 +109,20 @@ type RehearsalFeedback = {
     sections: FeedbackSection[];
 };
 
+type SegmentMarker = {
+    id: string;
+    label: string;
+    createdAtMs: number;
+};
+
+const DEFAULT_MARKER_LABELS = ['Opener', 'Spectator moment', 'Reveal', 'Applause cue', 'Closer'];
+
+const createDefaultMarker = (index: number, elapsedLabel: string): SegmentMarker => ({
+    id: `marker-${Date.now()}-${index + 1}`,
+    label: DEFAULT_MARKER_LABELS[index] || `Segment ${index + 1}`,
+    createdAtMs: Date.now(),
+});
+
 type TimelineItem = {
     timestampLabel: string;
     seconds: number;
@@ -123,7 +137,7 @@ const formatTimelineTimestamp = (seconds: number): string => {
     return `${minutes}:${secs}`;
 };
 
-const buildSessionTimeline = (transcript: Transcription[], startedAt?: number, endedAt?: number): TimelineItem[] => {
+const buildSessionTimeline = (transcript: Transcription[], markers: SegmentMarker[] = [], startedAt?: number, endedAt?: number): TimelineItem[] => {
     const userText = (transcript || [])
         .filter((t) => t?.source === 'user')
         .map((t) => t.text || '')
@@ -132,6 +146,26 @@ const buildSessionTimeline = (transcript: Transcription[], startedAt?: number, e
         .trim();
 
     const durationSeconds = Math.max(45, Math.round(((endedAt || 0) - (startedAt || 0)) / 1000) || 0);
+
+    if (markers.length > 0) {
+        const safeDuration = Math.max(30, durationSeconds);
+        return markers.map((marker, index) => {
+            const relativeSeconds = startedAt ? Math.max(0, Math.min(safeDuration, Math.round((marker.createdAtMs - startedAt) / 1000))) : Math.round((safeDuration / Math.max(1, markers.length + 1)) * (index + 1));
+            const commentary = /reveal/i.test(marker.label)
+                ? `Reveal Segment: Energy is strong here, but pacing may rush at ${formatTimelineTimestamp(relativeSeconds)}. Consider adding a dramatic pause.`
+                : /spectator|audience/i.test(marker.label)
+                    ? 'Spectator interaction happens here. Slow your wording slightly so the participant can follow without pressure.'
+                    : index === 0
+                        ? 'Opening segment is clearly defined. Keep the first beat calm and confident.'
+                        : 'This marked segment helps define the routine structure. Keep the transition into it crisp and intentional.';
+            return {
+                timestampLabel: formatTimelineTimestamp(relativeSeconds),
+                seconds: relativeSeconds,
+                label: marker.label,
+                commentary,
+            };
+        });
+    }
 
     if (!userText) {
         const fallbackMid = Math.max(12, Math.round(durationSeconds * 0.45));
@@ -209,13 +243,33 @@ const buildSessionTimeline = (transcript: Transcription[], startedAt?: number, e
     });
 };
 
-const buildRehearsalFeedback = (transcript: Transcription[]): RehearsalFeedback => {
+const buildRehearsalFeedback = (transcript: Transcription[], markers: SegmentMarker[] = []): RehearsalFeedback => {
     const userText = (transcript || [])
         .filter((t) => t?.source === 'user')
         .map((t) => t.text || '')
         .join(' ')
         .replace(/\s+/g, ' ')
         .trim();
+
+    if (markers.length > 0) {
+        const safeDuration = Math.max(30, durationSeconds);
+        return markers.map((marker, index) => {
+            const relativeSeconds = startedAt ? Math.max(0, Math.min(safeDuration, Math.round((marker.createdAtMs - startedAt) / 1000))) : Math.round((safeDuration / Math.max(1, markers.length + 1)) * (index + 1));
+            const commentary = /reveal/i.test(marker.label)
+                ? `Reveal Segment: Energy is strong here, but pacing may rush at ${formatTimelineTimestamp(relativeSeconds)}. Consider adding a dramatic pause.`
+                : /spectator|audience/i.test(marker.label)
+                    ? 'Spectator interaction happens here. Slow your wording slightly so the participant can follow without pressure.'
+                    : index === 0
+                        ? 'Opening segment is clearly defined. Keep the first beat calm and confident.'
+                        : 'This marked segment helps define the routine structure. Keep the transition into it crisp and intentional.';
+            return {
+                timestampLabel: formatTimelineTimestamp(relativeSeconds),
+                seconds: relativeSeconds,
+                label: marker.label,
+                commentary,
+            };
+        });
+    }
 
     if (!userText) {
         return {
@@ -275,6 +329,10 @@ const buildRehearsalFeedback = (transcript: Transcription[]): RehearsalFeedback 
             : 'Name the impossible outcome more explicitly so the effect registers cleanly.',
     ];
 
+    const markerSummary = markers.map((marker, index) => `Marker ${index + 1} – ${marker.label}`);
+    const revealMarker = markers.find((marker) => /reveal/i.test(marker.label));
+    const spectatorMarker = markers.find((marker) => /spectator|audience/i.test(marker.label));
+
     const suggestionBullets = [
         fillerMatches.length > 0
             ? 'Remove filler phrases from the first thirty seconds to sound more certain immediately.'
@@ -324,6 +382,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
     const timerIntervalRef = useRef<number | null>(null);
     const [studioHelpOpen, setStudioHelpOpen] = useState(true);
     const [markerCount, setMarkerCount] = useState(0);
+    const [currentMarkers, setCurrentMarkers] = useState<SegmentMarker[]>([]);
     const [demoScript, setDemoScript] = useState('');
     const [sessionElapsed, setSessionElapsed] = useState('0:00');
     const sessionElapsedIntervalRef = useRef<number | null>(null);
@@ -336,6 +395,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         startedAt: number;
         endedAt: number;
         transcript: Transcription[];
+        markers?: SegmentMarker[];
     };
 
     type RehearsalSessionContentV2 = {
@@ -640,6 +700,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         setErrorMessage('');
         setTranscriptionHistory([]);
         setMarkerCount(0);
+        setCurrentMarkers([]);
         currentTakeStartRef.current = Date.now();
         setSessionElapsed('0:00');
         if (sessionElapsedIntervalRef.current) clearInterval(sessionElapsedIntervalRef.current);
@@ -1090,7 +1151,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             const endedAt = Date.now();
             setTakes((prev) => {
                 const takeNumber = (prev?.length ?? 0) + 1;
-                const next = [...(prev ?? []), { takeNumber, startedAt, endedAt, transcript: takeTranscript } as any];
+                const next = [...(prev ?? []), { takeNumber, startedAt, endedAt, transcript: takeTranscript, markers: currentMarkers } as any];
                 setSelectedTake(Math.max(0, next.length - 1));
                 return next as any;
             });
@@ -1098,12 +1159,23 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             // ignore
         } finally {
             currentTakeStartRef.current = null;
+            setCurrentMarkers([]);
         }
 
         await safeCleanupSession();
         setView('reviewing');
     };
     
+
+    const handleAddMarker = () => {
+        if (status !== 'listening') return;
+        setCurrentMarkers((prev) => {
+            const next = [...prev, createDefaultMarker(prev.length, sessionElapsed)];
+            setMarkerCount(next.length);
+            return next;
+        });
+    };
+
     const handleHeaderButtonClick = async () => {
         try {
             if (view === 'rehearsing') {
@@ -1168,6 +1240,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                             onToggleHelp={() => setStudioHelpOpen((prev) => !prev)}
                             onReset={() => {
                                 setMarkerCount(0);
+                                setCurrentMarkers([]);
                                 setDemoScript('');
                                 setTranscriptionHistory([]);
                                 setErrorMessage('');
@@ -1176,6 +1249,8 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                                 setSessionElapsed('0:00');
                                 setView('idle');
                             }}
+                            onAddMarker={handleAddMarker}
+                            currentMarkers={currentMarkers}
                             onLoadDemo={() => {
                                 setDemoScript(DEMO_SCRIPT);
                                 setSessionTitle('Demo Rehearsal Session');
@@ -1277,9 +1352,11 @@ const StatusIndicator: React.FC<{
     helpOpen: boolean,
     onToggleHelp: () => void,
     onReset: () => void,
+    onAddMarker: () => void,
+    currentMarkers: SegmentMarker[],
     onLoadDemo: () => void,
     demoScript: string,
-}> = ({status, errorMessage, blockedUx, onUpgrade, onStart, elapsed, markerCount, helpOpen, onToggleHelp, onReset, onLoadDemo, demoScript}) => {
+}> = ({status, errorMessage, blockedUx, onUpgrade, onStart, elapsed, markerCount, helpOpen, onToggleHelp, onReset, onAddMarker, currentMarkers, onLoadDemo, demoScript}) => {
     const isRecording = status === 'listening';
     const isConnecting = status === 'connecting';
     const label = isRecording ? 'Recording' : isConnecting ? 'Connecting' : status === 'error' ? 'Attention Needed' : 'Ready';
@@ -1340,6 +1417,9 @@ const StatusIndicator: React.FC<{
                         <MicrophoneIcon className="w-5 h-5" />
                         <span>{isRecording ? 'Rehearsal Active' : isConnecting ? 'Connecting…' : 'Start Rehearsal'}</span>
                     </button>
+                    <button onClick={onAddMarker} disabled={!isRecording} className={`px-4 py-2.5 rounded-lg border font-semibold transition-colors ${isRecording ? 'border-amber-500/50 text-amber-200 hover:bg-amber-900/15' : 'border-slate-700 text-slate-500 cursor-not-allowed'}`} >
+                        Add Marker
+                    </button>
                     <button onClick={onReset} className="px-4 py-2.5 rounded-lg border border-slate-600 text-slate-200 hover:bg-slate-800/60 font-semibold transition-colors">
                         Reset Studio
                     </button>
@@ -1348,6 +1428,25 @@ const StatusIndicator: React.FC<{
                     </button>
                 </div>
             </div>
+
+            {currentMarkers.length > 0 ? (
+                <div className="bg-slate-900/30 border border-slate-700 rounded-xl p-4">
+                    <div className="flex items-center justify-between gap-3">
+                        <div>
+                            <div className="text-slate-100 font-semibold">Segment Markers</div>
+                            <div className="text-xs text-slate-400">Label the important beats of the routine while you rehearse.</div>
+                        </div>
+                        <div className="text-xs uppercase tracking-wide text-amber-200/80">Live markers</div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                        {currentMarkers.map((marker, index) => (
+                            <div key={marker.id} className="px-3 py-1.5 rounded-full border border-amber-500/30 bg-amber-900/15 text-amber-100 text-sm font-medium">
+                                {`Marker ${index + 1} – ${marker.label}`}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            ) : null}
 
             <div className="bg-slate-900/30 border border-slate-700 rounded-xl overflow-hidden">
                 <button onClick={onToggleHelp} className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-slate-800/40 transition-colors">
@@ -1536,7 +1635,7 @@ const RehearsalHistory: React.FC<{ onDiscuss: (transcript: Transcription[]) => v
 
 
 const ReviewView: React.FC<{
-    takes: { takeNumber: number; startedAt: number; endedAt: number; transcript: Transcription[] }[];
+    takes: { takeNumber: number; startedAt: number; endedAt: number; transcript: Transcription[]; markers?: SegmentMarker[] }[];
     selectedTake: number;
     sessionIdeaId: string | null;
     sessionTitle: string;
@@ -1676,12 +1775,26 @@ const ReviewView: React.FC<{
 
                 {current ? (
                     <>
-                        <RehearsalFeedbackCard transcript={current.transcript} />
+                        <RehearsalFeedbackCard transcript={current.transcript} markers={current.markers || []} />
                         <SessionTimelineCard
                             transcript={current.transcript}
+                            markers={current.markers || []}
                             startedAt={current.startedAt}
                             endedAt={current.endedAt}
                         />
+                        {(current.markers?.length ?? 0) > 0 ? (
+                            <div className="bg-slate-900/40 border border-slate-700 rounded-xl p-4">
+                                <div className="text-slate-100 font-semibold">Segment Markers</div>
+                                <div className="text-sm text-slate-400 mt-1">This take includes performer-labeled routine sections.</div>
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                    {(current.markers || []).map((marker, idx) => (
+                                        <div key={marker.id} className="px-3 py-1.5 rounded-full border border-amber-500/30 bg-amber-900/15 text-amber-100 text-sm font-medium">
+                                            {`Marker ${idx + 1} – ${marker.label}`}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : null}
                     </>
                 ) : null}
 
@@ -1788,8 +1901,8 @@ const ReviewView: React.FC<{
 
 
 
-const RehearsalFeedbackCard: React.FC<{ transcript: Transcription[] }> = ({ transcript }) => {
-    const feedback = buildRehearsalFeedback(transcript);
+const RehearsalFeedbackCard: React.FC<{ transcript: Transcription[]; markers?: SegmentMarker[] }> = ({ transcript, markers = [] }) => {
+    const feedback = buildRehearsalFeedback(transcript, markers);
 
     return (
         <div className="bg-slate-900/40 border border-slate-700 rounded-xl p-4 md:p-5">
@@ -1824,8 +1937,8 @@ const RehearsalFeedbackCard: React.FC<{ transcript: Transcription[] }> = ({ tran
 };
 
 
-const SessionTimelineCard: React.FC<{ transcript: Transcription[]; startedAt?: number; endedAt?: number }> = ({ transcript, startedAt, endedAt }) => {
-    const timeline = buildSessionTimeline(transcript, startedAt, endedAt);
+const SessionTimelineCard: React.FC<{ transcript: Transcription[]; markers?: SegmentMarker[]; startedAt?: number; endedAt?: number }> = ({ transcript, markers = [], startedAt, endedAt }) => {
+    const timeline = buildSessionTimeline(transcript, markers, startedAt, endedAt);
 
     return (
         <div className="bg-slate-900/40 border border-slate-700 rounded-xl p-4 md:p-5">
