@@ -4,12 +4,15 @@ import { ANGLE_RISK_ANALYSIS_SYSTEM_INSTRUCTION } from '../constants';
 import { generateResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
 import { createShow, addTaskToShow } from '../services/showsService';
-import { ShieldIcon, SaveIcon, ShareIcon, VideoIcon, WandIcon } from './icons';
+import { EyeIcon, SaveIcon, ShareIcon, ShieldIcon, VideoIcon, WandIcon } from './icons';
 import FormattedText from './FormattedText';
 import { useToast } from './ToastProvider';
 
 type AudienceSetup = 'Seated (front)' | 'Standing (close-up)' | 'Surrounded / 360°' | 'Stage (wide)';
 type PerformanceMode = 'Close-up' | 'Parlor' | 'Stage' | 'Walkaround';
+type VenueType = 'Close-up table' | 'Walk-around floor' | 'Parlor room' | 'Theater stage' | 'Street / outdoor';
+type LightingType = 'Bright / direct' | 'Mixed / uneven' | 'Dim / low light';
+type AudienceDistance = '1–3 ft' | '3–10 ft' | '10+ ft';
 
 const DEFAULT_KEY_MOMENTS = [
   'Load',
@@ -26,6 +29,14 @@ const FOCUS_CHIPS = [
   'Blocking & body position',
   'Timing of secret actions',
 ] as const;
+
+const DEFAULT_ROUTINE_STEPS = [
+  'Introduction / framing',
+  'Secret setup or load',
+  'Main effect sequence',
+  'Reveal / applause cue',
+  'Cleanup / reset',
+];
 
 type Props = {
   user: User;
@@ -47,35 +58,115 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved, onDeepLinkShowPla
   const [propsText, setPropsText] = useState('');
   const [keyMoments, setKeyMoments] = useState<string[]>([]);
   const [focusText, setFocusText] = useState('');
+  const [routineSteps, setRoutineSteps] = useState(DEFAULT_ROUTINE_STEPS.join('\n'));
+  const [venueType, setVenueType] = useState<VenueType>('Close-up table');
+  const [lighting, setLighting] = useState<LightingType>('Bright / direct');
+  const [audienceDistance, setAudienceDistance] = useState<AudienceDistance>('1–3 ft');
 
   const [isLoading, setIsLoading] = useState(false);
   const [analysis, setAnalysis] = useState<string>('');
 
-  // Phase 6A: lightweight, UI-only "Risk Profile" derived from the returned text.
-  // (No AI changes; simple keyword checks to improve scannability.)
-  const riskProfile = useMemo(() => {
-    const text = (analysis || '').toLowerCase();
-    if (!text) return null;
+  const parsedAnalysis = useMemo(() => {
+    const raw = (analysis || '').trim();
+    if (!raw) return null;
 
-    const isHigh = text.includes('extreme') || text.includes('highest risk');
-    const overall = isHigh ? { label: 'High', dot: '🔴' } : { label: 'Medium', dot: '🟡' };
+    const sectionEntries = raw
+      .split(/\n(?=#{2,6}\s+)/)
+      .map(section => section.trim())
+      .filter(Boolean);
 
-    const areas: string[] = [];
-    if (text.includes('sightline') || text.includes('angle')) areas.push('Sightlines');
-    if (text.includes('reset') || text.includes('pocket') || text.includes('prop management')) areas.push('Reset');
-    if (text.includes('handling') || text.includes('body-language') || text.includes('body language') || text.includes('tell')) {
-      areas.push('Handling Tells');
-    }
-    if (text.includes('blocking') || text.includes('stage')) areas.push('Blocking');
-    if (text.includes('timing') || text.includes('pause') || text.includes('pace')) areas.push('Timing');
+    const sections = sectionEntries.map(section => {
+      const [headingLine, ...bodyLines] = section.split('\n');
+      const heading = headingLine.replace(/^#{2,6}\s+/, '').trim();
+      const body = bodyLines.join('\n').trim();
+      const bulletItems = body
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean)
+        .map(line => line.replace(/^[-*•]\s+/, ''))
+        .map(line => line.replace(/^\d+\.\s+/, ''));
 
-    const primary = (areas.length ? Array.from(new Set(areas)) : ['Sightlines', 'Handling Tells']).slice(0, 2);
+      return { heading, body, bulletItems };
+    });
+
+    const findSection = (...keywords: string[]) =>
+      sections.find(section => {
+        const heading = section.heading.toLowerCase();
+        return keywords.every(keyword => heading.includes(keyword));
+      }) ?? null;
 
     return {
-      overall,
-      primary,
+      sections,
+      overview: findSection('overview'),
+      sightlines: findSection('sightline') ?? findSection('angle'),
+      reset: findSection('reset') ?? findSection('pocket') ?? findSection('prop'),
+      handling: findSection('handling') ?? findSection('body-language') ?? findSection('body language'),
+      mitigations: findSection('mitigation'),
+      questions: findSection('questions', 'refine'),
+      critical: findSection('critical', 'exposure'),
+      coaching: findSection('professional', 'coaching'),
     };
   }, [analysis]);
+
+  const scoreRisk = (text: string, fallback = 30) => {
+    const lower = text.toLowerCase();
+    let score = fallback;
+    if (/(extreme|highest risk|severe|very high)/.test(lower)) score += 45;
+    if (/(high risk|high exposure|significant|critical)/.test(lower)) score += 30;
+    if (/(moderate|medium|watch for|caution|careful)/.test(lower)) score += 15;
+    if (/(low risk|generally safe|minimal|minor)/.test(lower)) score -= 10;
+    return Math.max(10, Math.min(95, score));
+  };
+
+  const riskProfile = useMemo(() => {
+    if (!analysis.trim()) return null;
+
+    const postureScore = scoreRisk(parsedAnalysis?.handling?.body || analysis, 38);
+    const blockingScore = scoreRisk(`${parsedAnalysis?.sightlines?.body || ''}\n${parsedAnalysis?.reset?.body || ''}` || analysis, 42);
+    const timingScore = scoreRisk(`${focusText}\n${analysis}`, 35);
+    const anglesScore = scoreRisk(parsedAnalysis?.sightlines?.body || analysis, 45);
+    const resetScore = scoreRisk(parsedAnalysis?.reset?.body || analysis, 32);
+
+    const metrics = [
+      { label: 'Posture', score: postureScore },
+      { label: 'Blocking', score: blockingScore },
+      { label: 'Timing', score: timingScore },
+      { label: 'Angles', score: anglesScore },
+      { label: 'Reset', score: resetScore },
+    ].map(metric => ({
+      ...metric,
+      level: metric.score >= 70 ? 'High' : metric.score >= 45 ? 'Medium' : 'Low',
+    }));
+
+    const average = Math.round(metrics.reduce((sum, item) => sum + item.score, 0) / metrics.length);
+    const overall = average >= 70 ? { label: 'High', dot: '🔴' } : average >= 45 ? { label: 'Medium', dot: '🟡' } : { label: 'Low', dot: '🟢' };
+
+    const topRisks = [...metrics]
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 2)
+      .map(item => item.label);
+
+    return { overall, average, topRisks, metrics };
+  }, [analysis, focusText, parsedAnalysis]);
+
+  const criticalExposurePoints = useMemo(() => {
+    const sourceItems = [
+      ...(parsedAnalysis?.critical?.bulletItems || []),
+      ...(parsedAnalysis?.sightlines?.bulletItems || []),
+      ...(parsedAnalysis?.reset?.bulletItems || []),
+      ...(parsedAnalysis?.handling?.bulletItems || []),
+    ];
+
+    return Array.from(new Set(sourceItems)).slice(0, 4);
+  }, [parsedAnalysis]);
+
+  const coachingNotes = useMemo(() => {
+    const sourceItems = [
+      ...(parsedAnalysis?.coaching?.bulletItems || []),
+      ...(parsedAnalysis?.mitigations?.bulletItems || []),
+    ];
+    return Array.from(new Set(sourceItems)).slice(0, 5);
+  }, [parsedAnalysis]);
 
   const canAnalyze = routineName.trim().length > 0;
 
@@ -288,6 +379,9 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved, onDeepLinkShowPla
       `You are an expert stagecraft and rehearsal coach for magicians.`,
       `Task: Provide an Angle/Risk Analysis for the routine named: "${routineName.trim()}".`,
       `Context: Performance mode = ${mode}. Audience setup = ${setup}.`,
+      `Venue context: venue type = ${venueType}; lighting = ${lighting}; audience distance = ${audienceDistance}.`,
+      routineSteps.trim() ? `Routine phases / structure:
+${routineSteps.trim()}` : null,
       propsText.trim() ? `Props/Setup Notes: ${propsText.trim()}` : null,
       keyMoments.length ? `Key moments to protect: ${keyMoments.join(', ')}.` : null,
       focusToUse ? `User focus requests: ${focusToUse}` : null,
@@ -302,8 +396,10 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved, onDeepLinkShowPla
       `2) Sightline & Angle Risks (bullets)`,
       `3) Reset & Pocket/Prop Management Risks (bullets)`,
       `4) Handling/Body-Language Tells (bullets)`,
-      `5) Mitigations (3–7 actionable steps, written as checklist items)`,
-      `6) Questions to refine this analysis (3–6 targeted questions)`,
+      `5) Critical Exposure Points (3-5 bullets that name the vulnerable moment, why it is exposed, and the safer adjustment)`,
+      `6) Professional Coaching Notes (3-5 concise bullets on blocking, posture, timing, and audience management)`,
+      `7) Mitigations (3–7 actionable steps, written as checklist items)`,
+      `8) Questions to refine this analysis (3–6 targeted questions)`,
     ].filter(Boolean).join('\n');
 
     try {
@@ -387,9 +483,34 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved, onDeepLinkShowPla
     }
   };
 
+  const loadDemoPreset = () => {
+    setRoutineName('Zombie Ball');
+    setMode('Parlor');
+    setSetup('Seated (front)');
+    setVenueType('Parlor room');
+    setLighting('Mixed / uneven');
+    setAudienceDistance('3–10 ft');
+    setKeyMoments(['Load', 'Secret action', 'Reset']);
+    setPropsText('Floating sphere, foulard cloth, side table, limited backstage space.');
+    setRoutineSteps(['Introduction with cloth display', 'Secret setup under the foulard', 'Floating sequence and audience focus shifts', 'Reveal and applause cue', 'Cleanup and reset before next piece'].join('\n'));
+    setFocusText('Watch right-side exposure during the float, posture tells during the secret setup, and reset safety between routines.');
+    toast.showToast('Demo routine loaded', 'success');
+    setTimeout(() => routineNameRef.current?.focus(), 0);
+  };
+
   const handleStartOver = () => {
     setAnalysis('');
     setIsLoading(false);
+    setRoutineName('');
+    setMode('Close-up');
+    setSetup('Seated (front)');
+    setVenueType('Close-up table');
+    setLighting('Bright / direct');
+    setAudienceDistance('1–3 ft');
+    setPropsText('');
+    setKeyMoments([]);
+    setFocusText('');
+    setRoutineSteps(DEFAULT_ROUTINE_STEPS.join('\n'));
     toast.showToast('Ready for a new analysis', 'info');
     setTimeout(() => routineNameRef.current?.focus(), 0);
   };
@@ -405,8 +526,18 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved, onDeepLinkShowPla
             </div>
             <div>
               <h2 className="text-lg font-semibold text-white">Angle/Risk Analysis</h2>
-              <p className="mt-1 text-sm text-white/65">Spot sightline issues, reset risks, and performance vulnerabilities.</p>
+              <p className="mt-1 text-sm text-white/65">Analyze sightline exposure, posture tells, blocking pressure points, and reset vulnerabilities.</p>
             </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={loadDemoPreset}
+              className="rounded-full border border-purple-400/30 bg-purple-500/10 px-3 py-1.5 text-xs font-semibold text-purple-100 hover:bg-purple-500/20"
+            >
+              Load Demo Routine
+            </button>
           </div>
 
           <div className="mt-5 space-y-4">
@@ -446,6 +577,57 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved, onDeepLinkShowPla
                   ))}
                 </select>
               </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div>
+                <label className="block text-sm font-medium text-white/80 mb-1">Venue type</label>
+                <select
+                  value={venueType}
+                  onChange={(e) => setVenueType(e.target.value as VenueType)}
+                  className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                >
+                  {(['Close-up table', 'Walk-around floor', 'Parlor room', 'Theater stage', 'Street / outdoor'] as const).map(v => (
+                    <option key={v} value={v}>{v}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-white/80 mb-1">Lighting</label>
+                <select
+                  value={lighting}
+                  onChange={(e) => setLighting(e.target.value as LightingType)}
+                  className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                >
+                  {(['Bright / direct', 'Mixed / uneven', 'Dim / low light'] as const).map(v => (
+                    <option key={v} value={v}>{v}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-white/80 mb-1">Audience distance</label>
+                <select
+                  value={audienceDistance}
+                  onChange={(e) => setAudienceDistance(e.target.value as AudienceDistance)}
+                  className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                >
+                  {(['1–3 ft', '3–10 ft', '10+ ft'] as const).map(v => (
+                    <option key={v} value={v}>{v}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-white/80 mb-1">Routine phases</label>
+              <textarea
+                value={routineSteps}
+                onChange={(e) => setRoutineSteps(e.target.value)}
+                rows={5}
+                placeholder="List the key phases in order so the AI can analyze the weak points more precisely"
+                className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-2.5 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+              />
+              <p className="mt-2 text-xs text-white/55">One phase per line works best. This gives the analysis a real routine map instead of forcing it to guess.</p>
             </div>
 
             <div>
@@ -508,7 +690,7 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved, onDeepLinkShowPla
               disabled={!canAnalyze || isLoading}
               className="mt-1 w-full rounded-xl bg-purple-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? 'Analyzing…' : 'Run Angle/Risk Analysis'}
+              {isLoading ? 'Analyzing…' : 'Analyze Routine Risk'}
             </button>
           </div>
         </div>
@@ -522,8 +704,8 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved, onDeepLinkShowPla
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.02] text-white/70">
                 <ShieldIcon className="h-6 w-6" />
               </div>
-              <h3 className="mt-4 text-lg font-semibold text-white">Ready when you are</h3>
-              <p className="mt-1 max-w-md text-sm text-white/60">Fill in the routine details and click <span className="text-white/75">Run Angle/Risk Analysis</span>. Your feedback will appear here.</p>
+              <h3 className="mt-4 text-lg font-semibold text-white">Ready to analyze this routine</h3>
+              <p className="mt-1 max-w-md text-sm text-white/60">Enter the routine details and click <span className="text-white/75">Analyze Routine Risk</span>. The AI will score angles, posture, blocking, timing, and reset pressure points.</p>
 
               <div className="mt-6 grid w-full max-w-2xl grid-cols-1 gap-3 md:grid-cols-2">
                 {['Posture', 'Blocking', 'Timing', 'Angles'].map((t) => (
@@ -557,19 +739,66 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved, onDeepLinkShowPla
             <div className="flex h-full flex-col">
               <div className="flex-1 overflow-auto pr-1">
                 {riskProfile && (
-                  <div className="mb-4 rounded-xl border border-white/10 bg-black/10 p-4">
-                    <div className="flex items-center justify-between gap-4">
-                      <div>
-                        <p className="text-sm font-semibold text-white">Risk Profile</p>
-                        <p className="mt-1 text-xs text-white/60">A quick summary based on keywords in this report.</p>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-sm text-white/85">
-                          Overall Risk: <span className="font-semibold">{riskProfile.overall.dot} {riskProfile.overall.label}</span>
+                  <div className="mb-4 space-y-4">
+                    <div className="rounded-xl border border-white/10 bg-black/10 p-4">
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-white">Risk Profile</p>
+                          <p className="mt-1 text-xs text-white/60">Fast scannable scoring so this page feels like a real rehearsal analysis system.</p>
                         </div>
-                        <div className="mt-1 text-xs text-white/60">Primary Risk Areas: <span className="text-white/75">{riskProfile.primary.join(', ')}</span></div>
+                        <div className="lg:text-right">
+                          <div className="text-sm text-white/85">
+                            Overall Risk: <span className="font-semibold">{riskProfile.overall.dot} {riskProfile.overall.label}</span>
+                          </div>
+                          <div className="mt-1 text-xs text-white/60">Top pressure points: <span className="text-white/75">{riskProfile.topRisks.join(', ')}</span></div>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+                        {riskProfile.metrics.map(metric => (
+                          <div key={metric.label} className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-sm font-semibold text-white">{metric.label}</p>
+                              <span className="text-xs font-semibold text-white/70">{metric.level}</span>
+                            </div>
+                            <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
+                              <div className="h-full rounded-full bg-purple-400/80" style={{ width: `${metric.score}%` }} />
+                            </div>
+                            <div className="mt-2 text-xs text-white/50">{metric.score}/100</div>
+                          </div>
+                        ))}
                       </div>
                     </div>
+
+                    {(criticalExposurePoints.length > 0 || coachingNotes.length > 0) && (
+                      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                        <div className="rounded-xl border border-white/10 bg-black/10 p-4">
+                          <div className="flex items-center gap-2">
+                            <EyeIcon className="h-4 w-4 text-purple-200" />
+                            <p className="text-sm font-semibold text-white">Critical Exposure Points</p>
+                          </div>
+                          <p className="mt-1 text-xs text-white/60">The moments most likely to flash, feel suspicious, or create reset pressure.</p>
+                          <ul className="mt-3 space-y-2">
+                            {criticalExposurePoints.length ? criticalExposurePoints.map((item, idx) => (
+                              <li key={`${idx}-${item.slice(0, 12)}`} className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-sm text-white/80">{item}</li>
+                            )) : <li className="text-sm text-white/50">No critical points were extracted from this report.</li>}
+                          </ul>
+                        </div>
+
+                        <div className="rounded-xl border border-white/10 bg-black/10 p-4">
+                          <div className="flex items-center gap-2">
+                            <ShieldIcon className="h-4 w-4 text-purple-200" />
+                            <p className="text-sm font-semibold text-white">Professional Coaching Notes</p>
+                          </div>
+                          <p className="mt-1 text-xs text-white/60">Quick rehearsal coaching notes you can actually act on during practice.</p>
+                          <ul className="mt-3 space-y-2">
+                            {coachingNotes.length ? coachingNotes.map((item, idx) => (
+                              <li key={`${idx}-${item.slice(0, 12)}`} className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-sm text-white/80">{item}</li>
+                            )) : <li className="text-sm text-white/50">No coaching notes were extracted from this report.</li>}
+                          </ul>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
