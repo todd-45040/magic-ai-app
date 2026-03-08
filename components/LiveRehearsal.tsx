@@ -1408,7 +1408,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         }
 
         await safeCleanupSession();
-        openReviewForTake(Math.max(0, takesRef.current.length - 1));
+        openReviewForTake(takesRef.current.length);
     };
     
 
@@ -1799,7 +1799,7 @@ const StatusIndicator: React.FC<{
             ) : null}
 
             <div className="bg-slate-900/30 border border-slate-700 rounded-xl overflow-hidden">
-                <button onClick={onToggleHelp} className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-slate-800/40 transition-colors">
+                <button onClick={onToggleHelp} className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-slate-800/60 transition-colors">
                     <div>
                         <div className="text-slate-100 font-semibold">How Live Rehearsal Works</div>
                         <div className="text-xs text-slate-400">Quick guidance for stronger rehearsals and cleaner AI feedback.</div>
@@ -1975,7 +1975,7 @@ const RehearsalHistory: React.FC = () => {
                     </button>
                     <button
                         onClick={() => setExpanded(false)}
-                        className="px-3 py-1.5 bg-transparent hover:bg-slate-800/40 rounded-md text-slate-300 text-sm font-semibold transition-colors"
+                        className="px-3 py-1.5 bg-transparent hover:bg-slate-800/60 rounded-md text-slate-300 text-sm font-semibold transition-colors"
                     >
                         Hide
                     </button>
@@ -2360,7 +2360,7 @@ const ReviewView: React.FC<{
                                 </div>
                             </div>
                         ) : (
-                            <div className="text-sm text-slate-400 bg-slate-800/40 border border-slate-700 rounded-lg px-3 py-3">
+                            <div className="text-sm text-slate-400 bg-slate-800/60 border border-slate-700 rounded-lg px-3 py-3">
                                 Choose a quick coaching prompt or ask for a targeted rewrite to continue refining Take {current.takeNumber}.
                             </div>
                         )}
@@ -2474,7 +2474,7 @@ const ReviewView: React.FC<{
                     </div>
                 </div>
 
-                <div className="space-y-4 bg-slate-800/40 border border-slate-700 rounded-lg p-4">
+                <div className="space-y-4 bg-slate-800/60 border border-slate-700 rounded-lg p-4">
                     <div className="flex items-center justify-between gap-3 flex-wrap">
                         <div className="text-slate-200 font-semibold">
                             {current ? `Transcript — Take ${displayTakeNumber}` : 'Transcript'}
@@ -2538,7 +2538,7 @@ const ReviewView: React.FC<{
 
                 <button
                     onClick={onResetSession}
-                    className="w-full md:w-auto flex items-center justify-center gap-2 px-5 py-2.5 text-sm bg-transparent hover:bg-slate-800/40 rounded-md text-slate-300 font-bold transition-colors"
+                    className="w-full md:w-auto flex items-center justify-center gap-2 px-5 py-2.5 text-sm bg-transparent hover:bg-slate-800/60 rounded-md text-slate-300 font-bold transition-colors"
                 >
                     <TrashIcon className="w-5 h-5" />
                     <span>Start New Session</span>
@@ -2667,7 +2667,7 @@ const RehearsalFeedbackCard: React.FC<{ transcript: Transcription[]; markers?: S
                 </div>
                 <div className="inline-flex items-center gap-3 self-start md:self-auto px-4 py-2 rounded-xl border border-purple-600/40 bg-purple-900/20">
                     <div className="text-xs uppercase tracking-wide text-purple-200/80">Confidence Score</div>
-                    <div className="text-2xl font-bold text-white">{feedback.confidenceScore}%</div>
+                    <div className="text-3xl font-bold text-white">{feedback.confidenceScore}%</div>
                 </div>
             </div>
 
@@ -2708,7 +2708,7 @@ const RehearsalMetricsCard: React.FC<{ transcript: Transcription[]; startedAt?: 
                     <div className="text-slate-100 font-semibold">Rehearsal Metrics</div>
                     <div className="text-sm text-slate-400 mt-1">Measured performance signals from this take.</div>
                 </div>
-                <div className="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 text-sm font-semibold">
+                <div className="px-3 py-1 rounded-full shadow-[0_0_8px_rgba(124,58,237,.4)] bg-[#7c3aed] bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 text-sm font-semibold">
                     Confidence {metrics.confidenceScore}%
                 </div>
             </div>
