@@ -95,6 +95,14 @@ Watch closely... because the moment that feels the most ordinary is often the mo
 Take a breath, lock in what you think you saw, and don't change your mind too quickly.
 Now... if your memory is certain, this reveal should feel impossible.`;
 
+const DEMO_DURATION_SECONDS = 62;
+const DEMO_SESSION_NOTES = 'Convention-ready sample patter loaded for booth testing.';
+const buildDemoMarkers = (startedAt: number): SegmentMarker[] => ([
+    { id: `demo-marker-1-${startedAt}`, label: 'Opener', createdAtMs: startedAt + 8000 },
+    { id: `demo-marker-2-${startedAt}`, label: 'Spectator moment', createdAtMs: startedAt + 28000 },
+    { id: `demo-marker-3-${startedAt}`, label: 'Reveal', createdAtMs: startedAt + 50000 },
+]);
+
 const formatElapsed = (ms: number): string => {
     const totalSeconds = Math.max(0, Math.floor(ms / 1000));
     const minutes = Math.floor(totalSeconds / 60).toString();
@@ -421,6 +429,8 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
     const [markerCount, setMarkerCount] = useState(0);
     const [currentMarkers, setCurrentMarkers] = useState<SegmentMarker[]>([]);
     const [demoScript, setDemoScript] = useState('');
+    const [demoDurationSeconds, setDemoDurationSeconds] = useState(0);
+    const [demoMarkers, setDemoMarkers] = useState<SegmentMarker[]>([]);
     const [sessionElapsed, setSessionElapsed] = useState('0:00');
     const sessionElapsedIntervalRef = useRef<number | null>(null);
 
@@ -685,20 +695,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         };
     }, []);
 
-    const clearSessionElapsedTimer = () => {
-        if (sessionElapsedIntervalRef.current) {
-            clearInterval(sessionElapsedIntervalRef.current);
-            sessionElapsedIntervalRef.current = null;
-        }
-    };
-
-    const startSessionElapsedTimer = () => {
-        clearSessionElapsedTimer();
-        sessionElapsedIntervalRef.current = window.setInterval(() => {
-            const startedAt = currentTakeStartRef.current;
-            setSessionElapsed(startedAt ? formatElapsed(Date.now() - startedAt) : '0:00');
-        }, 250);
-    };
 
     const handleStartSession = async () => {
         setBlockedUx(null);
@@ -754,7 +750,11 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         setCurrentMarkers([]);
         currentTakeStartRef.current = Date.now();
         setSessionElapsed('0:00');
-        clearSessionElapsedTimer();
+        if (sessionElapsedIntervalRef.current) clearInterval(sessionElapsedIntervalRef.current);
+        sessionElapsedIntervalRef.current = window.setInterval(() => {
+            const startedAt = currentTakeStartRef.current;
+            setSessionElapsed(startedAt ? formatElapsed(Date.now() - startedAt) : '0:00');
+        }, 250);
         errorOccurred.current = false;
         try {
             // FIX: Request audio without a specific sample rate to ensure compatibility.
@@ -869,7 +869,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
 
                         setStatus('listening');
                         setView('rehearsing');
-                        startSessionElapsedTimer();
 
                         // Start usage timer
                         sessionStartRef.current = Date.now();
@@ -891,10 +890,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                     onerror: (e) => {
                         console.error('Live session error:', e);
                         errorOccurred.current = true;
-                        clearSessionElapsedTimer();
-                        setSessionElapsed('0:00');
-                        currentTakeStartRef.current = null;
-                        void safeCleanupSession();
                         setErrorMessage('A live session error occurred. The connection may have been interrupted.');
                         setStatus('error');
                         setView('rehearsing');
@@ -925,10 +920,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         } catch (error: any) {
             console.error('Failed to start session or get microphone:', error);
             errorOccurred.current = true;
-            clearSessionElapsedTimer();
-            setSessionElapsed('0:00');
-            currentTakeStartRef.current = null;
-            await safeCleanupSession();
             try {
                 const blocked = normalizeBlockedUx(error, { toolName: 'Live Rehearsal (Audio)' });
                 if (blocked.showUpgrade || blocked.retryable) setBlockedUx(blocked);
@@ -1156,7 +1147,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
     };
 
     const handleStopRehearsal = async (reason?: string) => {
-        clearSessionElapsedTimer();
         // Record minutes used for the current session.
         const start = sessionStartRef.current;
         if (start) {
@@ -1224,26 +1214,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
     };
     
 
-    const handleAnalyzeDemoScript = () => {
-        const script = demoScript.trim();
-        if (!script) return;
-        const now = Date.now();
-        const wordCount = script.split(/\s+/).filter(Boolean).length;
-        const estimatedSeconds = Math.max(45, Math.round((wordCount / 135) * 60));
-        const startedAt = now - estimatedSeconds * 1000;
-        const demoTranscript = [{ source: 'user', text: script, isFinal: true }] as Transcription[];
-
-        setTakes((prev) => {
-            const takeNumber = (prev?.length ?? 0) + 1;
-            const next = [...(prev ?? []), { takeNumber, startedAt, endedAt: now, transcript: demoTranscript, markers: [] } as any];
-            setSelectedTake(Math.max(0, next.length - 1));
-            return next as any;
-        });
-        setErrorMessage('');
-        setStatus('idle');
-        setView('reviewing');
-    };
-
     const handleAddMarker = () => {
         if (status !== 'listening') return;
         setCurrentMarkers((prev) => {
@@ -1251,6 +1221,33 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             setMarkerCount(next.length);
             return next;
         });
+    };
+
+    const handleRunDemoReview = () => {
+        const script = demoScript.trim();
+        if (!script) return;
+        const now = Date.now();
+        const durationSeconds = demoDurationSeconds || DEMO_DURATION_SECONDS;
+        const startedAt = now - durationSeconds * 1000;
+        const markers = buildDemoMarkers(startedAt);
+        const demoTranscript = [{ source: 'user', text: script, isFinal: true }] as Transcription[];
+
+        setTakes((prev) => {
+            const takeNumber = (prev?.length ?? 0) + 1;
+            const next = [...(prev ?? []), { takeNumber, startedAt, endedAt: now, transcript: demoTranscript, markers } as any];
+            setSelectedTake(Math.max(0, next.length - 1));
+            return next as any;
+        });
+        setMarkerCount(markers.length);
+        setCurrentMarkers([]);
+        setTranscriptionHistory([]);
+        setErrorMessage('');
+        setBlockedUx(null);
+        setStatus('idle');
+        setSessionElapsed('0:00');
+        setSessionTitle('Demo Rehearsal Session');
+        setSessionNotes(DEMO_SESSION_NOTES);
+        setView('reviewing');
     };
 
     const handleHeaderButtonClick = async () => {
@@ -1286,8 +1283,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                     onStartNewTake={() => void handleStartSession()}
                     onResetSession={() => {
                         clearDraft();
-                        clearSessionElapsedTimer();
-                        currentTakeStartRef.current = null;
                         setSessionIdeaId(null);
                         setSessionTitle(`Live Rehearsal Session - ${new Date().toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`);
                         setSessionNotes('');
@@ -1321,11 +1316,11 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                             helpOpen={studioHelpOpen}
                             onToggleHelp={() => setStudioHelpOpen((prev) => !prev)}
                             onReset={() => {
-                                clearSessionElapsedTimer();
-                                currentTakeStartRef.current = null;
                                 setMarkerCount(0);
                                 setCurrentMarkers([]);
                                 setDemoScript('');
+                                setDemoDurationSeconds(0);
+                                setDemoMarkers([]);
                                 setTranscriptionHistory([]);
                                 setErrorMessage('');
                                 setBlockedUx(null);
@@ -1336,12 +1331,23 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                             onAddMarker={handleAddMarker}
                             currentMarkers={currentMarkers}
                             onLoadDemo={() => {
+                                const startedAt = Date.now() - (DEMO_DURATION_SECONDS * 1000);
+                                const markers = buildDemoMarkers(startedAt);
                                 setDemoScript(DEMO_SCRIPT);
+                                setDemoDurationSeconds(DEMO_DURATION_SECONDS);
+                                setDemoMarkers(markers);
+                                setMarkerCount(markers.length);
+                                setSessionElapsed(formatElapsed(DEMO_DURATION_SECONDS * 1000));
+                                setStatus('idle');
+                                setErrorMessage('');
+                                setBlockedUx(null);
                                 setSessionTitle('Demo Rehearsal Session');
-                                setSessionNotes('Convention-ready sample patter loaded for booth testing.');
+                                setSessionNotes(DEMO_SESSION_NOTES);
                             }}
-                            onAnalyzeDemo={handleAnalyzeDemoScript}
+                            onRunDemoReview={handleRunDemoReview}
                             demoScript={demoScript}
+                            demoDurationSeconds={demoDurationSeconds}
+                            demoMarkers={demoMarkers}
                         />
 
                         {transcriptionHistory.length > 0 ? (
@@ -1440,9 +1446,11 @@ const StatusIndicator: React.FC<{
     onAddMarker: () => void,
     currentMarkers: SegmentMarker[],
     onLoadDemo: () => void,
-    onAnalyzeDemo: () => void,
+    onRunDemoReview: () => void,
     demoScript: string,
-}> = ({status, errorMessage, blockedUx, onUpgrade, onStart, elapsed, markerCount, helpOpen, onToggleHelp, onReset, onAddMarker, currentMarkers, onLoadDemo, onAnalyzeDemo, demoScript}) => {
+    demoDurationSeconds: number,
+    demoMarkers: SegmentMarker[],
+}> = ({status, errorMessage, blockedUx, onUpgrade, onStart, elapsed, markerCount, helpOpen, onToggleHelp, onReset, onAddMarker, currentMarkers, onLoadDemo, onRunDemoReview, demoScript, demoDurationSeconds, demoMarkers}) => {
     const isRecording = status === 'listening';
     const isConnecting = status === 'connecting';
     const label = isRecording ? 'Recording' : isConnecting ? 'Connecting' : status === 'error' ? 'Attention Needed' : 'Ready';
@@ -1558,13 +1566,31 @@ const StatusIndicator: React.FC<{
                     <div className="flex items-start gap-3">
                         <LightbulbIcon className="w-5 h-5 text-purple-300 mt-0.5" />
                         <div className="flex-1">
-                            <div className="text-purple-100 font-semibold">Demo Script Loaded</div>
-                            <p className="text-sm text-purple-100/90 mt-2 whitespace-pre-line">{demoScript}</p>
-                            <div className="mt-3 flex flex-wrap gap-3">
-                                <button onClick={onAnalyzeDemo} className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-semibold transition-colors">
-                                    Review Demo Script with AI
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                    <div className="text-purple-100 font-semibold">Demo Script Loaded</div>
+                                    <div className="text-xs text-purple-100/70 mt-1">Sample transcript, duration, markers, and session metadata are now loaded into the studio.</div>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    <div className="px-3 py-1.5 rounded-full border border-purple-500/30 bg-purple-950/40 text-purple-100 text-xs font-semibold">Duration preset: {formatElapsed(demoDurationSeconds * 1000)}</div>
+                                    <div className="px-3 py-1.5 rounded-full border border-purple-500/30 bg-purple-950/40 text-purple-100 text-xs font-semibold">Markers preset: {demoMarkers.length}</div>
+                                </div>
+                            </div>
+                            <p className="text-sm text-purple-100/90 mt-3 whitespace-pre-line">{demoScript}</p>
+                            {demoMarkers.length > 0 ? (
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                    {demoMarkers.map((marker, index) => (
+                                        <div key={marker.id} className="px-3 py-1.5 rounded-full border border-amber-500/30 bg-amber-900/15 text-amber-100 text-sm font-medium">
+                                            {`Marker ${index + 1} – ${marker.label}`}
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : null}
+                            <div className="mt-4 flex flex-wrap items-center gap-3">
+                                <button onClick={onRunDemoReview} className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-semibold transition-colors">
+                                    Run Demo Review
                                 </button>
-                                <div className="text-xs text-purple-100/75 self-center">Use this when you want to demo the analysis flow without opening a live microphone session.</div>
+                                <div className="text-xs text-purple-100/75">Generate the same structured rehearsal review used after a real take, without leaving this page.</div>
                             </div>
                         </div>
                     </div>
