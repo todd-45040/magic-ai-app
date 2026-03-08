@@ -56,23 +56,23 @@ const GuidedPlaceholder: React.FC = () => (
                     { title: 'Timing', desc: 'Pace, pauses, and moments that feel rushed.' },
                     { title: 'Angles', desc: 'Sightlines and exposure risk based on frames.' },
                 ].map((c) => (
-                    <div key={c.title} className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
+                    <div key={c.title} className="rounded-lg border border-slate-700/80 bg-slate-900/50 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]">
                         <div className="flex items-center justify-between">
-                            <p className="font-semibold text-slate-200">{c.title}</p>
-                            <div className="h-2 w-16 rounded-full bg-slate-800 overflow-hidden">
-                                <div className="h-full w-1/2 bg-slate-700 animate-pulse" />
+                            <p className="font-semibold text-slate-100">{c.title}</p>
+                            <div className="h-2 w-16 rounded-full bg-slate-800/90 overflow-hidden">
+                                <div className="h-full w-1/2 bg-slate-600 animate-pulse" />
                             </div>
                         </div>
-                        <p className="mt-1 text-xs text-slate-400">{c.desc}</p>
+                        <p className="mt-1 text-xs text-slate-300/90">{c.desc}</p>
                         <div className="mt-3 space-y-2 animate-pulse">
-                            <div className="h-2 rounded bg-slate-800" />
-                            <div className="h-2 rounded bg-slate-800 w-5/6" />
+                            <div className="h-2 rounded bg-slate-700/90" />
+                            <div className="h-2 rounded bg-slate-700/90 w-5/6" />
                         </div>
                     </div>
                 ))}
             </div>
 
-            <div className="rounded-lg border border-slate-800 bg-slate-900/30 p-3 text-sm text-slate-300">
+            <div className="rounded-lg border border-slate-700/80 bg-slate-900/35 p-3 text-sm text-slate-300">
                 <p className="font-semibold text-slate-200 mb-1">Tip</p>
                 <p className="text-slate-400">
                     Use the <span className="text-slate-200">Analysis Focus</span> chips to guide the AI (e.g., angles, pacing, posture).
@@ -459,6 +459,9 @@ const deriveAutoTags = (): string[] => {
             <div className="flex flex-col">
                 <div className="flex items-center gap-2 mb-2">
                     <h2 className="text-xl font-bold text-slate-300">Video Rehearsal Studio</h2>
+                    <span className="inline-flex items-center rounded-full border border-purple-400/30 bg-purple-500/10 px-2.5 py-1 text-[11px] font-semibold tracking-wide text-purple-200 shadow-[0_0_12px_rgba(168,85,247,0.12)]">
+                        Frame-Based AI Review
+                    </span>
                     <button
                         type="button"
                         onClick={() => setIsInfoOpen(true)}
@@ -469,7 +472,7 @@ const deriveAutoTags = (): string[] => {
                         <InfoIcon className="w-4 h-4" />
                     </button>
                 </div>
-                <p className="text-slate-400 mb-4">Upload a video of your performance to get AI-driven feedback on body language, staging, and physical timing.</p>
+                <p className="text-slate-400 mb-3">Upload a video of your performance to get AI-driven feedback on body language, staging, and physical timing.</p>
 
 {isInfoOpen && (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -531,14 +534,14 @@ const deriveAutoTags = (): string[] => {
                     <input type="file" accept="video/*" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
                     
                     {!videoPreviewUrl ? (
-                        <button onClick={() => fileInputRef.current?.click()} className="w-full flex flex-col items-center justify-center p-12 border-2 border-dashed border-slate-600 rounded-lg hover:bg-slate-800/50 hover:border-purple-500 transition-colors">
+                        <button onClick={() => fileInputRef.current?.click()} className="w-full flex flex-col items-center justify-center p-12 border-2 border-dashed border-slate-600/90 rounded-xl bg-slate-950/35 shadow-inner shadow-black/20 hover:bg-slate-900/70 hover:border-purple-400/80 hover:shadow-[0_0_18px_rgba(168,85,247,0.12)] transition-all duration-200">
                             <VideoIcon className="w-12 h-12 text-slate-500 mb-2"/>
-                            <span className="font-semibold text-slate-300">Upload a Rehearsal Video</span>
+                            <span className="font-semibold text-slate-200">Upload a Rehearsal Video</span>
                             <span className="text-sm text-slate-400">MP4, MOV, WEBM, etc. (Max 50MB)</span>
                         </button>
                     ) : (
                         <div>
-                            <div className="relative w-full aspect-video bg-black rounded-lg flex items-center justify-center overflow-hidden mb-2">
+                            <div className="relative w-full aspect-video bg-black rounded-xl flex items-center justify-center overflow-hidden mb-2 shadow-inner shadow-black/30">
                                 <video src={videoPreviewUrl} controls className="w-full h-full object-contain" />
                                 <button onClick={handleRemoveVideo} className="absolute top-2 right-2 p-2 bg-black/50 rounded-full text-white hover:bg-red-600 transition-colors" title="Remove video">
                                     <TrashIcon className="w-5 h-5" />
@@ -557,7 +560,7 @@ const deriveAutoTags = (): string[] => {
                         <textarea id="analysis-prompt" rows={3} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="e.g., Check my posture and hand movements during the vanish." className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500" />
 
 {/* Phase 5: saved focus templates */}
-<div className="mt-2 flex items-center justify-between gap-2">
+<div className="mt-1.5 flex items-center justify-between gap-2">
     <p className="text-xs text-slate-500">
         Shortcuts: <span className="text-slate-400">Ctrl/Cmd+O</span> upload, <span className="text-slate-400">Ctrl/Cmd+Enter</span> analyze
     </p>
@@ -602,7 +605,7 @@ const deriveAutoTags = (): string[] => {
 
 
                         {/* Guided prompt chips */}
-                        <div className="mt-2 flex flex-wrap gap-2">
+                        <div className="mt-1.5 flex flex-wrap gap-2">
                             {focusChips.map((chip) => (
                                 <button
                                     key={chip}
@@ -616,7 +619,8 @@ const deriveAutoTags = (): string[] => {
                         </div>
                     </div>
                     
-                    <button onClick={handleAnalyze} disabled={isLoading || !videoFile} className="w-full py-3 mt-4 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed">
+                    <button onClick={handleAnalyze} disabled={isLoading || !videoFile} className="group relative w-full py-3 mt-4 overflow-hidden rounded-lg border border-purple-400/30 bg-gradient-to-r from-purple-600 via-fuchsia-600 to-purple-700 text-white font-bold shadow-[0_0_18px_rgba(147,51,234,0.18)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_0_24px_rgba(168,85,247,0.28)] hover:from-purple-500 hover:via-fuchsia-500 hover:to-purple-600 disabled:border-slate-600 disabled:bg-slate-600 disabled:shadow-none disabled:hover:translate-y-0 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                        <span className="pointer-events-none absolute inset-y-0 left-0 w-1/3 translate-x-[-120%] bg-gradient-to-r from-transparent via-white/12 to-transparent transition-transform duration-700 group-hover:translate-x-[320%] disabled:hidden" />
                         <WandIcon className="w-5 h-5" />
                         <span>
                             {isLoading ? 'Analyzing…' : videoFile ? 'Analyze Performance (Ready)' : 'Analyze Performance'}
