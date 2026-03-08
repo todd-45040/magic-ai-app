@@ -1,12 +1,13 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { User } from '../types';
 import { ANGLE_RISK_ANALYSIS_SYSTEM_INSTRUCTION } from '../constants';
 import { generateResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
 import { createShow, addTaskToShow } from '../services/showsService';
-import { EyeIcon, SaveIcon, ShareIcon, ShieldIcon, VideoIcon, WandIcon } from './icons';
+import { ChevronDownIcon, EyeIcon, SaveIcon, ShareIcon, ShieldIcon, VideoIcon, WandIcon } from './icons';
 import FormattedText from './FormattedText';
 import { useToast } from './ToastProvider';
+import { trackClientEvent } from '../services/telemetryClient';
 
 type AudienceSetup = 'Seated (front)' | 'Standing (close-up)' | 'Surrounded / 360°' | 'Stage (wide)';
 type PerformanceMode = 'Close-up' | 'Parlor' | 'Stage' | 'Walkaround';
@@ -168,7 +169,65 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved, onDeepLinkShowPla
     return Array.from(new Set(sourceItems)).slice(0, 5);
   }, [parsedAnalysis]);
 
-  const canAnalyze = routineName.trim().length > 0;
+
+const spectatorViewItems = useMemo(() => {
+  const items = [
+    ...(parsedAnalysis?.spectator?.bulletItems || []),
+    ...((parsedAnalysis?.sightlines?.bulletItems || []).filter(item => /(front|left|right|rear|back|side|audience)/i.test(item))),
+  ];
+  return Array.from(new Set(items)).slice(0, 6);
+}, [parsedAnalysis]);
+
+const resetVulnerabilityItems = useMemo(() => {
+  const items = [
+    ...(parsedAnalysis?.resetVulnerability?.bulletItems || []),
+    ...(parsedAnalysis?.reset?.bulletItems || []),
+  ];
+  return Array.from(new Set(items)).slice(0, 5);
+}, [parsedAnalysis]);
+
+const exposureSummaryItems = useMemo(() => {
+  const items = [
+    ...(parsedAnalysis?.summary?.bulletItems || []),
+    ...(riskProfile ? [
+      `Overall exposure risk: ${riskProfile.overall.label}`,
+      riskProfile.topRisks.length ? `Most vulnerable areas: ${riskProfile.topRisks.join(', ')}` : '',
+      spectatorViewItems.find(item => /safe/i.test(item)) ? `Safest audience position: ${spectatorViewItems.find(item => /safe/i.test(item))}` : '',
+    ] : []),
+  ].filter(Boolean);
+  return Array.from(new Set(items as string[])).slice(0, 5);
+}, [parsedAnalysis, riskProfile, spectatorViewItems]);
+
+const canAnalyze = routineName.trim().length > 0;
+
+const PANEL_KEYS = ['risk-profile', 'angle-risk-analysis', 'posture-signals', 'timing-vulnerabilities', 'critical-exposure-points', 'spectator-view-simulation', 'reset-vulnerability-analysis', 'professional-coaching', 'mitigations', 'exposure-probability-summary', 'refinement-questions'] as const;
+type PanelKey = typeof PANEL_KEYS[number];
+
+const [expandedPanels, setExpandedPanels] = useState<Record<PanelKey, boolean>>(() =>
+  PANEL_KEYS.reduce((acc, key) => {
+    acc[key] = true;
+    return acc;
+  }, {} as Record<PanelKey, boolean>)
+);
+
+useEffect(() => {
+  if (!analysis.trim()) return;
+  setExpandedPanels(PANEL_KEYS.reduce((acc, key) => {
+    acc[key] = true;
+    return acc;
+  }, {} as Record<PanelKey, boolean>));
+}, [analysis]);
+
+const setAllPanels = (value: boolean) => {
+  setExpandedPanels(PANEL_KEYS.reduce((acc, key) => {
+    acc[key] = value;
+    return acc;
+  }, {} as Record<PanelKey, boolean>));
+};
+
+const togglePanel = (key: PanelKey) => {
+  setExpandedPanels(prev => ({ ...prev, [key]: !prev[key] }));
+};
 
   // Phase 6B: Improve output scannability without changing AI logic.
   // We decorate key section headings with visual anchors, and render the Mitigations section
@@ -333,6 +392,7 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved, onDeepLinkShowPla
         tags: normalizedTags,
       } as any);
       toast.showToast('Saved to My Ideas', 'success');
+      void trackClientEvent({ tool: 'angle-risk', action: 'angle_risk_analysis_saved', metadata: { routineName: routineName.trim(), mode, setup } });
       onIdeaSaved?.();
     } catch (e) {
       console.error(e);
@@ -397,16 +457,23 @@ ${routineSteps.trim()}` : null,
       `3) Reset & Pocket/Prop Management Risks (bullets)`,
       `4) Handling/Body-Language Tells (bullets)`,
       `5) Critical Exposure Points (3-5 bullets that name the vulnerable moment, why it is exposed, and the safer adjustment)`,
-      `6) Professional Coaching Notes (3-5 concise bullets on blocking, posture, timing, and audience management)`,
-      `7) Mitigations (3–7 actionable steps, written as checklist items)`,
-      `8) Questions to refine this analysis (3–6 targeted questions)`,
+      `6) Spectator View Simulation (bullets for Front Audience, Right Side Audience, Left Side Audience, and Rear Angles, with safety/risk comments)`,
+      `7) Reset Vulnerability Analysis (2-4 bullets on reset timing, attention cover, and pocket/prop management risk)`,
+      `8) Professional Coaching Notes (3-5 concise bullets on blocking, posture, timing, and audience management)`,
+      `9) Mitigations (3–7 actionable steps, written as checklist items)`,
+      `10) Exposure Probability Summary (3-5 bullets covering overall risk, most vulnerable moment, and safest audience position if inferable)`,
+      `11) Questions to refine this analysis (3–6 targeted questions)`,
     ].filter(Boolean).join('\n');
+
+    void trackClientEvent({ tool: 'angle-risk', action: 'angle_risk_analysis_start', metadata: { routineName: routineName.trim(), mode, setup, venueType, lighting, audienceDistance, keyMoments, focusLength: focusToUse.length } });
 
     try {
       const text = await generateResponse(prompt, ANGLE_RISK_ANALYSIS_SYSTEM_INSTRUCTION, user);
       setAnalysis(text);
+      void trackClientEvent({ tool: 'angle-risk', action: 'angle_risk_analysis_success', metadata: { routineName: routineName.trim(), mode, setup } });
     } catch (e: any) {
       console.error(e);
+      void trackClientEvent({ tool: 'angle-risk', action: 'angle_risk_analysis_error', metadata: { routineName: routineName.trim(), mode, setup, message: e?.message || 'unknown error' }, outcome: 'ERROR_UPSTREAM', error_code: 'ANGLE_RISK_ANALYSIS_ERROR' });
       toast.showToast('Angle/Risk analysis failed. Please try again.', 'error');
     } finally {
       setIsLoading(false);
@@ -730,140 +797,245 @@ ${routineSteps.trim()}` : null,
           {isLoading && (
             <div className="h-full flex flex-col items-center justify-center text-center">
               <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mb-4" />
-              <div className="text-white/80 font-semibold">Analyzing angle and risk…</div>
-              <div className="mt-2 text-sm text-white/55">Looking for sightlines, reset pressure points, and tells.</div>
+              <div className="text-white/80 font-semibold">Analyzing routine risks...</div>
+              <div className="mt-2 text-sm text-white/55">Simulating spectator sightlines, reset pressure points, posture tells, and exposure probability.</div>
             </div>
           )}
 
           {!!analysis && !isLoading && (
             <div className="flex h-full flex-col">
               <div className="flex-1 overflow-auto pr-1">
-                {riskProfile && (
-                  <div className="mb-4 space-y-4">
-                    <div className="rounded-xl border border-white/10 bg-black/10 p-4">
-                      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                        <div>
-                          <p className="text-sm font-semibold text-white">Risk Profile</p>
-                          <p className="mt-1 text-xs text-white/60">Fast scannable scoring so this page feels like a real rehearsal analysis system.</p>
-                        </div>
-                        <div className="lg:text-right">
-                          <div className="text-sm text-white/85">
-                            Overall Risk: <span className="font-semibold">{riskProfile.overall.dot} {riskProfile.overall.label}</span>
-                          </div>
-                          <div className="mt-1 text-xs text-white/60">Top pressure points: <span className="text-white/75">{riskProfile.topRisks.join(', ')}</span></div>
-                        </div>
-                      </div>
 
-                      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
-                        {riskProfile.metrics.map(metric => (
-                          <div key={metric.label} className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
-                            <div className="flex items-center justify-between gap-2">
-                              <p className="text-sm font-semibold text-white">{metric.label}</p>
-                              <span className="text-xs font-semibold text-white/70">{metric.level}</span>
-                            </div>
-                            <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
-                              <div className="h-full rounded-full bg-purple-400/80" style={{ width: `${metric.score}%` }} />
-                            </div>
-                            <div className="mt-2 text-xs text-white/50">{metric.score}/100</div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {(criticalExposurePoints.length > 0 || coachingNotes.length > 0) && (
-                      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                        <div className="rounded-xl border border-white/10 bg-black/10 p-4">
-                          <div className="flex items-center gap-2">
-                            <EyeIcon className="h-4 w-4 text-purple-200" />
-                            <p className="text-sm font-semibold text-white">Critical Exposure Points</p>
-                          </div>
-                          <p className="mt-1 text-xs text-white/60">The moments most likely to flash, feel suspicious, or create reset pressure.</p>
-                          <ul className="mt-3 space-y-2">
-                            {criticalExposurePoints.length ? criticalExposurePoints.map((item, idx) => (
-                              <li key={`${idx}-${item.slice(0, 12)}`} className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-sm text-white/80">{item}</li>
-                            )) : <li className="text-sm text-white/50">No critical points were extracted from this report.</li>}
-                          </ul>
-                        </div>
-
-                        <div className="rounded-xl border border-white/10 bg-black/10 p-4">
-                          <div className="flex items-center gap-2">
-                            <ShieldIcon className="h-4 w-4 text-purple-200" />
-                            <p className="text-sm font-semibold text-white">Professional Coaching Notes</p>
-                          </div>
-                          <p className="mt-1 text-xs text-white/60">Quick rehearsal coaching notes you can actually act on during practice.</p>
-                          <ul className="mt-3 space-y-2">
-                            {coachingNotes.length ? coachingNotes.map((item, idx) => (
-                              <li key={`${idx}-${item.slice(0, 12)}`} className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-sm text-white/80">{item}</li>
-                            )) : <li className="text-sm text-white/50">No coaching notes were extracted from this report.</li>}
-                          </ul>
-                        </div>
-                      </div>
-                    )}
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/10 p-3">
+                  <div>
+                    <p className="text-sm font-semibold text-white">Analysis Panels</p>
+                    <p className="mt-1 text-xs text-white/60">Collapse sections to keep the page compact while reviewing risk details.</p>
                   </div>
-                )}
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setAllPanels(true)}
+                      className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold text-white/75 hover:bg-white/[0.06]"
+                    >
+                      Expand All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAllPanels(false)}
+                      className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold text-white/75 hover:bg-white/[0.06]"
+                    >
+                      Collapse All
+                    </button>
+                  </div>
+                </div>
 
-                {/* Phase 6B: Decorated headings + actionable Mitigations checklist */}
-                {decoratedOutput ? (
-                  <>
-                    {!!decoratedOutput.main.trim() && <FormattedText text={decoratedOutput.main} />}
-
-                    {decoratedOutput.mitigationsItems.length > 0 && (
-                      <div className="my-4 rounded-xl border border-purple-400/20 bg-purple-500/10 p-4">
-                        <div className="flex items-center justify-between gap-3">
+                {(() => {
+                  const renderPanel = ({
+                    keyName,
+                    title,
+                    subtitle,
+                    children,
+                    defaultOpen = true,
+                  }: {
+                    keyName: PanelKey;
+                    title: string;
+                    subtitle?: string;
+                    children: React.ReactNode;
+                    defaultOpen?: boolean;
+                  }) => {
+                    const isOpen = expandedPanels[keyName] ?? defaultOpen;
+                    return (
+                      <div className="mb-4 overflow-hidden rounded-xl border border-white/10 bg-black/10">
+                        <button
+                          type="button"
+                          onClick={() => togglePanel(keyName)}
+                          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-white/[0.03]"
+                        >
                           <div>
-                            <p className="text-sm font-semibold text-white">🛡 Mitigations</p>
-                            <p className="mt-1 text-xs text-white/60">Actionable steps to reduce exposure risk and improve control.</p>
+                            <p className="text-sm font-semibold text-white">{title}</p>
+                            {subtitle ? <p className="mt-1 text-xs text-white/60">{subtitle}</p> : null}
                           </div>
-                        </div>
-
-                        <ul className="mt-3 space-y-2">
-                          {decoratedOutput.mitigationsItems.slice(0, 12).map((item, idx) => {
-                            // Emphasize a leading verb/phrase (best-effort) without changing the model output.
-                            const m = item.match(/^([A-Za-z][A-Za-z'’\-]+(?:\s+[A-Za-z][A-Za-z'’\-]+){0,2})([:—\-])\s*(.*)$/);
-                            const lead = m ? m[1] : item.split(/\s+/)[0];
-                            const rest = m ? m[3] : item.slice(lead.length).trim();
-
-                            return (
-                              <li key={`${idx}-${lead}`} className="flex gap-3 rounded-lg border border-white/10 bg-black/10 px-3 py-2">
-                                <div className="mt-0.5 h-5 w-5 flex items-center justify-center rounded-md border border-white/10 bg-white/[0.03] text-white/60">
-                                  ✓
-                                </div>
-                                <div className="text-sm text-white/85 leading-relaxed">
-                                  <strong className="text-white">{lead}</strong>{rest ? ` — ${rest}` : ''}
-                                </div>
-                              </li>
-                            );
-                          })}
-                        </ul>
+                          <ChevronDownIcon className={`h-5 w-5 text-white/60 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                        {isOpen ? <div className="border-t border-white/10 px-4 py-4">{children}</div> : null}
                       </div>
-                    )}
+                    );
+                  };
 
-                    {decoratedOutput.questionsItems.length > 0 && (
-                      <div className="my-4 rounded-xl border border-white/10 bg-black/10 p-4">
-                        <div className="flex items-start justify-between gap-3">
+                  return (
+                    <>
+                      {riskProfile && renderPanel({
+                        keyName: 'risk-profile',
+                        title: 'Risk Profile',
+                        subtitle: 'Fast scannable scoring so this page feels like a real rehearsal analysis system.',
+                        children: (
+                          <>
+                            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                              <div className="text-sm text-white/85">
+                                Overall Risk: <span className="font-semibold">{riskProfile.overall.dot} {riskProfile.overall.label}</span>
+                              </div>
+                              <div className="text-xs text-white/60">Top pressure points: <span className="text-white/75">{riskProfile.topRisks.join(', ')}</span></div>
+                            </div>
+                            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+                              {riskProfile.metrics.map(metric => (
+                                <div key={metric.label} className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <p className="text-sm font-semibold text-white">{metric.label}</p>
+                                    <span className="text-xs font-semibold text-white/70">{metric.level}</span>
+                                  </div>
+                                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
+                                    <div className="h-full rounded-full bg-purple-400/80" style={{ width: `${metric.score}%` }} />
+                                  </div>
+                                  <div className="mt-2 text-xs text-white/50">{metric.score}/100</div>
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        )
+                      })}
+
+                      {(parsedAnalysis?.overview?.body || parsedAnalysis?.sightlines?.body) && renderPanel({
+                        keyName: 'angle-risk-analysis',
+                        title: 'Angle Risk Analysis',
+                        subtitle: 'Overview plus direct sightline pressure points across the routine.',
+                        children: <FormattedText text={[parsedAnalysis?.overview?.body, parsedAnalysis?.sightlines?.body].filter(Boolean).join('
+
+')} />
+                      })}
+
+                      {parsedAnalysis?.handling?.body && renderPanel({
+                        keyName: 'posture-signals',
+                        title: 'Posture Signals',
+                        subtitle: 'Body-language tells, hand tension, and suspicious posture cues.',
+                        children: <FormattedText text={parsedAnalysis.handling.body} />
+                      })}
+
+                      {!!focusText.trim() && renderPanel({
+                        keyName: 'timing-vulnerabilities',
+                        title: 'Timing Vulnerabilities',
+                        subtitle: 'User-directed focus areas that may need better offbeats or attention cover.',
+                        children: (
+                          <div className="space-y-2 text-sm text-white/80">
+                            {focusText.split('
+').filter(Boolean).map((item, idx) => (
+                              <div key={`${idx}-${item.slice(0, 12)}`} className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2">{item}</div>
+                            ))}
+                          </div>
+                        )
+                      })}
+
+                      {(criticalExposurePoints.length > 0) && renderPanel({
+                        keyName: 'critical-exposure-points',
+                        title: 'Critical Exposure Points',
+                        subtitle: 'The moments most likely to flash, feel suspicious, or create reset pressure.',
+                        children: (
+                          <ul className="space-y-2">
+                            {criticalExposurePoints.map((item, idx) => (
+                              <li key={`${idx}-${item.slice(0, 12)}`} className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-sm text-white/80">{item}</li>
+                            ))}
+                          </ul>
+                        )
+                      })}
+
+                      {(spectatorViewItems.length > 0 || parsedAnalysis?.spectator?.body) && renderPanel({
+                        keyName: 'spectator-view-simulation',
+                        title: 'Spectator View Simulation',
+                        subtitle: 'Different audience sightlines so the tool thinks more like a working performer.',
+                        children: (
+                          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                            {(spectatorViewItems.length ? spectatorViewItems : parsedAnalysis?.spectator?.bulletItems || []).map((item, idx) => (
+                              <div key={`${idx}-${item.slice(0, 12)}`} className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-sm text-white/80">{item}</div>
+                            ))}
+                          </div>
+                        )
+                      })}
+
+                      {(resetVulnerabilityItems.length > 0) && renderPanel({
+                        keyName: 'reset-vulnerability-analysis',
+                        title: 'Reset Vulnerability Analysis',
+                        subtitle: 'Reset timing, attention cover, and pocket/prop management risk.',
+                        children: (
+                          <ul className="space-y-2">
+                            {resetVulnerabilityItems.map((item, idx) => (
+                              <li key={`${idx}-${item.slice(0, 12)}`} className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-sm text-white/80">{item}</li>
+                            ))}
+                          </ul>
+                        )
+                      })}
+
+                      {(coachingNotes.length > 0) && renderPanel({
+                        keyName: 'professional-coaching',
+                        title: 'Professional Coaching',
+                        subtitle: 'Quick rehearsal coaching notes you can actually act on during practice.',
+                        children: (
+                          <ul className="space-y-2">
+                            {coachingNotes.map((item, idx) => (
+                              <li key={`${idx}-${item.slice(0, 12)}`} className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-sm text-white/80">{item}</li>
+                            ))}
+                          </ul>
+                        )
+                      })}
+
+                      {(decoratedOutput?.mitigationsItems.length || parsedAnalysis?.mitigations?.body) && renderPanel({
+                        keyName: 'mitigations',
+                        title: 'Mitigations',
+                        subtitle: 'Actionable steps to reduce exposure risk and improve control.',
+                        children: (
+                          <ul className="space-y-2">
+                            {(decoratedOutput?.mitigationsItems || parsedAnalysis?.mitigations?.bulletItems || []).slice(0, 12).map((item, idx) => {
+                              const m = item.match(/^([A-Za-z][A-Za-z'’\-]+(?:\s+[A-Za-z][A-Za-z'’\-]+){0,2})([:—\-])\s*(.*)$/);
+                              const lead = m ? m[1] : item.split(/\s+/)[0];
+                              const rest = m ? m[3] : item.slice(lead.length).trim();
+                              return (
+                                <li key={`${idx}-${lead}`} className="flex gap-3 rounded-lg border border-white/10 bg-black/10 px-3 py-2">
+                                  <div className="mt-0.5 flex h-5 w-5 items-center justify-center rounded-md border border-white/10 bg-white/[0.03] text-white/60">✓</div>
+                                  <div className="text-sm leading-relaxed text-white/85"><strong className="text-white">{lead}</strong>{rest ? ` — ${rest}` : ''}</div>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )
+                      })}
+
+                      {(exposureSummaryItems.length > 0) && renderPanel({
+                        keyName: 'exposure-probability-summary',
+                        title: 'Exposure Probability Summary',
+                        subtitle: 'Clear takeaway on overall risk, most vulnerable moments, and safest audience positions.',
+                        children: (
+                          <ul className="space-y-2">
+                            {exposureSummaryItems.map((item, idx) => (
+                              <li key={`${idx}-${item.slice(0, 12)}`} className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-sm text-white/80">{item}</li>
+                            ))}
+                          </ul>
+                        )
+                      })}
+
+                      {(decoratedOutput?.questionsItems.length > 0) && renderPanel({
+                        keyName: 'refinement-questions',
+                        title: 'Refinement Questions',
+                        subtitle: 'Answer a question below to sharpen the next analysis pass.',
+                        children: (
                           <div>
-                            <p className="text-sm font-semibold text-white">Want even more precision?</p>
-                            <p className="mt-1 text-xs text-white/60">Answer the first question to refine your focus, then rerun the analysis.</p>
+                            <div className="mb-3 flex items-start justify-between gap-3">
+                              <p className="text-xs text-white/60">Answer the first question to refine your focus, then rerun the analysis.</p>
+                              <button
+                                onClick={handleRefineFromQuestions}
+                                className="shrink-0 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-white/80 hover:bg-white/[0.07]"
+                              >
+                                Refine this analysis
+                              </button>
+                            </div>
+                            <ol className="list-decimal space-y-2 pl-5 text-sm text-white/80">
+                              {decoratedOutput.questionsItems.slice(0, 8).map((q, i) => (
+                                <li key={`${i}-${q.slice(0, 12)}`} className="leading-relaxed">{q}</li>
+                              ))}
+                            </ol>
                           </div>
-                          <button
-                            onClick={handleRefineFromQuestions}
-                            className="shrink-0 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-white/80 hover:bg-white/[0.07]"
-                          >
-                            Refine this analysis
-                          </button>
-                        </div>
-
-                        <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-white/80">
-                          {decoratedOutput.questionsItems.slice(0, 8).map((q, i) => (
-                            <li key={`${i}-${q.slice(0, 12)}`} className="leading-relaxed">{q}</li>
-                          ))}
-                        </ol>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <FormattedText text={analysis} />
-                )}
+                        )
+                      })}
+                    </>
+                  );
+                })()}
               </div>
               {/* Phase 6D: clearer CTA footer with primary "Next Steps" + de-emphasized utilities */}
               <div className="mt-4 rounded-xl border border-white/10 bg-black/10 p-3">
