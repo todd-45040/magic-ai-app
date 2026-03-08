@@ -243,7 +243,15 @@ const buildSessionTimeline = (transcript: Transcription[], markers: SegmentMarke
     });
 };
 
-const buildRehearsalFeedback = (transcript: Transcription[], markers: SegmentMarker[] = []): RehearsalFeedback => {
+type RehearsalMetrics = {
+    confidenceScore: number;
+    fillerWords: number;
+    averageSpeakingSpeed: number;
+    totalPauseTimeSeconds: number;
+    energyLevel: string;
+};
+
+const buildRehearsalMetrics = (transcript: Transcription[], startedAt?: number, endedAt?: number): RehearsalMetrics => {
     const userText = (transcript || [])
         .filter((t) => t?.source === 'user')
         .map((t) => t.text || '')
@@ -251,25 +259,53 @@ const buildRehearsalFeedback = (transcript: Transcription[], markers: SegmentMar
         .replace(/\s+/g, ' ')
         .trim();
 
-    if (markers.length > 0) {
-        const safeDuration = Math.max(30, durationSeconds);
-        return markers.map((marker, index) => {
-            const relativeSeconds = startedAt ? Math.max(0, Math.min(safeDuration, Math.round((marker.createdAtMs - startedAt) / 1000))) : Math.round((safeDuration / Math.max(1, markers.length + 1)) * (index + 1));
-            const commentary = /reveal/i.test(marker.label)
-                ? `Reveal Segment: Energy is strong here, but pacing may rush at ${formatTimelineTimestamp(relativeSeconds)}. Consider adding a dramatic pause.`
-                : /spectator|audience/i.test(marker.label)
-                    ? 'Spectator interaction happens here. Slow your wording slightly so the participant can follow without pressure.'
-                    : index === 0
-                        ? 'Opening segment is clearly defined. Keep the first beat calm and confident.'
-                        : 'This marked segment helps define the routine structure. Keep the transition into it crisp and intentional.';
-            return {
-                timestampLabel: formatTimelineTimestamp(relativeSeconds),
-                seconds: relativeSeconds,
-                label: marker.label,
-                commentary,
-            };
-        });
-    }
+    const words = userText ? userText.split(/\s+/).filter(Boolean) : [];
+    const fillerWords = (userText.match(/\b(um|uh|like|you know|so|actually|basically)\b/gi) || []).length;
+    const pauseCueCount = (userText.match(/\b(now|watch|wait|pause|look|listen|remember|breathe)\b/gi) || []).length;
+    const exclamations = (userText.match(/!/g) || []).length;
+    const questionCount = (userText.match(/\?/g) || []).length;
+    const durationSeconds = Math.max(1, Math.round((((endedAt || 0) - (startedAt || 0)) / 1000) || Math.max(45, words.length / 2.3)));
+    const averageSpeakingSpeed = Math.max(70, Math.min(220, Math.round((words.length / durationSeconds) * 60)));
+
+    const punctuationPauses = (userText.match(/[,.!?;:]/g) || []).length;
+    const totalPauseTimeSeconds = Math.max(2, Math.min(45, Math.round((pauseCueCount * 1.4) + (punctuationPauses * 0.18))));
+
+    const confidenceScore = Math.max(
+        62,
+        Math.min(
+            97,
+            Math.round(
+                84
+                - fillerWords * 3
+                - Math.max(0, averageSpeakingSpeed - 168) / 5
+                - Math.max(0, 110 - averageSpeakingSpeed) / 6
+                + Math.min(8, questionCount * 2)
+                + Math.min(6, pauseCueCount)
+                + Math.min(4, exclamations)
+            )
+        )
+    );
+
+    let energyLevel = 'Moderate';
+    if (averageSpeakingSpeed >= 150 || exclamations >= 2 || pauseCueCount >= 4) energyLevel = 'High';
+    if (averageSpeakingSpeed < 115 && exclamations === 0 && pauseCueCount < 2) energyLevel = 'Measured';
+
+    return {
+        confidenceScore,
+        fillerWords,
+        averageSpeakingSpeed,
+        totalPauseTimeSeconds,
+        energyLevel,
+    };
+};
+
+const buildRehearsalFeedback = (transcript: Transcription[], markers: SegmentMarker[] = [], startedAt?: number, endedAt?: number): RehearsalFeedback => {
+    const userText = (transcript || [])
+        .filter((t) => t?.source === 'user')
+        .map((t) => t.text || '')
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
 
     if (!userText) {
         return {
@@ -284,19 +320,19 @@ const buildRehearsalFeedback = (transcript: Transcription[], markers: SegmentMar
         };
     }
 
+    const metrics = buildRehearsalMetrics(transcript, startedAt, endedAt);
     const words = userText.split(/\s+/).filter(Boolean);
     const sentences = userText.split(/[.!?]+/).map((s) => s.trim()).filter(Boolean);
-    const fillerMatches = userText.match(/\b(um|uh|like|you know|so|actually|basically)\b/gi) || [];
     const questionCount = (userText.match(/\?/g) || []).length;
     const pauseCueCount = (userText.match(/\b(now|watch|wait|pause|look|listen|remember|breathe)\b/gi) || []).length;
     const avgSentenceWords = sentences.length ? words.length / sentences.length : words.length;
     const longestSentence = sentences.reduce((max, s) => Math.max(max, s.split(/\s+/).filter(Boolean).length), 0);
-    const score = Math.max(62, Math.min(97, Math.round(84 - fillerMatches.length * 3 - Math.max(0, avgSentenceWords - 22) - Math.max(0, longestSentence - 30) / 2 + Math.min(8, questionCount * 2) + Math.min(6, pauseCueCount))));
+    const revealMarker = markers.find((marker) => /reveal/i.test(marker.label));
 
     const deliveryBullets = [
-        fillerMatches.length <= 2
+        metrics.fillerWords <= 2
             ? 'Strong vocal control overall. Your delivery reads as deliberate and performance-ready.'
-            : `A few filler words (${fillerMatches.length}) softened authority. Tightening those moments will increase confidence.`,
+            : `A few filler words (${metrics.fillerWords}) softened authority. Tightening those moments will increase confidence.`,
         pauseCueCount >= 3
             ? 'You naturally use cue words like “watch,” “remember,” or “now,” which helps shape attention.'
             : 'Add a few stronger cue words to guide attention and give the routine more command.',
@@ -306,9 +342,11 @@ const buildRehearsalFeedback = (transcript: Transcription[], markers: SegmentMar
         avgSentenceWords <= 18
             ? 'Pacing is generally clean. Sentence length stays compact enough for live delivery.'
             : 'Some lines run long. Breaking larger thoughts into shorter beats will improve pacing.',
-        longestSentence > 28
-            ? 'One or more explanation phases feel dense. Insert a deliberate pause before the reveal beat.'
-            : 'Reveal pacing appears controlled. A slightly longer beat before the climax could make it land harder.',
+        revealMarker
+            ? 'Reveal Segment: Energy is strong, but pacing feels slightly rushed. Add a short pause before the payoff.'
+            : longestSentence > 28
+                ? 'One or more explanation phases feel dense. Insert a deliberate pause before the reveal beat.'
+                : 'Reveal pacing appears controlled. A slightly longer beat before the climax could make it land harder.',
     ];
 
     const engagementBullets = [
@@ -329,12 +367,8 @@ const buildRehearsalFeedback = (transcript: Transcription[], markers: SegmentMar
             : 'Name the impossible outcome more explicitly so the effect registers cleanly.',
     ];
 
-    const markerSummary = markers.map((marker, index) => `Marker ${index + 1} – ${marker.label}`);
-    const revealMarker = markers.find((marker) => /reveal/i.test(marker.label));
-    const spectatorMarker = markers.find((marker) => /spectator|audience/i.test(marker.label));
-
     const suggestionBullets = [
-        fillerMatches.length > 0
+        metrics.fillerWords > 0
             ? 'Remove filler phrases from the first thirty seconds to sound more certain immediately.'
             : 'Keep the opening exactly this direct — it establishes authority quickly.',
         'Add a clear pause just before the strongest magical sentence or reveal line.',
@@ -344,7 +378,7 @@ const buildRehearsalFeedback = (transcript: Transcription[], markers: SegmentMar
     ];
 
     return {
-        confidenceScore: score,
+        confidenceScore: metrics.confidenceScore,
         sections: [
             { title: 'Delivery & Vocal Tone', bullets: deliveryBullets },
             { title: 'Timing & Pacing', bullets: pacingBullets },
@@ -1488,6 +1522,9 @@ type RehearsalHistoryItem = {
     createdAt: string;
     transcript: Transcription[];
     notes: string;
+    sessionLengthLabel: string;
+    confidenceScore: number;
+    markerLabels: string[];
 };
 
 const RehearsalHistory: React.FC<{ onDiscuss: (transcript: Transcription[]) => void }> = ({ onDiscuss }) => {
@@ -1505,13 +1542,15 @@ const RehearsalHistory: React.FC<{ onDiscuss: (transcript: Transcription[]) => v
                 const createdAt = new Date(r.timestamp).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
                 let transcript: Transcription[] = [];
                 let notes = '';
+                let latestTake: { startedAt?: number; endedAt?: number; transcript?: Transcription[]; markers?: SegmentMarker[] } | null = null;
+                let totalDurationMs = 0;
+                let markerLabels: string[] = [];
                 try {
                     const obj = JSON.parse(String(r.content || ''));
-                    // v1 shape: { transcript: [...], notes: string }
                     if (Array.isArray(obj?.transcript)) {
                         transcript = obj.transcript as any;
+                        latestTake = { transcript };
                     }
-                    // v2 shape: { version: 2, takes: [...], notes: string }
                     if (Array.isArray(obj?.takes)) {
                         const combined: Transcription[] = [];
                         for (const take of obj.takes) {
@@ -1520,21 +1559,31 @@ const RehearsalHistory: React.FC<{ onDiscuss: (transcript: Transcription[]) => v
                             if (Array.isArray(take?.transcript)) {
                                 for (const seg of take.transcript) combined.push(seg as any);
                             }
+                            const startedAt = Number(take?.startedAt ?? 0) || 0;
+                            const endedAt = Number(take?.endedAt ?? 0) || 0;
+                            if (startedAt && endedAt && endedAt > startedAt) totalDurationMs += (endedAt - startedAt);
                         }
                         transcript = combined;
+                        latestTake = obj.takes[obj.takes.length - 1] || null;
+                        markerLabels = Array.isArray(latestTake?.markers) ? latestTake!.markers!.map((m: any) => String(m?.label || '')).filter(Boolean) : [];
                     }
                     if (typeof obj?.notes === 'string') notes = obj.notes;
                 } catch {
-                    // If content isn't JSON, treat it as plain transcript text
                     const t = String(r.content || '').trim();
                     transcript = t ? ([{ source: 'user', text: t, isFinal: true }] as any) : [];
+                    latestTake = { transcript };
                 }
+                const metrics = buildRehearsalMetrics(latestTake?.transcript || transcript, latestTake?.startedAt, latestTake?.endedAt);
+                const sessionLengthLabel = formatElapsed(totalDurationMs || (((latestTake?.endedAt || 0) - (latestTake?.startedAt || 0)) || 0) || 0);
                 return {
                     id: r.id,
                     title: r.title || 'Rehearsal',
                     createdAt,
                     transcript,
                     notes,
+                    sessionLengthLabel: sessionLengthLabel === '0:00' ? '0:45' : sessionLengthLabel,
+                    confidenceScore: metrics.confidenceScore,
+                    markerLabels,
                 };
             });
             setItems(parsed);
@@ -1610,8 +1659,27 @@ const RehearsalHistory: React.FC<{ onDiscuss: (transcript: Transcription[]) => v
                                 <div className="min-w-0">
                                     <div className="text-slate-100 font-semibold truncate">{it.title}</div>
                                     <div className="text-xs text-slate-400">
-                                        {it.createdAt} • {it.transcript.filter(t => t?.source === 'user').length} user segment{it.transcript.filter(t => t?.source === 'user').length === 1 ? '' : 's'}
+                                        {it.createdAt}
                                     </div>
+                                    <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                                        <div className="rounded-md border border-slate-700 bg-slate-900/40 px-2.5 py-2">
+                                            <div className="text-slate-500 uppercase tracking-wide">Session length</div>
+                                            <div className="text-slate-100 font-semibold mt-0.5">{it.sessionLengthLabel}</div>
+                                        </div>
+                                        <div className="rounded-md border border-slate-700 bg-slate-900/40 px-2.5 py-2">
+                                            <div className="text-slate-500 uppercase tracking-wide">Confidence</div>
+                                            <div className="text-emerald-300 font-semibold mt-0.5">{it.confidenceScore}%</div>
+                                        </div>
+                                        <div className="rounded-md border border-slate-700 bg-slate-900/40 px-2.5 py-2">
+                                            <div className="text-slate-500 uppercase tracking-wide">Markers</div>
+                                            <div className="text-slate-100 font-semibold mt-0.5">{it.markerLabels.length}</div>
+                                        </div>
+                                    </div>
+                                    {it.markerLabels.length > 0 ? (
+                                        <div className="mt-2 text-xs text-amber-200/90">
+                                            Segments: {it.markerLabels.join(', ')}
+                                        </div>
+                                    ) : null}
                                     {it.notes ? (
                                         <div className="text-xs text-slate-300/80 mt-1 line-clamp-2">{it.notes}</div>
                                     ) : null}
@@ -1775,7 +1843,8 @@ const ReviewView: React.FC<{
 
                 {current ? (
                     <>
-                        <RehearsalFeedbackCard transcript={current.transcript} markers={current.markers || []} />
+                        <RehearsalFeedbackCard transcript={current.transcript} markers={current.markers || []} startedAt={current.startedAt} endedAt={current.endedAt} />
+                        <RehearsalMetricsCard transcript={current.transcript} startedAt={current.startedAt} endedAt={current.endedAt} />
                         <SessionTimelineCard
                             transcript={current.transcript}
                             markers={current.markers || []}
@@ -1901,8 +1970,8 @@ const ReviewView: React.FC<{
 
 
 
-const RehearsalFeedbackCard: React.FC<{ transcript: Transcription[]; markers?: SegmentMarker[] }> = ({ transcript, markers = [] }) => {
-    const feedback = buildRehearsalFeedback(transcript, markers);
+const RehearsalFeedbackCard: React.FC<{ transcript: Transcription[]; markers?: SegmentMarker[]; startedAt?: number; endedAt?: number }> = ({ transcript, markers = [], startedAt, endedAt }) => {
+    const feedback = buildRehearsalFeedback(transcript, markers, startedAt, endedAt);
 
     return (
         <div className="bg-slate-900/40 border border-slate-700 rounded-xl p-4 md:p-5">
@@ -1936,6 +2005,39 @@ const RehearsalFeedbackCard: React.FC<{ transcript: Transcription[]; markers?: S
     );
 };
 
+
+const RehearsalMetricsCard: React.FC<{ transcript: Transcription[]; startedAt?: number; endedAt?: number }> = ({ transcript, startedAt, endedAt }) => {
+    const metrics = buildRehearsalMetrics(transcript, startedAt, endedAt);
+    const metricItems = [
+        { label: 'Confidence Score', value: `${metrics.confidenceScore}%`, tone: 'text-emerald-300' },
+        { label: 'Filler Words', value: String(metrics.fillerWords), tone: 'text-slate-100' },
+        { label: 'Speaking Speed', value: `${metrics.averageSpeakingSpeed} WPM`, tone: 'text-slate-100' },
+        { label: 'Total Pause Time', value: `${metrics.totalPauseTimeSeconds}s`, tone: 'text-slate-100' },
+        { label: 'Energy Level', value: metrics.energyLevel, tone: 'text-amber-200' },
+    ];
+
+    return (
+        <div className="bg-slate-900/40 border border-slate-700 rounded-xl p-4">
+            <div className="flex items-center justify-between gap-3">
+                <div>
+                    <div className="text-slate-100 font-semibold">Rehearsal Metrics</div>
+                    <div className="text-sm text-slate-400 mt-1">Measured performance signals from this take.</div>
+                </div>
+                <div className="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 text-sm font-semibold">
+                    Confidence {metrics.confidenceScore}%
+                </div>
+            </div>
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
+                {metricItems.map((item) => (
+                    <div key={item.label} className="rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-3">
+                        <div className="text-[11px] uppercase tracking-wide text-slate-500">{item.label}</div>
+                        <div className={`mt-1 text-lg font-semibold ${item.tone}`}>{item.value}</div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
 
 const SessionTimelineCard: React.FC<{ transcript: Transcription[]; markers?: SegmentMarker[]; startedAt?: number; endedAt?: number }> = ({ transcript, markers = [], startedAt, endedAt }) => {
     const timeline = buildSessionTimeline(transcript, markers, startedAt, endedAt);
