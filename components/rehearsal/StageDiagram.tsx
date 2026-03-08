@@ -1,164 +1,184 @@
 import React from 'react';
 
-export type RiskLevel = 'low' | 'medium' | 'high';
+export type StageDiagramRisk = 'low' | 'medium' | 'high';
+export type SeatView = 'left' | 'center' | 'right';
 
 export interface Zone {
   angleStart: number;
   angleEnd: number;
-  risk: RiskLevel;
+  risk: StageDiagramRisk;
 }
 
-export interface Point {
+export interface BlockingPoint {
   x: number;
   y: number;
+  label?: string;
 }
 
-export interface StageDiagramProps {
+interface StageDiagramProps {
   stageWidth?: number;
   audienceDistance?: number;
   performerX?: number;
   performerY?: number;
-  performerFacingAngle?: number;
   exposureZones: Zone[];
-  blockingPath?: Point[];
+  blockingPath?: BlockingPoint[];
+  simulateSeatView?: boolean;
+  selectedSeat?: SeatView;
 }
 
-const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
-const toRadians = (deg: number) => (deg * Math.PI) / 180;
+const WIDTH = 420;
+const HEIGHT = 260;
+const STAGE_X = 72;
+const STAGE_Y = 108;
+const STAGE_W = 276;
+const STAGE_H = 106;
 
-const riskStyle = (risk: RiskLevel) => {
-  if (risk === 'high') return { fill: 'rgba(239,68,68,0.28)', stroke: 'rgba(248,113,113,0.95)' };
-  if (risk === 'medium') return { fill: 'rgba(250,204,21,0.22)', stroke: 'rgba(250,204,21,0.95)' };
-  return { fill: 'rgba(34,197,94,0.18)', stroke: 'rgba(74,222,128,0.95)' };
+const seatPoints: Record<SeatView, { x: number; y: number; label: string }> = {
+  left: { x: 96, y: 72, label: 'Left Seat' },
+  center: { x: 210, y: 40, label: 'Center Seat' },
+  right: { x: 324, y: 72, label: 'Right Seat' },
 };
 
-const describeSeatSafety = (zones: Zone[]) => {
-  const buckets = {
-    left: 'low' as RiskLevel,
-    center: 'low' as RiskLevel,
-    right: 'low' as RiskLevel,
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function polarToCartesian(cx: number, cy: number, radius: number, angleDegrees: number) {
+  const radians = ((angleDegrees - 90) * Math.PI) / 180;
+  return {
+    x: cx + radius * Math.cos(radians),
+    y: cy + radius * Math.sin(radians),
   };
+}
 
-  const elevate = (current: RiskLevel, next: RiskLevel): RiskLevel => {
-    const rank = { low: 1, medium: 2, high: 3 };
-    return rank[next] > rank[current] ? next : current;
-  };
+function describeWedge(cx: number, cy: number, innerRadius: number, outerRadius: number, startAngle: number, endAngle: number) {
+  const outerStart = polarToCartesian(cx, cy, outerRadius, endAngle);
+  const outerEnd = polarToCartesian(cx, cy, outerRadius, startAngle);
+  const innerStart = polarToCartesian(cx, cy, innerRadius, startAngle);
+  const innerEnd = polarToCartesian(cx, cy, innerRadius, endAngle);
+  const largeArcFlag = Math.abs(endAngle - startAngle) > 180 ? 1 : 0;
 
-  zones.forEach(zone => {
-    const mid = (zone.angleStart + zone.angleEnd) / 2;
-    if (mid < -12) buckets.left = elevate(buckets.left, zone.risk);
-    else if (mid > 12) buckets.right = elevate(buckets.right, zone.risk);
-    else buckets.center = elevate(buckets.center, zone.risk);
-  });
+  return [
+    `M ${outerStart.x} ${outerStart.y}`,
+    `A ${outerRadius} ${outerRadius} 0 ${largeArcFlag} 0 ${outerEnd.x} ${outerEnd.y}`,
+    `L ${innerStart.x} ${innerStart.y}`,
+    `A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} 1 ${innerEnd.x} ${innerEnd.y}`,
+    'Z',
+  ].join(' ');
+}
 
-  return buckets;
-};
+function getRiskFill(risk: StageDiagramRisk) {
+  if (risk === 'high') return 'rgba(248, 113, 113, 0.30)';
+  if (risk === 'medium') return 'rgba(250, 204, 21, 0.22)';
+  return 'rgba(74, 222, 128, 0.18)';
+}
+
+function getRiskStroke(risk: StageDiagramRisk) {
+  if (risk === 'high') return 'rgba(248, 113, 113, 0.85)';
+  if (risk === 'medium') return 'rgba(250, 204, 21, 0.75)';
+  return 'rgba(74, 222, 128, 0.75)';
+}
 
 export default function StageDiagram({
   stageWidth = 10,
-  audienceDistance = 8,
+  audienceDistance = 6,
   performerX = 0,
   performerY = 0,
-  performerFacingAngle = 0,
   exposureZones,
-  blockingPath,
+  blockingPath = [],
+  simulateSeatView = false,
+  selectedSeat = 'center',
 }: StageDiagramProps) {
-  const width = 520;
-  const height = 300;
-  const stageLeft = 90;
-  const stageTop = 150;
-  const stagePixelWidth = 340;
-  const stagePixelHeight = 90;
-  const centerX = stageLeft + stagePixelWidth / 2;
-  const performerBaseY = stageTop + 34;
-  const scaleX = stagePixelWidth / Math.max(stageWidth, 1);
-  const normalizedAudience = clamp(audienceDistance, 1, 20);
-  const wedgeRadius = 120 + normalizedAudience * 3;
-  const performerPx = centerX + performerX * scaleX;
-  const performerPy = performerBaseY + performerY * 10;
-  const frontArcY = stageTop - 18;
+  const stageCenterX = STAGE_X + STAGE_W / 2;
+  const stageBottomY = STAGE_Y + STAGE_H - 22;
+  const performerPx = stageCenterX + clamp(performerX / Math.max(stageWidth / 2, 1), -1, 1) * (STAGE_W * 0.34);
+  const performerPy = stageBottomY - clamp(performerY / Math.max(audienceDistance, 1), -1, 1) * (STAGE_H * 0.5);
 
-  const makeWedgePath = (startDeg: number, endDeg: number) => {
-    const start = toRadians(startDeg - 90 + performerFacingAngle);
-    const end = toRadians(endDeg - 90 + performerFacingAngle);
-    const x1 = performerPx + wedgeRadius * Math.cos(start);
-    const y1 = performerPy + wedgeRadius * Math.sin(start);
-    const x2 = performerPx + wedgeRadius * Math.cos(end);
-    const y2 = performerPy + wedgeRadius * Math.sin(end);
-    const largeArc = Math.abs(endDeg - startDeg) > 180 ? 1 : 0;
-    return `M ${performerPx} ${performerPy} L ${x1} ${y1} A ${wedgeRadius} ${wedgeRadius} 0 ${largeArc} 1 ${x2} ${y2} Z`;
-  };
+  const pathPoints = (blockingPath.length ? blockingPath : [{ x: performerX, y: performerY }]).map((point, index) => ({
+    x: stageCenterX + clamp(point.x / Math.max(stageWidth / 2, 1), -1, 1) * (STAGE_W * 0.34),
+    y: stageBottomY - clamp(point.y / Math.max(audienceDistance, 1), -1, 1) * (STAGE_H * 0.5),
+    label: point.label || (index === 0 ? 'Start' : index === blockingPath.length - 1 ? 'Reveal' : 'Move'),
+  }));
 
-  const seatSafety = describeSeatSafety(exposureZones);
+  const selectedSeatPoint = seatPoints[selectedSeat];
+  const audienceArc = `M ${seatPoints.left.x} ${seatPoints.left.y} Q ${seatPoints.center.x} ${seatPoints.center.y - 26} ${seatPoints.right.x} ${seatPoints.right.y}`;
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto overflow-visible" role="img" aria-label="Stage blocking diagram with exposure zones">
+    <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#120d1f] p-3">
+      <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="h-auto w-full" role="img" aria-label="Spatial blocking diagram">
         <defs>
-          <linearGradient id="stageGlow" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="rgba(168,85,247,0.35)" />
-            <stop offset="100%" stopColor="rgba(30,41,59,0.65)" />
-          </linearGradient>
-          <filter id="softGlow">
-            <feGaussianBlur stdDeviation="3" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
+          <marker id="blocking-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+            <path d="M 0 0 L 8 4 L 0 8 z" fill="rgba(196,181,253,0.95)" />
+          </marker>
         </defs>
 
-        <path d={`M ${stageLeft + 18} ${frontArcY} Q ${centerX} ${frontArcY - 74} ${stageLeft + stagePixelWidth - 18} ${frontArcY}`} fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth="2" strokeDasharray="5 7" />
-        <text x={centerX} y={frontArcY - 86} textAnchor="middle" fill="rgba(255,255,255,0.7)" fontSize="12">Audience arc</text>
+        <rect x="18" y="18" width="384" height="224" rx="18" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.07)" />
 
-        {exposureZones.map((zone, index) => {
-          const style = riskStyle(zone.risk);
-          return <path key={`${zone.angleStart}-${zone.angleEnd}-${index}`} d={makeWedgePath(zone.angleStart, zone.angleEnd)} fill={style.fill} stroke={style.stroke} strokeWidth="1.6" />;
-        })}
-
-        {[-38, 0, 38].map((deg, i) => {
-          const r = wedgeRadius + 6;
-          const theta = toRadians(deg - 90 + performerFacingAngle);
-          const x2 = performerPx + r * Math.cos(theta);
-          const y2 = performerPy + r * Math.sin(theta);
-          return <line key={i} x1={performerPx} y1={performerPy} x2={x2} y2={y2} stroke="rgba(255,255,255,0.38)" strokeWidth="1.5" strokeDasharray="4 5" />;
-        })}
-
-        <rect x={stageLeft} y={stageTop} width={stagePixelWidth} height={stagePixelHeight} rx="18" fill="url(#stageGlow)" stroke="rgba(196,181,253,0.5)" strokeWidth="2" />
-        <text x={centerX} y={stageTop + stagePixelHeight + 24} textAnchor="middle" fill="rgba(255,255,255,0.78)" fontSize="13">Stage / performance area</text>
-
-        {blockingPath && blockingPath.length > 1 && (
-          <polyline
-            points={blockingPath.map(point => `${centerX + point.x * scaleX},${performerBaseY + point.y * 10}`).join(' ')}
-            fill="none"
-            stroke="rgba(129,140,248,0.9)"
-            strokeWidth="3"
-            strokeDasharray="6 6"
+        {exposureZones.map((zone, idx) => (
+          <path
+            key={`${idx}-${zone.angleStart}-${zone.angleEnd}`}
+            d={describeWedge(performerPx, performerPy, 18, 130, zone.angleStart, zone.angleEnd)}
+            fill={getRiskFill(zone.risk)}
+            stroke={getRiskStroke(zone.risk)}
+            strokeWidth="1.2"
           />
-        )}
+        ))}
 
-        <circle cx={performerPx} cy={performerPy} r="8" fill="rgba(244,114,182,0.95)" filter="url(#softGlow)" />
-        <circle cx={performerPx} cy={performerPy} r="15" fill="none" stroke="rgba(244,114,182,0.3)" strokeWidth="2" />
-        <text x={performerPx} y={performerPy - 18} textAnchor="middle" fill="rgba(255,255,255,0.92)" fontSize="12">Performer</text>
+        <path d={audienceArc} fill="none" stroke="rgba(255,255,255,0.30)" strokeWidth="2.4" strokeDasharray="6 5" />
+        <text x={210} y={22} textAnchor="middle" fontSize="11" fill="rgba(255,255,255,0.62)">Audience Arc</text>
 
-        <g fontSize="11" fill="rgba(255,255,255,0.72)">
-          <text x={stageLeft - 6} y={frontArcY + 8} textAnchor="end">Left seats</text>
-          <text x={centerX} y={frontArcY + 8} textAnchor="middle">Center seats</text>
-          <text x={stageLeft + stagePixelWidth + 6} y={frontArcY + 8} textAnchor="start">Right seats</text>
-        </g>
+        {(['left', 'center', 'right'] as SeatView[]).map((seat) => {
+          const point = seatPoints[seat];
+          const isSelected = selectedSeat === seat;
+          return (
+            <g key={seat}>
+              <circle cx={point.x} cy={point.y} r={isSelected ? 8 : 6} fill={isSelected ? 'rgba(196,181,253,0.95)' : 'rgba(255,255,255,0.45)'} />
+              <text x={point.x} y={point.y + 20} textAnchor="middle" fontSize="10" fill="rgba(255,255,255,0.62)">{point.label}</text>
+            </g>
+          );
+        })}
+
+        <rect x={STAGE_X} y={STAGE_Y} width={STAGE_W} height={STAGE_H} rx="16" fill="rgba(139,92,246,0.12)" stroke="rgba(196,181,253,0.45)" strokeWidth="1.5" />
+        <text x={stageCenterX} y={STAGE_Y + STAGE_H - 12} textAnchor="middle" fontSize="12" fill="rgba(255,255,255,0.70)">Stage</text>
+
+        <line x1={seatPoints.left.x} y1={seatPoints.left.y} x2={performerPx} y2={performerPy} stroke="rgba(255,255,255,0.18)" strokeWidth="1.4" />
+        <line x1={seatPoints.center.x} y1={seatPoints.center.y} x2={performerPx} y2={performerPy} stroke="rgba(255,255,255,0.18)" strokeWidth="1.4" />
+        <line x1={seatPoints.right.x} y1={seatPoints.right.y} x2={performerPx} y2={performerPy} stroke="rgba(255,255,255,0.18)" strokeWidth="1.4" />
+
+        {simulateSeatView ? (
+          <line
+            x1={selectedSeatPoint.x}
+            y1={selectedSeatPoint.y}
+            x2={performerPx}
+            y2={performerPy}
+            stroke="rgba(255,255,255,0.9)"
+            strokeWidth="2.4"
+            strokeDasharray="4 3"
+          />
+        ) : null}
+
+        {pathPoints.length > 1 ? (
+          <>
+            <polyline
+              points={pathPoints.map((point) => `${point.x},${point.y}`).join(' ')}
+              fill="none"
+              stroke="rgba(196,181,253,0.95)"
+              strokeWidth="3"
+              strokeDasharray="7 5"
+              markerEnd="url(#blocking-arrow)"
+            />
+            {pathPoints.map((point, index) => (
+              <g key={`${point.x}-${point.y}-${index}`}>
+                <circle cx={point.x} cy={point.y} r={5.5} fill="rgba(196,181,253,0.96)" stroke="rgba(17,24,39,0.8)" strokeWidth="1" />
+                <text x={point.x + 10} y={point.y - 8} fontSize="10" fill="rgba(255,255,255,0.68)">{point.label}</text>
+              </g>
+            ))}
+          </>
+        ) : null}
+
+        <circle cx={performerPx} cy={performerPy} r="8" fill="rgba(255,255,255,0.96)" stroke="rgba(17,24,39,0.85)" strokeWidth="1.5" />
+        <text x={performerPx} y={performerPy + 24} textAnchor="middle" fontSize="11" fill="rgba(255,255,255,0.74)">Performer</text>
       </svg>
-
-      <div className="mt-3 grid grid-cols-1 gap-2 text-xs text-white/70 md:grid-cols-3">
-        <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
-          <span className="font-semibold text-white">Left view:</span> {seatSafety.left === 'high' ? 'danger' : seatSafety.left === 'medium' ? 'watch carefully' : 'safer'}
-        </div>
-        <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
-          <span className="font-semibold text-white">Center view:</span> {seatSafety.center === 'high' ? 'danger' : seatSafety.center === 'medium' ? 'watch carefully' : 'safer'}
-        </div>
-        <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
-          <span className="font-semibold text-white">Right view:</span> {seatSafety.right === 'high' ? 'danger' : seatSafety.right === 'medium' ? 'watch carefully' : 'safer'}
-        </div>
-      </div>
     </div>
   );
 }

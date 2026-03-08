@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { User } from '../types';
 import { ANGLE_RISK_ANALYSIS_SYSTEM_INSTRUCTION } from '../constants';
-import { generateResponse, generateStructuredResponse } from '../services/geminiService';
+import { generateResponse } from '../services/geminiService';
+import StageDiagram, { type BlockingPoint, type SeatView, type Zone } from './rehearsal/StageDiagram';
 import { saveIdea } from '../services/ideasService';
 import { createShow, addTaskToShow } from '../services/showsService';
 import { ChevronDownIcon, EyeIcon, SaveIcon, ShareIcon, ShieldIcon, VideoIcon, WandIcon } from './icons';
-import StageDiagram, { type Zone } from './rehearsal/StageDiagram';
 import FormattedText from './FormattedText';
 import { useToast } from './ToastProvider';
 import { trackClientEvent } from '../services/telemetryClient';
@@ -15,6 +15,7 @@ type PerformanceMode = 'Close-up' | 'Parlor' | 'Stage' | 'Walkaround';
 type VenueType = 'Close-up table' | 'Walk-around floor' | 'Parlor room' | 'Theater stage' | 'Street / outdoor';
 type LightingType = 'Bright / direct' | 'Mixed / uneven' | 'Dim / low light';
 type AudienceDistance = '1–3 ft' | '3–10 ft' | '10+ ft';
+type DiagramSeatView = SeatView;
 
 const DEFAULT_KEY_MOMENTS = [
   'Load',
@@ -39,44 +40,6 @@ const DEFAULT_ROUTINE_STEPS = [
   'Reveal / applause cue',
   'Cleanup / reset',
 ];
-
-type BlockingMap = {
-  performer_position?: { x?: number; y?: number };
-  exposure_zones?: Array<{ angle_start?: number; angle_end?: number; risk?: 'low' | 'medium' | 'high' }>;
-};
-
-const BLOCKING_MAP_SCHEMA = {
-  type: 'object',
-  properties: {
-    blocking_map: {
-      type: 'object',
-      properties: {
-        performer_position: {
-          type: 'object',
-          properties: {
-            x: { type: 'number' },
-            y: { type: 'number' },
-          },
-          required: ['x', 'y'],
-        },
-        exposure_zones: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              angle_start: { type: 'number' },
-              angle_end: { type: 'number' },
-              risk: { type: 'string', enum: ['low', 'medium', 'high'] },
-            },
-            required: ['angle_start', 'angle_end', 'risk'],
-          },
-        },
-      },
-      required: ['performer_position', 'exposure_zones'],
-    },
-  },
-  required: ['blocking_map'],
-};
 
 type Props = {
   user: User;
@@ -105,7 +68,6 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved, onDeepLinkShowPla
 
   const [isLoading, setIsLoading] = useState(false);
   const [analysis, setAnalysis] = useState<string>('');
-  const [blockingMap, setBlockingMap] = useState<BlockingMap | null>(null);
 
   const parsedAnalysis = useMemo(() => {
     const raw = (analysis || '').trim();
@@ -146,9 +108,9 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved, onDeepLinkShowPla
       questions: findSection('questions', 'refine'),
       critical: findSection('critical', 'exposure'),
       coaching: findSection('professional', 'coaching'),
-      spectator: findSection('spectator', 'view'),
-      resetVulnerability: findSection('reset', 'vulnerability'),
-      summary: findSection('exposure', 'probability'),
+      spectator: findSection('spectator', 'view') ?? findSection('spectator'),
+      resetVulnerability: findSection('reset', 'vulnerability') ?? findSection('reset', 'analysis'),
+      summary: findSection('exposure', 'probability') ?? findSection('summary'),
     };
   }, [analysis]);
 
@@ -192,31 +154,6 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved, onDeepLinkShowPla
 
     return { overall, average, topRisks, metrics };
   }, [analysis, focusText, parsedAnalysis]);
-
-  const fallbackExposureZones = useMemo<Zone[]>(() => {
-    const average = riskProfile?.average ?? 52;
-    const centerRisk: Zone['risk'] = average >= 70 ? 'high' : average >= 45 ? 'medium' : 'low';
-    const sideRisk: Zone['risk'] = average >= 70 ? 'medium' : average >= 45 ? 'low' : 'low';
-    return [
-      { angleStart: -48, angleEnd: -16, risk: sideRisk },
-      { angleStart: -16, angleEnd: 16, risk: centerRisk },
-      { angleStart: 16, angleEnd: 48, risk: sideRisk },
-    ];
-  }, [riskProfile]);
-
-  const diagramZones = useMemo<Zone[]>(() => {
-    const mapped = (blockingMap?.exposure_zones || []).map((zone) => ({
-      angleStart: Number(zone.angle_start ?? 0),
-      angleEnd: Number(zone.angle_end ?? 0),
-      risk: (zone.risk === 'high' || zone.risk === 'medium' || zone.risk === 'low') ? zone.risk : 'medium',
-    }));
-    return mapped.length ? mapped : fallbackExposureZones;
-  }, [blockingMap, fallbackExposureZones]);
-
-  const performerPoint = useMemo(() => ({
-    x: Number(blockingMap?.performer_position?.x ?? 0),
-    y: Number(blockingMap?.performer_position?.y ?? 0),
-  }), [blockingMap]);
 
   const criticalExposurePoints = useMemo(() => {
     const sourceItems = [
@@ -266,9 +203,54 @@ const exposureSummaryItems = useMemo(() => {
   return Array.from(new Set(items as string[])).slice(0, 5);
 }, [parsedAnalysis, riskProfile, spectatorViewItems]);
 
+const stageDiagramData = useMemo(() => {
+  const performerPosition = {
+    x: mode === 'Walkaround' ? 1 : mode === 'Stage' ? 0 : -0.5,
+    y: mode === 'Stage' ? 1.8 : mode === 'Parlor' ? 1.1 : 0.4,
+  };
+
+  const exposureZones: Zone[] = setup === 'Surrounded / 360°'
+    ? [
+        { angleStart: -72, angleEnd: -22, risk: 'high' },
+        { angleStart: -22, angleEnd: 18, risk: 'medium' },
+        { angleStart: 18, angleEnd: 72, risk: 'high' },
+      ]
+    : setup === 'Stage (wide)'
+      ? [
+          { angleStart: -72, angleEnd: -24, risk: 'medium' },
+          { angleStart: -24, angleEnd: 24, risk: 'low' },
+          { angleStart: 24, angleEnd: 72, risk: 'medium' },
+        ]
+      : [
+          { angleStart: -68, angleEnd: -18, risk: 'medium' },
+          { angleStart: -18, angleEnd: 18, risk: 'low' },
+          { angleStart: 18, angleEnd: 68, risk: 'medium' },
+        ];
+
+  const blockingPath: BlockingPoint[] = mode === 'Stage'
+    ? [
+        { x: -2.4, y: 0.4, label: 'Start' },
+        { x: -0.4, y: 1.2, label: 'Move' },
+        { x: 1.7, y: 2.0, label: 'Reveal' },
+      ]
+    : mode === 'Walkaround'
+      ? [
+          { x: -1.2, y: 0.1, label: 'Start' },
+          { x: 0.2, y: 0.6, label: 'Move' },
+          { x: 1.1, y: 1.1, label: 'Reveal' },
+        ]
+      : [
+          { x: -1.6, y: 0.2, label: 'Start' },
+          { x: 0.0, y: 0.8, label: 'Move' },
+          { x: 1.3, y: 1.4, label: 'Reveal' },
+        ];
+
+  return { performerPosition, exposureZones, blockingPath };
+}, [mode, setup]);
+
 const canAnalyze = routineName.trim().length > 0;
 
-const PANEL_KEYS = ['risk-profile', 'spatial-blocking-analysis', 'angle-risk-analysis', 'posture-signals', 'timing-vulnerabilities', 'critical-exposure-points', 'spectator-view-simulation', 'reset-vulnerability-analysis', 'professional-coaching', 'mitigations', 'exposure-probability-summary', 'refinement-questions'] as const;
+const PANEL_KEYS = ['risk-profile', 'angle-risk-analysis', 'posture-signals', 'timing-vulnerabilities', 'critical-exposure-points', 'spatial-blocking-analysis', 'spectator-view-simulation', 'reset-vulnerability-analysis', 'professional-coaching', 'mitigations', 'exposure-probability-summary', 'refinement-questions'] as const;
 type PanelKey = typeof PANEL_KEYS[number];
 
 const [expandedPanels, setExpandedPanels] = useState<Record<PanelKey, boolean>>(() =>
@@ -277,6 +259,30 @@ const [expandedPanels, setExpandedPanels] = useState<Record<PanelKey, boolean>>(
     return acc;
   }, {} as Record<PanelKey, boolean>)
 );
+
+const [simulateSeatView, setSimulateSeatView] = useState(false);
+const [selectedSeat, setSelectedSeat] = useState<DiagramSeatView>('center');
+
+const selectedSeatInsight = useMemo(() => {
+  if (!simulateSeatView) return '';
+
+  const fallbackMap: Record<DiagramSeatView, string> = {
+    left: 'Left-seat spectators usually get the clearest look at hand posture during a cross-body action. Keep elbows relaxed and shield reset motions with natural turns.',
+    center: 'Center-seat spectators usually see the cleanest overall picture. Preserve open chest posture and save the reveal for the most frontal, confident body line.',
+    right: 'Right-seat spectators often catch late ditches or pocket management. Slow the reveal beat slightly and keep cleanup actions below the eye line.',
+  };
+
+  const preferred = spectatorViewItems.find((item) => {
+    const lower = item.toLowerCase();
+    return selectedSeat === 'left'
+      ? lower.includes('left')
+      : selectedSeat === 'right'
+        ? lower.includes('right')
+        : lower.includes('front') || lower.includes('center');
+  });
+
+  return preferred || fallbackMap[selectedSeat];
+}, [selectedSeat, simulateSeatView, spectatorViewItems]);
 
 useEffect(() => {
   if (!analysis.trim()) return;
@@ -500,7 +506,6 @@ const togglePanel = (key: PanelKey) => {
     if (!canAnalyze || isLoading) return;
     setIsLoading(true);
     setAnalysis('');
-    setBlockingMap(null);
 
     const focusToUse = (focusOverride ?? focusText).trim();
 
@@ -539,39 +544,7 @@ ${routineSteps.trim()}` : null,
     try {
       const text = await generateResponse(prompt, ANGLE_RISK_ANALYSIS_SYSTEM_INSTRUCTION, user);
       setAnalysis(text);
-
-      const blockingPrompt = [
-        `You are creating a spatial blocking map for a magician's rehearsal analysis.`,
-        `Return JSON only following the provided schema.`,
-        `Routine: ${routineName.trim()}.`,
-        `Performance mode: ${mode}. Audience setup: ${setup}.`,
-        `Venue type: ${venueType}. Lighting: ${lighting}. Audience distance: ${audienceDistance}.`,
-        routineSteps.trim() ? `Routine phases:
-${routineSteps.trim()}` : null,
-        propsText.trim() ? `Props/constraints:
-${propsText.trim()}` : null,
-        keyMoments.length ? `Key moments to protect: ${keyMoments.join(', ')}` : null,
-        focusToUse ? `Focus requests:
-${focusToUse}` : null,
-        '',
-        'Create blocking_map with:',
-        '- performer_position x/y near center stage (use small values like -2 to 2).',
-        '- exposure_zones using angle_start / angle_end in degrees.',
-        '- risk must be low, medium, or high.',
-        '- Green means safe audience, yellow means risky, red means exposure danger.',
-        '- Keep it performance-safe and do not expose method.',
-      ].filter(Boolean).join('\n');
-
-      try {
-        const structured = await generateStructuredResponse(blockingPrompt, ANGLE_RISK_ANALYSIS_SYSTEM_INSTRUCTION, BLOCKING_MAP_SCHEMA, user, { speedMode: 'fast', maxOutputTokens: 900 });
-        if (structured?.blocking_map) {
-          setBlockingMap(structured.blocking_map as BlockingMap);
-        }
-      } catch (structuredError) {
-        console.warn('Blocking map generation failed, using fallback zones.', structuredError);
-      }
-
-      void trackClientEvent({ tool: 'angle_risk', action: 'angle_risk_analysis_success', metadata: { routineName: routineName.trim(), mode, setup, hasBlockingMap: true } });
+      void trackClientEvent({ tool: 'angle_risk', action: 'angle_risk_analysis_success', metadata: { routineName: routineName.trim(), mode, setup } });
     } catch (e: any) {
       console.error(e);
       void trackClientEvent({ tool: 'angle_risk', action: 'angle_risk_analysis_error', metadata: { routineName: routineName.trim(), mode, setup, message: e?.message || 'unknown error' }, outcome: 'ERROR_UPSTREAM', error_code: 'ANGLE_RISK_ANALYSIS_ERROR' });
@@ -668,7 +641,6 @@ ${focusToUse}` : null,
 
   const handleStartOver = () => {
     setAnalysis('');
-    setBlockingMap(null);
     setIsLoading(false);
     setRoutineName('');
     setMode('Close-up');
@@ -996,34 +968,6 @@ ${focusToUse}` : null,
                         )
                       })}
 
-                      {renderPanel({
-                        keyName: 'spatial-blocking-analysis',
-                        title: 'Spatial Blocking Analysis',
-                        subtitle: 'Stage geometry diagram driven by AI blocking_map output and color-coded exposure heat zones.',
-                        children: (
-                          <div className="space-y-4">
-                            <div>
-                              <div className="mb-3 text-sm font-semibold text-white">Spatial Blocking Diagram</div>
-                              <StageDiagram
-                                stageWidth={mode === 'Stage' ? 14 : mode === 'Parlor' ? 10 : 8}
-                                audienceDistance={audienceDistance === '1–3 ft' ? 4 : audienceDistance === '3–10 ft' ? 8 : 14}
-                                performerX={performerPoint.x}
-                                performerY={performerPoint.y}
-                                exposureZones={diagramZones}
-                              />
-                            </div>
-                            <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-                              <div className="rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">🟢 Safe Angle</div>
-                              <div className="rounded-lg border border-yellow-400/20 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-100">🟡 Risk</div>
-                              <div className="rounded-lg border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm text-red-100">🔴 Exposure</div>
-                            </div>
-                            <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3 text-xs text-white/65">
-                              {blockingMap ? 'AI diagram mode is active. The wedge colors and performer position are being read from blocking_map JSON.' : 'Fallback diagram mode is active. The wedges are using local risk heuristics until blocking_map data is returned.'}
-                            </div>
-                          </div>
-                        )
-                      })}
-
                       {(parsedAnalysis?.overview?.body || parsedAnalysis?.sightlines?.body) && renderPanel({
                         keyName: 'angle-risk-analysis',
                         title: 'Angle Risk Analysis',
@@ -1061,6 +1005,85 @@ ${focusToUse}` : null,
                               <li key={`${idx}-${item.slice(0, 12)}`} className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-sm text-white/80">{item}</li>
                             ))}
                           </ul>
+                        )
+                      })}
+
+                      {renderPanel({
+                        keyName: 'spatial-blocking-analysis',
+                        title: 'Spatial Blocking Analysis',
+                        subtitle: 'Stage geometry, performer pathing, and optional seat-view simulation.',
+                        children: (
+                          <div className="space-y-4">
+                            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                              <div>
+                                <p className="text-sm font-semibold text-white">Spatial Blocking Diagram</p>
+                                <p className="mt-1 text-xs text-white/60">Track performer travel, reveal position, and audience sightlines.</p>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setSimulateSeatView(prev => !prev)}
+                                  className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${simulateSeatView ? 'border-purple-400/50 bg-purple-500/20 text-white' : 'border-white/10 bg-white/[0.03] text-white/75 hover:bg-white/[0.06]'}`}
+                                >
+                                  {simulateSeatView ? 'Hide Seat View' : 'Simulate Seat View'}
+                                </button>
+                                {simulateSeatView ? (
+                                  <div className="flex flex-wrap gap-2">
+                                    {(['left', 'center', 'right'] as DiagramSeatView[]).map(seat => (
+                                      <button
+                                        key={seat}
+                                        type="button"
+                                        onClick={() => setSelectedSeat(seat)}
+                                        className={`rounded-lg border px-3 py-2 text-xs font-semibold capitalize transition ${selectedSeat === seat ? 'border-purple-400/60 bg-purple-500/20 text-white' : 'border-white/10 bg-white/[0.03] text-white/75 hover:bg-white/[0.06]'}`}
+                                      >
+                                        {seat} seat
+                                      </button>
+                                    ))}
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
+
+                            <StageDiagram
+                              stageWidth={10}
+                              audienceDistance={mode === 'Stage' ? 12 : mode === 'Parlor' ? 7 : 4}
+                              performerX={stageDiagramData.performerPosition.x}
+                              performerY={stageDiagramData.performerPosition.y}
+                              exposureZones={stageDiagramData.exposureZones}
+                              blockingPath={stageDiagramData.blockingPath}
+                              simulateSeatView={simulateSeatView}
+                              selectedSeat={selectedSeat}
+                            />
+
+                            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                              <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">🟢 Safe Angle</div>
+                              <div className="rounded-xl border border-yellow-400/20 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-100">🟡 Risk</div>
+                              <div className="rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm text-red-100">🔴 Exposure</div>
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                              <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-white/55">Performer Path</p>
+                                <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-white/80">
+                                  {stageDiagramData.blockingPath.map((point, index) => (
+                                    <React.Fragment key={`${point.label}-${index}`}>
+                                      <span className="rounded-lg border border-white/10 bg-black/10 px-3 py-1.5">{point.label || `Beat ${index + 1}`}</span>
+                                      {index < stageDiagramData.blockingPath.length - 1 ? <span className="text-white/45">→</span> : null}
+                                    </React.Fragment>
+                                  ))}
+                                </div>
+                              </div>
+
+                              <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-white/55">Seat View Insight</p>
+                                <p className="mt-2 text-sm leading-relaxed text-white/80">
+                                  {simulateSeatView
+                                    ? selectedSeatInsight
+                                    : 'Turn on Simulate Seat View to inspect what a left, center, or right spectator is most likely to catch.'}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
                         )
                       })}
 
