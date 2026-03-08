@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { User } from '../types';
 import { ANGLE_RISK_ANALYSIS_SYSTEM_INSTRUCTION } from '../constants';
-import { generateResponse } from '../services/geminiService';
+import { generateResponse, generateStructuredResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
 import { createShow, addTaskToShow } from '../services/showsService';
 import { ChevronDownIcon, EyeIcon, SaveIcon, ShareIcon, ShieldIcon, VideoIcon, WandIcon } from './icons';
-import FormattedText from './FormattedText';
 import StageDiagram, { type Zone } from './rehearsal/StageDiagram';
+import FormattedText from './FormattedText';
 import { useToast } from './ToastProvider';
 import { trackClientEvent } from '../services/telemetryClient';
 
@@ -40,6 +40,44 @@ const DEFAULT_ROUTINE_STEPS = [
   'Cleanup / reset',
 ];
 
+type BlockingMap = {
+  performer_position?: { x?: number; y?: number };
+  exposure_zones?: Array<{ angle_start?: number; angle_end?: number; risk?: 'low' | 'medium' | 'high' }>;
+};
+
+const BLOCKING_MAP_SCHEMA = {
+  type: 'object',
+  properties: {
+    blocking_map: {
+      type: 'object',
+      properties: {
+        performer_position: {
+          type: 'object',
+          properties: {
+            x: { type: 'number' },
+            y: { type: 'number' },
+          },
+          required: ['x', 'y'],
+        },
+        exposure_zones: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              angle_start: { type: 'number' },
+              angle_end: { type: 'number' },
+              risk: { type: 'string', enum: ['low', 'medium', 'high'] },
+            },
+            required: ['angle_start', 'angle_end', 'risk'],
+          },
+        },
+      },
+      required: ['performer_position', 'exposure_zones'],
+    },
+  },
+  required: ['blocking_map'],
+};
+
 type Props = {
   user: User;
   onIdeaSaved?: () => void;
@@ -67,6 +105,7 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved, onDeepLinkShowPla
 
   const [isLoading, setIsLoading] = useState(false);
   const [analysis, setAnalysis] = useState<string>('');
+  const [blockingMap, setBlockingMap] = useState<BlockingMap | null>(null);
 
   const parsedAnalysis = useMemo(() => {
     const raw = (analysis || '').trim();
@@ -107,9 +146,9 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved, onDeepLinkShowPla
       questions: findSection('questions', 'refine'),
       critical: findSection('critical', 'exposure'),
       coaching: findSection('professional', 'coaching'),
-      spectator: findSection('spectator', 'view') ?? findSection('spectator'),
+      spectator: findSection('spectator', 'view'),
       resetVulnerability: findSection('reset', 'vulnerability'),
-      summary: findSection('exposure', 'probability') ?? findSection('summary'),
+      summary: findSection('exposure', 'probability'),
     };
   }, [analysis]);
 
@@ -153,6 +192,31 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved, onDeepLinkShowPla
 
     return { overall, average, topRisks, metrics };
   }, [analysis, focusText, parsedAnalysis]);
+
+  const fallbackExposureZones = useMemo<Zone[]>(() => {
+    const average = riskProfile?.average ?? 52;
+    const centerRisk: Zone['risk'] = average >= 70 ? 'high' : average >= 45 ? 'medium' : 'low';
+    const sideRisk: Zone['risk'] = average >= 70 ? 'medium' : average >= 45 ? 'low' : 'low';
+    return [
+      { angleStart: -48, angleEnd: -16, risk: sideRisk },
+      { angleStart: -16, angleEnd: 16, risk: centerRisk },
+      { angleStart: 16, angleEnd: 48, risk: sideRisk },
+    ];
+  }, [riskProfile]);
+
+  const diagramZones = useMemo<Zone[]>(() => {
+    const mapped = (blockingMap?.exposure_zones || []).map((zone) => ({
+      angleStart: Number(zone.angle_start ?? 0),
+      angleEnd: Number(zone.angle_end ?? 0),
+      risk: (zone.risk === 'high' || zone.risk === 'medium' || zone.risk === 'low') ? zone.risk : 'medium',
+    }));
+    return mapped.length ? mapped : fallbackExposureZones;
+  }, [blockingMap, fallbackExposureZones]);
+
+  const performerPoint = useMemo(() => ({
+    x: Number(blockingMap?.performer_position?.x ?? 0),
+    y: Number(blockingMap?.performer_position?.y ?? 0),
+  }), [blockingMap]);
 
   const criticalExposurePoints = useMemo(() => {
     const sourceItems = [
@@ -204,49 +268,7 @@ const exposureSummaryItems = useMemo(() => {
 
 const canAnalyze = routineName.trim().length > 0;
 
-const stageDiagramData = useMemo(() => {
-  const stageWidth = mode === 'Stage' ? 360 : mode === 'Parlor' ? 320 : 280;
-  const audienceDistanceValue = audienceDistance === '10+ ft' ? 192 : audienceDistance === '3–10 ft' ? 168 : 146;
-  const performerX = setup === 'Standing (close-up)' ? 0 : setup === 'Stage (wide)' ? -10 : 0;
-  const performerY = mode === 'Walkaround' ? -8 : mode === 'Stage' ? 8 : 0;
-
-  const overallLevel = riskProfile?.overall.label ?? 'Medium';
-  let exposureZones: Zone[] = [
-    { angleStart: -58, angleEnd: -24, risk: 'medium' },
-    { angleStart: -24, angleEnd: 24, risk: 'low' },
-    { angleStart: 24, angleEnd: 58, risk: 'medium' },
-  ];
-
-  if (setup === 'Surrounded / 360°') {
-    exposureZones = [
-      { angleStart: -58, angleEnd: -18, risk: 'high' },
-      { angleStart: -18, angleEnd: 18, risk: overallLevel === 'Low' ? 'medium' : 'high' },
-      { angleStart: 18, angleEnd: 58, risk: 'high' },
-    ];
-  } else if (setup === 'Stage (wide)' || mode === 'Stage') {
-    exposureZones = [
-      { angleStart: -58, angleEnd: -20, risk: 'medium' },
-      { angleStart: -20, angleEnd: 20, risk: 'low' },
-      { angleStart: 20, angleEnd: 58, risk: 'medium' },
-    ];
-  }
-
-  const boostHigh = overallLevel === 'High';
-  const boostMedium = overallLevel === 'Medium';
-  exposureZones = exposureZones.map((zone, index) => {
-    if (boostHigh && index !== 1 && zone.risk === 'medium') return { ...zone, risk: 'high' as const };
-    if (boostMedium && index === 1 && zone.risk === 'low') return { ...zone, risk: 'medium' as const };
-    return zone;
-  });
-
-  if (riskProfile?.topRisks.includes('Angles')) {
-    exposureZones = exposureZones.map((zone, index) => index === 1 ? zone : { ...zone, risk: zone.risk === 'low' ? 'medium' : 'high' });
-  }
-
-  return { stageWidth, audienceDistance: audienceDistanceValue, performerX, performerY, exposureZones };
-}, [audienceDistance, mode, riskProfile, setup]);
-
-const PANEL_KEYS = ['risk-profile', 'angle-risk-analysis', 'spatial-blocking-analysis', 'posture-signals', 'timing-vulnerabilities', 'critical-exposure-points', 'spectator-view-simulation', 'reset-vulnerability-analysis', 'professional-coaching', 'mitigations', 'exposure-probability-summary', 'refinement-questions'] as const;
+const PANEL_KEYS = ['risk-profile', 'spatial-blocking-analysis', 'angle-risk-analysis', 'posture-signals', 'timing-vulnerabilities', 'critical-exposure-points', 'spectator-view-simulation', 'reset-vulnerability-analysis', 'professional-coaching', 'mitigations', 'exposure-probability-summary', 'refinement-questions'] as const;
 type PanelKey = typeof PANEL_KEYS[number];
 
 const [expandedPanels, setExpandedPanels] = useState<Record<PanelKey, boolean>>(() =>
@@ -478,6 +500,7 @@ const togglePanel = (key: PanelKey) => {
     if (!canAnalyze || isLoading) return;
     setIsLoading(true);
     setAnalysis('');
+    setBlockingMap(null);
 
     const focusToUse = (focusOverride ?? focusText).trim();
 
@@ -516,7 +539,40 @@ ${routineSteps.trim()}` : null,
     try {
       const text = await generateResponse(prompt, ANGLE_RISK_ANALYSIS_SYSTEM_INSTRUCTION, user);
       setAnalysis(text);
-      void trackClientEvent({ tool: 'angle_risk', action: 'angle_risk_analysis_success', metadata: { routineName: routineName.trim(), mode, setup } });
+
+      const blockingPrompt = [
+        `You are creating a spatial blocking map for a magician's rehearsal analysis.`,
+        `Return JSON only following the provided schema.`,
+        `Routine: ${routineName.trim()}.`,
+        `Performance mode: ${mode}. Audience setup: ${setup}.`,
+        `Venue type: ${venueType}. Lighting: ${lighting}. Audience distance: ${audienceDistance}.`,
+        routineSteps.trim() ? `Routine phases:
+${routineSteps.trim()}` : null,
+        propsText.trim() ? `Props/constraints:
+${propsText.trim()}` : null,
+        keyMoments.length ? `Key moments to protect: ${keyMoments.join(', ')}` : null,
+        focusToUse ? `Focus requests:
+${focusToUse}` : null,
+        '',
+        'Create blocking_map with:',
+        '- performer_position x/y near center stage (use small values like -2 to 2).',
+        '- exposure_zones using angle_start / angle_end in degrees.',
+        '- risk must be low, medium, or high.',
+        '- Green means safe audience, yellow means risky, red means exposure danger.',
+        '- Keep it performance-safe and do not expose method.',
+      ].filter(Boolean).join('
+');
+
+      try {
+        const structured = await generateStructuredResponse(blockingPrompt, ANGLE_RISK_ANALYSIS_SYSTEM_INSTRUCTION, BLOCKING_MAP_SCHEMA, user, { speedMode: 'fast', maxOutputTokens: 900 });
+        if (structured?.blocking_map) {
+          setBlockingMap(structured.blocking_map as BlockingMap);
+        }
+      } catch (structuredError) {
+        console.warn('Blocking map generation failed, using fallback zones.', structuredError);
+      }
+
+      void trackClientEvent({ tool: 'angle_risk', action: 'angle_risk_analysis_success', metadata: { routineName: routineName.trim(), mode, setup, hasBlockingMap: true } });
     } catch (e: any) {
       console.error(e);
       void trackClientEvent({ tool: 'angle_risk', action: 'angle_risk_analysis_error', metadata: { routineName: routineName.trim(), mode, setup, message: e?.message || 'unknown error' }, outcome: 'ERROR_UPSTREAM', error_code: 'ANGLE_RISK_ANALYSIS_ERROR' });
@@ -613,6 +669,7 @@ ${routineSteps.trim()}` : null,
 
   const handleStartOver = () => {
     setAnalysis('');
+    setBlockingMap(null);
     setIsLoading(false);
     setRoutineName('');
     setMode('Close-up');
@@ -943,24 +1000,26 @@ ${routineSteps.trim()}` : null,
                       {renderPanel({
                         keyName: 'spatial-blocking-analysis',
                         title: 'Spatial Blocking Analysis',
-                        subtitle: 'Simple stage geometry diagram for audience arc, performer position, sightlines, and exposure zones.',
+                        subtitle: 'Stage geometry diagram driven by AI blocking_map output and color-coded exposure heat zones.',
                         children: (
                           <div className="space-y-4">
-                            <StageDiagram
-                              stageWidth={stageDiagramData.stageWidth}
-                              audienceDistance={stageDiagramData.audienceDistance}
-                              performerX={stageDiagramData.performerX}
-                              performerY={stageDiagramData.performerY}
-                              exposureZones={stageDiagramData.exposureZones}
-                            />
-                            <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
-                              <p className="text-sm font-semibold text-white">Legend</p>
-                              <div className="mt-3 flex flex-wrap gap-3 text-sm text-white/75">
-                                <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1.5">🟢 Safe Angle</span>
-                                <span className="rounded-full border border-yellow-400/20 bg-yellow-500/10 px-3 py-1.5">🟡 Risk</span>
-                                <span className="rounded-full border border-red-400/20 bg-red-500/10 px-3 py-1.5">🔴 Exposure</span>
-                              </div>
-                              <p className="mt-3 text-xs text-white/55">Use this diagram as a rehearsal reference for where the audience is safest, where side angles become risky, and where movement or cover may be required.</p>
+                            <div>
+                              <div className="mb-3 text-sm font-semibold text-white">Spatial Blocking Diagram</div>
+                              <StageDiagram
+                                stageWidth={mode === 'Stage' ? 14 : mode === 'Parlor' ? 10 : 8}
+                                audienceDistance={audienceDistance === '1–3 ft' ? 4 : audienceDistance === '3–10 ft' ? 8 : 14}
+                                performerX={performerPoint.x}
+                                performerY={performerPoint.y}
+                                exposureZones={diagramZones}
+                              />
+                            </div>
+                            <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+                              <div className="rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">🟢 Safe Angle</div>
+                              <div className="rounded-lg border border-yellow-400/20 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-100">🟡 Risk</div>
+                              <div className="rounded-lg border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm text-red-100">🔴 Exposure</div>
+                            </div>
+                            <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3 text-xs text-white/65">
+                              {blockingMap ? 'AI diagram mode is active. The wedge colors and performer position are being read from blocking_map JSON.' : 'Fallback diagram mode is active. The wedges are using local risk heuristics until blocking_map data is returned.'}
                             </div>
                           </div>
                         )

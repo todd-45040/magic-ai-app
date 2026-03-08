@@ -146,6 +146,7 @@ OUTPUT REQUIREMENTS:
 - Use clear headings: Overview, Risks, Mitigations, Reset & Practicality, Quick Checklist.
 - Call out risks by audience position (front-left, front-right, sides, elevated, 360) when applicable.
 - If information is missing, list 3–6 clarifying questions at the end under “Questions to refine this analysis”.
+- When the caller requests structured JSON for a stage diagram, include a blocking_map with performer_position and exposure_zones using low/medium/high risk labels.
 `;
 export const DIRECTOR_MODE_SYSTEM_INSTRUCTION = `You are a world-class magic show director and creative consultant.
 
