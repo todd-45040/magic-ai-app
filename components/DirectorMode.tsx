@@ -203,6 +203,26 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
         // Default: ON for Full, OFF for Fast
         setOutlineFullDetail(speedMode === 'full');
     }, [speedMode]);
+
+
+    useEffect(() => {
+        try {
+            const raw = localStorage.getItem('maw_director_mode_prefill_v1');
+            if (!raw) return;
+            const parsed = JSON.parse(raw);
+            if (!parsed || parsed.version !== 1) {
+                localStorage.removeItem('maw_director_mode_prefill_v1');
+                return;
+            }
+            if (typeof parsed.showTitle === 'string' && parsed.showTitle.trim()) setShowTitle(parsed.showTitle.trim());
+            if (typeof parsed.theme === 'string') setTheme(parsed.theme);
+            if (typeof parsed.constraintNotes === 'string') setConstraintNotes(parsed.constraintNotes);
+            if (typeof parsed.tone === 'string') setTone(parsed.tone);
+            localStorage.removeItem('maw_director_mode_prefill_v1');
+        } catch {
+            // ignore prefill errors
+        }
+    }, []);
     // Audience: quick-select chips + optional custom text
     const [audienceType, setAudienceType] = useState(''); // custom audience text
     const [audienceChips, setAudienceChips] = useState<string[]>([]);

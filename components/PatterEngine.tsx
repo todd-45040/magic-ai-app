@@ -55,6 +55,28 @@ const PatterEngine: React.FC<PatterEngineProps> = ({ user: _user, onIdeaSaved })
 
   const canGenerate = effectDescription.trim().length > 20 && selectedTones.length > 0 && !isLoading;
 
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('maw_patter_engine_prefill_v1');
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!parsed || parsed.version !== 1) {
+        localStorage.removeItem('maw_patter_engine_prefill_v1');
+        return;
+      }
+      if (typeof parsed.effectDescription === 'string' && parsed.effectDescription.trim()) {
+        setEffectDescription(parsed.effectDescription.trim());
+      }
+      if (Array.isArray(parsed.selectedTones) && parsed.selectedTones.length) {
+        setSelectedTones(parsed.selectedTones.filter((tone: string) => TONES.includes(tone as any)));
+      }
+      localStorage.removeItem('maw_patter_engine_prefill_v1');
+    } catch {
+      // ignore prefill errors
+    }
+  }, []);
+
+
   const buildPrompt = (desc: string, tonesList: string[]) => {
     const tones = tonesList.join(", ");
     // Hard caps for speed/reliability (prevents ADMC booth timeouts)

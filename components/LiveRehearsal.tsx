@@ -52,6 +52,9 @@ interface LiveRehearsalProps {
   user: User;
   onReturnToStudio: (transcriptToDiscuss?: Transcription[]) => void;
   onIdeaSaved: () => void;
+  onOpenAngleRisk?: () => void;
+  onOpenPatterEngine?: () => void;
+  onOpenDirectorMode?: () => void;
 }
 
 // Helper functions for audio processing, moved from geminiService
@@ -388,7 +391,7 @@ const buildRehearsalFeedback = (transcript: Transcription[], markers: SegmentMar
         ],
     };
 };
-const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => void }> = ({ user, onReturnToStudio, onIdeaSaved, onRequestUpgrade }) => {
+const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => void }> = ({ user, onReturnToStudio, onIdeaSaved, onOpenAngleRisk, onOpenPatterEngine, onOpenDirectorMode, onRequestUpgrade }) => {
     const [view, setView] = useState<'idle' | 'rehearsing' | 'reviewing'>('idle');
     const [status, setStatus] = useState<'idle' | 'connecting' | 'listening' | 'error'>('idle');
     const [errorMessage, setErrorMessage] = useState('');
@@ -1256,6 +1259,9 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                     onSessionSaved={(id) => setSessionIdeaId(id)}
                     onIdeaSaved={onIdeaSaved}
                     onReturnToStudio={safeReturnToStudio}
+                    onOpenAngleRisk={onOpenAngleRisk}
+                    onOpenPatterEngine={onOpenPatterEngine}
+                    onOpenDirectorMode={onOpenDirectorMode}
                 />;
             case 'rehearsing':
             case 'idle':
@@ -1716,6 +1722,9 @@ const ReviewView: React.FC<{
     onSessionSaved: (id: string) => void;
     onIdeaSaved: () => void;
     onReturnToStudio: (transcriptToDiscuss?: Transcription[]) => void;
+    onOpenAngleRisk?: () => void;
+    onOpenPatterEngine?: () => void;
+    onOpenDirectorMode?: () => void;
 }> = ({
     takes,
     selectedTake,
@@ -1730,11 +1739,16 @@ const ReviewView: React.FC<{
     onSessionSaved,
     onIdeaSaved,
     onReturnToStudio,
+    onOpenAngleRisk,
+    onOpenPatterEngine,
+    onOpenDirectorMode,
 }) => {
     const transcriptEndRef = useRef<HTMLDivElement>(null);
     const [saveError, setSaveError] = useState<string>('');
     const [saveSuccess, setSaveSuccess] = useState<string>('');
     const [isSaving, setIsSaving] = useState(false);
+    const [integrationMessage, setIntegrationMessage] = useState<string>('');
+    const [isSavingRoutine, setIsSavingRoutine] = useState(false);
 
     const current = takes?.[selectedTake] ?? null;
 
@@ -1803,6 +1817,55 @@ const ReviewView: React.FC<{
 
     const hasAnyTakes = (takes?.length ?? 0) > 0;
 
+    const handleAnalyzeAngles = () => {
+        if (!current) return;
+        try {
+            localStorage.setItem('maw_angle_risk_prefill_v1', JSON.stringify(buildAngleRiskPrefill(current, sessionTitle, sessionNotes)));
+            setIntegrationMessage('Sent to Angle & Risk. Your latest rehearsal transcript is ready as context.');
+            onOpenAngleRisk?.();
+        } catch (err: any) {
+            setSaveError(String(err?.message || err || 'Failed to open Angle & Risk.'));
+        }
+    };
+
+    const handleRefineScript = () => {
+        if (!current) return;
+        try {
+            localStorage.setItem('maw_patter_engine_prefill_v1', JSON.stringify(buildPatterPrefill(current, sessionTitle, sessionNotes)));
+            setIntegrationMessage('Sent to Patter Engine. The rehearsal transcript has been loaded for script refinement.');
+            onOpenPatterEngine?.();
+        } catch (err: any) {
+            setSaveError(String(err?.message || err || 'Failed to open Patter Engine.'));
+        }
+    };
+
+    const handleEvaluateInShow = () => {
+        if (!current) return;
+        try {
+            localStorage.setItem('maw_director_mode_prefill_v1', JSON.stringify(buildDirectorPrefill(current, sessionTitle, sessionNotes)));
+            setIntegrationMessage('Sent to Director Mode. The current take is ready for show-level evaluation.');
+            onOpenDirectorMode?.();
+        } catch (err: any) {
+            setSaveError(String(err?.message || err || 'Failed to open Director Mode.'));
+        }
+    };
+
+    const handleSaveRoutine = async () => {
+        if (!current) return;
+        setIntegrationMessage('');
+        setSaveError('');
+        setIsSavingRoutine(true);
+        try {
+            await saveIdea(buildRoutineIdeaPayload(current, sessionTitle, sessionNotes));
+            setIntegrationMessage('Routine saved to Idea Vault.');
+            try { onIdeaSaved(); } catch {}
+        } catch (err: any) {
+            setSaveError(String(err?.message || err || 'Failed to save routine.'));
+        } finally {
+            setIsSavingRoutine(false);
+        }
+    };
+
     return (
         <div className="flex-1 flex flex-col overflow-hidden">
             <div className="p-4 md:p-6 flex-1 overflow-y-auto space-y-5">
@@ -1864,6 +1927,52 @@ const ReviewView: React.FC<{
                                 </div>
                             </div>
                         ) : null}
+
+                        <div className="bg-slate-900/40 border border-slate-700 rounded-xl p-4">
+                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                                <div>
+                                    <div className="text-slate-100 font-semibold">Workflow Integration</div>
+                                    <div className="text-sm text-slate-400 mt-1">Send this take into other Magic AI Wizard tools to continue rehearsal refinement.</div>
+                                </div>
+                                <div className="text-xs uppercase tracking-wide text-amber-200/80">Live Rehearsal → Ecosystem</div>
+                            </div>
+                            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                                <button
+                                    onClick={handleAnalyzeAngles}
+                                    className="px-4 py-3 rounded-xl border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-slate-100 text-sm font-semibold transition-colors text-left"
+                                >
+                                    <div>Analyze Angles</div>
+                                    <div className="text-xs text-slate-400 mt-1">Open Angle & Risk with transcript context.</div>
+                                </button>
+                                <button
+                                    onClick={handleRefineScript}
+                                    className="px-4 py-3 rounded-xl border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-slate-100 text-sm font-semibold transition-colors text-left"
+                                >
+                                    <div>Refine Script</div>
+                                    <div className="text-xs text-slate-400 mt-1">Open Patter Engine with your rehearsal transcript.</div>
+                                </button>
+                                <button
+                                    onClick={handleEvaluateInShow}
+                                    className="px-4 py-3 rounded-xl border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-slate-100 text-sm font-semibold transition-colors text-left"
+                                >
+                                    <div>Evaluate in Show</div>
+                                    <div className="text-xs text-slate-400 mt-1">Open Director Mode to test show fit and pacing.</div>
+                                </button>
+                                <button
+                                    onClick={() => void handleSaveRoutine()}
+                                    disabled={isSavingRoutine}
+                                    className={`px-4 py-3 rounded-xl border text-sm font-semibold transition-colors text-left ${isSavingRoutine ? 'border-emerald-500/20 bg-emerald-900/10 text-emerald-200/70' : 'border-emerald-500/30 bg-emerald-900/20 hover:bg-emerald-900/30 text-emerald-100'}`}
+                                >
+                                    <div>{isSavingRoutine ? 'Saving Routine…' : 'Save Routine'}</div>
+                                    <div className="text-xs text-emerald-200/70 mt-1">Save this take and critique to Idea Vault.</div>
+                                </button>
+                            </div>
+                            {integrationMessage ? (
+                                <div className="mt-3 text-sm text-emerald-300 bg-emerald-900/20 border border-emerald-700/40 rounded-md px-3 py-2">
+                                    {integrationMessage}
+                                </div>
+                            ) : null}
+                        </div>
                     </>
                 ) : null}
 
@@ -1966,6 +2075,111 @@ const ReviewView: React.FC<{
             </footer>
         </div>
     );
+};
+
+
+
+const buildTakeTranscriptText = (take: { transcript?: Transcription[]; takeNumber?: number } | null | undefined): string => {
+    const parts = (take?.transcript || [])
+        .filter((t) => t?.source === 'user')
+        .map((t) => (t?.text || '').trim())
+        .filter(Boolean);
+    return parts.join(' ').replace(/\s+/g, ' ').trim();
+};
+
+const buildAngleRiskPrefill = (take: { transcript?: Transcription[]; markers?: SegmentMarker[]; takeNumber?: number } | null | undefined, sessionTitle: string, sessionNotes: string) => {
+    const transcriptText = buildTakeTranscriptText(take);
+    const markerLabels = (take?.markers || []).map((m) => m.label).filter(Boolean);
+    const steps = markerLabels.length
+        ? markerLabels.map((label, index) => `${index + 1}. ${label}`).join('\n')
+        : '1. Introduction / framing\n2. Spectator instruction\n3. Main magical moment\n4. Reveal / applause cue\n5. Cleanup / reset';
+    const focusBits = [
+        sessionNotes ? `Session notes: ${sessionNotes}` : '',
+        markerLabels.length ? `Performer-marked segments: ${markerLabels.join(', ')}` : '',
+        transcriptText ? `Transcript context: ${transcriptText}` : '',
+    ].filter(Boolean);
+    return {
+        version: 1,
+        source: 'live-rehearsal',
+        routineName: sessionTitle || 'Live Rehearsal Routine',
+        focusText: focusBits.join('\n\n'),
+        routineSteps: steps,
+        propsText: '',
+        createdAt: Date.now(),
+    };
+};
+
+const buildPatterPrefill = (take: { transcript?: Transcription[]; markers?: SegmentMarker[] } | null | undefined, sessionTitle: string, sessionNotes: string) => {
+    const transcriptText = buildTakeTranscriptText(take);
+    const markerLabels = (take?.markers || []).map((m) => m.label).filter(Boolean);
+    const descriptionParts = [
+        sessionTitle ? `Routine: ${sessionTitle}` : '',
+        sessionNotes ? `Rehearsal focus: ${sessionNotes}` : '',
+        markerLabels.length ? `Routine segments: ${markerLabels.join(', ')}` : '',
+        transcriptText ? `Latest rehearsal transcript: ${transcriptText}` : '',
+        'Task: refine the spoken script into stronger, more polished performance patter while preserving the core routine structure.'
+    ].filter(Boolean);
+    return {
+        version: 1,
+        source: 'live-rehearsal',
+        effectDescription: descriptionParts.join('\n\n'),
+        selectedTones: ['Storytelling', 'Mysterious'],
+        createdAt: Date.now(),
+    };
+};
+
+const buildDirectorPrefill = (take: { transcript?: Transcription[]; markers?: SegmentMarker[] } | null | undefined, sessionTitle: string, sessionNotes: string) => {
+    const transcriptText = buildTakeTranscriptText(take);
+    const markerLabels = (take?.markers || []).map((m) => m.label).filter(Boolean);
+    const constraintBits = [
+        sessionNotes ? `Session focus: ${sessionNotes}` : '',
+        markerLabels.length ? `Routine structure: ${markerLabels.join(' -> ')}` : '',
+        transcriptText ? `Live rehearsal transcript: ${transcriptText}` : '',
+        'Evaluate how this routine fits into a larger show, including pacing, transitions, and audience management.'
+    ].filter(Boolean);
+    return {
+        version: 1,
+        source: 'live-rehearsal',
+        showTitle: sessionTitle || 'Live Rehearsal Routine',
+        theme: 'Refine this rehearsed routine into a stronger show segment with better arc, transitions, and audience clarity.',
+        constraintNotes: constraintBits.join('\n\n'),
+        tone: 'confident, theatrical, audience-focused',
+        createdAt: Date.now(),
+    };
+};
+
+const buildRoutineIdeaPayload = (take: { transcript?: Transcription[]; markers?: SegmentMarker[]; startedAt?: number; endedAt?: number; takeNumber?: number } | null | undefined, sessionTitle: string, sessionNotes: string) => {
+    const transcriptText = buildTakeTranscriptText(take);
+    const markers = (take?.markers || []).map((m, index) => `- Marker ${index + 1}: ${m.label}`).join('\n');
+    const metrics = buildRehearsalMetrics(take?.transcript || [], take?.startedAt, take?.endedAt);
+    const feedback = buildRehearsalFeedback(take?.transcript || [], take?.markers || [], take?.startedAt, take?.endedAt);
+    const timeline = buildSessionTimeline(take?.transcript || [], take?.markers || [], take?.startedAt, take?.endedAt)
+        .map((item) => `- ${item.timestampLabel} ${item.label}${item.commentary ? ` — ${item.commentary}` : ''}`)
+        .join('\n');
+
+    const lines = [
+        sessionTitle || 'Live Rehearsal Routine',
+        '',
+        sessionNotes ? `Session Notes\n${sessionNotes}\n` : '',
+        `Confidence Score: ${metrics.confidenceScore}%`,
+        `Filler Words: ${metrics.fillerWords}`,
+        `Average Speaking Speed: ${metrics.averageSpeakingSpeed} WPM`,
+        `Total Pause Time: ${metrics.totalPauseTimeSeconds}s`,
+        `Energy Level: ${metrics.energyLevel}`,
+        '',
+        markers ? `Segment Markers\n${markers}\n` : '',
+        transcriptText ? `Transcript\n${transcriptText}\n` : '',
+        timeline ? `Session Timeline\n${timeline}\n` : '',
+        'AI Rehearsal Feedback',
+        ...feedback.sections.map((section) => `${section.title}\n${section.bullets.map((bullet) => `- ${bullet}`).join('\n')}`),
+    ].filter(Boolean);
+
+    return {
+        type: 'text' as const,
+        title: sessionTitle || 'Live Rehearsal Routine',
+        content: lines.join('\n'),
+        tags: ['live-rehearsal', 'routine'],
+    };
 };
 
 

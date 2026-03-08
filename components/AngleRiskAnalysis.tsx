@@ -69,6 +69,26 @@ export default function AngleRiskAnalysis({ user, onIdeaSaved, onDeepLinkShowPla
   const [isLoading, setIsLoading] = useState(false);
   const [analysis, setAnalysis] = useState<string>('');
 
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('maw_angle_risk_prefill_v1');
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!parsed || parsed.version !== 1) {
+        localStorage.removeItem('maw_angle_risk_prefill_v1');
+        return;
+      }
+      if (typeof parsed.routineName === 'string' && parsed.routineName.trim()) setRoutineName(parsed.routineName.trim());
+      if (typeof parsed.focusText === 'string') setFocusText(parsed.focusText);
+      if (typeof parsed.routineSteps === 'string' && parsed.routineSteps.trim()) setRoutineSteps(parsed.routineSteps);
+      if (typeof parsed.propsText === 'string') setPropsText(parsed.propsText);
+      localStorage.removeItem('maw_angle_risk_prefill_v1');
+    } catch {
+      // ignore prefill errors
+    }
+  }, []);
+
   const parsedAnalysis = useMemo(() => {
     const raw = (analysis || '').trim();
     if (!raw) return null;

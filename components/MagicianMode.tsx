@@ -2879,6 +2879,9 @@ ${action.payload.content}`;
               user={user}
               onReturnToStudio={handleReturnFromRehearsal}
               onIdeaSaved={() => handleIdeaSaved('Rehearsal saved!')}
+              onOpenAngleRisk={() => setActiveView('angle-risk')}
+              onOpenPatterEngine={() => setActiveView('patter-engine')}
+              onOpenDirectorMode={() => setActiveView('director-mode')}
               onRequestUpgrade={() => setIsUpgradeModalOpen(true)}
             />
           );
