@@ -120,6 +120,11 @@ type RehearsalFeedback = {
     sections: FeedbackSection[];
 };
 
+type CoachingFollowUpResult = {
+    prompt: string;
+    sections: FeedbackSection[];
+};
+
 type SegmentMarker = {
     id: string;
     label: string;
@@ -399,6 +404,79 @@ const buildRehearsalFeedback = (transcript: Transcription[], markers: SegmentMar
         ],
     };
 };
+
+const buildCoachingFollowUp = (
+    prompt: string,
+    transcript: Transcription[],
+    markers: SegmentMarker[] = [],
+    startedAt?: number,
+    endedAt?: number,
+): CoachingFollowUpResult => {
+    const normalizedPrompt = (prompt || '').trim();
+    const lowerPrompt = normalizedPrompt.toLowerCase();
+    const userText = (transcript || [])
+        .filter((t) => t?.source === 'user')
+        .map((t) => t.text || '')
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    const feedback = buildRehearsalFeedback(transcript, markers, startedAt, endedAt);
+    const metrics = buildRehearsalMetrics(transcript, startedAt, endedAt);
+    const timeline = buildSessionTimeline(transcript, markers, startedAt, endedAt);
+    const openerLine = userText.split(/[.!?]+/).map((part) => part.trim()).filter(Boolean)[0] || 'Open with one clean, audience-facing line that establishes the premise immediately.';
+    const revealTimeline = timeline.find((item) => /reveal|climax/i.test(item.label)) || timeline[timeline.length - 1];
+    const revealMarker = markers.find((marker) => /reveal/i.test(marker.label));
+    const audienceMarker = markers.find((marker) => /spectator|audience/i.test(marker.label));
+
+    const rewriteFocus = lowerPrompt.includes('opening') || lowerPrompt.includes('opener')
+        ? 'opening'
+        : lowerPrompt.includes('confidence')
+            ? 'confidence'
+            : lowerPrompt.includes('family') || lowerPrompt.includes('interactive') || lowerPrompt.includes('audience')
+                ? 'audience'
+                : lowerPrompt.includes('reveal') || lowerPrompt.includes('pause') || lowerPrompt.includes('pacing')
+                    ? 'reveal'
+                    : 'general';
+
+    const suggestedRewrite = rewriteFocus === 'opening'
+        ? `Try this opener: “${openerLine.replace(/^(good evening,?\s*)?/i, '').trim() || 'I want to show you how attention can create impossibility'} — and the more certain you feel, the harder this moment will hit.”`
+        : rewriteFocus == 'confidence'
+            ? 'Try a firmer version: “Watch carefully. I want your first impression, because that instinct is about to be tested.”'
+            : rewriteFocus == 'audience'
+                ? 'Add audience connection: “In a moment, I want one of you to trust your first impression — because that choice is going to matter.”'
+                : rewriteFocus == 'reveal'
+                    ? 'Try a cleaner payoff line: “Now lock in what you think you saw... because this is the moment your memory should fail.”'
+                    : 'Trim one sentence from the middle and replace it with a cleaner cue line so the script feels more controlled live.';
+
+    const pacingAdjustment = revealTimeline
+        ? `At ${revealTimeline.timestampLabel}, the routine reaches ${revealTimeline.label.toLowerCase()}. Slow down one beat before that line and leave a visible pause before the payoff.`
+        : 'Add one deliberate pause before the strongest magical sentence so the reveal has room to land.';
+
+    const audienceUpgrade = audienceMarker
+        ? `Your ${audienceMarker.label.toLowerCase()} is a good interaction anchor. Add one short confirmation question there so the spectator participates without feeling rushed.`
+        : 'Add one direct audience question in the middle section so the rehearsal feels more interactive and less narrated.';
+
+    const priorityFixes = [
+        metrics.fillerWords > 0
+            ? `Remove ${metrics.fillerWords} filler word${metrics.fillerWords === 1 ? '' : 's'} from the take to sharpen authority.`
+            : 'Keep the current wording lean — filler language is already well controlled.',
+        metrics.averageSpeakingSpeed > 165
+            ? 'Slow the reveal section slightly so the audience has time to process the impossible moment.'
+            : 'Keep the current speaking speed, but add one cleaner pause before the climax.',
+        feedback.sections.find((section) => section.title === 'Clarity of Effect')?.bullets?.[0] || 'Clarify the effect statement so the audience knows exactly what changed.',
+    ];
+
+    return {
+        prompt: normalizedPrompt,
+        sections: [
+            { title: 'Suggested Rewrite', bullets: [suggestedRewrite] },
+            { title: 'Pacing Adjustment', bullets: [pacingAdjustment, revealMarker ? `Marker focus: ${revealMarker.label} should feel slightly slower than the previous beat.` : 'Use your reveal beat as the slowest, most controlled line in the routine.'] },
+            { title: 'Audience Interaction Upgrade', bullets: [audienceUpgrade, metrics.confidenceScore < 80 ? 'Ask one short question, then pause before answering it yourself to sound more in command.' : 'Keep the audience prompt compact so the momentum stays strong.'] },
+            { title: 'Priority Fixes', bullets: priorityFixes },
+        ],
+    };
+};
+
 const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => void }> = ({ user, onReturnToStudio, onIdeaSaved, onOpenAngleRisk, onOpenPatterEngine, onOpenDirectorMode, onRequestUpgrade }) => {
     const [view, setView] = useState<'idle' | 'rehearsing' | 'reviewing'>('idle');
     const [status, setStatus] = useState<'idle' | 'connecting' | 'listening' | 'error'>('idle');
@@ -1827,8 +1905,17 @@ const ReviewView: React.FC<{
     const [isSaving, setIsSaving] = useState(false);
     const [integrationMessage, setIntegrationMessage] = useState<string>('');
     const [isSavingRoutine, setIsSavingRoutine] = useState(false);
+    const [refineOpen, setRefineOpen] = useState(false);
+    const [refinePrompt, setRefinePrompt] = useState('');
+    const [refineResult, setRefineResult] = useState<CoachingFollowUpResult | null>(null);
 
     const current = takes?.[selectedTake] ?? null;
+
+    useEffect(() => {
+        setRefinePrompt('');
+        setRefineResult(null);
+        setRefineOpen(false);
+    }, [selectedTake]);
 
     useEffect(() => {
         transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -1928,6 +2015,24 @@ const ReviewView: React.FC<{
         }
     };
 
+
+    const quickRefinePrompts = [
+        'Tighten my opening',
+        'Improve pacing at reveal',
+        'Make instructions clearer',
+        'Add stronger audience engagement',
+        'Rewrite this for more confidence',
+    ];
+
+    const runRefine = (promptOverride?: string) => {
+        if (!current) return;
+        const promptToUse = (promptOverride ?? refinePrompt).trim();
+        if (!promptToUse) return;
+        setRefinePrompt(promptToUse);
+        setRefineResult(buildCoachingFollowUp(promptToUse, current.transcript, current.markers || [], current.startedAt, current.endedAt));
+        setRefineOpen(true);
+    };
+
     const handleSaveRoutine = async () => {
         if (!current) return;
         setIntegrationMessage('');
@@ -1948,7 +2053,17 @@ const ReviewView: React.FC<{
         <div className="flex-1 flex flex-col overflow-hidden">
             <div className="p-4 md:p-6 flex-1 overflow-y-auto space-y-5">
                 <div className="flex flex-col gap-3">
-                    <h3 className="text-xl font-bold text-slate-200 font-cinzel">Session Review</h3>
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <h3 className="text-xl font-bold text-slate-200 font-cinzel">Session Review</h3>
+                        {current ? (
+                            <button
+                                onClick={() => setRefineOpen((prev) => !prev)}
+                                className="px-4 py-2 rounded-md border border-purple-500/40 bg-purple-900/20 hover:bg-purple-900/30 text-purple-100 text-sm font-semibold transition-colors"
+                            >
+                                {refineOpen ? 'Hide AI Follow-Up' : 'Refine with AI'}
+                            </button>
+                        ) : null}
+                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-slate-300 mb-1">Session Title</label>
@@ -1981,6 +2096,71 @@ const ReviewView: React.FC<{
                         </div>
                     )}
                 </div>
+
+                {current && refineOpen ? (
+                    <div className="bg-slate-900/40 border border-slate-700 rounded-xl p-4 space-y-4">
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                            <div>
+                                <div className="text-slate-100 font-semibold">AI Coaching Follow-Up</div>
+                                <div className="text-sm text-slate-400 mt-1">Ask for a focused rewrite or coaching pass without leaving this take.</div>
+                            </div>
+                            <div className="text-xs uppercase tracking-wide text-purple-200/80">Take {current.takeNumber} refinement</div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                            {quickRefinePrompts.map((prompt) => (
+                                <button
+                                    key={prompt}
+                                    onClick={() => runRefine(prompt)}
+                                    className="px-3 py-1.5 rounded-full border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-slate-100 text-sm font-medium transition-colors"
+                                >
+                                    {prompt}
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="flex flex-col lg:flex-row gap-3">
+                            <input
+                                value={refinePrompt}
+                                onChange={(e) => setRefinePrompt(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Enter') runRefine(); }}
+                                className="flex-1 px-3 py-3 rounded-md bg-slate-800 border border-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                placeholder="Ask AI to refine this take, rewrite a line, or improve a specific beat..."
+                            />
+                            <button
+                                onClick={() => runRefine()}
+                                disabled={!refinePrompt.trim()}
+                                className={`px-4 py-3 rounded-md text-sm font-semibold transition-colors ${refinePrompt.trim() ? 'bg-purple-600 hover:bg-purple-700 text-white' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}
+                            >
+                                Submit Follow-Up
+                            </button>
+                        </div>
+
+                        {refineResult ? (
+                            <div className="space-y-3">
+                                <div className="text-sm text-slate-300">
+                                    <span className="text-slate-400">Latest coaching request:</span> {refineResult.prompt}
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {refineResult.sections.map((section) => (
+                                        <div key={section.title} className="bg-slate-800/60 border border-slate-700 rounded-xl p-4">
+                                            <div className="text-slate-100 font-semibold">{section.title}</div>
+                                            <ul className="mt-3 space-y-2 text-sm text-slate-300 list-disc pl-5">
+                                                {section.bullets.map((bullet, idx) => (
+                                                    <li key={idx}>{bullet}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="text-sm text-slate-400 bg-slate-800/40 border border-slate-700 rounded-lg px-3 py-3">
+                                Choose a quick coaching prompt or ask for a targeted rewrite to continue refining Take {current.takeNumber}.
+                            </div>
+                        )}
+                    </div>
+                ) : null}
 
                 {current ? (
                     <>
