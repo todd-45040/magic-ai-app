@@ -282,6 +282,7 @@ const toMarkdownBlueprint = (
   q: string,
   tone: MinistryTone,
   doctrinalMode: boolean,
+  ministrySensitivityMode: boolean,
   bp: MinistryBlueprint
 ) => {
   const lines: string[] = [];
@@ -289,6 +290,7 @@ const toMarkdownBlueprint = (
   lines.push('');
   lines.push(`**Ministry Tone:** ${tone}`);
   lines.push(`**Doctrinal Integrity Mode:** ${doctrinalMode ? 'On' : 'Off'}`);
+  lines.push(`**Ministry Sensitivity Mode:** ${ministrySensitivityMode ? 'On' : 'Off'}`);
   lines.push('');
   lines.push('### Scripture Focus');
   lines.push(mdEscape(bp.scripture_focus));
@@ -383,6 +385,7 @@ const GospelMagicAssistant: React.FC<GospelMagicAssistantProps> = ({ onIdeaSaved
   const [passage, setPassage] = useState('');
   const [ministryTone, setMinistryTone] = useState<MinistryTone>('Sunday Service');
   const [doctrinalMode, setDoctrinalMode] = useState(true);
+  const [ministrySensitivityMode, setMinistrySensitivityMode] = useState(true);
 
 
   // Tier-2: Intelligence Layer
@@ -443,6 +446,9 @@ const GospelMagicAssistant: React.FC<GospelMagicAssistantProps> = ({ onIdeaSaved
       const doctrinalGuardrails = doctrinalMode
         ? `\n\nDoctrinal integrity guardrails (mandatory):\n- Avoid theological overreach or making denominationally controversial claims.\n- Avoid prosperity-style promises (no \'God will\' guarantees tied to the routine).\n- Do NOT imply the performer has spiritual authority or supernatural power.\n- Avoid emotional manipulation tactics.\n- Keep language pastoral, humble, and respectful.`
         : '';
+      const ministrySensitivityGuardrails = ministrySensitivityMode
+        ? `\n\nMinistry sensitivity guardrails (mandatory):\n- Avoid emotional pressure or manipulative invitation language.\n- Do NOT imply that the effect demonstrates a miracle or supernatural proof.\n- Do NOT present the performer as having spiritual authority, divine insight, or special power.\n- Do NOT use tricks as proof that Christianity is true.\n- Keep volunteer handling gentle, fully respectful, and never embarrassing.`
+        : '';
 
       const prompt = `
 Return STRICT JSON that matches the provided schema. Do not include markdown, prose outside JSON, or extra keys.
@@ -468,7 +474,7 @@ Requirements:
 - Include scripture_handling_notes to help the performer treat the passage carefully and avoid overclaiming.
 - altar_call_sensitivity must include: guidance, do, dont.
 - closing_prayer_option should be gentle and appropriate for the selected tone.
-${doctrinalGuardrails}
+${doctrinalGuardrails}${ministrySensitivityGuardrails}
 `;
 
       const response = await generateStructuredResponse(
@@ -496,7 +502,7 @@ ${doctrinalGuardrails}
 
   const handleSave = () => {
     if (!blueprint) return;
-    const fullContent = toMarkdownBlueprint(lastQuery, ministryTone, doctrinalMode, blueprint);
+    const fullContent = toMarkdownBlueprint(lastQuery, ministryTone, doctrinalMode, ministrySensitivityMode, blueprint);
     saveIdea('text', fullContent, lastQuery);
     onIdeaSaved();
     setSaveStatus('saved');
@@ -512,6 +518,9 @@ ${doctrinalGuardrails}
     try {
       const doctrinalGuardrails = doctrinalMode
         ? `\n\nDoctrinal integrity guardrails (mandatory):\n- Avoid theological overreach or denominationally controversial claims.\n- Avoid prosperity-style promises.\n- Do NOT imply the performer has spiritual authority or supernatural power.\n- Avoid emotional manipulation tactics.\n- Keep language pastoral, humble, and respectful.`
+        : '';
+      const ministrySensitivityGuardrails = ministrySensitivityMode
+        ? `\n\nMinistry sensitivity guardrails (mandatory):\n- Flag any place where the routine could feel manipulative, miracle-implying, spiritually overclaimed, or embarrassing to a volunteer.\n- Prefer gentler wording and pastoral restraint when suggesting patches.`
         : '';
 
       const prompt = `
@@ -543,7 +552,7 @@ Output:
 Important:
 - Do NOT expose magic methods.
 - Keep critique constructive and respectful.
-${doctrinalGuardrails}
+${doctrinalGuardrails}${ministrySensitivityGuardrails}
 `;
 
       const response = await generateStructuredResponse(
@@ -596,6 +605,9 @@ ${doctrinalGuardrails}
       const doctrinalNote = doctrinalMode
         ? `Doctrinal Integrity\n- Avoid overreach and performer-authority framing.\n- Avoid emotionally manipulative language.\n`
         : '';
+      const sensitivityNote = ministrySensitivityMode
+        ? `Ministry Sensitivity\n- Avoid miracle implication or using the effect as spiritual proof.\n- Keep volunteer handling respectful and never embarrassing.\n`
+        : '';
 
       const openerNotes = [
         'OPENER FRAMING',
@@ -606,7 +618,8 @@ ${doctrinalGuardrails}
         list('Potential Misinterpretations', blueprint.potential_misinterpretations),
         list('Reverence Risk Notes', blueprint.reverence_risk_notes),
         reactionText ? `${reactionText}\n` : '',
-        doctrinalNote
+        doctrinalNote,
+        sensitivityNote
       ].filter(Boolean).join('\n');
 
       const phase1Notes = [
@@ -641,7 +654,8 @@ ${blueprint.scripture_handling_notes}
       const closerNotes = [
         'CLOSER TAG',
         blueprint.closing_prayer_option ? `Closing Prayer Option\n${blueprint.closing_prayer_option}\n` : '',
-        doctrinalNote
+        doctrinalNote,
+        sensitivityNote
       ].filter(Boolean).join('\n');
 
       const tasks = [
@@ -687,6 +701,7 @@ ${blueprint.scripture_handling_notes}
       }
       if (blueprint.pastoral_tone_guidance) blocks.push(`Pastoral Tone Guidance\n${blueprint.pastoral_tone_guidance}`);
       if (doctrinalMode) blocks.push(`Doctrinal Integrity\nKeep language careful, avoid performer-authority framing, and avoid emotional manipulation.`);
+      if (ministrySensitivityMode) blocks.push(`Ministry Sensitivity\nAvoid miracle implication, spiritual overclaiming, and any volunteer handling that could feel embarrassing or manipulative.`);
       if (blueprint.altar_call_sensitivity?.guidance) blocks.push(`Altar Call Sensitivity\n${blueprint.altar_call_sensitivity.guidance}`);
 
       const notes = blocks.join('\n\n').trim();
@@ -722,6 +737,9 @@ ${blueprint.scripture_handling_notes}
       const doctrinalGuardrails = doctrinalMode
         ? `\n\nDoctrinal integrity guardrails (mandatory):\n- Avoid theological overreach or denominationally controversial claims.\n- Avoid prosperity-style promises.\n- Do NOT imply the performer has spiritual authority or supernatural power.\n- Avoid emotional manipulation tactics.\n- Keep language pastoral, humble, and respectful.`
         : '';
+      const ministrySensitivityGuardrails = ministrySensitivityMode
+        ? `\n\nMinistry sensitivity guardrails (mandatory):\n- Avoid emotional pressure, miracle implication, manipulative framing, or embarrassing volunteer language.\n- Keep phrasing invitational, respectful, and pastoral.`
+        : '';
 
       const prompt = `
 Return STRICT JSON that matches the provided schema. No markdown. No extra keys.
@@ -740,7 +758,7 @@ Guidelines:
 - Do NOT claim supernatural power or performer authority.
 - Do NOT include exposure of magic methods.
 - Keep phrases usable on stage (short, speakable).
-${doctrinalGuardrails}
+${doctrinalGuardrails}${ministrySensitivityGuardrails}
 
 Populate arrays for categories the user selected; for unselected categories, return an empty array.
 `;
@@ -771,6 +789,9 @@ Populate arrays for categories the user selected; for unselected categories, ret
           <span className="px-2 py-1 rounded-full border border-slate-700 bg-slate-900/40">Tone: {ministryTone}</span>
           <span className="px-2 py-1 rounded-full border border-slate-700 bg-slate-900/40">
             Doctrinal Mode: {doctrinalMode ? 'On' : 'Off'}
+          </span>
+          <span className="px-2 py-1 rounded-full border border-slate-700 bg-slate-900/40">
+            Ministry Sensitivity: {ministrySensitivityMode ? 'On' : 'Off'}
           </span>
         </div>
         <div className="mt-2">
@@ -1088,6 +1109,21 @@ Populate arrays for categories the user selected; for unselected categories, ret
             </div>
           </label>
 
+          <label className={`flex items-start gap-3 rounded-lg border bg-slate-900/40 p-3 transition-shadow ${ministrySensitivityMode ? "border-emerald-500/50 shadow-[0_0_0_1px_rgba(16,185,129,0.22),0_0_20px_rgba(16,185,129,0.10)]" : "border-slate-700"}`}>
+            <input
+              type="checkbox"
+              checked={ministrySensitivityMode}
+              onChange={(e) => setMinistrySensitivityMode(e.target.checked)}
+              className="mt-1 accent-emerald-400"
+            />
+            <div>
+              <p className="text-sm font-semibold text-slate-200">Respect Ministry Sensitivity</p>
+              <p className="text-xs text-slate-400 mt-1">
+                Avoid emotional pressure, miracle implication, spiritual overclaiming, using tricks as proof, or embarrassing volunteers.
+              </p>
+            </div>
+          </label>
+
           <div className="rounded-xl border border-slate-700/60 bg-slate-900/20 p-3">
             <div className="flex items-center justify-between">
               <p className="text-sm font-semibold text-slate-200">Ministry Phrase Builder</p>
@@ -1249,7 +1285,7 @@ Populate arrays for categories the user selected; for unselected categories, ret
 
               <div className="flex items-center justify-end gap-2 flex-wrap">
                 <CohesionActions
-                  content={toMarkdownBlueprint(lastQuery, ministryTone, doctrinalMode, blueprint)}
+                  content={toMarkdownBlueprint(lastQuery, ministryTone, doctrinalMode, ministrySensitivityMode, blueprint)}
                   defaultTitle={`Gospel Blueprint — ${lastQuery || 'Untitled'}`}
                   defaultTags={["gospel", "ministry", "blueprint"]}
                   compact
@@ -1306,7 +1342,7 @@ Populate arrays for categories the user selected; for unselected categories, ret
 
                 <ShareButton
                   title={`Ministry Blueprint: ${lastQuery}`}
-                  text={toMarkdownBlueprint(lastQuery, ministryTone, doctrinalMode, blueprint)}
+                  text={toMarkdownBlueprint(lastQuery, ministryTone, doctrinalMode, ministrySensitivityMode, blueprint)}
                   className="flex items-center gap-2 px-3 py-1.5 text-sm bg-transparent border border-slate-600 text-slate-300 hover:border-slate-400 hover:text-white rounded-md transition-colors"
                 >
                   <ShareIcon className="w-4 h-4" />
