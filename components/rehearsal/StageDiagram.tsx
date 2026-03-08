@@ -69,9 +69,9 @@ function describeWedge(cx: number, cy: number, innerRadius: number, outerRadius:
 }
 
 function getRiskFill(risk: StageDiagramRisk) {
-  if (risk === 'high') return 'rgba(248, 113, 113, 0.30)';
-  if (risk === 'medium') return 'rgba(250, 204, 21, 0.22)';
-  return 'rgba(74, 222, 128, 0.18)';
+  if (risk === 'high') return 'rgba(248, 113, 113, 0.45)';
+  if (risk === 'medium') return 'rgba(250, 204, 21, 0.45)';
+  return 'rgba(74, 222, 128, 0.45)';
 }
 
 function getRiskStroke(risk: StageDiagramRisk) {
@@ -163,8 +163,8 @@ export default function StageDiagram({
               cy={seat.y}
               r={seat.highlighted ? 7 : 4.25}
               fill={seat.highlighted ? 'rgba(196,181,253,0.96)' : 'rgba(255,255,255,0.44)'}
-              stroke={seat.highlighted ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.15)'}
-              strokeWidth={seat.highlighted ? 1.2 : 0.8}
+              stroke={seat.highlighted ? 'rgba(255,255,255,1)' : 'rgba(255,255,255,0.15)'}
+              strokeWidth={seat.highlighted ? 2 : 0.8}
             />
             {(seat.seatNumber === 2 || seat.seatNumber === 4 || seat.seatNumber === 6) ? (
               <text x={seat.x} y={seat.y + 18} textAnchor="middle" fontSize="9" fill="rgba(255,255,255,0.60)">{seat.seatNumber}</text>
@@ -211,9 +211,8 @@ export default function StageDiagram({
         ) : null}
 
         <circle cx={performerPx} cy={performerPy} r="8" fill="rgba(255,255,255,0.96)" stroke="rgba(17,24,39,0.85)" strokeWidth="1.5" />
-        <path d={`M ${facingLeft.x} ${facingLeft.y} L ${facingTip.x} ${facingTip.y} L ${facingRight.x} ${facingRight.y} Z`} fill="rgba(255,255,255,0.92)" stroke="rgba(17,24,39,0.65)" strokeWidth="1" />
-        <text x={performerPx} y={performerPy + 24} textAnchor="middle" fontSize="11" fill="rgba(255,255,255,0.74)">Performer</text>
-        <text x={performerPx + 28} y={performerPy - 18} textAnchor="start" fontSize="10" fill="rgba(255,255,255,0.60)">Facing</text>
+        <path d={`M ${facingLeft.x} ${facingLeft.y} L ${facingTip.x} ${facingTip.y} L ${facingRight.x} ${facingRight.y} Z`} fill="rgba(255,255,255,0.96)" stroke="#ffffff" strokeWidth="2.5" />
+        <text x={performerPx} y={performerPy + 16} textAnchor="middle" fontSize="10" fill="#cbd5f5">Performer</text>
       </svg>
     </div>
   );

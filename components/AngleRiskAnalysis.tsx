@@ -1015,45 +1015,48 @@ ${routineSteps.trim()}` : null,
                         subtitle: 'Stage geometry, performer pathing, and optional seat-view simulation.',
                         children: (
                           <div className="space-y-4">
-                            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                              <div>
-                                <p className="text-sm font-semibold text-white">Spatial Blocking Diagram</p>
-                                <p className="mt-1 text-xs text-white/60">Track performer travel, reveal position, and audience sightlines.</p>
+                            <div>
+                              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                  <p className="text-sm font-semibold text-white">Spatial Blocking Diagram</p>
+                                  <p className="mt-1 text-xs text-white/60">Track performer travel, reveal position, and audience sightlines.</p>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => setPerformerOrientation(prev => (prev >= 30 ? -30 : prev + 15))}
+                                    className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold text-white/75 transition hover:bg-white/[0.06]"
+                                  >
+                                    Rotate Performer
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setSimulateSeatView(prev => !prev)}
+                                    className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${simulateSeatView ? 'border-purple-400/50 bg-purple-500/20 text-white' : 'border-white/10 bg-white/[0.03] text-white/75 hover:bg-white/[0.06]'}`}
+                                  >
+                                    {simulateSeatView ? 'Hide Seat View' : 'Simulate Seat View'}
+                                  </button>
+                                </div>
                               </div>
-                              <div className="flex flex-wrap gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => setPerformerOrientation(prev => (prev >= 30 ? -30 : prev + 15))}
-                                  className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold text-white/75 transition hover:bg-white/[0.06]"
-                                >
-                                  Rotate Performer
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setSimulateSeatView(prev => !prev)}
-                                  className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${simulateSeatView ? 'border-purple-400/50 bg-purple-500/20 text-white' : 'border-white/10 bg-white/[0.03] text-white/75 hover:bg-white/[0.06]'}`}
-                                >
-                                  {simulateSeatView ? 'Hide Seat View' : 'Simulate Seat View'}
-                                </button>
-                                {simulateSeatView ? (
-                                  <div className="flex flex-wrap gap-2">
-                                    {[
-                                      { key: 'left', label: 'Seat 2' },
-                                      { key: 'center', label: 'Seat 4' },
-                                      { key: 'right', label: 'Seat 6' },
-                                    ].map(seat => (
-                                      <button
-                                        key={seat.key}
-                                        type="button"
-                                        onClick={() => setSelectedSeat(seat.key as DiagramSeatView)}
-                                        className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${selectedSeat === seat.key ? 'border-purple-400/60 bg-purple-500/20 text-white' : 'border-white/10 bg-white/[0.03] text-white/75 hover:bg-white/[0.06]'}`}
-                                      >
-                                        {seat.label}
-                                      </button>
-                                    ))}
-                                  </div>
-                                ) : null}
-                              </div>
+
+                              {simulateSeatView ? (
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  {[
+                                    { key: 'left', label: 'Seat 2' },
+                                    { key: 'center', label: 'Seat 4' },
+                                    { key: 'right', label: 'Seat 6' },
+                                  ].map(seat => (
+                                    <button
+                                      key={seat.key}
+                                      type="button"
+                                      onClick={() => setSelectedSeat(seat.key as DiagramSeatView)}
+                                      className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${selectedSeat === seat.key ? 'border-purple-400/60 bg-purple-500/20 text-white' : 'border-white/10 bg-white/[0.03] text-white/75 hover:bg-white/[0.06]'}`}
+                                    >
+                                      {seat.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              ) : null}
                             </div>
 
                             <StageDiagram
