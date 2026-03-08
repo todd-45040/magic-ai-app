@@ -12,6 +12,7 @@ import ShareButton from './ShareButton';
 import FormattedText from './FormattedText';
 import type { User, AiSparkAction } from '../types';
 import { canConsume, consume } from '../services/usageTracker';
+import { trackClientEvent } from '../services/telemetryClient';
 
 interface VideoRehearsalProps {
     user: User;
@@ -82,6 +83,29 @@ const GuidedPlaceholder: React.FC = () => (
     </div>
 );
 
+
+const DEMO_CLIP_PATH = '/demo/video-rehearsal-demo.webm';
+const DEMO_CLIP_NAME = 'ADMC Demo Rehearsal Clip';
+const DEMO_ANALYSIS = `## Overview
+The performer reads clearly in frame with a strong center-stage presence. The biggest opportunities are a slightly tenser upper body during the secret moment, a faster-than-ideal reveal beat, and a need for cleaner blocking around the prop table.
+
+## What’s Working
+- Your body position stays readable for most of the clip, which helps the effect feel organized and professional.
+- The central framing is strong; spectators can follow where the action lives without searching.
+- The gesture before the reveal has good theatrical intent and gives the routine a clear visual beat.
+
+## What to Improve
+- During the key handling moment, the shoulders and lead hand look a bit more rigid than the rest of the performance. Relaxing that beat would reduce suspicion.
+- The transition into the reveal happens slightly too fast. Add a deliberate half-second pause so the climax feels more impossible.
+- When attention shifts toward the side table, your body line turns just enough to make the staging feel less open. Keep your chest a little more front-facing.
+- Consider widening your stance slightly during the middle phase; it will read as more grounded and confident.
+
+## Next Actions
+- Rehearse the secret-action beat at 80% speed and focus on keeping the shoulders loose.
+- Add one visible pause before the reveal line lands.
+- Run the routine once from a front-facing camera and once from a slight right-side angle to verify your blocking.
+- Save these notes to Show Planner, then run the piece again in Live Rehearsal for timing and vocal polish.`;
+
 const VideoRehearsal: React.FC<VideoRehearsalProps> = ({
     user,
     onIdeaSaved,
@@ -92,6 +116,7 @@ const VideoRehearsal: React.FC<VideoRehearsalProps> = ({
 }) => {
     const [videoFile, setVideoFile] = useState<File | null>(null);
     const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
+    const [isDemoClipLoaded, setIsDemoClipLoaded] = useState(false);
     const [prompt, setPrompt] = useState('');
     // Phase 5: remember last analysis focus + saved focus templates (per user)
     const [focusTemplates, setFocusTemplates] = useState<string[]>([]);
@@ -118,6 +143,10 @@ const VideoRehearsal: React.FC<VideoRehearsalProps> = ({
             // ignore storage failures (private mode, etc.)
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    useEffect(() => {
+        void trackClientEvent({ tool: 'video_rehearsal', action: 'page_open' });
     }, []);
 
 
@@ -271,10 +300,12 @@ useEffect(() => {
             }
 
             setVideoFile(file);
+            setIsDemoClipLoaded(false);
             const url = URL.createObjectURL(file);
             setVideoPreviewUrl(url);
             setError(null);
             setAnalysisResult(null);
+            void trackClientEvent({ tool: 'video_rehearsal', action: 'video_uploaded', metadata: { name: file.name, size: file.size, type: file.type } });
         }
     };
 
@@ -284,8 +315,30 @@ useEffect(() => {
         }
         setVideoFile(null);
         setVideoPreviewUrl(null);
+        setIsDemoClipLoaded(false);
         if(fileInputRef.current) {
             fileInputRef.current.value = "";
+        }
+    };
+
+
+    const handleLoadDemoClip = async () => {
+        try {
+            setError(null);
+            setAnalysisResult(null);
+            if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
+            const response = await fetch(DEMO_CLIP_PATH);
+            if (!response.ok) throw new Error('Demo clip could not be loaded. Add the demo clip file to public/demo.');
+            const blob = await response.blob();
+            const demoFile = new File([blob], DEMO_CLIP_NAME + '.webm', { type: blob.type || 'video/webm' });
+            const objectUrl = URL.createObjectURL(demoFile);
+            setVideoFile(demoFile);
+            setVideoPreviewUrl(objectUrl);
+            setIsDemoClipLoaded(true);
+            setPrompt((prev) => prev || 'Check posture, blocking, pacing, and angle awareness for a short stage demo clip.');
+            void trackClientEvent({ tool: 'video_rehearsal', action: 'demo_clip_loaded' });
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Unable to load demo clip.');
         }
     };
 
@@ -299,12 +352,22 @@ useEffect(() => {
             return;
         }
         consume(user, 'video_upload', 1);
+        void trackClientEvent({ tool: 'video_rehearsal', action: isDemoClipLoaded ? 'demo_analyze_click' : 'analyze_click' });
         
         setIsLoading(true);
         setError(null);
         setBlockedUi(null);
         setAnalysisResult(null);
         setSaveStatus('idle');
+
+        if (isDemoClipLoaded) {
+            window.setTimeout(() => {
+                setAnalysisResult(DEMO_ANALYSIS);
+                setIsLoading(false);
+                void trackClientEvent({ tool: 'video_rehearsal', action: 'demo_analyze_success', outcome: 'SUCCESS_NOT_CHARGED' });
+            }, 900);
+            return;
+        }
         // Frame-based analysis:
         // We extract representative frames client-side and send them to Gemini Vision.
         // This ensures the feedback is grounded in the uploaded video (not a simulation).
@@ -346,6 +409,7 @@ useEffect(() => {
 
             const response = await generateResponseWithParts(parts, VIDEO_REHEARSAL_SYSTEM_INSTRUCTION, user);
             setAnalysisResult(response);
+            void trackClientEvent({ tool: 'video_rehearsal', action: 'analyze_success', outcome: 'SUCCESS_NOT_CHARGED' });
 
             // Phase 4: soft upsell after first successful analysis for trial users.
             if (String(user.membership || '').toLowerCase() === 'trial' && !dismissedUpsell) {
@@ -358,6 +422,7 @@ useEffect(() => {
             }
         } catch (err) {
             setError(err instanceof Error ? err.message : "An unknown error occurred during the analysis.");
+            void trackClientEvent({ tool: 'video_rehearsal', action: 'analyze_error', outcome: 'ERROR_UPSTREAM', metadata: { message: err instanceof Error ? err.message : 'unknown' } });
         } finally {
             setIsLoading(false);
         }
@@ -381,6 +446,7 @@ const deriveAutoTags = (): string[] => {
         if (analysisResult) {
             const title = `Video Analysis for ${videoFile?.name || 'rehearsal'}`;
             const content = `## Analysis for: ${videoFile?.name}\n\n**Focus Prompt:** ${prompt || 'None'}\n\n---\n\n${analysisResult}`;
+            void trackClientEvent({ tool: 'video_rehearsal', action: 'save_click' });
             saveIdea({ type: 'text', content, title, tags: deriveAutoTags() });
             onIdeaSaved();
             setSaveStatus('saved');
@@ -408,6 +474,7 @@ const deriveAutoTags = (): string[] => {
             });
 
             setPlannerSaveStatus('saved');
+            void trackClientEvent({ tool: 'video_rehearsal', action: 'show_planner_handoff', outcome: 'SUCCESS_NOT_CHARGED' });
 
             // Navigate directly to the new show (best effort).
             if (onDeepLinkShowPlanner) {
@@ -432,6 +499,7 @@ const deriveAutoTags = (): string[] => {
     };
 
     const handleRunLiveAudioRehearsal = () => {
+        void trackClientEvent({ tool: 'video_rehearsal', action: 'live_rehearsal_handoff' });
         if (onNavigate) onNavigate('live-rehearsal');
     };
 
@@ -532,6 +600,17 @@ const deriveAutoTags = (): string[] => {
                 
                 <div className="space-y-4">
                     <input type="file" accept="video/*" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={handleLoadDemoClip}
+                            className="px-3 py-1.5 text-xs rounded-md border border-cyan-400/25 bg-cyan-500/10 text-cyan-200 hover:bg-cyan-500/15 hover:border-cyan-300/40 transition-colors"
+                            title="Load a bundled ADMC demo clip"
+                        >
+                            Load Demo Clip
+                        </button>
+                        <span className="text-xs text-slate-500">Fast booth demo: load clip → analyze → reset.</span>
+                    </div>
                     
                     {!videoPreviewUrl ? (
                         <button onClick={() => fileInputRef.current?.click()} className="w-full flex flex-col items-center justify-center p-12 border-2 border-dashed border-slate-600/90 rounded-xl bg-slate-950/35 shadow-inner shadow-black/20 hover:bg-slate-900/70 hover:border-purple-400/80 hover:shadow-[0_0_18px_rgba(168,85,247,0.12)] transition-all duration-200">
@@ -551,9 +630,10 @@ const deriveAutoTags = (): string[] => {
                         </div>
                     )}
 
-                    <p className="text-xs text-slate-400 text-center">
-                        Video uploads do not consume Live Rehearsal minutes.
-                    </p>
+                    <div className="space-y-1">
+                        <p className="text-xs text-slate-300 text-center">Short clips work great. Best results: 20–90 seconds with a front-facing rehearsal angle.</p>
+                        <p className="text-xs text-slate-400 text-center">Video uploads do not consume Live Rehearsal minutes.</p>
+                    </div>
 
                     <div>
                         <label htmlFor="analysis-prompt" className="block text-sm font-medium text-slate-300 mb-1">Analysis Focus (Optional)</label>
