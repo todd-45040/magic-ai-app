@@ -18,6 +18,9 @@ import {
   NewspaperIcon,
   ChecklistIcon,
   StarIcon,
+  EyeIcon,
+  DollarSignIcon,
+  FileTextIcon,
 } from './icons';
 
 type ClientX = Client & {
@@ -30,11 +33,19 @@ type ClientX = Client & {
 
 type NoteEntry = { at: string; text: string };
 
+type ClientActivityItem = {
+  at: number | string;
+  title: string;
+  detail: string;
+  kind: 'note' | 'show' | 'contract';
+};
+
 type ClientMetrics = {
   showCount: number;
   contractCount: number;
   avgRating: number | null;
   revenue: number;
+  averageFee: number;
   lastShowLabel: string;
   lastShowTitle: string;
   lastShowTs: number | null;
@@ -42,7 +53,11 @@ type ClientMetrics = {
   latestNote: string | null;
   primaryVenue: string | null;
   relatedShows: Show[];
+  relatedContracts: ContractRow[];
   feedbackCount: number;
+  topReaction: string | null;
+  topComment: string | null;
+  activityTimeline: ClientActivityItem[];
 };
 
 function parseNotesTimeline(raw?: string): NoteEntry[] {
@@ -76,26 +91,92 @@ function getShowSortTs(show: Show): number {
   return show.performanceDate || show.updatedAt || show.createdAt || 0;
 }
 
+function getContractSortTs(contract: ContractRow): number {
+  return new Date(contract.updated_at || contract.created_at || 0).getTime() || 0;
+}
+
+function formatContractStatus(status?: string | null) {
+  const normalized = String(status || 'draft').toLowerCase();
+  if (normalized === 'signed') return 'Signed';
+  if (normalized === 'sent') return 'Sent';
+  return 'Draft';
+}
+
+function getFeedbackReactionLabel(reaction?: string | null) {
+  if (!reaction) return null;
+  const raw = String(reaction).trim();
+  const map: Record<string, string> = {
+    '🎉': 'Celebration',
+    '😲': 'Amazed',
+    '😂': 'Laughing',
+    '🤔': 'Curious',
+    '❤️': 'Loved It',
+    '👏': 'Applause',
+    '😴': 'Low Energy',
+  };
+  return map[raw] || raw;
+}
+
 function getClientMetrics(client: ClientX, shows: Show[], feedback: Feedback[], contracts: ContractRow[]): ClientMetrics {
   const relatedShows = shows
     .filter((show) => show.clientId === client.id)
     .sort((a, b) => getShowSortTs(b) - getShowSortTs(a));
 
   const showIds = new Set(relatedShows.map((show) => show.id));
-  const relatedContracts = contracts.filter((row) => showIds.has(row.show_id));
+  const relatedContracts = contracts
+    .filter((row) => showIds.has(row.show_id))
+    .sort((a, b) => getContractSortTs(b) - getContractSortTs(a));
   const relatedFeedback = feedback.filter((item) => item.showId && showIds.has(item.showId));
   const ratings = relatedFeedback.map((item) => Number(item.rating)).filter((value) => Number.isFinite(value) && value > 0);
   const avgRating = ratings.length ? Number((ratings.reduce((sum, value) => sum + value, 0) / ratings.length).toFixed(1)) : null;
   const revenue = relatedShows.reduce((sum, show) => sum + Number(show.finances?.performanceFee || 0), 0);
+  const averageFee = relatedShows.length ? Math.round(revenue / relatedShows.length) : 0;
   const lastShow = relatedShows[0];
   const notes = parseNotesTimeline(client.notes);
   const latestNote = notes[0]?.text || null;
+  const reactionCounts = new Map<string, number>();
+  relatedFeedback.forEach((item) => {
+    const label = getFeedbackReactionLabel(item.reaction);
+    if (!label) return;
+    reactionCounts.set(label, (reactionCounts.get(label) || 0) + 1);
+  });
+  const topReaction = Array.from(reactionCounts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+  const topComment = relatedFeedback
+    .filter((item) => String(item.comment || '').trim())
+    .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))[0]?.comment || null;
+
+  const activityTimeline: ClientActivityItem[] = [
+    ...notes.map((note) => ({
+      at: note.at || client.createdAt,
+      title: 'Client note added',
+      detail: note.text,
+      kind: 'note' as const,
+    })),
+    ...relatedShows.slice(0, 8).map((show) => ({
+      at: show.performanceDate || show.updatedAt || show.createdAt,
+      title: show.status === 'Completed' ? 'Show completed' : 'Show linked',
+      detail: `${show.title}${show.venue ? ` • ${show.venue}` : ''}`,
+      kind: 'show' as const,
+    })),
+    ...relatedContracts.slice(0, 8).map((contract) => {
+      const linkedShow = relatedShows.find((show) => show.id === contract.show_id);
+      return {
+        at: contract.updated_at || contract.created_at || client.createdAt,
+        title: `Contract ${formatContractStatus(contract.status).toLowerCase()}`,
+        detail: `${linkedShow?.title || 'Linked performance'} • ${formatMoney(Number(linkedShow?.finances?.performanceFee || 0))}`,
+        kind: 'contract' as const,
+      };
+    }),
+  ]
+    .sort((a, b) => new Date(String(b.at)).getTime() - new Date(String(a.at)).getTime())
+    .slice(0, 8);
 
   return {
     showCount: relatedShows.length,
     contractCount: relatedContracts.length,
     avgRating,
     revenue,
+    averageFee,
     lastShowLabel: lastShow ? formatShortDate(lastShow.performanceDate || lastShow.updatedAt || lastShow.createdAt) : (client.last_show_date ? formatShortDate(client.last_show_date) : 'No shows yet'),
     lastShowTitle: lastShow?.title || client.last_show_title || 'No shows linked yet',
     lastShowTs: lastShow ? getShowSortTs(lastShow) : (client.last_show_date ? new Date(client.last_show_date).getTime() : null),
@@ -103,7 +184,11 @@ function getClientMetrics(client: ClientX, shows: Show[], feedback: Feedback[], 
     latestNote,
     primaryVenue: lastShow?.venue || null,
     relatedShows,
+    relatedContracts,
     feedbackCount: relatedFeedback.length,
+    topReaction,
+    topComment,
+    activityTimeline,
   };
 }
 
@@ -113,6 +198,7 @@ interface ClientManagementProps {
   onOpenShowPlanner?: (showId: string | null, taskId?: string | null) => void;
   onNavigateToContracts?: () => void;
   onNavigateToMarketing?: () => void;
+  onNavigateToFeedback?: () => void;
 }
 
 const ClientModal: React.FC<{
@@ -273,6 +359,7 @@ const ClientManagement: React.FC<ClientManagementProps> = ({
   onOpenShowPlanner,
   onNavigateToContracts,
   onNavigateToMarketing,
+  onNavigateToFeedback,
 }) => {
   const { shows, feedback } = useAppState();
   const [clients, setClients] = useState<ClientX[]>([]);
@@ -281,6 +368,7 @@ const ClientManagement: React.FC<ClientManagementProps> = ({
   const [clientToEdit, setClientToEdit] = useState<ClientX | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [quickNote, setQuickNote] = useState('');
   const hasTrackedOpenRef = useRef(false);
   const trackedClientIdRef = useRef<string | null>(null);
 
@@ -443,6 +531,68 @@ const ClientManagement: React.FC<ClientManagementProps> = ({
     } catch {
       // noop
     }
+  };
+
+
+  const handleOpenShow = (show: Show) => {
+    void trackClientEvent({
+      tool: 'client_management',
+      action: 'client_show_viewed',
+      metadata: {
+        client_id: selectedClient?.id ?? null,
+        show_id: show.id,
+        show_title: show.title,
+      },
+    });
+    onOpenShowPlanner?.(show.id);
+  };
+
+  const handleViewContract = (contract: ContractRow) => {
+    const linkedShow = selectedMetrics?.relatedShows.find((show) => show.id === contract.show_id);
+    void trackClientEvent({
+      tool: 'client_management',
+      action: 'client_contract_viewed',
+      metadata: {
+        client_id: selectedClient?.id ?? null,
+        contract_id: contract.id,
+        show_id: contract.show_id,
+        show_title: linkedShow?.title ?? null,
+        status: contract.status,
+      },
+    });
+    onNavigateToContracts?.();
+  };
+
+  const handleViewFeedback = () => {
+    void trackClientEvent({
+      tool: 'client_management',
+      action: 'client_feedback_viewed',
+      metadata: {
+        client_id: selectedClient?.id ?? null,
+        feedback_count: selectedMetrics?.feedbackCount ?? 0,
+        average_rating: selectedMetrics?.avgRating ?? null,
+      },
+    });
+    onNavigateToFeedback?.();
+  };
+
+  const handleAddQuickNote = () => {
+    if (!selectedClient) return;
+    const text = quickNote.trim();
+    if (!text) return;
+    const existing = parseNotesTimeline(selectedClient.notes);
+    const nextNotes = [{ at: new Date().toISOString().slice(0, 10), text }, ...existing];
+    updateClient(selectedClient.id, { notes: JSON.stringify(nextNotes) } as any);
+    refreshClients();
+    setQuickNote('');
+    void trackClientEvent({
+      tool: 'client_management',
+      action: 'client_notes_added',
+      metadata: {
+        client_id: selectedClient.id,
+        note_length: text.length,
+      },
+    });
   };
 
   return (
@@ -635,67 +785,202 @@ const ClientManagement: React.FC<ClientManagementProps> = ({
                 </div>
               </div>
 
-              <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
-                <div className="rounded-3xl border border-white/10 bg-slate-950/45 p-4 sm:p-5">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-semibold text-white">Client Snapshot</div>
-                      <div className="text-xs text-slate-400">Quick business context without leaving the page.</div>
+              <div className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,0.9fr)]">
+                <div className="space-y-5">
+                  <div className="rounded-3xl border border-white/10 bg-slate-950/45 p-4 sm:p-5">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-white">Performance History</div>
+                        <div className="text-xs text-slate-400">Linked shows for this client with direct Show Planner access.</div>
+                      </div>
+                      <div className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-slate-300">{selectedMetrics.relatedShows.length} linked</div>
                     </div>
-                    <button onClick={() => handleCopyContact(selectedClient)} className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-white/10">
-                      <CopyIcon className="h-4 w-4" />
-                      Copy Contact
-                    </button>
+
+                    {selectedMetrics.relatedShows.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-white/10 bg-slate-950/50 px-4 py-8 text-center text-sm text-slate-400">
+                        No shows linked to this client yet. Use <span className="font-semibold text-slate-200">Book Show</span> to create the first one.
+                      </div>
+                    ) : (
+                      <div className="overflow-hidden rounded-2xl border border-white/8">
+                        <div className="grid grid-cols-[120px_minmax(0,1fr)_110px_120px] gap-3 bg-white/5 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                          <div>Date</div>
+                          <div>Event</div>
+                          <div>Fee</div>
+                          <div>Audience Score</div>
+                        </div>
+                        <div className="divide-y divide-white/6">
+                          {selectedMetrics.relatedShows.map((show) => {
+                            const showFeedback = feedback.filter((item) => item.showId === show.id && Number(item.rating) > 0);
+                            const showAvg = showFeedback.length
+                              ? (showFeedback.reduce((sum, item) => sum + Number(item.rating || 0), 0) / showFeedback.length).toFixed(1)
+                              : null;
+                            return (
+                              <button
+                                key={show.id}
+                                type="button"
+                                onClick={() => handleOpenShow(show)}
+                                className="grid w-full grid-cols-[120px_minmax(0,1fr)_110px_120px] gap-3 px-4 py-3 text-left text-sm transition hover:bg-white/5"
+                              >
+                                <div className="text-slate-300">{formatShortDate(show.performanceDate || show.updatedAt || show.createdAt)}</div>
+                                <div className="min-w-0">
+                                  <div className="truncate font-semibold text-white">{show.title}</div>
+                                  <div className="truncate text-xs text-slate-400">{show.venue || 'Venue not set'}</div>
+                                </div>
+                                <div className="font-medium text-slate-200">{formatMoney(Number(show.finances?.performanceFee || 0))}</div>
+                                <div className="text-slate-200">{showAvg ? `⭐ ${showAvg}` : 'No data'}</div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
-                  <div className="space-y-3 text-sm text-slate-300">
-                    <div className="rounded-2xl border border-white/8 bg-slate-950/55 p-4">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Contact Details</div>
-                      <div className="mt-2 space-y-1">
-                        <div>Email: <span className="text-white">{selectedClient.email || 'Not added yet'}</span></div>
-                        <div>Phone: <span className="text-white">{selectedClient.phone || 'Not added yet'}</span></div>
-                        <div>Last Contacted: <span className="text-white">{selectedClient.last_contacted ? formatShortDate(selectedClient.last_contacted) : 'No contact logged yet'}</span></div>
+                  <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+                    <div className="rounded-3xl border border-white/10 bg-slate-950/45 p-4 sm:p-5">
+                      <div className="mb-4 flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-semibold text-white">Contracts</div>
+                          <div className="text-xs text-slate-400">Contract records tied to this client’s linked shows.</div>
+                        </div>
+                        <div className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-slate-300">{selectedMetrics.relatedContracts.length} total</div>
                       </div>
+
+                      {selectedMetrics.relatedContracts.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed border-white/10 bg-slate-950/50 px-4 py-8 text-center text-sm text-slate-400">
+                          No contracts linked yet. Generate the first contract from this client record.
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {selectedMetrics.relatedContracts.slice(0, 4).map((contract) => {
+                            const linkedShow = selectedMetrics.relatedShows.find((show) => show.id === contract.show_id);
+                            return (
+                              <div key={contract.id} className="rounded-2xl border border-white/8 bg-slate-950/55 p-4">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div>
+                                    <div className="font-semibold text-white">{linkedShow?.title || 'Linked performance'}</div>
+                                    <div className="mt-1 text-xs text-slate-400">{formatContractStatus(contract.status)} • Version {contract.version}</div>
+                                  </div>
+                                  <button onClick={() => handleViewContract(contract)} className="inline-flex items-center gap-2 rounded-xl border border-cyan-400/20 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-500/15">
+                                    <EyeIcon className="h-4 w-4" />
+                                    View Contract
+                                  </button>
+                                </div>
+                                <div className="mt-3 text-sm text-slate-300">Amount: <span className="font-semibold text-white">{formatMoney(Number(linkedShow?.finances?.performanceFee || 0))}</span></div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
 
-                    <div className="rounded-2xl border border-white/8 bg-slate-950/55 p-4">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Most Recent Note</div>
-                      <div className="mt-2 text-sm text-white">{selectedMetrics.latestNote || 'No notes saved for this client yet.'}</div>
+                    <div className="rounded-3xl border border-white/10 bg-slate-950/45 p-4 sm:p-5">
+                      <div className="mb-4 flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-semibold text-white">Audience Feedback</div>
+                          <div className="text-xs text-slate-400">Performance intelligence tied back to client results.</div>
+                        </div>
+                        <button onClick={handleViewFeedback} className="inline-flex items-center gap-2 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-100 transition hover:bg-amber-500/15">
+                          <EyeIcon className="h-4 w-4" />
+                          View Full Feedback
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div className="rounded-2xl border border-white/8 bg-slate-950/55 p-4">
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Average Rating</div>
+                          <div className="mt-2 text-2xl font-bold text-white">{selectedMetrics.avgRating ? `⭐ ${selectedMetrics.avgRating}` : 'No data'}</div>
+                        </div>
+                        <div className="rounded-2xl border border-white/8 bg-slate-950/55 p-4">
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Top Reaction</div>
+                          <div className="mt-2 text-2xl font-bold text-white">{selectedMetrics.topReaction || 'No data'}</div>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 rounded-2xl border border-white/8 bg-slate-950/55 p-4">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Top Comment</div>
+                        <div className="mt-2 text-sm text-white">{selectedMetrics.topComment || 'No comments collected from linked shows yet.'}</div>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="rounded-3xl border border-white/10 bg-slate-950/45 p-4 sm:p-5">
-                  <div className="mb-3">
-                    <div className="text-sm font-semibold text-white">Related Shows</div>
-                    <div className="text-xs text-slate-400">Early dashboard view for linked performances and planner access.</div>
+                <div className="space-y-5">
+                  <div className="rounded-3xl border border-white/10 bg-slate-950/45 p-4 sm:p-5">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-white">Client Revenue</div>
+                        <div className="text-xs text-slate-400">Lifetime value and average booking economics for this account.</div>
+                      </div>
+                      <DollarSignIcon className="h-5 w-5 text-emerald-300" />
+                    </div>
+
+                    <div className="space-y-3 text-sm text-slate-300">
+                      <div className="rounded-2xl border border-white/8 bg-slate-950/55 p-4">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Total Shows</div>
+                        <div className="mt-2 text-xl font-bold text-white">{selectedMetrics.showCount}</div>
+                      </div>
+                      <div className="rounded-2xl border border-white/8 bg-slate-950/55 p-4">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Total Revenue</div>
+                        <div className="mt-2 text-xl font-bold text-white">{formatMoney(selectedMetrics.revenue)}</div>
+                      </div>
+                      <div className="rounded-2xl border border-white/8 bg-slate-950/55 p-4">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Average Fee</div>
+                        <div className="mt-2 text-xl font-bold text-white">{formatMoney(selectedMetrics.averageFee)}</div>
+                      </div>
+                    </div>
                   </div>
 
-                  {selectedMetrics.relatedShows.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-white/10 bg-slate-950/50 px-4 py-8 text-center text-sm text-slate-400">
-                      No shows linked to this client yet. Use <span className="font-semibold text-slate-200">Book Show</span> to create the first one.
+                  <div className="rounded-3xl border border-white/10 bg-slate-950/45 p-4 sm:p-5">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-white">Client Activity</div>
+                        <div className="text-xs text-slate-400">A mini CRM timeline for notes, shows, and contracts.</div>
+                      </div>
+                      <button onClick={() => handleCopyContact(selectedClient)} className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-white/10">
+                        <CopyIcon className="h-4 w-4" />
+                        Copy Contact
+                      </button>
                     </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {selectedMetrics.relatedShows.slice(0, 4).map((show) => (
-                        <button
-                          key={show.id}
-                          type="button"
-                          onClick={() => onOpenShowPlanner?.(show.id)}
-                          className="w-full rounded-2xl border border-white/8 bg-slate-950/60 p-4 text-left transition hover:border-purple-400/25 hover:bg-slate-900/80"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <div className="font-semibold text-white">{show.title}</div>
-                              <div className="mt-1 text-xs text-slate-400">{show.venue || 'Venue not set'} • {formatShortDate(show.performanceDate || show.updatedAt || show.createdAt)}</div>
-                            </div>
-                            <div className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-300">{show.status || 'Draft'}</div>
-                          </div>
-                          <div className="mt-2 text-xs text-slate-400">Tasks: {show.tasks?.length || 0} • Fee: {formatMoney(Number(show.finances?.performanceFee || 0))}</div>
+
+                    <div className="rounded-2xl border border-white/8 bg-slate-950/55 p-4">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Quick Add Note</div>
+                      <div className="mt-3 flex flex-col gap-3">
+                        <textarea
+                          value={quickNote}
+                          onChange={(e) => setQuickNote(e.target.value)}
+                          rows={3}
+                          placeholder="Add a client update, follow-up reminder, or show note..."
+                          className="w-full rounded-2xl border border-white/10 bg-slate-900/80 px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-purple-500 focus:ring-1 focus:ring-purple-500/40"
+                        />
+                        <button onClick={handleAddQuickNote} className="inline-flex items-center justify-center gap-2 self-start rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-purple-500">
+                          <FileTextIcon className="h-4 w-4" />
+                          Save Note
                         </button>
-                      ))}
+                      </div>
                     </div>
-                  )}
+
+                    <div className="mt-4 space-y-3">
+                      {selectedMetrics.activityTimeline.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed border-white/10 bg-slate-950/50 px-4 py-8 text-center text-sm text-slate-400">
+                          No activity has been logged for this client yet.
+                        </div>
+                      ) : (
+                        selectedMetrics.activityTimeline.map((item, index) => (
+                          <div key={`${item.kind}-${index}-${item.title}`} className="relative rounded-2xl border border-white/8 bg-slate-950/55 p-4">
+                            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{formatShortDate(item.at)}</div>
+                            <div className="mt-2 flex items-start gap-3">
+                              <div className={`mt-0.5 h-2.5 w-2.5 rounded-full ${item.kind === 'note' ? 'bg-purple-400' : item.kind === 'contract' ? 'bg-cyan-400' : 'bg-emerald-400'}`} />
+                              <div>
+                                <div className="font-semibold text-white">{item.title}</div>
+                                <div className="mt-1 text-sm text-slate-300">{item.detail}</div>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             </>
