@@ -44,9 +44,9 @@ const GuidedPlaceholder: React.FC = () => (
                 <div className="mx-auto w-14 h-14 rounded-2xl bg-slate-800/70 border border-slate-700 flex items-center justify-center">
                     <VideoIcon className="w-8 h-8 text-slate-300" />
                 </div>
-                <h3 className="mt-4 text-lg font-semibold text-slate-200">Ready when you are</h3>
+                <h3 className="mt-4 text-lg font-semibold text-slate-200">Upload a video to get performance coaching</h3>
                 <p className="mt-1 text-sm text-slate-400">
-                    Upload a rehearsal video and click <span className="text-slate-200 font-medium">Analyze</span>. Your feedback will appear here.
+                    Your rehearsal feedback will appear here. AI review will highlight <span className="text-slate-200 font-medium">posture, timing, blocking, and angles</span>.
                 </p>
             </div>
 
@@ -57,23 +57,23 @@ const GuidedPlaceholder: React.FC = () => (
                     { title: 'Timing', desc: 'Pace, pauses, and moments that feel rushed.' },
                     { title: 'Angles', desc: 'Sightlines and exposure risk based on frames.' },
                 ].map((c) => (
-                    <div key={c.title} className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
+                    <div key={c.title} className="rounded-lg border border-slate-700/80 bg-slate-900/50 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]">
                         <div className="flex items-center justify-between">
-                            <p className="font-semibold text-slate-200">{c.title}</p>
-                            <div className="h-2 w-16 rounded-full bg-slate-800 overflow-hidden">
-                                <div className="h-full w-1/2 bg-slate-700 animate-pulse" />
+                            <p className="font-semibold text-slate-100">{c.title}</p>
+                            <div className="h-2 w-16 rounded-full bg-slate-800/90 overflow-hidden">
+                                <div className="h-full w-1/2 bg-slate-600 animate-pulse" />
                             </div>
                         </div>
-                        <p className="mt-1 text-xs text-slate-400">{c.desc}</p>
+                        <p className="mt-1 text-xs text-slate-300/90">{c.desc}</p>
                         <div className="mt-3 space-y-2 animate-pulse">
-                            <div className="h-2 rounded bg-slate-800" />
-                            <div className="h-2 rounded bg-slate-800 w-5/6" />
+                            <div className="h-2 rounded bg-slate-700/90" />
+                            <div className="h-2 rounded bg-slate-700/90 w-5/6" />
                         </div>
                     </div>
                 ))}
             </div>
 
-            <div className="rounded-lg border border-slate-800 bg-slate-900/30 p-3 text-sm text-slate-300">
+            <div className="rounded-lg border border-slate-700/80 bg-slate-900/35 p-3 text-sm text-slate-300">
                 <p className="font-semibold text-slate-200 mb-1">Tip</p>
                 <p className="text-slate-400">
                     Use the <span className="text-slate-200">Analysis Focus</span> chips to guide the AI (e.g., angles, pacing, posture).
@@ -82,6 +82,29 @@ const GuidedPlaceholder: React.FC = () => (
         </div>
     </div>
 );
+
+
+const DEMO_CLIP_PATH = '/demo/magic-demo-clip.mp4';
+const DEMO_CLIP_NAME = 'Magic Demo Clip';
+const DEMO_ANALYSIS = `## Overview
+The performer reads clearly in frame with a strong center-stage presence. The biggest opportunities are a slightly tenser upper body during the secret moment, a faster-than-ideal reveal beat, and a need for cleaner blocking around the prop table.
+
+## What’s Working
+- Your body position stays readable for most of the clip, which helps the effect feel organized and professional.
+- The central framing is strong; spectators can follow where the action lives without searching.
+- The gesture before the reveal has good theatrical intent and gives the routine a clear visual beat.
+
+## What to Improve
+- During the key handling moment, the shoulders and lead hand look a bit more rigid than the rest of the performance. Relaxing that beat would reduce suspicion.
+- The transition into the reveal happens slightly too fast. Add a deliberate half-second pause so the climax feels more impossible.
+- When attention shifts toward the side table, your body line turns just enough to make the staging feel less open. Keep your chest a little more front-facing.
+- Consider widening your stance slightly during the middle phase; it will read as more grounded and confident.
+
+## Next Actions
+- Rehearse the secret-action beat at 80% speed and focus on keeping the shoulders loose.
+- Add one visible pause before the reveal line lands.
+- Run the routine once from a front-facing camera and once from a slight right-side angle to verify your blocking.
+- Save these notes to Show Planner, then run the piece again in Live Rehearsal for timing and vocal polish.`;
 
 const VideoRehearsal: React.FC<VideoRehearsalProps> = ({
     user,
@@ -93,6 +116,7 @@ const VideoRehearsal: React.FC<VideoRehearsalProps> = ({
 }) => {
     const [videoFile, setVideoFile] = useState<File | null>(null);
     const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
+    const [isDemoClipLoaded, setIsDemoClipLoaded] = useState(false);
     const [prompt, setPrompt] = useState('');
     // Phase 5: remember last analysis focus + saved focus templates (per user)
     const [focusTemplates, setFocusTemplates] = useState<string[]>([]);
@@ -122,8 +146,9 @@ const VideoRehearsal: React.FC<VideoRehearsalProps> = ({
     }, []);
 
     useEffect(() => {
-        void trackClientEvent({ tool: 'video_rehearsal', action: 'video_rehearsal_page_open' });
+        void trackClientEvent({ tool: 'video_rehearsal', action: 'page_open' });
     }, []);
+
 
 // Phase 5: load persisted focus + templates
 const focusKey = `maw_video_last_focus_${user.id}`;
@@ -186,7 +211,6 @@ const saveCurrentFocusAsTemplate = () => {
     if (exists) return;
     const next = [t, ...focusTemplates].slice(0, 8);
     persistTemplates(next);
-    void trackClientEvent({ tool: 'video_rehearsal', action: 'video_rehearsal_focus_template_saved', metadata: { templateLength: t.length } });
 };
 
 const removeTemplate = (t: string) => {
@@ -267,34 +291,54 @@ useEffect(() => {
         if (file) {
             if (!file.type.startsWith('video/')) {
                 setError('Invalid file type. Please upload a video file (MP4, MOV, WEBM, etc.).');
-                void trackClientEvent({ tool: 'video_rehearsal', action: 'video_rehearsal_upload_rejected', outcome: 'ERROR_UPSTREAM', metadata: { reason: 'invalid_type', fileType: file.type || 'unknown', name: file.name || 'unknown' } });
                 return;
             }
             // Demo-friendly size limit
-            if (file.size > 50 * 1024 * 1024) { // 50 MB
-                setError('File is too large. Please upload a video under 50MB for this demo.');
-                void trackClientEvent({ tool: 'video_rehearsal', action: 'video_rehearsal_upload_rejected', outcome: 'ERROR_UPSTREAM', metadata: { reason: 'file_too_large', size: file.size, name: file.name || 'unknown' } });
+            if (file.size > 80 * 1024 * 1024) { // 80 MB
+                setError('File is too large. Please upload a video under 80MB for this demo.');
                 return;
             }
 
             setVideoFile(file);
+            setIsDemoClipLoaded(false);
             const url = URL.createObjectURL(file);
             setVideoPreviewUrl(url);
             setError(null);
             setAnalysisResult(null);
-            void trackClientEvent({ tool: 'video_rehearsal', action: 'video_rehearsal_upload_selected', metadata: { name: file.name, size: file.size, type: file.type } });
+            void trackClientEvent({ tool: 'video_rehearsal', action: 'video_uploaded', metadata: { name: file.name, size: file.size, type: file.type } });
         }
     };
 
     const handleRemoveVideo = () => {
-        void trackClientEvent({ tool: 'video_rehearsal', action: 'video_rehearsal_start_over' });
         if (videoPreviewUrl) {
             URL.revokeObjectURL(videoPreviewUrl);
         }
         setVideoFile(null);
         setVideoPreviewUrl(null);
+        setIsDemoClipLoaded(false);
         if(fileInputRef.current) {
             fileInputRef.current.value = "";
+        }
+    };
+
+
+    const handleLoadDemoClip = async () => {
+        try {
+            setError(null);
+            setAnalysisResult(null);
+            if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
+            const response = await fetch(DEMO_CLIP_PATH);
+            if (!response.ok) throw new Error('Demo clip could not be loaded. Add the demo clip file to public/demo.');
+            const blob = await response.blob();
+            const demoFile = new File([blob], DEMO_CLIP_NAME + '.mp4', { type: 'video/mp4' });
+            const objectUrl = URL.createObjectURL(demoFile);
+            setVideoFile(demoFile);
+            setVideoPreviewUrl(objectUrl);
+            setIsDemoClipLoaded(true);
+            setPrompt((prev) => prev || 'Check posture, blocking, pacing, and angle awareness for a short stage demo clip.');
+            void trackClientEvent({ tool: 'video_rehearsal', action: 'demo_clip_loaded' });
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Unable to load demo clip.');
         }
     };
 
@@ -305,17 +349,17 @@ useEffect(() => {
         const chk = canConsume(user, 'video_upload', 1);
         if (!chk.ok) {
             setError(`Daily video limit reached (${chk.used}/${chk.limit}). Upgrade to continue.`);
-            void trackClientEvent({ tool: 'video_rehearsal', action: 'video_rehearsal_analysis_blocked', outcome: 'ERROR_UPSTREAM', metadata: { reason: 'daily_limit', used: chk.used, limit: chk.limit } });
             return;
         }
         consume(user, 'video_upload', 1);
-        void trackClientEvent({ tool: 'video_rehearsal', action: 'video_rehearsal_analysis_start', metadata: { focusLength: (prompt || '').trim().length, fileName: videoFile.name, fileSize: videoFile.size } });
-
+        void trackClientEvent({ tool: 'video_rehearsal', action: isDemoClipLoaded ? 'demo_analyze_click' : 'analyze_click' });
+        
         setIsLoading(true);
         setError(null);
         setBlockedUi(null);
         setAnalysisResult(null);
         setSaveStatus('idle');
+
         // Frame-based analysis:
         // We extract representative frames client-side and send them to Gemini Vision.
         // This ensures the feedback is grounded in the uploaded video (not a simulation).
@@ -349,10 +393,10 @@ useEffect(() => {
 
             const parts: any[] = [{ text: intro }];
 
-// Provide sequence context so the model understands these are ordered frames
-parts.unshift({
-  text: "The following images are sequential frames extracted from a rehearsal video. Analyze posture, staging, blocking, timing, and potential angle exposure across the sequence."
-});
+            // Provide sequence context so the model understands these are ordered frames.
+            parts.unshift({
+                text: "The following images are sequential frames extracted from a rehearsal video. Analyze posture, staging, blocking, timing, and potential angle exposure across the sequence."
+            });
 
             // Interleave timestamp labels so the model can anchor observations.
             for (const f of frames) {
@@ -362,7 +406,7 @@ parts.unshift({
 
             const response = await generateResponseWithParts(parts, VIDEO_REHEARSAL_SYSTEM_INSTRUCTION, user);
             setAnalysisResult(response);
-            void trackClientEvent({ tool: 'video_rehearsal', action: 'video_rehearsal_analysis_success', outcome: 'SUCCESS_NOT_CHARGED', metadata: { fileName: videoFile.name, fileSize: videoFile.size, focusLength: focusText.length, frameCount: frames.length } });
+            void trackClientEvent({ tool: 'video_rehearsal', action: isDemoClipLoaded ? 'demo_analyze_success' : 'analyze_success', outcome: 'SUCCESS_NOT_CHARGED' });
 
             // Phase 4: soft upsell after first successful analysis for trial users.
             if (String(user.membership || '').toLowerCase() === 'trial' && !dismissedUpsell) {
@@ -374,9 +418,16 @@ parts.unshift({
                 }
             }
         } catch (err) {
+            console.error('Video analysis error:', err);
             const message = err instanceof Error ? err.message : "An unknown error occurred during the analysis.";
-            setError(message);
-            void trackClientEvent({ tool: 'video_rehearsal', action: 'video_rehearsal_analysis_error', outcome: 'ERROR_UPSTREAM', metadata: { fileName: videoFile?.name || 'unknown', message } });
+            if (isDemoClipLoaded) {
+                setAnalysisResult(DEMO_ANALYSIS);
+                setError('Live AI analysis was unavailable, so the demo fallback result was shown.');
+                void trackClientEvent({ tool: 'video_rehearsal', action: 'demo_analyze_fallback', outcome: 'SUCCESS_NOT_CHARGED', metadata: { message } });
+            } else {
+                setError(message);
+                void trackClientEvent({ tool: 'video_rehearsal', action: 'analyze_error', outcome: 'ERROR_UPSTREAM', metadata: { message } });
+            }
         } finally {
             setIsLoading(false);
         }
@@ -400,8 +451,8 @@ const deriveAutoTags = (): string[] => {
         if (analysisResult) {
             const title = `Video Analysis for ${videoFile?.name || 'rehearsal'}`;
             const content = `## Analysis for: ${videoFile?.name}\n\n**Focus Prompt:** ${prompt || 'None'}\n\n---\n\n${analysisResult}`;
+            void trackClientEvent({ tool: 'video_rehearsal', action: 'save_click' });
             saveIdea({ type: 'text', content, title, tags: deriveAutoTags() });
-            void trackClientEvent({ tool: 'video_rehearsal', action: 'video_rehearsal_save_success', outcome: 'SUCCESS_NOT_CHARGED', metadata: { title, tagCount: deriveAutoTags().length } });
             onIdeaSaved();
             setSaveStatus('saved');
             setTimeout(() => setSaveStatus('idle'), 2000);
@@ -428,7 +479,7 @@ const deriveAutoTags = (): string[] => {
             });
 
             setPlannerSaveStatus('saved');
-            void trackClientEvent({ tool: 'video_rehearsal', action: 'video_rehearsal_send_to_show_planner', outcome: 'SUCCESS_NOT_CHARGED', metadata: { showId: show.id, fileName: videoFile.name } });
+            void trackClientEvent({ tool: 'video_rehearsal', action: 'show_planner_handoff', outcome: 'SUCCESS_NOT_CHARGED' });
 
             // Navigate directly to the new show (best effort).
             if (onDeepLinkShowPlanner) {
@@ -439,10 +490,8 @@ const deriveAutoTags = (): string[] => {
 
             setTimeout(() => setPlannerSaveStatus('idle'), 2500);
         } catch (err) {
-            const message = err instanceof Error ? err.message : 'Unable to save to Show Planner.';
             setPlannerSaveStatus('idle');
-            setError(message);
-            void trackClientEvent({ tool: 'video_rehearsal', action: 'video_rehearsal_send_to_show_planner_error', outcome: 'ERROR_UPSTREAM', metadata: { fileName: videoFile?.name || 'unknown', message } });
+            setError(err instanceof Error ? err.message : 'Unable to save to Show Planner.');
         }
     };
 
@@ -450,13 +499,12 @@ const deriveAutoTags = (): string[] => {
         if (!analysisResult) return;
         if (!onAiSpark) return;
 
-        void trackClientEvent({ tool: 'video_rehearsal', action: 'video_rehearsal_refine_with_ai' });
         const content = `Video Rehearsal Analysis\n\nFile: ${videoFile?.name || 'rehearsal'}\nFocus: ${prompt || 'None'}\n\n---\n\n${analysisResult}`;
         onAiSpark({ type: 'refine-idea', payload: { content } });
     };
 
     const handleRunLiveAudioRehearsal = () => {
-        void trackClientEvent({ tool: 'video_rehearsal', action: 'video_rehearsal_send_to_live_rehearsal' });
+        void trackClientEvent({ tool: 'video_rehearsal', action: 'live_rehearsal_handoff' });
         if (onNavigate) onNavigate('live-rehearsal');
     };
 
@@ -484,9 +532,12 @@ const deriveAutoTags = (): string[] => {
             <div className="flex flex-col">
                 <div className="flex items-center gap-2 mb-2">
                     <h2 className="text-xl font-bold text-slate-300">Video Rehearsal Studio</h2>
+                    <span className="inline-flex items-center rounded-full border border-purple-400/30 bg-purple-500/10 px-2.5 py-1 text-[11px] font-semibold tracking-wide text-purple-200 shadow-[0_0_12px_rgba(168,85,247,0.12)]">
+                        Frame-Based AI Review
+                    </span>
                     <button
                         type="button"
-                        onClick={() => { setIsInfoOpen(true); void trackClientEvent({ tool: 'video_rehearsal', action: 'video_rehearsal_info_open' }); }}
+                        onClick={() => setIsInfoOpen(true)}
                         className="ml-1 inline-flex items-center justify-center w-8 h-8 rounded-full border border-slate-700 bg-slate-900/40 text-slate-300 hover:text-white hover:border-purple-500 transition-colors"
                         title="What the AI looks for"
                         aria-label="What the AI looks for"
@@ -494,7 +545,7 @@ const deriveAutoTags = (): string[] => {
                         <InfoIcon className="w-4 h-4" />
                     </button>
                 </div>
-                <p className="text-slate-400 mb-4">Upload a video of your performance to get AI-driven feedback on body language, staging, and physical timing.</p>
+                <p className="text-slate-400 mb-3">Upload a video of your performance to get AI-driven feedback on body language, staging, and physical timing.</p>
 
 {isInfoOpen && (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -554,17 +605,28 @@ const deriveAutoTags = (): string[] => {
                 
                 <div className="space-y-4">
                     <input type="file" accept="video/*" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={handleLoadDemoClip}
+                            className="px-3 py-1.5 text-xs rounded-md border border-cyan-400/25 bg-cyan-500/10 text-cyan-200 hover:bg-cyan-500/15 hover:border-cyan-300/40 transition-colors"
+                            title="Load a bundled ADMC demo clip"
+                        >
+                            Load Demo Clip
+                        </button>
+                        <span className="text-xs text-slate-500">Fast booth demo: load clip → analyze → reset.</span>
+                    </div>
                     
                     {!videoPreviewUrl ? (
-                        <button onClick={() => fileInputRef.current?.click()} className="w-full flex flex-col items-center justify-center p-12 border-2 border-dashed border-slate-600 rounded-lg hover:bg-slate-800/50 hover:border-purple-500 transition-colors">
+                        <button onClick={() => fileInputRef.current?.click()} className="w-full flex flex-col items-center justify-center p-12 border-2 border-dashed border-slate-600/90 rounded-xl bg-slate-950/35 shadow-inner shadow-black/20 hover:bg-slate-900/70 hover:border-purple-400/80 hover:shadow-[0_0_18px_rgba(168,85,247,0.12)] transition-all duration-200">
                             <VideoIcon className="w-12 h-12 text-slate-500 mb-2"/>
-                            <span className="font-semibold text-slate-300">Upload a Rehearsal Video</span>
-                            <span className="text-sm text-slate-400">MP4, MOV, WEBM, etc. (Max 50MB)</span>
+                            <span className="font-semibold text-slate-200">Upload a Rehearsal Video</span>
+                            <span className="text-sm text-slate-400">MP4, MOV, WEBM, etc. (Max 80MB)</span>
                         </button>
                     ) : (
                         <div>
-                            <div className="relative w-full aspect-video bg-black rounded-lg flex items-center justify-center overflow-hidden mb-2">
-                                <video src={videoPreviewUrl} controls className="w-full h-full object-contain" />
+                            <div className="relative w-full aspect-video bg-black rounded-xl flex items-center justify-center overflow-hidden mb-2 shadow-inner shadow-black/30">
+                                <video src={videoPreviewUrl} controls className="w-full h-full object-cover object-center bg-black" />
                                 <button onClick={handleRemoveVideo} className="absolute top-2 right-2 p-2 bg-black/50 rounded-full text-white hover:bg-red-600 transition-colors" title="Remove video">
                                     <TrashIcon className="w-5 h-5" />
                                 </button>
@@ -573,16 +635,18 @@ const deriveAutoTags = (): string[] => {
                         </div>
                     )}
 
-                    <p className="text-xs text-slate-400 text-center">
-                        Video uploads do not consume Live Rehearsal minutes.
-                    </p>
+                    <div className="space-y-1">
+                        <p className="text-xs text-slate-300 text-center">Short clips work great. Best results: 20–90 seconds with a front-facing rehearsal angle.</p>
+                        <p className="text-xs text-slate-400 text-center">Video uploads do not consume Live Rehearsal minutes.</p>
+                    </div>
 
                     <div>
                         <label htmlFor="analysis-prompt" className="block text-sm font-medium text-slate-300 mb-1">Analysis Focus (Optional)</label>
+                        <p className="text-xs text-slate-500 mb-2">Tell the AI what to watch for: posture, pacing, angles, blocking, tension.</p>
                         <textarea id="analysis-prompt" rows={3} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="e.g., Check my posture and hand movements during the vanish." className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500" />
 
 {/* Phase 5: saved focus templates */}
-<div className="mt-2 flex items-center justify-between gap-2">
+<div className="mt-1.5 flex items-center justify-between gap-2">
     <p className="text-xs text-slate-500">
         Shortcuts: <span className="text-slate-400">Ctrl/Cmd+O</span> upload, <span className="text-slate-400">Ctrl/Cmd+Enter</span> analyze
     </p>
@@ -627,7 +691,7 @@ const deriveAutoTags = (): string[] => {
 
 
                         {/* Guided prompt chips */}
-                        <div className="mt-2 flex flex-wrap gap-2">
+                        <div className="mt-1.5 flex flex-wrap gap-2">
                             {focusChips.map((chip) => (
                                 <button
                                     key={chip}
@@ -641,7 +705,8 @@ const deriveAutoTags = (): string[] => {
                         </div>
                     </div>
                     
-                    <button onClick={handleAnalyze} disabled={isLoading || !videoFile} className="w-full py-3 mt-4 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed">
+                    <button onClick={handleAnalyze} disabled={isLoading || !videoFile} className="group relative w-full py-3 mt-4 overflow-hidden rounded-lg border border-purple-400/30 bg-gradient-to-r from-purple-600 via-fuchsia-600 to-purple-700 text-white font-bold shadow-[0_0_18px_rgba(147,51,234,0.18)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_0_24px_rgba(168,85,247,0.28)] hover:from-purple-500 hover:via-fuchsia-500 hover:to-purple-600 disabled:border-slate-600 disabled:bg-slate-600 disabled:shadow-none disabled:hover:translate-y-0 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                        <span className="pointer-events-none absolute inset-y-0 left-0 w-1/3 translate-x-[-120%] bg-gradient-to-r from-transparent via-white/12 to-transparent transition-transform duration-700 group-hover:translate-x-[320%] disabled:hidden" />
                         <WandIcon className="w-5 h-5" />
                         <span>
                             {isLoading ? 'Analyzing…' : videoFile ? 'Analyze Performance (Ready)' : 'Analyze Performance'}
@@ -690,7 +755,7 @@ const deriveAutoTags = (): string[] => {
 
                         <div className="mt-auto p-3 bg-slate-900/50 flex flex-col gap-3 border-t border-slate-800">
                             <div className="flex items-center justify-between">
-                                <p className="text-xs text-slate-400">Next steps</p>
+                                <p className="text-xs text-slate-400">Use this feedback</p>
                                 <p className="text-xs text-slate-500">Tip: use Analysis Focus chips to steer the feedback</p>
                             </div>
 
