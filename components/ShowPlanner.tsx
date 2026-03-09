@@ -879,28 +879,45 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
         );
 
         const renderRoutineRow = (item: PlannerShowMeta) => (
-            <div key={item.show.id} className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 md:flex-row md:items-center md:justify-between">
-                <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="truncate text-base font-semibold text-white">{item.show.title}</h3>
-                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${lifecycleBadgeClass[item.statusLabel]}`}>{item.statusLabel}</span>
-                        <span className="rounded-full border border-white/10 bg-slate-900/80 px-2 py-0.5 text-[10px] font-semibold text-slate-300">{item.typeLabel}</span>
+            <div key={item.show.id} className="rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2.5 transition-all hover:border-purple-400/40 hover:bg-white/[0.04]">
+                <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
+                    <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                            <h3 className="truncate font-semibold text-white">{item.show.title}</h3>
+                            <span className="text-slate-500">•</span>
+                            <span className="text-xs text-slate-300">{item.typeLabel}</span>
+                            <span className="text-slate-500">•</span>
+                            <span className="text-xs text-slate-300">{item.runtimeMinutes ? `${item.runtimeMinutes} min` : 'Runtime TBD'}</span>
+                            <span className="text-slate-500">•</span>
+                            <span className={`text-xs font-semibold ${lifecycleProgressTextClass[item.statusLabel]}`}>{item.statusLabel}</span>
+                            {item.contractMeta?.latestStatus && (
+                                <>
+                                    <span className="text-slate-500">•</span>
+                                    <span className="text-[11px] font-semibold text-blue-200">{String(item.contractMeta.latestStatus).toUpperCase()}</span>
+                                </>
+                            )}
+                        </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500">
+                            <span>{item.metadataLine}</span>
+                            <span>•</span>
+                            <span>{item.nextCue}</span>
+                        </div>
                     </div>
-                    <p className="mt-1 text-xs text-slate-400">{item.metadataLine}</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                    <button onClick={() => setSelectedShow(item.show)} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-700">Open</button>
-                    <button onClick={async () => {
-                        try {
-                            const nextTags = Array.from(new Set([...(item.show.tags || []), 'archived']));
-                            const updated = await updateShow(item.show.id, { tags: nextTags } as any);
-                            setShows(updated);
-                            setToastMsg('Routine archived.');
-                        } catch (e) {
-                            console.error(e);
-                            setToastMsg("Couldn't archive routine.");
-                        }
-                    }} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-semibold text-slate-200 transition-colors hover:bg-slate-700">Archive</button>
+                    <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                        <button onClick={() => openShowDashboard(item.show)} className="rounded-lg bg-purple-600 px-2.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-purple-700">Open</button>
+                        <button onClick={() => openShowDashboard(item.show, 'rehearsals')} className="rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-xs font-semibold text-slate-100 transition-colors hover:bg-slate-700">Rehearse</button>
+                        <button onClick={async () => {
+                            try {
+                                const nextTags = Array.from(new Set([...(item.show.tags || []), 'archived']));
+                                const updated = await updateShow(item.show.id, { tags: nextTags } as any);
+                                setShows(updated);
+                                setToastMsg('Routine archived.');
+                            } catch (e) {
+                                console.error(e);
+                                setToastMsg("Couldn't archive routine.");
+                            }
+                        }} className="rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-xs font-semibold text-slate-200 transition-colors hover:bg-slate-700">Archive</button>
+                    </div>
                 </div>
             </div>
         );
@@ -937,7 +954,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                     ) : isCollapsed ? (
                         <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 px-4 py-8 text-center text-sm text-slate-400">Archive hidden by default to keep the planner focused.</div>
                     ) : (
-                        <div className={opts?.routineRows ? 'space-y-3' : sectionKey === 'active' ? 'grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-4' : 'grid grid-cols-1 xl:grid-cols-2 gap-4'}>
+                        <div className={opts?.routineRows ? 'space-y-2' : sectionKey === 'active' ? 'grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-4' : 'grid grid-cols-1 xl:grid-cols-2 gap-4'}>
                             {groupedItems.map(([groupKey, group]) => {
                                 if (group.length === 1) return opts?.routineRows ? renderRoutineRow(group[0]) : sectionKey === 'active' ? renderActiveHeroCard(group[0]) : renderCard(group[0]);
                                 const lead = group[0];
@@ -952,7 +969,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                             <button onClick={() => setExpandedDuplicateGroups(prev => ({ ...prev, [groupKey]: !prev[groupKey] }))} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold text-slate-100 transition-colors hover:bg-slate-700">{isExpanded ? 'Hide versions' : 'Show versions'}</button>
                                         </div>
                                         {isExpanded && (
-                                            <div className={`mt-4 ${opts?.routineRows ? 'space-y-3' : 'grid grid-cols-1 gap-3'}`}>
+                                            <div className={`mt-3 ${opts?.routineRows ? 'space-y-2' : 'grid grid-cols-1 gap-3'}`}>
                                                 {group.map(item => opts?.routineRows ? renderRoutineRow(item) : sectionKey === 'active' ? renderActiveHeroCard(item) : renderCard(item))}
                                             </div>
                                         )}
