@@ -1146,6 +1146,54 @@ const kUsers = data?.users || {};
         })()}
       </div>
 
+
+      {/* Client Management — Workflow + AI CRM KPIs (7d) */}
+      <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-sm opacity-80">Client Management KPIs</div>
+          <div className="text-[11px] text-white/50">Last 7 days</div>
+        </div>
+
+        {(() => {
+          const cm = (data as any)?.client_management_kpis;
+          if (!cm) return <div className="mt-2 text-sm text-white/60">—</div>;
+          return (
+            <div className="mt-3 grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                <div className="text-xs text-white/60">Page opens</div>
+                <div className="text-xl font-bold text-white">{Number(cm.opens || 0)}</div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                <div className="text-xs text-white/60">Client selections</div>
+                <div className="text-xl font-bold text-white">{Number(cm.selections || 0)}</div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                <div className="text-xs text-white/60">Workflow activation</div>
+                <div className="text-xl font-bold text-white">{pct(cm.activation_rate, 0)}</div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                <div className="text-xs text-white/60">Notes added</div>
+                <div className="text-xl font-bold text-white">{Number(cm.notes_added || 0)}</div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                <div className="text-xs text-white/60">AI usage rate</div>
+                <div className="text-xl font-bold text-white">{pct(cm.ai_usage_rate, 0)}</div>
+              </div>
+              <div className="md:col-span-5 text-[11px] text-white/50 flex flex-wrap gap-x-4 gap-y-1">
+                <span>Created: <span className="text-white/70">{Number(cm.created || 0)}</span></span>
+                <span>Deleted: <span className="text-white/70">{Number(cm.deleted || 0)}</span></span>
+                <span>Show views: <span className="text-white/70">{Number(cm.show_views || 0)}</span></span>
+                <span>Contract views: <span className="text-white/70">{Number(cm.contract_views || 0)}</span></span>
+                <span>Feedback views: <span className="text-white/70">{Number(cm.feedback_views || 0)}</span></span>
+                <span>AI follow-ups: <span className="text-white/70">{Number(cm.ai_followups || 0)}</span></span>
+                <span>AI marketing: <span className="text-white/70">{Number(cm.ai_marketing || 0)}</span></span>
+                <span>AI pitches: <span className="text-white/70">{Number(cm.ai_pitches || 0)}</span></span>
+              </div>
+            </div>
+          );
+        })()}
+      </div>
+
       {/* Phase 2 — Growth + Activation Funnel */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div className="p-3 rounded-xl bg-white/5 border border-white/10">

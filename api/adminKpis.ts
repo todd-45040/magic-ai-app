@@ -471,6 +471,61 @@ function classifyEvent(e: any): {
           angleRiskHealth24h.last_error = lastErr[0];
         }
       }
+
+    } catch {
+      // Do not fail dashboard
+    }
+
+
+    // Phase CM — Client Management KPIs (fixed 7d window)
+    // Client telemetry is stored in ai_usage_events with tool='client_management' and endpoint='client:<action>'.
+    let clientManagementKpis: any = {
+      window_days: 7,
+      opens: 0,
+      selections: 0,
+      created: 0,
+      deleted: 0,
+      show_views: 0,
+      contract_views: 0,
+      feedback_views: 0,
+      notes_added: 0,
+      ai_followups: 0,
+      ai_marketing: 0,
+      ai_pitches: 0,
+      activation_rate: null as number | null,
+      ai_usage_rate: null as number | null,
+    };
+
+    try {
+      const { data: cmEvents, error: cmErr } = await admin
+        .from('ai_usage_events')
+        .select('endpoint')
+        .eq('tool', 'client_management')
+        .gte('created_at', sinceIso7)
+        .limit(50000);
+
+      if (!cmErr) {
+        for (const ev of (cmEvents || []) as any[]) {
+          const ep = String(ev?.endpoint || '');
+          if (ep === 'client:client_management_open') clientManagementKpis.opens += 1;
+          else if (ep === 'client:client_selected') clientManagementKpis.selections += 1;
+          else if (ep === 'client:client_created') clientManagementKpis.created += 1;
+          else if (ep === 'client:client_deleted') clientManagementKpis.deleted += 1;
+          else if (ep === 'client:client_show_viewed') clientManagementKpis.show_views += 1;
+          else if (ep === 'client:client_contract_viewed') clientManagementKpis.contract_views += 1;
+          else if (ep === 'client:client_feedback_viewed') clientManagementKpis.feedback_views += 1;
+          else if (ep === 'client:client_notes_added') clientManagementKpis.notes_added += 1;
+          else if (ep === 'client:client_ai_followup_generated') clientManagementKpis.ai_followups += 1;
+          else if (ep === 'client:client_ai_marketing_generated') clientManagementKpis.ai_marketing += 1;
+          else if (ep === 'client:client_ai_pitch_generated') clientManagementKpis.ai_pitches += 1;
+        }
+
+        const opens = Number(clientManagementKpis.opens || 0);
+        const selected = Number(clientManagementKpis.selections || 0);
+        const aiActions = Number(clientManagementKpis.ai_followups || 0) + Number(clientManagementKpis.ai_marketing || 0) + Number(clientManagementKpis.ai_pitches || 0);
+        clientManagementKpis.activation_rate = opens ? selected / opens : null;
+        clientManagementKpis.ai_usage_rate = selected ? aiActions / selected : null;
+      }
     } catch {
       // Do not fail dashboard
     }
@@ -2044,6 +2099,7 @@ const provider_breakdown = Object.entries(providerReliability)
       director_mode_health_24h: directorModeHealth24h,
       angle_risk_kpis: angleRiskKpis,
       angle_risk_health_24h: angleRiskHealth24h,
+      client_management_kpis: clientManagementKpis,
     });
   } catch (e: any) {
     return res.status(500).json({ ok: false, error: e?.message || 'Server error' });
