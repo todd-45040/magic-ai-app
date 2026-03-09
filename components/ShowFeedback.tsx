@@ -1,8 +1,9 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import type { Feedback, Show } from '../types';
 import { fetchShowFeedback, buildShowFeedbackUrl } from '../services/showFeedbackService';
 import { StarIcon, UsersIcon, QrCodeIcon, CopyIcon } from './icons';
 import { useAppState } from '../store';
+import { trackClientEvent } from '../services/telemetryClient';
 
 const REACTIONS: { key: Feedback['reaction']; label: string; tip: string; tone: 'positive' | 'warning' }[] = [
     { key: '🎉', label: 'Big Reaction', tip: 'Strong surprise or applause moment', tone: 'positive' },
@@ -49,6 +50,12 @@ const ShowFeedback: React.FC = () => {
     const [errorMsg, setErrorMsg] = useState<string>('');
     const [copied, setCopied] = useState(false);
     const [showDemoGuide, setShowDemoGuide] = useState(false);
+    const hasTrackedPageOpenRef = useRef(false);
+    const previousShowIdRef = useRef<string>('');
+    const previousLegendRef = useRef(false);
+    const previousDemoRef = useRef(false);
+    const previousEmptyStateKeyRef = useRef<string>('');
+    const previousInsightsKeyRef = useRef<string>('');
 
     const selectedShow: Show | undefined = useMemo(() => shows.find(s => s.id === selectedShowId), [shows, selectedShowId]);
 
@@ -82,6 +89,91 @@ const ShowFeedback: React.FC = () => {
         const timer = window.setTimeout(() => setCopied(false), 1800);
         return () => window.clearTimeout(timer);
     }, [copied]);
+
+
+    useEffect(() => {
+        if (hasTrackedPageOpenRef.current) return;
+        hasTrackedPageOpenRef.current = true;
+        void trackClientEvent({
+            tool: 'audience_feedback',
+            action: 'audience_feedback_page_open',
+            metadata: {
+                show_count: shows.length,
+            },
+        });
+    }, [shows.length]);
+
+    useEffect(() => {
+        if (!selectedShowId || previousShowIdRef.current === selectedShowId) return;
+        previousShowIdRef.current = selectedShowId;
+        void trackClientEvent({
+            tool: 'audience_feedback',
+            action: 'audience_feedback_show_selected',
+            metadata: {
+                show_id: selectedShowId,
+                show_title: selectedShow?.title ?? null,
+            },
+        });
+    }, [selectedShowId, selectedShow]);
+
+    useEffect(() => {
+        if (showLegend === previousLegendRef.current) return;
+        previousLegendRef.current = showLegend;
+        if (!showLegend) return;
+        void trackClientEvent({
+            tool: 'audience_feedback',
+            action: 'audience_feedback_legend_opened',
+            metadata: {
+                show_id: selectedShowId || null,
+                show_title: selectedShow?.title ?? null,
+            },
+        });
+    }, [showLegend, selectedShowId, selectedShow]);
+
+    useEffect(() => {
+        if (showDemoGuide === previousDemoRef.current) return;
+        previousDemoRef.current = showDemoGuide;
+        void trackClientEvent({
+            tool: 'audience_feedback',
+            action: showDemoGuide ? 'audience_feedback_demo_opened' : 'audience_feedback_demo_closed',
+            metadata: {
+                show_id: selectedShowId || null,
+                show_title: selectedShow?.title ?? null,
+            },
+        });
+    }, [showDemoGuide, selectedShowId, selectedShow]);
+
+    useEffect(() => {
+        if (loading || !selectedShowId) return;
+        if (feedback.length === 0) {
+            const key = `${selectedShowId}:empty`;
+            if (previousEmptyStateKeyRef.current === key) return;
+            previousEmptyStateKeyRef.current = key;
+            void trackClientEvent({
+                tool: 'audience_feedback',
+                action: 'audience_feedback_empty_state_viewed',
+                metadata: {
+                    show_id: selectedShowId,
+                    show_title: selectedShow?.title ?? null,
+                    feedback_count: 0,
+                },
+            });
+            return;
+        }
+
+        const insightsKey = `${selectedShowId}:insights:${feedback.length}`;
+        if (previousInsightsKeyRef.current === insightsKey) return;
+        previousInsightsKeyRef.current = insightsKey;
+        void trackClientEvent({
+            tool: 'audience_feedback',
+            action: 'audience_feedback_insight_panel_viewed',
+            metadata: {
+                show_id: selectedShowId,
+                show_title: selectedShow?.title ?? null,
+                feedback_count: feedback.length,
+            },
+        });
+    }, [loading, selectedShowId, selectedShow, feedback.length]);
 
     const averageRating = useMemo(() => {
         if (feedback.length === 0) return 0;
@@ -203,6 +295,15 @@ const ShowFeedback: React.FC = () => {
         try {
             await navigator.clipboard.writeText(feedbackUrl);
             setCopied(true);
+            void trackClientEvent({
+                tool: 'audience_feedback',
+                action: 'audience_feedback_qr_link_copied',
+                metadata: {
+                    show_id: selectedShowId || null,
+                    show_title: selectedShow?.title ?? null,
+                    feedback_url_present: Boolean(feedbackUrl),
+                },
+            });
         } catch {}
     };
 
@@ -290,7 +391,7 @@ const ShowFeedback: React.FC = () => {
                             <div className="rounded-xl border border-slate-700/70 bg-slate-900/45 p-4">
                                 <div className="text-xs uppercase tracking-[0.14em] text-purple-200/80 mb-2">Step 1</div>
                                 <div className="mb-4 flex items-center justify-center">
-                                    <div className="rounded-2xl border border-purple-500/25 bg-gradient-to-br from-purple-500/20 to-indigo-500/10 p-3 shadow-[0_0_20px_rgba(168,85,247,0.25)]">
+                                    <div className="rounded-2xl border border-purple-500/25 bg-slate-950/70 p-3 shadow-[0_0_24px_rgba(168,85,247,0.12)]">
                                         <div className="grid grid-cols-5 gap-1">
                                             {[
                                                 1,1,1,0,1,
@@ -315,7 +416,7 @@ const ShowFeedback: React.FC = () => {
                             <div className="rounded-xl border border-slate-700/70 bg-slate-900/45 p-4">
                                 <div className="text-xs uppercase tracking-[0.14em] text-purple-200/80 mb-2">Step 2</div>
                                 <div className="mb-4 flex items-center justify-center gap-3">
-                                    <div className="rounded-2xl border border-slate-700/80 bg-gradient-to-br from-purple-500/20 to-indigo-500/10 px-3 py-2 shadow-[0_0_20px_rgba(168,85,247,0.25)]">
+                                    <div className="rounded-2xl border border-slate-700/80 bg-slate-950/80 px-3 py-2 shadow-[0_0_24px_rgba(56,189,248,0.10)]">
                                         <div className="h-12 w-7 rounded-lg border border-slate-600 bg-slate-900 relative overflow-hidden">
                                             <div className="absolute inset-x-1 top-1 h-6 rounded bg-gradient-to-b from-purple-500/30 to-sky-400/20 border border-purple-400/20"></div>
                                             <div className="absolute bottom-1 left-1/2 -translate-x-1/2 h-1.5 w-1.5 rounded-full bg-slate-500"></div>
@@ -335,7 +436,7 @@ const ShowFeedback: React.FC = () => {
                             </div>
                             <div className="rounded-xl border border-slate-700/70 bg-slate-900/45 p-4">
                                 <div className="text-xs uppercase tracking-[0.14em] text-purple-200/80 mb-2">Step 3</div>
-                                <div className="mb-4 rounded-2xl border border-slate-700/80 bg-gradient-to-br from-purple-500/20 to-indigo-500/10 p-3 shadow-[0_0_20px_rgba(168,85,247,0.25)]">
+                                <div className="mb-4 rounded-2xl border border-slate-700/80 bg-slate-950/70 p-3 shadow-[0_0_24px_rgba(168,85,247,0.10)]">
                                     <div className="flex items-end gap-1 h-12">
                                         <div className="w-4 rounded-t bg-sky-400/70 h-5"></div>
                                         <div className="w-4 rounded-t bg-purple-400/70 h-8"></div>
