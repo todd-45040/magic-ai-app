@@ -35,6 +35,125 @@ const PRIORITY_ORDER: Record<TaskPriority, number> = {
     'Low': 3,
 };
 
+
+type PlannerFilter = 'all' | 'active' | 'development' | 'routines' | 'archived';
+type PlannerSort = 'updated' | 'progress' | 'alphabetical';
+type PlannerSectionKey = 'active' | 'development' | 'routines' | 'archive';
+type PlannerLifecycle = 'Idea' | 'Writing' | 'Blocking' | 'Rehearsal' | 'Ready' | 'Archived';
+
+type PlannerShowMeta = {
+    show: Show;
+    progress: number;
+    completedTasks: number;
+    totalTasks: number;
+    runtimeMinutes: number;
+    statusLabel: PlannerLifecycle;
+    typeLabel: string;
+    metadataLine: string;
+    nextCue: string;
+    nextTask: string | null;
+    section: PlannerSectionKey;
+    contractMeta?: ContractMeta;
+};
+
+const normalizePlannerTitle = (value: string) =>
+    String(value || '')
+        .toLowerCase()
+        .replace(/\b(version|v)\s*\d+\b/g, ' ')
+        .replace(/\([^)]*\)/g, ' ')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+
+const inferShowTypeLabel = (show: Show): string => {
+    const haystack = `${show.title} ${show.description || ''} ${(show.tags || []).join(' ')}`.toLowerCase();
+    if (haystack.includes('close-up') || haystack.includes('close up') || haystack.includes('walkaround')) return 'Close-up';
+    if (haystack.includes('stage') || haystack.includes('theater') || haystack.includes('theatre')) return 'Stage';
+    if (haystack.includes('corporate') || haystack.includes('banquet') || haystack.includes('gala')) return 'Corporate';
+    if (haystack.includes('children') || haystack.includes('kids') || haystack.includes('birthday') || haystack.includes('school')) return 'Children';
+    if (haystack.includes('mentalism') || haystack.includes('mindreading') || haystack.includes('mind reading')) return 'Mentalism';
+    if (haystack.includes('gospel') || haystack.includes('church') || haystack.includes('ministry')) return 'Gospel';
+    if (haystack.includes('educational') || haystack.includes('assembly') || haystack.includes('library')) return 'Educational';
+    return 'Stage';
+};
+
+const inferPlannerLifecycle = (show: Show): PlannerLifecycle => {
+    const status = String((show as any).status || '').toLowerCase();
+    const tags = (show.tags || []).map(t => String(t).toLowerCase());
+    const tasks = Array.isArray(show.tasks) ? show.tasks : [];
+    const totalTasks = tasks.length;
+    const completedTasks = tasks.filter(t => t.status === 'Completed').length;
+    const progress = totalTasks ? completedTasks / totalTasks : 0;
+    if (tags.includes('archived') || status === 'completed' || tags.includes('archive')) return 'Archived';
+    if (status === 'confirmed' || progress >= 0.85) return 'Ready';
+    if (progress >= 0.55 || tasks.some(t => t.status === 'Completed')) return 'Rehearsal';
+    if (totalTasks >= 3) return 'Blocking';
+    if ((show.description || '').trim().length > 0 || totalTasks > 0) return 'Writing';
+    return 'Idea';
+};
+
+const isRoutineLikeShow = (show: Show) => {
+    const tasks = Array.isArray(show.tasks) ? show.tasks : [];
+    const runtimeMinutes = tasks.reduce((sum, task: any) => sum + (Number(task.durationMinutes) || 0), 0);
+    const haystack = `${show.title} ${show.description || ''} ${(show.tags || []).join(' ')}`.toLowerCase();
+    if (/\b(routine|effect|trick|bit|segment|opener|closer)\b/.test(haystack)) return true;
+    if (tasks.length > 0 && tasks.length <= 3 && runtimeMinutes > 0 && runtimeMinutes <= 12) return true;
+    return false;
+};
+
+const inferPlannerSection = (show: Show, lifecycle: PlannerLifecycle): PlannerSectionKey => {
+    if (lifecycle === 'Archived') return 'archive';
+    if (isRoutineLikeShow(show)) return 'routines';
+    if (lifecycle === 'Ready' || lifecycle === 'Rehearsal') return 'active';
+    return 'development';
+};
+
+const buildPlannerMeta = (show: Show, clients: Client[], contractMeta?: ContractMeta): PlannerShowMeta => {
+    const tasks = Array.isArray(show.tasks) ? show.tasks : [];
+    const completedTasks = tasks.filter(t => t.status === 'Completed').length;
+    const totalTasks = tasks.length;
+    const progress = totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0;
+    const runtimeMinutes = tasks.reduce((sum, task: any) => sum + (Number(task.durationMinutes) || 0), 0);
+    const lifecycle = inferPlannerLifecycle(show);
+    const section = inferPlannerSection(show, lifecycle);
+    const typeLabel = inferShowTypeLabel(show);
+    const client = clients.find(c => c.id === show.clientId);
+    const audienceLabel = client?.name || ((show.description || '').toLowerCase().includes('kid') ? 'Family' : 'Adults');
+    const venueLabel = show.venue || (typeLabel === 'Stage' ? 'Theater' : typeLabel);
+    const metadataLine = `${runtimeMinutes ? `${runtimeMinutes} min` : 'Runtime TBD'} • ${audienceLabel} • ${venueLabel}`;
+    const nextTask = tasks.find(t => t.status !== 'Completed')?.title || null;
+    const nextCue = lifecycle === 'Ready'
+        ? 'Performance-ready'
+        : nextTask
+            ? `Next: ${nextTask}`
+            : lifecycle === 'Idea'
+                ? 'Needs first planning beat'
+                : 'Review and refine';
+
+    return {
+        show,
+        progress,
+        completedTasks,
+        totalTasks,
+        runtimeMinutes,
+        statusLabel: lifecycle,
+        typeLabel,
+        metadataLine,
+        nextCue,
+        nextTask,
+        section,
+        contractMeta,
+    };
+};
+
+const lifecycleBadgeClass: Record<PlannerLifecycle, string> = {
+    Idea: 'bg-slate-700/60 text-slate-200 border-slate-500/40',
+    Writing: 'bg-blue-500/15 text-blue-200 border-blue-400/30',
+    Blocking: 'bg-amber-500/15 text-amber-200 border-amber-400/30',
+    Rehearsal: 'bg-purple-500/15 text-purple-200 border-purple-400/30',
+    Ready: 'bg-emerald-500/15 text-emerald-200 border-emerald-400/30',
+    Archived: 'bg-slate-800/90 text-slate-300 border-slate-600/50',
+};
+
 // --- Helper Components ---
 
 const PriorityBadge: React.FC<{ priority: TaskPriority }> = ({ priority }) => (
@@ -345,6 +464,11 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
     const [generatedScript, setGeneratedScript] = useState('');
     const [taskToEdit, setTaskToEdit] = useState<Task | null>(null);
     const [sortBy, setSortBy] = useState<SortBy>('dueDate');
+    const [plannerFilter, setPlannerFilter] = useState<PlannerFilter>('all');
+    const [plannerSort, setPlannerSort] = useState<PlannerSort>('updated');
+    const [plannerSearch, setPlannerSearch] = useState('');
+    const [isArchiveExpanded, setIsArchiveExpanded] = useState(false);
+    const [expandedDuplicateGroups, setExpandedDuplicateGroups] = useState<Record<string, boolean>>({});
     const taskRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
 
     useEffect(() => {
@@ -593,49 +717,243 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
         );
     };
 
-    const ShowListView = () => (
-        <div className="flex flex-col h-full">
-            <header className="p-4 md:px-6 md:pt-6">
-                <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                        <ChecklistIcon className="w-8 h-8 text-purple-400" />
-                        <h2 className="text-2xl font-bold text-slate-200 font-cinzel">All Performances</h2>
-                    </div>
-                    <button onClick={() => setIsShowModalOpen(true)} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors flex items-center gap-2 text-sm"><WandIcon className="w-4 h-4" /><span>Create New Performance</span></button>
+    const plannerItems = useMemo(() => {
+        return shows.map(show => buildPlannerMeta(show, clients, contractsMetaByShowId[show.id]));
+    }, [shows, clients, contractsMetaByShowId]);
+
+    const filteredPlannerItems = useMemo(() => {
+        const q = plannerSearch.trim().toLowerCase();
+        const filtered = plannerItems.filter(item => {
+            if (plannerFilter === 'active' && item.section !== 'active') return false;
+            if (plannerFilter === 'development' && item.section !== 'development') return false;
+            if (plannerFilter === 'routines' && item.section !== 'routines') return false;
+            if (plannerFilter === 'archived' && item.section !== 'archive') return false;
+            if (!q) return true;
+            const haystack = `${item.show.title} ${item.show.description || ''} ${item.typeLabel} ${item.statusLabel}`.toLowerCase();
+            return haystack.includes(q);
+        });
+
+        const sorted = [...filtered].sort((a, b) => {
+            if (plannerSort === 'alphabetical') return a.show.title.localeCompare(b.show.title);
+            if (plannerSort === 'progress') return b.progress - a.progress || b.show.updatedAt - a.show.updatedAt;
+            return b.show.updatedAt - a.show.updatedAt;
+        });
+        return sorted;
+    }, [plannerItems, plannerFilter, plannerSearch, plannerSort]);
+
+    const plannerSections = useMemo(() => {
+        const grouped: Record<PlannerSectionKey, PlannerShowMeta[]> = {
+            active: [],
+            development: [],
+            routines: [],
+            archive: [],
+        };
+        filteredPlannerItems.forEach(item => {
+            grouped[item.section].push(item);
+        });
+        return grouped;
+    }, [filteredPlannerItems]);
+
+
+
+    const ShowListView = () => {
+        const filterChips: { key: PlannerFilter; label: string; count: number }[] = [
+            { key: 'all', label: 'All', count: filteredPlannerItems.length },
+            { key: 'active', label: 'Active', count: plannerSections.active.length },
+            { key: 'development', label: 'Development', count: plannerSections.development.length },
+            { key: 'routines', label: 'Routines', count: plannerSections.routines.length },
+            { key: 'archived', label: 'Archived', count: plannerSections.archive.length },
+        ];
+
+        const renderProgress = (item: PlannerShowMeta) => (
+            <>
+                <div className="flex items-center justify-between text-[11px] text-slate-400">
+                    <span>{item.completedTasks} / {item.totalTasks} beats complete</span>
+                    <span>{item.progress}%</span>
                 </div>
-            </header>
-            <main className="flex-1 overflow-y-auto p-4 md:p-5">
-                {showsError && (
-                    <div className="mb-4 p-3 rounded-md bg-red-900/30 border border-red-500/40 text-red-200 text-sm">
-                        {showsError}
+                <div className="mt-1 h-1.5 w-full rounded-full bg-slate-800">
+                    <div className="h-1.5 rounded-full bg-purple-500" style={{ width: `${item.progress}%` }} />
+                </div>
+            </>
+        );
+
+        const renderCard = (item: PlannerShowMeta) => (
+            <div key={item.show.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 transition-all hover:border-purple-400/50 hover:bg-white/[0.045] hover:shadow-[0_18px_45px_rgba(0,0,0,0.28)]">
+                <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="truncate text-lg font-bold text-white font-cinzel">{item.show.title}</h3>
+                            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${lifecycleBadgeClass[item.statusLabel]}`}>{item.statusLabel}</span>
+                            <span className="rounded-full border border-white/10 bg-slate-900/80 px-2 py-0.5 text-[10px] font-semibold text-slate-300">{item.typeLabel}</span>
+                            {item.contractMeta?.latestStatus && <span className="rounded-full border border-blue-400/25 bg-blue-500/10 px-2 py-0.5 text-[10px] font-semibold text-blue-200">{String(item.contractMeta.latestStatus).toUpperCase()}</span>}
+                        </div>
+                        <p className="mt-1 text-xs text-slate-400">{item.metadataLine}</p>
                     </div>
-                )}
-                {isLoadingShows ? (
-                    <div className="text-center py-12 text-slate-300">Loading shows…</div>
-                ) : shows.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {shows.map(show => <ShowListItem key={show.id} show={show} clients={clients} contractMeta={contractsMetaByShowId[show.id]} onSelect={() => setSelectedShow(show)} onDelete={() => handleDeleteShow(show.id)} />)}
+                    <button onClick={(e) => { e.stopPropagation(); handleDeleteShow(item.show.id); }} className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-red-300"><TrashIcon className="h-4 w-4" /></button>
+                </div>
+                <div className="mt-3">{renderProgress(item)}</div>
+                <div className="mt-3 flex items-center justify-between gap-3 text-sm">
+                    <p className="min-w-0 truncate text-slate-300">{item.nextCue}</p>
+                    <button onClick={() => setSelectedShow(item.show)} className="shrink-0 rounded-lg bg-purple-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-purple-700">Open Dashboard</button>
+                </div>
+            </div>
+        );
+
+        const renderRoutineRow = (item: PlannerShowMeta) => (
+            <div key={item.show.id} className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 md:flex-row md:items-center md:justify-between">
+                <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="truncate text-base font-semibold text-white">{item.show.title}</h3>
+                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${lifecycleBadgeClass[item.statusLabel]}`}>{item.statusLabel}</span>
+                        <span className="rounded-full border border-white/10 bg-slate-900/80 px-2 py-0.5 text-[10px] font-semibold text-slate-300">{item.typeLabel}</span>
                     </div>
-                ) : (
-                    <div className="text-center py-12">
-                        <StageCurtainsIcon className="w-16 h-16 mx-auto text-slate-600 mb-4" />
-                        <h3 className="text-lg font-bold text-slate-300">Your Stage is Bare</h3>
-                        <p className="text-slate-500 mt-1">Create your first show plan — then add beats, rehearsal notes, and contracts as you go.</p>
-                        <div className="mt-5 flex justify-center">
-                            <button
-                                onClick={() => setIsShowModalOpen(true)}
-                                className="inline-flex items-center gap-2 rounded-xl border border-purple-400/25 bg-purple-500/15 px-4 py-2 text-sm font-semibold text-purple-100 transition hover:bg-purple-500/25 hover:text-white"
-                            >
-                                <WandIcon className="w-4 h-4" />
-                                Create Your First Show
-                            </button>
+                    <p className="mt-1 text-xs text-slate-400">{item.metadataLine}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                    <button onClick={() => setSelectedShow(item.show)} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-700">Open</button>
+                    <button onClick={async () => {
+                        try {
+                            const nextTags = Array.from(new Set([...(item.show.tags || []), 'archived']));
+                            const updated = await updateShow(item.show.id, { tags: nextTags } as any);
+                            setShows(updated);
+                            setToastMsg('Routine archived.');
+                        } catch (e) {
+                            console.error(e);
+                            setToastMsg("Couldn't archive routine.");
+                        }
+                    }} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-semibold text-slate-200 transition-colors hover:bg-slate-700">Archive</button>
+                </div>
+            </div>
+        );
+
+        const renderSection = (title: string, subtitle: string, sectionKey: PlannerSectionKey, items: PlannerShowMeta[], opts?: { collapsed?: boolean; routineRows?: boolean }) => {
+            const isCollapsed = opts?.collapsed && !isArchiveExpanded;
+            const titleGroups = new Map<string, PlannerShowMeta[]>();
+            items.forEach(item => {
+                const key = normalizePlannerTitle(item.show.title) || item.show.id;
+                if (!titleGroups.has(key)) titleGroups.set(key, []);
+                titleGroups.get(key)!.push(item);
+            });
+            const groupedItems = Array.from(titleGroups.entries());
+
+            return (
+                <section className="rounded-3xl border border-white/10 bg-slate-950/30 p-4 md:p-5" key={sectionKey}>
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <h3 className="text-xl font-bold text-white font-cinzel">{title}</h3>
+                            <p className="text-sm text-slate-400">{subtitle}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs font-semibold text-slate-300">{items.length} item{items.length === 1 ? '' : 's'}</span>
+                            {opts?.collapsed && (
+                                <button onClick={() => setIsArchiveExpanded(v => !v)} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-semibold text-slate-200 transition-colors hover:bg-slate-700">
+                                    {isArchiveExpanded ? 'Collapse' : 'Expand'}
+                                </button>
+                            )}
                         </div>
                     </div>
-                )}
-            </main>
-        </div>
-    );
-    
+
+                    {!items.length ? (
+                        <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 px-4 py-8 text-center text-sm text-slate-500">No items in this section yet.</div>
+                    ) : isCollapsed ? (
+                        <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 px-4 py-8 text-center text-sm text-slate-400">Archive hidden by default to keep the planner focused.</div>
+                    ) : (
+                        <div className={opts?.routineRows ? 'space-y-3' : 'grid grid-cols-1 xl:grid-cols-2 gap-4'}>
+                            {groupedItems.map(([groupKey, group]) => {
+                                if (group.length === 1) return opts?.routineRows ? renderRoutineRow(group[0]) : renderCard(group[0]);
+                                const lead = group[0];
+                                const isExpanded = !!expandedDuplicateGroups[groupKey];
+                                return (
+                                    <div key={groupKey} className="rounded-2xl border border-amber-400/20 bg-amber-500/5 p-4">
+                                        <div className="flex flex-wrap items-center justify-between gap-3">
+                                            <div>
+                                                <h4 className="text-base font-semibold text-white">{lead.show.title}</h4>
+                                                <p className="text-xs text-amber-100/80">{group.length} versions grouped to reduce planner clutter.</p>
+                                            </div>
+                                            <button onClick={() => setExpandedDuplicateGroups(prev => ({ ...prev, [groupKey]: !prev[groupKey] }))} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold text-slate-100 transition-colors hover:bg-slate-700">{isExpanded ? 'Hide versions' : 'Show versions'}</button>
+                                        </div>
+                                        {isExpanded && (
+                                            <div className={`mt-4 ${opts?.routineRows ? 'space-y-3' : 'grid grid-cols-1 gap-3'}`}>
+                                                {group.map(item => opts?.routineRows ? renderRoutineRow(item) : renderCard(item))}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </section>
+            );
+        };
+
+        return (
+            <div className="flex h-full flex-col">
+                <header className="p-4 md:px-6 md:pt-6">
+                    <div className="rounded-3xl border border-purple-500/20 bg-gradient-to-br from-purple-900/35 via-slate-950 to-slate-950 p-5 md:p-6">
+                        <div className="flex flex-wrap items-start justify-between gap-4">
+                            <div>
+                                <div className="flex items-center gap-3">
+                                    <ChecklistIcon className="h-8 w-8 text-purple-400" />
+                                    <div>
+                                        <h2 className="text-3xl font-bold text-slate-100 font-cinzel">Show Planner</h2>
+                                        <p className="text-sm text-slate-400">A production dashboard for active shows, works-in-progress, routines, and archive.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <button onClick={() => setIsShowModalOpen(true)} className="rounded-xl bg-purple-600 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-purple-700">Create New Performance</button>
+                                <button onClick={() => setIsShowModalOpen(true)} className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-semibold text-slate-100 transition-colors hover:bg-slate-700">Create New Routine</button>
+                                <button onClick={() => setToastMsg('Import from AI Tool uses the Save-to-Show workflow from the tool that created the idea.')} className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-semibold text-slate-100 transition-colors hover:bg-slate-700">Import from AI Tool</button>
+                            </div>
+                        </div>
+
+                        <div className="mt-5 grid grid-cols-1 gap-3 lg:grid-cols-[1fr_auto_auto]">
+                            <input
+                                type="text"
+                                value={plannerSearch}
+                                onChange={(e) => setPlannerSearch(e.target.value)}
+                                placeholder="Search shows, routines, venues, or status"
+                                className="w-full rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none transition-colors focus:border-purple-400"
+                            />
+                            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2">
+                                {filterChips.map(chip => (
+                                    <button key={chip.key} onClick={() => setPlannerFilter(chip.key)} className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${plannerFilter === chip.key ? 'bg-purple-600 text-white' : 'bg-white/[0.03] text-slate-300 hover:bg-slate-700'}`}>
+                                        {chip.label} <span className="text-[10px] opacity-80">{chip.count}</span>
+                                    </button>
+                                ))}
+                            </div>
+                            <select value={plannerSort} onChange={(e) => setPlannerSort(e.target.value as PlannerSort)} className="rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none">
+                                <option value="updated">Last Updated</option>
+                                <option value="progress">Progress</option>
+                                <option value="alphabetical">Alphabetical</option>
+                            </select>
+                        </div>
+                    </div>
+                </header>
+                <main className="flex-1 overflow-y-auto space-y-5 p-4 md:p-5">
+                    {showsError && <div className="rounded-xl border border-red-500/40 bg-red-900/30 p-3 text-sm text-red-200">{showsError}</div>}
+                    {isLoadingShows ? (
+                        <div className="py-12 text-center text-slate-300">Loading planner…</div>
+                    ) : shows.length === 0 ? (
+                        <div className="rounded-3xl border border-dashed border-white/10 bg-black/20 py-16 text-center">
+                            <StageCurtainsIcon className="mx-auto mb-4 h-16 w-16 text-slate-600" />
+                            <h3 className="text-lg font-bold text-slate-300">Your production board is empty</h3>
+                            <p className="mt-1 text-slate-500">Create a performance, build a routine, or import an idea from another tool.</p>
+                            <button onClick={() => setIsShowModalOpen(true)} className="mt-5 rounded-xl bg-purple-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-purple-700">Create Your First Show</button>
+                        </div>
+                    ) : (
+                        <>
+                            {renderSection('Active Shows', 'Performance-ready or currently in rehearsal.', 'active', plannerSections.active)}
+                            {renderSection('Shows in Development', 'Concepts still being written, planned, or assembled.', 'development', plannerSections.development)}
+                            {renderSection('Routine Workshop', 'Smaller pieces kept out of the main show wall for faster scanning.', 'routines', plannerSections.routines, { routineRows: true })}
+                            {renderSection('Archive', 'Past or shelved planner items. Hidden by default.', 'archive', plannerSections.archive, { collapsed: true })}
+                        </>
+                    )}
+                </main>
+            </div>
+        );
+    };
+
     const ShowDetailView = () => {
         if (!selectedShow) return null;
         const [activeTab, setActiveTab] = useState<'tasks' | 'finances' | 'contract' | 'history' | 'rehearsals'>('tasks');
