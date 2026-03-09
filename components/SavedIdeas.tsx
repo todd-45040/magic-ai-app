@@ -1128,12 +1128,13 @@ const openPromoteModal = (idea: SavedIdea) => {
                 if ((sectionCounts[key] || 0) === 0) next[key] = false;
             });
             if (!didInitSectionVisibility.current) {
-                next.effect = (sectionCounts.effect || 0) > 0;
-                next.script = (sectionCounts.script || 0) > 0;
-                next.image = false;
-                next.blueprint = false;
-                next.research = false;
-                next.rehearsal = false;
+                IDEA_CATEGORY_ORDER.forEach((key) => {
+                    next[key] = false;
+                });
+                const firstPopulatedKey = IDEA_CATEGORY_ORDER.find((key) => (sectionCounts[key] || 0) > 0);
+                if (firstPopulatedKey) {
+                    next[firstPopulatedKey] = true;
+                }
                 didInitSectionVisibility.current = true;
             }
             return next;
