@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { getSavedIdeas, deleteIdea, updateIdea } from '../services/ideasService';
-import type { SavedIdea, Transcription, IdeaType, AiSparkAction } from '../types';
+import type { SavedIdea, Transcription, IdeaType, IdeaCategory, AiSparkAction } from '../types';
 import { BookmarkIcon, TrashIcon, ShareIcon, MicrophoneIcon, PrintIcon, FileTextIcon, ImageIcon, PencilIcon, WandIcon, CrossIcon } from './icons';
 import ShareButton from './ShareButton';
 
@@ -15,6 +15,83 @@ type MawIdeaV2 = {
     meta?: any;
     raw?: any;
 };
+
+
+
+type CategoryMeta = { label: string; icon: string; searchLabel: string };
+
+const IDEA_CATEGORY_META: Record<IdeaCategory, CategoryMeta> = {
+    effect: { label: 'Effects', icon: '🎩', searchLabel: 'effect' },
+    script: { label: 'Scripts', icon: '📝', searchLabel: 'script' },
+    image: { label: 'Images', icon: '🖼', searchLabel: 'image' },
+    blueprint: { label: 'Blueprints', icon: '📐', searchLabel: 'blueprint' },
+    research: { label: 'Research', icon: '📚', searchLabel: 'research' },
+    rehearsal: { label: 'Rehearsal Insights', icon: '🎤', searchLabel: 'rehearsal' },
+};
+
+const IDEA_CATEGORY_ORDER: IdeaCategory[] = ['effect', 'script', 'image', 'blueprint', 'research', 'rehearsal'];
+
+function getIdeaSourceTool(idea: SavedIdea): string {
+    const v2 = tryParseMawIdeaV2(idea.content);
+    const candidates = [
+        (v2 as any)?.tool,
+        (v2 as any)?.meta?.tool,
+        (v2 as any)?.structured?.tool,
+        (idea as any)?.tool,
+        (idea as any)?.sourceTool,
+        (idea as any)?.source_tool,
+    ];
+    const fromPayload = candidates.find((value) => typeof value === 'string' && value.trim());
+    if (fromPayload) return fromPayload.trim();
+
+    const title = safeLower(idea.title);
+    const content = safeLower(idea.content);
+    const tags = (idea.tags || []).map((tag) => safeLower(tag));
+    const haystack = [title, content, tags.join(' ')].join(' ');
+
+    if (idea.type === 'rehearsal' || haystack.includes('video rehearsal') || haystack.includes('video analysis')) return 'Video Rehearsal';
+    if (haystack.includes('live rehearsal')) return 'Live Rehearsal';
+    if (haystack.includes('effect generator')) return 'Effect Generator';
+    if (haystack.includes('patter engine')) return 'Patter Engine';
+    if (haystack.includes('visual brainstorm')) return 'Visual Brainstorm';
+    if (haystack.includes('persona simulator')) return 'Persona Simulator';
+    if (haystack.includes('blueprint')) return 'Blueprint Generator';
+    if (haystack.includes('director mode')) return 'Director Mode';
+    if (haystack.includes('assistant studio')) return 'Assistant Studio';
+    if (idea.type === 'image') return 'Visual Brainstorm';
+    return 'Saved Notes';
+}
+
+function inferIdeaCategory(idea: SavedIdea): IdeaCategory {
+    if (idea.category) return idea.category;
+    if (idea.type === 'image') return 'image';
+    if (idea.type === 'rehearsal') return 'rehearsal';
+
+    const tool = safeLower(getIdeaSourceTool(idea));
+    const title = safeLower(idea.title);
+    const content = safeLower(idea.content);
+    const tags = (idea.tags || []).map((tag) => safeLower(tag));
+    const haystack = [tool, title, content, tags.join(' ')].join(' ');
+
+    if (tool.includes('effect generator')) return 'effect';
+    if (tool.includes('patter engine')) return 'script';
+    if (tool.includes('visual brainstorm')) return 'image';
+    if (tool.includes('blueprint')) return 'blueprint';
+    if (tool.includes('persona simulator')) return 'research';
+    if (tool.includes('video rehearsal') || tool.includes('live rehearsal')) return 'rehearsal';
+    if (tool.includes('saved notes')) return 'research';
+
+    if (haystack.includes('blueprint')) return 'blueprint';
+    if (haystack.includes('script') || haystack.includes('patter')) return 'script';
+    if (haystack.includes('effect') || haystack.includes('routine') || haystack.includes('trick')) return 'effect';
+    if (haystack.includes('persona simulator') || haystack.includes('director mode') || haystack.includes('assistant studio') || haystack.includes('research') || haystack.includes('notes')) return 'research';
+
+    return 'research';
+}
+
+function getIdeaCategoryMeta(idea: SavedIdea): CategoryMeta {
+    return IDEA_CATEGORY_META[inferIdeaCategory(idea)];
+}
 
 function tryParseMawIdeaV2(content: string): MawIdeaV2 | null {
     const t = (content ?? '').toString().trim();
@@ -281,7 +358,7 @@ function extractFirstDataImage(markdown: string): { imgSrc: string | null; clean
 
 const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => {
     const [ideas, setIdeas] = useState<SavedIdea[]>([]);
-    const [typeFilter, setTypeFilter] = useState<'all' | IdeaType>('all');
+    const [categoryFilter, setCategoryFilter] = useState<'all' | IdeaCategory>('all');
     const [tagFilter, setTagFilter] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [sortBy, setSortBy] = useState<'recent' | 'title' | 'mostUsed' | 'lastOpened' | 'aiScore'>('recent');
@@ -299,15 +376,18 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
     const resetView = () => {
         setSearchQuery('');
         setTagFilter(null);
-        setTypeFilter('all');
+        setCategoryFilter('all');
         setSortBy('recent');
         setSmartTab('all');
         setSelectedIds([]);
         setSectionOpen({
-            saved_notes: true,
-            blueprints: true,
-            video_analyses: true,
-            rehearsal_sessions: true
+            effect: true,
+            script: true,
+            image: false,
+            blueprint: false,
+            research: false,
+            rehearsal: false,
+            pinned: true
         });
     };
 
@@ -351,10 +431,13 @@ const [lastOpenedMap, setLastOpenedMap] = useState<Record<string, number>>(() =>
 
 
     const [sectionOpen, setSectionOpen] = useState<Record<string, boolean>>({
-        saved_notes: true,
-        blueprints: true,
-        video_analyses: true,
-        rehearsal_sessions: true,
+        effect: true,
+        script: true,
+        image: false,
+        blueprint: false,
+        research: false,
+        rehearsal: false,
+        pinned: true,
     });
     const [editingIdeaId, setEditingIdeaId] = useState<string | null>(null);
     const [editText, setEditText] = useState('');
@@ -640,7 +723,7 @@ const sendToPlanner = (idea: SavedIdea) => {
         const q = searchQuery.trim().toLowerCase();
 
         const base = ideas.filter((idea) => {
-            const typeMatch = typeFilter === 'all' || idea.type === typeFilter;
+            const typeMatch = categoryFilter === 'all' || inferIdeaCategory(idea) === categoryFilter;
 
             const usedCount = getUsedInShowsCount(idea);
             const isRecent = (idea.timestamp || 0) >= (Date.now() - 14 * 24 * 60 * 60 * 1000);
@@ -655,10 +738,12 @@ const sendToPlanner = (idea: SavedIdea) => {
 
             const tagMatch = !tagFilter || (idea.tags || []).includes(tagFilter);
             const display = getIdeaDisplay(idea);
+            const sourceTool = getIdeaSourceTool(idea).toLowerCase();
             const searchMatch =
                 !q ||
                 (display.title || '').toLowerCase().includes(q) ||
                 (display.body || '').toLowerCase().includes(q) ||
+                sourceTool.includes(q) ||
                 (idea.tags || []).some((t) => t.toLowerCase().includes(q));
             return typeMatch && tabMatch && tagMatch && searchMatch;
         });
@@ -686,51 +771,20 @@ const sendToPlanner = (idea: SavedIdea) => {
         });
 
         return sorted;
-    }, [ideas, typeFilter, tagFilter, searchQuery, sortBy, smartTab, starredIds, lastOpenedMap]);
+    }, [ideas, categoryFilter, tagFilter, searchQuery, sortBy, smartTab, starredIds, lastOpenedMap]);
 
 
     const sections = useMemo(() => {
-        const normalize = (s: string) => (s || '').toLowerCase();
-
-        const classify = (idea: SavedIdea): 'saved_notes' | 'blueprints' | 'video_analyses' | 'rehearsal_sessions' => {
-            if (idea.type === 'rehearsal') return 'rehearsal_sessions';
-
-            const titleGuess =
-                idea.title ||
-                splitLeadingHeading(idea.content).heading ||
-                '';
-            const t = normalize(titleGuess);
-            const tags = (idea.tags || []).map(normalize);
-
-            const hasBlueprint = t.includes('blueprint') || tags.some((x) => x.includes('blueprint'));
-            if (hasBlueprint) return 'blueprints';
-
-            const hasVideoAnalysis =
-                (t.includes('video') && t.includes('analysis')) ||
-                tags.some((x) => x.includes('analysis')) ||
-                tags.some((x) => x.includes('video'));
-            if (hasVideoAnalysis) return 'video_analyses';
-
-            return 'saved_notes';
-        };
-
-        const buckets: Record<string, SavedIdea[]> = {
-            saved_notes: [],
-            blueprints: [],
-            video_analyses: [],
-            rehearsal_sessions: [],
-        };
+        const buckets = IDEA_CATEGORY_ORDER.reduce((acc, key) => {
+            acc[key] = [] as SavedIdea[];
+            return acc;
+        }, {} as Record<IdeaCategory, SavedIdea[]>);
 
         filteredIdeas.forEach((idea) => {
-            buckets[classify(idea)].push(idea);
+            buckets[inferIdeaCategory(idea)].push(idea);
         });
 
-        return buckets as {
-            saved_notes: SavedIdea[];
-            blueprints: SavedIdea[];
-            video_analyses: SavedIdea[];
-            rehearsal_sessions: SavedIdea[];
-        };
+        return buckets;
     }, [filteredIdeas]);
 
 
@@ -847,7 +901,8 @@ const sendToPlanner = (idea: SavedIdea) => {
             <div
                 ref={el => { ideaRefs.current.set(idea.id, el); }}
                 className="group relative rounded-xl border border-white/10 bg-white/[0.02] p-4 flex flex-col justify-between col-span-1 md:col-span-2 lg:col-span-3">
-                <div>
+                <div className="absolute top-3 left-3 z-10 rounded-full border border-slate-600 bg-slate-950/70 px-2 py-0.5 text-[11px] font-semibold text-slate-200">{getIdeaCategoryMeta(idea).icon} {getIdeaCategoryMeta(idea).label}</div>
+                <div className="pt-7">
                     <div className="flex items-start justify-between gap-3 mb-3">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-slate-900 rounded-lg flex items-center justify-center flex-shrink-0"><MicrophoneIcon className="w-6 h-6 text-purple-400" /></div>
@@ -855,7 +910,7 @@ const sendToPlanner = (idea: SavedIdea) => {
                                 <h3 className="font-bold text-yellow-300 pr-20 overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">{idea.title || 'Untitled Rehearsal'}</h3>
                                                 <div className="flex items-center gap-2 mt-1">
                                                     <div className="flex items-center gap-2 mt-1">
-                                                    <p className="text-xs text-slate-400">Used in {getUsedInShowsCount(idea)} shows • Last opened {lastOpenedMap[idea.id] ? formatRelative(lastOpenedMap[idea.id]) : "—"} • Created {formatSavedOn(idea)}</p>
+                                                    <p className="text-xs text-slate-400">{getIdeaSourceTool(idea)} • Used in {getUsedInShowsCount(idea)} shows • Last opened {lastOpenedMap[idea.id] ? formatRelative(lastOpenedMap[idea.id]) : "—"} • Created {formatSavedOn(idea)}</p>
                                                                         <div className="text-[11px] text-slate-500 mt-1">
                                                                             Used in {getUsedInShowsCount(idea)} shows • Last opened {lastOpenedMap[idea.id] ? formatRelative(lastOpenedMap[idea.id]) : '—'} • Created {formatSavedOn(idea)}
                                                                         </div>
@@ -968,6 +1023,27 @@ const sendToPlanner = (idea: SavedIdea) => {
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                     {([
+                        { key: 'all', label: 'All', icon: '✨' },
+                        ...IDEA_CATEGORY_ORDER.map((key) => ({ key, label: IDEA_CATEGORY_META[key].label, icon: IDEA_CATEGORY_META[key].icon })),
+                    ] as const).map((item) => (
+                        <button
+                            key={item.key}
+                            type="button"
+                            onClick={() => setCategoryFilter(item.key as 'all' | IdeaCategory)}
+                            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                                categoryFilter === item.key
+                                    ? 'bg-amber-500/20 border-amber-400/40 text-amber-100'
+                                    : 'bg-slate-900/40 border-slate-700 text-slate-300 hover:border-amber-400/30 hover:text-amber-100'
+                            }`}
+                        >
+                            <span className="mr-1.5">{item.icon}</span>
+                            {item.label}
+                        </button>
+                    ))}
+                </div>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {([
                         { key: 'all', label: 'All' },
                         { key: 'recent', label: 'Recent' },
                         { key: 'starred', label: 'Starred' },
@@ -1003,7 +1079,7 @@ const sendToPlanner = (idea: SavedIdea) => {
                         };
                         items.push(`Tab=${tabLabel[smartTab] ?? smartTab}`);
                     }
-                    if (typeFilter !== 'all') items.push(`Type=${typeFilter}`);
+                    if (categoryFilter !== 'all') items.push(`Category=${IDEA_CATEGORY_META[categoryFilter].label}`);
                     if (tagFilter) items.push(`Tag=${tagFilter}`);
                     if (searchQuery.trim()) items.push('Search active');
                     if (!items.length) return null;
@@ -1050,7 +1126,7 @@ const sendToPlanner = (idea: SavedIdea) => {
             ) : filteredIdeas.length === 0 ? (
                 <div className="text-center py-10 text-slate-400">
                     <div className="text-lg font-semibold text-slate-200">No matches</div>
-                    <div className="text-sm text-slate-400 mt-1">Try a different search, tag, or type filter.</div>
+                    <div className="text-sm text-slate-400 mt-1">Try a different search, tag, or category filter.</div>
                 </div>
             ) : (
                 
@@ -1069,7 +1145,7 @@ const sendToPlanner = (idea: SavedIdea) => {
                                     >
                                         <div className="flex items-center gap-3">
                                             <span className={`text-slate-300 transition-transform duration-300 ${isOpen ? 'rotate-90' : 'rotate-0'}`}>▼</span>
-                                            <div className="font-semibold tracking-tight text-slate-100">Pinned</div>
+                                            <div className="font-semibold tracking-tight text-slate-100"><span className="mr-2">📌</span>Pinned</div>
                                             <div className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">{pinnedIdeas.length}</div>
                                         </div>
                                         <span className="text-xs text-slate-400">Collapse</span>
@@ -1098,7 +1174,7 @@ const sendToPlanner = (idea: SavedIdea) => {
                                                                                 <div className="w-8 h-8 bg-slate-900/70 rounded-lg flex items-center justify-center flex-shrink-0 backdrop-blur-sm"><ImageIcon className="w-5 h-5 text-purple-400" /></div>
                                                                                 <div className="min-w-0">
                                                                                     <h3 className="font-bold text-yellow-300 text-sm overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:1]">{idea.title || 'Image Idea'}</h3>
-                                                                                    <p className="text-xs text-slate-400 mt-1">{formatSavedOn(idea)}</p>
+                                                                                    <p className="text-xs text-slate-400 mt-1">{getIdeaSourceTool(idea)} • {formatSavedOn(idea)}</p>
                                                                                 </div>
                                                                             </div>
                                                                             {editingIdeaId === idea.id ? <TagEditor idea={idea} /> : <TagDisplay idea={idea} />}
@@ -1116,13 +1192,14 @@ const sendToPlanner = (idea: SavedIdea) => {
                                                                     onClick={() => openIdeaView(idea)}
                                                                     className="group relative bg-slate-800 border border-slate-700 rounded-lg p-4 flex flex-col justify-between transition-all hover:border-purple-500 min-h-[180px] max-h-[180px] overflow-hidden"
                                                                 >
-                                                                    <div className="min-w-0">
+                                                                    <div className="absolute top-3 left-3 z-10 rounded-full border border-slate-600 bg-slate-950/70 px-2 py-0.5 text-[11px] font-semibold text-slate-200">{getIdeaCategoryMeta(idea).icon} {getIdeaCategoryMeta(idea).label}</div>
+                                                                    <div className="min-w-0 pt-7">
                                                                         <div className="flex items-start justify-between gap-3 mb-2">
                                                                             <div className="flex items-center gap-3 min-w-0">
                                                                                 <div className="w-10 h-10 bg-slate-900 rounded-lg flex items-center justify-center flex-shrink-0"><FileTextIcon className="w-6 h-6 text-purple-400" /></div>
                                                                                 <div className="min-w-0">
                                                                                     <h3 className="font-bold text-yellow-300 pr-20 overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">{getIdeaDisplay(idea).title}</h3>
-                                                                                    <p className="text-xs text-slate-400">Used in {getUsedInShowsCount(idea)} shows • Last opened {lastOpenedMap[idea.id] ? formatRelative(lastOpenedMap[idea.id]) : "—"} • Created {formatSavedOn(idea)}</p>
+                                                                                    <p className="text-xs text-slate-400">{getIdeaSourceTool(idea)} • Used in {getUsedInShowsCount(idea)} shows • Last opened {lastOpenedMap[idea.id] ? formatRelative(lastOpenedMap[idea.id]) : "—"} • Created {formatSavedOn(idea)}</p>
                                                                                 </div>
                                                                             </div>
                                                                         </div>
@@ -1141,12 +1218,13 @@ const sendToPlanner = (idea: SavedIdea) => {
                         })()
                     ) : null}
 
-                    {([
-                        { key: 'saved_notes', label: 'Saved Notes', items: sections.saved_notes },
-                        { key: 'blueprints', label: 'Blueprints', items: sections.blueprints },
-                        { key: 'video_analyses', label: 'Video Analyses', items: sections.video_analyses },
-                        { key: 'rehearsal_sessions', label: 'Rehearsal Sessions', items: sections.rehearsal_sessions },
-                    ] as const).map((sec) => {
+                    {IDEA_CATEGORY_ORDER.map((secKey) => {
+                        const sec = {
+                            key: secKey,
+                            label: IDEA_CATEGORY_META[secKey].label,
+                            icon: IDEA_CATEGORY_META[secKey].icon,
+                            items: sections[secKey],
+                        } as const;
                         if (!sec.items.length) return null;
                         const isOpen = sectionOpen[sec.key] ?? true;
 
@@ -1160,7 +1238,7 @@ const sendToPlanner = (idea: SavedIdea) => {
                                 >
                                     <div className="flex items-center gap-3">
                                         <span className={`text-slate-300 transition-transform duration-300 ${isOpen ? 'rotate-90' : 'rotate-0'}`}>▼</span>
-                                        <div className="font-semibold tracking-tight line-clamp-2 text-slate-100">{sec.label}</div>
+                                        <div className="font-semibold tracking-tight line-clamp-2 text-slate-100"><span className="mr-2">{sec.icon}</span>{sec.label}</div>
                                         <div className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">
                                             {sec.items.length}
                                         </div>
@@ -1177,6 +1255,7 @@ const sendToPlanner = (idea: SavedIdea) => {
                                                 if (idea.type === 'image') {
                                                     return (
                                                         <div key={idea.id} ref={el => { ideaRefs.current.set(idea.id, el); }} onClick={() => openIdeaView(idea)} className="group relative bg-slate-900 border border-slate-700 rounded-lg flex flex-col justify-between overflow-hidden aspect-square transition-all hover:border-purple-500">
+                                                            <div className="absolute left-3 top-11 z-20 rounded-full border border-slate-600 bg-slate-950/70 px-2 py-0.5 text-[11px] font-semibold text-slate-200">{getIdeaCategoryMeta(idea).icon} {getIdeaCategoryMeta(idea).label}</div>
                                                             <button
                                                                 type="button"
                                                                 onClick={(e) => { e.stopPropagation(); toggleSelected(idea.id); }}
@@ -1255,7 +1334,7 @@ const sendToPlanner = (idea: SavedIdea) => {
                                                                     <div className="w-10 h-10 bg-slate-900 rounded-lg flex items-center justify-center flex-shrink-0"><FileTextIcon className="w-6 h-6 text-purple-400" /></div>
                                                                     <div className="min-w-0">
                                                                         <h3 className="font-bold text-yellow-300 pr-20 overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">{idea.title || splitLeadingHeading(idea.content).heading || 'Saved Note'}</h3>
-                                                                        <p className="text-xs text-slate-400">Used in {getUsedInShowsCount(idea)} shows • Last opened {lastOpenedMap[idea.id] ? formatRelative(lastOpenedMap[idea.id]) : "—"} • Created {formatSavedOn(idea)}</p>
+                                                                        <p className="text-xs text-slate-400">{getIdeaSourceTool(idea)} • Used in {getUsedInShowsCount(idea)} shows • Last opened {lastOpenedMap[idea.id] ? formatRelative(lastOpenedMap[idea.id]) : "—"} • Created {formatSavedOn(idea)}</p>
                                                                         <div className="text-[11px] text-slate-500 mt-1">
                                                                             Used in {getUsedInShowsCount(idea)} shows • Last opened {lastOpenedMap[idea.id] ? formatRelative(lastOpenedMap[idea.id]) : '—'} • Created {formatSavedOn(idea)}
                                                                         </div>

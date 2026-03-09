@@ -1,5 +1,5 @@
 import { supabase } from '../supabase';
-import type { IdeaType, SavedIdea } from '../types';
+import type { IdeaCategory, IdeaType, SavedIdea } from '../types';
 
 // --- DB row shape (maps to SavedIdea used by the UI) ---
 type DbIdeaRow = {
@@ -10,6 +10,7 @@ type DbIdeaRow = {
   content: string;
   tags: string[] | null;
   created_at: string | null;
+  category?: IdeaCategory | null;
 };
 
 function mapRowToIdea(row: DbIdeaRow): SavedIdea {
@@ -23,6 +24,7 @@ function mapRowToIdea(row: DbIdeaRow): SavedIdea {
     // schema cache can still yield null. Normalize to an array for safety.
     tags: Array.isArray(row.tags) ? row.tags : [],
     timestamp: Number.isFinite(ts) ? ts : Date.now(),
+    category: (row as any).category ?? undefined,
   };
 }
 

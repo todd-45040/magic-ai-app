@@ -26,6 +26,7 @@ export interface PredefinedPrompt {
 }
 
 export type IdeaType = 'text' | 'image' | 'rehearsal';
+export type IdeaCategory = 'effect' | 'script' | 'image' | 'blueprint' | 'research' | 'rehearsal';
 
 export interface SavedIdea {
   id: string;
@@ -34,6 +35,7 @@ export interface SavedIdea {
   content: string; 
   timestamp: number;
   tags?: string[];
+  category?: IdeaCategory;
 }
 
 export interface ClientProposal {
