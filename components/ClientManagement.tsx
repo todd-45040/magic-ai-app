@@ -1177,20 +1177,22 @@ const ClientManagement: React.FC<ClientManagementProps> = ({
                         </button>
                       </div>
 
-                      <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-                        <div className="rounded-2xl border border-white/8 bg-slate-950/55 p-4">
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Average Rating</div>
-                          <div className="mt-2 text-xl font-bold text-white sm:text-2xl">{selectedMetrics.avgRating ? `⭐ ${selectedMetrics.avgRating}` : 'No data'}</div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="rounded-2xl border border-white/8 bg-slate-950/55 p-4 text-center">
+                          <div className="text-3xl leading-none drop-shadow-[0_0_8px_rgba(250,204,21,0.45)]">⭐</div>
+                          <div className="mt-2 text-2xl font-bold text-white">{selectedMetrics.avgRating ? selectedMetrics.avgRating : '—'}</div>
+                          <div className="mt-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Avg Rating</div>
                         </div>
-                        <div className="rounded-2xl border border-white/8 bg-slate-950/55 p-4">
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Top Reaction</div>
-                          <div className="mt-2 break-words text-xl font-bold leading-tight text-white sm:text-2xl">{selectedMetrics.topReaction || 'No data'}</div>
+                        <div className="rounded-2xl border border-white/8 bg-slate-950/55 p-4 text-center">
+                          <div className="text-3xl leading-none">{selectedMetrics.topReaction === 'Amazed' ? '🤯' : selectedMetrics.topReaction === 'Laughing' ? '😂' : selectedMetrics.topReaction === 'Applause' ? '👏' : selectedMetrics.topReaction === 'Loved It' ? '❤️' : selectedMetrics.topReaction === 'Curious' ? '🤔' : selectedMetrics.topReaction === 'Celebration' ? '🎉' : selectedMetrics.topReaction === 'Low Energy' ? '😴' : '✨'}</div>
+                          <div className="mt-2 text-lg font-bold leading-tight text-white">{selectedMetrics.topReaction || 'No data'}</div>
+                          <div className="mt-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Top Reaction</div>
                         </div>
                       </div>
 
                       <div className="mt-3 rounded-2xl border border-white/8 bg-slate-950/55 p-4">
                         <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Top Comment</div>
-                        <div className="mt-2 text-sm text-white">{selectedMetrics.topComment || 'No comments collected from linked shows yet.'}</div>
+                        <div className="mt-2 text-sm leading-6 text-white">{selectedMetrics.topComment || 'No comments collected from linked shows yet.'}</div>
                       </div>
                     </div>
                   </div>
