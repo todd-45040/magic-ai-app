@@ -84,7 +84,7 @@ const GuidedPlaceholder: React.FC = () => (
 );
 
 
-const DEMO_CLIP_PATH = '/demo/magic-demo-clip.mpeg4';
+const DEMO_CLIP_PATH = '/demo/magic-demo-clip.mp4';
 const DEMO_CLIP_NAME = 'Magic Demo Clip';
 const DEMO_ANALYSIS = `## Overview
 The performer reads clearly in frame with a strong center-stage presence. The biggest opportunities are a slightly tenser upper body during the secret moment, a faster-than-ideal reveal beat, and a need for cleaner blocking around the prop table.
@@ -330,7 +330,7 @@ useEffect(() => {
             const response = await fetch(DEMO_CLIP_PATH);
             if (!response.ok) throw new Error('Demo clip could not be loaded. Add the demo clip file to public/demo.');
             const blob = await response.blob();
-            const demoFile = new File([blob], DEMO_CLIP_NAME + '.mpeg4', { type: blob.type || 'video/mp4' });
+            const demoFile = new File([blob], DEMO_CLIP_NAME + '.mp4', { type: 'video/mp4' });
             const objectUrl = URL.createObjectURL(demoFile);
             setVideoFile(demoFile);
             setVideoPreviewUrl(objectUrl);
@@ -413,6 +413,7 @@ useEffect(() => {
                 }
             }
         } catch (err) {
+            console.error('Video analysis error:', err);
             const message = err instanceof Error ? err.message : "An unknown error occurred during the analysis.";
             if (isDemoClipLoaded) {
                 setAnalysisResult(DEMO_ANALYSIS);
