@@ -444,6 +444,7 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
     const [tagFilter, setTagFilter] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'favorites' | 'recentlyViewed'>('newest');
+    const [viewMode, setViewMode] = useState<'grid' | 'compact'>('grid');
 
     const [smartTab, setSmartTab] = useState<'all' | 'recent' | 'starred' | 'used' | 'unused' | 'ai'>('all');
     const [pinnedIds, setPinnedIds] = useState<string[]>(() => {
@@ -460,6 +461,7 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
         setTagFilter(null);
         setCategoryFilter('all');
         setSortBy('newest');
+        setViewMode('grid');
         setSmartTab('all');
         setSelectedIds([]);
         setSectionOpen({
@@ -1023,6 +1025,14 @@ const openPromoteModal = (idea: SavedIdea) => {
 
     const favoriteIdeas = useMemo(() => filteredIdeas.filter((idea) => isStarred(idea.id)), [filteredIdeas, starredIds]);
 
+
+    const mainSectionGridClass = viewMode === 'compact'
+        ? 'grid grid-cols-1 xl:grid-cols-2 gap-3'
+        : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4';
+    const summarySectionGridClass = viewMode === 'compact'
+        ? 'grid grid-cols-1 xl:grid-cols-2 gap-3'
+        : 'grid grid-cols-1 lg:grid-cols-2 gap-4';
+
     const archivedIdeas = useMemo(() => {
         const q = searchQuery.trim().toLowerCase();
         return ideas
@@ -1184,7 +1194,7 @@ const openPromoteModal = (idea: SavedIdea) => {
                     </div>
                     {editingIdeaId === idea.id ? <TagEditor idea={idea} /> : <TagDisplay idea={idea} />}
                 </div>
-                <div className="absolute top-3 right-3 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="absolute top-3 right-3 flex items-center gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                     <button onClick={handleRefineRehearsal} className="flex items-center gap-1.5 px-2.5 py-1 text-xs bg-slate-700/50 hover:bg-purple-900/50 rounded-full text-slate-300 hover:text-purple-300 transition-colors" aria-label="Refine with AI"><WandIcon className="w-3 h-3" /><span>Refine</span></button>
                     <ShareButton title={`Rehearsal: ${idea.title || 'Untitled Session'}`} text={formattedShareText} className="flex items-center gap-1.5 px-2.5 py-1 text-xs bg-slate-700/50 hover:bg-purple-900/50 rounded-full text-slate-300 hover:text-purple-300 transition-colors" aria-label="Share"><ShareIcon className="w-3 h-3" /><span>Share</span></ShareButton>
                     <button onClick={() => handlePrint(idea)} className="flex items-center gap-1.5 px-2.5 py-1 text-xs bg-slate-700/50 hover:bg-purple-900/50 rounded-full text-slate-300 hover:text-purple-300 transition-colors" aria-label="Print"><PrintIcon className="w-3 h-3" /></button>
@@ -1195,7 +1205,7 @@ const openPromoteModal = (idea: SavedIdea) => {
     };
 
     const renderLibraryRow = (idea: SavedIdea) => (
-        <div key={idea.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+        <div key={idea.id} className={`group rounded-2xl border border-slate-800 bg-slate-950/70 ${viewMode === 'compact' ? 'p-3 min-h-[148px]' : 'p-4 min-h-[160px]'} transition hover:border-purple-400/30`}>
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                     <div className="flex items-center gap-2">
@@ -1208,15 +1218,15 @@ const openPromoteModal = (idea: SavedIdea) => {
                     {isStarred(idea.id) ? '★ Favorite' : '☆ Favorite'}
                 </button>
             </div>
-            <p className="mt-3 text-sm text-slate-300 overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3]">{(getIdeaDisplay(idea).body || idea.content || '').trim()}</p>
+            <p className={`mt-2 text-sm text-slate-300 overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] ${viewMode === 'compact' ? '[-webkit-line-clamp:2] group-hover:[-webkit-line-clamp:4]' : '[-webkit-line-clamp:3] group-hover:[-webkit-line-clamp:5]'}`}>{(getIdeaDisplay(idea).body || idea.content || '').trim()}</p>
             {idea.tags?.length ? (
                 <div className="mt-3 flex flex-wrap gap-2">
-                    {idea.tags.slice(0, 4).map((tag) => (
+                    {idea.tags.slice(0, viewMode === 'compact' ? 3 : 4).map((tag) => (
                         <span key={tag} className="rounded-full border border-slate-700 bg-slate-900/70 px-2 py-0.5 text-[11px] text-slate-300">{tag}</span>
                     ))}
                 </div>
             ) : null}
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="mt-3 flex flex-wrap gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                 <button onClick={() => openIdeaView(idea)} className="px-3 py-1.5 text-xs rounded-full bg-slate-800 text-slate-200 hover:bg-slate-700 transition">Open</button>
                 <button onClick={() => openPromoteModal(idea)} className="px-3 py-1.5 text-xs rounded-full bg-purple-900/30 text-purple-100 hover:bg-purple-900/50 transition">Promote</button>
                 <button onClick={() => openAddToShowModal(idea)} className="px-3 py-1.5 text-xs rounded-full bg-blue-900/30 text-blue-100 hover:bg-blue-900/50 transition">Add to Show</button>
@@ -1265,6 +1275,24 @@ const openPromoteModal = (idea: SavedIdea) => {
 
 
                     <div className="flex flex-wrap items-center gap-2">
+                        <label className="text-xs font-semibold text-slate-400">View:</label>
+                        <div className="flex overflow-hidden rounded-md border border-slate-700 bg-slate-900/60">
+                            <button
+                                type="button"
+                                onClick={() => setViewMode('grid')}
+                                className={`px-3 py-2 text-xs font-semibold transition ${viewMode === 'grid' ? 'bg-purple-600/30 text-purple-100' : 'text-slate-300 hover:bg-slate-800/70'}`}
+                            >
+                                Grid
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setViewMode('compact')}
+                                className={`px-3 py-2 text-xs font-semibold transition ${viewMode === 'compact' ? 'bg-purple-600/30 text-purple-100' : 'text-slate-300 hover:bg-slate-800/70'}`}
+                            >
+                                Compact
+                            </button>
+                        </div>
+
                         <label className="text-xs font-semibold text-slate-400">Sort:</label>
                         <select
                             value={sortBy}
@@ -1426,7 +1454,7 @@ const openPromoteModal = (idea: SavedIdea) => {
                                         </div>
                                     </button>
                                     {sectionOpen[secKey] ? (
-                                        <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                        <div className={`mt-4 ${summarySectionGridClass}`}>
                                             {favoriteIdeas.map((idea) => renderLibraryRow(idea))}
                                         </div>
                                     ) : null}
@@ -1457,7 +1485,7 @@ const openPromoteModal = (idea: SavedIdea) => {
 
                                     {isOpen ? (
                                         <div className="p-4">
-                                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                                            <div className={mainSectionGridClass}>
                                                 {pinnedIdeas.map((idea) => (
                                                     <div key={idea.id}>
                                                         {/* Reuse normal rendering by filtering to this single idea via map below */}
@@ -1494,7 +1522,7 @@ const openPromoteModal = (idea: SavedIdea) => {
                                                                     key={idea.id}
                                                                     ref={el => { ideaRefs.current.set(idea.id, el); }}
                                                                     onClick={() => openIdeaView(idea)}
-                                                                    className="group relative bg-slate-800 border border-slate-700 rounded-lg p-4 flex flex-col justify-between transition-all hover:border-purple-500 min-h-[180px] max-h-[180px] overflow-hidden"
+                                                                    className={`group relative bg-slate-800 border border-slate-700 rounded-lg ${viewMode === 'compact' ? 'p-3 min-h-[148px] max-h-[148px]' : 'p-4 min-h-[160px] max-h-[160px]'} flex flex-col justify-between transition-all hover:border-purple-500 overflow-hidden`}
                                                                 >
                                                                     <div className="absolute top-3 left-3 z-10 rounded-full border border-slate-600 bg-slate-950/70 px-2 py-0.5 text-[11px] font-semibold text-slate-200">{getIdeaCategoryMeta(idea).icon} {getIdeaCategoryMeta(idea).label}</div>
                                                                     <div className="min-w-0 pt-7">
@@ -1554,7 +1582,7 @@ const openPromoteModal = (idea: SavedIdea) => {
 
                                 {isOpen ? (
                                     <div className="p-4">
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                        <div className={mainSectionGridClass}>
                                             {sec.items.map((idea) => {
                                                 if (idea.type === 'image') {
                                                     return (
@@ -1585,7 +1613,7 @@ const openPromoteModal = (idea: SavedIdea) => {
                                                                 </div>
                                                                 {editingIdeaId === idea.id ? <TagEditor idea={idea} /> : <TagDisplay idea={idea} />}
                                                             </div>
-                                                            <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                                                                 <button onClick={(e) => { e.stopPropagation(); openIdeaView(idea); }} className="px-2.5 py-1 text-xs bg-black/40 hover:bg-black/60 rounded-full text-slate-200 transition-colors backdrop-blur-sm" aria-label="Open">Open</button>
                                                                 <button onClick={(e) => { e.stopPropagation(); openPromoteModal(idea); }} className="px-2.5 py-1 text-xs bg-purple-900/30 hover:bg-purple-900/50 rounded-full text-purple-100 transition-colors backdrop-blur-sm" aria-label="Promote to Routine">Promote</button>
                                                                 <button onClick={(e) => { e.stopPropagation(); openAddToShowModal(idea); }} className="px-2.5 py-1 text-xs bg-blue-900/30 hover:bg-blue-900/50 rounded-full text-blue-100 transition-colors backdrop-blur-sm" aria-label="Add to Show">Add to Show</button>
@@ -1611,7 +1639,7 @@ const openPromoteModal = (idea: SavedIdea) => {
                                                         key={idea.id}
                                                         ref={el => { ideaRefs.current.set(idea.id, el); }}
                                                         onClick={() => openIdeaView(idea)}
-                                                        className="group relative bg-slate-800 border border-slate-700 rounded-lg p-4 flex flex-col justify-between transition-all hover:border-purple-500 min-h-[180px] max-h-[180px] overflow-hidden"
+                                                        className={`group relative bg-slate-800 border border-slate-700 rounded-lg ${viewMode === 'compact' ? 'p-3 min-h-[148px] max-h-[148px]' : 'p-4 min-h-[160px] max-h-[160px]'} flex flex-col justify-between transition-all hover:border-purple-500 overflow-hidden`}
                                                     >
                                                         <button
                                                             type="button"
@@ -1656,7 +1684,7 @@ const openPromoteModal = (idea: SavedIdea) => {
                                                                         {isError ? (
                                                                             <div className="text-sm text-slate-300">
                                                                                 <div className="font-semibold text-slate-200">This item failed to load.</div>
-                                                                                <div className="text-slate-400 mt-1 overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3]">
+                                                                                <div className={`text-slate-400 mt-1 overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] ${viewMode === 'compact' ? '[-webkit-line-clamp:2] group-hover:[-webkit-line-clamp:4]' : '[-webkit-line-clamp:3] group-hover:[-webkit-line-clamp:4]'}`}>
                                                                                     {idea.content}
                                                                                 </div>
                                                                                 <div className="text-slate-500 mt-2">You can safely delete it.</div>
@@ -1676,7 +1704,7 @@ const openPromoteModal = (idea: SavedIdea) => {
                                                                                         </button>
                                                                                     </div>
                                                                                 ) : null}
-                                                                                <div className="overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:4]">{cleaned}</div>
+                                                                                <div className={`overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] ${viewMode === 'compact' ? '[-webkit-line-clamp:2] group-hover:[-webkit-line-clamp:4]' : '[-webkit-line-clamp:3] group-hover:[-webkit-line-clamp:5]'}`}>{cleaned}</div>
                                                                             </>
                                                                         )}
                                                                     </div>
@@ -1686,7 +1714,7 @@ const openPromoteModal = (idea: SavedIdea) => {
 
                                                         {editingIdeaId === idea.id ? <TagEditor idea={idea} /> : <TagDisplay idea={idea} />}
 
-                                                        <div className="absolute top-3 right-3 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <div className="absolute top-3 right-3 flex items-center gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                                                             <button onClick={(e) => { e.stopPropagation(); openIdeaView(idea); }} className="px-2.5 py-1 text-xs bg-slate-700/50 hover:bg-slate-700/70 rounded-full text-slate-200 transition-colors" aria-label="Open">Open</button>
                                                             <button onClick={(e) => { e.stopPropagation(); openPromoteModal(idea); }} className="px-2.5 py-1 text-xs bg-purple-900/30 hover:bg-purple-900/50 rounded-full text-purple-100 transition-colors" aria-label="Promote to Routine">Promote</button>
                                                             <button onClick={(e) => { e.stopPropagation(); openAddToShowModal(idea); }} className="px-2.5 py-1 text-xs bg-blue-900/30 hover:bg-blue-900/50 rounded-full text-blue-100 transition-colors" aria-label="Add to Show">Add to Show</button>
@@ -1840,7 +1868,7 @@ const openPromoteModal = (idea: SavedIdea) => {
                         </div>
                     </button>
                     {sectionOpen.archived ? (
-                        <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4 opacity-90">
+                        <div className={`mt-4 ${summarySectionGridClass} opacity-90`}>
                             {archivedIdeas.map((idea) => renderLibraryRow(idea))}
                         </div>
                     ) : null}
