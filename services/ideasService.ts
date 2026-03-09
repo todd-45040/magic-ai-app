@@ -13,6 +13,60 @@ type DbIdeaRow = {
   category?: IdeaCategory | null;
 };
 
+const IDEA_METADATA_KEYS = new Set([
+  'format',
+  'tool',
+  'timestamp',
+  'meta',
+  'raw',
+  'structured',
+  'createdat',
+  'updatedat',
+  'userid',
+  'id',
+  'type',
+  'category',
+  'tags',
+  'provider',
+  'model',
+  'mime',
+  'mimetype',
+]);
+
+function flattenReadableStrings(value: unknown, depth = 0): string[] {
+  if (value == null || depth > 4) return [];
+  if (typeof value === 'string') {
+    const cleaned = value.trim();
+    return cleaned ? [cleaned] : [];
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') return [];
+  if (Array.isArray(value)) return value.flatMap((item) => flattenReadableStrings(item, depth + 1));
+  if (typeof value === 'object') {
+    return Object.entries(value as Record<string, unknown>).flatMap(([key, val]) => {
+      if (IDEA_METADATA_KEYS.has(String(key).toLowerCase())) return [];
+      return flattenReadableStrings(val, depth + 1);
+    });
+  }
+  return [];
+}
+
+function sanitizeIdeaContent(content: string): string {
+  const text = (content ?? '').toString().trim();
+  if (!text || (!text.startsWith('{') && !text.startsWith('['))) return content;
+
+  try {
+    const parsed: any = JSON.parse(text);
+    const direct = [parsed?.display, parsed?.content, parsed?.text, parsed?.body, parsed?.result, parsed?.response, parsed?.markdown]
+      .find((value) => typeof value === 'string' && value.trim());
+    if (typeof direct === 'string' && direct.trim()) return direct.trim();
+
+    const readable = Array.from(new Set(flattenReadableStrings(parsed).filter(Boolean)));
+    return readable.length ? readable.join('\n\n').trim() : content;
+  } catch {
+    return content;
+  }
+}
+
 function mapRowToIdea(row: DbIdeaRow): SavedIdea {
   const ts = row.created_at ? Date.parse(row.created_at) : Date.now();
   return {
@@ -110,7 +164,7 @@ export async function saveIdea(
     .insert({
       user_id: uid,
       type: payload.type,
-      content: payload.content,
+      content: sanitizeIdeaContent(payload.content),
       title: payload.title ?? null,
       // DB constraint: tags is NOT NULL. Always send an array.
       tags: Array.isArray(payload.tags) ? payload.tags : [],
@@ -135,7 +189,7 @@ export async function updateIdea(id: string, updates: Partial<SavedIdea>): Promi
   const dbUpdates: Partial<DbIdeaRow> = {};
   if (typeof updates.type !== 'undefined') dbUpdates.type = updates.type as IdeaType;
   if (typeof updates.title !== 'undefined') dbUpdates.title = updates.title ?? null;
-  if (typeof updates.content !== 'undefined') dbUpdates.content = updates.content;
+  if (typeof updates.content !== 'undefined') dbUpdates.content = sanitizeIdeaContent(updates.content);
   if (typeof updates.tags !== 'undefined') {
     dbUpdates.tags = Array.isArray(updates.tags) ? updates.tags : [];
   }

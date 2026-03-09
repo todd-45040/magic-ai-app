@@ -15,8 +15,79 @@ type MawIdeaV2 = {
     structured?: any;
     meta?: any;
     raw?: any;
+    content?: any;
+    text?: any;
+    body?: any;
+    result?: any;
 };
 
+const METADATA_ONLY_KEYS = new Set([
+    'format',
+    'tool',
+    'timestamp',
+    'meta',
+    'raw',
+    'structured',
+    'createdat',
+    'updatedat',
+    'userid',
+    'id',
+    'type',
+    'category',
+    'tags',
+    'model',
+    'provider',
+    'mime',
+    'mimetype',
+]);
+
+function collectReadableText(value: any, depth = 0): string[] {
+    if (value == null || depth > 4) return [];
+    if (typeof value === 'string') {
+        const cleaned = value.trim();
+        return cleaned ? [cleaned] : [];
+    }
+    if (typeof value === 'number' || typeof value === 'boolean') return [];
+    if (Array.isArray(value)) return value.flatMap((item) => collectReadableText(item, depth + 1));
+    if (typeof value === 'object') {
+        return Object.entries(value).flatMap(([key, val]) => {
+            if (METADATA_ONLY_KEYS.has(String(key).toLowerCase())) return [];
+            return collectReadableText(val, depth + 1);
+        });
+    }
+    return [];
+}
+
+function normalizeDisplayBody(content: string): string {
+    const text = (content ?? '').toString().trim();
+    if (!text) return '';
+
+    const v2 = tryParseMawIdeaV2(text);
+    if (v2) {
+        const direct = [v2.display, v2.body, v2.text, v2.content, v2.result]
+            .find((value) => typeof value === 'string' && value.trim());
+        if (typeof direct === 'string' && direct.trim()) return direct.trim();
+
+        const readable = collectReadableText(v2).filter(Boolean);
+        if (readable.length) return Array.from(new Set(readable)).join('\n\n').trim();
+    }
+
+    if (text.startsWith('{') || text.startsWith('[')) {
+        try {
+            const parsed = JSON.parse(text);
+            const prioritized = [parsed?.display, parsed?.content, parsed?.text, parsed?.body, parsed?.result, parsed?.response, parsed?.markdown]
+                .find((value) => typeof value === 'string' && value.trim());
+            if (typeof prioritized === 'string' && prioritized.trim()) return prioritized.trim();
+
+            const readable = collectReadableText(parsed).filter(Boolean);
+            if (readable.length) return Array.from(new Set(readable)).join('\n\n').trim();
+        } catch {
+            // leave as legacy plain text
+        }
+    }
+
+    return text;
+}
 
 
 type CategoryMeta = { label: string; icon: string; searchLabel: string };
@@ -151,19 +222,21 @@ function getImageUrlForIdea(idea: SavedIdea): string {
 }
 
 function getIdeaDisplay(idea: SavedIdea): { title: string; body: string } {
-    // Images and rehearsals keep existing behavior
     if (idea.type === 'image') return { title: idea.title || 'Saved Image', body: '' };
-    if (idea.type === 'rehearsal') return { title: idea.title || 'Saved Rehearsal', body: idea.content || '' };
 
     const v2 = tryParseMawIdeaV2(idea.content);
-    if (v2 && (v2.display || v2.title)) {
-        const title = (idea.title || v2.title || 'Saved Idea').toString();
-        const body = (v2.display || '').toString();
-        return { title, body };
+    const cleanedBody = normalizeDisplayBody(idea.content);
+
+    if (idea.type === 'rehearsal') {
+        return { title: idea.title || 'Saved Rehearsal', body: cleanedBody || idea.content || '' };
     }
 
-    // Default: legacy text
-    return { title: idea.title || splitLeadingHeading(idea.content).heading || 'Saved Note', body: idea.content || '' };
+    if (v2 && (v2.display || v2.title)) {
+        const title = (idea.title || v2.title || 'Saved Idea').toString();
+        return { title, body: cleanedBody };
+    }
+
+    return { title: idea.title || splitLeadingHeading(cleanedBody || idea.content).heading || 'Saved Note', body: cleanedBody || idea.content || '' };
 }
 
 
@@ -1011,6 +1084,34 @@ const openPromoteModal = (idea: SavedIdea) => {
         return buckets;
     }, [filteredIdeas]);
 
+    const sectionCounts = useMemo(
+        () => IDEA_CATEGORY_ORDER.reduce((acc, key) => {
+            acc[key] = sections[key]?.length || 0;
+            return acc;
+        }, {} as Record<IdeaCategory, number>),
+        [sections]
+    );
+    const didInitSectionVisibility = useRef(false);
+
+    useEffect(() => {
+        setSectionOpen((prev) => {
+            const next = { ...prev };
+            IDEA_CATEGORY_ORDER.forEach((key) => {
+                if ((sectionCounts[key] || 0) === 0) next[key] = false;
+            });
+            if (!didInitSectionVisibility.current) {
+                next.effect = (sectionCounts.effect || 0) > 0;
+                next.script = (sectionCounts.script || 0) > 0;
+                next.image = false;
+                next.blueprint = false;
+                next.research = false;
+                next.rehearsal = false;
+                didInitSectionVisibility.current = true;
+            }
+            return next;
+        });
+    }, [sectionCounts]);
+
 
     const pinnedIdeas = useMemo(() => {
         if (!pinnedIds.length) return [];
@@ -1444,7 +1545,7 @@ const openPromoteModal = (idea: SavedIdea) => {
                                         <div className="flex items-center gap-3 min-w-0">
                                             <div className="w-10 h-10 rounded-2xl bg-yellow-500/15 border border-yellow-400/20 flex items-center justify-center text-lg">⭐</div>
                                             <div className="min-w-0">
-                                                <h2 className="text-lg md:text-xl font-bold text-yellow-200">Favorite Ideas</h2>
+                                                <h2 className="text-lg md:text-xl font-bold text-purple-100">Favorite Ideas</h2>
                                                 <p className="text-sm text-slate-400">Quick access to your best working material.</p>
                                             </div>
                                         </div>
@@ -1557,8 +1658,7 @@ const openPromoteModal = (idea: SavedIdea) => {
                             icon: IDEA_CATEGORY_META[secKey].icon,
                             items: sections[secKey],
                         } as const;
-                        if (!sec.items.length) return null;
-                        const isOpen = sectionOpen[sec.key] ?? true;
+                        const isOpen = sectionOpen[sec.key] ?? (sec.items.length > 0);
 
                         return (
                             <div key={sec.key} className="bg-slate-900/20 border border-slate-800 rounded-xl overflow-hidden mb-10 bg-white/3 backdrop-blur-sm hover:border-indigo-400/20">
@@ -1570,7 +1670,7 @@ const openPromoteModal = (idea: SavedIdea) => {
                                 >
                                     <div className="flex items-center gap-3">
                                         <span className={`text-slate-300 transition-transform duration-300 ${isOpen ? 'rotate-90' : 'rotate-0'}`}>▼</span>
-                                        <div className="font-semibold tracking-tight line-clamp-2 text-slate-100"><span className="mr-2">{sec.icon}</span>{sec.label}</div>
+                                        <div className="font-semibold tracking-tight line-clamp-2 text-purple-100"><span className="mr-2">{sec.icon}</span>{sec.label}</div>
                                         <div className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">
                                             {sec.items.length}
                                         </div>
@@ -1582,6 +1682,9 @@ const openPromoteModal = (idea: SavedIdea) => {
 
                                 {isOpen ? (
                                     <div className="p-4">
+                                        {sec.items.length === 0 ? (
+                                            <div className="rounded-xl border border-dashed border-slate-700 bg-slate-950/40 px-4 py-6 text-sm text-slate-400">No ideas in this section yet.</div>
+                                        ) : (
                                         <div className={mainSectionGridClass}>
                                             {sec.items.map((idea) => {
                                                 if (idea.type === 'image') {
@@ -1731,6 +1834,7 @@ const openPromoteModal = (idea: SavedIdea) => {
                                                 );
                                             })}
                                         </div>
+                                        )}
                                     </div>
                                 ) : null}
                             </div>
@@ -1858,7 +1962,7 @@ const openPromoteModal = (idea: SavedIdea) => {
                         <div className="flex items-center gap-3 min-w-0">
                             <div className="w-10 h-10 rounded-2xl bg-slate-800/80 border border-slate-700 flex items-center justify-center text-lg">🗃️</div>
                             <div className="min-w-0">
-                                <h2 className="text-lg md:text-xl font-bold text-slate-100">Archived Ideas</h2>
+                                <h2 className="text-lg md:text-xl font-semibold text-purple-100">Archived Ideas</h2>
                                 <p className="text-sm text-slate-400">Older ideas moved out of the main creative workflow.</p>
                             </div>
                         </div>
