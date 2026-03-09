@@ -12,6 +12,7 @@ import ShareButton from './ShareButton';
 import FormattedText from './FormattedText';
 import type { User, AiSparkAction } from '../types';
 import { canConsume, consume } from '../services/usageTracker';
+import { trackClientEvent } from '../services/telemetryClient';
 
 interface VideoRehearsalProps {
     user: User;
@@ -120,6 +121,9 @@ const VideoRehearsal: React.FC<VideoRehearsalProps> = ({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    useEffect(() => {
+        void trackClientEvent({ tool: 'video_rehearsal', action: 'video_rehearsal_page_open' });
+    }, []);
 
 // Phase 5: load persisted focus + templates
 const focusKey = `maw_video_last_focus_${user.id}`;
@@ -182,6 +186,7 @@ const saveCurrentFocusAsTemplate = () => {
     if (exists) return;
     const next = [t, ...focusTemplates].slice(0, 8);
     persistTemplates(next);
+    void trackClientEvent({ tool: 'video_rehearsal', action: 'video_rehearsal_focus_template_saved', metadata: { templateLength: t.length } });
 };
 
 const removeTemplate = (t: string) => {
@@ -262,11 +267,13 @@ useEffect(() => {
         if (file) {
             if (!file.type.startsWith('video/')) {
                 setError('Invalid file type. Please upload a video file (MP4, MOV, WEBM, etc.).');
+                void trackClientEvent({ tool: 'video_rehearsal', action: 'video_rehearsal_upload_rejected', outcome: 'ERROR_UPSTREAM', metadata: { reason: 'invalid_type', fileType: file.type || 'unknown', name: file.name || 'unknown' } });
                 return;
             }
             // Demo-friendly size limit
             if (file.size > 50 * 1024 * 1024) { // 50 MB
                 setError('File is too large. Please upload a video under 50MB for this demo.');
+                void trackClientEvent({ tool: 'video_rehearsal', action: 'video_rehearsal_upload_rejected', outcome: 'ERROR_UPSTREAM', metadata: { reason: 'file_too_large', size: file.size, name: file.name || 'unknown' } });
                 return;
             }
 
@@ -275,10 +282,12 @@ useEffect(() => {
             setVideoPreviewUrl(url);
             setError(null);
             setAnalysisResult(null);
+            void trackClientEvent({ tool: 'video_rehearsal', action: 'video_rehearsal_upload_selected', metadata: { name: file.name, size: file.size, type: file.type } });
         }
     };
 
     const handleRemoveVideo = () => {
+        void trackClientEvent({ tool: 'video_rehearsal', action: 'video_rehearsal_start_over' });
         if (videoPreviewUrl) {
             URL.revokeObjectURL(videoPreviewUrl);
         }
@@ -296,10 +305,12 @@ useEffect(() => {
         const chk = canConsume(user, 'video_upload', 1);
         if (!chk.ok) {
             setError(`Daily video limit reached (${chk.used}/${chk.limit}). Upgrade to continue.`);
+            void trackClientEvent({ tool: 'video_rehearsal', action: 'video_rehearsal_analysis_blocked', outcome: 'ERROR_UPSTREAM', metadata: { reason: 'daily_limit', used: chk.used, limit: chk.limit } });
             return;
         }
         consume(user, 'video_upload', 1);
-        
+        void trackClientEvent({ tool: 'video_rehearsal', action: 'video_rehearsal_analysis_start', metadata: { focusLength: (prompt || '').trim().length, fileName: videoFile.name, fileSize: videoFile.size } });
+
         setIsLoading(true);
         setError(null);
         setBlockedUi(null);
@@ -351,6 +362,7 @@ parts.unshift({
 
             const response = await generateResponseWithParts(parts, VIDEO_REHEARSAL_SYSTEM_INSTRUCTION, user);
             setAnalysisResult(response);
+            void trackClientEvent({ tool: 'video_rehearsal', action: 'video_rehearsal_analysis_success', outcome: 'SUCCESS_NOT_CHARGED', metadata: { fileName: videoFile.name, fileSize: videoFile.size, focusLength: focusText.length, frameCount: frames.length } });
 
             // Phase 4: soft upsell after first successful analysis for trial users.
             if (String(user.membership || '').toLowerCase() === 'trial' && !dismissedUpsell) {
@@ -362,7 +374,9 @@ parts.unshift({
                 }
             }
         } catch (err) {
-            setError(err instanceof Error ? err.message : "An unknown error occurred during the analysis.");
+            const message = err instanceof Error ? err.message : "An unknown error occurred during the analysis.";
+            setError(message);
+            void trackClientEvent({ tool: 'video_rehearsal', action: 'video_rehearsal_analysis_error', outcome: 'ERROR_UPSTREAM', metadata: { fileName: videoFile?.name || 'unknown', message } });
         } finally {
             setIsLoading(false);
         }
@@ -387,6 +401,7 @@ const deriveAutoTags = (): string[] => {
             const title = `Video Analysis for ${videoFile?.name || 'rehearsal'}`;
             const content = `## Analysis for: ${videoFile?.name}\n\n**Focus Prompt:** ${prompt || 'None'}\n\n---\n\n${analysisResult}`;
             saveIdea({ type: 'text', content, title, tags: deriveAutoTags() });
+            void trackClientEvent({ tool: 'video_rehearsal', action: 'video_rehearsal_save_success', outcome: 'SUCCESS_NOT_CHARGED', metadata: { title, tagCount: deriveAutoTags().length } });
             onIdeaSaved();
             setSaveStatus('saved');
             setTimeout(() => setSaveStatus('idle'), 2000);
@@ -413,6 +428,7 @@ const deriveAutoTags = (): string[] => {
             });
 
             setPlannerSaveStatus('saved');
+            void trackClientEvent({ tool: 'video_rehearsal', action: 'video_rehearsal_send_to_show_planner', outcome: 'SUCCESS_NOT_CHARGED', metadata: { showId: show.id, fileName: videoFile.name } });
 
             // Navigate directly to the new show (best effort).
             if (onDeepLinkShowPlanner) {
@@ -423,8 +439,10 @@ const deriveAutoTags = (): string[] => {
 
             setTimeout(() => setPlannerSaveStatus('idle'), 2500);
         } catch (err) {
+            const message = err instanceof Error ? err.message : 'Unable to save to Show Planner.';
             setPlannerSaveStatus('idle');
-            setError(err instanceof Error ? err.message : 'Unable to save to Show Planner.');
+            setError(message);
+            void trackClientEvent({ tool: 'video_rehearsal', action: 'video_rehearsal_send_to_show_planner_error', outcome: 'ERROR_UPSTREAM', metadata: { fileName: videoFile?.name || 'unknown', message } });
         }
     };
 
@@ -432,11 +450,13 @@ const deriveAutoTags = (): string[] => {
         if (!analysisResult) return;
         if (!onAiSpark) return;
 
+        void trackClientEvent({ tool: 'video_rehearsal', action: 'video_rehearsal_refine_with_ai' });
         const content = `Video Rehearsal Analysis\n\nFile: ${videoFile?.name || 'rehearsal'}\nFocus: ${prompt || 'None'}\n\n---\n\n${analysisResult}`;
         onAiSpark({ type: 'refine-idea', payload: { content } });
     };
 
     const handleRunLiveAudioRehearsal = () => {
+        void trackClientEvent({ tool: 'video_rehearsal', action: 'video_rehearsal_send_to_live_rehearsal' });
         if (onNavigate) onNavigate('live-rehearsal');
     };
 
@@ -466,7 +486,7 @@ const deriveAutoTags = (): string[] => {
                     <h2 className="text-xl font-bold text-slate-300">Video Rehearsal Studio</h2>
                     <button
                         type="button"
-                        onClick={() => setIsInfoOpen(true)}
+                        onClick={() => { setIsInfoOpen(true); void trackClientEvent({ tool: 'video_rehearsal', action: 'video_rehearsal_info_open' }); }}
                         className="ml-1 inline-flex items-center justify-center w-8 h-8 rounded-full border border-slate-700 bg-slate-900/40 text-slate-300 hover:text-white hover:border-purple-500 transition-colors"
                         title="What the AI looks for"
                         aria-label="What the AI looks for"
