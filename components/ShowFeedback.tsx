@@ -277,7 +277,7 @@ const ShowFeedback: React.FC = () => {
                     <div className="mb-5 rounded-xl border border-purple-500/25 bg-gradient-to-r from-purple-500/10 to-slate-900/35 p-4 md:p-5 animate-fade-in">
                         <div className="flex items-start justify-between gap-4 flex-wrap">
                             <div>
-                                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-200 mb-2">QR Feedback Demo</h3>
+                                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-200 mb-2">QR Feedback Walkthrough</h3>
                                 <p className="text-sm text-slate-300 max-w-3xl">
                                     Use this quick walkthrough to show users how feedback gets from the audience into this dashboard.
                                 </p>
@@ -290,7 +290,7 @@ const ShowFeedback: React.FC = () => {
                             <div className="rounded-xl border border-slate-700/70 bg-slate-900/45 p-4">
                                 <div className="text-xs uppercase tracking-[0.14em] text-purple-200/80 mb-2">Step 1</div>
                                 <div className="mb-4 flex items-center justify-center">
-                                    <div className="rounded-2xl border border-purple-500/25 bg-slate-950/70 p-3 shadow-[0_0_24px_rgba(168,85,247,0.12)]">
+                                    <div className="rounded-2xl border border-purple-500/25 bg-gradient-to-br from-purple-500/20 to-indigo-500/10 p-3 shadow-[0_0_20px_rgba(168,85,247,0.25)]">
                                         <div className="grid grid-cols-5 gap-1">
                                             {[
                                                 1,1,1,0,1,
@@ -315,7 +315,7 @@ const ShowFeedback: React.FC = () => {
                             <div className="rounded-xl border border-slate-700/70 bg-slate-900/45 p-4">
                                 <div className="text-xs uppercase tracking-[0.14em] text-purple-200/80 mb-2">Step 2</div>
                                 <div className="mb-4 flex items-center justify-center gap-3">
-                                    <div className="rounded-2xl border border-slate-700/80 bg-slate-950/80 px-3 py-2 shadow-[0_0_24px_rgba(56,189,248,0.10)]">
+                                    <div className="rounded-2xl border border-slate-700/80 bg-gradient-to-br from-purple-500/20 to-indigo-500/10 px-3 py-2 shadow-[0_0_20px_rgba(168,85,247,0.25)]">
                                         <div className="h-12 w-7 rounded-lg border border-slate-600 bg-slate-900 relative overflow-hidden">
                                             <div className="absolute inset-x-1 top-1 h-6 rounded bg-gradient-to-b from-purple-500/30 to-sky-400/20 border border-purple-400/20"></div>
                                             <div className="absolute bottom-1 left-1/2 -translate-x-1/2 h-1.5 w-1.5 rounded-full bg-slate-500"></div>
@@ -335,7 +335,7 @@ const ShowFeedback: React.FC = () => {
                             </div>
                             <div className="rounded-xl border border-slate-700/70 bg-slate-900/45 p-4">
                                 <div className="text-xs uppercase tracking-[0.14em] text-purple-200/80 mb-2">Step 3</div>
-                                <div className="mb-4 rounded-2xl border border-slate-700/80 bg-slate-950/70 p-3 shadow-[0_0_24px_rgba(168,85,247,0.10)]">
+                                <div className="mb-4 rounded-2xl border border-slate-700/80 bg-gradient-to-br from-purple-500/20 to-indigo-500/10 p-3 shadow-[0_0_20px_rgba(168,85,247,0.25)]">
                                     <div className="flex items-end gap-1 h-12">
                                         <div className="w-4 rounded-t bg-sky-400/70 h-5"></div>
                                         <div className="w-4 rounded-t bg-purple-400/70 h-8"></div>
