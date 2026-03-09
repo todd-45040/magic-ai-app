@@ -388,6 +388,47 @@ const ContractGenerator: React.FC<ContractGeneratorProps> = ({ user, clients, sh
         });
     };
 
+    const resetContractBuilder = () => {
+        setSelectedClientId('');
+        setSelectedShowId('');
+        setPerformerName('');
+        setClientName('');
+        setClientCompany('');
+        setClientEmail('');
+        setClientPhone('');
+        setClientAddress('');
+        setEventTitle('');
+        setEventType('');
+        setEventDate('');
+        setEventTime('');
+        setEventLocation('');
+        setPerformanceLength('');
+        setPerformanceFee('');
+        setDepositAmount('');
+        setDepositDueDate('');
+        setSpecialRequirements('');
+        setCancellationPolicy(DEFAULT_CANCELLATION_POLICY);
+        setContractType(DEFAULT_CONTRACT_TYPE);
+        setPreviewToneSeed(CONTRACT_TYPE_PRESETS[DEFAULT_CONTRACT_TYPE].previewToneSeed);
+        setResult(null);
+        setError(null);
+        setIsLoading(false);
+        setSaveStatus('idle');
+        setCopyStatus('idle');
+        setSaveToShowStatus('idle');
+        setShowNextVersion(null);
+        setShowLatestStatus(null);
+        setClientLoadedFromCrm(false);
+        setClientRecordSaveStatus('idle');
+        setEmailStatus('idle');
+        emitContractTelemetry('contract_reset');
+    };
+
+    const handleResetContractBuilder = () => {
+        if (window.confirm('Reset the Contract Generator and clear the current draft?')) {
+            resetContractBuilder();
+        }
+    };
 
     const applyContractPreset = (nextType: ContractType) => {
         const preset = CONTRACT_TYPE_PRESETS[nextType];
@@ -780,6 +821,14 @@ Guidelines:
                     >
                         <span aria-hidden="true">🎭</span>
                         Load Demo Contract
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleResetContractBuilder}
+                        className="inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900/80 px-4 py-2 text-xs font-semibold text-slate-200 transition hover:border-slate-500 hover:bg-slate-800/90"
+                    >
+                        <span aria-hidden="true">↺</span>
+                        Reset Page
                     </button>
                     <StatusPill label={selectedClientId ? 'Client linked' : 'Client manual'} active={!!selectedClientId} />
                     <StatusPill label={selectedShowId ? 'Show linked' : 'Show optional'} active={!!selectedShowId} />
