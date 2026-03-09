@@ -149,9 +149,36 @@ const lifecycleBadgeClass: Record<PlannerLifecycle, string> = {
     Idea: 'bg-slate-700/60 text-slate-200 border-slate-500/40',
     Writing: 'bg-blue-500/15 text-blue-200 border-blue-400/30',
     Blocking: 'bg-amber-500/15 text-amber-200 border-amber-400/30',
-    Rehearsal: 'bg-purple-500/15 text-purple-200 border-purple-400/30',
+    Rehearsal: 'bg-orange-500/15 text-orange-200 border-orange-400/30',
     Ready: 'bg-emerald-500/15 text-emerald-200 border-emerald-400/30',
     Archived: 'bg-slate-800/90 text-slate-300 border-slate-600/50',
+};
+
+const lifecycleProgressFillClass: Record<PlannerLifecycle, string> = {
+    Idea: 'bg-slate-500',
+    Writing: 'bg-blue-500',
+    Blocking: 'bg-amber-400',
+    Rehearsal: 'bg-orange-500',
+    Ready: 'bg-emerald-500',
+    Archived: 'bg-slate-600',
+};
+
+const lifecycleProgressTrackClass: Record<PlannerLifecycle, string> = {
+    Idea: 'bg-slate-800',
+    Writing: 'bg-blue-950/70',
+    Blocking: 'bg-amber-950/60',
+    Rehearsal: 'bg-orange-950/60',
+    Ready: 'bg-emerald-950/60',
+    Archived: 'bg-slate-900',
+};
+
+const lifecycleProgressTextClass: Record<PlannerLifecycle, string> = {
+    Idea: 'text-slate-400',
+    Writing: 'text-blue-300',
+    Blocking: 'text-amber-300',
+    Rehearsal: 'text-orange-300',
+    Ready: 'text-emerald-300',
+    Archived: 'text-slate-500',
 };
 
 // --- Helper Components ---
@@ -770,10 +797,10 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
             <>
                 <div className="flex items-center justify-between text-[11px] text-slate-400">
                     <span>{item.completedTasks} / {item.totalTasks} beats complete</span>
-                    <span>{item.progress}%</span>
+                    <span className={`font-semibold ${lifecycleProgressTextClass[item.statusLabel]}`}>{item.progress}%</span>
                 </div>
-                <div className="mt-1 h-1.5 w-full rounded-full bg-slate-800">
-                    <div className="h-1.5 rounded-full bg-purple-500" style={{ width: `${item.progress}%` }} />
+                <div className={`mt-1 h-1.5 w-full rounded-full ${lifecycleProgressTrackClass[item.statusLabel]}`}>
+                    <div className={`h-1.5 rounded-full ${lifecycleProgressFillClass[item.statusLabel]}`} style={{ width: `${item.progress}%` }} />
                 </div>
             </>
         );
@@ -1926,7 +1953,7 @@ const ShowListItem: React.FC<{show: Show, clients: Client[], contractMeta?: Cont
                     <span>Progress</span>
                     <span>{completedPerformanceBeats} / {totalPerformanceBeats} Performance Beats</span>
                 </div>
-                <div className="w-full bg-slate-700 rounded-full h-2"><div className="bg-purple-500 h-2 rounded-full" style={{ width: `${progress}%` }}></div></div>
+                <div className={`w-full rounded-full h-2 ${lifecycleProgressTrackClass[inferPlannerLifecycle(show)]}`}><div className={`h-2 rounded-full ${lifecycleProgressFillClass[inferPlannerLifecycle(show)]}`} style={{ width: `${progress}%` }}></div></div>
                 <button onClick={onSelect} className="w-full text-center mt-4 py-2 px-4 bg-slate-700/50 hover:bg-purple-800 rounded-md text-white font-bold transition-colors">Open Planner</button>
             </div>
         </div>
