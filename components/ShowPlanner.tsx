@@ -149,36 +149,9 @@ const lifecycleBadgeClass: Record<PlannerLifecycle, string> = {
     Idea: 'bg-slate-700/60 text-slate-200 border-slate-500/40',
     Writing: 'bg-blue-500/15 text-blue-200 border-blue-400/30',
     Blocking: 'bg-amber-500/15 text-amber-200 border-amber-400/30',
-    Rehearsal: 'bg-orange-500/15 text-orange-200 border-orange-400/30',
+    Rehearsal: 'bg-purple-500/15 text-purple-200 border-purple-400/30',
     Ready: 'bg-emerald-500/15 text-emerald-200 border-emerald-400/30',
     Archived: 'bg-slate-800/90 text-slate-300 border-slate-600/50',
-};
-
-const lifecycleProgressFillClass: Record<PlannerLifecycle, string> = {
-    Idea: 'bg-slate-500',
-    Writing: 'bg-blue-500',
-    Blocking: 'bg-amber-400',
-    Rehearsal: 'bg-orange-500',
-    Ready: 'bg-emerald-500',
-    Archived: 'bg-slate-600',
-};
-
-const lifecycleProgressTrackClass: Record<PlannerLifecycle, string> = {
-    Idea: 'bg-slate-800',
-    Writing: 'bg-blue-950/70',
-    Blocking: 'bg-amber-950/60',
-    Rehearsal: 'bg-orange-950/60',
-    Ready: 'bg-emerald-950/60',
-    Archived: 'bg-slate-900',
-};
-
-const lifecycleProgressTextClass: Record<PlannerLifecycle, string> = {
-    Idea: 'text-slate-400',
-    Writing: 'text-blue-300',
-    Blocking: 'text-amber-300',
-    Rehearsal: 'text-orange-300',
-    Ready: 'text-emerald-300',
-    Archived: 'text-slate-500',
 };
 
 // --- Helper Components ---
@@ -496,7 +469,6 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
     const [plannerSearch, setPlannerSearch] = useState('');
     const [isArchiveExpanded, setIsArchiveExpanded] = useState(false);
     const [expandedDuplicateGroups, setExpandedDuplicateGroups] = useState<Record<string, boolean>>({});
-    const [detailInitialTab, setDetailInitialTab] = useState<'tasks' | 'finances' | 'contract' | 'history' | 'rehearsals'>('tasks');
     const taskRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
 
     useEffect(() => {
@@ -797,24 +769,13 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
             <>
                 <div className="flex items-center justify-between text-[11px] text-slate-400">
                     <span>{item.completedTasks} / {item.totalTasks} beats complete</span>
-                    <span className={`font-semibold ${lifecycleProgressTextClass[item.statusLabel]}`}>{item.progress}%</span>
+                    <span>{item.progress}%</span>
                 </div>
-                <div className={`mt-1 h-1.5 w-full rounded-full ${lifecycleProgressTrackClass[item.statusLabel]}`}>
-                    <div className={`h-1.5 rounded-full ${lifecycleProgressFillClass[item.statusLabel]}`} style={{ width: `${item.progress}%` }} />
+                <div className="mt-1 h-1.5 w-full rounded-full bg-slate-800">
+                    <div className="h-1.5 rounded-full bg-purple-500" style={{ width: `${item.progress}%` }} />
                 </div>
             </>
         );
-
-        const openShowDashboard = (show: Show, tab: 'tasks' | 'finances' | 'contract' | 'history' | 'rehearsals' = 'tasks') => {
-            setDetailInitialTab(tab);
-            setSelectedShow(show);
-        };
-
-        const openPerformanceModal = (show: Show) => {
-            setDetailInitialTab('history');
-            setSelectedShow(show);
-            setIsLiveModalOpen(true);
-        };
 
         const renderCard = (item: PlannerShowMeta) => (
             <div key={item.show.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 transition-all hover:border-purple-400/50 hover:bg-white/[0.045] hover:shadow-[0_18px_45px_rgba(0,0,0,0.28)]">
@@ -833,91 +794,34 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                 <div className="mt-3">{renderProgress(item)}</div>
                 <div className="mt-3 flex items-center justify-between gap-3 text-sm">
                     <p className="min-w-0 truncate text-slate-300">{item.nextCue}</p>
-                    <button onClick={() => openShowDashboard(item.show)} className="shrink-0 rounded-lg bg-purple-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-purple-700">Open Dashboard</button>
-                </div>
-            </div>
-        );
-
-        const renderActiveHeroCard = (item: PlannerShowMeta) => (
-            <div key={item.show.id} className="rounded-3xl border border-purple-500/20 bg-gradient-to-br from-purple-950/70 via-slate-950/95 to-slate-950 p-5 shadow-[0_24px_60px_rgba(0,0,0,0.32)] transition-all hover:-translate-y-0.5 hover:border-purple-400/45 hover:shadow-[0_30px_70px_rgba(0,0,0,0.4)]">
-                <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-200">Active Show</span>
-                            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${lifecycleBadgeClass[item.statusLabel]}`}>{item.statusLabel}</span>
-                            <span className="rounded-full border border-white/10 bg-slate-900/80 px-2 py-0.5 text-[10px] font-semibold text-slate-300">{item.typeLabel}</span>
-                            {item.contractMeta?.latestStatus && <span className="rounded-full border border-blue-400/25 bg-blue-500/10 px-2 py-0.5 text-[10px] font-semibold text-blue-200">{String(item.contractMeta.latestStatus).toUpperCase()}</span>}
-                        </div>
-                        <h3 className="mt-3 text-2xl font-bold text-white font-cinzel md:text-[1.75rem]">{item.show.title}</h3>
-                        <p className="mt-2 text-sm text-slate-300">{item.metadataLine}</p>
-                    </div>
-                    <button onClick={(e) => { e.stopPropagation(); handleDeleteShow(item.show.id); }} className="rounded-xl border border-white/10 bg-white/[0.03] p-2.5 text-slate-400 transition-colors hover:bg-slate-800 hover:text-red-300"><TrashIcon className="h-4 w-4" /></button>
-                </div>
-
-                <div className="mt-5 grid grid-cols-2 gap-3">
-                    <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-                        <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Routines</p>
-                        <p className="mt-1 text-2xl font-bold text-white">{item.totalTasks}</p>
-                    </div>
-                    <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-                        <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Tasks Remaining</p>
-                        <p className="mt-1 text-2xl font-bold text-white">{Math.max(item.totalTasks - item.completedTasks, 0)}</p>
-                    </div>
-                </div>
-
-                <div className="mt-5">
-                    {renderProgress(item)}
-                    <p className="mt-3 text-sm text-slate-300">{item.nextCue}</p>
-                </div>
-
-                <div className="mt-5 flex flex-wrap gap-2">
-                    <button onClick={() => openShowDashboard(item.show)} className="rounded-xl bg-purple-600 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-purple-700">Open Dashboard</button>
-                    <button onClick={() => openShowDashboard(item.show, 'rehearsals')} className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-slate-100 transition-colors hover:bg-slate-700">Start Rehearsal</button>
-                    <button onClick={() => openPerformanceModal(item.show)} className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-slate-100 transition-colors hover:bg-slate-700">Log Performance</button>
+                    <button onClick={() => setSelectedShow(item.show)} className="shrink-0 rounded-lg bg-purple-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-purple-700">Open Dashboard</button>
                 </div>
             </div>
         );
 
         const renderRoutineRow = (item: PlannerShowMeta) => (
-            <div key={item.show.id} className="rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2.5 transition-all hover:border-purple-400/40 hover:bg-white/[0.04]">
-                <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
-                    <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-                            <h3 className="truncate font-semibold text-white">{item.show.title}</h3>
-                            <span className="text-slate-500">•</span>
-                            <span className="text-xs text-slate-300">{item.typeLabel}</span>
-                            <span className="text-slate-500">•</span>
-                            <span className="text-xs text-slate-300">{item.runtimeMinutes ? `${item.runtimeMinutes} min` : 'Runtime TBD'}</span>
-                            <span className="text-slate-500">•</span>
-                            <span className={`text-xs font-semibold ${lifecycleProgressTextClass[item.statusLabel]}`}>{item.statusLabel}</span>
-                            {item.contractMeta?.latestStatus && (
-                                <>
-                                    <span className="text-slate-500">•</span>
-                                    <span className="text-[11px] font-semibold text-blue-200">{String(item.contractMeta.latestStatus).toUpperCase()}</span>
-                                </>
-                            )}
-                        </div>
-                        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500">
-                            <span>{item.metadataLine}</span>
-                            <span>•</span>
-                            <span>{item.nextCue}</span>
-                        </div>
+            <div key={item.show.id} className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 md:flex-row md:items-center md:justify-between">
+                <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="truncate text-base font-semibold text-white">{item.show.title}</h3>
+                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${lifecycleBadgeClass[item.statusLabel]}`}>{item.statusLabel}</span>
+                        <span className="rounded-full border border-white/10 bg-slate-900/80 px-2 py-0.5 text-[10px] font-semibold text-slate-300">{item.typeLabel}</span>
                     </div>
-                    <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-                        <button onClick={() => openShowDashboard(item.show)} className="rounded-lg bg-purple-600 px-2.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-purple-700">Open</button>
-                        <button onClick={() => openShowDashboard(item.show, 'rehearsals')} className="rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-xs font-semibold text-slate-100 transition-colors hover:bg-slate-700">Rehearse</button>
-                        <button onClick={async () => {
-                            try {
-                                const nextTags = Array.from(new Set([...(item.show.tags || []), 'archived']));
-                                const updated = await updateShow(item.show.id, { tags: nextTags } as any);
-                                setShows(updated);
-                                setToastMsg('Routine archived.');
-                            } catch (e) {
-                                console.error(e);
-                                setToastMsg("Couldn't archive routine.");
-                            }
-                        }} className="rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-xs font-semibold text-slate-200 transition-colors hover:bg-slate-700">Archive</button>
-                    </div>
+                    <p className="mt-1 text-xs text-slate-400">{item.metadataLine}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                    <button onClick={() => setSelectedShow(item.show)} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-700">Open</button>
+                    <button onClick={async () => {
+                        try {
+                            const nextTags = Array.from(new Set([...(item.show.tags || []), 'archived']));
+                            const updated = await updateShow(item.show.id, { tags: nextTags } as any);
+                            setShows(updated);
+                            setToastMsg('Routine archived.');
+                        } catch (e) {
+                            console.error(e);
+                            setToastMsg("Couldn't archive routine.");
+                        }
+                    }} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-semibold text-slate-200 transition-colors hover:bg-slate-700">Archive</button>
                 </div>
             </div>
         );
@@ -954,14 +858,14 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                     ) : isCollapsed ? (
                         <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 px-4 py-8 text-center text-sm text-slate-400">Archive hidden by default to keep the planner focused.</div>
                     ) : (
-                        <div className={opts?.routineRows ? 'space-y-2' : sectionKey === 'active' ? 'grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-4' : 'grid grid-cols-1 xl:grid-cols-2 gap-4'}>
+                        <div className={opts?.routineRows ? 'space-y-3' : 'grid grid-cols-1 xl:grid-cols-2 gap-4'}>
                             {groupedItems.map(([groupKey, group]) => {
-                                if (group.length === 1) return opts?.routineRows ? renderRoutineRow(group[0]) : sectionKey === 'active' ? renderActiveHeroCard(group[0]) : renderCard(group[0]);
+                                if (group.length === 1) return opts?.routineRows ? renderRoutineRow(group[0]) : renderCard(group[0]);
                                 const lead = group[0];
                                 const isExpanded = !!expandedDuplicateGroups[groupKey];
                                 return (
-                                    <div key={groupKey} className="rounded-2xl border border-dashed border-amber-300/35 bg-slate-950/70 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-                                        <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-white/5 bg-black/20 px-3 py-2.5">
+                                    <div key={groupKey} className="rounded-2xl border border-amber-400/20 bg-amber-500/5 p-4">
+                                        <div className="flex flex-wrap items-center justify-between gap-3">
                                             <div>
                                                 <h4 className="text-base font-semibold text-white">{lead.show.title}</h4>
                                                 <p className="text-xs text-amber-100/80">{group.length} versions grouped to reduce planner clutter.</p>
@@ -969,8 +873,8 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                             <button onClick={() => setExpandedDuplicateGroups(prev => ({ ...prev, [groupKey]: !prev[groupKey] }))} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold text-slate-100 transition-colors hover:bg-slate-700">{isExpanded ? 'Hide versions' : 'Show versions'}</button>
                                         </div>
                                         {isExpanded && (
-                                            <div className={`mt-3 rounded-xl border border-dashed border-white/10 bg-black/20 p-2.5 ${opts?.routineRows ? 'space-y-2' : 'grid grid-cols-1 gap-3'}`}>
-                                                {group.map(item => opts?.routineRows ? renderRoutineRow(item) : sectionKey === 'active' ? renderActiveHeroCard(item) : renderCard(item))}
+                                            <div className={`mt-4 ${opts?.routineRows ? 'space-y-3' : 'grid grid-cols-1 gap-3'}`}>
+                                                {group.map(item => opts?.routineRows ? renderRoutineRow(item) : renderCard(item))}
                                             </div>
                                         )}
                                     </div>
@@ -1052,7 +956,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
 
     const ShowDetailView = () => {
         if (!selectedShow) return null;
-        const [activeTab, setActiveTab] = useState<'tasks' | 'finances' | 'contract' | 'history' | 'rehearsals'>(detailInitialTab);
+        const [activeTab, setActiveTab] = useState<'dashboard' | 'tasks' | 'finances' | 'contract' | 'history' | 'rehearsals'>('dashboard');
         const [isSuggesting, setIsSuggesting] = useState(false);
         const [suggestionError, setSuggestionError] = useState<string | null>(null);
         const [pastPerformances, setPastPerformances] = useState<Performance[]>([]);
@@ -1072,10 +976,6 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
         });
         const [rehearsalDraft, setRehearsalDraft] = useState({ notes: '', improvements: '' });
         const [activeRehearsalStart, setActiveRehearsalStart] = useState<number | null>(null);
-
-        useEffect(() => {
-            setActiveTab(detailInitialTab);
-        }, [selectedShow?.id]);
 
         const client = clients.find(c => c.id === selectedShow.clientId);
 
@@ -1147,6 +1047,27 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
             activePerformanceTasks: tasks.filter(t => t.status === 'To-Do'),
             completedPerformanceBeats: tasks.filter(t => t.status === 'Completed').sort((a,b) => b.createdAt - a.createdAt)
         };
+        const plannerMeta = buildPlannerMeta(selectedShow, clients, contractsMetaByShowId[selectedShow.id]);
+        const routineCount = tasks.length;
+        const tasksRemaining = processedPerformanceBeats.activePerformanceTasks.length;
+        const rehearsalAvgMinutes = rehearsals.length
+            ? Math.round(rehearsals.reduce((sum, session) => sum + (Number(session.durationMinutes) || 0), 0) / rehearsals.length)
+            : runtimeMinutes;
+        const confidenceScore = Math.max(52, Math.min(98,
+            Math.round(
+                (plannerMeta.progress * 0.45) +
+                (rehearsals.length * 6) +
+                ((avgRating || 0) * 6) +
+                (String((selectedShow as any).status || '').toLowerCase() === 'confirmed' ? 10 : 0)
+            )
+        ));
+        const relativeLastRehearsal = (() => {
+            if (!lastRehearsedTs) return 'No rehearsals logged yet';
+            const diffDays = Math.max(0, Math.floor((Date.now() - lastRehearsedTs) / 86400000));
+            if (diffDays === 0) return 'Today';
+            if (diffDays === 1) return '1 day ago';
+            return `${diffDays} days ago`;
+        })();
         
         const handleAiSuggestPerformanceBeats = async () => {
             if (!selectedShow) return;
@@ -1252,6 +1173,189 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
             </button>
         );
         
+        const DashboardView = () => (
+            <div className="space-y-4">
+                <div className="grid grid-cols-1 xl:grid-cols-[1.35fr_0.95fr] gap-4">
+                    <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 md:p-5">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                                <div className="text-xs uppercase tracking-[0.22em] text-purple-300">Show Dashboard</div>
+                                <h3 className="mt-1 text-2xl font-bold text-white font-cinzel">{selectedShow.title}</h3>
+                                <p className="mt-2 text-sm text-slate-300">Audience: <span className="font-semibold text-white">{client?.name || plannerMeta.typeLabel}</span> <span className="text-slate-500">•</span> Runtime: <span className="font-semibold text-white">{runtimeMinutes ? `${runtimeMinutes} minutes` : 'TBD'}</span> <span className="text-slate-500">•</span> Status: <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${lifecycleBadgeClass[plannerMeta.statusLabel]}`}>{plannerMeta.statusLabel}</span></p>
+                            </div>
+                            <div className="rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 min-w-[180px]">
+                                <div className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Progress</div>
+                                <div className="mt-1 text-2xl font-bold text-white">{plannerMeta.progress}%</div>
+                                <div className="mt-2 h-2 w-full rounded-full bg-slate-800 overflow-hidden">
+                                    <div className="h-2 rounded-full bg-purple-500" style={{ width: `${plannerMeta.progress}%` }} />
+                                </div>
+                                <div className="mt-2 text-xs text-slate-400">{plannerMeta.completedTasks}/{plannerMeta.totalTasks} beats complete</div>
+                            </div>
+                        </div>
+                        <div className="mt-4 grid grid-cols-2 xl:grid-cols-4 gap-3">
+                            <div className="rounded-xl border border-white/10 bg-slate-950/50 p-3">
+                                <div className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Routines</div>
+                                <div className="mt-1 text-2xl font-bold text-white">{routineCount}</div>
+                            </div>
+                            <div className="rounded-xl border border-white/10 bg-slate-950/50 p-3">
+                                <div className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Tasks Remaining</div>
+                                <div className="mt-1 text-2xl font-bold text-white">{tasksRemaining}</div>
+                            </div>
+                            <div className="rounded-xl border border-white/10 bg-slate-950/50 p-3">
+                                <div className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Venue</div>
+                                <div className="mt-1 text-sm font-semibold text-white">{(selectedShow as any).venue || 'Venue TBD'}</div>
+                            </div>
+                            <div className="rounded-xl border border-white/10 bg-slate-950/50 p-3">
+                                <div className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Next Cue</div>
+                                <div className="mt-1 text-sm font-semibold text-white">{plannerMeta.nextTask || 'Review show flow'}</div>
+                            </div>
+                        </div>
+                        <div className="mt-4 flex flex-wrap gap-2">
+                            <button onClick={() => setActiveTab('rehearsals')} className="rounded-lg bg-purple-600 px-3.5 py-2 text-sm font-semibold text-white transition-colors hover:bg-purple-700">Start Rehearsal</button>
+                            <button onClick={() => setIsLiveModalOpen(true)} className="rounded-lg bg-emerald-600 px-3.5 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700">Log Performance</button>
+                            <button onClick={generateScriptGuide} className="rounded-lg border border-white/10 bg-white/[0.03] px-3.5 py-2 text-sm font-semibold text-slate-100 transition-colors hover:bg-slate-700">Generate Run Sheet</button>
+                            <button onClick={() => setIsAudienceQrModalOpen(true)} className="rounded-lg border border-white/10 bg-white/[0.03] px-3.5 py-2 text-sm font-semibold text-slate-100 transition-colors hover:bg-slate-700">Audience Feedback QR</button>
+                        </div>
+                    </section>
+
+                    <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 md:p-5">
+                        <div className="flex items-center justify-between gap-3">
+                            <div>
+                                <h4 className="text-base font-semibold text-white">Rehearsal Status</h4>
+                                <p className="text-sm text-slate-400">Connected to Live Rehearsal and session notes.</p>
+                            </div>
+                            <button onClick={() => setActiveTab('rehearsals')} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold text-slate-200 transition-colors hover:bg-slate-700">Open Rehearsal Log</button>
+                        </div>
+                        <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div className="rounded-xl border border-white/10 bg-slate-950/50 p-3">
+                                <div className="text-xs text-slate-400">Last rehearsal</div>
+                                <div className="mt-1 text-lg font-bold text-white">{relativeLastRehearsal}</div>
+                            </div>
+                            <div className="rounded-xl border border-white/10 bg-slate-950/50 p-3">
+                                <div className="text-xs text-slate-400">Average runtime</div>
+                                <div className="mt-1 text-lg font-bold text-white">{rehearsalAvgMinutes ? `${rehearsalAvgMinutes} min` : 'TBD'}</div>
+                            </div>
+                            <div className="rounded-xl border border-white/10 bg-slate-950/50 p-3">
+                                <div className="text-xs text-slate-400">Confidence score</div>
+                                <div className="mt-1 text-lg font-bold text-white">{confidenceScore}%</div>
+                            </div>
+                        </div>
+                        <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/40 p-3 text-sm text-slate-300">
+                            {rehearsals.length > 0 ? (
+                                <>
+                                    <div className="font-semibold text-white">Latest notes</div>
+                                    <div className="mt-1 text-slate-300">{rehearsals[rehearsals.length - 1]?.notes || 'No session notes captured yet.'}</div>
+                                </>
+                            ) : (
+                                <div>No rehearsal sessions logged yet. Start a rehearsal to begin tracking runtime, notes, and improvements.</div>
+                            )}
+                        </div>
+                    </section>
+                </div>
+
+                <div className="grid grid-cols-1 xl:grid-cols-[0.95fr_1.05fr] gap-4">
+                    <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 md:p-5">
+                        <div className="flex items-center justify-between gap-3">
+                            <div>
+                                <h4 className="text-base font-semibold text-white">Show Overview</h4>
+                                <p className="text-sm text-slate-400">Theme, audience, venue, runtime, and working notes.</p>
+                            </div>
+                            <button onClick={() => setIsEditingHeader(v => !v)} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold text-slate-200 transition-colors hover:bg-slate-700">{isEditingHeader ? 'Close Editor' : 'Edit Details'}</button>
+                        </div>
+                        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                            <div className="rounded-xl border border-white/10 bg-slate-950/50 p-3"><div className="text-xs text-slate-500">Theme / Type</div><div className="mt-1 font-semibold text-white">{plannerMeta.typeLabel}</div></div>
+                            <div className="rounded-xl border border-white/10 bg-slate-950/50 p-3"><div className="text-xs text-slate-500">Audience</div><div className="mt-1 font-semibold text-white">{client?.name || 'General audience'}</div></div>
+                            <div className="rounded-xl border border-white/10 bg-slate-950/50 p-3"><div className="text-xs text-slate-500">Venue</div><div className="mt-1 font-semibold text-white">{(selectedShow as any).venue || 'Venue TBD'}</div></div>
+                            <div className="rounded-xl border border-white/10 bg-slate-950/50 p-3"><div className="text-xs text-slate-500">Runtime</div><div className="mt-1 font-semibold text-white">{runtimeMinutes ? `${runtimeMinutes} minutes` : 'Runtime TBD'}</div></div>
+                        </div>
+                        <div className="mt-3 rounded-xl border border-white/10 bg-slate-950/40 p-3">
+                            <div className="text-xs text-slate-500">Notes / Source Context</div>
+                            <div className="mt-1 whitespace-pre-wrap text-sm text-slate-300">{selectedShow.description || 'No show notes yet. Add venue notes, audience framing, and special handling here.'}</div>
+                        </div>
+                    </section>
+
+                    <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 md:p-5">
+                        <div className="flex items-center justify-between gap-3">
+                            <div>
+                                <h4 className="text-base font-semibold text-white">Routine List</h4>
+                                <p className="text-sm text-slate-400">Ordered beats for this show.</p>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                <button onClick={() => { setTaskToEdit(null); setIsTaskModalOpen(true); }} className="rounded-lg bg-purple-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-purple-700">Add Routine</button>
+                                <button onClick={() => { setActiveTab('tasks'); setViewMode('timeline'); }} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold text-slate-200 transition-colors hover:bg-slate-700">Reorder</button>
+                                <button onClick={generateScriptGuide} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold text-slate-200 transition-colors hover:bg-slate-700">Generate Transitions</button>
+                            </div>
+                        </div>
+                        <div className="mt-4 space-y-2">
+                            {tasks.length ? tasks.map((task, idx) => (
+                                <div key={task.id} className="flex items-start justify-between gap-3 rounded-xl border border-white/10 bg-slate-950/45 px-3 py-2.5">
+                                    <div className="min-w-0">
+                                        <div className="text-xs text-slate-500">{idx + 1}. {task.status === 'Completed' ? 'Locked' : 'Next Beat'}</div>
+                                        <div className="truncate text-sm font-semibold text-white">{task.title}</div>
+                                        <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-slate-400">
+                                            {(task as any).durationMinutes !== undefined ? <span>{Number((task as any).durationMinutes) || 0} min</span> : null}
+                                            {(task as any).energyLevel ? <span>• {(task as any).energyLevel} energy</span> : null}
+                                            {task.musicCue ? <span>• Cue: {task.musicCue}</span> : null}
+                                        </div>
+                                    </div>
+                                    <button onClick={() => openEditModal(task)} className="rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-xs font-semibold text-slate-200 transition-colors hover:bg-slate-700">Edit</button>
+                                </div>
+                            )) : <div className="rounded-xl border border-dashed border-white/10 bg-slate-950/30 p-4 text-sm text-slate-400">No routines yet. Add your opener to start structuring the show.</div>}
+                        </div>
+                    </section>
+                </div>
+
+                <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-4">
+                    <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 md:p-5">
+                        <div className="flex items-center justify-between gap-3">
+                            <div>
+                                <h4 className="text-base font-semibold text-white">Tasks / Checklist</h4>
+                                <p className="text-sm text-slate-400">Planner tasks connected directly to this show.</p>
+                            </div>
+                            <button onClick={() => setActiveTab('tasks')} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold text-slate-200 transition-colors hover:bg-slate-700">Open Task Views</button>
+                        </div>
+                        <div className="mt-4 space-y-2">
+                            {tasks.slice(0, 6).map(task => {
+                                const isDone = task.status === 'Completed';
+                                return (
+                                    <button
+                                        key={task.id}
+                                        onClick={() => handleUpdateTaskStatus(task, isDone ? 'To-Do' : 'Completed')}
+                                        className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-slate-950/45 px-3 py-2.5 text-left transition-colors hover:bg-slate-900/70"
+                                    >
+                                        <span className={`flex h-5 w-5 items-center justify-center rounded-md border ${isDone ? 'border-emerald-400 bg-emerald-500/20 text-emerald-200' : 'border-slate-600 bg-slate-900/80 text-transparent'}`}>
+                                            <CheckIcon className="h-3.5 w-3.5" />
+                                        </span>
+                                        <span className={`text-sm ${isDone ? 'text-slate-500 line-through' : 'text-slate-200'}`}>{task.title}</span>
+                                    </button>
+                                );
+                            })}
+                            {!tasks.length && <div className="rounded-xl border border-dashed border-white/10 bg-slate-950/30 p-4 text-sm text-slate-400">No checklist items yet. Add a beat to begin building the show.</div>}
+                        </div>
+                    </section>
+
+                    <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 md:p-5">
+                        <div className="flex items-center justify-between gap-3">
+                            <div>
+                                <h4 className="text-base font-semibold text-white">Performance Notes</h4>
+                                <p className="text-sm text-slate-400">Feedback, finance, and audience response in one glance.</p>
+                            </div>
+                            <button onClick={() => setActiveTab('history')} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold text-slate-200 transition-colors hover:bg-slate-700">Open Performance History</button>
+                        </div>
+                        <div className="mt-4 grid grid-cols-2 gap-3">
+                            <div className="rounded-xl border border-white/10 bg-slate-950/50 p-3"><div className="text-xs text-slate-500">Profit</div><div className="mt-1 text-lg font-bold text-white">${profit.toFixed(0)}</div></div>
+                            <div className="rounded-xl border border-white/10 bg-slate-950/50 p-3"><div className="text-xs text-slate-500">Audience rating</div><div className="mt-1 text-lg font-bold text-white">{avgRating ? avgRating.toFixed(1) : '—'}</div></div>
+                        </div>
+                        <div className="mt-3 rounded-xl border border-white/10 bg-slate-950/40 p-3 text-sm text-slate-300">
+                            {showFeedback.length
+                                ? `${showFeedback.length} audience responses captured for this show.`
+                                : 'No audience feedback captured yet. Use the Audience Feedback QR action before or after the performance.'}
+                        </div>
+                    </section>
+                </div>
+            </div>
+        );
+
         return (
              <div className="flex flex-col h-full">
                 <header className="p-4 md:px-6 md:pt-6">
@@ -1262,11 +1366,13 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                             {client && <p className="text-sm text-slate-400 flex items-center gap-2"><UsersIcon className="w-4 h-4" /> {client.name}</p>}
                         </div>
                         <div className="flex items-center gap-2">
-                            <button onClick={() => setIsAudienceQrModalOpen(true)} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-md text-white font-semibold transition-colors flex items-center gap-2 text-sm" title="Generate a post-show feedback QR code"><QrCodeIcon className="w-4 h-4" /><span>Audience QR</span></button>
-                            <button onClick={() => setIsLiveModalOpen(true)} className="px-3 py-2 bg-green-600 hover:bg-green-700 rounded-md text-white font-semibold transition-colors flex items-center gap-2 text-sm"><QrCodeIcon className="w-4 h-4" /><span>Start Live Performance</span></button>
-                            <button onClick={handleAiSuggestPerformanceBeats} disabled={isSuggesting} className="px-3 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold flex items-center gap-2 transition-colors"><WandIcon className="w-4 h-4" /><span>{isSuggesting ? 'Thinking...' : 'AI-Suggest Performance Beats'}</span></button>
-                            <button onClick={generateScriptGuide} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 font-semibold transition-colors flex items-center gap-2 text-sm"><FileTextIcon className="w-4 h-4" /><span>Performance Narrative</span></button>
-                            <button onClick={() => { setTaskToEdit(null); setIsTaskModalOpen(true); }} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors flex items-center gap-2 text-sm"><ChecklistIcon className="w-4 h-4" /><span>Add Beat</span></button>
+                            <button onClick={() => setActiveTab('dashboard')} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-md text-white font-semibold transition-colors flex items-center gap-2 text-sm"><StageCurtainsIcon className="w-4 h-4" /><span>Dashboard</span></button>
+                            <button onClick={() => setActiveTab('rehearsals')} className="px-3 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-semibold transition-colors flex items-center gap-2 text-sm"><MusicNoteIcon className="w-4 h-4" /><span>Start Rehearsal</span></button>
+                            <button onClick={() => setIsLiveModalOpen(true)} className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-md text-white font-semibold transition-colors flex items-center gap-2 text-sm"><QrCodeIcon className="w-4 h-4" /><span>Log Performance</span></button>
+                            <button onClick={generateScriptGuide} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 font-semibold transition-colors flex items-center gap-2 text-sm"><FileTextIcon className="w-4 h-4" /><span>Generate Run Sheet</span></button>
+                            <button onClick={() => setIsAudienceQrModalOpen(true)} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-md text-white font-semibold transition-colors flex items-center gap-2 text-sm" title="Generate a post-show feedback QR code"><QrCodeIcon className="w-4 h-4" /><span>Audience Feedback QR</span></button>
+                            <button onClick={() => { setTaskToEdit(null); setIsTaskModalOpen(true); }} className="px-4 py-2 bg-white/[0.03] hover:bg-slate-700 rounded-md text-white font-bold transition-colors flex items-center gap-2 text-sm"><ChecklistIcon className="w-4 h-4" /><span>Add Beat</span></button>
+                            <button onClick={handleAiSuggestPerformanceBeats} disabled={isSuggesting} className="px-3 py-2 rounded-md bg-white/[0.03] hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold flex items-center gap-2 transition-colors"><WandIcon className="w-4 h-4" /><span>{isSuggesting ? 'Thinking...' : 'AI-Suggest Beats'}</span></button>
                         </div>
                     </div>
 
@@ -1417,6 +1523,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                     {suggestionError && <p className="text-red-400 text-center text-sm mb-2">{suggestionError}</p>}
                     <div className="bg-white/[0.03]/50 border-y border-white/10 -mx-4 md:-mx-6 px-4 md:px-6 flex items-center justify-between">
                          <div className="flex items-center">
+                            <TabButton icon={StageCurtainsIcon} label="Dashboard" isActive={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
                             <TabButton icon={ChecklistIcon} label="Performance Beats" isActive={activeTab === 'tasks'} onClick={() => setActiveTab('tasks')} />
                             <TabButton icon={DollarSignIcon} label="Finances" isActive={activeTab === 'finances'} onClick={() => setActiveTab('finances')} />
                             <TabButton icon={FileTextIcon} label="Contract" isActive={activeTab === 'contract'} onClick={() => setActiveTab('contract')} />
@@ -1428,7 +1535,9 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                     </div>
                 </header>
                 <div className="flex-1 overflow-y-auto px-4 md:px-6 pb-4 pt-4">
-                    {activeTab === 'tasks' ? (
+                    {activeTab === 'dashboard' ? (
+                        <DashboardView />
+                    ) : activeTab === 'tasks' ? (
                         tasks.length === 0 ? <div className="text-center py-10 text-slate-400"><p className="mb-3">Add your first beat to start building your performance flow.. Click <span className="text-slate-200 font-semibold">Add Beat</span> to get started.</p><button onClick={handleAiSuggestPerformanceBeats} disabled={isSuggesting} className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold transition-colors"><WandIcon className="w-4 h-4" /><span>{isSuggesting ? 'Thinking...' : 'AI-Suggest Performance Beats'}</span></button></div> : viewMode === 'list' ? <ListView /> : viewMode === 'timeline' ? <TimelineView /> : <BoardView />
 
                     
@@ -1970,7 +2079,7 @@ const ShowListItem: React.FC<{show: Show, clients: Client[], contractMeta?: Cont
                     <span>Progress</span>
                     <span>{completedPerformanceBeats} / {totalPerformanceBeats} Performance Beats</span>
                 </div>
-                <div className={`w-full rounded-full h-2 ${lifecycleProgressTrackClass[inferPlannerLifecycle(show)]}`}><div className={`h-2 rounded-full ${lifecycleProgressFillClass[inferPlannerLifecycle(show)]}`} style={{ width: `${progress}%` }}></div></div>
+                <div className="w-full bg-slate-700 rounded-full h-2"><div className="bg-purple-500 h-2 rounded-full" style={{ width: `${progress}%` }}></div></div>
                 <button onClick={onSelect} className="w-full text-center mt-4 py-2 px-4 bg-slate-700/50 hover:bg-purple-800 rounded-md text-white font-bold transition-colors">Open Planner</button>
             </div>
         </div>
