@@ -32,6 +32,7 @@ type ContractSections = Required<NonNullable<Show['contract']>>;
 
 type PreviewContract = {
     performerName: string;
+    clientCompany: string;
     clientName: string;
     clientEmail: string;
     clientPhone: string;
@@ -149,6 +150,7 @@ const ContractGenerator: React.FC<ContractGeneratorProps> = ({ user, clients, sh
     const [selectedClientId, setSelectedClientId] = useState<string>('');
     const [selectedShowId, setSelectedShowId] = useState<string>('');
     const [clientName, setClientName] = useState('');
+    const [clientCompany, setClientCompany] = useState('');
     const [clientEmail, setClientEmail] = useState('');
     const [clientPhone, setClientPhone] = useState('');
     const [clientAddress, setClientAddress] = useState('');
@@ -172,6 +174,7 @@ const ContractGenerator: React.FC<ContractGeneratorProps> = ({ user, clients, sh
     const [saveToShowStatus, setSaveToShowStatus] = useState<'idle' | 'saved'>('idle');
     const [showNextVersion, setShowNextVersion] = useState<number | null>(null);
     const [showLatestStatus, setShowLatestStatus] = useState<string | null>(null);
+    const [clientLoadedFromCrm, setClientLoadedFromCrm] = useState(false);
 
     const isFormValid = performerName && clientName && eventDate && performanceFee;
     const selectedShow = useMemo(() => shows.find((s) => s.id === selectedShowId) ?? null, [shows, selectedShowId]);
@@ -195,6 +198,7 @@ const ContractGenerator: React.FC<ContractGeneratorProps> = ({ user, clients, sh
     const previewContract: PreviewContract = useMemo(
         () => ({
             performerName,
+            clientCompany,
             clientName,
             clientEmail,
             clientPhone,
@@ -213,6 +217,7 @@ const ContractGenerator: React.FC<ContractGeneratorProps> = ({ user, clients, sh
         }),
         [
             performerName,
+            clientCompany,
             clientName,
             clientEmail,
             clientPhone,
@@ -234,26 +239,43 @@ const ContractGenerator: React.FC<ContractGeneratorProps> = ({ user, clients, sh
     const applyClientSelection = (clientId: string) => {
         setSelectedClientId(clientId);
         const client = clients.find((x) => x.id === clientId);
-        if (!client) return;
+        if (!client) {
+            setClientLoadedFromCrm(false);
+            return;
+        }
         setClientName(client.name ?? '');
+        setClientCompany(client.company ?? '');
         setClientEmail(client.email ?? '');
         setClientPhone(client.phone ?? '');
         setClientAddress(inferClientAddress(client));
+        setClientLoadedFromCrm(true);
     };
 
     const applyShowSelection = (showId: string) => {
         setSelectedShowId(showId);
+        if (!showId) return;
         const show = shows.find((x) => x.id === showId);
         if (!show) return;
 
+        const runtimeMinutes = Array.isArray(show.tasks)
+            ? show.tasks.reduce((sum: number, task: any) => sum + (Number(task?.durationMinutes) || 0), 0)
+            : 0;
+
         setEventTitle(show.title ?? '');
+        setEventType(show.status ? `Performance · ${show.status}` : eventType);
         setEventLocation(show.venue ?? '');
         setEventDate(show.performanceDate ? new Date(show.performanceDate).toISOString().slice(0, 10) : '');
+        if ((show as any).performanceTime) setEventTime(String((show as any).performanceTime));
+        if (runtimeMinutes > 0) setPerformanceLength(`${runtimeMinutes} minutes`);
         if (typeof show.finances?.performanceFee === 'number' && !Number.isNaN(show.finances.performanceFee) && show.finances.performanceFee > 0) {
             setPerformanceFee(String(show.finances.performanceFee));
         }
         if (show.description && !specialRequirements) {
             setSpecialRequirements(String(show.description));
+        }
+        if ((show as any).clientId && !selectedClientId) {
+            const linkedClient = clients.find((c) => c.id === (show as any).clientId);
+            if (linkedClient) applyClientSelection(linkedClient.id);
         }
         if ((show as any).contract) {
             const existing = (show as any).contract as ContractSections;
@@ -335,6 +357,7 @@ Return ONLY JSON matching the provided schema.
 Contract context:
 - Performer (Magician) Name/Company: ${performerName}
 - Client Name: ${clientName}
+- Client Company: ${clientCompany}
 - Client Email: ${clientEmail}
 - Client Phone: ${clientPhone}
 - Client Address: ${clientAddress}
@@ -484,7 +507,9 @@ Guidelines:
                         onShowSelect={applyShowSelection}
                         performerName={performerName}
                         setPerformerName={setPerformerName}
+                        clientCompany={clientCompany}
                         clientName={clientName}
+                        setClientCompany={setClientCompany}
                         setClientName={setClientName}
                         clientEmail={clientEmail}
                         setClientEmail={setClientEmail}
@@ -502,6 +527,11 @@ Guidelines:
                         setEventTime={setEventTime}
                         eventLocation={eventLocation}
                         setEventLocation={setEventLocation}
+                        clientLoadedFromCrm={clientLoadedFromCrm}
+                        selectedShow={selectedShow}
+                        showNextVersion={showNextVersion}
+                        showLatestStatus={showLatestStatus}
+                        onOpenShowPlanner={() => selectedShowId && onNavigateToShowPlanner(selectedShowId)}
                     />
 
                     <FinancialTermsSection
@@ -637,7 +667,9 @@ const EventClientSection: React.FC<{
     onShowSelect: (id: string) => void;
     performerName: string;
     setPerformerName: (v: string) => void;
+    clientCompany: string;
     clientName: string;
+    setClientCompany: (v: string) => void;
     setClientName: (v: string) => void;
     clientEmail: string;
     setClientEmail: (v: string) => void;
@@ -655,6 +687,11 @@ const EventClientSection: React.FC<{
     setEventTime: (v: string) => void;
     eventLocation: string;
     setEventLocation: (v: string) => void;
+    clientLoadedFromCrm: boolean;
+    selectedShow: Show | null;
+    showNextVersion: number | null;
+    showLatestStatus: string | null;
+    onOpenShowPlanner: () => void;
 }> = ({
     clients,
     shows,
@@ -664,7 +701,9 @@ const EventClientSection: React.FC<{
     onShowSelect,
     performerName,
     setPerformerName,
+    clientCompany,
     clientName,
+    setClientCompany,
     setClientName,
     clientEmail,
     setClientEmail,
@@ -682,6 +721,11 @@ const EventClientSection: React.FC<{
     setEventTime,
     eventLocation,
     setEventLocation,
+    clientLoadedFromCrm,
+    selectedShow,
+    showNextVersion,
+    showLatestStatus,
+    onOpenShowPlanner,
 }) => (
     <CardShell
         title="Event & Client"
@@ -715,6 +759,33 @@ const EventClientSection: React.FC<{
                 </div>
             </div>
 
+            <div className="flex flex-wrap gap-2 text-xs">
+                <StatusPill label={clientLoadedFromCrm ? 'Loaded from Client Management' : 'Manual client entry'} active={clientLoadedFromCrm} />
+                <StatusPill label={selectedShow ? 'Show linked from Planner' : 'No show linked'} active={!!selectedShow} />
+            </div>
+
+            {selectedShow ? (
+                <div className="rounded-xl border border-blue-400/20 bg-blue-500/10 p-3">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div className="text-sm text-slate-200">
+                            <div className="font-semibold">Selected show: {selectedShow.title}</div>
+                            <div className="mt-1 text-xs text-slate-300">
+                                Contract status: {showLatestStatus || 'No saved contract yet'}
+                                {showNextVersion ? ` · Next version v${showNextVersion}` : ''}
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={onOpenShowPlanner}
+                            className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-slate-900/70 px-3 py-2 text-sm text-slate-200 transition hover:bg-slate-800"
+                        >
+                            <ShareIcon className="h-4 w-4" />
+                            Open in Show Planner
+                        </button>
+                    </div>
+                </div>
+            ) : null}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                     <FieldLabel htmlFor="performer-name">Performer / Company Name *</FieldLabel>
@@ -723,6 +794,10 @@ const EventClientSection: React.FC<{
                 <div>
                     <FieldLabel htmlFor="client-name">Client Name *</FieldLabel>
                     <FieldInput id="client-name" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Cincinnati Event Planner" />
+                </div>
+                <div>
+                    <FieldLabel htmlFor="client-company">Company / Organization</FieldLabel>
+                    <FieldInput id="client-company" value={clientCompany} onChange={(e) => setClientCompany(e.target.value)} placeholder="Cincinnati Event Planner" />
                 </div>
                 <div>
                     <FieldLabel htmlFor="client-email">Client Email</FieldLabel>
@@ -738,6 +813,33 @@ const EventClientSection: React.FC<{
                 <FieldLabel htmlFor="client-address">Client Address</FieldLabel>
                 <FieldTextarea id="client-address" rows={2} value={clientAddress} onChange={(e) => setClientAddress(e.target.value)} placeholder="Mailing address or billing address" />
             </div>
+
+            <div className="flex flex-wrap gap-2 text-xs">
+                <StatusPill label={clientLoadedFromCrm ? 'Loaded from Client Management' : 'Manual client entry'} active={clientLoadedFromCrm} />
+                <StatusPill label={selectedShow ? 'Show linked from Planner' : 'No show linked'} active={!!selectedShow} />
+            </div>
+
+            {selectedShow ? (
+                <div className="rounded-xl border border-blue-400/20 bg-blue-500/10 p-3">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div className="text-sm text-slate-200">
+                            <div className="font-semibold">Selected show: {selectedShow.title}</div>
+                            <div className="mt-1 text-xs text-slate-300">
+                                Contract status: {showLatestStatus || 'No saved contract yet'}
+                                {showNextVersion ? ` · Next version v${showNextVersion}` : ''}
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={onOpenShowPlanner}
+                            className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-slate-900/70 px-3 py-2 text-sm text-slate-200 transition hover:bg-slate-800"
+                        >
+                            <ShareIcon className="h-4 w-4" />
+                            Open in Show Planner
+                        </button>
+                    </div>
+                </div>
+            ) : null}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -856,7 +958,7 @@ const ContractPreviewPanel: React.FC<{
     showNextVersion: number | null;
     showLatestStatus: string | null;
 }> = ({ preview, result, isLoading, selectedShow, showNextVersion, showLatestStatus }) => {
-    const hasCoreDetails = preview.performerName || preview.clientName || preview.eventTitle || preview.eventDate || preview.performanceFee;
+    const signatureStub = result?.signatureBlock || `Performer: ${preview.performerName || '________________'}\nClient: ${preview.clientName || '________________'}\nDate: ____________________`;
 
     return (
         <CardShell
@@ -875,18 +977,19 @@ const ContractPreviewPanel: React.FC<{
                             </p>
                         </div>
                         <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-right text-xs text-slate-300">
-                            <div>Status: {result ? 'Draft generated' : 'Preview only'}</div>
+                            <div>Status: {result ? 'AI draft generated' : 'Live preview active'}</div>
                             <div className="mt-1">{showNextVersion ? `Next version: v${showNextVersion}` : 'Versioning available after show link'}</div>
                         </div>
                     </div>
 
                     {isLoading ? (
                         <LoadingIndicator />
-                    ) : hasCoreDetails ? (
+                    ) : (
                         <div className="space-y-5 pt-4 text-sm text-slate-300">
                             <PreviewBlock title="Parties">
                                 <p><span className="text-slate-500">Performer:</span> {preview.performerName || 'Performer name pending'}</p>
                                 <p><span className="text-slate-500">Client:</span> {preview.clientName || 'Client name pending'}</p>
+                                {preview.clientCompany ? <p><span className="text-slate-500">Company:</span> {preview.clientCompany}</p> : null}
                                 {preview.clientEmail ? <p><span className="text-slate-500">Email:</span> {preview.clientEmail}</p> : null}
                                 {preview.clientPhone ? <p><span className="text-slate-500">Phone:</span> {preview.clientPhone}</p> : null}
                                 {preview.clientAddress ? <p><span className="text-slate-500">Address:</span> {preview.clientAddress}</p> : null}
@@ -916,23 +1019,20 @@ const ContractPreviewPanel: React.FC<{
                                 <p>{preview.cancellationPolicy || DEFAULT_CANCELLATION_POLICY}</p>
                             </PreviewBlock>
 
-                            {result ? (
-                                <PreviewBlock title="Generated Clauses">
-                                    <p className="font-medium text-slate-200">Performance Details</p>
-                                    <p className="mb-3 whitespace-pre-wrap">{result.performanceDetails}</p>
-                                    <p className="font-medium text-slate-200">Payment Terms</p>
-                                    <p className="mb-3 whitespace-pre-wrap">{result.paymentTerms}</p>
-                                    <p className="font-medium text-slate-200">Technical Requirements</p>
-                                    <p className="mb-3 whitespace-pre-wrap">{result.technicalRequirements}</p>
-                                    <p className="font-medium text-slate-200">Force Majeure</p>
-                                    <p className="whitespace-pre-wrap">{result.forceMajeure}</p>
-                                </PreviewBlock>
-                            ) : null}
-                        </div>
-                    ) : (
-                        <div className="py-10 text-center text-slate-500">
-                            <FileTextIcon className="mx-auto mb-4 h-16 w-16 text-slate-600" />
-                            <p>Start filling in event, client, and fee details to bring the contract preview to life.</p>
+                            <PreviewBlock title="Agreement Language">
+                                <p className="font-medium text-slate-200">Performance Details</p>
+                                <p className="mb-3 whitespace-pre-wrap">{result?.performanceDetails || 'Performance details will appear here after generation. The agreement will summarize the show type, date, timing, and service commitment.'}</p>
+                                <p className="font-medium text-slate-200">Payment Terms</p>
+                                <p className="mb-3 whitespace-pre-wrap">{result?.paymentTerms || `Total fee: ${formatCurrency(preview.performanceFee)}. ${preview.depositAmount ? `Deposit: ${formatCurrency(preview.depositAmount)}` : 'Deposit terms pending.'}`}</p>
+                                <p className="font-medium text-slate-200">Technical Requirements</p>
+                                <p className="mb-3 whitespace-pre-wrap">{result?.technicalRequirements || preview.specialRequirements || 'Technical and rider requirements will appear here.'}</p>
+                                <p className="font-medium text-slate-200">Cancellation Policy</p>
+                                <p className="mb-3 whitespace-pre-wrap">{result?.cancellationPolicy || preview.cancellationPolicy || DEFAULT_CANCELLATION_POLICY}</p>
+                                <p className="font-medium text-slate-200">Force Majeure</p>
+                                <p className="mb-3 whitespace-pre-wrap">{result?.forceMajeure || 'Either party may be excused from performance delays or cancellations caused by events beyond reasonable control.'}</p>
+                                <p className="font-medium text-slate-200">Signature Block</p>
+                                <p className="whitespace-pre-wrap">{signatureStub}</p>
+                            </PreviewBlock>
                         </div>
                     )}
                 </div>
