@@ -48,6 +48,7 @@ const ShowFeedback: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState<string>('');
     const [copied, setCopied] = useState(false);
+    const [showDemoGuide, setShowDemoGuide] = useState(false);
 
     const selectedShow: Show | undefined = useMemo(() => shows.find(s => s.id === selectedShowId), [shows, selectedShowId]);
 
@@ -242,15 +243,26 @@ const ShowFeedback: React.FC = () => {
                         </div>
 
                         <div className="flex flex-col sm:items-end gap-2">
-                            <button
-                                onClick={copyLink}
-                                disabled={!feedbackUrl}
-                                className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md text-slate-100 font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50 min-w-[150px]"
-                                title="Copy feedback QR link"
-                            >
-                                <CopyIcon className="w-4 h-4" />
-                                {copied ? 'Link Copied' : 'Copy QR Link'}
-                            </button>
+                            <div className="flex flex-wrap gap-2 sm:justify-end">
+                                <button
+                                    onClick={copyLink}
+                                    disabled={!feedbackUrl}
+                                    className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md text-slate-100 font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50 min-w-[150px]"
+                                    title="Copy feedback QR link"
+                                >
+                                    <CopyIcon className="w-4 h-4" />
+                                    {copied ? 'Link Copied' : 'Copy QR Link'}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowDemoGuide(v => !v)}
+                                    className="px-4 py-2.5 bg-purple-500/10 hover:bg-purple-500/15 border border-purple-500/25 rounded-md text-purple-100 font-semibold text-sm flex items-center justify-center gap-2 min-w-[150px]"
+                                    title="Show a quick demo of the QR workflow"
+                                >
+                                    <QrCodeIcon className="w-4 h-4 text-purple-300" />
+                                    {showDemoGuide ? 'Hide Demo' : 'QR Demo'}
+                                </button>
+                            </div>
                             <div className="flex items-start sm:items-center gap-2 rounded-lg border border-purple-500/20 bg-purple-500/10 px-3 py-2 text-xs text-purple-100 max-w-sm">
                                 <QrCodeIcon className="w-4 h-4 mt-0.5 sm:mt-0 flex-shrink-0 text-purple-300" />
                                 <span>
@@ -260,6 +272,45 @@ const ShowFeedback: React.FC = () => {
                         </div>
                     </div>
                 </div>
+
+                {showDemoGuide && (
+                    <div className="mb-5 rounded-xl border border-purple-500/25 bg-gradient-to-r from-purple-500/10 to-slate-900/35 p-4 md:p-5 animate-fade-in">
+                        <div className="flex items-start justify-between gap-4 flex-wrap">
+                            <div>
+                                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-200 mb-2">QR Feedback Demo</h3>
+                                <p className="text-sm text-slate-300 max-w-3xl">
+                                    Use this quick walkthrough to show users how feedback gets from the audience into this dashboard.
+                                </p>
+                            </div>
+                            <span className="px-3 py-1 rounded-full text-xs font-semibold border border-purple-500/25 bg-purple-500/10 text-purple-100">
+                                3-step demo
+                            </span>
+                        </div>
+                        <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <div className="rounded-xl border border-slate-700/70 bg-slate-900/45 p-4">
+                                <div className="text-xs uppercase tracking-[0.14em] text-purple-200/80 mb-2">Step 1</div>
+                                <div className="text-base font-semibold text-white">Generate the QR code</div>
+                                <p className="text-sm text-slate-400 mt-2">
+                                    Open <span className="font-semibold text-slate-200">Show Planner</span> and create the audience feedback QR code for this performance.
+                                </p>
+                            </div>
+                            <div className="rounded-xl border border-slate-700/70 bg-slate-900/45 p-4">
+                                <div className="text-xs uppercase tracking-[0.14em] text-purple-200/80 mb-2">Step 2</div>
+                                <div className="text-base font-semibold text-white">Share it after the show</div>
+                                <p className="text-sm text-slate-400 mt-2">
+                                    Display the QR on a screen or send the copied link so audience members can rate the performance on their phones.
+                                </p>
+                            </div>
+                            <div className="rounded-xl border border-slate-700/70 bg-slate-900/45 p-4">
+                                <div className="text-xs uppercase tracking-[0.14em] text-purple-200/80 mb-2">Step 3</div>
+                                <div className="text-base font-semibold text-white">Review the results here</div>
+                                <p className="text-sm text-slate-400 mt-2">
+                                    Ratings, reactions, comments, and future insight panels appear on this page once responses are submitted.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {errorMsg && (
                     <div className="p-3 rounded-md bg-red-900/25 border border-red-500/40 text-red-200 text-sm mb-5">
