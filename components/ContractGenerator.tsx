@@ -803,7 +803,7 @@ Guidelines:
 
                     {result ? (
                         <CardShell title="AI Contract Sections" description="Refine the generated agreement language before saving or exporting." icon={<ShieldIcon className="w-5 h-5" />}>
-                            <div className="space-y-4">
+                            <div className="space-y-3">
                                 <SectionEditor title="Performance Details" value={result.performanceDetails} onChange={(v) => updateSection('performanceDetails', v)} />
                                 <SectionEditor title="Payment Terms" value={result.paymentTerms} onChange={(v) => updateSection('paymentTerms', v)} />
                                 <SectionEditor title="Technical Requirements" value={result.technicalRequirements} onChange={(v) => updateSection('technicalRequirements', v)} />
@@ -827,8 +827,8 @@ const CardShell: React.FC<{ title: string; description?: string; icon?: React.Re
     icon,
     children,
 }) => (
-    <div className="rounded-xl border border-white/10 bg-white/5 p-4 md:p-5 shadow-[0_10px_30px_rgba(2,6,23,0.28)] backdrop-blur-sm">
-        <div className="mb-4 flex items-start gap-3">
+    <div className="rounded-xl border border-white/10 bg-white/5 p-4 shadow-[0_10px_30px_rgba(2,6,23,0.28)] backdrop-blur-sm">
+        <div className="mb-3 flex items-start gap-3">
             <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/15 text-purple-300 border border-purple-400/20 shrink-0">
                 {icon ?? <FileTextIcon className="w-5 h-5" />}
             </div>
@@ -850,21 +850,21 @@ const FieldLabel: React.FC<{ htmlFor: string; children: React.ReactNode }> = ({ 
 const FieldInput: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = (props) => (
     <input
         {...props}
-        className={`w-full rounded-lg border border-white/10 bg-slate-900/80 px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-purple-400/60 focus:outline-none focus:ring-2 focus:ring-purple-500/20 ${props.className ?? ''}`.trim()}
+        className={`w-full rounded-lg border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-purple-400/60 focus:outline-none focus:ring-2 focus:ring-purple-500/20 ${props.className ?? ''}`.trim()}
     />
 );
 
 const FieldTextarea: React.FC<React.TextareaHTMLAttributes<HTMLTextAreaElement>> = (props) => (
     <textarea
         {...props}
-        className={`w-full rounded-lg border border-white/10 bg-slate-900/80 px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-purple-400/60 focus:outline-none focus:ring-2 focus:ring-purple-500/20 ${props.className ?? ''}`.trim()}
+        className={`w-full rounded-lg border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-purple-400/60 focus:outline-none focus:ring-2 focus:ring-purple-500/20 ${props.className ?? ''}`.trim()}
     />
 );
 
 const FieldSelect: React.FC<React.SelectHTMLAttributes<HTMLSelectElement>> = (props) => (
     <select
         {...props}
-        className={`w-full rounded-lg border border-white/10 bg-slate-900/80 px-3 py-2.5 text-sm text-white focus:border-purple-400/60 focus:outline-none focus:ring-2 focus:ring-purple-500/20 ${props.className ?? ''}`.trim()}
+        className={`w-full rounded-lg border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white focus:border-purple-400/60 focus:outline-none focus:ring-2 focus:ring-purple-500/20 ${props.className ?? ''}`.trim()}
     />
 );
 
@@ -956,9 +956,9 @@ const EventClientSection: React.FC<{
         description="Connect this agreement to your CRM and Show Planner, then confirm the booking details."
         icon={<UsersIcon className="w-5 h-5" />}
     >
-        <div className="space-y-4">
-            <div className="mb-4 rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">Preset active: <span className="font-semibold">{contractType}</span> · Deposit and language defaults are tuned for this booking type.</div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-3">
+            <div className="mb-3 rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">Preset active: <span className="font-semibold">{contractType}</span> · Deposit and language defaults are tuned for this booking type.</div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                     <FieldLabel htmlFor="select-client">Select Client</FieldLabel>
                     <FieldSelect id="select-client" value={selectedClientId} onChange={(e) => onClientSelect(e.target.value)}>
@@ -984,7 +984,7 @@ const EventClientSection: React.FC<{
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                     <FieldLabel htmlFor="performer-name">Performer / Company Name *</FieldLabel>
                     <FieldInput id="performer-name" value={performerName} onChange={(e) => setPerformerName(e.target.value)} placeholder="Todd Simpson Magic" />
@@ -1039,7 +1039,7 @@ const EventClientSection: React.FC<{
                 </div>
             ) : null}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                     <FieldLabel htmlFor="contract-type">Contract Type</FieldLabel>
                     <FieldSelect id="contract-type" value={contractType} onChange={(e) => setContractType(e.target.value as ContractType)}>
@@ -1092,8 +1092,8 @@ const FinancialTermsSection: React.FC<{
         description="Set the booking economics clearly so the agreement reads like a professional client document."
         icon={<ClockIcon className="w-5 h-5" />}
     >
-        <div className="mb-4 rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">Preset active: <span className="font-semibold">{contractType}</span> · Deposit and language defaults are tuned for this booking type.</div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="mb-3 rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">Preset active: <span className="font-semibold">{contractType}</span> · Deposit and language defaults are tuned for this booking type.</div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
                 <FieldLabel htmlFor="perf-length">Performance Length</FieldLabel>
                 <FieldInput id="perf-length" value={performanceLength} onChange={(e) => setPerformanceLength(e.target.value)} placeholder="45 minutes" />
@@ -1200,9 +1200,9 @@ const ContractPreviewPanel: React.FC<{
 
                     <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 py-4">
                         <div>
-                            <div className="text-[11px] uppercase tracking-[0.18em] text-purple-300">Performance Agreement</div>
-                            <h4 className="mt-2 text-2xl font-semibold tracking-tight text-slate-50">{preview.eventTitle || 'Untitled Engagement'}</h4>
-                            <p className="mt-1 text-sm text-slate-300">
+                            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-purple-300/90">Performance Agreement</div>
+                            <h4 className="mt-2 text-3xl font-bold leading-tight tracking-tight text-white">{preview.eventTitle || 'Untitled Engagement'}</h4>
+                            <p className="mt-1 text-sm text-slate-400">
                                 {preview.eventType || 'Professional performance contract'} · {preview.contractType}
                             </p>
                         </div>
@@ -1279,7 +1279,7 @@ const ContractPreviewPanel: React.FC<{
                     )}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
                     <InfoChip title="Show status" value={selectedShow ? showLatestStatus || 'No saved contract status' : 'No show connected'} />
                     <InfoChip title="Revenue snapshot" value={preview.performanceFee ? formatCurrency(preview.performanceFee) : 'Fee not entered'} />
                     <InfoChip title="Contract preset" value={preview.contractType} />
@@ -1318,11 +1318,11 @@ const ContractActionBar: React.FC<{
             <StatusPill label={selectedShowId ? 'Show versioning active' : 'Show versioning off'} active={!!selectedShowId} />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <ActionButton onClick={onCopy} disabled={!result || copyStatus === 'copied'} primary>
+            <ActionButton onClick={onCopy} disabled={!result || copyStatus === 'copied'} primary className="sm:col-span-2">
                 {copyStatus === 'copied' ? <CheckIcon className="w-4 h-4 text-green-400" /> : <CopyIcon className="w-4 h-4" />}
                 <span>{copyStatus === 'copied' ? 'Copied!' : 'Copy Contract'}</span>
             </ActionButton>
-            <ActionButton onClick={onDownloadPdf} disabled={!result}>
+            <ActionButton onClick={onDownloadPdf} disabled={!result} className="border border-purple-400/20 bg-purple-500/10 text-purple-100 hover:bg-purple-500/15">
                 <FileTextIcon className="w-4 h-4" />
                 <span>Download PDF</span>
             </ActionButton>
@@ -1338,7 +1338,7 @@ const ContractActionBar: React.FC<{
                 {saveToShowStatus === 'saved' ? <CheckIcon className="w-4 h-4 text-green-300" /> : <ShareIcon className="w-4 h-4" />}
                 <span>{saveToShowStatus === 'saved' ? 'Saved to Show!' : 'Save as New Version to Show'}</span>
             </ActionButton>
-            <ActionButton onClick={onSave} disabled={!result || saveStatus === 'saved'}>
+            <ActionButton onClick={onSave} disabled={!result || saveStatus === 'saved'} className="sm:col-span-2">
                 {saveStatus === 'saved' ? <CheckIcon className="w-4 h-4 text-green-400" /> : <SaveIcon className="w-4 h-4" />}
                 <span>{saveStatus === 'saved' ? 'Saved!' : 'Save to Ideas'}</span>
             </ActionButton>
@@ -1381,11 +1381,11 @@ const IntegrationHintsCard: React.FC<{ selectedShow: Show | null; selectedClient
     </CardShell>
 );
 
-const ActionButton: React.FC<{ onClick: () => void; disabled?: boolean; primary?: boolean; children: React.ReactNode }> = ({ onClick, disabled, primary, children }) => (
+const ActionButton: React.FC<{ onClick: () => void; disabled?: boolean; primary?: boolean; className?: string; children: React.ReactNode }> = ({ onClick, disabled, primary, className, children }) => (
     <button
         onClick={onClick}
         disabled={disabled}
-        className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+        className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
             primary
                 ? 'border border-purple-400/25 bg-purple-600 text-white hover:bg-purple-500 shadow-[0_0_20px_rgba(168,85,247,0.22)] disabled:border-white/10 disabled:bg-slate-700 disabled:shadow-none'
                 : 'border border-white/10 bg-slate-900/70 text-slate-200 hover:bg-slate-800 disabled:bg-slate-800/60 disabled:text-slate-500'
@@ -1403,9 +1403,9 @@ const HintTile: React.FC<{ title: string; text: string; active?: boolean }> = ({
 );
 
 const InfoChip: React.FC<{ title: string; value: string }> = ({ title, value }) => (
-    <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
-        <div className="text-[11px] uppercase tracking-wide text-slate-500">{title}</div>
-        <div className="mt-1 text-sm text-slate-200">{value}</div>
+    <div className="rounded-lg border border-white/10 bg-slate-950/35 px-3 py-2">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">{title}</div>
+        <div className="mt-1 line-clamp-2 text-[13px] leading-5 text-slate-200">{value}</div>
     </div>
 );
 
