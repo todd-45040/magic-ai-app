@@ -1031,7 +1031,7 @@ const ClientManagement: React.FC<ClientManagementProps> = ({
                     <div className="mt-3 text-lg font-semibold text-white">Retention + booking assistant</div>
                     <div className="mt-1 max-w-3xl text-sm text-slate-300">Generate polished follow-up copy, smarter event ideas, and a ready-to-send booking pitch based on this client’s show history, contracts, and audience response.</div>
                   </div>
-                  <div className="rounded-2xl border border-emerald-400/15 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100 xl:max-w-xs">
+                  <div className="rounded-2xl border border-emerald-400/15 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 px-4 py-3 text-sm text-emerald-100 shadow-[0_0_18px_rgba(99,102,241,0.12)] xl:max-w-xs">
                     <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-200/90">Repeat Booking Predictor</div>
                     <div className="mt-2 leading-6">{repeatBookingInsight}</div>
                   </div>
@@ -1146,7 +1146,7 @@ const ClientManagement: React.FC<ClientManagementProps> = ({
                           {selectedMetrics.relatedContracts.slice(0, 4).map((contract) => {
                             const linkedShow = selectedMetrics.relatedShows.find((show) => show.id === contract.show_id);
                             return (
-                              <div key={contract.id} className="rounded-2xl border border-white/8 bg-slate-950/55 p-4">
+                              <div key={contract.id} className="rounded-2xl border border-white/8 bg-slate-950/55 p-4 transition hover:border-indigo-400/40 hover:shadow-[0_0_20px_rgba(99,102,241,0.25)]">
                                 <div className="flex flex-col items-start gap-3">
                                   <div>
                                     <div className="font-semibold text-white">{linkedShow?.title || 'Linked performance'}</div>
@@ -1191,7 +1191,7 @@ const ClientManagement: React.FC<ClientManagementProps> = ({
                       </div>
 
                       <div className="mt-3 rounded-2xl border border-white/8 bg-slate-950/55 p-4">
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Top Comment</div>
+                        <div className="border-t border-white/10 pt-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">💬 Top Comment</div>
                         <div className="mt-2 text-sm leading-6 text-white">{selectedMetrics.topComment || 'No comments collected from linked shows yet.'}</div>
                       </div>
                     </div>
@@ -1265,7 +1265,10 @@ const ClientManagement: React.FC<ClientManagementProps> = ({
                             <div className="mt-2 flex items-start gap-3">
                               <div className={`mt-0.5 h-2.5 w-2.5 rounded-full ${item.kind === 'note' ? 'bg-purple-400' : item.kind === 'contract' ? 'bg-cyan-400' : 'bg-emerald-400'}`} />
                               <div>
-                                <div className="font-semibold text-white">{item.title}</div>
+                                <div className="flex items-center gap-2 font-semibold text-white">
+                                  <span aria-hidden="true">{item.kind === 'show' ? '🎭' : item.kind === 'contract' ? '📝' : '🗒️'}</span>
+                                  <span>{item.title}</span>
+                                </div>
                                 <div className="mt-1 text-sm text-slate-300">{item.detail}</div>
                               </div>
                             </div>
