@@ -2982,7 +2982,7 @@ ${action.payload.content}`;
               onOpenDirectorMode={() => setActiveView('director-mode')}
             />
           );
-        case 'client-management': return <ClientManagement onClientsUpdate={handleClientsUpdate} onAiSpark={handleAiSpark} onOpenShowPlanner={handleOpenShowPlannerFromClient} />;
+        case 'client-management': return <ClientManagement onClientsUpdate={handleClientsUpdate} onAiSpark={handleAiSpark} onOpenShowPlanner={handleOpenShowPlannerFromClient} onNavigateToContracts={() => setActiveView('contract-generator')} onNavigateToMarketing={() => setActiveView('marketing-campaign')} />;
         case 'member-management': return <MemberManagement />;
         case 'effect-generator': return <EffectGenerator onIdeaSaved={() => handleIdeaSaved('Effect ideas saved!')} />;
         case 'magic-wire': return <MagicWire currentUser={user} onIdeaSaved={() => handleIdeaSaved('News article saved!')} />;

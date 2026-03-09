@@ -1,527 +1,709 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { Client, AiSparkAction } from '../types';
+import type { Client, AiSparkAction, Feedback, Show } from '../types';
 import { getClients, addClient, updateClient, deleteClient } from '../services/clientsService';
-import { createShow, addTaskToShow, getShows } from '../services/showsService';
-import { UsersCogIcon, TrashIcon, PencilIcon, WandIcon, MailIcon } from './icons';
+import { createShow, addTaskToShow } from '../services/showsService';
+import { listAllContractsForUser, type ContractRow } from '../services/contractsService';
+import { useAppState } from '../store';
+import { trackClientEvent } from '../services/telemetryClient';
+import {
+  UsersCogIcon,
+  TrashIcon,
+  PencilIcon,
+  WandIcon,
+  MailIcon,
+  SearchIcon,
+  CalendarIcon,
+  CopyIcon,
+  NewspaperIcon,
+  ChecklistIcon,
+  StarIcon,
+} from './icons';
 
 type ClientX = Client & {
-    tags?: string[];
-    last_contacted?: string;
-    last_show_title?: string;
-    last_show_date?: string;
-    related_shows?: { title: string; date?: string }[];
+  tags?: string[];
+  last_contacted?: string;
+  last_show_title?: string;
+  last_show_date?: string;
+  related_shows?: { title: string; date?: string }[];
 };
-
 
 type NoteEntry = { at: string; text: string };
 
+type ClientMetrics = {
+  showCount: number;
+  contractCount: number;
+  avgRating: number | null;
+  revenue: number;
+  lastShowLabel: string;
+  lastShowTitle: string;
+  lastShowTs: number | null;
+  clientSinceLabel: string;
+  latestNote: string | null;
+  primaryVenue: string | null;
+  relatedShows: Show[];
+  feedbackCount: number;
+};
+
 function parseNotesTimeline(raw?: string): NoteEntry[] {
-    const r = (raw || '').trim();
-    if (!r) return [];
-    try {
-        const parsed = JSON.parse(r);
-        if (Array.isArray(parsed)) {
-            return parsed
-                .filter((x) => x && typeof x.text === 'string')
-                .map((x) => ({ at: typeof x.at === 'string' ? x.at : '', text: String(x.text) }));
-        }
-    } catch { /* ignore */ }
-    // Back-compat: treat existing notes string as one entry
-    return [{ at: '', text: r }];
+  const r = (raw || '').trim();
+  if (!r) return [];
+  try {
+    const parsed = JSON.parse(r);
+    if (Array.isArray(parsed)) {
+      return parsed
+        .filter((x) => x && typeof x.text === 'string')
+        .map((x) => ({ at: typeof x.at === 'string' ? x.at : '', text: String(x.text) }));
+    }
+  } catch {
+    // ignore legacy plain text notes
+  }
+  return [{ at: '', text: r }];
 }
 
-function formatShortDate(iso?: string) {
-    if (!iso) return '';
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return iso;
-    return d.toLocaleDateString();
+function formatShortDate(value?: string | number | null) {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function formatMoney(value: number) {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value || 0);
+}
+
+function getShowSortTs(show: Show): number {
+  return show.performanceDate || show.updatedAt || show.createdAt || 0;
+}
+
+function getClientMetrics(client: ClientX, shows: Show[], feedback: Feedback[], contracts: ContractRow[]): ClientMetrics {
+  const relatedShows = shows
+    .filter((show) => show.clientId === client.id)
+    .sort((a, b) => getShowSortTs(b) - getShowSortTs(a));
+
+  const showIds = new Set(relatedShows.map((show) => show.id));
+  const relatedContracts = contracts.filter((row) => showIds.has(row.show_id));
+  const relatedFeedback = feedback.filter((item) => item.showId && showIds.has(item.showId));
+  const ratings = relatedFeedback.map((item) => Number(item.rating)).filter((value) => Number.isFinite(value) && value > 0);
+  const avgRating = ratings.length ? Number((ratings.reduce((sum, value) => sum + value, 0) / ratings.length).toFixed(1)) : null;
+  const revenue = relatedShows.reduce((sum, show) => sum + Number(show.finances?.performanceFee || 0), 0);
+  const lastShow = relatedShows[0];
+  const notes = parseNotesTimeline(client.notes);
+  const latestNote = notes[0]?.text || null;
+
+  return {
+    showCount: relatedShows.length,
+    contractCount: relatedContracts.length,
+    avgRating,
+    revenue,
+    lastShowLabel: lastShow ? formatShortDate(lastShow.performanceDate || lastShow.updatedAt || lastShow.createdAt) : (client.last_show_date ? formatShortDate(client.last_show_date) : 'No shows yet'),
+    lastShowTitle: lastShow?.title || client.last_show_title || 'No shows linked yet',
+    lastShowTs: lastShow ? getShowSortTs(lastShow) : (client.last_show_date ? new Date(client.last_show_date).getTime() : null),
+    clientSinceLabel: formatShortDate(client.createdAt),
+    latestNote,
+    primaryVenue: lastShow?.venue || null,
+    relatedShows,
+    feedbackCount: relatedFeedback.length,
+  };
 }
 
 interface ClientManagementProps {
-    onClientsUpdate: (clients: Client[]) => void;
-    onAiSpark: (action: AiSparkAction) => void;
-    /** Navigate to Show Planner and optionally open a specific show/task */
-    onOpenShowPlanner?: (showId: string | null, taskId?: string | null) => void;
+  onClientsUpdate: (clients: Client[]) => void;
+  onAiSpark: (action: AiSparkAction) => void;
+  onOpenShowPlanner?: (showId: string | null, taskId?: string | null) => void;
+  onNavigateToContracts?: () => void;
+  onNavigateToMarketing?: () => void;
 }
 
 const ClientModal: React.FC<{
-    onClose: () => void;
-    onSave: (clientData: Omit<ClientX, 'id'|'createdAt'>) => void;
-    clientToEdit?: ClientX | null;
+  onClose: () => void;
+  onSave: (clientData: Omit<ClientX, 'id' | 'createdAt'>) => void;
+  clientToEdit?: ClientX | null;
 }> = ({ onClose, onSave, clientToEdit }) => {
-    const [name, setName] = useState(clientToEdit?.name || '');
-    const [company, setCompany] = useState(clientToEdit?.company || '');
-    const [email, setEmail] = useState(clientToEdit?.email || '');
-    const [phone, setPhone] = useState(clientToEdit?.phone || '');
-    const [notesTimeline, setNotesTimeline] = useState<NoteEntry[]>(parseNotesTimeline(clientToEdit?.notes));
-    const [newNote, setNewNote] = useState('');
-    const [tagsText, setTagsText] = useState((clientToEdit?.tags || []).join(', '));
-    const [lastContacted, setLastContacted] = useState(clientToEdit?.last_contacted || '');
-    const [lastShowTitle, setLastShowTitle] = useState(clientToEdit?.last_show_title || '');
-    const [lastShowDate, setLastShowDate] = useState(clientToEdit?.last_show_date || '');
-    const [relatedShows, setRelatedShows] = useState<{ title: string; date?: string }[]>(clientToEdit?.related_shows || []);
-    const [newRelatedShowTitle, setNewRelatedShowTitle] = useState('');
-    const [newRelatedShowDate, setNewRelatedShowDate] = useState('');
+  const [name, setName] = useState(clientToEdit?.name || '');
+  const [company, setCompany] = useState(clientToEdit?.company || '');
+  const [email, setEmail] = useState(clientToEdit?.email || '');
+  const [phone, setPhone] = useState(clientToEdit?.phone || '');
+  const [notesTimeline, setNotesTimeline] = useState<NoteEntry[]>(parseNotesTimeline(clientToEdit?.notes));
+  const [newNote, setNewNote] = useState('');
+  const [tagsText, setTagsText] = useState((clientToEdit?.tags || []).join(', '));
+  const [lastContacted, setLastContacted] = useState(clientToEdit?.last_contacted || '');
+  const [lastShowTitle, setLastShowTitle] = useState(clientToEdit?.last_show_title || '');
+  const [lastShowDate, setLastShowDate] = useState(clientToEdit?.last_show_date || '');
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!name.trim()) return;
-        onSave({
-            name,
-            company,
-            email,
-            phone,
-            notes: JSON.stringify(notesTimeline),
-            tags: tagsText.split(',').map(t => t.trim()).filter(Boolean),
-            last_contacted: lastContacted || undefined,
-            last_show_title: lastShowTitle || undefined,
-            last_show_date: lastShowDate || undefined,
-        } as any);
-    };
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    onSave({
+      name: name.trim(),
+      company: company.trim(),
+      email: email.trim(),
+      phone: phone.trim(),
+      notes: JSON.stringify(notesTimeline),
+      tags: tagsText.split(',').map((tag) => tag.trim()).filter(Boolean),
+      last_contacted: lastContacted || undefined,
+      last_show_title: lastShowTitle || undefined,
+      last_show_date: lastShowDate || undefined,
+    } as any);
+  };
 
-    const modalTitle = clientToEdit ? 'Edit Client' : 'Add New Client';
-    const buttonText = clientToEdit ? 'Save Changes' : 'Add Client';
+  const addNote = () => {
+    const text = newNote.trim();
+    if (!text) return;
+    setNotesTimeline((prev) => [{ at: new Date().toISOString().slice(0, 10), text }, ...prev]);
+    setNewNote('');
+  };
 
-    const modalContent = (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={onClose}>
-            <div className="w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col rounded-lg border border-slate-700/40 bg-slate-900/80 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                <form id="client-form" onSubmit={handleSubmit} className="p-6 space-y-4 flex-1 min-h-0 overflow-y-auto">
-                    <h2 className="text-xl font-bold text-white">{modalTitle}</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div><label htmlFor="name" className="block text-sm font-medium text-slate-300 mb-1">Name*</label><input id="name" type="text" value={name} onChange={e => setName(e.target.value)} required autoFocus className="w-full px-3 py-2 border-slate-600 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50" /></div>
-                        <div><label htmlFor="company" className="block text-sm font-medium text-slate-300 mb-1">Company</label><input id="company" type="text" value={company} onChange={e => setCompany(e.target.value)} className="w-full px-3 py-2 border-slate-600 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50" /></div>
-                        <div><label htmlFor="email" className="block text-sm font-medium text-slate-300 mb-1">Email</label><input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full px-3 py-2 border-slate-600 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50" /></div>
-                        <div><label htmlFor="phone" className="block text-sm font-medium text-slate-300 mb-1">Phone</label><input id="phone" type="tel" value={phone} onChange={e => setPhone(e.target.value)} className="w-full px-3 py-2 border-slate-600 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50" /></div>
-                    </div>
-                    <div className="col-span-2">
-                        <label className="block text-sm font-medium text-slate-300 mb-1">Tags</label>
-                        <input
-                            className="w-full px-3 py-2 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50"
-                            value={tagsText}
-                            onChange={(e) => setTagsText(e.target.value)}
-                            placeholder="e.g., Corporate, Repeat, Holiday"
-                        />
-                        {tagsText.trim() ? (
-                            <div className="mt-2 flex flex-wrap gap-1">
-                                {tagsText.split(',').map(t => t.trim()).filter(Boolean).slice(0, 8).map((t, idx) => (
-                                    <span key={idx} className="px-2 py-0.5 text-[11px] rounded-full bg-slate-900/40 border border-slate-700 text-slate-200">{t}</span>
-                                ))}
-                            </div>
-                        ) : null}
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-slate-300 mb-1">Last Contacted</label>
-                            <input
-                                type="date"
-                                className="w-full px-3 py-2 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50"
-                                value={lastContacted}
-                                onChange={(e) => setLastContacted(e.target.value)}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-300 mb-1">Last Show Date</label>
-                            <input
-                                type="date"
-                                className="w-full px-3 py-2 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50"
-                                value={lastShowDate}
-                                onChange={(e) => setLastShowDate(e.target.value)}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="col-span-2">
-                        <label className="block text-sm font-medium text-slate-300 mb-1">Last Show Title</label>
-                        <input
-                            className="w-full px-3 py-2 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50"
-                            value={lastShowTitle}
-                            onChange={(e) => setLastShowTitle(e.target.value)}
-                            placeholder="e.g., Science Time"
-                        />
-                    </div>
-
-
-<label className="block text-sm font-medium text-slate-300 mb-1">Notes Timeline</label>
-<div className="rounded-md border border-slate-700 bg-slate-950/30 p-3">
-    {notesTimeline.length === 0 ? (
-        <div className="text-sm text-slate-400">No notes yet. Add your first note below.</div>
-    ) : (
-        <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
-            {notesTimeline
-                .slice()
-                .sort((a, b) => (b.at || '').localeCompare(a.at || ''))
-                .map((n, idx) => (
-                    <div key={idx} className="text-sm">
-                        <div className="text-slate-400 text-xs mb-0.5">
-                            {n.at ? formatShortDate(n.at) : 'Note'}
-                        </div>
-                        <div className="text-slate-100 whitespace-pre-wrap">{n.text}</div>
-                    </div>
-                ))}
-        </div>
-    )}
-
-    <div className="mt-3">
-        <label htmlFor="newNote" className="block text-xs font-medium text-slate-400 mb-1">Add a note (append-only)</label>
-        <textarea
-            id="newNote"
-            rows={2}
-            value={newNote}
-            onChange={(e) => setNewNote(e.target.value)}
-            placeholder="e.g., Met at the 2026 convention. Interested in a holiday party booking."
-            className="w-full px-3 py-2 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50"
-        />
-        <div className="mt-2 flex justify-end">
-            <button
-                type="button"
-                onClick={() => {
-                    const t = newNote.trim();
-                    if (!t) return;
-                    setNotesTimeline((prev) => [{ at: new Date().toISOString(), text: t }, ...prev]);
-                    setNewNote('');
-                }}
-                className="px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-100 text-sm border border-slate-600 transition"
-            >
-                Add Note
-            </button>
-        </div>
-    </div>
-</div>
-
-<div className="mt-4">
-    <label className="block text-sm font-medium text-slate-300 mb-1">Related Shows</label>
-    {relatedShows.length === 0 ? (
-        <div className="text-sm text-slate-400 mb-2">No related shows yet. Add one below.</div>
-    ) : (
-        <div className="flex flex-wrap gap-2 mb-2">
-            {relatedShows.slice(0, 6).map((s, idx) => (
-                <button
-                    key={idx}
-                    type="button"
-                    onClick={() => {
-                        // Best-effort navigation hook (safe even if unused)
-                        try {
-                            localStorage.setItem('maw_open_show_title', s.title);
-                            window.location.href = `/?tab=show-planner&showTitle=${encodeURIComponent(s.title)}`;
-                        } catch {}
-                    }}
-                    className="px-2 py-1 rounded-md text-xs bg-slate-900/40 border border-slate-700 text-slate-200 hover:bg-slate-800 transition"
-                    title="Open in Show Planner"
-                >
-                    {s.title}{s.date ? ` • ${formatShortDate(s.date)}` : ''}
-                </button>
-            ))}
-        </div>
-    )}
-
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <input
-            type="text"
-            value={newRelatedShowTitle}
-            onChange={(e) => setNewRelatedShowTitle(e.target.value)}
-            placeholder="Show title (e.g., Science Time)"
-            className="w-full px-3 py-2 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50"
-        />
-        <input
-            type="date"
-            value={newRelatedShowDate}
-            onChange={(e) => setNewRelatedShowDate(e.target.value)}
-            className="w-full px-3 py-2 rounded-md text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50"
-        />
-    </div>
-    <div className="mt-2 flex justify-end">
-        <button
-            type="button"
-            onClick={() => {
-                const title = newRelatedShowTitle.trim();
-                if (!title) return;
-                setRelatedShows((prev) => [{ title, date: newRelatedShowDate || undefined }, ...prev]);
-                setNewRelatedShowTitle('');
-                setNewRelatedShowDate('');
-            }}
-            className="px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-100 text-sm border border-slate-600 transition"
-        >
-            Add Related Show
-        </button>
-    </div>
-</div>
-
-                    <div className="flex gap-3 pt-2">
-                        <button type="button" onClick={onClose} className="w-full py-2 rounded-md text-slate-300 font-bold text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50">Cancel</button>
-                        <button type="submit" className="w-full py-2 rounded-md text-white font-bold text-slate-100 placeholder:text-slate-400 bg-slate-900/70 border border-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50">{buttonText}</button>
-                    </div>
-                </form>
+  const modalContent = (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-slate-950/95 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <form id="client-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6">
+          <div className="mb-6 flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-bold text-white">{clientToEdit ? 'Edit Client' : 'Add New Client'}</h2>
+              <p className="mt-1 text-sm text-slate-400">Capture client details, recent notes, and follow-up context.</p>
             </div>
-        </div>
-    );
-    return createPortal(modalContent, document.body);
-};
+            <button type="button" onClick={onClose} className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-slate-300 transition hover:bg-white/5">Close</button>
+          </div>
 
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div>
+              <label htmlFor="name" className="mb-1 block text-sm font-medium text-slate-300">Name*</label>
+              <input id="name" value={name} onChange={(e) => setName(e.target.value)} required autoFocus className="w-full rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2.5 text-slate-100 outline-none transition focus:border-purple-500 focus:ring-1 focus:ring-purple-500/40" />
+            </div>
+            <div>
+              <label htmlFor="company" className="mb-1 block text-sm font-medium text-slate-300">Company</label>
+              <input id="company" value={company} onChange={(e) => setCompany(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2.5 text-slate-100 outline-none transition focus:border-purple-500 focus:ring-1 focus:ring-purple-500/40" />
+            </div>
+            <div>
+              <label htmlFor="email" className="mb-1 block text-sm font-medium text-slate-300">Email</label>
+              <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2.5 text-slate-100 outline-none transition focus:border-purple-500 focus:ring-1 focus:ring-purple-500/40" />
+            </div>
+            <div>
+              <label htmlFor="phone" className="mb-1 block text-sm font-medium text-slate-300">Phone</label>
+              <input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2.5 text-slate-100 outline-none transition focus:border-purple-500 focus:ring-1 focus:ring-purple-500/40" />
+            </div>
+          </div>
 
-const ClientManagement: React.FC<ClientManagementProps> = ({ onClientsUpdate, onAiSpark, onOpenShowPlanner }) => {
-    const [clients, setClients] = useState<ClientX[]>([]);
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [clientToEdit, setClientToEdit] = useState<Client | null>(null);
+          <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-300">Last Contacted</label>
+              <input type="date" value={lastContacted} onChange={(e) => setLastContacted(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2.5 text-slate-100 outline-none transition focus:border-purple-500 focus:ring-1 focus:ring-purple-500/40" />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-300">Last Show Date</label>
+              <input type="date" value={lastShowDate} onChange={(e) => setLastShowDate(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2.5 text-slate-100 outline-none transition focus:border-purple-500 focus:ring-1 focus:ring-purple-500/40" />
+            </div>
+          </div>
 
-    useEffect(() => {
-        const allClients = getClients();
-        setClients(allClients);
-        onClientsUpdate(allClients);
+          <div className="mt-4">
+            <label className="mb-1 block text-sm font-medium text-slate-300">Last Show Title</label>
+            <input value={lastShowTitle} onChange={(e) => setLastShowTitle(e.target.value)} placeholder="e.g., Corporate Holiday Gala" className="w-full rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2.5 text-slate-100 outline-none transition focus:border-purple-500 focus:ring-1 focus:ring-purple-500/40" />
+          </div>
 
-}, [onClientsUpdate]);
+          <div className="mt-4">
+            <label className="mb-1 block text-sm font-medium text-slate-300">Tags</label>
+            <input value={tagsText} onChange={(e) => setTagsText(e.target.value)} placeholder="Corporate, Repeat, Holiday" className="w-full rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2.5 text-slate-100 outline-none transition focus:border-purple-500 focus:ring-1 focus:ring-purple-500/40" />
+            {tagsText.trim() ? (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {tagsText.split(',').map((tag) => tag.trim()).filter(Boolean).slice(0, 8).map((tag) => (
+                  <span key={tag} className="rounded-full border border-purple-400/20 bg-purple-500/10 px-2.5 py-1 text-[11px] font-medium text-purple-100">{tag}</span>
+                ))}
+              </div>
+            ) : null}
+          </div>
 
-// --- Quick Actions (Client Tile Buttons) ---
+          <div className="mt-5 rounded-2xl border border-white/10 bg-slate-900/60 p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-slate-200">Notes Timeline</div>
+                <div className="text-xs text-slate-400">Keep a running log of contact history and client preferences.</div>
+              </div>
+            </div>
 
-const openShowPlanner = (showId: string | null, taskId?: string | null) => {
-    if (onOpenShowPlanner) {
-        onOpenShowPlanner(showId, taskId ?? null);
-    }
-};
+            <div className="mb-3 flex gap-2">
+              <input value={newNote} onChange={(e) => setNewNote(e.target.value)} placeholder="Add a note, follow-up reminder, or show preference…" className="flex-1 rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2.5 text-slate-100 outline-none transition focus:border-purple-500 focus:ring-1 focus:ring-purple-500/40" />
+              <button type="button" onClick={addNote} className="rounded-xl bg-purple-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-purple-500">Add Note</button>
+            </div>
 
-const ensureFollowUpShow = async (): Promise<string> => {
-    const STORAGE_KEY = 'maw_followups_show_id';
-    const existingId = localStorage.getItem(STORAGE_KEY);
-
-    try {
-        if (existingId) {
-            const shows = await getShows();
-            if (shows.some(s => s.id === existingId)) return existingId;
-        }
-    } catch {
-        // If fetching shows fails, we'll attempt to create the follow-up show below.
-    }
-
-    const created = await createShow('Client Follow-ups', 'Auto-created checklist for client follow-up reminders.');
-    localStorage.setItem(STORAGE_KEY, created.id);
-    return created.id;
-};
-
-const handleAddFollowUp = async (client: ClientX) => {
-    try {
-        const showId = await ensureFollowUpShow();
-        const due = new Date();
-        // Default: 3 days from now (nice, practical nudge)
-        due.setDate(due.getDate() + 3);
-
-        await addTaskToShow(showId, {
-            title: `Follow up: ${client.name}${client.company ? ` (${client.company})` : ''}`,
-            notes: [
-                client.email ? `Email: ${client.email}` : null,
-                client.phone ? `Phone: ${client.phone}` : null,
-                '',
-                'Next step: (add notes here)'
-            ].filter(Boolean).join('\n'),
-            priority: 'Medium',
-            dueDate: due.toISOString(),
-            status: 'To-Do',
-        } as any);
-
-        openShowPlanner(showId, null);
-    } catch (err: any) {
-        console.error('Failed to add follow-up:', err);
-        alert(`Could not add follow-up. ${err?.message ? `\n\n${err.message}` : ''}`);
-    }
-};
-
-const handleCreateBooking = async (client: ClientX) => {
-    try {
-        const created = await createShow(
-            `${client.name}${client.company ? ` — ${client.company}` : ''} Booking`,
-            [
-                `Client: ${client.name}`,
-                client.company ? `Company: ${client.company}` : null,
-                client.email ? `Email: ${client.email}` : null,
-                client.phone ? `Phone: ${client.phone}` : null,
-            ].filter(Boolean).join('\n')
-        );
-
-        // Seed the new show with a few default prep tasks (fast win)
-        await addTaskToShow(created.id, { title: 'Confirm date & venue', priority: 'High', status: 'To-Do' } as any);
-        await addTaskToShow(created.id, { title: 'Send contract / agreement', priority: 'High', status: 'To-Do' } as any);
-        await addTaskToShow(created.id, { title: 'Build set list & prop checklist', priority: 'Medium', status: 'To-Do' } as any);
-
-        openShowPlanner(created.id, null);
-    } catch (err: any) {
-        console.error('Failed to create booking/show:', err);
-        alert(`Could not create show / booking. ${err?.message ? `\n\n${err.message}` : ''}`);
-    }
-};
-
-    const handleSaveClient = (clientData: Omit<ClientX, 'id' | 'createdAt'>) => {
-        let updatedClients;
-        if (clientToEdit) {
-            updatedClients = updateClient(clientToEdit.id, clientData);
-        } else {
-            updatedClients = addClient(clientData as any);
-        }
-        setClients(updatedClients);
-        onClientsUpdate(updatedClients);
-        setIsModalOpen(false);
-        setClientToEdit(null);
-    };
-
-    const handleDeleteClient = (id: string) => {
-        if (window.confirm("Are you sure you want to delete this client? This cannot be undone.")) {
-            const updatedClients = deleteClient(id);
-            setClients(updatedClients);
-            onClientsUpdate(updatedClients);
-        }
-    };
-
-    const openEditModal = (client: Client) => {
-        setClientToEdit(client);
-        setIsModalOpen(true);
-    };
-
-    const openAddModal = () => {
-        setClientToEdit(null);
-        setIsModalOpen(true);
-    };
-
-    return (
-        <div className="flex-1 flex flex-col overflow-y-auto p-4 md:p-6 animate-fade-in">
-            {isModalOpen && <ClientModal onClose={() => setIsModalOpen(false)} onSave={handleSaveClient} clientToEdit={clientToEdit} />}
-            <header className="flex flex-wrap items-center justify-between gap-4 mb-6">
-                <div className="flex items-center gap-3">
-                    <UsersCogIcon className="w-8 h-8 text-purple-400" />
-                    <h2 className="text-2xl font-bold text-slate-200 font-cinzel">Client Management</h2>
-                </div>
-                <button onClick={openAddModal} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors flex items-center gap-2 text-sm">
-                    <WandIcon className="w-4 h-4" />
-                    <span>Add New Client</span>
-                </button>
-            </header>
-
-            {clients.length > 0 && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {clients.map(client => (
-                        <div key={client.id} className="bg-slate-800 border border-slate-700 rounded-lg p-4 flex flex-col justify-between">
-                            <div>
-                                <div className="flex justify-between items-start gap-2 mb-2">
-                                    <div>
-                                        <h3 className="font-bold text-lg text-white">{client.name}</h3>
-                                        {client.company && <p className="text-sm text-slate-400">{client.company}</p>}
-                                {client.tags && client.tags.length > 0 && (
-                                    <div className="mt-2 flex flex-wrap gap-1">
-                                        {client.tags.slice(0, 6).map((t, idx) => (
-                                            <span key={idx} className="px-2 py-0.5 text-[11px] rounded-full bg-slate-900/40 border border-slate-700 text-slate-200">{t}</span>
-                                        ))}
-                                    </div>
-                                )}
-                                    </div>
-                                    <div className="flex items-center gap-1 flex-shrink-0">
-                                        <button onClick={() => openEditModal(client)} className="p-2 text-slate-400 hover:text-amber-300 rounded-full hover:bg-slate-700"><PencilIcon className="w-5 h-5"/></button>
-                                        <button onClick={() => handleDeleteClient(client.id)} className="p-2 text-slate-400 hover:text-red-400 rounded-full hover:bg-slate-700"><TrashIcon className="w-5 h-5"/></button>
-                                    </div>
-                                </div>
-                                <div className="text-sm space-y-1 text-slate-300 border-t border-slate-700/50 pt-2">
-                                    {client.email && <p><strong className="text-slate-400">Email:</strong> {client.email}</p>}
-                                    {client.phone && <p><strong className="text-slate-400">Phone:</strong> {client.phone}</p>}
-                                    {client.last_contacted && <p className="text-xs text-slate-400 mt-2"><strong>Last contacted:</strong> {client.last_contacted}</p>}
-                                    {(client.last_show_title || client.last_show_date) && (
-                                        <p className="text-xs text-slate-400"><strong>Last show:</strong> {client.last_show_title || '—'}{client.last_show_date ? ` — ${client.last_show_date}` : ''}</p>
-                                    )}
-                                    {((client.related_shows && client.related_shows.length > 0) || client.last_show_title) && (
-                                        <div className="mt-2">
-                                            <div className="text-xs font-semibold text-slate-400 mb-1">Related Shows</div>
-                                            <div className="flex flex-wrap gap-2">
-                                                {(client.related_shows && client.related_shows.length > 0
-                                                    ? client.related_shows
-                                                    : [{ title: client.last_show_title || 'Show', date: client.last_show_date || undefined }])
-                                                    .slice(0, 3)
-                                                    .map((s, idx) => (
-                                                        <button
-                                                            key={idx}
-                                                            type="button"
-                                                            onClick={() => {
-                                                                try {
-                                                                    localStorage.setItem('maw_open_show_title', s.title);
-                                                                    window.location.href = `/?tab=show-planner&showTitle=${encodeURIComponent(s.title)}`;
-                                                                } catch {}
-                                                            }}
-                                                            className="px-2 py-1 rounded-md text-[11px] bg-slate-900/40 border border-slate-700 text-slate-200 hover:bg-slate-800 transition"
-                                                            title="Open in Show Planner"
-                                                        >
-                                                            {s.title}{s.date ? ` • ${formatShortDate(s.date)}` : ''}
-                                                        </button>
-                                                    ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                                {parseNotesTimeline(client.notes).length > 0 && (
-                                    <p className="text-xs text-slate-400 bg-slate-900/50 p-2 rounded-md mt-3">
-                                        <strong>Latest note:</strong> {parseNotesTimeline(client.notes)[0].text}
-                                    </p>
-                                )}
-                            </div>
-                             <div className="border-t border-slate-700/50 mt-3 pt-3">
-                                <div className="flex items-center justify-between gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            const today = new Date().toISOString().slice(0, 10);
-                                            const updated = { ...client, last_contacted: today };
-                                            updateClient(updated as any);
-                                            setClients(getClients() as ClientX[]);
-                                            onAiSpark({ type: 'draft-email', payload: { client: updated } });
-                                        }}
-                                        title="Draft follow-up email"
-                                        className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-slate-900/40 border border-slate-700 text-slate-200 hover:bg-slate-900/60 transition"
-                                    >
-                                        <MailIcon className="w-4 h-4" />
-                                        <span className="text-sm font-semibold">Email</span>
-                                    </button>
-
-                                    <button
-                                        type="button"
-                                        onClick={async () => {
-                                            const clip = `${client.name}${client.company ? `\n${client.company}` : ''}\nEmail: ${client.email || ''}\nPhone: ${client.phone || ''}`;
-                                            try { await navigator.clipboard.writeText(clip); } catch {}
-                                        }}
-                                        title="Copy contact info"
-                                        className="px-3 py-2 rounded-md bg-slate-900/40 border border-slate-700 text-slate-200 hover:bg-slate-900/60 transition"
-                                        aria-label="Copy contact info"
-                                    >
-                                        📋
-                                    </button>
-
-                                    <button
-                                        type="button"
-                                        onClick={() => handleAddFollowUp(client)}
-                                        title="Create a follow-up task for this client and open it in Show Planner"
-                                        className="px-3 py-2 rounded-md bg-slate-900/40 border border-slate-700 text-slate-200 hover:bg-slate-900/60 transition"
-                                        aria-label="Add follow-up reminder"
-                                    >
-                                        🗓️
-                                    </button>
-
-                                    <button
-                                        type="button"
-                                        onClick={() => handleCreateBooking(client)}
-                                        title="Create a new show linked to this client and open it in Show Planner"
-                                        className="px-3 py-2 rounded-md bg-slate-900/40 border border-slate-700 text-slate-200 hover:bg-slate-900/60 transition"
-                                        aria-label="Create show / booking"
-                                    >
-                                        🧾
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
+            {notesTimeline.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-white/10 bg-slate-950/50 px-4 py-6 text-center text-sm text-slate-400">No notes yet. Add your first note above.</div>
+            ) : (
+              <div className="max-h-52 space-y-2 overflow-y-auto pr-1">
+                {notesTimeline.map((note, idx) => (
+                  <div key={`${note.at}-${idx}`} className="rounded-xl border border-white/8 bg-slate-950/60 p-3">
+                    <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{note.at ? formatShortDate(note.at) : 'Note'}</div>
+                    <div className="text-sm text-slate-200">{note.text}</div>
+                  </div>
+                ))}
+              </div>
             )}
+          </div>
+        </form>
 
-            {clients.length === 0 && (
-                <div className="flex-1 flex flex-col items-center justify-center text-center py-12">
-                    <UsersCogIcon className="w-16 h-16 mx-auto textborder-slate-600 mb-4" />
-                    <h3 className="text-lg font-bold text-slate-400">Your Client List is Empty</h3>
-                    <p className="text-slate-500">Click "Add New Client" to start building your professional network.</p>
-                </div>)}
+        <div className="flex items-center justify-end gap-3 border-t border-white/10 bg-slate-950/90 px-6 py-4">
+          <button type="button" onClick={onClose} className="rounded-xl border border-white/10 px-4 py-2 text-sm font-medium text-slate-300 transition hover:bg-white/5">Cancel</button>
+          <button type="submit" form="client-form" className="rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-purple-500">{clientToEdit ? 'Save Changes' : 'Add Client'}</button>
         </div>
-    );
+      </div>
+    </div>
+  );
+
+  return createPortal(modalContent, document.body);
+};
+
+const MetricTile: React.FC<{ label: string; value: string; accent?: 'purple' | 'amber' | 'cyan' | 'emerald' }> = ({ label, value, accent = 'purple' }) => {
+  const accentClasses: Record<string, string> = {
+    purple: 'from-purple-500/18 to-indigo-500/8 border-purple-400/20 text-purple-100',
+    amber: 'from-amber-500/18 to-orange-500/8 border-amber-400/20 text-amber-100',
+    cyan: 'from-cyan-500/18 to-sky-500/8 border-cyan-400/20 text-cyan-100',
+    emerald: 'from-emerald-500/18 to-green-500/8 border-emerald-400/20 text-emerald-100',
+  };
+  return (
+    <div className={`rounded-2xl border bg-gradient-to-br px-4 py-3 ${accentClasses[accent]}`}>
+      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">{label}</div>
+      <div className="mt-1 text-xl font-bold text-white">{value}</div>
+    </div>
+  );
+};
+
+const ClientManagement: React.FC<ClientManagementProps> = ({
+  onClientsUpdate,
+  onAiSpark,
+  onOpenShowPlanner,
+  onNavigateToContracts,
+  onNavigateToMarketing,
+}) => {
+  const { shows, feedback } = useAppState();
+  const [clients, setClients] = useState<ClientX[]>([]);
+  const [contracts, setContracts] = useState<ContractRow[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [clientToEdit, setClientToEdit] = useState<ClientX | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const hasTrackedOpenRef = useRef(false);
+  const trackedClientIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    setClients(getClients() as ClientX[]);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const rows = await listAllContractsForUser();
+        if (!cancelled) setContracts(rows);
+      } catch {
+        if (!cancelled) setContracts([]);
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (hasTrackedOpenRef.current) return;
+    hasTrackedOpenRef.current = true;
+    void trackClientEvent({
+      tool: 'client_management',
+      action: 'client_management_open',
+      metadata: {
+        client_count: clients.length,
+      },
+    });
+  }, [clients.length]);
+
+  const filteredClients = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return clients;
+    return clients.filter((client) => [client.name, client.company, client.email].filter(Boolean).some((value) => String(value).toLowerCase().includes(query)));
+  }, [clients, searchQuery]);
+
+  useEffect(() => {
+    if (!filteredClients.length) {
+      setSelectedClientId(null);
+      return;
+    }
+    if (!selectedClientId || !filteredClients.some((client) => client.id === selectedClientId)) {
+      setSelectedClientId(filteredClients[0].id);
+    }
+  }, [filteredClients, selectedClientId]);
+
+  useEffect(() => {
+    if (!selectedClientId || trackedClientIdRef.current === selectedClientId) return;
+    trackedClientIdRef.current = selectedClientId;
+    const client = clients.find((item) => item.id === selectedClientId);
+    void trackClientEvent({
+      tool: 'client_management',
+      action: 'client_selected',
+      metadata: {
+        client_id: selectedClientId,
+        client_name: client?.name ?? null,
+      },
+    });
+  }, [selectedClientId, clients]);
+
+  const metricsByClient = useMemo(() => {
+    const map = new Map<string, ClientMetrics>();
+    clients.forEach((client) => {
+      map.set(client.id, getClientMetrics(client, shows, feedback, contracts));
+    });
+    return map;
+  }, [clients, shows, feedback, contracts]);
+
+  const selectedClient = useMemo(() => clients.find((client) => client.id === selectedClientId) || null, [clients, selectedClientId]);
+  const selectedMetrics = selectedClient ? metricsByClient.get(selectedClient.id) : null;
+
+  const refreshClients = () => {
+    const next = getClients() as ClientX[];
+    setClients(next);
+    onClientsUpdate(next);
+  };
+
+  const openAddModal = () => {
+    setClientToEdit(null);
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (client: ClientX) => {
+    setClientToEdit(client);
+    setIsModalOpen(true);
+  };
+
+  const handleSaveClient = (clientData: Omit<ClientX, 'id' | 'createdAt'>) => {
+    let nextClients: Client[];
+    if (clientToEdit) {
+      nextClients = updateClient(clientToEdit.id, clientData as any);
+      setSelectedClientId(clientToEdit.id);
+    } else {
+      nextClients = addClient(clientData as any);
+      const newest = nextClients[0] as ClientX | undefined;
+      if (newest) setSelectedClientId(newest.id);
+      void trackClientEvent({
+        tool: 'client_management',
+        action: 'client_created',
+        metadata: {
+          client_name: clientData.name,
+          has_company: Boolean(clientData.company),
+          has_email: Boolean(clientData.email),
+        },
+      });
+    }
+    setClients(nextClients as ClientX[]);
+    onClientsUpdate(nextClients);
+    setIsModalOpen(false);
+    setClientToEdit(null);
+  };
+
+  const handleDeleteClient = (clientId: string) => {
+    const client = clients.find((item) => item.id === clientId);
+    if (!window.confirm(`Delete ${client?.name || 'this client'}? This cannot be undone.`)) return;
+    const nextClients = deleteClient(clientId);
+    setClients(nextClients as ClientX[]);
+    onClientsUpdate(nextClients);
+    if (selectedClientId === clientId) {
+      setSelectedClientId(nextClients[0]?.id || null);
+    }
+    void trackClientEvent({
+      tool: 'client_management',
+      action: 'client_deleted',
+      metadata: {
+        client_id: clientId,
+        client_name: client?.name ?? null,
+      },
+    });
+  };
+
+  const handleCreateBooking = async (client: ClientX) => {
+    try {
+      const title = `${client.company || client.name} Booking`;
+      const created = await createShow(title, `Show created from Client Management for ${client.name}.`, client.id);
+      await addTaskToShow(created.id, { title: 'Confirm event details', priority: 'High', status: 'To-Do' } as any);
+      onOpenShowPlanner?.(created.id);
+    } catch (error) {
+      console.error(error);
+      window.alert('Unable to create booking right now.');
+    }
+  };
+
+  const handleDraftEmail = (client: ClientX) => {
+    const today = new Date().toISOString().slice(0, 10);
+    updateClient(client.id, { last_contacted: today } as any);
+    refreshClients();
+    onAiSpark({ type: 'draft-email', payload: { client: { ...client, last_contacted: today } } });
+  };
+
+  const handleCopyContact = async (client: ClientX) => {
+    const text = `${client.name}${client.company ? `\n${client.company}` : ''}${client.email ? `\nEmail: ${client.email}` : ''}${client.phone ? `\nPhone: ${client.phone}` : ''}`;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // noop
+    }
+  };
+
+  return (
+    <div className="relative min-h-[70vh] rounded-3xl border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(124,58,237,0.16),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(59,130,246,0.10),transparent_24%),rgba(2,6,23,0.88)] p-4 sm:p-6">
+      <div className="pointer-events-none absolute inset-0 rounded-3xl border border-white/5" />
+
+      {isModalOpen && <ClientModal onClose={() => setIsModalOpen(false)} onSave={handleSaveClient} clientToEdit={clientToEdit} />}
+
+      <header className="relative mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-purple-400/20 bg-purple-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-purple-100">
+            <UsersCogIcon className="h-4 w-4" />
+            Manage • Client Intelligence
+          </div>
+          <h2 className="font-cinzel text-3xl font-bold text-white sm:text-4xl">Client Management</h2>
+          <p className="mt-2 max-w-3xl text-sm text-slate-300 sm:text-base">
+            Turn contacts into a usable business dashboard. Search clients, review value at a glance, and jump directly into booking, contracts, and follow-up workflows.
+          </p>
+        </div>
+        <button onClick={openAddModal} className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-fuchsia-500 px-4 py-3 text-sm font-semibold text-white shadow-[0_0_24px_rgba(168,85,247,0.28)] transition hover:from-purple-500 hover:to-fuchsia-400">
+          <WandIcon className="h-4 w-4" />
+          <span>Add New Client</span>
+        </button>
+      </header>
+
+      <div className="relative grid grid-cols-1 gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
+        <aside className="rounded-3xl border border-white/10 bg-slate-950/60 p-4 shadow-[0_0_32px_rgba(15,23,42,0.35)]">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold text-white">Client List</div>
+              <div className="text-xs text-slate-400">Search and scan your highest-value accounts.</div>
+            </div>
+            <div className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-slate-300">{filteredClients.length} shown</div>
+          </div>
+
+          <div className="relative mb-4">
+            <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search clients, companies, or email…"
+              className="w-full rounded-2xl border border-white/10 bg-slate-900/80 py-3 pl-10 pr-3 text-sm text-slate-100 outline-none transition focus:border-purple-500 focus:ring-1 focus:ring-purple-500/40"
+            />
+          </div>
+
+          <div className="max-h-[860px] space-y-3 overflow-y-auto pr-1">
+            {filteredClients.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-white/10 bg-slate-950/50 px-4 py-8 text-center">
+                <UsersCogIcon className="mx-auto mb-3 h-10 w-10 text-slate-500" />
+                <div className="text-sm font-semibold text-slate-300">No matching clients</div>
+                <div className="mt-1 text-xs text-slate-500">Try a different search or add a new client.</div>
+              </div>
+            ) : (
+              filteredClients.map((client) => {
+                const metrics = metricsByClient.get(client.id)!;
+                const isActive = client.id === selectedClientId;
+                return (
+                  <button
+                    key={client.id}
+                    type="button"
+                    onClick={() => setSelectedClientId(client.id)}
+                    className={`w-full rounded-2xl border p-4 text-left transition ${
+                      isActive
+                        ? 'border-purple-400/40 bg-gradient-to-br from-purple-500/16 to-indigo-500/8 shadow-[0_0_22px_rgba(168,85,247,0.22)]'
+                        : 'border-white/8 bg-slate-900/70 hover:border-white/15 hover:bg-slate-900/90'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate text-base font-semibold text-white">{client.name}</div>
+                        <div className="truncate text-sm text-slate-400">{client.company || 'Independent / direct booking'}</div>
+                      </div>
+                      <div className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-300">
+                        {metrics.showCount} show{metrics.showCount === 1 ? '' : 's'}
+                      </div>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                      <div className="rounded-xl border border-white/8 bg-slate-950/55 px-3 py-2">
+                        <div className="text-slate-400">Rating</div>
+                        <div className="mt-1 font-semibold text-white">{metrics.avgRating ? `⭐ ${metrics.avgRating}` : 'No data'}</div>
+                      </div>
+                      <div className="rounded-xl border border-white/8 bg-slate-950/55 px-3 py-2">
+                        <div className="text-slate-400">Revenue</div>
+                        <div className="mt-1 font-semibold text-white">{formatMoney(metrics.revenue)}</div>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-between text-[11px] text-slate-400">
+                      <span>Last show</span>
+                      <span className="font-medium text-slate-300">{metrics.lastShowLabel}</span>
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </aside>
+
+        <section className="rounded-3xl border border-white/10 bg-slate-950/55 p-4 shadow-[0_0_32px_rgba(15,23,42,0.35)] sm:p-5">
+          {!selectedClient || !selectedMetrics ? (
+            <div className="flex min-h-[420px] flex-col items-center justify-center rounded-3xl border border-dashed border-white/10 bg-slate-950/45 px-6 text-center">
+              <UsersCogIcon className="mb-4 h-16 w-16 text-slate-500" />
+              <div className="text-xl font-semibold text-slate-200">Your Client Dashboard is Ready</div>
+              <p className="mt-2 max-w-md text-sm text-slate-400">Add a client to begin building a professional CRM workflow inside Magic AI Wizard.</p>
+              <button onClick={openAddModal} className="mt-5 rounded-xl bg-purple-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-purple-500">Add Your First Client</button>
+            </div>
+          ) : (
+            <>
+              <div className="rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(30,41,59,0.92),rgba(15,23,42,0.9))] p-5 sm:p-6">
+                <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                  <div className="min-w-0">
+                    <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-100">
+                      <StarIcon className="h-3.5 w-3.5" />
+                      Client Profile Header
+                    </div>
+                    <div className="flex flex-wrap items-start gap-3">
+                      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-500/25 to-indigo-500/15 text-xl font-bold text-white shadow-[0_0_22px_rgba(168,85,247,0.22)]">
+                        {selectedClient.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="truncate text-2xl font-bold text-white sm:text-3xl">{selectedClient.name}</h3>
+                        <p className="mt-1 truncate text-sm text-slate-300 sm:text-base">{selectedClient.company || 'Independent client relationship'}</p>
+                        <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-300">
+                          {selectedClient.email ? <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">{selectedClient.email}</span> : null}
+                          {selectedClient.phone ? <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">{selectedClient.phone}</span> : null}
+                          {selectedMetrics.primaryVenue ? <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">Primary venue: {selectedMetrics.primaryVenue}</span> : null}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button onClick={() => openEditModal(selectedClient)} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-slate-200 transition hover:bg-white/10">
+                      <span className="inline-flex items-center gap-2"><PencilIcon className="h-4 w-4" />Edit</span>
+                    </button>
+                    <button onClick={() => handleDeleteClient(selectedClient.id)} className="rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-100 transition hover:bg-red-500/15">
+                      <span className="inline-flex items-center gap-2"><TrashIcon className="h-4 w-4" />Delete</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
+                  <MetricTile label="Shows" value={String(selectedMetrics.showCount)} accent="purple" />
+                  <MetricTile label="Contracts" value={String(selectedMetrics.contractCount)} accent="cyan" />
+                  <MetricTile label="Audience Rating" value={selectedMetrics.avgRating ? `⭐ ${selectedMetrics.avgRating}` : 'No data'} accent="amber" />
+                  <MetricTile label="Revenue" value={formatMoney(selectedMetrics.revenue)} accent="emerald" />
+                </div>
+
+                <div className="mt-5 grid grid-cols-1 gap-3 text-sm text-slate-300 sm:grid-cols-3">
+                  <div className="rounded-2xl border border-white/8 bg-slate-950/50 px-4 py-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Client Since</div>
+                    <div className="mt-1 font-semibold text-white">{selectedMetrics.clientSinceLabel}</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/8 bg-slate-950/50 px-4 py-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Last Show</div>
+                    <div className="mt-1 font-semibold text-white">{selectedMetrics.lastShowTitle}</div>
+                    <div className="text-xs text-slate-400">{selectedMetrics.lastShowLabel}</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/8 bg-slate-950/50 px-4 py-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Audience Responses</div>
+                    <div className="mt-1 font-semibold text-white">{selectedMetrics.feedbackCount}</div>
+                    <div className="text-xs text-slate-400">Linked to this client’s shows</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-5 rounded-3xl border border-white/10 bg-slate-950/45 p-4 sm:p-5">
+                <div className="mb-3">
+                  <div className="text-sm font-semibold text-white">Workflow Actions</div>
+                  <div className="text-xs text-slate-400">Jump into the tools you use most often from this client record.</div>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <button onClick={() => handleCreateBooking(selectedClient)} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-purple-400/25 bg-gradient-to-br from-purple-500/18 to-indigo-500/8 px-4 py-3 text-sm font-semibold text-white transition hover:from-purple-500/24 hover:to-indigo-500/14">
+                    <CalendarIcon className="h-4 w-4" />
+                    Book Show
+                  </button>
+                  <button onClick={() => onNavigateToContracts?.()} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-cyan-400/20 bg-gradient-to-br from-cyan-500/12 to-sky-500/6 px-4 py-3 text-sm font-semibold text-white transition hover:from-cyan-500/18 hover:to-sky-500/10">
+                    <ChecklistIcon className="h-4 w-4" />
+                    Generate Contract
+                  </button>
+                  <button onClick={() => handleDraftEmail(selectedClient)} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10">
+                    <MailIcon className="h-4 w-4" />
+                    Send Email
+                  </button>
+                  <button onClick={() => onNavigateToMarketing?.()} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-amber-400/20 bg-gradient-to-br from-amber-500/12 to-orange-500/6 px-4 py-3 text-sm font-semibold text-white transition hover:from-amber-500/18 hover:to-orange-500/10">
+                    <NewspaperIcon className="h-4 w-4" />
+                    Marketing Campaign
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
+                <div className="rounded-3xl border border-white/10 bg-slate-950/45 p-4 sm:p-5">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold text-white">Client Snapshot</div>
+                      <div className="text-xs text-slate-400">Quick business context without leaving the page.</div>
+                    </div>
+                    <button onClick={() => handleCopyContact(selectedClient)} className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-white/10">
+                      <CopyIcon className="h-4 w-4" />
+                      Copy Contact
+                    </button>
+                  </div>
+
+                  <div className="space-y-3 text-sm text-slate-300">
+                    <div className="rounded-2xl border border-white/8 bg-slate-950/55 p-4">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Contact Details</div>
+                      <div className="mt-2 space-y-1">
+                        <div>Email: <span className="text-white">{selectedClient.email || 'Not added yet'}</span></div>
+                        <div>Phone: <span className="text-white">{selectedClient.phone || 'Not added yet'}</span></div>
+                        <div>Last Contacted: <span className="text-white">{selectedClient.last_contacted ? formatShortDate(selectedClient.last_contacted) : 'No contact logged yet'}</span></div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-white/8 bg-slate-950/55 p-4">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Most Recent Note</div>
+                      <div className="mt-2 text-sm text-white">{selectedMetrics.latestNote || 'No notes saved for this client yet.'}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-3xl border border-white/10 bg-slate-950/45 p-4 sm:p-5">
+                  <div className="mb-3">
+                    <div className="text-sm font-semibold text-white">Related Shows</div>
+                    <div className="text-xs text-slate-400">Early dashboard view for linked performances and planner access.</div>
+                  </div>
+
+                  {selectedMetrics.relatedShows.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-white/10 bg-slate-950/50 px-4 py-8 text-center text-sm text-slate-400">
+                      No shows linked to this client yet. Use <span className="font-semibold text-slate-200">Book Show</span> to create the first one.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {selectedMetrics.relatedShows.slice(0, 4).map((show) => (
+                        <button
+                          key={show.id}
+                          type="button"
+                          onClick={() => onOpenShowPlanner?.(show.id)}
+                          className="w-full rounded-2xl border border-white/8 bg-slate-950/60 p-4 text-left transition hover:border-purple-400/25 hover:bg-slate-900/80"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="font-semibold text-white">{show.title}</div>
+                              <div className="mt-1 text-xs text-slate-400">{show.venue || 'Venue not set'} • {formatShortDate(show.performanceDate || show.updatedAt || show.createdAt)}</div>
+                            </div>
+                            <div className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-300">{show.status || 'Draft'}</div>
+                          </div>
+                          <div className="mt-2 text-xs text-slate-400">Tasks: {show.tasks?.length || 0} • Fee: {formatMoney(Number(show.finances?.performanceFee || 0))}</div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </section>
+      </div>
+    </div>
+  );
 };
 
 export default ClientManagement;
