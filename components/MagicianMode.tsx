@@ -3062,10 +3062,14 @@ ${action.payload.content}`;
     // Manage
     const manageTabs = new Set<MagicianTab>([
       'show-planner',
+      'search',
+    ]);
+
+    // Social
+    const socialTabs = new Set<MagicianTab>([
       'magic-wire',
       'publications',
       'community',
-      'search',
     ]);
     const manageViews = new Set<MagicianView>([
       'saved-ideas',
@@ -3083,6 +3087,7 @@ ${action.payload.content}`;
     if (createViews.has(activeView)) return 'create' as const;
     if (rehearseViews.has(activeView)) return 'rehearse' as const;
     if (manageViews.has(activeView) || manageTabs.has(activeTab)) return 'manage' as const;
+    if (socialTabs.has(activeTab)) return 'social' as const;
 
     return 'home' as const;
   })();
@@ -3105,6 +3110,10 @@ ${action.payload.content}`;
     }
     if (intent === 'manage') {
       handleNavigate('show-planner');
+      return;
+    }
+    if (intent === 'social') {
+      handleNavigate('magic-wire');
       return;
     }
     if (intent === 'admin') {
@@ -3175,6 +3184,16 @@ const renderIntentSubnav = () => {
       );
     }
 
+    if (activeIntent === 'social') {
+      return (
+        <div className="flex flex-wrap items-center gap-2 px-2 md:px-4 py-2 border-b border-slate-800/70">
+          {subBtn('Magic Wire', () => handleNavigate('magic-wire'), activeTab === 'magic-wire')}
+          {subBtn('Publications', () => handleNavigate('publications'), activeTab === 'publications')}
+          {subBtn('Community', () => handleNavigate('community'), activeTab === 'community')}
+        </div>
+      );
+    }
+
     // manage
     return (
       <div className="flex flex-wrap items-center gap-2 px-2 md:px-4 py-2 border-b border-slate-800/70">
@@ -3185,9 +3204,6 @@ const renderIntentSubnav = () => {
         {subBtn('Contracts', () => handleNavigate('contract-generator'), activeView === 'contract-generator', !hasProfessionalAccess)}
         {subBtn('Prop Checklist', () => handleNavigate('prop-checklists'), activeView === 'prop-checklists', !hasProfessionalAccess)}
         {subBtn('Marketing', () => handleNavigate('marketing-campaign'), activeView === 'marketing-campaign', !hasProfessionalAccess)}
-        {subBtn('Magic Wire', () => handleNavigate('magic-wire'), activeTab === 'magic-wire')}
-        {subBtn('Publications', () => handleNavigate('publications'), activeTab === 'publications')}
-        {subBtn('Community', () => handleNavigate('community'), activeTab === 'community')}
         {subBtn('Search', () => handleNavigate('global-search'), activeView === 'global-search', !hasAmateurAccess)}
       </div>
     );
@@ -3350,6 +3366,12 @@ const renderIntentSubnav = () => {
           isActive={activeIntent === 'manage'}
           onClick={() => handlePrimaryIntentClick('manage')}
           isLocked={!hasAmateurAccess}
+        />
+        <TabButton
+          label="Social"
+          icon={UsersIcon}
+          isActive={activeIntent === 'social'}
+          onClick={() => handlePrimaryIntentClick('social')}
         />
         {user?.isAdmin ? (
           <TabButton
