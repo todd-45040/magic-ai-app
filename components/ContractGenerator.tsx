@@ -101,6 +101,39 @@ const DEFAULT_CONTRACT_TYPE: ContractType = 'Corporate Event';
 const DEFAULT_CANCELLATION_POLICY =
     'Deposit is non-refundable if Client cancels within 30 days of the event date. If Performer cancels, the deposit will be fully refunded.';
 
+
+const ADMC_DEMO_CONTRACT: Partial<PreviewContract> = {
+    performerName: 'Todd Simpson',
+    clientName: 'Cincinnati Event Planner',
+    clientCompany: 'Cincinnati Event Planner',
+    clientEmail: 'events@cincinnatieventplanner.com',
+    clientPhone: '(513) 555-0142',
+    clientAddress: '35 W 5th St, Cincinnati, OH 45202',
+    eventTitle: 'Corporate Holiday Gala',
+    eventType: 'Corporate Holiday Gala',
+    eventDate: '2025-12-12',
+    eventTime: '7:00 PM',
+    eventLocation: 'Hilton Cincinnati Netherland Plaza',
+    performanceLength: '45 Minute Interactive Magic Show',
+    performanceFee: '1500',
+    depositAmount: '750',
+    depositDueDate: '2025-11-15',
+    specialRequirements: 'Performer requires a small performance area, a wireless handheld microphone if available, one skirted side table, and venue access 45 minutes before showtime for setup.',
+    cancellationPolicy: 'Deposit is non-refundable. Cancellation within 14 days of the event requires full payment unless otherwise agreed in writing by both parties.',
+    contractType: 'Corporate Event',
+    previewToneSeed: 'Polished corporate language with clear professionalism and concise expectations.',
+};
+
+const ADMC_DEMO_CONTRACT_SECTIONS: ContractSections = {
+    performanceDetails: 'Performer agrees to present one forty-five (45) minute interactive magic show for the Client at the Corporate Holiday Gala on December 12, 2025, at the Hilton Cincinnati Netherland Plaza in Cincinnati, Ohio. The performance is designed for a corporate audience and will feature clean, audience-friendly interactive magic suitable for a banquet or gala setting. Client will provide a safe, accessible performance area and reasonable audience attention during the scheduled performance window.',
+    paymentTerms: 'The total performance fee is $1,500. A non-refundable booking deposit of $750 is due no later than November 15, 2025, in order to secure the performance date. The remaining balance of $750 is due on or before the event date prior to the performance. Late changes to schedule, venue access, or event timing that materially affect the performance may require written approval by both parties.',
+    technicalRequirements: 'Client will provide a clear performance area, one stable side table, and a wireless handheld microphone if available. Performer will be granted access to the venue approximately forty-five (45) minutes before showtime for setup and pre-show preparation. Basic coordination with the event planner or banquet captain will be provided for cue timing and room readiness.',
+    cancellationPolicy: 'The booking deposit is non-refundable once paid. If Client cancels the engagement within fourteen (14) days of the event date, the full contract amount remains due because the date has been reserved and other bookings may have been declined. If Performer must cancel due to emergency or circumstances beyond reasonable control, all payments received from Client will be refunded and Performer will make reasonable efforts to assist with a replacement referral if requested.',
+    forceMajeure: 'Neither party will be considered in breach of this agreement for delays or cancellation caused by events beyond reasonable control, including severe weather, venue closure, government restrictions, labor disruptions, or other force majeure events. In such cases, both parties agree to work in good faith toward a reasonable rescheduling solution when feasible.',
+    signatureBlock: 'Client Representative: ________________________________\nDate: ____________________\n\nPerformer: Todd Simpson\nDate: ____________________',
+    generatedAt: Date.now(),
+};
+
 const LoadingIndicator: React.FC = () => (
     <div className="flex flex-col items-center justify-center text-center p-8">
         <div className="relative">
@@ -485,6 +518,45 @@ const ContractGenerator: React.FC<ContractGeneratorProps> = ({ user, clients, sh
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    const loadDemoContract = () => {
+        setPerformerName(ADMC_DEMO_CONTRACT.performerName ?? '');
+        setSelectedClientId('');
+        setSelectedShowId('');
+        setClientName(ADMC_DEMO_CONTRACT.clientName ?? '');
+        setClientCompany(ADMC_DEMO_CONTRACT.clientCompany ?? '');
+        setClientEmail(ADMC_DEMO_CONTRACT.clientEmail ?? '');
+        setClientPhone(ADMC_DEMO_CONTRACT.clientPhone ?? '');
+        setClientAddress(ADMC_DEMO_CONTRACT.clientAddress ?? '');
+        setEventTitle(ADMC_DEMO_CONTRACT.eventTitle ?? '');
+        setEventType(ADMC_DEMO_CONTRACT.eventType ?? '');
+        setEventDate(ADMC_DEMO_CONTRACT.eventDate ?? '');
+        setEventTime(ADMC_DEMO_CONTRACT.eventTime ?? '');
+        setEventLocation(ADMC_DEMO_CONTRACT.eventLocation ?? '');
+        setPerformanceLength(ADMC_DEMO_CONTRACT.performanceLength ?? '');
+        setPerformanceFee(ADMC_DEMO_CONTRACT.performanceFee ?? '');
+        setDepositAmount(ADMC_DEMO_CONTRACT.depositAmount ?? '');
+        setDepositDueDate(ADMC_DEMO_CONTRACT.depositDueDate ?? '');
+        setSpecialRequirements(ADMC_DEMO_CONTRACT.specialRequirements ?? '');
+        setCancellationPolicy(ADMC_DEMO_CONTRACT.cancellationPolicy ?? DEFAULT_CANCELLATION_POLICY);
+        setContractType(ADMC_DEMO_CONTRACT.contractType ?? DEFAULT_CONTRACT_TYPE);
+        setPreviewToneSeed(ADMC_DEMO_CONTRACT.previewToneSeed ?? CONTRACT_TYPE_PRESETS[DEFAULT_CONTRACT_TYPE].previewToneSeed);
+        setClientLoadedFromCrm(false);
+        setShowNextVersion(null);
+        setShowLatestStatus(null);
+        setResult({ ...ADMC_DEMO_CONTRACT_SECTIONS, generatedAt: Date.now() });
+        setError(null);
+        setSaveStatus('idle');
+        setCopyStatus('idle');
+        setSaveToShowStatus('idle');
+        setClientRecordSaveStatus('idle');
+        setEmailStatus('idle');
+        emitContractTelemetry('demo_contract_loaded', {
+            contract_type: ADMC_DEMO_CONTRACT.contractType ?? DEFAULT_CONTRACT_TYPE,
+            demo_name: 'admc_corporate_holiday_gala',
+            has_ai_sections: true,
+        });
+    };
+
     const handleGenerate = async () => {
         if (!isFormValid) {
             setError('Please fill in all required fields (*).');
@@ -699,7 +771,15 @@ Guidelines:
                         Build a professional performance agreement with connected client and show details. Fields marked with * are required.
                     </p>
                 </div>
-                <div className="flex flex-wrap gap-2 text-xs">
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <button
+                        type="button"
+                        onClick={loadDemoContract}
+                        className="inline-flex items-center gap-2 rounded-full border border-amber-300/40 bg-gradient-to-r from-amber-400 to-yellow-300 px-4 py-2 text-xs font-semibold text-slate-950 shadow-[0_10px_30px_rgba(251,191,36,0.22)] transition hover:scale-[1.01] hover:from-amber-300 hover:to-yellow-200"
+                    >
+                        <span aria-hidden="true">🎭</span>
+                        Load Demo Contract
+                    </button>
                     <StatusPill label={selectedClientId ? 'Client linked' : 'Client manual'} active={!!selectedClientId} />
                     <StatusPill label={selectedShowId ? 'Show linked' : 'Show optional'} active={!!selectedShowId} />
                     <StatusPill label={showNextVersion ? `Version ready · v${showNextVersion}` : 'Version pending'} active={!!showNextVersion} />
