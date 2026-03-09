@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { getSavedIdeas, deleteIdea, updateIdea } from '../services/ideasService';
-import type { SavedIdea, Transcription, IdeaType, IdeaCategory, AiSparkAction } from '../types';
+import { getShows, createShow, updateShow, addTaskToShow } from '../services/showsService';
+import type { SavedIdea, Transcription, IdeaType, IdeaCategory, Show, AiSparkAction } from '../types';
 import { BookmarkIcon, TrashIcon, ShareIcon, MicrophoneIcon, PrintIcon, FileTextIcon, ImageIcon, PencilIcon, WandIcon, CrossIcon } from './icons';
 import ShareButton from './ShareButton';
 
@@ -30,6 +31,10 @@ const IDEA_CATEGORY_META: Record<IdeaCategory, CategoryMeta> = {
 };
 
 const IDEA_CATEGORY_ORDER: IdeaCategory[] = ['effect', 'script', 'image', 'blueprint', 'research', 'rehearsal'];
+
+const IDEA_PROMOTABLE_CATEGORIES: IdeaCategory[] = ['effect', 'script', 'blueprint', 'research', 'rehearsal'];
+const DEFAULT_SLOT_OPTIONS = ['Opener', 'Middle', 'Closer'];
+
 
 function getIdeaSourceTool(idea: SavedIdea): string {
     const v2 = tryParseMawIdeaV2(idea.content);
@@ -91,6 +96,35 @@ function inferIdeaCategory(idea: SavedIdea): IdeaCategory {
 
 function getIdeaCategoryMeta(idea: SavedIdea): CategoryMeta {
     return IDEA_CATEGORY_META[inferIdeaCategory(idea)];
+}
+
+function buildIdeaPlannerNotes(idea: SavedIdea, extraNotes?: string, slot?: string): string {
+    const display = getIdeaDisplay(idea);
+    const lines = [
+        `Idea Vault source: ${display.title || idea.title || 'Saved Idea'}`,
+        `Source tool: ${getIdeaSourceTool(idea)}`,
+        `Category: ${getIdeaCategoryMeta(idea).label}`,
+        slot ? `Preferred slot: ${slot}` : '',
+        idea.tags?.length ? `Tags: ${idea.tags.join(', ')}` : '',
+        '',
+        extraNotes ? `Routine Notes:
+${extraNotes}` : '',
+        '',
+        'Original Idea:',
+        display.body || idea.content || '',
+    ].filter(Boolean);
+    return lines.join('\n');
+}
+
+function buildRoutineShowTags(idea: SavedIdea, category: IdeaCategory, slot?: string): string[] {
+    const tags = new Set<string>(['routine', 'idea-vault', category]);
+    (idea.tags || []).forEach((tag) => tags.add(tag));
+    if (slot) tags.add(`slot:${slot.toLowerCase()}`);
+    return Array.from(tags);
+}
+
+function ideaIsArchived(idea: SavedIdea): boolean {
+    return (idea.tags || []).some((tag) => String(tag).toLowerCase() === 'archived');
 }
 
 function tryParseMawIdeaV2(content: string): MawIdeaV2 | null {
@@ -358,6 +392,13 @@ function extractFirstDataImage(markdown: string): { imgSrc: string | null; clean
 
 const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => {
     const [ideas, setIdeas] = useState<SavedIdea[]>([]);
+    const [shows, setShows] = useState<Show[]>([]);
+    const [actionMessage, setActionMessage] = useState<string | null>(null);
+    const [actionBusy, setActionBusy] = useState(false);
+    const [promoteIdea, setPromoteIdea] = useState<SavedIdea | null>(null);
+    const [addToShowIdea, setAddToShowIdea] = useState<SavedIdea | null>(null);
+    const [promoteForm, setPromoteForm] = useState({ title: '', estimatedTime: '5', category: 'effect' as IdeaCategory, notes: '' });
+    const [addToShowForm, setAddToShowForm] = useState({ showId: '', routineSlot: 'Middle', estimatedTime: '5' });
     const [categoryFilter, setCategoryFilter] = useState<'all' | IdeaCategory>('all');
     const [tagFilter, setTagFilter] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
@@ -387,7 +428,9 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
             blueprint: false,
             research: false,
             rehearsal: false,
-            pinned: true
+            pinned: true,
+            favorites: true,
+            archived: false
         });
     };
 
@@ -438,6 +481,8 @@ const [lastOpenedMap, setLastOpenedMap] = useState<Record<string, number>>(() =>
         research: false,
         rehearsal: false,
         pinned: true,
+        favorites: true,
+        archived: false,
     });
     const [editingIdeaId, setEditingIdeaId] = useState<string | null>(null);
     const [editText, setEditText] = useState('');
@@ -450,7 +495,14 @@ const [lastOpenedMap, setLastOpenedMap] = useState<Record<string, number>>(() =>
     useEffect(() => {
         // FIX: getSavedIdeas() is async, resolve with .then()
         getSavedIdeas().then(setIdeas);
+        getShows().then(setShows).catch((error) => console.error('Failed to load shows', error));
     }, []);
+
+    useEffect(() => {
+        if (!actionMessage) return;
+        const timeout = window.setTimeout(() => setActionMessage(null), 3200);
+        return () => window.clearTimeout(timeout);
+    }, [actionMessage]);
     useEffect(() => {
         try { localStorage.setItem('savedIdeas:pins', JSON.stringify(pinnedIds)); } catch {}
     }, [pinnedIds]);
@@ -557,7 +609,9 @@ const [lastOpenedMap, setLastOpenedMap] = useState<Record<string, number>>(() =>
     };
 
     const archiveIdea = async (idea: SavedIdea) => {
+        if (ideaIsArchived(idea)) return;
         await addTagToIdea(idea, 'archived');
+        setActionMessage('Idea archived.');
     };
 
     const bulkArchive = async () => {
@@ -607,15 +661,110 @@ const bulkDuplicateToClipboard = async () => {
         setOpenIdea(idea);
     };
 
-const sendToPlanner = (idea: SavedIdea) => {
-        // Best-effort integration (kept safe/typed as any)
-        onAiSpark?.({ type: 'send_to_show_planner', ideaId: idea.id, idea } as any);
+const openPromoteModal = (idea: SavedIdea) => {
+        const display = getIdeaDisplay(idea);
+        setPromoteIdea(idea);
+        setPromoteForm({
+            title: display.title || idea.title || 'New Routine',
+            estimatedTime: '5',
+            category: inferIdeaCategory(idea),
+            notes: '',
+        });
+    };
+
+    const openAddToShowModal = (idea: SavedIdea) => {
+        setAddToShowIdea(idea);
+        setAddToShowForm({
+            showId: shows[0]?.id || '',
+            routineSlot: 'Middle',
+            estimatedTime: '5',
+        });
+    };
+
+    const sendToPlanner = (idea: SavedIdea) => {
+        openPromoteModal(idea);
     };
 
     const bulkSendToPlanner = () => {
         const targets = ideas.filter((i) => selectedIds.includes(i.id));
-        targets.forEach((idea) => sendToPlanner(idea));
+        if (targets[0]) openPromoteModal(targets[0]);
         clearSelection();
+    };
+
+    const submitPromoteToRoutine = async () => {
+        if (!promoteIdea) return;
+        const title = promoteForm.title.trim();
+        if (!title) {
+            setActionMessage('Routine title is required.');
+            return;
+        }
+
+        setActionBusy(true);
+        try {
+            const createdShow = await createShow(title, promoteForm.notes || `Promoted from Idea Vault: ${getIdeaDisplay(promoteIdea).title || promoteIdea.title || 'Saved Idea'}`);
+            await updateShow((createdShow as any).id, {
+                tags: buildRoutineShowTags(promoteIdea, promoteForm.category),
+                status: 'Draft',
+                description: promoteForm.notes || `Promoted from Idea Vault on ${new Date().toLocaleDateString()}`
+            } as any);
+            await addTaskToShow((createdShow as any).id, {
+                title,
+                notes: buildIdeaPlannerNotes(promoteIdea, promoteForm.notes),
+                priority: 'Medium',
+                status: 'To-Do',
+                durationMinutes: Number(promoteForm.estimatedTime) || 5,
+                tags: buildRoutineShowTags(promoteIdea, promoteForm.category),
+                createdAt: Date.now(),
+            } as any);
+            const refreshedShows = await getShows();
+            setShows(refreshedShows);
+            setPromoteIdea(null);
+            setActionMessage(`Routine "${title}" added to Show Planner.`);
+            onAiSpark?.({ type: 'idea_promoted_to_routine', ideaId: promoteIdea.id, showTitle: title } as any);
+        } catch (error) {
+            console.error('Failed to promote idea to routine', error);
+            setActionMessage('Could not promote idea to routine.');
+        } finally {
+            setActionBusy(false);
+        }
+    };
+
+    const submitAddToShow = async () => {
+        if (!addToShowIdea || !addToShowForm.showId) {
+            setActionMessage('Select a show first.');
+            return;
+        }
+        const selectedShow = shows.find((show) => show.id === addToShowForm.showId);
+        if (!selectedShow) {
+            setActionMessage('Selected show could not be found.');
+            return;
+        }
+
+        setActionBusy(true);
+        try {
+            const display = getIdeaDisplay(addToShowIdea);
+            const slot = addToShowForm.routineSlot;
+            const category = inferIdeaCategory(addToShowIdea);
+            await addTaskToShow(selectedShow.id, {
+                title: `[${slot}] ${display.title || addToShowIdea.title || 'Saved Idea'}`,
+                notes: buildIdeaPlannerNotes(addToShowIdea, `Added directly to show "${selectedShow.title}".`, slot),
+                priority: 'Medium',
+                status: 'To-Do',
+                durationMinutes: Number(addToShowForm.estimatedTime) || 5,
+                tags: buildRoutineShowTags(addToShowIdea, category, slot),
+                createdAt: Date.now(),
+            } as any);
+            const refreshedShows = await getShows();
+            setShows(refreshedShows);
+            setAddToShowIdea(null);
+            setActionMessage(`Idea added to "${selectedShow.title}".`);
+            onAiSpark?.({ type: 'idea_added_to_show', ideaId: addToShowIdea.id, showId: selectedShow.id } as any);
+        } catch (error) {
+            console.error('Failed to add idea to show', error);
+            setActionMessage('Could not add idea to show.');
+        } finally {
+            setActionBusy(false);
+        }
     };
 
     const handlePrint = (idea: SavedIdea) => {
@@ -723,6 +872,7 @@ const sendToPlanner = (idea: SavedIdea) => {
         const q = searchQuery.trim().toLowerCase();
 
         const base = ideas.filter((idea) => {
+            if (ideaIsArchived(idea)) return false;
             const typeMatch = categoryFilter === 'all' || inferIdeaCategory(idea) === categoryFilter;
 
             const usedCount = getUsedInShowsCount(idea);
@@ -798,6 +948,26 @@ const sendToPlanner = (idea: SavedIdea) => {
         // If a pinned id is no longer in filteredIdeas, ignore it.
         return pinned;
     }, [pinnedIds, filteredIdeas]);
+
+    const favoriteIdeas = useMemo(() => filteredIdeas.filter((idea) => isStarred(idea.id)), [filteredIdeas, starredIds]);
+
+    const archivedIdeas = useMemo(() => {
+        const q = searchQuery.trim().toLowerCase();
+        return ideas
+            .filter((idea) => ideaIsArchived(idea))
+            .filter((idea) => categoryFilter === 'all' || inferIdeaCategory(idea) === categoryFilter)
+            .filter((idea) => !tagFilter || (idea.tags || []).includes(tagFilter))
+            .filter((idea) => {
+                const display = getIdeaDisplay(idea);
+                const sourceTool = getIdeaSourceTool(idea).toLowerCase();
+                return !q ||
+                    (display.title || '').toLowerCase().includes(q) ||
+                    (display.body || '').toLowerCase().includes(q) ||
+                    sourceTool.includes(q) ||
+                    (idea.tags || []).some((t) => t.toLowerCase().includes(q));
+            })
+            .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    }, [ideas, categoryFilter, tagFilter, searchQuery]);
 
 
     const formatRehearsalForSharing = (idea: SavedIdea, transcript: Transcription[], notes: string | null): string => {
@@ -952,6 +1122,37 @@ const sendToPlanner = (idea: SavedIdea) => {
         );
     };
 
+    const renderLibraryRow = (idea: SavedIdea) => (
+        <div key={idea.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+            <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                        <span className="text-base">{getIdeaCategoryMeta(idea).icon}</span>
+                        <h3 className="text-sm font-semibold text-yellow-200 truncate">{getIdeaDisplay(idea).title || idea.title || 'Saved Idea'}</h3>
+                    </div>
+                    <div className="mt-1 text-xs text-slate-400">{getIdeaSourceTool(idea)} • {formatSavedOn(idea)}</div>
+                </div>
+                <button onClick={() => toggleStar(idea.id)} className="px-2.5 py-1 text-xs rounded-full bg-slate-800 text-slate-200 hover:bg-slate-700 transition">
+                    {isStarred(idea.id) ? '★ Favorite' : '☆ Favorite'}
+                </button>
+            </div>
+            <p className="mt-3 text-sm text-slate-300 overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3]">{(getIdeaDisplay(idea).body || idea.content || '').trim()}</p>
+            {idea.tags?.length ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                    {idea.tags.slice(0, 4).map((tag) => (
+                        <span key={tag} className="rounded-full border border-slate-700 bg-slate-900/70 px-2 py-0.5 text-[11px] text-slate-300">{tag}</span>
+                    ))}
+                </div>
+            ) : null}
+            <div className="mt-4 flex flex-wrap gap-2">
+                <button onClick={() => openIdeaView(idea)} className="px-3 py-1.5 text-xs rounded-full bg-slate-800 text-slate-200 hover:bg-slate-700 transition">Open</button>
+                <button onClick={() => openPromoteModal(idea)} className="px-3 py-1.5 text-xs rounded-full bg-purple-900/30 text-purple-100 hover:bg-purple-900/50 transition">Promote</button>
+                <button onClick={() => openAddToShowModal(idea)} className="px-3 py-1.5 text-xs rounded-full bg-blue-900/30 text-blue-100 hover:bg-blue-900/50 transition">Add to Show</button>
+                {!ideaIsArchived(idea) ? <button onClick={() => archiveIdea(idea)} className="px-3 py-1.5 text-xs rounded-full bg-slate-800 text-slate-200 hover:bg-slate-700 transition">Archive</button> : null}
+            </div>
+        </div>
+    );
+
     return (
         <div className="flex-1 overflow-y-auto p-4 md:p-6 animate-fade-in">
             <div className="flex items-center gap-3 mb-4">
@@ -1046,7 +1247,7 @@ const sendToPlanner = (idea: SavedIdea) => {
                     {([
                         { key: 'all', label: 'All' },
                         { key: 'recent', label: 'Recent' },
-                        { key: 'starred', label: 'Starred' },
+                        { key: 'starred', label: 'Favorites' },
                         { key: 'used', label: 'Used in Shows' },
                         { key: 'unused', label: 'Unused' },
                         { key: 'ai', label: 'AI Generated' },
@@ -1072,7 +1273,7 @@ const sendToPlanner = (idea: SavedIdea) => {
                     if (smartTab !== 'all') {
                         const tabLabel: Record<string, string> = {
                             recent: 'Recent',
-                            starred: 'Starred',
+                            starred: 'Favorites',
                             used: 'Used in Shows',
                             unused: 'Unused',
                             ai: 'AI Generated',
@@ -1131,6 +1332,38 @@ const sendToPlanner = (idea: SavedIdea) => {
             ) : (
                 
                 <div className="space-y-4">
+                    {favoriteIdeas.length ? (
+                        (() => {
+                            const secKey = 'favorites';
+                            return (
+                                <section className="mb-8">
+                                    <button
+                                        type="button"
+                                        onClick={() => setSectionOpen((prev) => ({ ...prev, [secKey]: !prev[secKey] }))}
+                                        className="w-full flex items-center justify-between rounded-2xl border border-yellow-500/20 bg-gradient-to-r from-yellow-500/10 via-slate-900/70 to-slate-950/80 px-5 py-4 text-left hover:border-yellow-400/30 transition"
+                                    >
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <div className="w-10 h-10 rounded-2xl bg-yellow-500/15 border border-yellow-400/20 flex items-center justify-center text-lg">⭐</div>
+                                            <div className="min-w-0">
+                                                <h2 className="text-lg md:text-xl font-bold text-yellow-200">Favorite Ideas</h2>
+                                                <p className="text-sm text-slate-400">Quick access to your best working material.</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <div className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">{favoriteIdeas.length}</div>
+                                            <div className="text-slate-400">{sectionOpen[secKey] ? '▼' : '▶'}</div>
+                                        </div>
+                                    </button>
+                                    {sectionOpen[secKey] ? (
+                                        <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                            {favoriteIdeas.map((idea) => renderLibraryRow(idea))}
+                                        </div>
+                                    ) : null}
+                                </section>
+                            );
+                        })()
+                    ) : null}
+
                     {pinnedIdeas.length ? (
                         (() => {
                             const secKey = 'pinned';
@@ -1283,10 +1516,11 @@ const sendToPlanner = (idea: SavedIdea) => {
                                                             </div>
                                                             <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                                                                 <button onClick={(e) => { e.stopPropagation(); openIdeaView(idea); }} className="px-2.5 py-1 text-xs bg-black/40 hover:bg-black/60 rounded-full text-slate-200 transition-colors backdrop-blur-sm" aria-label="Open">Open</button>
-                                                                <button onClick={(e) => { e.stopPropagation(); sendToPlanner(idea); }} className="px-2.5 py-1 text-xs bg-purple-900/30 hover:bg-purple-900/50 rounded-full text-purple-100 transition-colors backdrop-blur-sm" aria-label="Send to Show Planner">Send</button>
+                                                                <button onClick={(e) => { e.stopPropagation(); openPromoteModal(idea); }} className="px-2.5 py-1 text-xs bg-purple-900/30 hover:bg-purple-900/50 rounded-full text-purple-100 transition-colors backdrop-blur-sm" aria-label="Promote to Routine">Promote</button>
+                                                                <button onClick={(e) => { e.stopPropagation(); openAddToShowModal(idea); }} className="px-2.5 py-1 text-xs bg-blue-900/30 hover:bg-blue-900/50 rounded-full text-blue-100 transition-colors backdrop-blur-sm" aria-label="Add to Show">Add to Show</button>
                                                                 <button onClick={(e) => { e.stopPropagation(); copyIdeaToClipboard(idea); }} className="px-2.5 py-1 text-xs bg-black/40 hover:bg-black/60 rounded-full text-slate-200 transition-colors backdrop-blur-sm" aria-label="Copy">Copy</button>
                                                                 <button onClick={(e) => { e.stopPropagation(); toggleStar(idea.id); }} className="px-2.5 py-1 text-xs bg-black/40 hover:bg-black/60 rounded-full text-slate-200 transition-colors backdrop-blur-sm" aria-label="Star">
-                                                                    {isStarred(idea.id) ? 'Starred' : 'Star'}
+                                                                    {isStarred(idea.id) ? '★ Favorite' : '☆ Favorite'}
                                                                 </button>
                                                                 <button onClick={(e) => { e.stopPropagation(); togglePin(idea.id); }} className="p-1.5 bg-black/40 text-slate-200 hover:text-purple-200 hover:bg-black/60 rounded-full transition-colors backdrop-blur-sm" aria-label="Pin" title={isPinned(idea.id) ? 'Unpin' : 'Pin'}>
                                                                     <BookmarkIcon className="w-4 h-4" />
@@ -1383,10 +1617,11 @@ const sendToPlanner = (idea: SavedIdea) => {
 
                                                         <div className="absolute top-3 right-3 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                                                             <button onClick={(e) => { e.stopPropagation(); openIdeaView(idea); }} className="px-2.5 py-1 text-xs bg-slate-700/50 hover:bg-slate-700/70 rounded-full text-slate-200 transition-colors" aria-label="Open">Open</button>
-                                                            <button onClick={(e) => { e.stopPropagation(); sendToPlanner(idea); }} className="px-2.5 py-1 text-xs bg-purple-900/30 hover:bg-purple-900/50 rounded-full text-purple-100 transition-colors" aria-label="Send to Show Planner">Send</button>
+                                                            <button onClick={(e) => { e.stopPropagation(); openPromoteModal(idea); }} className="px-2.5 py-1 text-xs bg-purple-900/30 hover:bg-purple-900/50 rounded-full text-purple-100 transition-colors" aria-label="Promote to Routine">Promote</button>
+                                                            <button onClick={(e) => { e.stopPropagation(); openAddToShowModal(idea); }} className="px-2.5 py-1 text-xs bg-blue-900/30 hover:bg-blue-900/50 rounded-full text-blue-100 transition-colors" aria-label="Add to Show">Add to Show</button>
                                                             <button onClick={(e) => { e.stopPropagation(); copyIdeaToClipboard(idea); }} className="px-2.5 py-1 text-xs bg-slate-700/50 hover:bg-slate-700/70 rounded-full text-slate-200 transition-colors" aria-label="Copy">Copy</button>
                                                             <button onClick={(e) => { e.stopPropagation(); toggleStar(idea.id); }} className="px-2.5 py-1 text-xs bg-slate-700/50 hover:bg-slate-700/70 rounded-full text-slate-200 transition-colors" aria-label="Star">
-                                                                {isStarred(idea.id) ? 'Starred' : 'Star'}
+                                                                {isStarred(idea.id) ? '★ Favorite' : '☆ Favorite'}
                                                             </button>
                                                             <button onClick={(e) => { e.stopPropagation(); archiveIdea(idea); }} className="px-2.5 py-1 text-xs bg-slate-700/50 hover:bg-slate-700/70 rounded-full text-slate-200 transition-colors" aria-label="Archive">Archive</button>
                                                             <IdeaShareWrapper idea={idea} />
@@ -1406,6 +1641,12 @@ const sendToPlanner = (idea: SavedIdea) => {
             )}
 
             {/* Lightbox */}
+            {actionMessage ? (
+                <div className="fixed top-20 right-4 z-50 rounded-xl border border-purple-500/30 bg-slate-950/95 px-4 py-3 text-sm text-slate-100 shadow-xl backdrop-blur">
+                    {actionMessage}
+                </div>
+            ) : null}
+
             {lightboxImg ? (
                 <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" role="dialog" aria-modal="true">
                     <button
@@ -1420,6 +1661,121 @@ const sendToPlanner = (idea: SavedIdea) => {
                 </div>
             ) : null}
 
+            {promoteIdea ? (
+                <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" role="dialog" aria-modal="true" onClick={(e)=>{ if(e.target===e.currentTarget && !actionBusy) setPromoteIdea(null); }}>
+                    <div className="w-full max-w-2xl rounded-2xl border border-slate-800 bg-slate-950/95 p-6 shadow-2xl">
+                        <div className="flex items-start justify-between gap-4">
+                            <div>
+                                <h3 className="text-xl font-bold text-yellow-300">Promote to Routine</h3>
+                                <p className="mt-1 text-sm text-slate-400">Create a Show Planner routine directly from this saved idea.</p>
+                            </div>
+                            <button onClick={() => !actionBusy && setPromoteIdea(null)} className="p-2 rounded-full bg-slate-900/60 text-slate-200 hover:text-white hover:bg-slate-900/80 transition" aria-label="Close">
+                                <CrossIcon className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <label className="space-y-2">
+                                <span className="text-sm text-slate-300">Routine Title</span>
+                                <input value={promoteForm.title} onChange={(e)=>setPromoteForm((prev)=>({ ...prev, title: e.target.value }))} className="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-white outline-none focus:border-purple-500" />
+                            </label>
+                            <label className="space-y-2">
+                                <span className="text-sm text-slate-300">Estimated Time (minutes)</span>
+                                <input value={promoteForm.estimatedTime} onChange={(e)=>setPromoteForm((prev)=>({ ...prev, estimatedTime: e.target.value }))} type="number" min="1" className="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-white outline-none focus:border-purple-500" />
+                            </label>
+                            <label className="space-y-2 md:col-span-2">
+                                <span className="text-sm text-slate-300">Category</span>
+                                <select value={promoteForm.category} onChange={(e)=>setPromoteForm((prev)=>({ ...prev, category: e.target.value as IdeaCategory }))} className="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-white outline-none focus:border-purple-500">
+                                    {IDEA_PROMOTABLE_CATEGORIES.map((category) => (
+                                        <option key={category} value={category}>{IDEA_CATEGORY_META[category].label}</option>
+                                    ))}
+                                </select>
+                            </label>
+                            <label className="space-y-2 md:col-span-2">
+                                <span className="text-sm text-slate-300">Notes</span>
+                                <textarea value={promoteForm.notes} onChange={(e)=>setPromoteForm((prev)=>({ ...prev, notes: e.target.value }))} rows={6} className="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-white outline-none focus:border-purple-500" placeholder="Add notes for the new routine card in Show Planner." />
+                            </label>
+                        </div>
+                        <div className="mt-6 flex items-center justify-end gap-3">
+                            <button onClick={() => setPromoteIdea(null)} className="px-4 py-2 rounded-xl border border-slate-700 bg-slate-900 text-slate-200 hover:border-slate-500 transition">Cancel</button>
+                            <button onClick={submitPromoteToRoutine} disabled={actionBusy} className="px-4 py-2 rounded-xl bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-60 transition">{actionBusy ? 'Creating…' : 'Create Routine'}</button>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
+
+            {addToShowIdea ? (
+                <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" role="dialog" aria-modal="true" onClick={(e)=>{ if(e.target===e.currentTarget && !actionBusy) setAddToShowIdea(null); }}>
+                    <div className="w-full max-w-xl rounded-2xl border border-slate-800 bg-slate-950/95 p-6 shadow-2xl">
+                        <div className="flex items-start justify-between gap-4">
+                            <div>
+                                <h3 className="text-xl font-bold text-yellow-300">Add to Show</h3>
+                                <p className="mt-1 text-sm text-slate-400">Drop this idea directly into an existing show plan.</p>
+                            </div>
+                            <button onClick={() => !actionBusy && setAddToShowIdea(null)} className="p-2 rounded-full bg-slate-900/60 text-slate-200 hover:text-white hover:bg-slate-900/80 transition" aria-label="Close">
+                                <CrossIcon className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="mt-5 space-y-4">
+                            <label className="space-y-2 block">
+                                <span className="text-sm text-slate-300">Select Show</span>
+                                <select value={addToShowForm.showId} onChange={(e)=>setAddToShowForm((prev)=>({ ...prev, showId: e.target.value }))} className="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-white outline-none focus:border-blue-500">
+                                    <option value="">Select a show…</option>
+                                    {shows.map((show) => (
+                                        <option key={show.id} value={show.id}>{show.title}</option>
+                                    ))}
+                                </select>
+                            </label>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <label className="space-y-2">
+                                    <span className="text-sm text-slate-300">Routine Slot</span>
+                                    <select value={addToShowForm.routineSlot} onChange={(e)=>setAddToShowForm((prev)=>({ ...prev, routineSlot: e.target.value }))} className="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-white outline-none focus:border-blue-500">
+                                        {DEFAULT_SLOT_OPTIONS.map((slot) => (
+                                            <option key={slot} value={slot}>{slot}</option>
+                                        ))}
+                                    </select>
+                                </label>
+                                <label className="space-y-2">
+                                    <span className="text-sm text-slate-300">Estimated Time (minutes)</span>
+                                    <input value={addToShowForm.estimatedTime} onChange={(e)=>setAddToShowForm((prev)=>({ ...prev, estimatedTime: e.target.value }))} type="number" min="1" className="w-full rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-white outline-none focus:border-blue-500" />
+                                </label>
+                            </div>
+                            {!shows.length ? <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">Create a show in Show Planner first, then return here to add the idea.</div> : null}
+                        </div>
+                        <div className="mt-6 flex items-center justify-end gap-3">
+                            <button onClick={() => setAddToShowIdea(null)} className="px-4 py-2 rounded-xl border border-slate-700 bg-slate-900 text-slate-200 hover:border-slate-500 transition">Cancel</button>
+                            <button onClick={submitAddToShow} disabled={actionBusy || !shows.length} className="px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-60 transition">{actionBusy ? 'Adding…' : 'Add to Show'}</button>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
+
+            {archivedIdeas.length ? (
+                <section className="mb-8">
+                    <button
+                        type="button"
+                        onClick={() => setSectionOpen((prev) => ({ ...prev, archived: !prev.archived }))}
+                        className="w-full flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-950/70 px-5 py-4 text-left hover:border-slate-700 transition"
+                    >
+                        <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-10 h-10 rounded-2xl bg-slate-800/80 border border-slate-700 flex items-center justify-center text-lg">🗃️</div>
+                            <div className="min-w-0">
+                                <h2 className="text-lg md:text-xl font-bold text-slate-100">Archived Ideas</h2>
+                                <p className="text-sm text-slate-400">Older ideas moved out of the main creative workflow.</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <div className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">{archivedIdeas.length}</div>
+                            <div className="text-slate-400">{sectionOpen.archived ? '▼' : '▶'}</div>
+                        </div>
+                    </button>
+                    {sectionOpen.archived ? (
+                        <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4 opacity-90">
+                            {archivedIdeas.map((idea) => renderLibraryRow(idea))}
+                        </div>
+                    ) : null}
+                </section>
+            ) : null}
+
             {/* Open Idea Modal */}
             {openIdea ? (
                 <div className="fixed inset-0 z-50 bg-black/70 flex items-start justify-center p-4 pt-6 overflow-y-auto" onClick={(e)=>{ if(e.target===e.currentTarget) setOpenIdea(null); }} role="dialog" aria-modal="true">
@@ -1432,7 +1788,7 @@ const sendToPlanner = (idea: SavedIdea) => {
                                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-600/20 border border-purple-500/30 text-purple-200">Pinned</span>
                                     ) : null}
                                     {isStarred(openIdea.id) ? (
-                                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-600/20 border border-yellow-500/30 text-yellow-200">Starred</span>
+                                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-600/20 border border-yellow-500/30 text-yellow-200">Favorite</span>
                                     ) : null}
                                     {isAiGenerated(openIdea) ? (
                                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-200">AI</span>
@@ -1448,10 +1804,13 @@ const sendToPlanner = (idea: SavedIdea) => {
                                     {isPinned(openIdea.id) ? 'Unpin' : 'Pin'}
                                 </button>
                                 <button onClick={() => toggleStar(openIdea.id)} className="px-3 py-1.5 text-xs rounded-full bg-slate-800/60 border border-slate-700 text-slate-200 hover:border-yellow-400/30 hover:text-yellow-200 transition">
-                                    {isStarred(openIdea.id) ? 'Unstar' : 'Star'}
+                                    {isStarred(openIdea.id) ? 'Remove Favorite' : 'Favorite'}
                                 </button>
-                                <button onClick={() => sendToPlanner(openIdea)} className="px-3 py-1.5 text-xs rounded-full bg-purple-900/30 border border-purple-500/30 text-purple-100 hover:bg-purple-900/50 transition">
-                                    Send → Planner
+                                <button onClick={() => openPromoteModal(openIdea)} className="px-3 py-1.5 text-xs rounded-full bg-purple-900/30 border border-purple-500/30 text-purple-100 hover:bg-purple-900/50 transition">
+                                    Promote → Routine
+                                </button>
+                                <button onClick={() => openAddToShowModal(openIdea)} className="px-3 py-1.5 text-xs rounded-full bg-blue-900/30 border border-blue-500/30 text-blue-100 hover:bg-blue-900/50 transition">
+                                    Add to Show
                                 </button>
                                 <button onClick={() => copyIdeaToClipboard(openIdea)} className="px-3 py-1.5 text-xs rounded-full bg-slate-800/60 border border-slate-700 text-slate-200 hover:border-slate-500 transition" title="Copies selected ideas. Use bulk select for multiple.">
                                     Copy
@@ -1592,7 +1951,7 @@ const sendToPlanner = (idea: SavedIdea) => {
             {selectedIds.length ? (
                 <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 px-4 py-3 rounded-2xl bg-slate-950/90 border border-slate-800 shadow-xl backdrop-blur flex flex-wrap items-center gap-2">
                     <div className="text-sm text-slate-200 font-semibold mr-2">{selectedIds.length} selected</div>
-                    <button onClick={bulkSendToPlanner} className="px-3 py-1.5 text-xs rounded-full bg-purple-900/30 border border-purple-500/30 text-purple-100 hover:bg-purple-900/50 transition">Send → Planner</button>
+                    <button onClick={bulkSendToPlanner} className="px-3 py-1.5 text-xs rounded-full bg-purple-900/30 border border-purple-500/30 text-purple-100 hover:bg-purple-900/50 transition">Promote → Routine</button>
                     <button onClick={bulkDuplicateToClipboard} className="px-3 py-1.5 text-xs rounded-full bg-slate-800/60 border border-slate-700 text-slate-200 hover:border-slate-500 transition">Copy</button>
                     <button onClick={bulkAddTag} className="px-3 py-1.5 text-xs rounded-full bg-slate-800/60 border border-slate-700 text-slate-200 hover:border-slate-500 transition">Tag</button>
                     <button onClick={bulkArchive} className="px-3 py-1.5 text-xs rounded-full bg-slate-800/60 border border-slate-700 text-slate-200 hover:border-slate-500 transition">Archive</button>
