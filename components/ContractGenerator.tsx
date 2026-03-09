@@ -17,6 +17,7 @@ import {
 } from './icons';
 import { updateShow } from '../services/showsService';
 import { createContractVersion, listContractsForShow } from '../services/contractsService';
+import { updateClient } from '../services/clientsService';
 import type { Client, Show, User } from '../types';
 
 interface ContractGeneratorProps {
@@ -48,7 +49,53 @@ type PreviewContract = {
     depositDueDate: string;
     specialRequirements: string;
     cancellationPolicy: string;
+    contractType: ContractType;
+    previewToneSeed: string;
 };
+
+type ContractType = 'Corporate Event' | 'Private Party' | 'School Show' | 'Festival' | 'Theater';
+
+type ContractPreset = {
+    depositRatio: number;
+    cancellationPolicy: string;
+    riderLanguage: string;
+    previewToneSeed: string;
+};
+
+const CONTRACT_TYPE_PRESETS: Record<ContractType, ContractPreset> = {
+    'Corporate Event': {
+        depositRatio: 0.5,
+        cancellationPolicy: 'A 50% booking deposit is required to secure the date and is non-refundable if the Client cancels within 30 days of the event. Remaining balance is due on the event date before performance.',
+        riderLanguage: 'Performer will be provided a private staging area, one stable table, and basic sound support suitable for a corporate banquet or ballroom environment.',
+        previewToneSeed: 'Polished corporate language with clear professionalism and concise expectations.',
+    },
+    'Private Party': {
+        depositRatio: 0.4,
+        cancellationPolicy: 'A 40% retainer secures the date. If the Client cancels within 14 days of the event, the retainer is non-refundable. Good-faith rescheduling may be offered when possible.',
+        riderLanguage: 'Performer requires a performance space clear of guest traffic, a safe setup area, and access to the venue 30 minutes before showtime.',
+        previewToneSeed: 'Warm, friendly client-facing language appropriate for family and private events.',
+    },
+    'School Show': {
+        depositRatio: 0.25,
+        cancellationPolicy: 'A 25% booking deposit secures the engagement. School closures, safety events, or weather-related schedule changes may be rescheduled in good faith when possible.',
+        riderLanguage: 'Performer requires an indoor performance area, access to a power outlet if sound is used, and an arrival window of 45 minutes for setup in school environments.',
+        previewToneSeed: 'Clear educational-event language emphasizing scheduling clarity, safety, and professionalism.',
+    },
+    Festival: {
+        depositRatio: 0.3,
+        cancellationPolicy: 'A 30% booking deposit secures the performance slot. Outdoor weather delays, festival programming changes, or force majeure events will be handled in accordance with the event schedule and rescheduling feasibility.',
+        riderLanguage: 'Performer requires a sheltered staging area when outdoors, a secure prop space, and event staff coordination for load-in, parking, and cue timing.',
+        previewToneSeed: 'Production-aware language suitable for public events, festivals, and shared schedules.',
+    },
+    Theater: {
+        depositRatio: 0.5,
+        cancellationPolicy: 'A 50% booking deposit secures the theater date. Cancellations within 45 days of performance may forfeit the deposit due to date exclusivity and production planning commitments.',
+        riderLanguage: 'Performer requires coordinated access with venue staff, agreed rehearsal or sound-check timing, backstage support, and a clear stage plot for theater presentation.',
+        previewToneSeed: 'Formal venue language with production professionalism and stage-management clarity.',
+    },
+};
+
+const DEFAULT_CONTRACT_TYPE: ContractType = 'Corporate Event';
 
 const DEFAULT_CANCELLATION_POLICY =
     'Deposit is non-refundable if Client cancels within 30 days of the event date. If Performer cancels, the deposit will be fully refunded.';
@@ -114,6 +161,43 @@ const contractSectionsToText = (sections: ContractSections): string => {
         .join('\n\n');
 };
 
+const buildContractSummaryText = (preview: PreviewContract, result: ContractSections | null): string => {
+    const lines = [
+        `Performer: ${preview.performerName || 'TBD'}`,
+        `Client: ${preview.clientName || 'TBD'}${preview.clientCompany ? ` (${preview.clientCompany})` : ''}`,
+        `Event: ${preview.eventTitle || 'Untitled Engagement'}`,
+        `Type: ${preview.eventType || 'Professional performance agreement'}`,
+        `Date: ${formatDateForPreview(preview.eventDate)}`,
+        `Time: ${preview.eventTime || 'Time to be confirmed'}`,
+        `Location: ${preview.eventLocation || 'Location to be confirmed'}`,
+        `Performance Length: ${preview.performanceLength || 'Length to be confirmed'}`,
+        `Fee: ${formatCurrency(preview.performanceFee)}`,
+        `Deposit: ${preview.depositAmount ? formatCurrency(preview.depositAmount) : 'No deposit specified'}${preview.depositDueDate ? ` due ${formatDateForPreview(preview.depositDueDate)}` : ''}`,
+        '',
+        'Special Requirements:',
+        preview.specialRequirements || 'None specified yet.',
+        '',
+        'Cancellation Policy:',
+        preview.cancellationPolicy || DEFAULT_CANCELLATION_POLICY,
+    ];
+
+    if (result) lines.push('', contractSectionsToText(result));
+    return lines.join('\n');
+};
+
+const escapeHtml = (value: string): string =>
+    value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+const buildContractPrintHtml = (preview: PreviewContract, result: ContractSections | null): string => {
+    const section = (title: string, body: string) => `
+        <section style="margin-top:18px;">
+            <h3 style="font-size:15px;margin:0 0 8px 0;color:#111827;">${escapeHtml(title)}</h3>
+            <div style="white-space:pre-wrap;line-height:1.55;color:#374151;">${escapeHtml(body)}</div>
+        </section>`;
+    const signatureStub = result?.signatureBlock || `Performer: ${preview.performerName || '________________'}\nClient: ${preview.clientName || '________________'}\nDate: ____________________`;
+    return `<!doctype html><html><head><meta charset="utf-8" /><title>Performance Contract</title></head><body style="font-family:Arial,Helvetica,sans-serif;padding:40px;max-width:860px;margin:0 auto;color:#111827;"><div style="border-bottom:2px solid #e5e7eb;padding-bottom:16px;margin-bottom:20px;"><div style="font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#7c3aed;">Performance Agreement</div><h1 style="margin:8px 0 4px 0;font-size:28px;">${escapeHtml(preview.eventTitle || 'Untitled Engagement')}</h1><div style="color:#4b5563;">${escapeHtml(preview.eventType || 'Professional performance contract')} · ${escapeHtml(preview.contractType)}</div></div>${section('Parties', `Performer: ${preview.performerName || 'Performer name pending'}\nClient: ${preview.clientName || 'Client name pending'}${preview.clientCompany ? `\nCompany: ${preview.clientCompany}` : ''}${preview.clientEmail ? `\nEmail: ${preview.clientEmail}` : ''}${preview.clientPhone ? `\nPhone: ${preview.clientPhone}` : ''}${preview.clientAddress ? `\nAddress: ${preview.clientAddress}` : ''}`)}${section('Event', `${formatDateForPreview(preview.eventDate)}${preview.eventTime ? `\n${preview.eventTime}` : ''}\n${preview.eventLocation || 'Location to be confirmed'}${preview.performanceLength ? `\n${preview.performanceLength}` : ''}`)}${section('Financial Terms', `Performance Fee: ${formatCurrency(preview.performanceFee)}\nDeposit: ${preview.depositAmount ? formatCurrency(preview.depositAmount) : 'No deposit specified yet'}${preview.depositDueDate ? ` due ${formatDateForPreview(preview.depositDueDate)}` : ''}`)}${section('Operational Notes', preview.specialRequirements || 'Special requirements will appear here once added.')}${section('Cancellation', preview.cancellationPolicy || DEFAULT_CANCELLATION_POLICY)}${section('Agreement Language', [`Performance Details\n${result?.performanceDetails || 'Performance details will appear here after generation.'}`, `\nPayment Terms\n${result?.paymentTerms || `Total fee: ${formatCurrency(preview.performanceFee)}. ${preview.depositAmount ? `Deposit: ${formatCurrency(preview.depositAmount)}` : 'Deposit terms pending.'}`}`, `\nTechnical Requirements\n${result?.technicalRequirements || preview.specialRequirements || 'Technical and rider requirements will appear here.'}`, `\nCancellation Policy\n${result?.cancellationPolicy || preview.cancellationPolicy || DEFAULT_CANCELLATION_POLICY}`, `\nForce Majeure\n${result?.forceMajeure || 'Either party may be excused from performance delays or cancellations caused by events beyond reasonable control.'}`, `\nSignature Block\n${signatureStub}`].join(''))}</body></html>`;
+};
+
 const formatContractAsText = (
     sections: ContractSections,
     meta: { performerName: string; clientName: string; eventTitle: string }
@@ -175,6 +259,10 @@ const ContractGenerator: React.FC<ContractGeneratorProps> = ({ user, clients, sh
     const [showNextVersion, setShowNextVersion] = useState<number | null>(null);
     const [showLatestStatus, setShowLatestStatus] = useState<string | null>(null);
     const [clientLoadedFromCrm, setClientLoadedFromCrm] = useState(false);
+    const [contractType, setContractType] = useState<ContractType>(DEFAULT_CONTRACT_TYPE);
+    const [previewToneSeed, setPreviewToneSeed] = useState(CONTRACT_TYPE_PRESETS[DEFAULT_CONTRACT_TYPE].previewToneSeed);
+    const [clientRecordSaveStatus, setClientRecordSaveStatus] = useState<'idle' | 'saved'>('idle');
+    const [emailStatus, setEmailStatus] = useState<'idle' | 'opened'>('idle');
 
     const isFormValid = performerName && clientName && eventDate && performanceFee;
     const selectedShow = useMemo(() => shows.find((s) => s.id === selectedShowId) ?? null, [shows, selectedShowId]);
@@ -214,6 +302,8 @@ const ContractGenerator: React.FC<ContractGeneratorProps> = ({ user, clients, sh
             depositDueDate,
             specialRequirements,
             cancellationPolicy,
+            contractType,
+            previewToneSeed,
         }),
         [
             performerName,
@@ -233,8 +323,24 @@ const ContractGenerator: React.FC<ContractGeneratorProps> = ({ user, clients, sh
             depositDueDate,
             specialRequirements,
             cancellationPolicy,
+            contractType,
+            previewToneSeed,
         ]
     );
+
+    const applyContractPreset = (nextType: ContractType) => {
+        const preset = CONTRACT_TYPE_PRESETS[nextType];
+        setContractType(nextType);
+        setPreviewToneSeed(preset.previewToneSeed);
+        setCancellationPolicy(preset.cancellationPolicy);
+        setSpecialRequirements((prev) => {
+            const trimmed = prev.trim();
+            if (!trimmed) return preset.riderLanguage;
+            return trimmed.includes(preset.riderLanguage) ? trimmed : `${trimmed}\n\n${preset.riderLanguage}`;
+        });
+        const fee = Number(performanceFee);
+        if (!Number.isNaN(fee) && fee > 0) setDepositAmount(String(Math.round(fee * preset.depositRatio)));
+    };
 
     const applyClientSelection = (clientId: string) => {
         setSelectedClientId(clientId);
@@ -300,6 +406,15 @@ const ContractGenerator: React.FC<ContractGeneratorProps> = ({ user, clients, sh
     }, [shows]);
 
     useEffect(() => {
+        const preset = CONTRACT_TYPE_PRESETS[contractType];
+        const fee = Number(performanceFee);
+        if (!Number.isNaN(fee) && fee > 0) {
+            const suggestedDeposit = String(Math.round(fee * preset.depositRatio));
+            setDepositAmount((prev) => (!prev || Number.isNaN(Number(prev)) ? suggestedDeposit : prev));
+        }
+    }, [contractType, performanceFee]);
+
+    useEffect(() => {
         let cancelled = false;
 
         const run = async () => {
@@ -348,6 +463,8 @@ const ContractGenerator: React.FC<ContractGeneratorProps> = ({ user, clients, sh
         setSaveStatus('idle');
         setCopyStatus('idle');
         setSaveToShowStatus('idle');
+        setClientRecordSaveStatus('idle');
+        setEmailStatus('idle');
 
         const prompt = `
 You are drafting a professional performance contract for a magician.
@@ -365,6 +482,8 @@ Contract context:
 Event details:
 - Event Title: ${eventTitle}
 - Event Type: ${eventType}
+- Contract Type Preset: ${contractType}
+- Preview Tone Seed: ${previewToneSeed}
 - Event Date: ${eventDate}
 - Event Time: ${eventTime}
 - Event Location/Address: ${eventLocation}
@@ -426,7 +545,21 @@ Guidelines:
         setTimeout(() => setCopyStatus('idle'), 2000);
     };
 
-    const handleDownload = () => {
+    const handleDownloadPdf = () => {
+        const html = buildContractPrintHtml(previewContract, result);
+        const printWindow = window.open('', '_blank', 'noopener,noreferrer,width=900,height=1100');
+        if (!printWindow) {
+            setError('Popup blocked. Please allow popups to download the contract as a PDF.');
+            return;
+        }
+        printWindow.document.open();
+        printWindow.document.write(html);
+        printWindow.document.close();
+        printWindow.focus();
+        window.setTimeout(() => { printWindow.print(); }, 250);
+    };
+
+    const handleDownloadTxt = () => {
         if (!result) return;
         const text = formatContractAsText(result, { performerName, clientName, eventTitle });
         const blob = new Blob([text], { type: 'text/plain' });
@@ -438,6 +571,38 @@ Guidelines:
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+    };
+
+    const handleSendEmail = () => {
+        const subject = encodeURIComponent(`Performance Agreement — ${eventTitle || 'Upcoming Event'}`);
+        const body = encodeURIComponent(`Hello ${clientName || 'Client'},\n\nAttached below is the draft performance agreement for your review.\n\n${buildContractSummaryText(previewContract, result)}\n\nThank you,\n${performerName || 'Performer'}`);
+        const email = clientEmail || '';
+        window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
+        setEmailStatus('opened');
+        setTimeout(() => setEmailStatus('idle'), 2500);
+    };
+
+    const handleSaveToClientRecord = () => {
+        if (!selectedClientId) return;
+        try {
+            const selectedClient = clients.find((client) => client.id === selectedClientId);
+            const stamp = new Date().toLocaleString();
+            const existingNotes = selectedClient?.notes?.trim() || '';
+            const contractRecord = [
+                `Contract Record — ${stamp}`,
+                `Contract Type: ${contractType}`,
+                `Event: ${eventTitle || 'Untitled Engagement'}`,
+                `Fee: ${formatCurrency(performanceFee)}`,
+                `Deposit: ${depositAmount ? formatCurrency(depositAmount) : 'Not specified'}`,
+                `Status: ${result ? 'AI draft generated' : 'Preview draft saved'}`,
+                buildContractSummaryText(previewContract, result),
+            ].join('\n');
+            updateClient(selectedClientId, { notes: existingNotes ? `${existingNotes}\n\n${contractRecord}` : contractRecord } as any);
+            setClientRecordSaveStatus('saved');
+            setTimeout(() => setClientRecordSaveStatus('idle'), 2000);
+        } catch (err: any) {
+            setError(err?.message || 'Unable to save contract details to the selected client record.');
+        }
     };
 
     const handleSaveToShow = async () => {
@@ -528,6 +693,8 @@ Guidelines:
                         eventLocation={eventLocation}
                         setEventLocation={setEventLocation}
                         clientLoadedFromCrm={clientLoadedFromCrm}
+                        contractType={contractType}
+                        setContractType={applyContractPreset}
                         selectedShow={selectedShow}
                         showNextVersion={showNextVersion}
                         showLatestStatus={showLatestStatus}
@@ -542,6 +709,7 @@ Guidelines:
                         depositAmount={depositAmount}
                         setDepositAmount={setDepositAmount}
                         depositDueDate={depositDueDate}
+                        contractType={contractType}
                         setDepositDueDate={setDepositDueDate}
                     />
 
@@ -570,12 +738,18 @@ Guidelines:
                     <ContractActionBar
                         result={result}
                         selectedShowId={selectedShowId}
+                        selectedClientId={selectedClientId}
                         saveStatus={saveStatus}
                         copyStatus={copyStatus}
                         saveToShowStatus={saveToShowStatus}
+                        clientRecordSaveStatus={clientRecordSaveStatus}
+                        emailStatus={emailStatus}
                         onSave={handleSave}
                         onCopy={handleCopy}
-                        onDownload={handleDownload}
+                        onDownloadPdf={handleDownloadPdf}
+                        onDownloadTxt={handleDownloadTxt}
+                        onSendEmail={handleSendEmail}
+                        onSaveToClientRecord={handleSaveToClientRecord}
                         onSaveToShow={handleSaveToShow}
                     />
 
@@ -688,6 +862,8 @@ const EventClientSection: React.FC<{
     eventLocation: string;
     setEventLocation: (v: string) => void;
     clientLoadedFromCrm: boolean;
+    contractType: ContractType;
+    setContractType: (v: ContractType) => void;
     selectedShow: Show | null;
     showNextVersion: number | null;
     showLatestStatus: string | null;
@@ -722,6 +898,8 @@ const EventClientSection: React.FC<{
     eventLocation,
     setEventLocation,
     clientLoadedFromCrm,
+    contractType,
+    setContractType,
     selectedShow,
     showNextVersion,
     showLatestStatus,
@@ -733,7 +911,8 @@ const EventClientSection: React.FC<{
         icon={<UsersIcon className="w-5 h-5" />}
     >
         <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="mb-4 rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">Preset active: <span className="font-semibold">{contractType}</span> · Deposit and language defaults are tuned for this booking type.</div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                     <FieldLabel htmlFor="select-client">Select Client</FieldLabel>
                     <FieldSelect id="select-client" value={selectedClientId} onChange={(e) => onClientSelect(e.target.value)}>
@@ -758,33 +937,6 @@ const EventClientSection: React.FC<{
                     </FieldSelect>
                 </div>
             </div>
-
-            <div className="flex flex-wrap gap-2 text-xs">
-                <StatusPill label={clientLoadedFromCrm ? 'Loaded from Client Management' : 'Manual client entry'} active={clientLoadedFromCrm} />
-                <StatusPill label={selectedShow ? 'Show linked from Planner' : 'No show linked'} active={!!selectedShow} />
-            </div>
-
-            {selectedShow ? (
-                <div className="rounded-xl border border-blue-400/20 bg-blue-500/10 p-3">
-                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                        <div className="text-sm text-slate-200">
-                            <div className="font-semibold">Selected show: {selectedShow.title}</div>
-                            <div className="mt-1 text-xs text-slate-300">
-                                Contract status: {showLatestStatus || 'No saved contract yet'}
-                                {showNextVersion ? ` · Next version v${showNextVersion}` : ''}
-                            </div>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={onOpenShowPlanner}
-                            className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-slate-900/70 px-3 py-2 text-sm text-slate-200 transition hover:bg-slate-800"
-                        >
-                            <ShareIcon className="h-4 w-4" />
-                            Open in Show Planner
-                        </button>
-                    </div>
-                </div>
-            ) : null}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -843,6 +995,16 @@ const EventClientSection: React.FC<{
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
+                    <FieldLabel htmlFor="contract-type">Contract Type</FieldLabel>
+                    <FieldSelect id="contract-type" value={contractType} onChange={(e) => setContractType(e.target.value as ContractType)}>
+                        {Object.keys(CONTRACT_TYPE_PRESETS).map((type) => (
+                            <option key={type} value={type}>
+                                {type}
+                            </option>
+                        ))}
+                    </FieldSelect>
+                </div>
+                <div>
                     <FieldLabel htmlFor="event-title">Event Name / Title</FieldLabel>
                     <FieldInput id="event-title" value={eventTitle} onChange={(e) => setEventTitle(e.target.value)} placeholder="Corporate Holiday Gala" />
                 </div>
@@ -877,12 +1039,14 @@ const FinancialTermsSection: React.FC<{
     setDepositAmount: (v: string) => void;
     depositDueDate: string;
     setDepositDueDate: (v: string) => void;
-}> = ({ performanceLength, setPerformanceLength, performanceFee, setPerformanceFee, depositAmount, setDepositAmount, depositDueDate, setDepositDueDate }) => (
+    contractType: ContractType;
+}> = ({ performanceLength, setPerformanceLength, performanceFee, setPerformanceFee, depositAmount, setDepositAmount, depositDueDate, setDepositDueDate, contractType }) => (
     <CardShell
         title="Financial Terms"
         description="Set the booking economics clearly so the agreement reads like a professional client document."
         icon={<ClockIcon className="w-5 h-5" />}
     >
+        <div className="mb-4 rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">Preset active: <span className="font-semibold">{contractType}</span> · Deposit and language defaults are tuned for this booking type.</div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
                 <FieldLabel htmlFor="perf-length">Performance Length</FieldLabel>
@@ -973,7 +1137,7 @@ const ContractPreviewPanel: React.FC<{
                             <div className="text-[11px] uppercase tracking-[0.18em] text-purple-300">Performance Agreement</div>
                             <h4 className="mt-2 text-xl font-semibold text-slate-100">{preview.eventTitle || 'Untitled Engagement'}</h4>
                             <p className="mt-1 text-sm text-slate-400">
-                                {preview.eventType || 'Professional performance contract'}
+                                {preview.eventType || 'Professional performance contract'} · {preview.contractType}
                             </p>
                         </div>
                         <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-right text-xs text-slate-300">
@@ -1037,9 +1201,11 @@ const ContractPreviewPanel: React.FC<{
                     )}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
                     <InfoChip title="Show status" value={selectedShow ? showLatestStatus || 'No saved contract status' : 'No show connected'} />
                     <InfoChip title="Revenue snapshot" value={preview.performanceFee ? formatCurrency(preview.performanceFee) : 'Fee not entered'} />
+                    <InfoChip title="Contract preset" value={preview.contractType} />
+                    <InfoChip title="Preview tone" value={preview.previewToneSeed} />
                 </div>
             </div>
         </CardShell>
@@ -1049,39 +1215,58 @@ const ContractPreviewPanel: React.FC<{
 const ContractActionBar: React.FC<{
     result: ContractSections | null;
     selectedShowId: string;
+    selectedClientId: string;
     saveStatus: 'idle' | 'saved';
     copyStatus: 'idle' | 'copied';
     saveToShowStatus: 'idle' | 'saved';
+    clientRecordSaveStatus: 'idle' | 'saved';
+    emailStatus: 'idle' | 'opened';
     onSave: () => void;
     onCopy: () => void;
-    onDownload: () => void;
+    onDownloadPdf: () => void;
+    onDownloadTxt: () => void;
+    onSendEmail: () => void;
+    onSaveToClientRecord: () => void;
     onSaveToShow: () => void;
-}> = ({ result, selectedShowId, saveStatus, copyStatus, saveToShowStatus, onSave, onCopy, onDownload, onSaveToShow }) => (
+}> = ({ result, selectedShowId, selectedClientId, saveStatus, copyStatus, saveToShowStatus, clientRecordSaveStatus, emailStatus, onSave, onCopy, onDownloadPdf, onDownloadTxt, onSendEmail, onSaveToClientRecord, onSaveToShow }) => (
     <CardShell
         title="Output Actions"
-        description="Once the AI draft is ready, export it, store it, or attach it to the selected show."
+        description="Export, email, or save this agreement into the connected client and show workflow."
         icon={<ShareIcon className="w-5 h-5" />}
     >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <ActionButton onClick={onSaveToShow} disabled={!result || !selectedShowId || saveToShowStatus === 'saved'} primary>
-                {saveToShowStatus === 'saved' ? <CheckIcon className="w-4 h-4 text-green-300" /> : <ShareIcon className="w-4 h-4" />}
-                <span>{saveToShowStatus === 'saved' ? 'Saved to Show!' : 'Save as New Version to Show'}</span>
-            </ActionButton>
-            <ActionButton onClick={onDownload} disabled={!result}>
-                <FileTextIcon className="w-4 h-4" />
-                <span>Download .txt</span>
-            </ActionButton>
-            <ActionButton onClick={onCopy} disabled={!result || copyStatus === 'copied'}>
+            <ActionButton onClick={onCopy} disabled={!result || copyStatus === 'copied'} primary>
                 {copyStatus === 'copied' ? <CheckIcon className="w-4 h-4 text-green-400" /> : <CopyIcon className="w-4 h-4" />}
                 <span>{copyStatus === 'copied' ? 'Copied!' : 'Copy Contract'}</span>
+            </ActionButton>
+            <ActionButton onClick={onDownloadPdf} disabled={!result}>
+                <FileTextIcon className="w-4 h-4" />
+                <span>Download PDF</span>
+            </ActionButton>
+            <ActionButton onClick={onSendEmail} disabled={!selectedClientId}>
+                {emailStatus === 'opened' ? <CheckIcon className="w-4 h-4 text-green-400" /> : <ShareIcon className="w-4 h-4" />}
+                <span>{emailStatus === 'opened' ? 'Email Ready' : 'Send Email'}</span>
+            </ActionButton>
+            <ActionButton onClick={onSaveToClientRecord} disabled={!selectedClientId || clientRecordSaveStatus === 'saved'}>
+                {clientRecordSaveStatus === 'saved' ? <CheckIcon className="w-4 h-4 text-green-400" /> : <SaveIcon className="w-4 h-4" />}
+                <span>{clientRecordSaveStatus === 'saved' ? 'Saved to Client!' : 'Save to Client Record'}</span>
+            </ActionButton>
+            <ActionButton onClick={onSaveToShow} disabled={!result || !selectedShowId || saveToShowStatus === 'saved'}>
+                {saveToShowStatus === 'saved' ? <CheckIcon className="w-4 h-4 text-green-300" /> : <ShareIcon className="w-4 h-4" />}
+                <span>{saveToShowStatus === 'saved' ? 'Saved to Show!' : 'Save as New Version to Show'}</span>
             </ActionButton>
             <ActionButton onClick={onSave} disabled={!result || saveStatus === 'saved'}>
                 {saveStatus === 'saved' ? <CheckIcon className="w-4 h-4 text-green-400" /> : <SaveIcon className="w-4 h-4" />}
                 <span>{saveStatus === 'saved' ? 'Saved!' : 'Save to Ideas'}</span>
             </ActionButton>
         </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+            <StatusPill label="PDF print flow" active={!!result} />
+            <button type="button" onClick={onDownloadTxt} disabled={!result} className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50">Download .txt fallback</button>
+        </div>
         <div className="mt-3 text-xs text-slate-400 space-y-1">
-            <div>• Save to Ideas stores this contract for later reuse.</div>
+            <div>• Save to Client Record appends a structured contract note to the linked client record.</div>
+            <div>• Send Email opens a compose-ready draft using the selected client email.</div>
             <div>• Save as New Version to Show creates a versioned draft for the selected show.</div>
         </div>
     </CardShell>
