@@ -219,7 +219,7 @@ const ShowFeedback: React.FC = () => {
                 <div className="rounded-xl border border-slate-700/80 bg-slate-900/35 p-4 md:p-5 mb-5">
                     <div className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-4">
                         <div className="flex-1 min-w-0">
-                            <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 mb-2" htmlFor="show-select">
+                            <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 mb-2" htmlFor="show-select">
                                 Performance Selection
                             </label>
                             <div className="flex items-center gap-3 flex-wrap">
@@ -271,7 +271,7 @@ const ShowFeedback: React.FC = () => {
                 )}
 
                 <div className="mb-3">
-                    <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 mb-3">Performance Summary</h3>
+                    <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 mb-3">Performance Summary</h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="bg-slate-800/50 p-5 rounded-xl border border-slate-700/80 min-h-[132px]">
                             <h4 className="text-sm font-semibold text-slate-400 mb-4">Average Rating</h4>
@@ -333,7 +333,7 @@ const ShowFeedback: React.FC = () => {
                         <section className="rounded-2xl border border-slate-700/80 bg-slate-900/35 p-5 md:p-6">
                             <div className="flex items-start justify-between gap-4 mb-5 flex-wrap">
                                 <div>
-                                    <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 mb-2">Reaction Timeline</h3>
+                                    <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 mb-2">Reaction Timeline</h3>
                                     <p className="text-sm text-slate-400 max-w-2xl">
                                         A performance-pattern view based on submitted ratings and reactions. Until true routine timestamps are available,
                                         this panel estimates where the strongest audience energy appeared across the show.
@@ -370,7 +370,7 @@ const ShowFeedback: React.FC = () => {
 
                         <section className="rounded-2xl border border-slate-700/80 bg-slate-900/35 p-5 md:p-6">
                             <div className="mb-5">
-                                <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 mb-2">Key Insights</h3>
+                                <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 mb-2">Key Insights</h3>
                                 <p className="text-sm text-slate-400">
                                     Quick performance intelligence inferred from ratings, reactions, and audience comments.
                                 </p>
@@ -417,7 +417,7 @@ const ShowFeedback: React.FC = () => {
 
                         <section>
                             <div className="mb-4">
-                                <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 mb-2">Audience Comments</h3>
+                                <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 mb-2">Audience Comments</h3>
                                 <p className="text-sm text-slate-400">Raw response details are listed below to support the higher-level summary and insight panels above.</p>
                             </div>
                             <div className="space-y-4">
@@ -479,9 +479,9 @@ const ShowFeedback: React.FC = () => {
                         </section>
                     </div>
                 ) : (
-                    <div className="rounded-2xl border border-slate-700/80 bg-slate-900/35 px-6 py-14 text-center max-w-3xl mx-auto">
-                        <div className="w-20 h-20 rounded-full border border-slate-700 bg-slate-900/50 flex items-center justify-center mx-auto mb-5">
-                            <StarIcon className="w-10 h-10 text-purple-400/80" />
+                    <div className="mt-10 rounded-2xl border border-slate-700/80 bg-slate-900/35 px-6 py-14 text-center max-w-3xl mx-auto">
+                        <div className="w-24 h-24 rounded-full border border-slate-700 bg-slate-900/50 flex items-center justify-center mx-auto mb-5 shadow-[0_0_24px_rgba(168,85,247,0.14)]">
+                            <StarIcon className="w-12 h-12 text-purple-400 drop-shadow-[0_0_10px_rgba(168,85,247,0.35)]" />
                         </div>
                         <h3 className="text-2xl font-bold text-slate-200 mb-3">No Audience Feedback Yet</h3>
                         <p className="text-slate-400 max-w-xl mx-auto mb-6">
