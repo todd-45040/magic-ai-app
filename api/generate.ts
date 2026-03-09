@@ -353,6 +353,23 @@ export default async function handler(request: any, response: any) {
       );
     };
 
+    // --- Skip Effect Engine rewrite for multimodal (image/video) analysis ---
+    const containsImages = JSON.stringify(contents).includes('inlineData');
+
+    if (containsImages) {
+      const result = await run();
+      const text = extractText(result);
+
+      response.setHeader('X-AI-Remaining', String(usage.remaining ?? ''));
+      response.setHeader('X-AI-Limit', String(usage.limit ?? ''));
+      response.setHeader('X-AI-Membership', String(usage.membership ?? ''));
+      response.setHeader('X-AI-Burst-Remaining', String(usage.burstRemaining ?? ''));
+      response.setHeader('X-AI-Burst-Limit', String(usage.burstLimit ?? ''));
+      response.setHeader('X-AI-Provider-Used', provider);
+
+      return response.status(200).json({ text });
+    }
+
     // --- Never-cut-off path: Deep JSON contract + validate + retry once ---
     const items = extractItemsFromContents(contents);
     const jsonPrompt = buildDeepEffectEngineJsonPrompt(items);
