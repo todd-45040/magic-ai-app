@@ -294,8 +294,8 @@ useEffect(() => {
                 return;
             }
             // Demo-friendly size limit
-            if (file.size > 50 * 1024 * 1024) { // 50 MB
-                setError('File is too large. Please upload a video under 50MB for this demo.');
+            if (file.size > 80 * 1024 * 1024) { // 80 MB
+                setError('File is too large. Please upload a video under 80MB for this demo.');
                 return;
             }
 
@@ -360,14 +360,6 @@ useEffect(() => {
         setAnalysisResult(null);
         setSaveStatus('idle');
 
-        if (isDemoClipLoaded) {
-            window.setTimeout(() => {
-                setAnalysisResult(DEMO_ANALYSIS);
-                setIsLoading(false);
-                void trackClientEvent({ tool: 'video_rehearsal', action: 'demo_analyze_success', outcome: 'SUCCESS_NOT_CHARGED' });
-            }, 900);
-            return;
-        }
         // Frame-based analysis:
         // We extract representative frames client-side and send them to Gemini Vision.
         // This ensures the feedback is grounded in the uploaded video (not a simulation).
@@ -409,7 +401,7 @@ useEffect(() => {
 
             const response = await generateResponseWithParts(parts, VIDEO_REHEARSAL_SYSTEM_INSTRUCTION, user);
             setAnalysisResult(response);
-            void trackClientEvent({ tool: 'video_rehearsal', action: 'analyze_success', outcome: 'SUCCESS_NOT_CHARGED' });
+            void trackClientEvent({ tool: 'video_rehearsal', action: isDemoClipLoaded ? 'demo_analyze_success' : 'analyze_success', outcome: 'SUCCESS_NOT_CHARGED' });
 
             // Phase 4: soft upsell after first successful analysis for trial users.
             if (String(user.membership || '').toLowerCase() === 'trial' && !dismissedUpsell) {
@@ -421,8 +413,15 @@ useEffect(() => {
                 }
             }
         } catch (err) {
-            setError(err instanceof Error ? err.message : "An unknown error occurred during the analysis.");
-            void trackClientEvent({ tool: 'video_rehearsal', action: 'analyze_error', outcome: 'ERROR_UPSTREAM', metadata: { message: err instanceof Error ? err.message : 'unknown' } });
+            const message = err instanceof Error ? err.message : "An unknown error occurred during the analysis.";
+            if (isDemoClipLoaded) {
+                setAnalysisResult(DEMO_ANALYSIS);
+                setError('Live AI analysis was unavailable, so the demo fallback result was shown.');
+                void trackClientEvent({ tool: 'video_rehearsal', action: 'demo_analyze_fallback', outcome: 'SUCCESS_NOT_CHARGED', metadata: { message } });
+            } else {
+                setError(message);
+                void trackClientEvent({ tool: 'video_rehearsal', action: 'analyze_error', outcome: 'ERROR_UPSTREAM', metadata: { message } });
+            }
         } finally {
             setIsLoading(false);
         }
@@ -616,12 +615,12 @@ const deriveAutoTags = (): string[] => {
                         <button onClick={() => fileInputRef.current?.click()} className="w-full flex flex-col items-center justify-center p-12 border-2 border-dashed border-slate-600/90 rounded-xl bg-slate-950/35 shadow-inner shadow-black/20 hover:bg-slate-900/70 hover:border-purple-400/80 hover:shadow-[0_0_18px_rgba(168,85,247,0.12)] transition-all duration-200">
                             <VideoIcon className="w-12 h-12 text-slate-500 mb-2"/>
                             <span className="font-semibold text-slate-200">Upload a Rehearsal Video</span>
-                            <span className="text-sm text-slate-400">MP4, MOV, WEBM, etc. (Max 50MB)</span>
+                            <span className="text-sm text-slate-400">MP4, MOV, WEBM, etc. (Max 80MB)</span>
                         </button>
                     ) : (
                         <div>
                             <div className="relative w-full aspect-video bg-black rounded-xl flex items-center justify-center overflow-hidden mb-2 shadow-inner shadow-black/30">
-                                <video src={videoPreviewUrl} controls className="w-full h-full object-contain" />
+                                <video src={videoPreviewUrl} controls className="w-full h-full object-cover object-center bg-black" />
                                 <button onClick={handleRemoveVideo} className="absolute top-2 right-2 p-2 bg-black/50 rounded-full text-white hover:bg-red-600 transition-colors" title="Remove video">
                                     <TrashIcon className="w-5 h-5" />
                                 </button>
