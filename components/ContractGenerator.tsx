@@ -14,6 +14,7 @@ import {
     UsersIcon,
     ShieldIcon,
     ClockIcon,
+    ChevronDownIcon,
 } from './icons';
 import { updateShow } from '../services/showsService';
 import { createContractVersion, listContractsForShow } from '../services/contractsService';
@@ -882,7 +883,7 @@ Guidelines:
                     <IntegrationHintsCard selectedShow={selectedShow} selectedClientId={selectedClientId} performanceFee={performanceFee} />
 
                     {result ? (
-                        <CardShell title="AI Contract Sections" description="Refine the generated agreement language before saving or exporting." icon={<ShieldIcon className="w-5 h-5" />}>
+                        <CardShell title="AI Contract Sections" description="Refine the generated agreement language before saving or exporting." icon={<ShieldIcon className="w-5 h-5" />} collapsible defaultOpen={false} summary="6 editable sections ready">
                             <div className="space-y-3">
                                 <SectionEditor title="Performance Details" value={result.performanceDetails} onChange={(v) => updateSection('performanceDetails', v)} />
                                 <SectionEditor title="Payment Terms" value={result.paymentTerms} onChange={(v) => updateSection('paymentTerms', v)} />
@@ -901,25 +902,48 @@ Guidelines:
 
 export default ContractGenerator;
 
-const CardShell: React.FC<{ title: string; description?: string; icon?: React.ReactNode; children: React.ReactNode }> = ({
+const CardShell: React.FC<{ title: string; description?: string; icon?: React.ReactNode; children: React.ReactNode; collapsible?: boolean; defaultOpen?: boolean; summary?: string }> = ({
     title,
     description,
     icon,
     children,
-}) => (
-    <div className="rounded-xl border border-white/10 bg-white/5 p-4 shadow-[0_10px_30px_rgba(2,6,23,0.28)] backdrop-blur-sm">
-        <div className="mb-3 flex items-start gap-3">
-            <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/15 text-purple-300 border border-purple-400/20 shrink-0">
-                {icon ?? <FileTextIcon className="w-5 h-5" />}
+    collapsible = false,
+    defaultOpen = true,
+    summary,
+}) => {
+    const [isOpen, setIsOpen] = useState(defaultOpen);
+
+    return (
+        <div className="rounded-xl border border-white/10 bg-white/5 p-4 shadow-[0_10px_30px_rgba(2,6,23,0.28)] backdrop-blur-sm">
+            <div className="mb-3 flex items-start gap-3">
+                <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/15 text-purple-300 border border-purple-400/20 shrink-0">
+                    {icon ?? <FileTextIcon className="w-5 h-5" />}
+                </div>
+                <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                            <h3 className="text-base font-semibold text-slate-100">{title}</h3>
+                            {description ? <p className="mt-1 text-sm text-slate-400">{description}</p> : null}
+                            {!isOpen && summary ? <div className="mt-2 text-xs text-slate-400">{summary}</div> : null}
+                        </div>
+                        {collapsible ? (
+                            <button
+                                type="button"
+                                onClick={() => setIsOpen((prev) => !prev)}
+                                className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-slate-800/80"
+                                aria-expanded={isOpen}
+                            >
+                                <span>{isOpen ? 'Hide' : 'Show'}</span>
+                                <ChevronDownIcon className={`h-4 w-4 transition-transform ${isOpen ? '' : '-rotate-90'}`} />
+                            </button>
+                        ) : null}
+                    </div>
+                </div>
             </div>
-            <div>
-                <h3 className="text-base font-semibold text-slate-100">{title}</h3>
-                {description ? <p className="mt-1 text-sm text-slate-400">{description}</p> : null}
-            </div>
+            {(!collapsible || isOpen) ? children : null}
         </div>
-        {children}
-    </div>
-);
+    );
+};
 
 const FieldLabel: React.FC<{ htmlFor: string; children: React.ReactNode }> = ({ htmlFor, children }) => (
     <label htmlFor={htmlFor} className="mb-1 block text-sm font-medium text-slate-300">
@@ -1208,6 +1232,9 @@ const ContractDetailsSection: React.FC<{
         title="📜 Contract Details"
         description="Define rider notes, cancellation expectations, and then generate the full agreement language."
         icon={<ShieldIcon className="w-5 h-5" />}
+        collapsible
+        defaultOpen={false}
+        summary={`Requirements: ${specialRequirements.trim() ? 'set' : 'pending'} · Cancellation: ${cancellationPolicy.trim() ? 'set' : 'pending'}`}
     >
         <div className="space-y-4">
             <div>
@@ -1391,6 +1418,9 @@ const ContractActionBar: React.FC<{
         title="Document Toolbelt"
         description="Export, email, or save this agreement into the connected client and show workflow."
         icon={<ShareIcon className="w-5 h-5" />}
+        collapsible
+        defaultOpen={false}
+        summary={`Actions ready · ${result ? 'document generated' : 'preview only'}`}
     >
         <div className="mb-4 flex flex-wrap gap-2 text-xs">
             <StatusPill label={result ? 'Document ready' : 'Draft preview'} active={!!result} />
@@ -1440,6 +1470,9 @@ const IntegrationHintsCard: React.FC<{ selectedShow: Show | null; selectedClient
         title="Connected Workflow"
         description="This builder is positioned to connect contracts with CRM, booking value, and Show Planner history."
         icon={<FileTextIcon className="w-5 h-5" />}
+        collapsible
+        defaultOpen={false}
+        summary={`CRM ${selectedClientId ? 'connected' : 'pending'} · Show ${selectedShow ? 'connected' : 'pending'} · Revenue ${performanceFee ? 'set' : 'pending'}`}
     >
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
             <HintTile
