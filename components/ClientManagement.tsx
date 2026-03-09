@@ -122,6 +122,133 @@ function getFeedbackReactionLabel(reaction?: string | null) {
   return map[raw] || raw;
 }
 
+
+function isDemoExampleClient(client: ClientX): boolean {
+  const name = String(client.name || '').trim().toLowerCase();
+  const company = String(client.company || '').trim().toLowerCase();
+  return name === 'cincinnati event planner' && company === 'riverfront corporate events';
+}
+
+function getDemoExampleMetrics(client: ClientX): ClientMetrics {
+  const jan15 = new Date('2025-01-15T18:00:00').getTime();
+  const aug14 = new Date('2025-08-14T19:00:00').getTime();
+  const dec12 = new Date('2025-12-12T19:30:00').getTime();
+  const demoShows: Show[] = [
+    {
+      id: 'demo-example-show-3',
+      title: 'Corporate Holiday Gala',
+      description: '45-minute corporate gala show with strong opener, audience participation, and branded closer.',
+      tasks: [],
+      createdAt: dec12 - 1000 * 60 * 60 * 24 * 30,
+      updatedAt: dec12 - 1000 * 60 * 60 * 24 * 5,
+      performanceDate: dec12,
+      venue: 'Hilton Cincinnati Netherland Plaza',
+      status: 'Completed',
+      clientId: client.id,
+      finances: { performanceFee: 1500, expenses: [] },
+      tags: ['corporate', 'holiday'],
+    },
+    {
+      id: 'demo-example-show-2',
+      title: 'Summer Banquet',
+      description: 'Interactive dinner entertainment for award winners and guests.',
+      tasks: [],
+      createdAt: aug14 - 1000 * 60 * 60 * 24 * 21,
+      updatedAt: aug14 - 1000 * 60 * 60 * 24 * 2,
+      performanceDate: aug14,
+      venue: 'Riverfront Marriott Ballroom',
+      status: 'Completed',
+      clientId: client.id,
+      finances: { performanceFee: 1200, expenses: [] },
+      tags: ['banquet'],
+    },
+    {
+      id: 'demo-example-show-1',
+      title: 'Product Launch',
+      description: 'Fast-paced networking magic set for sponsors and VIP guests.',
+      tasks: [],
+      createdAt: jan15 - 1000 * 60 * 60 * 24 * 18,
+      updatedAt: jan15 - 1000 * 60 * 60 * 24 * 1,
+      performanceDate: jan15,
+      venue: 'Cincinnati Convention Center',
+      status: 'Completed',
+      clientId: client.id,
+      finances: { performanceFee: 1500, expenses: [] },
+      tags: ['launch'],
+    },
+  ];
+
+  const demoContracts: ContractRow[] = [
+    {
+      id: 'demo-example-contract-3',
+      show_id: 'demo-example-show-3',
+      user_id: 'demo-user',
+      client_id: client.id,
+      version: 2,
+      content: 'Demo contract for Corporate Holiday Gala',
+      status: 'signed',
+      deposit_paid: true,
+      balance_paid: false,
+      created_at: '2025-10-28T14:00:00Z',
+      updated_at: '2025-11-20T09:00:00Z',
+    },
+    {
+      id: 'demo-example-contract-2',
+      show_id: 'demo-example-show-2',
+      user_id: 'demo-user',
+      client_id: client.id,
+      version: 1,
+      content: 'Demo contract for Summer Banquet',
+      status: 'signed',
+      deposit_paid: true,
+      balance_paid: true,
+      created_at: '2025-06-10T14:00:00Z',
+      updated_at: '2025-06-22T09:00:00Z',
+    },
+    {
+      id: 'demo-example-contract-1',
+      show_id: 'demo-example-show-1',
+      user_id: 'demo-user',
+      client_id: client.id,
+      version: 1,
+      content: 'Demo contract for Product Launch',
+      status: 'signed',
+      deposit_paid: true,
+      balance_paid: true,
+      created_at: '2024-12-08T14:00:00Z',
+      updated_at: '2024-12-20T09:00:00Z',
+    },
+  ];
+
+  return {
+    showCount: 3,
+    contractCount: 3,
+    avgRating: 4.7,
+    revenue: 4200,
+    averageFee: 1400,
+    lastShowLabel: 'Dec 12, 2025',
+    lastShowTitle: 'Corporate Holiday Gala',
+    lastShowTs: dec12,
+    clientSinceLabel: formatShortDate(client.createdAt),
+    latestNote: 'Requested a proposal for the 2026 awards banquet after the holiday gala.',
+    primaryVenue: 'Hilton Cincinnati Netherland Plaza',
+    relatedShows: demoShows,
+    relatedContracts: demoContracts,
+    feedbackCount: 38,
+    topReaction: 'Amazed',
+    topComment: 'The finale was incredible and perfect for our corporate crowd.',
+    activityTimeline: [
+      { at: '2025-12-12', title: 'Show completed', detail: 'Corporate Holiday Gala • Audience loved the interactive finale.', kind: 'show' },
+      { at: '2025-11-20', title: 'Contract signed', detail: 'Holiday Gala contract signed for $1,500.', kind: 'contract' },
+      { at: '2025-10-02', title: 'Client note added', detail: 'Client asked about adding strolling magic during cocktail hour for 2026.', kind: 'note' },
+      { at: '2025-08-14', title: 'Show completed', detail: 'Summer Banquet • Strong audience engagement and sponsor shout-out integration.', kind: 'show' },
+      { at: '2025-06-22', title: 'Contract signed', detail: 'Summer Banquet contract completed and paid in full.', kind: 'contract' },
+      { at: '2025-01-15', title: 'Show completed', detail: 'Product Launch • Opened with a branded prediction effect.', kind: 'show' },
+    ],
+    daysSinceLastShow: Math.max(0, Math.floor((Date.now() - dec12) / 86400000)),
+  };
+}
+
 function getClientMetrics(client: ClientX, shows: Show[], feedback: Feedback[], contracts: ContractRow[]): ClientMetrics {
   const relatedShows = shows
     .filter((show) => show.clientId === client.id)
@@ -179,7 +306,7 @@ function getClientMetrics(client: ClientX, shows: Show[], feedback: Feedback[], 
   const lastShowTs = lastShow ? getShowSortTs(lastShow) : (client.last_show_date ? new Date(client.last_show_date).getTime() : null);
   const daysSinceLastShow = lastShowTs ? Math.max(0, Math.floor((Date.now() - lastShowTs) / 86400000)) : null;
 
-  return {
+  const computed: ClientMetrics = {
     showCount: relatedShows.length,
     contractCount: relatedContracts.length,
     avgRating,
@@ -199,6 +326,12 @@ function getClientMetrics(client: ClientX, shows: Show[], feedback: Feedback[], 
     activityTimeline,
     daysSinceLastShow,
   };
+
+  if (computed.showCount === 0 && computed.contractCount === 0 && computed.feedbackCount === 0 && isDemoExampleClient(client)) {
+    return getDemoExampleMetrics(client);
+  }
+
+  return computed;
 }
 
 interface ClientManagementProps {
@@ -968,12 +1101,16 @@ const ClientManagement: React.FC<ClientManagementProps> = ({
                             const showAvg = showFeedback.length
                               ? (showFeedback.reduce((sum, item) => sum + Number(item.rating || 0), 0) / showFeedback.length).toFixed(1)
                               : null;
+                            const isDemoShow = show.id.startsWith('demo-example-show-');
                             return (
                               <button
                                 key={show.id}
                                 type="button"
-                                onClick={() => handleOpenShow(show)}
-                                className="grid w-full grid-cols-[120px_minmax(0,1fr)_110px_120px] gap-3 px-4 py-3 text-left text-sm transition hover:bg-white/5"
+                                onClick={() => {
+                                  if (isDemoShow) return;
+                                  handleOpenShow(show);
+                                }}
+                                className={`grid w-full grid-cols-[120px_minmax(0,1fr)_110px_120px] gap-3 px-4 py-3 text-left text-sm transition ${isDemoShow ? 'cursor-default' : 'hover:bg-white/5'}`}
                               >
                                 <div className="text-slate-300">{formatShortDate(show.performanceDate || show.updatedAt || show.createdAt)}</div>
                                 <div className="min-w-0">
