@@ -1,10 +1,20 @@
-
 import React, { useEffect, useMemo, useState } from 'react';
 import { Type } from '@google/genai';
 import { generateStructuredResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
 import { CONTRACT_GENERATOR_SYSTEM_INSTRUCTION } from '../constants';
-import { FileTextIcon, WandIcon, SaveIcon, CheckIcon, ShareIcon, CopyIcon } from './icons';
+import {
+    FileTextIcon,
+    WandIcon,
+    SaveIcon,
+    CheckIcon,
+    ShareIcon,
+    CopyIcon,
+    CalendarIcon,
+    UsersIcon,
+    ShieldIcon,
+    ClockIcon,
+} from './icons';
 import { updateShow } from '../services/showsService';
 import { createContractVersion, listContractsForShow } from '../services/contractsService';
 import type { Client, Show, User } from '../types';
@@ -20,12 +30,34 @@ interface ContractGeneratorProps {
 
 type ContractSections = Required<NonNullable<Show['contract']>>;
 
+type PreviewContract = {
+    performerName: string;
+    clientName: string;
+    clientEmail: string;
+    clientPhone: string;
+    clientAddress: string;
+    eventTitle: string;
+    eventType: string;
+    eventDate: string;
+    eventTime: string;
+    eventLocation: string;
+    performanceLength: string;
+    performanceFee: string;
+    depositAmount: string;
+    depositDueDate: string;
+    specialRequirements: string;
+    cancellationPolicy: string;
+};
+
+const DEFAULT_CANCELLATION_POLICY =
+    'Deposit is non-refundable if Client cancels within 30 days of the event date. If Performer cancels, the deposit will be fully refunded.';
+
 const LoadingIndicator: React.FC = () => (
     <div className="flex flex-col items-center justify-center text-center p-8">
         <div className="relative">
             <WandIcon className="w-16 h-16 text-purple-400 animate-pulse" />
             <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center">
-                 <div className="w-24 h-24 border-t-2 border-purple-300 rounded-full animate-spin"></div>
+                <div className="w-24 h-24 border-t-2 border-purple-300 rounded-full animate-spin"></div>
             </div>
         </div>
         <p className="text-slate-300 mt-4 text-lg">Drafting your agreement...</p>
@@ -33,9 +65,36 @@ const LoadingIndicator: React.FC = () => (
     </div>
 );
 
-
 const isUuid = (value: string): boolean => {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+};
+
+const inferClientAddress = (client?: Client | null): string => {
+    if (!client?.notes) return '';
+    return client.notes.includes('Address:')
+        ? client.notes.split('Address:')[1]?.split('\n')[0]?.trim() || ''
+        : '';
+};
+
+const formatDateForPreview = (value: string): string => {
+    if (!value) return 'Date to be confirmed';
+    const date = new Date(`${value}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return value;
+    return new Intl.DateTimeFormat('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+    }).format(date);
+};
+
+const formatCurrency = (value: string): string => {
+    const numeric = Number(value);
+    if (!value || Number.isNaN(numeric)) return 'To be determined';
+    return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        maximumFractionDigits: 0,
+    }).format(numeric);
 };
 
 const contractSectionsToText = (sections: ContractSections): string => {
@@ -54,9 +113,38 @@ const contractSectionsToText = (sections: ContractSections): string => {
         .join('\n\n');
 };
 
+const formatContractAsText = (
+    sections: ContractSections,
+    meta: { performerName: string; clientName: string; eventTitle: string }
+) => {
+    const titleLine = meta.eventTitle ? `${meta.eventTitle}` : 'Performance Agreement';
+    return [
+        titleLine,
+        `Performer: ${meta.performerName}`,
+        `Client: ${meta.clientName}`,
+        '',
+        '--- Performance Details ---',
+        sections.performanceDetails,
+        '',
+        '--- Payment Terms ---',
+        sections.paymentTerms,
+        '',
+        '--- Technical Requirements ---',
+        sections.technicalRequirements,
+        '',
+        '--- Cancellation Policy ---',
+        sections.cancellationPolicy,
+        '',
+        '--- Force Majeure ---',
+        sections.forceMajeure,
+        '',
+        '--- Signature Block ---',
+        sections.signatureBlock,
+        '',
+    ].join('\n');
+};
 
 const ContractGenerator: React.FC<ContractGeneratorProps> = ({ user, clients, shows, onShowsUpdate, onNavigateToShowPlanner, onIdeaSaved }) => {
-    // Form State
     const [performerName, setPerformerName] = useState('');
     const [selectedClientId, setSelectedClientId] = useState<string>('');
     const [selectedShowId, setSelectedShowId] = useState<string>('');
@@ -74,135 +162,124 @@ const ContractGenerator: React.FC<ContractGeneratorProps> = ({ user, clients, sh
     const [depositAmount, setDepositAmount] = useState('');
     const [depositDueDate, setDepositDueDate] = useState('');
     const [specialRequirements, setSpecialRequirements] = useState('');
-    const [cancellationPolicy, setCancellationPolicy] = useState('Deposit is non-refundable if Client cancels within 30 days of the event date. If Performer cancels, the deposit will be fully refunded.');
+    const [cancellationPolicy, setCancellationPolicy] = useState(DEFAULT_CANCELLATION_POLICY);
 
-    // Control State
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [result, setResult] = useState<ContractSections | null>(null);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
     const [copyStatus, setCopyStatus] = useState<'idle' | 'copied'>('idle');
     const [saveToShowStatus, setSaveToShowStatus] = useState<'idle' | 'saved'>('idle');
-
-    // Selected show context (versioning + status awareness)
     const [showNextVersion, setShowNextVersion] = useState<number | null>(null);
     const [showLatestStatus, setShowLatestStatus] = useState<string | null>(null);
-    
-    const isFormValid = performerName && clientName && eventDate && performanceFee;
-    const selectedShow = useMemo(() => shows.find(s => s.id === selectedShowId) ?? null, [shows, selectedShowId]);
 
-    // If Show Planner requests a revision flow, it can drop a prefill payload in localStorage.
-    // This keeps the feature working even if the navigation method changes.
+    const isFormValid = performerName && clientName && eventDate && performanceFee;
+    const selectedShow = useMemo(() => shows.find((s) => s.id === selectedShowId) ?? null, [shows, selectedShowId]);
+
+    const responseSchema = useMemo(
+        () => ({
+            type: Type.OBJECT,
+            properties: {
+                performanceDetails: { type: Type.STRING },
+                paymentTerms: { type: Type.STRING },
+                technicalRequirements: { type: Type.STRING },
+                cancellationPolicy: { type: Type.STRING },
+                forceMajeure: { type: Type.STRING },
+                signatureBlock: { type: Type.STRING },
+            },
+            required: ['performanceDetails', 'paymentTerms', 'technicalRequirements', 'cancellationPolicy', 'forceMajeure', 'signatureBlock'],
+        }),
+        []
+    );
+
+    const previewContract: PreviewContract = useMemo(
+        () => ({
+            performerName,
+            clientName,
+            clientEmail,
+            clientPhone,
+            clientAddress,
+            eventTitle,
+            eventType,
+            eventDate,
+            eventTime,
+            eventLocation,
+            performanceLength,
+            performanceFee,
+            depositAmount,
+            depositDueDate,
+            specialRequirements,
+            cancellationPolicy,
+        }),
+        [
+            performerName,
+            clientName,
+            clientEmail,
+            clientPhone,
+            clientAddress,
+            eventTitle,
+            eventType,
+            eventDate,
+            eventTime,
+            eventLocation,
+            performanceLength,
+            performanceFee,
+            depositAmount,
+            depositDueDate,
+            specialRequirements,
+            cancellationPolicy,
+        ]
+    );
+
+    const applyClientSelection = (clientId: string) => {
+        setSelectedClientId(clientId);
+        const client = clients.find((x) => x.id === clientId);
+        if (!client) return;
+        setClientName(client.name ?? '');
+        setClientEmail(client.email ?? '');
+        setClientPhone(client.phone ?? '');
+        setClientAddress(inferClientAddress(client));
+    };
+
+    const applyShowSelection = (showId: string) => {
+        setSelectedShowId(showId);
+        const show = shows.find((x) => x.id === showId);
+        if (!show) return;
+
+        setEventTitle(show.title ?? '');
+        setEventLocation(show.venue ?? '');
+        setEventDate(show.performanceDate ? new Date(show.performanceDate).toISOString().slice(0, 10) : '');
+        if (typeof show.finances?.performanceFee === 'number' && !Number.isNaN(show.finances.performanceFee) && show.finances.performanceFee > 0) {
+            setPerformanceFee(String(show.finances.performanceFee));
+        }
+        if (show.description && !specialRequirements) {
+            setSpecialRequirements(String(show.description));
+        }
+        if ((show as any).contract) {
+            const existing = (show as any).contract as ContractSections;
+            if (existing?.performanceDetails) {
+                setResult(existing);
+            }
+        }
+    };
+
     useEffect(() => {
         try {
             const raw = localStorage.getItem('maw_contract_revision_prefill');
             if (!raw) return;
             const parsed = JSON.parse(raw);
             if (parsed?.showId && typeof parsed.showId === 'string') {
-                setSelectedShowId(parsed.showId);
-                handleShowSelect(parsed.showId);
+                applyShowSelection(parsed.showId);
             }
-            // One-shot
             localStorage.removeItem('maw_contract_revision_prefill');
         } catch {
-            // ignore
+            // ignore malformed prefill payloads
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [shows]);
 
-    // Load version context for the selected show (next version number + latest status)
     useEffect(() => {
         let cancelled = false;
-        const run = async () => {
-            if (!selectedShowId) {
-                setShowNextVersion(null);
-                setShowLatestStatus(null);
-                return;
-            }
-            try {
-                const list = await listContractsForShow(selectedShowId);
-                if (cancelled) return;
-                const maxVersion = list.reduce((m: number, c: any) => Math.max(m, Number(c?.version ?? 0) || 0), 0);
-                const latest = [...list].sort((a: any, b: any) => (Number(b?.version ?? 0) - Number(a?.version ?? 0)))[0];
-                setShowNextVersion((maxVersion || 0) + 1);
-                setShowLatestStatus((latest?.status as string) ?? null);
-            } catch {
-                if (!cancelled) {
-                    setShowNextVersion(1);
-                    setShowLatestStatus(null);
-                }
-            }
-        };
-        void run();
-        return () => {
-            cancelled = true;
-        };
-    }, [selectedShowId]);
 
-    const responseSchema = useMemo(() => ({
-        type: Type.OBJECT,
-        properties: {
-            performanceDetails: { type: Type.STRING },
-            paymentTerms: { type: Type.STRING },
-            technicalRequirements: { type: Type.STRING },
-            cancellationPolicy: { type: Type.STRING },
-            forceMajeure: { type: Type.STRING },
-            signatureBlock: { type: Type.STRING },
-        },
-        required: ['performanceDetails', 'paymentTerms', 'technicalRequirements', 'cancellationPolicy', 'forceMajeure', 'signatureBlock']
-    }), []);
-
-    const handleClientSelect = (id: string) => {
-        setSelectedClientId(id);
-        const c = clients.find(x => x.id === id);
-        if (!c) return;
-        setClientName(c.name ?? '');
-        setClientEmail(c.email ?? '');
-        setClientPhone(c.phone ?? '');
-        // Address is not yet a first-class Client field everywhere; allow manual entry.
-        // If you later add an address column, just map it here.
-        const inferredAddress = (c.notes || '').includes('Address:') ? (c.notes || '').split('Address:')[1]?.split('\n')[0]?.trim() : '';
-        setClientAddress(inferredAddress || '');
-    };
-
-    const handleShowSelect = (id: string) => {
-        setSelectedShowId(id);
-        const s = shows.find(x => x.id === id);
-        if (!s) return;
-        setEventTitle(s.title ?? '');
-        // Show Planner stores fee inside finances where available.
-        const fee = (s.finances as any)?.performanceFee;
-        if (typeof fee === 'number' && !Number.isNaN(fee) && fee > 0) setPerformanceFee(String(fee));
-        // Use description as a helpful notes seed.
-        if (s.description && !specialRequirements) setSpecialRequirements(String(s.description));
-        // If a contract already exists, load it so the user can tweak/version.
-        if ((s as any).contract) {
-            const existing = (s as any).contract as ContractSections;
-            if (existing?.performanceDetails) setResult(existing);
-        }
-    };
-
-    // If another part of the app wants to start a revision from Show Planner,
-    // it can stash a prefill request in localStorage and we will preselect that show.
-    useEffect(() => {
-        try {
-            const raw = localStorage.getItem('maw_contract_revision_prefill');
-            if (!raw) return;
-            const payload = JSON.parse(raw);
-            if (payload?.showId && typeof payload.showId === 'string') {
-                // Clear immediately to avoid repeated auto-navigation.
-                localStorage.removeItem('maw_contract_revision_prefill');
-                setSelectedShowId(payload.showId);
-                handleShowSelect(payload.showId);
-            }
-        } catch {
-            // ignore
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    // Keep version context up to date for the selected show.
-    useEffect(() => {
         const run = async () => {
             if (!selectedShowId) {
                 setShowNextVersion(null);
@@ -212,31 +289,37 @@ const ContractGenerator: React.FC<ContractGeneratorProps> = ({ user, clients, sh
 
             try {
                 const rows = await listContractsForShow(selectedShowId);
+                if (cancelled) return;
                 if (!rows || rows.length === 0) {
                     setShowNextVersion(1);
                     setShowLatestStatus(null);
                     return;
                 }
-                const maxV = rows.reduce((m: number, r: any) => Math.max(m, Number(r.version) || 1), 1);
-                const latest = [...rows].sort((a: any, b: any) => (Number(b.version) || 0) - (Number(a.version) || 0))[0];
-                setShowNextVersion(maxV + 1);
-                setShowLatestStatus((latest?.status as string) || null);
+
+                const maxVersion = rows.reduce((m: number, row: any) => Math.max(m, Number(row?.version ?? 0) || 0), 0);
+                const latest = [...rows].sort((a: any, b: any) => (Number(b?.version ?? 0) || 0) - (Number(a?.version ?? 0) || 0))[0];
+                setShowNextVersion(maxVersion + 1);
+                setShowLatestStatus((latest?.status as string) ?? null);
             } catch {
-                // If anything goes wrong, don't block the user.
-                setShowNextVersion(null);
-                setShowLatestStatus(null);
+                if (!cancelled) {
+                    setShowNextVersion(1);
+                    setShowLatestStatus(null);
+                }
             }
         };
 
         void run();
+        return () => {
+            cancelled = true;
+        };
     }, [selectedShowId]);
 
     const handleGenerate = async () => {
         if (!isFormValid) {
-            setError("Please fill in all required fields (*).");
+            setError('Please fill in all required fields (*).');
             return;
         }
-        
+
         setIsLoading(true);
         setError(null);
         setResult(null);
@@ -281,86 +364,77 @@ Guidelines:
 - Avoid jurisdiction-specific legal advice.
 - Use headings inside each section where appropriate.
 `;
-        
+
         try {
-          const response = await generateStructuredResponse(prompt, CONTRACT_GENERATOR_SYSTEM_INSTRUCTION, responseSchema, user);
-          const normalized: ContractSections = {
-            performanceDetails: String(response?.performanceDetails ?? ''),
-            paymentTerms: String(response?.paymentTerms ?? ''),
-            technicalRequirements: String(response?.technicalRequirements ?? ''),
-            cancellationPolicy: String(response?.cancellationPolicy ?? ''),
-            forceMajeure: String(response?.forceMajeure ?? ''),
-            signatureBlock: String(response?.signatureBlock ?? ''),
-            generatedAt: Date.now(),
-            clientId: selectedClientId || undefined,
-          };
-          setResult(normalized);
+            const response = await generateStructuredResponse(prompt, CONTRACT_GENERATOR_SYSTEM_INSTRUCTION, responseSchema, user);
+            const normalized: ContractSections = {
+                performanceDetails: String(response?.performanceDetails ?? ''),
+                paymentTerms: String(response?.paymentTerms ?? ''),
+                technicalRequirements: String(response?.technicalRequirements ?? ''),
+                cancellationPolicy: String(response?.cancellationPolicy ?? ''),
+                forceMajeure: String(response?.forceMajeure ?? ''),
+                signatureBlock: String(response?.signatureBlock ?? ''),
+                generatedAt: Date.now(),
+                clientId: selectedClientId || undefined,
+            };
+            setResult(normalized);
         } catch (err) {
-          setError(err instanceof Error ? err.message : "An unknown error occurred.");
+            setError(err instanceof Error ? err.message : 'An unknown error occurred.');
         } finally {
-          setIsLoading(false);
+            setIsLoading(false);
         }
     };
-  
+
     const handleSave = () => {
-        if (result) {
-            const title = `Contract: ${performerName} & ${clientName}`;
-            const text = formatContractAsText(result, { performerName, clientName, eventTitle });
-            saveIdea('text', text, title);
-            onIdeaSaved();
-            setSaveStatus('saved');
-            setTimeout(() => setSaveStatus('idle'), 2000);
-        }
+        if (!result) return;
+        const title = `Contract: ${performerName} & ${clientName}`;
+        const text = formatContractAsText(result, { performerName, clientName, eventTitle });
+        saveIdea('text', text, title);
+        onIdeaSaved();
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus('idle'), 2000);
     };
 
     const handleCopy = () => {
-        if (result) {
-            const text = formatContractAsText(result, { performerName, clientName, eventTitle });
-            navigator.clipboard.writeText(text);
-            setCopyStatus('copied');
-            setTimeout(() => setCopyStatus('idle'), 2000);
-        }
+        if (!result) return;
+        const text = formatContractAsText(result, { performerName, clientName, eventTitle });
+        navigator.clipboard.writeText(text);
+        setCopyStatus('copied');
+        setTimeout(() => setCopyStatus('idle'), 2000);
     };
 
     const handleDownload = () => {
-        if (result) {
-            const text = formatContractAsText(result, { performerName, clientName, eventTitle });
-            const blob = new Blob([text], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `Performance_Contract_${clientName.replace(/\s/g, '_')}.txt`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }
+        if (!result) return;
+        const text = formatContractAsText(result, { performerName, clientName, eventTitle });
+        const blob = new Blob([text], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Performance_Contract_${clientName.replace(/\s/g, '_') || 'Client'}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     };
 
     const handleSaveToShow = async () => {
         if (!selectedShowId || !result) return;
         try {
             setError(null);
-
-            // Persist contract to the contracts table (versioned)
             const content = contractSectionsToText(result);
 
             await createContractVersion({
                 showId: selectedShowId,
-                clientId: (selectedClientId && isUuid(selectedClientId) ? selectedClientId : null),
+                clientId: selectedClientId && isUuid(selectedClientId) ? selectedClientId : null,
                 content,
                 status: 'draft',
-});
+            });
 
             setSaveToShowStatus('saved');
             setTimeout(() => setSaveToShowStatus('idle'), 2000);
-
-            // Navigate to Show Planner only after successful save
             onNavigateToShowPlanner(selectedShowId);
         } catch (err: any) {
             console.error('Save to Show failed:', err);
-
-            // Backward compatibility fallback (older builds that stored contract on show)
             try {
                 const updatedShows = await updateShow(selectedShowId, { contract: result } as any);
                 onShowsUpdate(updatedShows);
@@ -380,177 +454,116 @@ Guidelines:
     };
 
     const updateSection = (key: keyof ContractSections, value: string) => {
-        setResult((prev) => prev ? ({ ...prev, [key]: value }) : prev);
-    };
-
-    const formatContractAsText = (
-        sections: ContractSections,
-        meta: { performerName: string; clientName: string; eventTitle: string }
-    ) => {
-        const titleLine = meta.eventTitle ? `${meta.eventTitle}` : 'Performance Agreement';
-        return [
-            titleLine,
-            `Performer: ${meta.performerName}`,
-            `Client: ${meta.clientName}`,
-            '',
-            '--- Performance Details ---',
-            sections.performanceDetails,
-            '',
-            '--- Payment Terms ---',
-            sections.paymentTerms,
-            '',
-            '--- Technical Requirements ---',
-            sections.technicalRequirements,
-            '',
-            '--- Cancellation Policy ---',
-            sections.cancellationPolicy,
-            '',
-            '--- Force Majeure ---',
-            sections.forceMajeure,
-            '',
-            '--- Signature Block ---',
-            sections.signatureBlock,
-            '',
-        ].join('\n');
+        setResult((prev) => (prev ? { ...prev, [key]: value } : prev));
     };
 
     return (
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
-            {/* Control Panel */}
-            <div className="flex flex-col">
-                <h2 className="text-xl font-bold text-slate-300 mb-2">Performance Contract Generator</h2>
-                <p className="text-slate-400 mb-4">Fill in the gig details to create a professional performance agreement. Fields marked with * are required.</p>
-                
-                <div className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label htmlFor="select-client" className="block text-sm font-medium text-slate-300 mb-1">Select Client</label>
-                            <select
-                                id="select-client"
-                                value={selectedClientId}
-                                onChange={(e) => handleClientSelect(e.target.value)}
-                                className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white"
-                            >
-                                <option value="">-- Choose a client --</option>
-                                {clients.map(c => (
-                                    <option key={c.id} value={c.id}>{c.name}{c.company ? ` (${c.company})` : ''}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div>
-                            <label htmlFor="select-show" className="block text-sm font-medium text-slate-300 mb-1">Select Show (optional)</label>
-                            <select
-                                id="select-show"
-                                value={selectedShowId}
-                                onChange={(e) => handleShowSelect(e.target.value)}
-                                className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white"
-                            >
-                                <option value="">-- No show selected --</option>
-                                {shows.map(s => (
-                                    <option key={s.id} value={s.id}>{s.title}</option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div><label htmlFor="performer-name" className="block text-sm font-medium text-slate-300 mb-1">Your Name/Company*</label><input id="performer-name" type="text" value={performerName} onChange={(e) => setPerformerName(e.target.value)} className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white" /></div>
-                        <div><label htmlFor="client-name" className="block text-sm font-medium text-slate-300 mb-1">Client Name*</label><input id="client-name" type="text" value={clientName} onChange={(e) => setClientName(e.target.value)} className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white" /></div>
-                        <div><label htmlFor="client-email" className="block text-sm font-medium text-slate-300 mb-1">Client Email</label><input id="client-email" type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white" /></div>
-                        <div><label htmlFor="client-phone" className="block text-sm font-medium text-slate-300 mb-1">Client Phone</label><input id="client-phone" type="tel" value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white" /></div>
-                        <div><label htmlFor="client-address" className="block text-sm font-medium text-slate-300 mb-1">Client Address</label><input id="client-address" type="text" value={clientAddress} onChange={(e) => setClientAddress(e.target.value)} className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white" /></div>
-                        <div><label htmlFor="event-type" className="block text-sm font-medium text-slate-300 mb-1">Event Type</label><input id="event-type" type="text" value={eventType} onChange={(e) => setEventType(e.target.value)} placeholder="e.g., Corporate Gala" className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white" /></div>
-                        <div><label htmlFor="event-date" className="block text-sm font-medium text-slate-300 mb-1">Event Date*</label><input id="event-date" type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white" /></div>
-                        <div><label htmlFor="event-time" className="block text-sm font-medium text-slate-300 mb-1">Event Time</label><input id="event-time" type="text" value={eventTime} onChange={(e) => setEventTime(e.target.value)} placeholder="e.g., 7:00 PM - 8:00 PM" className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white" /></div>
-                    </div>
-                    <div><label htmlFor="event-title" className="block text-sm font-medium text-slate-300 mb-1">Event Title</label><input id="event-title" type="text" value={eventTitle} onChange={(e) => setEventTitle(e.target.value)} placeholder="e.g., Holiday Party Show" className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white" /></div>
-                    <div><label htmlFor="event-location" className="block text-sm font-medium text-slate-300 mb-1">Event Location / Address</label><textarea id="event-location" rows={2} value={eventLocation} onChange={(e) => setEventLocation(e.target.value)} className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white" /></div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div><label htmlFor="perf-length" className="block text-sm font-medium text-slate-300 mb-1">Performance Length</label><input id="perf-length" type="text" value={performanceLength} onChange={(e) => setPerformanceLength(e.target.value)} placeholder="e.g., 45 minutes" className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white" /></div>
-                        <div><label htmlFor="perf-fee" className="block text-sm font-medium text-slate-300 mb-1">Performance Fee ($)*</label><input id="perf-fee" type="number" value={performanceFee} onChange={(e) => setPerformanceFee(e.target.value)} placeholder="e.g., 1500" className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white" /></div>
-                        <div><label htmlFor="deposit-amt" className="block text-sm font-medium text-slate-300 mb-1">Deposit Amount ($)</label><input id="deposit-amt" type="number" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} placeholder="e.g., 750" className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white" /></div>
-                        <div><label htmlFor="deposit-due" className="block text-sm font-medium text-slate-300 mb-1">Deposit Due Date</label><input id="deposit-due" type="date" value={depositDueDate} onChange={(e) => setDepositDueDate(e.target.value)} className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white" /></div>
-                    </div>
-                    <div><label htmlFor="requirements" className="block text-sm font-medium text-slate-300 mb-1">Special Requirements (Rider)</label><textarea id="requirements" rows={3} value={specialRequirements} onChange={(e) => setSpecialRequirements(e.target.value)} placeholder="e.g., Private changing area, bottled water, one microphone on a stand." className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white" /></div>
-                    <div><label htmlFor="cancellation" className="block text-sm font-medium text-slate-300 mb-1">Cancellation Policy</label><textarea id="cancellation" rows={3} value={cancellationPolicy} onChange={(e) => setCancellationPolicy(e.target.value)} className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white text-sm" /></div>
-                    {selectedShow && (
-                        <div className="mt-3 rounded-md border border-slate-700 bg-slate-900/40 px-3 py-2 text-xs text-slate-300">
-                            <div>
-                                Editing: <span className="font-semibold text-slate-100">{selectedShow.title}</span>
-                                {showNextVersion ? (
-                                    <>
-                                        {' '}— Next version will be <span className="font-semibold text-slate-100">v{showNextVersion}</span>
-                                    </>
-                                ) : null}
-                            </div>
-                            {String(showLatestStatus || '').toLowerCase() === 'signed' ? (
-                                <div className="mt-1 text-yellow-200/90">
-                                    This contract is marked <span className="font-semibold">Signed</span>. Creating a new version will create a revision.
-                                </div>
-                            ) : null}
-                        </div>
-                    )}
-
-                    <button onClick={handleGenerate} disabled={isLoading || !isFormValid} className="w-full py-3 mt-4 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed">
-                        <WandIcon className="w-5 h-5" />
-                        <span>Generate Contract</span>
-                    </button>
-                    {error && <p className="text-red-400 mt-2 text-sm text-center">{error}</p>}
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 animate-fade-in">
+            <div className="mb-6 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                    <h2 className="text-2xl font-bold text-slate-100">Performance Contract Generator</h2>
+                    <p className="text-slate-400 mt-1 max-w-3xl">
+                        Build a professional performance agreement with connected client and show details. Fields marked with * are required.
+                    </p>
+                </div>
+                <div className="flex flex-wrap gap-2 text-xs">
+                    <StatusPill label={selectedClientId ? 'Client linked' : 'Client manual'} active={!!selectedClientId} />
+                    <StatusPill label={selectedShowId ? 'Show linked' : 'Show optional'} active={!!selectedShowId} />
+                    <StatusPill label={result ? 'AI draft ready' : 'Preview mode'} active={!!result} />
                 </div>
             </div>
 
-            {/* Result Display Area */}
-            <div className="flex flex-col bg-slate-900/50 rounded-lg border border-slate-800 min-h-[300px]">
-                {isLoading ? (
-                    <div className="flex-1 flex items-center justify-center"><LoadingIndicator /></div>
-                ) : result ? (
-                     <div className="relative group flex-1 flex flex-col">
-                        <div className="p-4 overflow-y-auto space-y-4">
-                            <SectionEditor title="Performance Details" value={result.performanceDetails} onChange={(v) => updateSection('performanceDetails', v)} />
-                            <SectionEditor title="Payment Terms" value={result.paymentTerms} onChange={(v) => updateSection('paymentTerms', v)} />
-                            <SectionEditor title="Technical Requirements" value={result.technicalRequirements} onChange={(v) => updateSection('technicalRequirements', v)} />
-                            <SectionEditor title="Cancellation Policy" value={result.cancellationPolicy} onChange={(v) => updateSection('cancellationPolicy', v)} />
-                            <SectionEditor title="Force Majeure" value={result.forceMajeure} onChange={(v) => updateSection('forceMajeure', v)} />
-                            <SectionEditor title="Signature Block" value={result.signatureBlock} onChange={(v) => updateSection('signatureBlock', v)} />
-                        </div>
-                        <div className="mt-auto p-2 bg-slate-900/50 flex flex-col gap-2 border-t border-slate-800">
-                            <div className="flex justify-end gap-2">
-                            <button
-                                onClick={handleSaveToShow}
-                                disabled={!selectedShowId || saveToShowStatus === 'saved'}
-                                title={!selectedShowId ? 'Select a show to save this contract' : 'Save as a new version for the selected show, then open it in Show Planner'}
-                                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-purple-700 hover:bg-purple-600 disabled:bg-slate-700 disabled:cursor-not-allowed rounded-md text-white"
-                            >
-                                {saveToShowStatus === 'saved' ? <CheckIcon className="w-4 h-4 text-green-300" /> : <ShareIcon className="w-4 h-4" />}
-                                <span>{saveToShowStatus === 'saved' ? 'Saved to Show!' : 'Save as New Version to Show'}</span>
-                            </button>
-                            <button onClick={handleDownload} className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200"><FileTextIcon className="w-4 h-4" /><span>Download .txt</span></button>
-                            <button onClick={handleCopy} disabled={copyStatus === 'copied'} className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200">{copyStatus === 'copied' ? <CheckIcon className="w-4 h-4 text-green-400" /> : <CopyIcon className="w-4 h-4" />}<span>{copyStatus === 'copied' ? 'Copied!' : 'Copy'}</span></button>
-                            <button
-                                onClick={handleSave}
-                                disabled={saveStatus === 'saved'}
-                                title="Save this contract as a Saved Idea (for reuse later)"
-                                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200"
-                            >
-                                {saveStatus === 'saved' ? <CheckIcon className="w-4 h-4 text-green-400" /> : <SaveIcon className="w-4 h-4" />}
-                                <span>{saveStatus === 'saved' ? 'Saved!' : 'Save to Ideas'}</span>
-                            </button>
-                            </div>
+            <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)] gap-6">
+                <section className="space-y-5">
+                    <EventClientSection
+                        clients={clients}
+                        shows={shows}
+                        selectedClientId={selectedClientId}
+                        selectedShowId={selectedShowId}
+                        onClientSelect={applyClientSelection}
+                        onShowSelect={applyShowSelection}
+                        performerName={performerName}
+                        setPerformerName={setPerformerName}
+                        clientName={clientName}
+                        setClientName={setClientName}
+                        clientEmail={clientEmail}
+                        setClientEmail={setClientEmail}
+                        clientPhone={clientPhone}
+                        setClientPhone={setClientPhone}
+                        clientAddress={clientAddress}
+                        setClientAddress={setClientAddress}
+                        eventTitle={eventTitle}
+                        setEventTitle={setEventTitle}
+                        eventType={eventType}
+                        setEventType={setEventType}
+                        eventDate={eventDate}
+                        setEventDate={setEventDate}
+                        eventTime={eventTime}
+                        setEventTime={setEventTime}
+                        eventLocation={eventLocation}
+                        setEventLocation={setEventLocation}
+                    />
 
-                            <div className="text-xs text-slate-400 flex flex-col gap-1">
-                                <div>• <span className="text-slate-300">Save to Ideas</span> stores this contract as a Saved Idea.</div>
-                                <div>• <span className="text-slate-300">Save as New Version to Show</span> creates a new contract version for the selected show.</div>
+                    <FinancialTermsSection
+                        performanceLength={performanceLength}
+                        setPerformanceLength={setPerformanceLength}
+                        performanceFee={performanceFee}
+                        setPerformanceFee={setPerformanceFee}
+                        depositAmount={depositAmount}
+                        setDepositAmount={setDepositAmount}
+                        depositDueDate={depositDueDate}
+                        setDepositDueDate={setDepositDueDate}
+                    />
+
+                    <ContractDetailsSection
+                        specialRequirements={specialRequirements}
+                        setSpecialRequirements={setSpecialRequirements}
+                        cancellationPolicy={cancellationPolicy}
+                        setCancellationPolicy={setCancellationPolicy}
+                        onGenerate={handleGenerate}
+                        isLoading={isLoading}
+                        isFormValid={!!isFormValid}
+                        error={error}
+                    />
+                </section>
+
+                <section className="space-y-5">
+                    <ContractPreviewPanel
+                        preview={previewContract}
+                        result={result}
+                        isLoading={isLoading}
+                        selectedShow={selectedShow}
+                        showNextVersion={showNextVersion}
+                        showLatestStatus={showLatestStatus}
+                    />
+
+                    <ContractActionBar
+                        result={result}
+                        selectedShowId={selectedShowId}
+                        saveStatus={saveStatus}
+                        copyStatus={copyStatus}
+                        saveToShowStatus={saveToShowStatus}
+                        onSave={handleSave}
+                        onCopy={handleCopy}
+                        onDownload={handleDownload}
+                        onSaveToShow={handleSaveToShow}
+                    />
+
+                    <IntegrationHintsCard selectedShow={selectedShow} selectedClientId={selectedClientId} performanceFee={performanceFee} />
+
+                    {result ? (
+                        <CardShell title="AI Contract Sections" description="Refine the generated agreement language before saving or exporting." icon={<ShieldIcon className="w-5 h-5" />}>
+                            <div className="space-y-4">
+                                <SectionEditor title="Performance Details" value={result.performanceDetails} onChange={(v) => updateSection('performanceDetails', v)} />
+                                <SectionEditor title="Payment Terms" value={result.paymentTerms} onChange={(v) => updateSection('paymentTerms', v)} />
+                                <SectionEditor title="Technical Requirements" value={result.technicalRequirements} onChange={(v) => updateSection('technicalRequirements', v)} />
+                                <SectionEditor title="Cancellation Policy" value={result.cancellationPolicy} onChange={(v) => updateSection('cancellationPolicy', v)} />
+                                <SectionEditor title="Force Majeure" value={result.forceMajeure} onChange={(v) => updateSection('forceMajeure', v)} />
+                                <SectionEditor title="Signature Block" value={result.signatureBlock} onChange={(v) => updateSection('signatureBlock', v)} />
                             </div>
-                        </div>
-                    </div>
-                ) : (
-                    <div className="flex-1 flex items-center justify-center text-center text-slate-500 p-4">
-                        <div>
-                            <FileTextIcon className="w-24 h-24 mx-auto mb-4" />
-                            <p>Your generated performance contract will appear here.</p>
-                        </div>
-                    </div>
-                )}
+                        </CardShell>
+                    ) : null}
+                </section>
             </div>
         </main>
     );
@@ -558,15 +571,492 @@ Guidelines:
 
 export default ContractGenerator;
 
+const CardShell: React.FC<{ title: string; description?: string; icon?: React.ReactNode; children: React.ReactNode }> = ({
+    title,
+    description,
+    icon,
+    children,
+}) => (
+    <div className="rounded-xl border border-white/10 bg-white/5 p-4 md:p-5 shadow-[0_10px_30px_rgba(2,6,23,0.28)] backdrop-blur-sm">
+        <div className="mb-4 flex items-start gap-3">
+            <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/15 text-purple-300 border border-purple-400/20 shrink-0">
+                {icon ?? <FileTextIcon className="w-5 h-5" />}
+            </div>
+            <div>
+                <h3 className="text-base font-semibold text-slate-100">{title}</h3>
+                {description ? <p className="mt-1 text-sm text-slate-400">{description}</p> : null}
+            </div>
+        </div>
+        {children}
+    </div>
+);
+
+const FieldLabel: React.FC<{ htmlFor: string; children: React.ReactNode }> = ({ htmlFor, children }) => (
+    <label htmlFor={htmlFor} className="mb-1 block text-sm font-medium text-slate-300">
+        {children}
+    </label>
+);
+
+const FieldInput: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = (props) => (
+    <input
+        {...props}
+        className={`w-full rounded-lg border border-white/10 bg-slate-900/80 px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-purple-400/60 focus:outline-none focus:ring-2 focus:ring-purple-500/20 ${props.className ?? ''}`.trim()}
+    />
+);
+
+const FieldTextarea: React.FC<React.TextareaHTMLAttributes<HTMLTextAreaElement>> = (props) => (
+    <textarea
+        {...props}
+        className={`w-full rounded-lg border border-white/10 bg-slate-900/80 px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-purple-400/60 focus:outline-none focus:ring-2 focus:ring-purple-500/20 ${props.className ?? ''}`.trim()}
+    />
+);
+
+const FieldSelect: React.FC<React.SelectHTMLAttributes<HTMLSelectElement>> = (props) => (
+    <select
+        {...props}
+        className={`w-full rounded-lg border border-white/10 bg-slate-900/80 px-3 py-2.5 text-sm text-white focus:border-purple-400/60 focus:outline-none focus:ring-2 focus:ring-purple-500/20 ${props.className ?? ''}`.trim()}
+    />
+);
+
+const StatusPill: React.FC<{ label: string; active?: boolean }> = ({ label, active = false }) => (
+    <span
+        className={`rounded-full border px-3 py-1 font-medium ${
+            active ? 'border-purple-400/30 bg-purple-500/15 text-purple-200' : 'border-white/10 bg-white/5 text-slate-400'
+        }`}
+    >
+        {label}
+    </span>
+);
+
+const EventClientSection: React.FC<{
+    clients: Client[];
+    shows: Show[];
+    selectedClientId: string;
+    selectedShowId: string;
+    onClientSelect: (id: string) => void;
+    onShowSelect: (id: string) => void;
+    performerName: string;
+    setPerformerName: (v: string) => void;
+    clientName: string;
+    setClientName: (v: string) => void;
+    clientEmail: string;
+    setClientEmail: (v: string) => void;
+    clientPhone: string;
+    setClientPhone: (v: string) => void;
+    clientAddress: string;
+    setClientAddress: (v: string) => void;
+    eventTitle: string;
+    setEventTitle: (v: string) => void;
+    eventType: string;
+    setEventType: (v: string) => void;
+    eventDate: string;
+    setEventDate: (v: string) => void;
+    eventTime: string;
+    setEventTime: (v: string) => void;
+    eventLocation: string;
+    setEventLocation: (v: string) => void;
+}> = ({
+    clients,
+    shows,
+    selectedClientId,
+    selectedShowId,
+    onClientSelect,
+    onShowSelect,
+    performerName,
+    setPerformerName,
+    clientName,
+    setClientName,
+    clientEmail,
+    setClientEmail,
+    clientPhone,
+    setClientPhone,
+    clientAddress,
+    setClientAddress,
+    eventTitle,
+    setEventTitle,
+    eventType,
+    setEventType,
+    eventDate,
+    setEventDate,
+    eventTime,
+    setEventTime,
+    eventLocation,
+    setEventLocation,
+}) => (
+    <CardShell
+        title="Event & Client"
+        description="Connect this agreement to your CRM and Show Planner, then confirm the booking details."
+        icon={<UsersIcon className="w-5 h-5" />}
+    >
+        <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <FieldLabel htmlFor="select-client">Select Client</FieldLabel>
+                    <FieldSelect id="select-client" value={selectedClientId} onChange={(e) => onClientSelect(e.target.value)}>
+                        <option value="">-- Choose a client --</option>
+                        {clients.map((client) => (
+                            <option key={client.id} value={client.id}>
+                                {client.name}
+                                {client.company ? ` (${client.company})` : ''}
+                            </option>
+                        ))}
+                    </FieldSelect>
+                </div>
+                <div>
+                    <FieldLabel htmlFor="select-show">Select Show (optional)</FieldLabel>
+                    <FieldSelect id="select-show" value={selectedShowId} onChange={(e) => onShowSelect(e.target.value)}>
+                        <option value="">-- Choose a show --</option>
+                        {shows.map((show) => (
+                            <option key={show.id} value={show.id}>
+                                {show.title}
+                            </option>
+                        ))}
+                    </FieldSelect>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <FieldLabel htmlFor="performer-name">Performer / Company Name *</FieldLabel>
+                    <FieldInput id="performer-name" value={performerName} onChange={(e) => setPerformerName(e.target.value)} placeholder="Todd Simpson Magic" />
+                </div>
+                <div>
+                    <FieldLabel htmlFor="client-name">Client Name *</FieldLabel>
+                    <FieldInput id="client-name" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Cincinnati Event Planner" />
+                </div>
+                <div>
+                    <FieldLabel htmlFor="client-email">Client Email</FieldLabel>
+                    <FieldInput id="client-email" type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} placeholder="client@example.com" />
+                </div>
+                <div>
+                    <FieldLabel htmlFor="client-phone">Client Phone</FieldLabel>
+                    <FieldInput id="client-phone" type="tel" value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} placeholder="(555) 555-5555" />
+                </div>
+            </div>
+
+            <div>
+                <FieldLabel htmlFor="client-address">Client Address</FieldLabel>
+                <FieldTextarea id="client-address" rows={2} value={clientAddress} onChange={(e) => setClientAddress(e.target.value)} placeholder="Mailing address or billing address" />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <FieldLabel htmlFor="event-title">Event Name / Title</FieldLabel>
+                    <FieldInput id="event-title" value={eventTitle} onChange={(e) => setEventTitle(e.target.value)} placeholder="Corporate Holiday Gala" />
+                </div>
+                <div>
+                    <FieldLabel htmlFor="event-type">Event Type</FieldLabel>
+                    <FieldInput id="event-type" value={eventType} onChange={(e) => setEventType(e.target.value)} placeholder="Corporate Event" />
+                </div>
+                <div>
+                    <FieldLabel htmlFor="event-date">Event Date *</FieldLabel>
+                    <FieldInput id="event-date" type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} />
+                </div>
+                <div>
+                    <FieldLabel htmlFor="event-time">Event Time</FieldLabel>
+                    <FieldInput id="event-time" type="time" value={eventTime} onChange={(e) => setEventTime(e.target.value)} />
+                </div>
+            </div>
+
+            <div>
+                <FieldLabel htmlFor="event-location">Event Location / Address</FieldLabel>
+                <FieldTextarea id="event-location" rows={2} value={eventLocation} onChange={(e) => setEventLocation(e.target.value)} placeholder="Hilton Cincinnati Netherland Plaza" />
+            </div>
+        </div>
+    </CardShell>
+);
+
+const FinancialTermsSection: React.FC<{
+    performanceLength: string;
+    setPerformanceLength: (v: string) => void;
+    performanceFee: string;
+    setPerformanceFee: (v: string) => void;
+    depositAmount: string;
+    setDepositAmount: (v: string) => void;
+    depositDueDate: string;
+    setDepositDueDate: (v: string) => void;
+}> = ({ performanceLength, setPerformanceLength, performanceFee, setPerformanceFee, depositAmount, setDepositAmount, depositDueDate, setDepositDueDate }) => (
+    <CardShell
+        title="Financial Terms"
+        description="Set the booking economics clearly so the agreement reads like a professional client document."
+        icon={<ClockIcon className="w-5 h-5" />}
+    >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <FieldLabel htmlFor="perf-length">Performance Length</FieldLabel>
+                <FieldInput id="perf-length" value={performanceLength} onChange={(e) => setPerformanceLength(e.target.value)} placeholder="45 minutes" />
+            </div>
+            <div>
+                <FieldLabel htmlFor="perf-fee">Performance Fee ($) *</FieldLabel>
+                <FieldInput id="perf-fee" type="number" value={performanceFee} onChange={(e) => setPerformanceFee(e.target.value)} placeholder="1500" />
+            </div>
+            <div>
+                <FieldLabel htmlFor="deposit-amt">Deposit Amount ($)</FieldLabel>
+                <FieldInput id="deposit-amt" type="number" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} placeholder="750" />
+            </div>
+            <div>
+                <FieldLabel htmlFor="deposit-due">Deposit Due Date</FieldLabel>
+                <FieldInput id="deposit-due" type="date" value={depositDueDate} onChange={(e) => setDepositDueDate(e.target.value)} />
+            </div>
+        </div>
+    </CardShell>
+);
+
+const ContractDetailsSection: React.FC<{
+    specialRequirements: string;
+    setSpecialRequirements: (v: string) => void;
+    cancellationPolicy: string;
+    setCancellationPolicy: (v: string) => void;
+    onGenerate: () => void;
+    isLoading: boolean;
+    isFormValid: boolean;
+    error: string | null;
+}> = ({ specialRequirements, setSpecialRequirements, cancellationPolicy, setCancellationPolicy, onGenerate, isLoading, isFormValid, error }) => (
+    <CardShell
+        title="Contract Details"
+        description="Define rider notes, cancellation expectations, and then generate the full agreement language."
+        icon={<ShieldIcon className="w-5 h-5" />}
+    >
+        <div className="space-y-4">
+            <div>
+                <FieldLabel htmlFor="requirements">Special Requirements (Rider)</FieldLabel>
+                <FieldTextarea
+                    id="requirements"
+                    rows={4}
+                    value={specialRequirements}
+                    onChange={(e) => setSpecialRequirements(e.target.value)}
+                    placeholder="Private changing area, bottled water, one microphone on a stand."
+                />
+            </div>
+            <div>
+                <FieldLabel htmlFor="cancellation">Cancellation Policy</FieldLabel>
+                <FieldTextarea id="cancellation" rows={4} value={cancellationPolicy} onChange={(e) => setCancellationPolicy(e.target.value)} />
+            </div>
+
+            <button
+                onClick={onGenerate}
+                disabled={isLoading || !isFormValid}
+                className="w-full rounded-xl border border-purple-400/30 bg-gradient-to-r from-purple-600 to-violet-600 px-4 py-3 text-white font-semibold shadow-[0_0_24px_rgba(168,85,247,0.24)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-slate-700 disabled:shadow-none"
+            >
+                <span className="inline-flex items-center justify-center gap-2">
+                    <WandIcon className="w-5 h-5" />
+                    {isLoading ? 'Generating Contract...' : 'Generate Contract'}
+                </span>
+            </button>
+            {error ? <p className="text-sm text-red-400">{error}</p> : null}
+        </div>
+    </CardShell>
+);
+
+const ContractPreviewPanel: React.FC<{
+    preview: PreviewContract;
+    result: ContractSections | null;
+    isLoading: boolean;
+    selectedShow: Show | null;
+    showNextVersion: number | null;
+    showLatestStatus: string | null;
+}> = ({ preview, result, isLoading, selectedShow, showNextVersion, showLatestStatus }) => {
+    const hasCoreDetails = preview.performerName || preview.clientName || preview.eventTitle || preview.eventDate || preview.performanceFee;
+
+    return (
+        <CardShell
+            title="Live Contract Preview"
+            description="The agreement preview updates as you build. Generated sections appear below once the AI draft is ready."
+            icon={<CalendarIcon className="w-5 h-5" />}
+        >
+            <div className="space-y-4">
+                <div className="rounded-xl border border-white/10 bg-slate-950/50 p-4 md:p-5">
+                    <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 pb-4">
+                        <div>
+                            <div className="text-[11px] uppercase tracking-[0.18em] text-purple-300">Performance Agreement</div>
+                            <h4 className="mt-2 text-xl font-semibold text-slate-100">{preview.eventTitle || 'Untitled Engagement'}</h4>
+                            <p className="mt-1 text-sm text-slate-400">
+                                {preview.eventType || 'Professional performance contract'}
+                            </p>
+                        </div>
+                        <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-right text-xs text-slate-300">
+                            <div>Status: {result ? 'Draft generated' : 'Preview only'}</div>
+                            <div className="mt-1">{showNextVersion ? `Next version: v${showNextVersion}` : 'Versioning available after show link'}</div>
+                        </div>
+                    </div>
+
+                    {isLoading ? (
+                        <LoadingIndicator />
+                    ) : hasCoreDetails ? (
+                        <div className="space-y-5 pt-4 text-sm text-slate-300">
+                            <PreviewBlock title="Parties">
+                                <p><span className="text-slate-500">Performer:</span> {preview.performerName || 'Performer name pending'}</p>
+                                <p><span className="text-slate-500">Client:</span> {preview.clientName || 'Client name pending'}</p>
+                                {preview.clientEmail ? <p><span className="text-slate-500">Email:</span> {preview.clientEmail}</p> : null}
+                                {preview.clientPhone ? <p><span className="text-slate-500">Phone:</span> {preview.clientPhone}</p> : null}
+                                {preview.clientAddress ? <p><span className="text-slate-500">Address:</span> {preview.clientAddress}</p> : null}
+                            </PreviewBlock>
+
+                            <PreviewBlock title="Event">
+                                <p>{formatDateForPreview(preview.eventDate)}</p>
+                                {preview.eventTime ? <p>{preview.eventTime}</p> : null}
+                                <p>{preview.eventLocation || 'Location to be confirmed'}</p>
+                                {preview.performanceLength ? <p>{preview.performanceLength}</p> : null}
+                            </PreviewBlock>
+
+                            <PreviewBlock title="Financial Terms">
+                                <p><span className="text-slate-500">Performance Fee:</span> {formatCurrency(preview.performanceFee)}</p>
+                                <p>
+                                    <span className="text-slate-500">Deposit:</span>{' '}
+                                    {preview.depositAmount ? formatCurrency(preview.depositAmount) : 'No deposit specified yet'}
+                                    {preview.depositDueDate ? ` due ${formatDateForPreview(preview.depositDueDate)}` : ''}
+                                </p>
+                            </PreviewBlock>
+
+                            <PreviewBlock title="Operational Notes">
+                                <p>{preview.specialRequirements || 'Special requirements will appear here once added.'}</p>
+                            </PreviewBlock>
+
+                            <PreviewBlock title="Cancellation">
+                                <p>{preview.cancellationPolicy || DEFAULT_CANCELLATION_POLICY}</p>
+                            </PreviewBlock>
+
+                            {result ? (
+                                <PreviewBlock title="Generated Clauses">
+                                    <p className="font-medium text-slate-200">Performance Details</p>
+                                    <p className="mb-3 whitespace-pre-wrap">{result.performanceDetails}</p>
+                                    <p className="font-medium text-slate-200">Payment Terms</p>
+                                    <p className="mb-3 whitespace-pre-wrap">{result.paymentTerms}</p>
+                                    <p className="font-medium text-slate-200">Technical Requirements</p>
+                                    <p className="mb-3 whitespace-pre-wrap">{result.technicalRequirements}</p>
+                                    <p className="font-medium text-slate-200">Force Majeure</p>
+                                    <p className="whitespace-pre-wrap">{result.forceMajeure}</p>
+                                </PreviewBlock>
+                            ) : null}
+                        </div>
+                    ) : (
+                        <div className="py-10 text-center text-slate-500">
+                            <FileTextIcon className="mx-auto mb-4 h-16 w-16 text-slate-600" />
+                            <p>Start filling in event, client, and fee details to bring the contract preview to life.</p>
+                        </div>
+                    )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <InfoChip title="Show status" value={selectedShow ? showLatestStatus || 'No saved contract status' : 'No show connected'} />
+                    <InfoChip title="Revenue snapshot" value={preview.performanceFee ? formatCurrency(preview.performanceFee) : 'Fee not entered'} />
+                </div>
+            </div>
+        </CardShell>
+    );
+};
+
+const ContractActionBar: React.FC<{
+    result: ContractSections | null;
+    selectedShowId: string;
+    saveStatus: 'idle' | 'saved';
+    copyStatus: 'idle' | 'copied';
+    saveToShowStatus: 'idle' | 'saved';
+    onSave: () => void;
+    onCopy: () => void;
+    onDownload: () => void;
+    onSaveToShow: () => void;
+}> = ({ result, selectedShowId, saveStatus, copyStatus, saveToShowStatus, onSave, onCopy, onDownload, onSaveToShow }) => (
+    <CardShell
+        title="Output Actions"
+        description="Once the AI draft is ready, export it, store it, or attach it to the selected show."
+        icon={<ShareIcon className="w-5 h-5" />}
+    >
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <ActionButton onClick={onSaveToShow} disabled={!result || !selectedShowId || saveToShowStatus === 'saved'} primary>
+                {saveToShowStatus === 'saved' ? <CheckIcon className="w-4 h-4 text-green-300" /> : <ShareIcon className="w-4 h-4" />}
+                <span>{saveToShowStatus === 'saved' ? 'Saved to Show!' : 'Save as New Version to Show'}</span>
+            </ActionButton>
+            <ActionButton onClick={onDownload} disabled={!result}>
+                <FileTextIcon className="w-4 h-4" />
+                <span>Download .txt</span>
+            </ActionButton>
+            <ActionButton onClick={onCopy} disabled={!result || copyStatus === 'copied'}>
+                {copyStatus === 'copied' ? <CheckIcon className="w-4 h-4 text-green-400" /> : <CopyIcon className="w-4 h-4" />}
+                <span>{copyStatus === 'copied' ? 'Copied!' : 'Copy Contract'}</span>
+            </ActionButton>
+            <ActionButton onClick={onSave} disabled={!result || saveStatus === 'saved'}>
+                {saveStatus === 'saved' ? <CheckIcon className="w-4 h-4 text-green-400" /> : <SaveIcon className="w-4 h-4" />}
+                <span>{saveStatus === 'saved' ? 'Saved!' : 'Save to Ideas'}</span>
+            </ActionButton>
+        </div>
+        <div className="mt-3 text-xs text-slate-400 space-y-1">
+            <div>• Save to Ideas stores this contract for later reuse.</div>
+            <div>• Save as New Version to Show creates a versioned draft for the selected show.</div>
+        </div>
+    </CardShell>
+);
+
+const IntegrationHintsCard: React.FC<{ selectedShow: Show | null; selectedClientId: string; performanceFee: string }> = ({ selectedShow, selectedClientId, performanceFee }) => (
+    <CardShell
+        title="Connected Workflow"
+        description="This builder is positioned to connect contracts with CRM, booking value, and Show Planner history."
+        icon={<FileTextIcon className="w-5 h-5" />}
+    >
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+            <HintTile
+                title="Client CRM"
+                text={selectedClientId ? 'Client information has been pulled into the contract builder.' : 'Select a client to auto-fill contact details.'}
+                active={!!selectedClientId}
+            />
+            <HintTile
+                title="Show Planner"
+                text={selectedShow ? `Linked to ${selectedShow.title}${selectedShow.status ? ` · ${selectedShow.status}` : ''}` : 'Link a show to carry event and fee details forward.'}
+                active={!!selectedShow}
+            />
+            <HintTile
+                title="Revenue"
+                text={performanceFee ? `Current draft value: ${formatCurrency(performanceFee)}` : 'Fee will become a visible contract value signal.'}
+                active={!!performanceFee}
+            />
+        </div>
+    </CardShell>
+);
+
+const ActionButton: React.FC<{ onClick: () => void; disabled?: boolean; primary?: boolean; children: React.ReactNode }> = ({ onClick, disabled, primary, children }) => (
+    <button
+        onClick={onClick}
+        disabled={disabled}
+        className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+            primary
+                ? 'border border-purple-400/25 bg-purple-600 text-white hover:bg-purple-500 disabled:border-white/10 disabled:bg-slate-700'
+                : 'border border-white/10 bg-slate-900/70 text-slate-200 hover:bg-slate-800 disabled:bg-slate-800/60 disabled:text-slate-500'
+        } disabled:cursor-not-allowed`}
+    >
+        {children}
+    </button>
+);
+
+const HintTile: React.FC<{ title: string; text: string; active?: boolean }> = ({ title, text, active = false }) => (
+    <div className={`rounded-xl border p-3 ${active ? 'border-purple-400/20 bg-purple-500/10' : 'border-white/10 bg-slate-950/35'}`}>
+        <div className="text-xs font-semibold uppercase tracking-wide text-slate-300">{title}</div>
+        <p className="mt-1 text-slate-400 text-sm">{text}</p>
+    </div>
+);
+
+const InfoChip: React.FC<{ title: string; value: string }> = ({ title, value }) => (
+    <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+        <div className="text-[11px] uppercase tracking-wide text-slate-500">{title}</div>
+        <div className="mt-1 text-sm text-slate-200">{value}</div>
+    </div>
+);
+
+const PreviewBlock: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
+    <div>
+        <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{title}</div>
+        <div className="space-y-1 leading-6">{children}</div>
+    </div>
+);
+
 const SectionEditor: React.FC<{ title: string; value: string; onChange: (v: string) => void }> = ({ title, value, onChange }) => {
     return (
-        <div className="rounded-lg border border-slate-800 bg-slate-950/30 p-3">
-            <div className="text-xs font-semibold text-slate-300 mb-2">{title}</div>
+        <div className="rounded-lg border border-white/10 bg-slate-950/35 p-3">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-300">{title}</div>
             <textarea
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
                 rows={5}
-                className="w-full resize-y rounded-md bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-slate-100"
+                className="w-full resize-y rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-purple-400/60 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
             />
         </div>
     );
