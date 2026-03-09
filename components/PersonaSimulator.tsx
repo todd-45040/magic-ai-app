@@ -155,17 +155,47 @@ const PersonaSimulator: React.FC<PersonaSimulatorProps> = ({ user, onIdeaSaved }
     };
 
     const buildStructuredPrompt = (personaName: string, personaDescription: string, scriptText: string, level: PersonaIntensity) => (
-        `You are simulating a live audience member reacting to a magician's material.\n\n` +
-        `Persona: ${personaName}\n` +
-        `Persona behavior: ${personaDescription}\n` +
-        `Intensity: ${INTENSITY_LABELS[level]} (${INTENSITY_HELP[level]})\n\n` +
-        `Instructions:\n` +
-        `- Stay fully inside the persona during the simulated interaction.\n` +
-        `- Do not explain methods, secrets, gimmicks, or sleights.\n` +
-        `- Simulate realistic audience interruptions, doubts, excitement, or drift in attention based on the persona.\n` +
-        `- After the simulation, convert the audience behavior into practical director coaching.\n` +
-        `- Make every point specific to the script, not generic.\n\n` +
-        `SCRIPT:\n${scriptText}`
+        `You are simulating a live audience member reacting to a magician's material.
+
+` +
+        `Persona: ${personaName}
+` +
+        `Persona behavior: ${personaDescription}
+` +
+        `Intensity: ${INTENSITY_LABELS[level]} (${INTENSITY_HELP[level]})
+
+` +
+        `Instructions:
+` +
+        `- Stay fully inside the persona during the simulated interaction.
+` +
+        `- Do not explain methods, secrets, gimmicks, or sleights.
+` +
+        `- Simulate realistic audience interruptions, doubts, excitement, or drift in attention based on the persona.
+` +
+        `- Dynamic Persona Behavior: vary the timing and style of reactions so they feel live, not scripted.
+` +
+        `- If the persona is a heckler, interrupt unpredictably, challenge claims, and occasionally try to step on momentum.
+` +
+        `- If the persona is a child, blurt out surprising questions, react emotionally, and jump ahead when curiosity spikes.
+` +
+        `- If the persona is a distracted corporate guest, lose focus at realistic moments, respond politely, and occasionally miss key beats.
+` +
+        `- If the persona is supportive, still react naturally with small doubts, encouraging comments, and realistic audience timing.
+` +
+        `- Include at least 2 moments where the audience behavior shifts unexpectedly based on something in the script.
+` +
+        `- Make interruption timing feel uneven: some reactions should arrive early, some late, and some right on the critical line.
+` +
+        `- Show when attention rises, drops, or snaps back so the magician can feel momentum changes.
+` +
+        `- After the simulation, convert the audience behavior into practical director coaching.
+` +
+        `- Make every point specific to the script, not generic.
+
+` +
+        `SCRIPT:
+${scriptText}`
     );
 
     const getResultSummaryText = (personaName: string, res: PersonaSimulationResult, level: PersonaIntensity = intensity) => (
@@ -225,6 +255,7 @@ const PersonaSimulator: React.FC<PersonaSimulatorProps> = ({ user, onIdeaSaved }
                 scriptLength: scriptForRun.trim().length,
                 hasCustomScript: scriptForRun.trim() !== SCRIPT_EXAMPLE.trim(),
                 demoMode: demoMode ?? null,
+                dynamicPersonaBehavior: true,
             },
         });
 
@@ -274,6 +305,7 @@ const PersonaSimulator: React.FC<PersonaSimulatorProps> = ({ user, onIdeaSaved }
                     riskCount: safeResult.riskMoments.length,
                     coachingCount: safeResult.directorCoaching.length,
                     demoMode: demoMode ?? null,
+                    dynamicPersonaBehavior: true,
                 },
             });
         } catch (e: any) {
@@ -314,7 +346,7 @@ const PersonaSimulator: React.FC<PersonaSimulatorProps> = ({ user, onIdeaSaved }
         setMessages(prev => [...prev, userMessage]);
         setInput('');
         setIsLoading(true);
-        void trackClientEvent({ tool: 'persona_simulator', action: 'followup_send', metadata: { persona: selectedPersona, intensity } });
+        void trackClientEvent({ tool: 'persona_simulator', action: 'followup_send', metadata: { persona: selectedPersona, intensity, dynamicPersonaBehavior: true } });
 
         try {
             const intensityModifier = buildIntensityModifier(intensity);
@@ -337,7 +369,7 @@ const PersonaSimulator: React.FC<PersonaSimulatorProps> = ({ user, onIdeaSaved }
         const title = `Persona Sim: ${selectedPersonaObj.name}`;
         await saveIdea('text', content, title, ['persona-simulator', 'transcript', selectedPersona ?? 'unknown']);
         onIdeaSaved();
-        void trackClientEvent({ tool: 'persona_simulator', action: 'save_transcript', outcome: 'SUCCESS_NOT_CHARGED', metadata: { persona: selectedPersona, intensity } });
+        void trackClientEvent({ tool: 'persona_simulator', action: 'save_transcript', outcome: 'SUCCESS_NOT_CHARGED', metadata: { persona: selectedPersona, intensity, dynamicPersonaBehavior: true } });
         setPostSaveNotice('Transcript saved to Saved Ideas.');
     };
 
@@ -459,7 +491,7 @@ const PersonaSimulator: React.FC<PersonaSimulatorProps> = ({ user, onIdeaSaved }
                             </div>
                             <div>
                                 <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-amber-200 mb-3">
-                                    AI Studio Rehearsal Lab
+                                    AI Studio Rehearsal Lab • Dynamic Personas
                                 </div>
                                 <h2 className="text-2xl md:text-3xl font-bold text-white font-cinzel">Persona Simulator</h2>
                                 <p className="mt-2 text-slate-300 max-w-3xl">
