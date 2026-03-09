@@ -607,6 +607,34 @@ const [lastOpenedMap, setLastOpenedMap] = useState<Record<string, number>>(() =>
         favorites: true,
         archived: false,
     });
+
+    const expandAllSections = () => {
+        setSectionOpen({
+            effect: true,
+            script: true,
+            image: true,
+            blueprint: true,
+            research: true,
+            rehearsal: true,
+            pinned: true,
+            favorites: true,
+            archived: true,
+        });
+    };
+
+    const collapseAllSections = () => {
+        setSectionOpen({
+            effect: false,
+            script: false,
+            image: false,
+            blueprint: false,
+            research: false,
+            rehearsal: false,
+            pinned: false,
+            favorites: false,
+            archived: false,
+        });
+    };
     const [editingIdeaId, setEditingIdeaId] = useState<string | null>(null);
     const [editText, setEditText] = useState('');
     const [isSavingTags, setIsSavingTags] = useState(false);
@@ -1420,6 +1448,26 @@ const openPromoteModal = (idea: SavedIdea) => {
                                 <option key={t} value={t}>{t}</option>
                             ))}
                         </select>
+
+
+                        <div className="flex items-center gap-2 ml-auto">
+                            <button
+                                type="button"
+                                onClick={expandAllSections}
+                                className="px-3 py-2 text-xs font-semibold bg-slate-900/60 border border-slate-700 rounded-md text-slate-200 transition hover:border-purple-400/40 hover:text-purple-100"
+                                title="Open all idea sections"
+                            >
+                                Expand All
+                            </button>
+                            <button
+                                type="button"
+                                onClick={collapseAllSections}
+                                className="px-3 py-2 text-xs font-semibold bg-slate-900/60 border border-slate-700 rounded-md text-slate-200 transition hover:border-purple-400/40 hover:text-purple-100"
+                                title="Collapse all idea sections"
+                            >
+                                Compact All
+                            </button>
+                        </div>
                     </div>
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
