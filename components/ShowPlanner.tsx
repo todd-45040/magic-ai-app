@@ -469,6 +469,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
     const [plannerSearch, setPlannerSearch] = useState('');
     const [isArchiveExpanded, setIsArchiveExpanded] = useState(false);
     const [expandedDuplicateGroups, setExpandedDuplicateGroups] = useState<Record<string, boolean>>({});
+    const [detailInitialTab, setDetailInitialTab] = useState<'tasks' | 'finances' | 'contract' | 'history' | 'rehearsals'>('tasks');
     const taskRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
 
     useEffect(() => {
@@ -777,6 +778,17 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
             </>
         );
 
+        const openShowDashboard = (show: Show, tab: 'tasks' | 'finances' | 'contract' | 'history' | 'rehearsals' = 'tasks') => {
+            setDetailInitialTab(tab);
+            setSelectedShow(show);
+        };
+
+        const openPerformanceModal = (show: Show) => {
+            setDetailInitialTab('history');
+            setSelectedShow(show);
+            setIsLiveModalOpen(true);
+        };
+
         const renderCard = (item: PlannerShowMeta) => (
             <div key={item.show.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 transition-all hover:border-purple-400/50 hover:bg-white/[0.045] hover:shadow-[0_18px_45px_rgba(0,0,0,0.28)]">
                 <div className="flex items-start justify-between gap-3">
@@ -794,7 +806,47 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                 <div className="mt-3">{renderProgress(item)}</div>
                 <div className="mt-3 flex items-center justify-between gap-3 text-sm">
                     <p className="min-w-0 truncate text-slate-300">{item.nextCue}</p>
-                    <button onClick={() => setSelectedShow(item.show)} className="shrink-0 rounded-lg bg-purple-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-purple-700">Open Dashboard</button>
+                    <button onClick={() => openShowDashboard(item.show)} className="shrink-0 rounded-lg bg-purple-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-purple-700">Open Dashboard</button>
+                </div>
+            </div>
+        );
+
+        const renderActiveHeroCard = (item: PlannerShowMeta) => (
+            <div key={item.show.id} className="rounded-3xl border border-purple-500/20 bg-gradient-to-br from-purple-950/70 via-slate-950/95 to-slate-950 p-5 shadow-[0_24px_60px_rgba(0,0,0,0.32)] transition-all hover:-translate-y-0.5 hover:border-purple-400/45 hover:shadow-[0_30px_70px_rgba(0,0,0,0.4)]">
+                <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-200">Active Show</span>
+                            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${lifecycleBadgeClass[item.statusLabel]}`}>{item.statusLabel}</span>
+                            <span className="rounded-full border border-white/10 bg-slate-900/80 px-2 py-0.5 text-[10px] font-semibold text-slate-300">{item.typeLabel}</span>
+                            {item.contractMeta?.latestStatus && <span className="rounded-full border border-blue-400/25 bg-blue-500/10 px-2 py-0.5 text-[10px] font-semibold text-blue-200">{String(item.contractMeta.latestStatus).toUpperCase()}</span>}
+                        </div>
+                        <h3 className="mt-3 text-2xl font-bold text-white font-cinzel md:text-[1.75rem]">{item.show.title}</h3>
+                        <p className="mt-2 text-sm text-slate-300">{item.metadataLine}</p>
+                    </div>
+                    <button onClick={(e) => { e.stopPropagation(); handleDeleteShow(item.show.id); }} className="rounded-xl border border-white/10 bg-white/[0.03] p-2.5 text-slate-400 transition-colors hover:bg-slate-800 hover:text-red-300"><TrashIcon className="h-4 w-4" /></button>
+                </div>
+
+                <div className="mt-5 grid grid-cols-2 gap-3">
+                    <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+                        <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Routines</p>
+                        <p className="mt-1 text-2xl font-bold text-white">{item.totalTasks}</p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+                        <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Tasks Remaining</p>
+                        <p className="mt-1 text-2xl font-bold text-white">{Math.max(item.totalTasks - item.completedTasks, 0)}</p>
+                    </div>
+                </div>
+
+                <div className="mt-5">
+                    {renderProgress(item)}
+                    <p className="mt-3 text-sm text-slate-300">{item.nextCue}</p>
+                </div>
+
+                <div className="mt-5 flex flex-wrap gap-2">
+                    <button onClick={() => openShowDashboard(item.show)} className="rounded-xl bg-purple-600 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-purple-700">Open Dashboard</button>
+                    <button onClick={() => openShowDashboard(item.show, 'rehearsals')} className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-slate-100 transition-colors hover:bg-slate-700">Start Rehearsal</button>
+                    <button onClick={() => openPerformanceModal(item.show)} className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-slate-100 transition-colors hover:bg-slate-700">Log Performance</button>
                 </div>
             </div>
         );
@@ -858,9 +910,9 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                     ) : isCollapsed ? (
                         <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 px-4 py-8 text-center text-sm text-slate-400">Archive hidden by default to keep the planner focused.</div>
                     ) : (
-                        <div className={opts?.routineRows ? 'space-y-3' : 'grid grid-cols-1 xl:grid-cols-2 gap-4'}>
+                        <div className={opts?.routineRows ? 'space-y-3' : sectionKey === 'active' ? 'grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-4' : 'grid grid-cols-1 xl:grid-cols-2 gap-4'}>
                             {groupedItems.map(([groupKey, group]) => {
-                                if (group.length === 1) return opts?.routineRows ? renderRoutineRow(group[0]) : renderCard(group[0]);
+                                if (group.length === 1) return opts?.routineRows ? renderRoutineRow(group[0]) : sectionKey === 'active' ? renderActiveHeroCard(group[0]) : renderCard(group[0]);
                                 const lead = group[0];
                                 const isExpanded = !!expandedDuplicateGroups[groupKey];
                                 return (
@@ -874,7 +926,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                         </div>
                                         {isExpanded && (
                                             <div className={`mt-4 ${opts?.routineRows ? 'space-y-3' : 'grid grid-cols-1 gap-3'}`}>
-                                                {group.map(item => opts?.routineRows ? renderRoutineRow(item) : renderCard(item))}
+                                                {group.map(item => opts?.routineRows ? renderRoutineRow(item) : sectionKey === 'active' ? renderActiveHeroCard(item) : renderCard(item))}
                                             </div>
                                         )}
                                     </div>
@@ -956,7 +1008,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
 
     const ShowDetailView = () => {
         if (!selectedShow) return null;
-        const [activeTab, setActiveTab] = useState<'tasks' | 'finances' | 'contract' | 'history' | 'rehearsals'>('tasks');
+        const [activeTab, setActiveTab] = useState<'tasks' | 'finances' | 'contract' | 'history' | 'rehearsals'>(detailInitialTab);
         const [isSuggesting, setIsSuggesting] = useState(false);
         const [suggestionError, setSuggestionError] = useState<string | null>(null);
         const [pastPerformances, setPastPerformances] = useState<Performance[]>([]);
@@ -976,6 +1028,10 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
         });
         const [rehearsalDraft, setRehearsalDraft] = useState({ notes: '', improvements: '' });
         const [activeRehearsalStart, setActiveRehearsalStart] = useState<number | null>(null);
+
+        useEffect(() => {
+            setActiveTab(detailInitialTab);
+        }, [selectedShow?.id]);
 
         const client = clients.find(c => c.id === selectedShow.clientId);
 
