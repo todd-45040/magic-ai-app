@@ -379,16 +379,21 @@ useEffect(() => {
             const intro = [
                 `You are reviewing a magician's rehearsal video using ONLY the provided video frames.`,
                 `CRITICAL RULES:`,
-                `- Base your analysis ONLY on what is visible in the frames. If something is not visible, say "not visible in the provided frames".`,
-                `- Do NOT assume a routine type unless it is clearly shown.`,
-                `- Do NOT invent props, methods, or actions that are not present.`,
+                `- Base your analysis ONLY on what is visible in the frames.`,
+                `- If something is unclear, say "not visible in the frames".`,
+                `- Do NOT invent routines, premises, effect names, props, methods, or fictional storylines.`,
+                `- Focus only on visible posture, blocking, timing, prop clarity, gaze, and angle risk.`,
                 ``,
                 `The performer requested the following analysis focus: "${focusText}"`,
                 ``,
-                `Deliverables:`,
-                `1) A short 2–3 sentence overview of what you observe (routine/props/staging).`,
-                `2) A detailed time-stamped analysis referencing the provided frame timestamps when possible.`,
-                `3) A concise summary of 3–7 actionable items.`,
+                `Return the analysis using these exact sections:`,
+                `## Overview`,
+                `## Frame Observations`,
+                `## Strengths`,
+                `## Improvements`,
+                `## Rehearsal Notes`,
+                ``,
+                `In Frame Observations, reference the provided frame timestamps whenever possible.`,
             ].join('\n');
 
             const parts: any[] = [{ text: intro }];
