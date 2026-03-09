@@ -4,14 +4,21 @@ import { fetchShowFeedback, buildShowFeedbackUrl } from '../services/showFeedbac
 import { StarIcon, UsersIcon, QrCodeIcon, CopyIcon } from './icons';
 import { useAppState } from '../store';
 
-const REACTIONS: { key: Feedback['reaction']; label: string; tip: string }[] = [
-    { key: '🎉', label: 'Big Reaction', tip: 'Strong surprise or applause moment' },
-    { key: '😲', label: 'Amazed', tip: 'Audience visibly impressed or surprised' },
-    { key: '😂', label: 'Laughter', tip: 'Comedic beat landed well' },
-    { key: '🤔', label: 'Confused', tip: 'Moment may need clarification or tightening' },
-    { key: '👏', label: 'Applause', tip: 'Clear positive response or appreciation' },
-    { key: '❤️', label: 'Loved It', tip: 'Emotional connection or favorite moment' },
+const REACTIONS: { key: Feedback['reaction']; label: string; tip: string; tone: 'positive' | 'warning' }[] = [
+    { key: '🎉', label: 'Big Reaction', tip: 'Strong surprise or applause moment', tone: 'positive' },
+    { key: '😲', label: 'Amazed', tip: 'Audience visibly impressed or surprised', tone: 'positive' },
+    { key: '😂', label: 'Laughter', tip: 'Comedic beat landed well', tone: 'positive' },
+    { key: '🤔', label: 'Confused', tip: 'Moment may need clarification or tightening', tone: 'warning' },
+    { key: '👏', label: 'Applause', tip: 'Clear positive response or appreciation', tone: 'positive' },
+    { key: '❤️', label: 'Loved It', tip: 'Emotional connection or favorite moment', tone: 'positive' },
 ];
+
+const TIMELINE_SEGMENTS = [
+    { key: 'opening', label: 'Opening' },
+    { key: 'early', label: 'Early Middle' },
+    { key: 'late', label: 'Late Middle' },
+    { key: 'closing', label: 'Closing' },
+] as const;
 
 const StarRatingDisplay: React.FC<{ rating: number }> = ({ rating }) => (
     <div className="flex">
@@ -23,6 +30,15 @@ const StarRatingDisplay: React.FC<{ rating: number }> = ({ rating }) => (
         ))}
     </div>
 );
+
+const formatDate = (timestamp?: number) => {
+    if (!timestamp) return 'Unknown date';
+    try {
+        return new Date(timestamp).toLocaleString();
+    } catch {
+        return 'Unknown date';
+    }
+};
 
 const ShowFeedback: React.FC = () => {
     const { shows } = useAppState();
@@ -92,6 +108,94 @@ const ShowFeedback: React.FC = () => {
             return '';
         }
     }, [selectedShowId]);
+
+    const strongestReaction = useMemo(() => {
+        const ranked = REACTIONS
+            .map(r => ({ ...r, count: reactionCounts[String(r.key)] ?? 0 }))
+            .sort((a, b) => b.count - a.count);
+        return ranked[0]?.count ? ranked[0] : null;
+    }, [reactionCounts]);
+
+    const feedbackPatterns = useMemo(() => {
+        const totalPositiveSignals = feedback.reduce((sum, item) => {
+            const isPositiveReaction = item.reaction && item.reaction !== '🤔';
+            return sum + (item.rating >= 4 ? 1 : 0) + (isPositiveReaction ? 1 : 0);
+        }, 0);
+
+        const confusedCount = reactionCounts['🤔'] ?? 0;
+        const commentCount = feedback.filter(item => Boolean(item.comment?.trim())).length;
+        const tagFrequency: Record<string, number> = {};
+        feedback.forEach(item => {
+            const maybeTags = ((item as any).tags ?? []) as string[];
+            maybeTags.forEach(tag => {
+                tagFrequency[tag] = (tagFrequency[tag] ?? 0) + 1;
+            });
+        });
+        const mostCommonTagEntry = Object.entries(tagFrequency).sort((a, b) => b[1] - a[1])[0];
+
+        let dominantPattern = 'Mixed audience response';
+        if (feedback.length === 0) {
+            dominantPattern = 'No response data yet';
+        } else if (confusedCount >= Math.max(2, Math.ceil(feedback.length * 0.25))) {
+            dominantPattern = 'Some moments may need clarification';
+        } else if (Number(averageRating) >= 4.5) {
+            dominantPattern = 'Consistently strong audience response';
+        } else if (Number(averageRating) >= 4) {
+            dominantPattern = 'Generally positive engagement';
+        } else if (Number(averageRating) < 3) {
+            dominantPattern = 'Performance may need refinement';
+        }
+
+        return {
+            totalPositiveSignals,
+            confusedCount,
+            commentCount,
+            mostCommonTag: mostCommonTagEntry?.[0] ?? null,
+            dominantPattern,
+            lowResponse: feedback.length < 3,
+        };
+    }, [averageRating, feedback, reactionCounts]);
+
+    const timelineData = useMemo(() => {
+        if (feedback.length === 0) {
+            return TIMELINE_SEGMENTS.map(segment => ({ ...segment, count: 0, share: 0, summary: 'No responses yet' }));
+        }
+
+        const sorted = [...feedback].sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0));
+        const size = Math.max(1, Math.ceil(sorted.length / TIMELINE_SEGMENTS.length));
+
+        return TIMELINE_SEGMENTS.map((segment, index) => {
+            const group = sorted.slice(index * size, (index + 1) * size);
+            const count = group.length;
+            const share = count === 0 ? 0 : Math.min(100, Math.round((group.reduce((sum, item) => {
+                const reactionBoost = item.reaction && item.reaction !== '🤔' ? 1 : 0;
+                return sum + item.rating + reactionBoost;
+            }, 0) / (count * 6)) * 100));
+
+            const localReactionCounts: Record<string, number> = {};
+            group.forEach(item => {
+                if (item.reaction) {
+                    localReactionCounts[String(item.reaction)] = (localReactionCounts[String(item.reaction)] ?? 0) + 1;
+                }
+            });
+            const topLocalReaction = REACTIONS
+                .map(r => ({ ...r, count: localReactionCounts[String(r.key)] ?? 0 }))
+                .sort((a, b) => b.count - a.count)[0];
+
+            const summary = count === 0
+                ? 'No audience responses captured'
+                : topLocalReaction?.count
+                    ? `${topLocalReaction.label} was the strongest signal`
+                    : 'Ratings were submitted without reaction markers';
+
+            return {
+                ...segment,
+                count,
+                share,
+                summary,
+            };
+        });
+    }, [feedback]);
 
     const copyLink = async () => {
         if (!feedbackUrl) return;
@@ -225,37 +329,154 @@ const ShowFeedback: React.FC = () => {
                 {loading ? (
                     <div className="text-center py-14 text-slate-400">Loading feedback…</div>
                 ) : feedback.length > 0 ? (
-                    <div>
-                        <div className="mb-4">
-                            <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 mb-3">Audience Responses</h3>
-                            <p className="text-sm text-slate-400">Individual comments and ratings for this performance.</p>
-                        </div>
-                        <div className="space-y-4">
-                            {feedback.map(item => (
-                                <div key={item.id} className="bg-slate-800 border border-slate-700 p-4 rounded-xl">
-                                    <div className="flex justify-between items-start gap-3">
-                                        <div>
-                                            <StarRatingDisplay rating={item.rating} />
-                                            <p className="text-xs text-slate-500 mt-1.5">
-                                                Submitted on {new Date(item.timestamp).toLocaleString()}
-                                                {item.name && ` by ${item.name}`}
-                                            </p>
+                    <div className="space-y-6">
+                        <section className="rounded-2xl border border-slate-700/80 bg-slate-900/35 p-5 md:p-6">
+                            <div className="flex items-start justify-between gap-4 mb-5 flex-wrap">
+                                <div>
+                                    <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 mb-2">Reaction Timeline</h3>
+                                    <p className="text-sm text-slate-400 max-w-2xl">
+                                        A performance-pattern view based on submitted ratings and reactions. Until true routine timestamps are available,
+                                        this panel estimates where the strongest audience energy appeared across the show.
+                                    </p>
+                                </div>
+                                {strongestReaction && (
+                                    <div className="rounded-xl border border-purple-500/25 bg-purple-500/10 px-4 py-3 min-w-[200px]">
+                                        <div className="text-xs uppercase tracking-[0.16em] text-purple-200/80 mb-1">Top Reaction</div>
+                                        <div className="text-lg font-semibold text-white flex items-center gap-2">
+                                            <span className="text-xl" aria-hidden="true">{String(strongestReaction.key)}</span>
+                                            {strongestReaction.label}
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                            {item.reaction && (
-                                                <span className="px-2 py-1 text-sm rounded-md bg-purple-500/15 border border-purple-500/30 text-purple-200">
-                                                    {String(item.reaction)}
-                                                </span>
+                                        <div className="text-xs text-slate-300 mt-1">{strongestReaction.count} audience signals</div>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                                {timelineData.map(segment => (
+                                    <div key={segment.key} className="rounded-xl border border-slate-700/70 bg-slate-800/45 p-4">
+                                        <div className="flex items-center justify-between gap-3 mb-3">
+                                            <h4 className="text-sm font-semibold text-slate-200">{segment.label}</h4>
+                                            <span className="text-xs text-slate-400">{segment.count} responses</span>
+                                        </div>
+                                        <div className="h-2 rounded-full bg-slate-950/60 overflow-hidden mb-3">
+                                            <div className="h-full rounded-full bg-gradient-to-r from-sky-500 via-purple-500 to-fuchsia-500" style={{ width: `${segment.share}%` }} />
+                                        </div>
+                                        <div className="text-xs uppercase tracking-[0.14em] text-slate-500 mb-1">Engagement Signal</div>
+                                        <div className="text-lg font-semibold text-white mb-2">{segment.share}%</div>
+                                        <p className="text-sm text-slate-400 leading-relaxed">{segment.summary}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+
+                        <section className="rounded-2xl border border-slate-700/80 bg-slate-900/35 p-5 md:p-6">
+                            <div className="mb-5">
+                                <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 mb-2">Key Insights</h3>
+                                <p className="text-sm text-slate-400">
+                                    Quick performance intelligence inferred from ratings, reactions, and audience comments.
+                                </p>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                                <div className="rounded-xl border border-slate-700/70 bg-slate-800/45 p-4">
+                                    <div className="text-xs uppercase tracking-[0.14em] text-slate-500 mb-2">Strongest Audience Signal</div>
+                                    <div className="text-lg font-semibold text-white">
+                                        {strongestReaction ? `${String(strongestReaction.key)} ${strongestReaction.label}` : 'No reaction data yet'}
+                                    </div>
+                                    <div className="text-sm text-slate-400 mt-2">
+                                        {strongestReaction ? `${strongestReaction.count} audience members selected this reaction.` : 'Ask viewers to tap a reaction after the show.'}
+                                    </div>
+                                </div>
+                                <div className="rounded-xl border border-slate-700/70 bg-slate-800/45 p-4">
+                                    <div className="text-xs uppercase tracking-[0.14em] text-slate-500 mb-2">Most Common Pattern</div>
+                                    <div className="text-lg font-semibold text-white">{feedbackPatterns.dominantPattern}</div>
+                                    <div className="text-sm text-slate-400 mt-2">
+                                        {feedbackPatterns.mostCommonTag
+                                            ? `Most-mentioned theme: ${feedbackPatterns.mostCommonTag}.`
+                                            : 'Add optional audience tags to identify recurring strengths.'}
+                                    </div>
+                                </div>
+                                <div className="rounded-xl border border-slate-700/70 bg-slate-800/45 p-4">
+                                    <div className="text-xs uppercase tracking-[0.14em] text-slate-500 mb-2">Positive Engagement</div>
+                                    <div className="text-2xl font-bold text-white">{feedbackPatterns.totalPositiveSignals}</div>
+                                    <div className="text-sm text-slate-400 mt-2">
+                                        Combined count of high ratings and positive reactions across this performance.
+                                    </div>
+                                </div>
+                                <div className="rounded-xl border border-slate-700/70 bg-slate-800/45 p-4">
+                                    <div className="text-xs uppercase tracking-[0.14em] text-slate-500 mb-2">Response Condition</div>
+                                    <div className="text-lg font-semibold text-white">
+                                        {feedbackPatterns.lowResponse ? 'Low-response sample' : 'Healthy response volume'}
+                                    </div>
+                                    <div className="text-sm text-slate-400 mt-2">
+                                        {feedbackPatterns.lowResponse
+                                            ? 'Collect more scans after the next show to improve confidence in the pattern.'
+                                            : `${feedbackPatterns.commentCount} written comments and ${feedbackPatterns.confusedCount} confusion markers captured.`}
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section>
+                            <div className="mb-4">
+                                <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 mb-2">Audience Comments</h3>
+                                <p className="text-sm text-slate-400">Raw response details are listed below to support the higher-level summary and insight panels above.</p>
+                            </div>
+                            <div className="space-y-4">
+                                {feedback.map(item => {
+                                    const metaTags = ((item as any).tags ?? []) as string[];
+                                    const showAssociation = ((item as any).showTitle ?? selectedShow?.title ?? '') as string;
+                                    return (
+                                        <div key={item.id} className="bg-slate-800/75 border border-slate-700/80 p-4 md:p-5 rounded-2xl shadow-[0_0_0_1px_rgba(255,255,255,0.01)]">
+                                            <div className="flex justify-between items-start gap-4 flex-wrap">
+                                                <div className="space-y-2 min-w-0">
+                                                    <StarRatingDisplay rating={item.rating} />
+                                                    <div className="flex flex-wrap gap-2 text-xs text-slate-300">
+                                                        <span className="px-2.5 py-1 rounded-md border border-slate-700 bg-slate-900/50">
+                                                            {formatDate(item.timestamp)}
+                                                        </span>
+                                                        {item.name && (
+                                                            <span className="px-2.5 py-1 rounded-md border border-slate-700 bg-slate-900/50">
+                                                                {item.name}
+                                                            </span>
+                                                        )}
+                                                        {showAssociation && (
+                                                            <span className="px-2.5 py-1 rounded-md border border-slate-700 bg-slate-900/50">
+                                                                {showAssociation}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2 flex-wrap justify-end">
+                                                    {item.reaction && (
+                                                        <span className={`px-2.5 py-1.5 text-sm rounded-md border ${item.reaction === '🤔' ? 'bg-amber-500/10 border-amber-500/30 text-amber-200' : 'bg-purple-500/15 border-purple-500/30 text-purple-200'}`}>
+                                                            {String(item.reaction)}
+                                                        </span>
+                                                    )}
+                                                    <span className="px-2.5 py-1.5 text-xs rounded-md border border-slate-700 bg-slate-900/50 text-slate-300">
+                                                        {item.rating}/5 rating
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {metaTags.length > 0 && (
+                                                <div className="mt-3 flex flex-wrap gap-2">
+                                                    {metaTags.map(tag => (
+                                                        <span key={`${item.id}-${tag}`} className="px-2.5 py-1 text-xs rounded-full bg-sky-500/10 border border-sky-500/25 text-sky-200">
+                                                            {tag}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
+
+                                            {item.comment ? (
+                                                <p className="text-slate-200 mt-4 pt-4 border-t border-slate-700/50 leading-relaxed">“{item.comment}”</p>
+                                            ) : (
+                                                <p className="text-slate-500 mt-4 pt-4 border-t border-slate-700/50 text-sm italic">No written comment provided.</p>
                                             )}
                                         </div>
-                                    </div>
-
-                                    {item.comment && (
-                                        <p className="text-slate-200 mt-3 pt-3 border-t border-slate-700/50">“{item.comment}”</p>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
+                                    );
+                                })}
+                            </div>
+                        </section>
                     </div>
                 ) : (
                     <div className="rounded-2xl border border-slate-700/80 bg-slate-900/35 px-6 py-14 text-center max-w-3xl mx-auto">
