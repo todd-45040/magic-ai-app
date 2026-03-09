@@ -7,6 +7,7 @@ import { getShows, addShow, updateShow, deleteShow, addTaskToShow, addTasksToSho
 import { startPerformance, endPerformance, getPerformancesByShowId } from '../services/performanceService';
 import { listContractsForShow, updateContractStatus, updateContractPayments, getContractsMetaForShows, type ContractRow, type ContractStatus, type ContractMeta } from '../services/contractsService';
 import { generateResponse, generateStructuredResponse } from '../services/geminiService';
+import { trackClientEvent } from '../services/telemetryClient';
 import { buildShowFeedbackUrl, rotateShowFeedbackToken } from '../services/showFeedbackService';
 import { getFeedback } from '../services/feedbackService';
 import { AI_TASK_SUGGESTER_SYSTEM_INSTRUCTION, IN_TASK_PATTER_SYSTEM_INSTRUCTION } from '../constants';
@@ -490,6 +491,15 @@ interface ShowPlannerProps {
 
 const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAnalytics, initialShowId, initialTaskId }) => {
     const [shows, setShows] = useState<Show[]>([]);
+
+    const trackShowPlannerEvent = (action: string, metadata?: Record<string, any>) => {
+        void trackClientEvent({
+            tool: 'show_planner',
+            action,
+            metadata,
+            outcome: 'SUCCESS_NOT_CHARGED',
+        });
+    };
     const [contractsMetaByShowId, setContractsMetaByShowId] = useState<Record<string, ContractMeta>>({});
 
     const [isLoadingShows, setIsLoadingShows] = useState(true);
@@ -518,6 +528,23 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
     const [expandedDuplicateGroups, setExpandedDuplicateGroups] = useState<Record<string, boolean>>({});
     const taskRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
 
+    const openShowDashboard = (show: Show, source: 'planner_card' | 'active_hero' | 'deep_link' = 'planner_card') => {
+        setSelectedShow(show);
+        const meta = buildPlannerMeta(show, clients, contractsMetaByShowId[show.id]);
+        trackShowPlannerEvent('show_dashboard_opened', {
+            source,
+            show_id: show.id,
+            show_title: show.title,
+            show_type: meta.typeLabel.toLowerCase(),
+            status: meta.statusLabel.toLowerCase(),
+            section: meta.section,
+            routine_count: meta.totalTasks,
+            task_count: meta.totalTasks,
+            task_completed_count: meta.completedTasks,
+            progress_pct: meta.progress,
+        });
+    };
+
     useEffect(() => {
         let isMounted = true;
         const fetchShows = async () => {
@@ -540,7 +567,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
 
                 if (initialShowId) {
                     const show = allShows.find((s) => s.id === initialShowId);
-                    if (show) setSelectedShow(show);
+                    if (show) openShowDashboard(show, 'deep_link');
                 }
             } catch (err: any) {
                 if (!isMounted) return;
@@ -585,6 +612,18 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
             } as any);
             setShows(newShows);
             setIsShowModalOpen(false);
+            const createdShow = newShows[newShows.length - 1];
+            if (createdShow) {
+                const createdMeta = buildPlannerMeta(createdShow, clients, contractsMetaByShowId[createdShow.id]);
+                trackShowPlannerEvent('show_created', {
+                    show_id: createdShow.id,
+                    show_title: createdShow.title,
+                    show_type: createdMeta.typeLabel.toLowerCase(),
+                    status: createdMeta.statusLabel.toLowerCase(),
+                    routine_count: createdMeta.totalTasks,
+                    task_count: createdMeta.totalTasks,
+                });
+            }
             setToastMsg('Show created.');
         } catch (err: any) {
             console.error('Failed to create show:', err);
@@ -622,7 +661,21 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
         try {
             const newShows = await addTaskToShow(selectedShow.id, data);
             setShows(newShows);
-            setSelectedShow(newShows.find(s => s.id === selectedShow.id) || null);
+            const refreshedShow = newShows.find(s => s.id === selectedShow.id) || null;
+            setSelectedShow(refreshedShow);
+            if (refreshedShow) {
+                const refreshedMeta = buildPlannerMeta(refreshedShow, clients, contractsMetaByShowId[refreshedShow.id]);
+                trackShowPlannerEvent('routine_added_to_show', {
+                    source: 'manual_add',
+                    show_id: refreshedShow.id,
+                    show_title: refreshedShow.title,
+                    show_type: refreshedMeta.typeLabel.toLowerCase(),
+                    status: refreshedMeta.statusLabel.toLowerCase(),
+                    routine_title: data?.title || null,
+                    routine_count: refreshedMeta.totalTasks,
+                    task_count: refreshedMeta.totalTasks,
+                });
+            }
             setIsTaskModalOpen(false);
         } catch (err: any) {
             console.error('Failed to add task:', err);
@@ -648,12 +701,56 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
         try {
             const newShows = await updateTaskInShow(selectedShow.id, task.id, { status: newStatus });
             setShows(newShows);
-            setSelectedShow(newShows.find(s => s.id === selectedShow.id) || null);
+            const refreshedShow = newShows.find(s => s.id === selectedShow.id) || null;
+            setSelectedShow(refreshedShow);
+            if (newStatus === 'Completed' && refreshedShow) {
+                const refreshedMeta = buildPlannerMeta(refreshedShow, clients, contractsMetaByShowId[refreshedShow.id]);
+                trackShowPlannerEvent('task_completed', {
+                    source: 'task_list',
+                    show_id: refreshedShow.id,
+                    show_title: refreshedShow.title,
+                    show_type: refreshedMeta.typeLabel.toLowerCase(),
+                    status: refreshedMeta.statusLabel.toLowerCase(),
+                    task_id: task.id,
+                    task_title: task.title,
+                    routine_count: refreshedMeta.totalTasks,
+                    task_count: refreshedMeta.totalTasks,
+                    task_completed_count: refreshedMeta.completedTasks,
+                });
+            }
         } catch (err: any) {
             console.error('Failed to toggle task status:', err);
             setToastMsg(err?.message ? String(err.message) : "Couldn't update task status.");
         }
     };
+    const handleUpdateTaskStatus = async (task: Task, status: Task['status']) => {
+        if (!selectedShow) return;
+        try {
+            const newShows = await updateTaskInShow(selectedShow.id, task.id, { status });
+            setShows(newShows);
+            const refreshedShow = newShows.find(s => s.id === selectedShow.id) || null;
+            setSelectedShow(refreshedShow);
+            if (status === 'Completed' && refreshedShow) {
+                const refreshedMeta = buildPlannerMeta(refreshedShow, clients, contractsMetaByShowId[refreshedShow.id]);
+                trackShowPlannerEvent('task_completed', {
+                    source: 'dashboard_checklist',
+                    show_id: refreshedShow.id,
+                    show_title: refreshedShow.title,
+                    show_type: refreshedMeta.typeLabel.toLowerCase(),
+                    status: refreshedMeta.statusLabel.toLowerCase(),
+                    task_id: task.id,
+                    task_title: task.title,
+                    routine_count: refreshedMeta.totalTasks,
+                    task_count: refreshedMeta.totalTasks,
+                    task_completed_count: refreshedMeta.completedTasks,
+                });
+            }
+        } catch (err: any) {
+            console.error('Failed to update task status:', err);
+            setToastMsg(err?.message ? String(err.message) : "Couldn't update task status.");
+        }
+    };
+
     const handleDeleteTask = async (id: string) => {
         if (!selectedShow) return;
         if (!window.confirm('Are you sure you want to delete this task?')) return;
@@ -841,7 +938,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                 <div className="mt-3">{renderProgress(item)}</div>
                 <div className="mt-3 flex items-center justify-between gap-3 text-sm">
                     <p className="min-w-0 truncate text-slate-300">{item.nextCue}</p>
-                    <button onClick={() => setSelectedShow(item.show)} className="shrink-0 rounded-lg bg-purple-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-purple-700">Open Dashboard</button>
+                    <button onClick={() => openShowDashboard(item.show, item.section === 'active' ? 'active_hero' : 'planner_card')} className="shrink-0 rounded-lg bg-purple-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-purple-700">Open Dashboard</button>
                 </div>
                 {item.section === 'active' && (
                     <div className="mt-3 text-xs text-slate-400">Last rehearsal: <span className="font-medium text-slate-200">{item.lastRehearsalLabel}</span></div>
@@ -860,7 +957,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                     <p className="mt-1 text-xs text-slate-400">{item.metadataLine}</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                    <button onClick={() => setSelectedShow(item.show)} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-700">Open</button>
+                    <button onClick={() => openShowDashboard(item.show, 'planner_card')} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-700">Open</button>
                     <button onClick={async () => {
                         try {
                             const nextTags = Array.from(new Set([...(item.show.tags || []), 'archived']));
@@ -1136,7 +1233,22 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                     const tasksData = result.tasks.map((title: string) => ({ title, priority: 'Medium' as const }));
                     const newShows = await addTasksToShow(selectedShow.id, tasksData);
                     setShows(newShows);
-                    setSelectedShow(newShows.find(s => s.id === selectedShow.id) || null);
+                    const refreshedShow = newShows.find(s => s.id === selectedShow.id) || null;
+                    setSelectedShow(refreshedShow);
+                    if (refreshedShow) {
+                        const refreshedMeta = buildPlannerMeta(refreshedShow, clients, contractsMetaByShowId[refreshedShow.id]);
+                        trackShowPlannerEvent('routine_added_to_show', {
+                            source: 'ai_suggest_tasks',
+                            show_id: refreshedShow.id,
+                            show_title: refreshedShow.title,
+                            show_type: refreshedMeta.typeLabel.toLowerCase(),
+                            status: refreshedMeta.statusLabel.toLowerCase(),
+                            routines_added: tasksData.length,
+                            routine_titles: tasksData.map((task: any) => task.title).slice(0, 8),
+                            routine_count: refreshedMeta.totalTasks,
+                            task_count: refreshedMeta.totalTasks,
+                        });
+                    }
                 } else {
                     throw new Error("AI response did not contain a valid 'tasks' array.");
                 }
@@ -2533,6 +2645,16 @@ const LivePerformanceModal: React.FC<{ show: Show; onClose: () => void; onEnd: (
         if (performance) {
             // FIX: Added await to correctly resolve endPerformance().
             await endPerformance(performance.id);
+            void trackClientEvent({
+                tool: 'show_planner',
+                action: 'performance_logged',
+                metadata: {
+                    show_id: show.id,
+                    show_title: show.title,
+                    performance_id: performance.id,
+                },
+                outcome: 'SUCCESS_NOT_CHARGED',
+            });
             onEnd(performance.id);
         }
     };
