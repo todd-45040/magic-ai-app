@@ -289,6 +289,24 @@ const ShowFeedback: React.FC = () => {
                         <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
                             <div className="rounded-xl border border-slate-700/70 bg-slate-900/45 p-4">
                                 <div className="text-xs uppercase tracking-[0.14em] text-purple-200/80 mb-2">Step 1</div>
+                                <div className="mb-4 flex items-center justify-center">
+                                    <div className="rounded-2xl border border-purple-500/25 bg-slate-950/70 p-3 shadow-[0_0_24px_rgba(168,85,247,0.12)]">
+                                        <div className="grid grid-cols-5 gap-1">
+                                            {[
+                                                1,1,1,0,1,
+                                                1,0,1,0,0,
+                                                1,1,1,0,1,
+                                                0,0,0,1,1,
+                                                1,0,1,1,1,
+                                            ].map((cell, idx) => (
+                                                <div
+                                                    key={`qr-demo-${idx}`}
+                                                    className={`h-2.5 w-2.5 rounded-[2px] ${cell ? 'bg-white' : 'bg-slate-800 border border-slate-700/70'}`}
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
                                 <div className="text-base font-semibold text-white">Generate the QR code</div>
                                 <p className="text-sm text-slate-400 mt-2">
                                     Open <span className="font-semibold text-slate-200">Show Planner</span> and create the audience feedback QR code for this performance.
@@ -296,6 +314,20 @@ const ShowFeedback: React.FC = () => {
                             </div>
                             <div className="rounded-xl border border-slate-700/70 bg-slate-900/45 p-4">
                                 <div className="text-xs uppercase tracking-[0.14em] text-purple-200/80 mb-2">Step 2</div>
+                                <div className="mb-4 flex items-center justify-center gap-3">
+                                    <div className="rounded-2xl border border-slate-700/80 bg-slate-950/80 px-3 py-2 shadow-[0_0_24px_rgba(56,189,248,0.10)]">
+                                        <div className="h-12 w-7 rounded-lg border border-slate-600 bg-slate-900 relative overflow-hidden">
+                                            <div className="absolute inset-x-1 top-1 h-6 rounded bg-gradient-to-b from-purple-500/30 to-sky-400/20 border border-purple-400/20"></div>
+                                            <div className="absolute bottom-1 left-1/2 -translate-x-1/2 h-1.5 w-1.5 rounded-full bg-slate-500"></div>
+                                        </div>
+                                    </div>
+                                    <div className="text-purple-300 text-lg">→</div>
+                                    <div className="flex gap-1.5">
+                                        <div className="h-8 w-8 rounded-full border border-slate-700 bg-slate-950/70 flex items-center justify-center text-sm">🙂</div>
+                                        <div className="h-8 w-8 rounded-full border border-slate-700 bg-slate-950/70 flex items-center justify-center text-sm">👏</div>
+                                        <div className="h-8 w-8 rounded-full border border-slate-700 bg-slate-950/70 flex items-center justify-center text-sm">⭐</div>
+                                    </div>
+                                </div>
                                 <div className="text-base font-semibold text-white">Share it after the show</div>
                                 <p className="text-sm text-slate-400 mt-2">
                                     Display the QR on a screen or send the copied link so audience members can rate the performance on their phones.
@@ -303,6 +335,19 @@ const ShowFeedback: React.FC = () => {
                             </div>
                             <div className="rounded-xl border border-slate-700/70 bg-slate-900/45 p-4">
                                 <div className="text-xs uppercase tracking-[0.14em] text-purple-200/80 mb-2">Step 3</div>
+                                <div className="mb-4 rounded-2xl border border-slate-700/80 bg-slate-950/70 p-3 shadow-[0_0_24px_rgba(168,85,247,0.10)]">
+                                    <div className="flex items-end gap-1 h-12">
+                                        <div className="w-4 rounded-t bg-sky-400/70 h-5"></div>
+                                        <div className="w-4 rounded-t bg-purple-400/70 h-8"></div>
+                                        <div className="w-4 rounded-t bg-emerald-400/70 h-10"></div>
+                                        <div className="w-4 rounded-t bg-amber-400/70 h-6"></div>
+                                    </div>
+                                    <div className="mt-3 grid grid-cols-3 gap-2">
+                                        <div className="h-2 rounded bg-slate-700/80"></div>
+                                        <div className="h-2 rounded bg-slate-700/80"></div>
+                                        <div className="h-2 rounded bg-slate-700/80"></div>
+                                    </div>
+                                </div>
                                 <div className="text-base font-semibold text-white">Review the results here</div>
                                 <p className="text-sm text-slate-400 mt-2">
                                     Ratings, reactions, comments, and future insight panels appear on this page once responses are submitted.
