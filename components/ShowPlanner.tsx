@@ -49,9 +49,11 @@ type PlannerShowMeta = {
     runtimeMinutes: number;
     statusLabel: PlannerLifecycle;
     typeLabel: string;
+    typeIcon: string;
     metadataLine: string;
     nextCue: string;
     nextTask: string | null;
+    lastRehearsalLabel: string;
     section: PlannerSectionKey;
     contractMeta?: ContractMeta;
 };
@@ -74,6 +76,29 @@ const inferShowTypeLabel = (show: Show): string => {
     if (haystack.includes('gospel') || haystack.includes('church') || haystack.includes('ministry')) return 'Gospel';
     if (haystack.includes('educational') || haystack.includes('assembly') || haystack.includes('library')) return 'Educational';
     return 'Stage';
+};
+
+
+const SHOW_TYPE_ICONS: Record<string, string> = {
+    'Stage': '🎭',
+    'Children': '🎈',
+    'Corporate': '💼',
+    'Gospel': '✝',
+    'Mentalism': '🧠',
+    'Close-up': '🃏',
+    'Educational': '📚',
+};
+
+const getShowTypeIcon = (typeLabel: string) => SHOW_TYPE_ICONS[typeLabel] || '✨';
+
+const getRelativeLastRehearsalLabel = (show: Show) => {
+    const rehearsals = Array.isArray((show as any).rehearsals) ? ((show as any).rehearsals as ShowRehearsalSession[]) : [];
+    const lastRehearsedTs = rehearsals.length ? Math.max(...rehearsals.map(r => r.endedAt || r.startedAt)) : null;
+    if (!lastRehearsedTs) return 'No rehearsals logged yet';
+    const diffDays = Math.max(0, Math.floor((Date.now() - lastRehearsedTs) / 86400000));
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return '1 day ago';
+    return `${diffDays} days ago`;
 };
 
 const inferPlannerLifecycle = (show: Show): PlannerLifecycle => {
@@ -116,6 +141,7 @@ const buildPlannerMeta = (show: Show, clients: Client[], contractMeta?: Contract
     const lifecycle = inferPlannerLifecycle(show);
     const section = inferPlannerSection(show, lifecycle);
     const typeLabel = inferShowTypeLabel(show);
+    const typeIcon = getShowTypeIcon(typeLabel);
     const client = clients.find(c => c.id === show.clientId);
     const audienceLabel = client?.name || ((show.description || '').toLowerCase().includes('kid') ? 'Family' : 'Adults');
     const venueLabel = show.venue || (typeLabel === 'Stage' ? 'Theater' : typeLabel);
@@ -137,9 +163,11 @@ const buildPlannerMeta = (show: Show, clients: Client[], contractMeta?: Contract
         runtimeMinutes,
         statusLabel: lifecycle,
         typeLabel,
+        typeIcon,
         metadataLine,
         nextCue,
         nextTask,
+        lastRehearsalLabel: getRelativeLastRehearsalLabel(show),
         section,
         contractMeta,
     };
@@ -152,6 +180,25 @@ const lifecycleBadgeClass: Record<PlannerLifecycle, string> = {
     Rehearsal: 'bg-purple-500/15 text-purple-200 border-purple-400/30',
     Ready: 'bg-emerald-500/15 text-emerald-200 border-emerald-400/30',
     Archived: 'bg-slate-800/90 text-slate-300 border-slate-600/50',
+};
+
+
+const lifecycleProgressFillClass: Record<PlannerLifecycle, string> = {
+    Idea: 'bg-slate-400 shadow-[0_0_10px_rgba(148,163,184,0.35)]',
+    Writing: 'bg-blue-400 shadow-[0_0_12px_rgba(96,165,250,0.35)]',
+    Blocking: 'bg-amber-300 shadow-[0_0_12px_rgba(252,211,77,0.35)]',
+    Rehearsal: 'bg-orange-400 shadow-[0_0_12px_rgba(251,146,60,0.4)]',
+    Ready: 'bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.35)]',
+    Archived: 'bg-slate-500 shadow-none',
+};
+
+const lifecycleProgressTextClass: Record<PlannerLifecycle, string> = {
+    Idea: 'text-slate-300',
+    Writing: 'text-blue-300',
+    Blocking: 'text-amber-200',
+    Rehearsal: 'text-orange-300',
+    Ready: 'text-emerald-300',
+    Archived: 'text-slate-400',
 };
 
 // --- Helper Components ---
@@ -769,22 +816,22 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
             <>
                 <div className="flex items-center justify-between text-[11px] text-slate-400">
                     <span>{item.completedTasks} / {item.totalTasks} beats complete</span>
-                    <span>{item.progress}%</span>
+                    <span className={lifecycleProgressTextClass[item.statusLabel]}>{item.progress}%</span>
                 </div>
-                <div className="mt-1 h-1.5 w-full rounded-full bg-slate-800">
-                    <div className="h-1.5 rounded-full bg-purple-500" style={{ width: `${item.progress}%` }} />
+                <div className="mt-1 h-1.5 w-full rounded-full bg-slate-800/90 overflow-hidden">
+                    <div className={`h-1.5 rounded-full ${lifecycleProgressFillClass[item.statusLabel]}`} style={{ width: `${item.progress}%` }} />
                 </div>
             </>
         );
 
         const renderCard = (item: PlannerShowMeta) => (
-            <div key={item.show.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 transition-all hover:border-purple-400/50 hover:bg-white/[0.045] hover:shadow-[0_18px_45px_rgba(0,0,0,0.28)]">
+            <div key={item.show.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 transition-all duration-200 hover:scale-[1.01] hover:border-purple-400/60 hover:bg-white/[0.045] hover:shadow-[0_18px_45px_rgba(0,0,0,0.28)]">
                 <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                             <h3 className="truncate text-lg font-bold text-white font-cinzel">{item.show.title}</h3>
                             <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${lifecycleBadgeClass[item.statusLabel]}`}>{item.statusLabel}</span>
-                            <span className="rounded-full border border-white/10 bg-slate-900/80 px-2 py-0.5 text-[10px] font-semibold text-slate-300">{item.typeLabel}</span>
+                            <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-slate-900/80 px-2 py-0.5 text-[10px] font-semibold text-slate-300"><span aria-hidden="true">{item.typeIcon}</span>{item.typeLabel}</span>
                             {item.contractMeta?.latestStatus && <span className="rounded-full border border-blue-400/25 bg-blue-500/10 px-2 py-0.5 text-[10px] font-semibold text-blue-200">{String(item.contractMeta.latestStatus).toUpperCase()}</span>}
                         </div>
                         <p className="mt-1 text-xs text-slate-400">{item.metadataLine}</p>
@@ -796,16 +843,19 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                     <p className="min-w-0 truncate text-slate-300">{item.nextCue}</p>
                     <button onClick={() => setSelectedShow(item.show)} className="shrink-0 rounded-lg bg-purple-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-purple-700">Open Dashboard</button>
                 </div>
+                {item.section === 'active' && (
+                    <div className="mt-3 text-xs text-slate-400">Last rehearsal: <span className="font-medium text-slate-200">{item.lastRehearsalLabel}</span></div>
+                )}
             </div>
         );
 
         const renderRoutineRow = (item: PlannerShowMeta) => (
-            <div key={item.show.id} className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 md:flex-row md:items-center md:justify-between">
+            <div key={item.show.id} className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 transition-all duration-200 hover:scale-[1.01] hover:border-purple-400/60 hover:bg-white/[0.045] hover:shadow-[0_18px_45px_rgba(0,0,0,0.24)] md:flex-row md:items-center md:justify-between">
                 <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                         <h3 className="truncate text-base font-semibold text-white">{item.show.title}</h3>
                         <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${lifecycleBadgeClass[item.statusLabel]}`}>{item.statusLabel}</span>
-                        <span className="rounded-full border border-white/10 bg-slate-900/80 px-2 py-0.5 text-[10px] font-semibold text-slate-300">{item.typeLabel}</span>
+                        <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-slate-900/80 px-2 py-0.5 text-[10px] font-semibold text-slate-300"><span aria-hidden="true">{item.typeIcon}</span>{item.typeLabel}</span>
                     </div>
                     <p className="mt-1 text-xs text-slate-400">{item.metadataLine}</p>
                 </div>
@@ -864,7 +914,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                 const lead = group[0];
                                 const isExpanded = !!expandedDuplicateGroups[groupKey];
                                 return (
-                                    <div key={groupKey} className="rounded-2xl border border-amber-400/20 bg-amber-500/5 p-4">
+                                    <div key={groupKey} className="rounded-2xl border border-dashed border-amber-400/35 bg-slate-950/70 p-4 transition-all duration-200 hover:border-purple-400/45 hover:shadow-[0_16px_38px_rgba(0,0,0,0.22)]">
                                         <div className="flex flex-wrap items-center justify-between gap-3">
                                             <div>
                                                 <h4 className="text-base font-semibold text-white">{lead.show.title}</h4>
@@ -1061,13 +1111,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                 (String((selectedShow as any).status || '').toLowerCase() === 'confirmed' ? 10 : 0)
             )
         ));
-        const relativeLastRehearsal = (() => {
-            if (!lastRehearsedTs) return 'No rehearsals logged yet';
-            const diffDays = Math.max(0, Math.floor((Date.now() - lastRehearsedTs) / 86400000));
-            if (diffDays === 0) return 'Today';
-            if (diffDays === 1) return '1 day ago';
-            return `${diffDays} days ago`;
-        })();
+        const relativeLastRehearsal = getRelativeLastRehearsalLabel(selectedShow);
         
         const handleAiSuggestPerformanceBeats = async () => {
             if (!selectedShow) return;
@@ -1187,7 +1231,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                 <div className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Progress</div>
                                 <div className="mt-1 text-2xl font-bold text-white">{plannerMeta.progress}%</div>
                                 <div className="mt-2 h-2 w-full rounded-full bg-slate-800 overflow-hidden">
-                                    <div className="h-2 rounded-full bg-purple-500" style={{ width: `${plannerMeta.progress}%` }} />
+                                    <div className={`h-2 rounded-full ${lifecycleProgressFillClass[plannerMeta.statusLabel]}`} style={{ width: `${plannerMeta.progress}%` }} />
                                 </div>
                                 <div className="mt-2 text-xs text-slate-400">{plannerMeta.completedTasks}/{plannerMeta.totalTasks} beats complete</div>
                             </div>
