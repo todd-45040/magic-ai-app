@@ -598,6 +598,25 @@ const ClientManagement: React.FC<ClientManagementProps> = ({
     onNavigateToFeedback?.();
   };
 
+  const handleAddQuickNote = () => {
+    if (!selectedClient) return;
+    const text = quickNote.trim();
+    if (!text) return;
+    const existing = parseNotesTimeline(selectedClient.notes);
+    const nextNotes = [{ at: new Date().toISOString().slice(0, 10), text }, ...existing];
+    updateClient(selectedClient.id, { notes: JSON.stringify(nextNotes) } as any);
+    refreshClients();
+    setQuickNote('');
+    void trackClientEvent({
+      tool: 'client_management',
+      action: 'client_notes_added',
+      metadata: {
+        client_id: selectedClient.id,
+        note_length: text.length,
+      },
+    });
+  };
+
   const repeatBookingInsight = useMemo(() => {
     if (!selectedClient || !selectedMetrics) return '';
     if (selectedMetrics.showCount <= 0 || !selectedMetrics.lastShowTs) {
