@@ -166,6 +166,47 @@ function getIdeaDisplay(idea: SavedIdea): { title: string; body: string } {
     return { title: idea.title || splitLeadingHeading(idea.content).heading || 'Saved Note', body: idea.content || '' };
 }
 
+
+function extractOriginalPrompt(idea: SavedIdea): string | null {
+    const v2 = tryParseMawIdeaV2(idea.content);
+    const candidates = [
+        (v2 as any)?.meta?.originalPrompt,
+        (v2 as any)?.meta?.prompt,
+        (v2 as any)?.structured?.originalPrompt,
+        (v2 as any)?.structured?.prompt,
+        (idea as any)?.originalPrompt,
+        (idea as any)?.prompt,
+    ];
+    const found = candidates.find((value) => typeof value === 'string' && value.trim());
+    return found ? String(found).trim() : null;
+}
+
+function getRelatedShowNames(idea: SavedIdea, shows: Show[]): string[] {
+    const tags = (idea.tags || []).map((tag) => String(tag));
+    const explicit = tags
+        .filter((tag) => tag.toLowerCase().startsWith('show:'))
+        .map((tag) => tag.slice(5).trim())
+        .filter(Boolean);
+    const matched = shows
+        .filter((show) => (show.tasks || []).some((task) => (task.notes || '').includes(idea.id) || (task.notes || '').includes(getIdeaDisplay(idea).title || '')))
+        .map((show) => show.title);
+    return Array.from(new Set([...explicit, ...matched]));
+}
+
+function getRelatedRoutineNames(idea: SavedIdea, shows: Show[]): string[] {
+    const tags = (idea.tags || []).map((tag) => String(tag));
+    const explicit = tags
+        .filter((tag) => tag.toLowerCase().startsWith('routine:'))
+        .map((tag) => tag.slice(8).trim())
+        .filter(Boolean);
+    const matched = shows.flatMap((show) =>
+        (show.tasks || [])
+            .filter((task) => (task.notes || '').includes(idea.id) || (task.notes || '').includes(getIdeaDisplay(idea).title || ''))
+            .map((task) => task.title)
+    );
+    return Array.from(new Set([...explicit, ...matched]));
+}
+
 interface SavedIdeasProps {
     initialIdeaId?: string;
     onAiSpark: (action: AiSparkAction) => void;
@@ -402,7 +443,7 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
     const [categoryFilter, setCategoryFilter] = useState<'all' | IdeaCategory>('all');
     const [tagFilter, setTagFilter] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
-    const [sortBy, setSortBy] = useState<'recent' | 'title' | 'mostUsed' | 'lastOpened' | 'aiScore'>('recent');
+    const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'favorites' | 'recentlyViewed'>('newest');
 
     const [smartTab, setSmartTab] = useState<'all' | 'recent' | 'starred' | 'used' | 'unused' | 'ai'>('all');
     const [pinnedIds, setPinnedIds] = useState<string[]>(() => {
@@ -418,7 +459,7 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
         setSearchQuery('');
         setTagFilter(null);
         setCategoryFilter('all');
-        setSortBy('recent');
+        setSortBy('newest');
         setSmartTab('all');
         setSelectedIds([]);
         setSectionOpen({
@@ -456,6 +497,7 @@ const [lastOpenedMap, setLastOpenedMap] = useState<Record<string, number>>(() =>
         try { return JSON.parse(localStorage.getItem('savedIdeas:lastOpened') || '{}'); } catch { return {}; }
     });
     const [openIdea, setOpenIdea] = useState<SavedIdea | null>(null);
+    const [detailEdit, setDetailEdit] = useState({ isEditing: false, title: '', content: '', tags: '' });
 
     const [orgOpen, setOrgOpen] = useState(false);
     const [orgBusy, setOrgBusy] = useState(false);
@@ -465,6 +507,12 @@ const [lastOpenedMap, setLastOpenedMap] = useState<Record<string, number>>(() =>
 
     useEffect(() => {
         if (!openIdea) return;
+        setDetailEdit({
+            isEditing: false,
+            title: getIdeaDisplay(openIdea).title || openIdea.title || '',
+            content: openIdea.type === 'image' ? '' : (getIdeaDisplay(openIdea).body || openIdea.content || ''),
+            tags: (openIdea.tags || []).join(', '),
+        });
         const handler = (e: KeyboardEvent) => {
             if (e.key === "Escape") setOpenIdea(null);
         };
@@ -860,6 +908,34 @@ const openPromoteModal = (idea: SavedIdea) => {
         }
     };
     
+    const saveDetailEdits = async () => {
+        if (!openIdea) return;
+        setActionBusy(true);
+        try {
+            const nextTags = detailEdit.tags
+                .split(',')
+                .map((tag) => tag.trim())
+                .filter(Boolean);
+            const updates: Partial<SavedIdea> = {
+                title: detailEdit.title.trim() || openIdea.title,
+                tags: nextTags,
+            };
+            if (openIdea.type !== 'image') {
+                updates.content = detailEdit.content;
+            }
+            const updated = await updateIdea(openIdea.id, updates as any);
+            setIdeas((prev) => prev.map((idea) => (idea.id === openIdea.id ? { ...idea, ...updated } : idea)));
+            setOpenIdea((prev) => prev ? { ...prev, ...updated } : prev);
+            setDetailEdit((prev) => ({ ...prev, isEditing: false }));
+            setActionMessage('Idea details updated.');
+        } catch (error) {
+            console.error('Failed to save idea details', error);
+            setActionMessage('Could not save idea details.');
+        } finally {
+            setActionBusy(false);
+        }
+    };
+
     const allTags = useMemo(() => {
         const tagsSet = new Set<string>();
         ideas.forEach(idea => {
@@ -899,23 +975,19 @@ const openPromoteModal = (idea: SavedIdea) => {
         });
 
         const sorted = [...base].sort((a, b) => {
-            if (sortBy === 'title') {
-                const at = (a.title || '').toLowerCase();
-                const bt = (b.title || '').toLowerCase();
-                return at.localeCompare(bt);
+            if (sortBy === 'oldest') {
+                return (a.timestamp || 0) - (b.timestamp || 0);
             }
-            if (sortBy === 'lastOpened') {
+            if (sortBy === 'favorites') {
+                const af = isStarred(a.id) ? 1 : 0;
+                const bf = isStarred(b.id) ? 1 : 0;
+                if (bf !== af) return bf - af;
+                return (b.timestamp || 0) - (a.timestamp || 0);
+            }
+            if (sortBy === 'recentlyViewed') {
                 const ao = lastOpenedMap[a.id] || 0;
                 const bo = lastOpenedMap[b.id] || 0;
                 return bo - ao;
-            }
-            if (sortBy === 'mostUsed') {
-                return getUsedInShowsCount(b) - getUsedInShowsCount(a);
-            }
-            if (sortBy === 'aiScore') {
-                const as = computePriorityScore(a, { usedInShows: getUsedInShowsCount(a), lastOpened: lastOpenedMap[a.id], isStarred: isStarred(a.id), isPinned: isPinned(a.id) });
-                const bs = computePriorityScore(b, { usedInShows: getUsedInShowsCount(b), lastOpened: lastOpenedMap[b.id], isStarred: isStarred(b.id), isPinned: isPinned(b.id) });
-                return bs - as;
             }
             return (b.timestamp || 0) - (a.timestamp || 0);
         });
@@ -1200,15 +1272,14 @@ const openPromoteModal = (idea: SavedIdea) => {
                             className="px-3 py-2 bg-slate-900/60 border border-slate-700 rounded-md text-sm text-slate-200 focus:outline-none focus:border-purple-500"
                             aria-label="Sort ideas"
                         >
-                            <option value="recent">Recent</option>
-                            <option value="mostUsed">Most Used</option>
-                            <option value="lastOpened">Last Opened</option>
-                            <option value="title">Title</option>
-                            <option value="aiScore">AI Score (future)</option>
+                            <option value="newest">Newest</option>
+                            <option value="oldest">Oldest</option>
+                            <option value="favorites">Favorites</option>
+                            <option value="recentlyViewed">Recently Viewed</option>
                         </select>
 
                         
-                        <label className="text-xs font-semibold text-slate-400">Tag:</label>
+                        <label className="text-xs font-semibold text-slate-400">Filter by tag:</label>
                         <select
                             value={tagFilter ?? ''}
                             onChange={(e) => setTagFilter(e.target.value ? e.target.value : null)}
@@ -1779,29 +1850,25 @@ const openPromoteModal = (idea: SavedIdea) => {
             {/* Open Idea Modal */}
             {openIdea ? (
                 <div className="fixed inset-0 z-50 bg-black/70 flex items-start justify-center p-4 pt-6 overflow-y-auto" onClick={(e)=>{ if(e.target===e.currentTarget) setOpenIdea(null); }} role="dialog" aria-modal="true">
-                    <div className="w-full max-w-3xl mt-2 bg-slate-950/90 border border-slate-800 rounded-2xl overflow-hidden shadow-xl backdrop-blur">
+                    <div className="w-full max-w-4xl mt-2 bg-slate-950/90 border border-slate-800 rounded-2xl overflow-hidden shadow-xl backdrop-blur">
                         <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-slate-800">
                             <div className="min-w-0">
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-lg">{getIdeaCategoryMeta(openIdea).icon}</span>
                                     <h3 className="text-lg font-bold text-yellow-300 truncate">{getIdeaDisplay(openIdea).title || 'Saved Idea'}</h3>
-                                    {isPinned(openIdea.id) ? (
-                                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-600/20 border border-purple-500/30 text-purple-200">Pinned</span>
-                                    ) : null}
+                                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-200">{getIdeaSourceTool(openIdea)}</span>
                                     {isStarred(openIdea.id) ? (
                                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-600/20 border border-yellow-500/30 text-yellow-200">Favorite</span>
                                     ) : null}
-                                    {isAiGenerated(openIdea) ? (
-                                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-200">AI</span>
-                                    ) : null}
                                 </div>
                                 <div className="text-xs text-slate-400 mt-1">
-                                    Used in {getUsedInShowsCount(openIdea)} shows • Last opened {lastOpenedMap[openIdea.id] ? formatRelative(lastOpenedMap[openIdea.id]) : '—'} • Created {formatSavedOn(openIdea)}
+                                    Created {formatSavedOn(openIdea)} • Last opened {lastOpenedMap[openIdea.id] ? formatRelative(lastOpenedMap[openIdea.id]) : '—'}
                                 </div>
                             </div>
 
-                            <div className="flex items-center gap-2">
-                                <button onClick={() => togglePin(openIdea.id)} className="px-3 py-1.5 text-xs rounded-full bg-slate-800/60 border border-slate-700 text-slate-200 hover:border-purple-400/30 hover:text-purple-200 transition">
-                                    {isPinned(openIdea.id) ? 'Unpin' : 'Pin'}
+                            <div className="flex items-center gap-2 flex-wrap justify-end">
+                                <button onClick={() => setDetailEdit((prev) => ({ ...prev, isEditing: !prev.isEditing }))} className="px-3 py-1.5 text-xs rounded-full bg-slate-800/60 border border-slate-700 text-slate-200 hover:border-slate-500 transition">
+                                    {detailEdit.isEditing ? 'Cancel Edit' : 'Edit'}
                                 </button>
                                 <button onClick={() => toggleStar(openIdea.id)} className="px-3 py-1.5 text-xs rounded-full bg-slate-800/60 border border-slate-700 text-slate-200 hover:border-yellow-400/30 hover:text-yellow-200 transition">
                                     {isStarred(openIdea.id) ? 'Remove Favorite' : 'Favorite'}
@@ -1812,28 +1879,84 @@ const openPromoteModal = (idea: SavedIdea) => {
                                 <button onClick={() => openAddToShowModal(openIdea)} className="px-3 py-1.5 text-xs rounded-full bg-blue-900/30 border border-blue-500/30 text-blue-100 hover:bg-blue-900/50 transition">
                                     Add to Show
                                 </button>
-                                <button onClick={() => copyIdeaToClipboard(openIdea)} className="px-3 py-1.5 text-xs rounded-full bg-slate-800/60 border border-slate-700 text-slate-200 hover:border-slate-500 transition" title="Copies selected ideas. Use bulk select for multiple.">
-                                    Copy
-                                </button>
+                                {!ideaIsArchived(openIdea) ? (
+                                    <button onClick={() => archiveIdea(openIdea)} className="px-3 py-1.5 text-xs rounded-full bg-slate-800/60 border border-slate-700 text-slate-200 hover:border-slate-500 transition">
+                                        Archive
+                                    </button>
+                                ) : null}
                                 <button onClick={() => setOpenIdea(null)} className="p-2 rounded-full bg-slate-900/60 text-slate-200 hover:text-white hover:bg-slate-900/80 transition" aria-label="Close">
                                     <CrossIcon className="w-5 h-5" />
                                 </button>
                             </div>
                         </div>
 
-                        <div className="p-5 max-h-[70vh] overflow-y-auto">
-                            {openIdea.type === 'image' ? (
-                                <img src={getImageUrlForIdea(openIdea)} alt={openIdea.title || 'Saved image'} className="w-full rounded-xl border border-slate-800" />
-                            ) : openIdea.type === 'rehearsal' ? (
-                                <div className="text-sm text-slate-200 whitespace-pre-wrap">{openIdea.content}</div>
-                            ) : (
-                                <div className="text-sm text-slate-200 whitespace-pre-wrap break-words">{getIdeaDisplay(openIdea).body}</div>
-                            )}
+                        <div className="p-5 max-h-[72vh] overflow-y-auto space-y-5">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
+                                    <div className="text-xs uppercase tracking-wide text-slate-500 mb-2">Idea Details</div>
+                                    <div className="space-y-2 text-sm text-slate-300">
+                                        <div><span className="text-slate-500">Title:</span> {getIdeaDisplay(openIdea).title || 'Saved Idea'}</div>
+                                        <div><span className="text-slate-500">Source Tool:</span> {getIdeaSourceTool(openIdea)}</div>
+                                        <div><span className="text-slate-500">Creation Date:</span> {formatSavedOn(openIdea)}</div>
+                                        <div><span className="text-slate-500">Related Show:</span> {getRelatedShowNames(openIdea, shows).join(', ') || '—'}</div>
+                                        <div><span className="text-slate-500">Related Routine:</span> {getRelatedRoutineNames(openIdea, shows).join(', ') || '—'}</div>
+                                    </div>
+                                </div>
+                                <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
+                                    <div className="text-xs uppercase tracking-wide text-slate-500 mb-2">Tags</div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {(openIdea.tags || []).length ? (openIdea.tags || []).map((tag) => (
+                                            <span key={tag} className="rounded-full border border-slate-700 bg-slate-900/70 px-2 py-0.5 text-[11px] text-slate-300">{tag}</span>
+                                        )) : <span className="text-sm text-slate-500">No tags yet</span>}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-slate-800 bg-slate-900/30 p-4">
+                                <div className="text-xs uppercase tracking-wide text-slate-500 mb-2">Full Content</div>
+                                {detailEdit.isEditing && openIdea.type !== 'image' ? (
+                                    <textarea
+                                        value={detailEdit.content}
+                                        onChange={(e) => setDetailEdit((prev) => ({ ...prev, content: e.target.value }))}
+                                        className="w-full min-h-[220px] rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-sm text-slate-200 focus:outline-none focus:border-purple-500"
+                                    />
+                                ) : openIdea.type === 'image' ? (
+                                    <img src={getImageUrlForIdea(openIdea)} alt={openIdea.title || 'Saved image'} className="w-full rounded-xl border border-slate-800" />
+                                ) : (
+                                    <div className="text-sm text-slate-200 whitespace-pre-wrap break-words">{getIdeaDisplay(openIdea).body || openIdea.content}</div>
+                                )}
+                            </div>
+
+                            <div className="rounded-2xl border border-slate-800 bg-slate-900/30 p-4">
+                                <div className="text-xs uppercase tracking-wide text-slate-500 mb-2">Original Prompt</div>
+                                <div className="text-sm text-slate-300 whitespace-pre-wrap">{extractOriginalPrompt(openIdea) || 'No original prompt stored for this item.'}</div>
+                            </div>
+
+                            {detailEdit.isEditing ? (
+                                <div className="rounded-2xl border border-purple-500/20 bg-purple-950/10 p-4 space-y-3">
+                                    <div className="text-xs uppercase tracking-wide text-purple-300">Edit Idea</div>
+                                    <input
+                                        value={detailEdit.title}
+                                        onChange={(e) => setDetailEdit((prev) => ({ ...prev, title: e.target.value }))}
+                                        className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-purple-500"
+                                        placeholder="Idea title"
+                                    />
+                                    <input
+                                        value={detailEdit.tags}
+                                        onChange={(e) => setDetailEdit((prev) => ({ ...prev, tags: e.target.value }))}
+                                        className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-purple-500"
+                                        placeholder="Tags separated by commas"
+                                    />
+                                    <div className="flex justify-end gap-3">
+                                        <button onClick={() => setDetailEdit((prev) => ({ ...prev, isEditing: false }))} className="px-4 py-2 rounded-xl border border-slate-700 bg-slate-900 text-slate-200 hover:border-slate-500 transition">Cancel</button>
+                                        <button onClick={saveDetailEdits} disabled={actionBusy} className="px-4 py-2 rounded-xl bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-60 transition">{actionBusy ? 'Saving…' : 'Save Changes'}</button>
+                                    </div>
+                                </div>
+                            ) : null}
                         </div>
                     </div>
                 </div>
             ) : null}
-
 
 
             {/* AI Organization Assistant */}

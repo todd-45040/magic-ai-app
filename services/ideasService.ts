@@ -91,9 +91,9 @@ export async function getRehearsalSessions(limit = 25): Promise<SavedIdea[]> {
  *   saveIdea('text', 'content', 'optional title')
  */
 export function saveIdea(type: IdeaType, content: string, title?: string, tags?: string[]): Promise<SavedIdea>;
-export function saveIdea(idea: { type: IdeaType; content: string; title?: string; tags?: string[] }): Promise<SavedIdea>;
+export function saveIdea(idea: { type: IdeaType; content: string; title?: string; tags?: string[]; category?: IdeaCategory }): Promise<SavedIdea>;
 export async function saveIdea(
-  a: IdeaType | { type: IdeaType; content: string; title?: string; tags?: string[] },
+  a: IdeaType | { type: IdeaType; content: string; title?: string; tags?: string[]; category?: IdeaCategory },
   b?: string,
   c?: string,
   d?: string[]
@@ -114,6 +114,7 @@ export async function saveIdea(
       title: payload.title ?? null,
       // DB constraint: tags is NOT NULL. Always send an array.
       tags: Array.isArray(payload.tags) ? payload.tags : [],
+      category: payload.category ?? null,
     })
     .select('*')
     .single();
@@ -138,6 +139,7 @@ export async function updateIdea(id: string, updates: Partial<SavedIdea>): Promi
   if (typeof updates.tags !== 'undefined') {
     dbUpdates.tags = Array.isArray(updates.tags) ? updates.tags : [];
   }
+  if (typeof updates.category !== 'undefined') dbUpdates.category = updates.category ?? null;
 
   const { data, error } = await supabase
     .from('ideas')
