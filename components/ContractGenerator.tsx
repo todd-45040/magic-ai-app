@@ -1169,6 +1169,19 @@ const ContractPreviewPanel: React.FC<{
     showLatestStatus: string | null;
 }> = ({ preview, result, isLoading, selectedShow, showNextVersion, showLatestStatus }) => {
     const signatureStub = result?.signatureBlock || `Performer: ${preview.performerName || '________________'}\nClient: ${preview.clientName || '________________'}\nDate: ____________________`;
+    const hasPreviewSeedData = Boolean(
+        preview.performerName ||
+        preview.clientName ||
+        preview.eventTitle ||
+        preview.eventDate ||
+        preview.eventLocation ||
+        preview.performanceFee ||
+        preview.depositAmount ||
+        preview.performanceLength ||
+        preview.specialRequirements ||
+        preview.cancellationPolicy ||
+        result
+    );
 
     return (
         <CardShell
