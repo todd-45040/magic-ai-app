@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { getSavedIdeas, deleteIdea, updateIdea } from '../services/ideasService';
 import { getShows, createShow, updateShow, addTaskToShow } from '../services/showsService';
-import { trackClientEvent } from '../services/telemetryClient';
 import type { SavedIdea, Transcription, IdeaType, IdeaCategory, Show, AiSparkAction } from '../types';
 import { BookmarkIcon, TrashIcon, ShareIcon, MicrophoneIcon, PrintIcon, FileTextIcon, ImageIcon, PencilIcon, WandIcon, CrossIcon } from './icons';
 import ShareButton from './ShareButton';
@@ -168,19 +167,6 @@ function inferIdeaCategory(idea: SavedIdea): IdeaCategory {
 
 function getIdeaCategoryMeta(idea: SavedIdea): CategoryMeta {
     return IDEA_CATEGORY_META[inferIdeaCategory(idea)];
-}
-
-function buildIdeaTelemetryMetadata(idea: SavedIdea) {
-    const display = getIdeaDisplay(idea);
-    return {
-        idea_id: idea.id,
-        idea_type: idea.type,
-        category: inferIdeaCategory(idea),
-        source_tool: getIdeaSourceTool(idea),
-        title: display.title || idea.title || 'Saved Idea',
-        archived: ideaIsArchived(idea),
-        tags: idea.tags || [],
-    };
 }
 
 function buildIdeaPlannerNotes(idea: SavedIdea, extraNotes?: string, slot?: string): string {
@@ -571,7 +557,6 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
         try {
             // Notify parent (optional)
             onAiSpark?.({ type: 'organize_saved_ideas', ideas } as any);
-            void trackClientEvent({ tool: 'saved_ideas', action: 'saved_ideas_organize_click', metadata: { idea_count: ideas.length } });
 
             const tags = allTags;
             const results = organizeIdeasLocally(ideas, tags, getUsedInShowsCount, lastOpenedMap, isStarred, isPinned);
@@ -624,7 +609,6 @@ const [lastOpenedMap, setLastOpenedMap] = useState<Record<string, number>>(() =>
     });
 
     const expandAllSections = () => {
-        void trackClientEvent({ tool: 'saved_ideas', action: 'saved_ideas_expand_all' });
         setSectionOpen({
             effect: true,
             script: true,
@@ -639,7 +623,6 @@ const [lastOpenedMap, setLastOpenedMap] = useState<Record<string, number>>(() =>
     };
 
     const collapseAllSections = () => {
-        void trackClientEvent({ tool: 'saved_ideas', action: 'saved_ideas_compact_all' });
         setSectionOpen({
             effect: false,
             script: false,
@@ -664,10 +647,6 @@ const [lastOpenedMap, setLastOpenedMap] = useState<Record<string, number>>(() =>
         // FIX: getSavedIdeas() is async, resolve with .then()
         getSavedIdeas().then(setIdeas);
         getShows().then(setShows).catch((error) => console.error('Failed to load shows', error));
-    }, []);
-
-    useEffect(() => {
-        void trackClientEvent({ tool: 'saved_ideas', action: 'saved_ideas_page_open' });
     }, []);
 
     useEffect(() => {
@@ -730,16 +709,7 @@ const [lastOpenedMap, setLastOpenedMap] = useState<Record<string, number>>(() =>
     };
 
     const toggleStar = (id: string) => {
-        const idea = ideas.find((item) => item.id === id);
-        const becomingStarred = !starredIds.includes(id);
         setStarredIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [id, ...prev]));
-        if (idea) {
-            void trackClientEvent({
-                tool: 'saved_ideas',
-                action: becomingStarred ? 'saved_ideas_favorited' : 'saved_ideas_unfavorited',
-                metadata: buildIdeaTelemetryMetadata(idea),
-            });
-        }
     };
 
     const toggleSelected = (id: string) => {
@@ -792,15 +762,11 @@ const [lastOpenedMap, setLastOpenedMap] = useState<Record<string, number>>(() =>
     const archiveIdea = async (idea: SavedIdea) => {
         if (ideaIsArchived(idea)) return;
         await addTagToIdea(idea, 'archived');
-        void trackClientEvent({ tool: 'saved_ideas', action: 'saved_ideas_archived', metadata: buildIdeaTelemetryMetadata(idea) });
         setActionMessage('Idea archived.');
     };
 
     const bulkArchive = async () => {
         const targets = ideas.filter((i) => selectedIds.includes(i.id));
-        if (targets.length) {
-            void trackClientEvent({ tool: 'saved_ideas', action: 'saved_ideas_bulk_archive', metadata: { count: targets.length, idea_ids: targets.map((idea) => idea.id) } });
-        }
         for (const idea of targets) {
             // eslint-disable-next-line no-await-in-loop
             await archiveIdea(idea);
@@ -812,9 +778,6 @@ const [lastOpenedMap, setLastOpenedMap] = useState<Record<string, number>>(() =>
         const tag = window.prompt('Add tag to selected ideas:', '');
         if (!tag) return;
         const targets = ideas.filter((i) => selectedIds.includes(i.id));
-        if (targets.length) {
-            void trackClientEvent({ tool: 'saved_ideas', action: 'saved_ideas_bulk_tag', metadata: { tag, count: targets.length, idea_ids: targets.map((idea) => idea.id) } });
-        }
         for (const idea of targets) {
             // eslint-disable-next-line no-await-in-loop
             await addTagToIdea(idea, tag);
@@ -842,7 +805,6 @@ const bulkDuplicateToClipboard = async () => {
 
         const openIdeaView = (idea: SavedIdea) => {
         markOpenedNow(idea.id);
-        void trackClientEvent({ tool: 'saved_ideas', action: 'saved_ideas_idea_opened', metadata: buildIdeaTelemetryMetadata(idea) });
         if (idea.type === 'image' && idea.content) {
             setLightboxImg(getImageUrlForIdea(idea));
             return;
@@ -852,7 +814,6 @@ const bulkDuplicateToClipboard = async () => {
 
 const openPromoteModal = (idea: SavedIdea) => {
         const display = getIdeaDisplay(idea);
-        void trackClientEvent({ tool: 'saved_ideas', action: 'saved_ideas_promote_opened', metadata: buildIdeaTelemetryMetadata(idea) });
         setPromoteIdea(idea);
         setPromoteForm({
             title: display.title || idea.title || 'New Routine',
@@ -863,7 +824,6 @@ const openPromoteModal = (idea: SavedIdea) => {
     };
 
     const openAddToShowModal = (idea: SavedIdea) => {
-        void trackClientEvent({ tool: 'saved_ideas', action: 'saved_ideas_add_to_show_opened', metadata: buildIdeaTelemetryMetadata(idea) });
         setAddToShowIdea(idea);
         setAddToShowForm({
             showId: shows[0]?.id || '',
@@ -909,7 +869,6 @@ const openPromoteModal = (idea: SavedIdea) => {
             } as any);
             const refreshedShows = await getShows();
             setShows(refreshedShows);
-            void trackClientEvent({ tool: 'saved_ideas', action: 'saved_ideas_promoted_to_routine', metadata: { ...buildIdeaTelemetryMetadata(promoteIdea), routine_title: title, estimated_minutes: Number(promoteForm.estimatedTime) || 5, category: promoteForm.category } });
             setPromoteIdea(null);
             setActionMessage(`Routine "${title}" added to Show Planner.`);
             onAiSpark?.({ type: 'idea_promoted_to_routine', ideaId: promoteIdea.id, showTitle: title } as any);
@@ -948,7 +907,6 @@ const openPromoteModal = (idea: SavedIdea) => {
             } as any);
             const refreshedShows = await getShows();
             setShows(refreshedShows);
-            void trackClientEvent({ tool: 'saved_ideas', action: 'saved_ideas_added_to_show', metadata: { ...buildIdeaTelemetryMetadata(addToShowIdea), show_id: selectedShow.id, show_title: selectedShow.title, routine_slot: slot, estimated_minutes: Number(addToShowForm.estimatedTime) || 5 } });
             setAddToShowIdea(null);
             setActionMessage(`Idea added to "${selectedShow.title}".`);
             onAiSpark?.({ type: 'idea_added_to_show', ideaId: addToShowIdea.id, showId: selectedShow.id } as any);
@@ -1169,14 +1127,13 @@ const openPromoteModal = (idea: SavedIdea) => {
             IDEA_CATEGORY_ORDER.forEach((key) => {
                 if ((sectionCounts[key] || 0) === 0) next[key] = false;
             });
-            if (!didInitSectionVisibility.current) {
+
+            const firstPopulatedKey = IDEA_CATEGORY_ORDER.find((key) => (sectionCounts[key] || 0) > 0);
+            if (!didInitSectionVisibility.current && firstPopulatedKey) {
                 IDEA_CATEGORY_ORDER.forEach((key) => {
                     next[key] = false;
                 });
-                const firstPopulatedKey = IDEA_CATEGORY_ORDER.find((key) => (sectionCounts[key] || 0) > 0);
-                if (firstPopulatedKey) {
-                    next[firstPopulatedKey] = true;
-                }
+                next[firstPopulatedKey] = true;
                 didInitSectionVisibility.current = true;
             }
             return next;
