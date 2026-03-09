@@ -6,6 +6,7 @@ import { createShow, addTaskToShow } from '../services/showsService';
 import { listAllContractsForUser, type ContractRow } from '../services/contractsService';
 import { useAppState } from '../store';
 import { trackClientEvent } from '../services/telemetryClient';
+import { generateResponse } from '../services/geminiService';
 import {
   UsersCogIcon,
   TrashIcon,
@@ -21,6 +22,9 @@ import {
   EyeIcon,
   DollarSignIcon,
   FileTextIcon,
+  LightbulbIcon,
+  MegaphoneIcon,
+  SendIcon,
 } from './icons';
 
 type ClientX = Client & {
@@ -58,6 +62,7 @@ type ClientMetrics = {
   topReaction: string | null;
   topComment: string | null;
   activityTimeline: ClientActivityItem[];
+  daysSinceLastShow: number | null;
 };
 
 function parseNotesTimeline(raw?: string): NoteEntry[] {
@@ -171,6 +176,9 @@ function getClientMetrics(client: ClientX, shows: Show[], feedback: Feedback[], 
     .sort((a, b) => new Date(String(b.at)).getTime() - new Date(String(a.at)).getTime())
     .slice(0, 8);
 
+  const lastShowTs = lastShow ? getShowSortTs(lastShow) : (client.last_show_date ? new Date(client.last_show_date).getTime() : null);
+  const daysSinceLastShow = lastShowTs ? Math.max(0, Math.floor((Date.now() - lastShowTs) / 86400000)) : null;
+
   return {
     showCount: relatedShows.length,
     contractCount: relatedContracts.length,
@@ -179,7 +187,7 @@ function getClientMetrics(client: ClientX, shows: Show[], feedback: Feedback[], 
     averageFee,
     lastShowLabel: lastShow ? formatShortDate(lastShow.performanceDate || lastShow.updatedAt || lastShow.createdAt) : (client.last_show_date ? formatShortDate(client.last_show_date) : 'No shows yet'),
     lastShowTitle: lastShow?.title || client.last_show_title || 'No shows linked yet',
-    lastShowTs: lastShow ? getShowSortTs(lastShow) : (client.last_show_date ? new Date(client.last_show_date).getTime() : null),
+    lastShowTs,
     clientSinceLabel: formatShortDate(client.createdAt),
     latestNote,
     primaryVenue: lastShow?.venue || null,
@@ -189,6 +197,7 @@ function getClientMetrics(client: ClientX, shows: Show[], feedback: Feedback[], 
     topReaction,
     topComment,
     activityTimeline,
+    daysSinceLastShow,
   };
 }
 
@@ -369,6 +378,11 @@ const ClientManagement: React.FC<ClientManagementProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [quickNote, setQuickNote] = useState('');
+  const [aiLoading, setAiLoading] = useState<'followup' | 'marketing' | 'pitch' | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [followupEmail, setFollowupEmail] = useState('');
+  const [marketingSuggestions, setMarketingSuggestions] = useState('');
+  const [bookingPitch, setBookingPitch] = useState('');
   const hasTrackedOpenRef = useRef(false);
   const trackedClientIdRef = useRef<string | null>(null);
 
@@ -444,6 +458,14 @@ const ClientManagement: React.FC<ClientManagementProps> = ({
 
   const selectedClient = useMemo(() => clients.find((client) => client.id === selectedClientId) || null, [clients, selectedClientId]);
   const selectedMetrics = selectedClient ? metricsByClient.get(selectedClient.id) : null;
+
+  useEffect(() => {
+    setAiError(null);
+    setFollowupEmail('');
+    setMarketingSuggestions('');
+    setBookingPitch('');
+    setAiLoading(null);
+  }, [selectedClientId]);
 
   const refreshClients = () => {
     const next = getClients() as ClientX[];
@@ -576,23 +598,85 @@ const ClientManagement: React.FC<ClientManagementProps> = ({
     onNavigateToFeedback?.();
   };
 
-  const handleAddQuickNote = () => {
-    if (!selectedClient) return;
-    const text = quickNote.trim();
-    if (!text) return;
-    const existing = parseNotesTimeline(selectedClient.notes);
-    const nextNotes = [{ at: new Date().toISOString().slice(0, 10), text }, ...existing];
-    updateClient(selectedClient.id, { notes: JSON.stringify(nextNotes) } as any);
-    refreshClients();
-    setQuickNote('');
-    void trackClientEvent({
-      tool: 'client_management',
-      action: 'client_notes_added',
-      metadata: {
-        client_id: selectedClient.id,
-        note_length: text.length,
-      },
-    });
+  const repeatBookingInsight = useMemo(() => {
+    if (!selectedClient || !selectedMetrics) return '';
+    if (selectedMetrics.showCount <= 0 || !selectedMetrics.lastShowTs) {
+      return 'Book the first client event to start building repeat-booking predictions and retention prompts.';
+    }
+    const days = selectedMetrics.daysSinceLastShow ?? 0;
+    const cadenceWindow = selectedMetrics.showCount >= 3 ? '6–9 months' : '8–12 months';
+    let targetMonth = 'the next planning window';
+    if (selectedMetrics.lastShowTs) {
+      const d = new Date(selectedMetrics.lastShowTs);
+      d.setMonth(d.getMonth() + (selectedMetrics.showCount >= 3 ? 7 : 9));
+      targetMonth = d.toLocaleDateString(undefined, { month: 'long' });
+    }
+    if (days < 45) {
+      return `This account is still warm. Recommended rebook window: ${targetMonth}, with a typical cadence of ${cadenceWindow}.`;
+    }
+    if (days < 150) {
+      return `This client is entering a strong follow-up window. Suggested rebook timing: ${targetMonth}, based on a ${cadenceWindow} cadence.`;
+    }
+    return `This client may be ready for a win-back pitch now. Suggested rebook timing: ${targetMonth}, based on a ${cadenceWindow} cadence.`;
+  }, [selectedClient, selectedMetrics]);
+
+  const buildClientAiContext = () => {
+    if (!selectedClient || !selectedMetrics) return '';
+    const showsSummary = selectedMetrics.relatedShows.slice(0, 4).map((show) => `- ${show.title} | ${formatShortDate(show.performanceDate || show.updatedAt || show.createdAt)} | Fee ${formatMoney(Number(show.finances?.performanceFee || 0))}${show.venue ? ` | Venue ${show.venue}` : ''}`).join('\n') || '- No linked shows yet';
+    const contractsSummary = selectedMetrics.relatedContracts.slice(0, 3).map((contract) => `- ${formatContractStatus(contract.status)} contract | Updated ${formatShortDate(contract.updated_at || contract.created_at)}`).join('\n') || '- No contracts linked yet';
+    return [
+      `Client name: ${selectedClient.name}`,
+      `Company: ${selectedClient.company || 'n/a'}`,
+      `Email: ${selectedClient.email || 'n/a'}`,
+      `Phone: ${selectedClient.phone || 'n/a'}`,
+      `Client since: ${selectedMetrics.clientSinceLabel}`,
+      `Show count: ${selectedMetrics.showCount}`,
+      `Contract count: ${selectedMetrics.contractCount}`,
+      `Audience rating: ${selectedMetrics.avgRating ?? 'n/a'}`,
+      `Top reaction: ${selectedMetrics.topReaction || 'n/a'}`,
+      `Top comment: ${selectedMetrics.topComment || 'n/a'}`,
+      `Total revenue: ${formatMoney(selectedMetrics.revenue)}`,
+      `Average fee: ${formatMoney(selectedMetrics.averageFee)}`,
+      `Last show: ${selectedMetrics.lastShowTitle} on ${selectedMetrics.lastShowLabel}`,
+      `Latest note: ${selectedMetrics.latestNote || 'n/a'}`,
+      `Repeat booking insight: ${repeatBookingInsight}`,
+      'Recent shows:',
+      showsSummary,
+      'Recent contract signals:',
+      contractsSummary,
+    ].join('\n');
+  };
+
+  const runClientAiTask = async (kind: 'followup' | 'marketing' | 'pitch') => {
+    if (!selectedClient || !selectedMetrics || aiLoading) return;
+    setAiError(null);
+    setAiLoading(kind);
+    const systemInstruction = `You are Magic AI Wizard's client-retention assistant for professional magicians. Write concise, polished business copy that helps a magician retain clients, encourage repeat bookings, and pitch future events. Keep the tone professional, warm, persuasive, and specific. Avoid fluff. Format output in readable markdown with short sections or bullets when useful.`;
+    const context = buildClientAiContext();
+    const promptByKind = {
+      followup: `Using the client context below, write a professional follow-up email thanking the client for the recent performance and suggesting a future booking opportunity. Include a strong subject line and a short CTA.\n\n${context}`,
+      marketing: `Using the client context below, generate a short "Suggested Opportunities" list for this client. Give 4-6 specific event or campaign ideas a magician could pitch next. After the bullet list, add a 2-sentence recommendation on which opportunity to prioritize first and why.\n\n${context}`,
+      pitch: `Using the client context below, write a short booking pitch/proposal for this client's next corporate event. Include a headline, a short positioning paragraph, 3 bullet benefits, and a closing CTA.\n\n${context}`,
+    } as const;
+
+    try {
+      const result = await generateResponse(promptByKind[kind], systemInstruction);
+      if (String(result || '').startsWith('Error:')) throw new Error(String(result).replace(/^Error:\s*/, ''));
+      if (kind === 'followup') {
+        setFollowupEmail(result);
+        void trackClientEvent({ tool: 'client_management', action: 'client_ai_followup_generated', outcome: 'SUCCESS_NOT_CHARGED', metadata: { client_id: selectedClient.id, show_count: selectedMetrics.showCount, revenue: selectedMetrics.revenue } });
+      } else if (kind === 'marketing') {
+        setMarketingSuggestions(result);
+        void trackClientEvent({ tool: 'client_management', action: 'client_ai_marketing_generated', outcome: 'SUCCESS_NOT_CHARGED', metadata: { client_id: selectedClient.id, show_count: selectedMetrics.showCount, avg_rating: selectedMetrics.avgRating } });
+      } else {
+        setBookingPitch(result);
+        void trackClientEvent({ tool: 'client_management', action: 'client_ai_pitch_generated', outcome: 'SUCCESS_NOT_CHARGED', metadata: { client_id: selectedClient.id, contract_count: selectedMetrics.contractCount, average_fee: selectedMetrics.averageFee } });
+      }
+    } catch (error: any) {
+      setAiError(error?.message || 'Unable to generate AI client intelligence right now.');
+    } finally {
+      setAiLoading(null);
+    }
   };
 
   return (
@@ -782,6 +866,57 @@ const ClientManagement: React.FC<ClientManagementProps> = ({
                     <NewspaperIcon className="h-4 w-4" />
                     Marketing Campaign
                   </button>
+                </div>
+              </div>
+
+              <div className="mt-5 rounded-3xl border border-white/10 bg-[linear-gradient(135deg,rgba(91,33,182,0.22),rgba(15,23,42,0.92))] p-4 sm:p-5 shadow-[0_0_28px_rgba(139,92,246,0.12)]">
+                <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                  <div>
+                    <div className="inline-flex items-center gap-2 rounded-full border border-fuchsia-400/20 bg-fuchsia-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-fuchsia-100">
+                      <LightbulbIcon className="h-4 w-4" />
+                      AI Client Intelligence
+                    </div>
+                    <div className="mt-3 text-lg font-semibold text-white">Retention + booking assistant</div>
+                    <div className="mt-1 max-w-3xl text-sm text-slate-300">Generate polished follow-up copy, smarter event ideas, and a ready-to-send booking pitch based on this client’s show history, contracts, and audience response.</div>
+                  </div>
+                  <div className="rounded-2xl border border-emerald-400/15 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100 xl:max-w-xs">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-200/90">Repeat Booking Predictor</div>
+                    <div className="mt-2 leading-6">{repeatBookingInsight}</div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
+                  <button onClick={() => void runClientAiTask('followup')} disabled={!!aiLoading} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-cyan-400/20 bg-cyan-500/10 px-4 py-3 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/15 disabled:cursor-not-allowed disabled:opacity-60">
+                    <SendIcon className="h-4 w-4" />
+                    {aiLoading === 'followup' ? 'Generating Follow-Up…' : 'Generate Follow-Up Email'}
+                  </button>
+                  <button onClick={() => void runClientAiTask('marketing')} disabled={!!aiLoading} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-sm font-semibold text-amber-100 transition hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-60">
+                    <LightbulbIcon className="h-4 w-4" />
+                    {aiLoading === 'marketing' ? 'Generating Ideas…' : 'AI Marketing Suggestions'}
+                  </button>
+                  <button onClick={() => void runClientAiTask('pitch')} disabled={!!aiLoading} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-fuchsia-400/20 bg-fuchsia-500/10 px-4 py-3 text-sm font-semibold text-fuchsia-100 transition hover:bg-fuchsia-500/15 disabled:cursor-not-allowed disabled:opacity-60">
+                    <MegaphoneIcon className="h-4 w-4" />
+                    {aiLoading === 'pitch' ? 'Creating Pitch…' : 'Create Booking Pitch'}
+                  </button>
+                </div>
+
+                {aiError ? (
+                  <div className="mt-4 rounded-2xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">{aiError}</div>
+                ) : null}
+
+                <div className="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-3">
+                  <div className="rounded-2xl border border-white/8 bg-slate-950/55 p-4">
+                    <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-white"><SendIcon className="h-4 w-4 text-cyan-300" /> Follow-Up Email</div>
+                    <div className="min-h-[180px] whitespace-pre-wrap text-sm leading-6 text-slate-200">{followupEmail || 'Generate a tailored thank-you email with a rebooking CTA for this client.'}</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/8 bg-slate-950/55 p-4">
+                    <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-white"><LightbulbIcon className="h-4 w-4 text-amber-300" /> Suggested Opportunities</div>
+                    <div className="min-h-[180px] whitespace-pre-wrap text-sm leading-6 text-slate-200">{marketingSuggestions || 'Generate AI marketing suggestions to surface likely repeat-booking angles for this account.'}</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/8 bg-slate-950/55 p-4">
+                    <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-white"><MegaphoneIcon className="h-4 w-4 text-fuchsia-300" /> Booking Pitch</div>
+                    <div className="min-h-[180px] whitespace-pre-wrap text-sm leading-6 text-slate-200">{bookingPitch || 'Create a concise proposal you can adapt for the client’s next corporate or seasonal event.'}</div>
+                  </div>
                 </div>
               </div>
 
