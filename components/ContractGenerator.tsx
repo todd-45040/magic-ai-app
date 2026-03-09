@@ -18,6 +18,7 @@ import {
 import { updateShow } from '../services/showsService';
 import { createContractVersion, listContractsForShow } from '../services/contractsService';
 import { updateClient } from '../services/clientsService';
+import { trackClientEvent } from '../services/telemetryClient';
 import type { Client, Show, User } from '../types';
 
 interface ContractGeneratorProps {
@@ -328,9 +329,36 @@ const ContractGenerator: React.FC<ContractGeneratorProps> = ({ user, clients, sh
         ]
     );
 
+    const telemetryMetadata = useMemo(
+        () => ({
+            client_id: selectedClientId || null,
+            show_id: selectedShowId || null,
+            contract_type: contractType,
+            performance_fee: Number(performanceFee) || 0,
+            deposit_amount: Number(depositAmount) || 0,
+            has_ai_sections: !!result,
+            has_selected_client: !!selectedClientId,
+            has_selected_show: !!selectedShowId,
+        }),
+        [selectedClientId, selectedShowId, contractType, performanceFee, depositAmount, result]
+    );
+
+    const emitContractTelemetry = (action: string, metadata: Record<string, any> = {}) => {
+        void trackClientEvent({
+            tool: 'contract_generator',
+            action,
+            metadata: {
+                ...telemetryMetadata,
+                ...metadata,
+            },
+        });
+    };
+
+
     const applyContractPreset = (nextType: ContractType) => {
         const preset = CONTRACT_TYPE_PRESETS[nextType];
         setContractType(nextType);
+        emitContractTelemetry('contract_template_selected', { contract_type: nextType });
         setPreviewToneSeed(preset.previewToneSeed);
         setCancellationPolicy(preset.cancellationPolicy);
         setSpecialRequirements((prev) => {
@@ -451,6 +479,12 @@ const ContractGenerator: React.FC<ContractGeneratorProps> = ({ user, clients, sh
         };
     }, [selectedShowId]);
 
+
+    useEffect(() => {
+        emitContractTelemetry('contract_page_opened');
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     const handleGenerate = async () => {
         if (!isFormValid) {
             setError('Please fill in all required fields (*).');
@@ -520,6 +554,10 @@ Guidelines:
                 clientId: selectedClientId || undefined,
             };
             setResult(normalized);
+            emitContractTelemetry('contract_generated', {
+                has_ai_sections: true,
+                generated_section_count: 6,
+            });
         } catch (err) {
             setError(err instanceof Error ? err.message : 'An unknown error occurred.');
         } finally {
@@ -533,6 +571,7 @@ Guidelines:
         const text = formatContractAsText(result, { performerName, clientName, eventTitle });
         saveIdea('text', text, title);
         onIdeaSaved();
+        emitContractTelemetry('contract_saved_to_ideas');
         setSaveStatus('saved');
         setTimeout(() => setSaveStatus('idle'), 2000);
     };
@@ -541,6 +580,7 @@ Guidelines:
         if (!result) return;
         const text = formatContractAsText(result, { performerName, clientName, eventTitle });
         navigator.clipboard.writeText(text);
+        emitContractTelemetry('contract_copied');
         setCopyStatus('copied');
         setTimeout(() => setCopyStatus('idle'), 2000);
     };
@@ -556,6 +596,7 @@ Guidelines:
         printWindow.document.write(html);
         printWindow.document.close();
         printWindow.focus();
+        emitContractTelemetry('contract_downloaded', { format: 'pdf' });
         window.setTimeout(() => { printWindow.print(); }, 250);
     };
 
@@ -571,6 +612,7 @@ Guidelines:
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+        emitContractTelemetry('contract_downloaded', { format: 'txt' });
     };
 
     const handleSendEmail = () => {
@@ -578,6 +620,7 @@ Guidelines:
         const body = encodeURIComponent(`Hello ${clientName || 'Client'},\n\nAttached below is the draft performance agreement for your review.\n\n${buildContractSummaryText(previewContract, result)}\n\nThank you,\n${performerName || 'Performer'}`);
         const email = clientEmail || '';
         window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
+        emitContractTelemetry('contract_email_composed');
         setEmailStatus('opened');
         setTimeout(() => setEmailStatus('idle'), 2500);
     };
@@ -618,6 +661,7 @@ Guidelines:
                 status: 'draft',
             });
 
+            emitContractTelemetry('contract_saved_to_show');
             setSaveToShowStatus('saved');
             setTimeout(() => setSaveToShowStatus('idle'), 2000);
             onNavigateToShowPlanner(selectedShowId);
@@ -626,6 +670,7 @@ Guidelines:
             try {
                 const updatedShows = await updateShow(selectedShowId, { contract: result } as any);
                 onShowsUpdate(updatedShows);
+                emitContractTelemetry('contract_saved_to_show', { save_mode: 'legacy_fallback' });
                 setSaveToShowStatus('saved');
                 setTimeout(() => setSaveToShowStatus('idle'), 2000);
                 onNavigateToShowPlanner(selectedShowId);
@@ -657,7 +702,8 @@ Guidelines:
                 <div className="flex flex-wrap gap-2 text-xs">
                     <StatusPill label={selectedClientId ? 'Client linked' : 'Client manual'} active={!!selectedClientId} />
                     <StatusPill label={selectedShowId ? 'Show linked' : 'Show optional'} active={!!selectedShowId} />
-                    <StatusPill label={result ? 'AI draft ready' : 'Preview mode'} active={!!result} />
+                    <StatusPill label={showNextVersion ? `Version ready · v${showNextVersion}` : 'Version pending'} active={!!showNextVersion} />
+                    <StatusPill label={result ? 'AI-generated' : 'Preview mode'} active={!!result} />
                 </div>
             </div>
 
@@ -906,7 +952,7 @@ const EventClientSection: React.FC<{
     onOpenShowPlanner,
 }) => (
     <CardShell
-        title="Event & Client"
+        title="📅 Event & Client"
         description="Connect this agreement to your CRM and Show Planner, then confirm the booking details."
         icon={<UsersIcon className="w-5 h-5" />}
     >
@@ -1042,7 +1088,7 @@ const FinancialTermsSection: React.FC<{
     contractType: ContractType;
 }> = ({ performanceLength, setPerformanceLength, performanceFee, setPerformanceFee, depositAmount, setDepositAmount, depositDueDate, setDepositDueDate, contractType }) => (
     <CardShell
-        title="Financial Terms"
+        title="💰 Financial Terms"
         description="Set the booking economics clearly so the agreement reads like a professional client document."
         icon={<ClockIcon className="w-5 h-5" />}
     >
@@ -1079,7 +1125,7 @@ const ContractDetailsSection: React.FC<{
     error: string | null;
 }> = ({ specialRequirements, setSpecialRequirements, cancellationPolicy, setCancellationPolicy, onGenerate, isLoading, isFormValid, error }) => (
     <CardShell
-        title="Contract Details"
+        title="📜 Contract Details"
         description="Define rider notes, cancellation expectations, and then generate the full agreement language."
         icon={<ShieldIcon className="w-5 h-5" />}
     >
@@ -1131,12 +1177,19 @@ const ContractPreviewPanel: React.FC<{
             icon={<CalendarIcon className="w-5 h-5" />}
         >
             <div className="space-y-4">
-                <div className="rounded-xl border border-white/10 bg-slate-950/50 p-4 md:p-5">
-                    <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 pb-4">
+                <div className="rounded-xl border border-white/10 bg-slate-950/50 p-4 md:p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                    <div className="flex flex-wrap gap-2 border-b border-white/10 pb-3">
+                        <StatusPill label={preview.clientName ? 'Client linked' : 'Client pending'} active={!!preview.clientName} />
+                        <StatusPill label={selectedShow ? 'Show linked' : 'Show pending'} active={!!selectedShow} />
+                        <StatusPill label={showNextVersion ? `Version ready · v${showNextVersion}` : 'Version pending'} active={!!showNextVersion} />
+                        <StatusPill label={result ? 'AI-generated' : 'Awaiting AI draft'} active={!!result} />
+                    </div>
+
+                    <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 py-4">
                         <div>
                             <div className="text-[11px] uppercase tracking-[0.18em] text-purple-300">Performance Agreement</div>
-                            <h4 className="mt-2 text-xl font-semibold text-slate-100">{preview.eventTitle || 'Untitled Engagement'}</h4>
-                            <p className="mt-1 text-sm text-slate-400">
+                            <h4 className="mt-2 text-2xl font-semibold tracking-tight text-slate-50">{preview.eventTitle || 'Untitled Engagement'}</h4>
+                            <p className="mt-1 text-sm text-slate-300">
                                 {preview.eventType || 'Professional performance contract'} · {preview.contractType}
                             </p>
                         </div>
@@ -1148,6 +1201,18 @@ const ContractPreviewPanel: React.FC<{
 
                     {isLoading ? (
                         <LoadingIndicator />
+                    ) : !hasPreviewSeedData ? (
+                        <div className="space-y-4 pt-4 animate-pulse">
+                            <div className="h-4 w-40 rounded bg-white/10"></div>
+                            <div className="h-10 w-full rounded-xl bg-white/5"></div>
+                            <div className="h-4 w-28 rounded bg-white/10"></div>
+                            <div className="h-24 w-full rounded-xl bg-white/5"></div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="h-16 rounded-xl bg-white/5"></div>
+                                <div className="h-16 rounded-xl bg-white/5"></div>
+                            </div>
+                            <p className="text-sm text-slate-400">Start filling in the booking details to watch the agreement assemble in real time.</p>
+                        </div>
                     ) : (
                         <div className="space-y-5 pt-4 text-sm text-slate-300">
                             <PreviewBlock title="Parties">
@@ -1166,7 +1231,7 @@ const ContractPreviewPanel: React.FC<{
                                 {preview.performanceLength ? <p>{preview.performanceLength}</p> : null}
                             </PreviewBlock>
 
-                            <PreviewBlock title="Financial Terms">
+                            <PreviewBlock title="💰 Financial Terms">
                                 <p><span className="text-slate-500">Performance Fee:</span> {formatCurrency(preview.performanceFee)}</p>
                                 <p>
                                     <span className="text-slate-500">Deposit:</span>{' '}
@@ -1230,10 +1295,15 @@ const ContractActionBar: React.FC<{
     onSaveToShow: () => void;
 }> = ({ result, selectedShowId, selectedClientId, saveStatus, copyStatus, saveToShowStatus, clientRecordSaveStatus, emailStatus, onSave, onCopy, onDownloadPdf, onDownloadTxt, onSendEmail, onSaveToClientRecord, onSaveToShow }) => (
     <CardShell
-        title="Output Actions"
+        title="Document Toolbelt"
         description="Export, email, or save this agreement into the connected client and show workflow."
         icon={<ShareIcon className="w-5 h-5" />}
     >
+        <div className="mb-4 flex flex-wrap gap-2 text-xs">
+            <StatusPill label={result ? 'Document ready' : 'Draft preview'} active={!!result} />
+            <StatusPill label={selectedClientId ? 'Client record connected' : 'No client record'} active={!!selectedClientId} />
+            <StatusPill label={selectedShowId ? 'Show versioning active' : 'Show versioning off'} active={!!selectedShowId} />
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <ActionButton onClick={onCopy} disabled={!result || copyStatus === 'copied'} primary>
                 {copyStatus === 'copied' ? <CheckIcon className="w-4 h-4 text-green-400" /> : <CopyIcon className="w-4 h-4" />}
@@ -1304,7 +1374,7 @@ const ActionButton: React.FC<{ onClick: () => void; disabled?: boolean; primary?
         disabled={disabled}
         className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
             primary
-                ? 'border border-purple-400/25 bg-purple-600 text-white hover:bg-purple-500 disabled:border-white/10 disabled:bg-slate-700'
+                ? 'border border-purple-400/25 bg-purple-600 text-white hover:bg-purple-500 shadow-[0_0_20px_rgba(168,85,247,0.22)] disabled:border-white/10 disabled:bg-slate-700 disabled:shadow-none'
                 : 'border border-white/10 bg-slate-900/70 text-slate-200 hover:bg-slate-800 disabled:bg-slate-800/60 disabled:text-slate-500'
         } disabled:cursor-not-allowed`}
     >
@@ -1328,8 +1398,8 @@ const InfoChip: React.FC<{ title: string; value: string }> = ({ title, value }) 
 
 const PreviewBlock: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
     <div>
-        <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{title}</div>
-        <div className="space-y-1 leading-6">{children}</div>
+        <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{title}</div>
+        <div className="space-y-1.5 leading-6">{children}</div>
     </div>
 );
 
