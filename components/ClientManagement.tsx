@@ -896,7 +896,7 @@ const ClientManagement: React.FC<ClientManagementProps> = ({
                         : 'border-white/8 bg-slate-900/70 hover:border-white/15 hover:bg-slate-900/90'
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">
                         <div className="truncate text-base font-semibold text-white">{client.name}</div>
                         <div className="truncate text-sm text-slate-400">{client.company || 'Independent / direct booking'}</div>
@@ -1127,7 +1127,7 @@ const ClientManagement: React.FC<ClientManagementProps> = ({
                     )}
                   </div>
 
-                  <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
                     <div className="rounded-3xl border border-white/10 bg-slate-950/45 p-4 sm:p-5">
                       <div className="mb-4 flex items-center justify-between gap-3">
                         <div>
@@ -1152,7 +1152,7 @@ const ClientManagement: React.FC<ClientManagementProps> = ({
                                     <div className="font-semibold text-white">{linkedShow?.title || 'Linked performance'}</div>
                                     <div className="mt-1 text-xs text-slate-400">{formatContractStatus(contract.status)} • Version {contract.version}</div>
                                   </div>
-                                  <button onClick={() => handleViewContract(contract)} className="inline-flex items-center gap-2 rounded-xl border border-cyan-400/20 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-500/15">
+                                  <button onClick={() => handleViewContract(contract)} className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-400/20 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-500/15 sm:w-auto">
                                     <EyeIcon className="h-4 w-4" />
                                     View Contract
                                   </button>
@@ -1166,12 +1166,12 @@ const ClientManagement: React.FC<ClientManagementProps> = ({
                     </div>
 
                     <div className="rounded-3xl border border-white/10 bg-slate-950/45 p-4 sm:p-5">
-                      <div className="mb-4 flex items-center justify-between gap-3">
+                      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div>
                           <div className="text-sm font-semibold text-white">Audience Feedback</div>
                           <div className="text-xs text-slate-400">Performance intelligence tied back to client results.</div>
                         </div>
-                        <button onClick={handleViewFeedback} className="inline-flex items-center gap-2 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-100 transition hover:bg-amber-500/15">
+                        <button onClick={handleViewFeedback} className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-100 transition hover:bg-amber-500/15 sm:w-auto">
                           <EyeIcon className="h-4 w-4" />
                           View Full Feedback
                         </button>
@@ -1180,11 +1180,11 @@ const ClientManagement: React.FC<ClientManagementProps> = ({
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div className="rounded-2xl border border-white/8 bg-slate-950/55 p-4">
                           <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Average Rating</div>
-                          <div className="mt-2 text-2xl font-bold text-white">{selectedMetrics.avgRating ? `⭐ ${selectedMetrics.avgRating}` : 'No data'}</div>
+                          <div className="mt-2 text-xl font-bold text-white sm:text-2xl">{selectedMetrics.avgRating ? `⭐ ${selectedMetrics.avgRating}` : 'No data'}</div>
                         </div>
                         <div className="rounded-2xl border border-white/8 bg-slate-950/55 p-4">
                           <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Top Reaction</div>
-                          <div className="mt-2 text-2xl font-bold text-white">{selectedMetrics.topReaction || 'No data'}</div>
+                          <div className="mt-2 break-words text-xl font-bold leading-tight text-white sm:text-2xl">{selectedMetrics.topReaction || 'No data'}</div>
                         </div>
                       </div>
 
