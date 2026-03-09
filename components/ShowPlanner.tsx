@@ -960,8 +960,8 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                 const lead = group[0];
                                 const isExpanded = !!expandedDuplicateGroups[groupKey];
                                 return (
-                                    <div key={groupKey} className="rounded-2xl border border-amber-400/20 bg-amber-500/5 p-4">
-                                        <div className="flex flex-wrap items-center justify-between gap-3">
+                                    <div key={groupKey} className="rounded-2xl border border-dashed border-amber-300/35 bg-slate-950/70 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                                        <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-white/5 bg-black/20 px-3 py-2.5">
                                             <div>
                                                 <h4 className="text-base font-semibold text-white">{lead.show.title}</h4>
                                                 <p className="text-xs text-amber-100/80">{group.length} versions grouped to reduce planner clutter.</p>
@@ -969,7 +969,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                             <button onClick={() => setExpandedDuplicateGroups(prev => ({ ...prev, [groupKey]: !prev[groupKey] }))} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold text-slate-100 transition-colors hover:bg-slate-700">{isExpanded ? 'Hide versions' : 'Show versions'}</button>
                                         </div>
                                         {isExpanded && (
-                                            <div className={`mt-3 ${opts?.routineRows ? 'space-y-2' : 'grid grid-cols-1 gap-3'}`}>
+                                            <div className={`mt-3 rounded-xl border border-dashed border-white/10 bg-black/20 p-2.5 ${opts?.routineRows ? 'space-y-2' : 'grid grid-cols-1 gap-3'}`}>
                                                 {group.map(item => opts?.routineRows ? renderRoutineRow(item) : sectionKey === 'active' ? renderActiveHeroCard(item) : renderCard(item))}
                                             </div>
                                         )}
