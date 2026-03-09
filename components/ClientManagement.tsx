@@ -1127,7 +1127,7 @@ const ClientManagement: React.FC<ClientManagementProps> = ({
                     )}
                   </div>
 
-                  <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-5 2xl:grid-cols-2">
                     <div className="rounded-3xl border border-white/10 bg-slate-950/45 p-4 sm:p-5">
                       <div className="mb-4 flex items-center justify-between gap-3">
                         <div>
@@ -1147,12 +1147,12 @@ const ClientManagement: React.FC<ClientManagementProps> = ({
                             const linkedShow = selectedMetrics.relatedShows.find((show) => show.id === contract.show_id);
                             return (
                               <div key={contract.id} className="rounded-2xl border border-white/8 bg-slate-950/55 p-4">
-                                <div className="flex items-start justify-between gap-3">
+                                <div className="flex flex-col items-start gap-3">
                                   <div>
                                     <div className="font-semibold text-white">{linkedShow?.title || 'Linked performance'}</div>
                                     <div className="mt-1 text-xs text-slate-400">{formatContractStatus(contract.status)} • Version {contract.version}</div>
                                   </div>
-                                  <button onClick={() => handleViewContract(contract)} className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-400/20 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-500/15 sm:w-auto">
+                                  <button onClick={() => handleViewContract(contract)} className="inline-flex items-center justify-center gap-2 self-start rounded-xl border border-cyan-400/20 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-500/15">
                                     <EyeIcon className="h-4 w-4" />
                                     View Contract
                                   </button>
@@ -1177,7 +1177,7 @@ const ClientManagement: React.FC<ClientManagementProps> = ({
                         </button>
                       </div>
 
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
                         <div className="rounded-2xl border border-white/8 bg-slate-950/55 p-4">
                           <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Average Rating</div>
                           <div className="mt-2 text-xl font-bold text-white sm:text-2xl">{selectedMetrics.avgRating ? `⭐ ${selectedMetrics.avgRating}` : 'No data'}</div>
