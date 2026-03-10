@@ -83,6 +83,28 @@ export interface TrickIdentificationResult {
   }[];
 }
 
+
+export interface PropBuildInstructions {
+  toolsRequired: string[];
+  constructionSteps: string[];
+  estimatedBuildTime: string;
+  difficultyRating: string;
+}
+
+export interface PropConcept {
+  propName: string;
+  conceptSummary: string;
+  performanceUse: string;
+  constructionIdea: string;
+  materials: string[];
+  estimatedCost: string;
+  transportNotes: string;
+  resetSpeed: string;
+  safetyNotes: string[];
+  angleNotes: string[];
+  buildInstructions?: PropBuildInstructions | null;
+}
+
 // Membership levels
 // - The only "free" access is the 14-day trial (no permanent free tier).
 // - `free`, `amateur`, and `semi-pro` are retained for backward compatibility / anonymous caps.

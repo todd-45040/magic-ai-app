@@ -1,46 +1,126 @@
+import React, { useMemo, useState } from "react";
+import type { PropBuildInstructions, PropConcept, Task, User } from "../types";
+import { saveIdea } from "../services/ideasService";
+import { createShow, addTasksToShow } from "../services/showsService";
+import { useAppDispatch, refreshIdeas, refreshShows } from "../store";
+import ShareButton from "./ShareButton";
 
-import React, { useState } from "react";
+type Props = {
+  user?: User;
+  onIdeaSaved?: () => void;
+  onNavigateShowPlanner?: () => void;
+};
 
-interface PropConcept {
-  propName: string
-  conceptSummary: string
-  performanceUse: string
-  constructionIdea: string
-  materials: string[]
-  estimatedCost: string
-  transportNotes: string
-  resetSpeed: string
-  safetyNotes: string[]
-  angleNotes: string[]
+type SectionKey = "concept" | "use" | "construction" | "materials" | "cost" | "transport" | "safety" | "build";
+
+type ResultSection = {
+  key: SectionKey;
+  title: string;
+  content: React.ReactNode;
+};
+
+const defaultOpen = new Set<SectionKey>(["concept"]);
+
+function parseJsonFromText<T>(text: string): T {
+  const trimmed = text.trim();
+  try {
+    return JSON.parse(trimmed) as T;
+  } catch {}
+  const match = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (match?.[1]) return JSON.parse(match[1]) as T;
+  const start = trimmed.indexOf('{');
+  const end = trimmed.lastIndexOf('}');
+  if (start >= 0 && end > start) return JSON.parse(trimmed.slice(start, end + 1)) as T;
+  throw new Error('Could not parse JSON response.');
 }
 
-export default function PropGenerator() {
+function sanitizeConcept(raw: any): PropConcept {
+  const list = (value: any) => Array.isArray(value) ? value.map((item) => String(item).trim()).filter(Boolean) : [];
+  const build = raw?.buildInstructions && typeof raw.buildInstructions === 'object' ? {
+    toolsRequired: list(raw.buildInstructions.toolsRequired),
+    constructionSteps: list(raw.buildInstructions.constructionSteps),
+    estimatedBuildTime: String(raw.buildInstructions.estimatedBuildTime ?? '').trim(),
+    difficultyRating: String(raw.buildInstructions.difficultyRating ?? '').trim(),
+  } satisfies PropBuildInstructions : null;
 
-  const [loading,setLoading] = useState(false)
-  const [result,setResult] = useState<PropConcept | null>(null)
+  return {
+    propName: String(raw?.propName ?? 'Untitled Prop Concept').trim() || 'Untitled Prop Concept',
+    conceptSummary: String(raw?.conceptSummary ?? '').trim(),
+    performanceUse: String(raw?.performanceUse ?? '').trim(),
+    constructionIdea: String(raw?.constructionIdea ?? '').trim(),
+    materials: list(raw?.materials),
+    estimatedCost: String(raw?.estimatedCost ?? '').trim(),
+    transportNotes: String(raw?.transportNotes ?? '').trim(),
+    resetSpeed: String(raw?.resetSpeed ?? '').trim(),
+    safetyNotes: list(raw?.safetyNotes),
+    angleNotes: list(raw?.angleNotes),
+    buildInstructions: build,
+  };
+}
 
-  const [inputs,setInputs] = useState({
-    propType:"",
-    materials:"",
-    skillLevel:"",
-    audience:"",
-    venue:"",
-    budget:"",
-    transport:"",
-    reset:""
-  })
+function listNode(items: string[], empty = 'Not provided yet.') {
+  if (!items.length) return <p className="text-slate-400">{empty}</p>;
+  return <ul className="list-disc pl-5 space-y-1 text-slate-200">{items.map((item, i) => <li key={`${item}-${i}`}>{item}</li>)}</ul>;
+}
 
-  async function generate(){
+function CollapsibleCard({ title, isOpen, onToggle, children }: { title: string; isOpen: boolean; onToggle: () => void; children: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-900/30 overflow-hidden">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-slate-800/40 transition-colors"
+      >
+        <span className="font-semibold text-slate-100">{title}</span>
+        <span className="text-slate-400 text-sm">{isOpen ? '▲' : '▼'}</span>
+      </button>
+      {isOpen && <div className="px-4 pb-4 text-sm leading-6">{children}</div>}
+    </div>
+  );
+}
 
-    setLoading(true)
+export default function PropGenerator({ onIdeaSaved, onNavigateShowPlanner }: Props) {
+  const dispatch = useAppDispatch();
+  const [loading, setLoading] = useState(false);
+  const [buildLoading, setBuildLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<PropConcept | null>(null);
+  const [openSections, setOpenSections] = useState<Set<SectionKey>>(new Set(defaultOpen));
 
-    try{
+  const [inputs, setInputs] = useState({
+    propType: "",
+    materials: "",
+    skillLevel: "",
+    audience: "",
+    venue: "",
+    budget: "",
+    transport: "",
+    reset: ""
+  });
 
-      const prompt = `
-Design a magic performance prop.
+  function updateInput<K extends keyof typeof inputs>(key: K, value: (typeof inputs)[K]) {
+    setInputs((prev) => ({ ...prev, [key]: value }));
+  }
 
-Return JSON ONLY.
+  async function callGenerate(prompt: string) {
+    const r = await fetch("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt })
+    });
+    const text = await r.text();
+    if (!r.ok) throw new Error(text || 'Generation failed');
+    return text;
+  }
 
+  async function generate() {
+    if (loading) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const prompt = `Design a magic performance prop.
+
+Return JSON ONLY using this schema:
 {
   "propName":"",
   "conceptSummary":"",
@@ -54,6 +134,8 @@ Return JSON ONLY.
   "angleNotes":[]
 }
 
+Keep it practical, non-exposure, and suitable for a magician building or commissioning a prop.
+
 Inputs:
 Prop Type: ${inputs.propType}
 Materials: ${inputs.materials}
@@ -62,162 +144,211 @@ Audience: ${inputs.audience}
 Venue: ${inputs.venue}
 Budget: ${inputs.budget}
 Transport: ${inputs.transport}
-Reset: ${inputs.reset}
-`
+Reset: ${inputs.reset}`;
 
-      const r = await fetch("/api/generate",{
-        method:"POST",
-        headers:{ "Content-Type":"application/json"},
-        body:JSON.stringify({prompt})
-      })
-
-      const text = await r.text()
-
-      const json = JSON.parse(text)
-
-      setResult(json)
-
-    }catch(e){
-      console.error(e)
-      alert("Generation failed")
+      const text = await callGenerate(prompt);
+      const json = parseJsonFromText<any>(text);
+      setResult(sanitizeConcept(json));
+      setOpenSections(new Set(defaultOpen));
+    } catch (e: any) {
+      console.error(e);
+      setError(e?.message || "Generation failed");
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false)
-
   }
 
+  async function generateBuildInstructions() {
+    if (!result || buildLoading) return;
+    setBuildLoading(true);
+    setError(null);
+    try {
+      const prompt = `You are helping a magician plan safe, practical build instructions for a custom performance prop.
+
+Return JSON ONLY using this schema:
+{
+  "toolsRequired": [],
+  "constructionSteps": [],
+  "estimatedBuildTime": "",
+  "difficultyRating": ""
+}
+
+Base prop concept:
+${JSON.stringify(result, null, 2)}
+
+Original constraints:
+${JSON.stringify(inputs, null, 2)}
+
+Requirements:
+- Keep the advice high-level and non-exposure.
+- Focus on materials prep, fabrication sequence, assembly order, finishing, transport readiness, and rehearsal readiness.
+- Do not include dangerous or illegal instructions.
+`;
+      const text = await callGenerate(prompt);
+      const build = parseJsonFromText<PropBuildInstructions>(text);
+      setResult((prev) => prev ? ({ ...prev, buildInstructions: {
+        toolsRequired: Array.isArray(build.toolsRequired) ? build.toolsRequired.map(String) : [],
+        constructionSteps: Array.isArray(build.constructionSteps) ? build.constructionSteps.map(String) : [],
+        estimatedBuildTime: String(build.estimatedBuildTime ?? '').trim(),
+        difficultyRating: String(build.difficultyRating ?? '').trim(),
+      } }) : prev);
+      setOpenSections((prev) => new Set([...Array.from(prev), 'build']));
+    } catch (e: any) {
+      console.error(e);
+      setError(e?.message || 'Build instruction generation failed');
+    } finally {
+      setBuildLoading(false);
+    }
+  }
+
+  async function saveToIdeas() {
+    if (!result) return;
+    try {
+      await saveIdea({
+        type: 'text',
+        title: `Prop Concept: ${result.propName}`,
+        content: JSON.stringify(result, null, 2),
+        tags: ['prop-generator', 'prop-concept'],
+        category: 'blueprint',
+      });
+      await refreshIdeas(dispatch);
+      onIdeaSaved?.();
+    } catch (e: any) {
+      setError(e?.message || 'Could not save concept.');
+    }
+  }
+
+  async function sendToShowPlanner() {
+    if (!result) return;
+    try {
+      const show = await createShow(result.propName, 'Auto-created from Prop Generator');
+      const tasks: Partial<Task>[] = [
+        { title: 'Review prop concept', notes: result.conceptSummary, status: 'To-Do', priority: 'Medium', tags: ['prop-generator'] },
+        { title: 'Source materials', notes: result.materials.join('\n'), status: 'To-Do', priority: 'Medium', tags: ['prop-generator'] },
+        { title: 'Build / commission prop', notes: result.constructionIdea, status: 'To-Do', priority: 'High', tags: ['prop-generator'] },
+        { title: 'Rehearse reset and transport', notes: `${result.transportNotes}\n\nReset: ${result.resetSpeed}`, status: 'To-Do', priority: 'Medium', tags: ['prop-generator'] },
+      ];
+      if (result.buildInstructions?.constructionSteps?.length) {
+        tasks.push({ title: 'Follow build steps', notes: result.buildInstructions.constructionSteps.join('\n'), status: 'To-Do', priority: 'High', tags: ['prop-generator', 'build-instructions'] });
+      }
+      await addTasksToShow(show.id, tasks);
+      await refreshShows(dispatch);
+      onNavigateShowPlanner?.();
+    } catch (e: any) {
+      setError(e?.message || 'Could not send to Show Planner.');
+    }
+  }
+
+  const sections = useMemo<ResultSection[]>(() => {
+    if (!result) return [];
+    return [
+      { key: 'concept', title: 'Prop Concept', content: <div><h2 className="text-xl font-semibold text-slate-100 mb-2">{result.propName}</h2><p className="text-slate-200">{result.conceptSummary || 'No summary generated yet.'}</p></div> },
+      { key: 'use', title: 'Performance Use', content: <p className="text-slate-200">{result.performanceUse || 'No performance use generated yet.'}</p> },
+      { key: 'construction', title: 'Construction Plan', content: <p className="text-slate-200">{result.constructionIdea || 'No construction plan generated yet.'}</p> },
+      { key: 'materials', title: 'Materials List', content: listNode(result.materials, 'No materials listed yet.') },
+      { key: 'cost', title: 'Cost Estimate', content: <p className="text-slate-200">{result.estimatedCost || 'No cost estimate generated yet.'}</p> },
+      { key: 'transport', title: 'Transport & Reset', content: <div className="space-y-3 text-slate-200"><div><div className="font-semibold text-slate-100 mb-1">Transport Notes</div><p>{result.transportNotes || 'No transport notes generated yet.'}</p></div><div><div className="font-semibold text-slate-100 mb-1">Reset Speed</div><p>{result.resetSpeed || 'No reset notes generated yet.'}</p></div></div> },
+      { key: 'safety', title: 'Safety & Angles', content: <div className="space-y-3"><div><div className="font-semibold text-slate-100 mb-1">Safety Notes</div>{listNode(result.safetyNotes, 'No safety notes generated yet.')}</div><div><div className="font-semibold text-slate-100 mb-1">Angle Notes</div>{listNode(result.angleNotes, 'No angle notes generated yet.')}</div></div> },
+      { key: 'build', title: 'Build Instructions', content: result.buildInstructions ? <div className="space-y-3"><div><div className="font-semibold text-slate-100 mb-1">Tools Required</div>{listNode(result.buildInstructions.toolsRequired, 'No tools listed yet.')}</div><div><div className="font-semibold text-slate-100 mb-1">Construction Steps</div>{listNode(result.buildInstructions.constructionSteps, 'No build steps generated yet.')}</div><div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><div className="rounded-xl border border-slate-800 bg-slate-950/30 p-3"><div className="text-xs uppercase tracking-wide text-slate-400">Estimated Build Time</div><div className="text-slate-100 font-semibold mt-1">{result.buildInstructions.estimatedBuildTime || 'Not provided'}</div></div><div className="rounded-xl border border-slate-800 bg-slate-950/30 p-3"><div className="text-xs uppercase tracking-wide text-slate-400">Difficulty Rating</div><div className="text-slate-100 font-semibold mt-1">{result.buildInstructions.difficultyRating || 'Not provided'}</div></div></div></div> : <p className="text-slate-400">Click Generate Build Instructions to add a practical build plan.</p> },
+    ];
+  }, [result]);
+
+  const hasResult = Boolean(result);
+
   return (
+    <div className="w-full h-full p-4 md:p-6">
+      <div className="mb-6">
+        <h1 className="text-2xl md:text-3xl font-bold text-slate-100">Prop Generator</h1>
+        <p className="text-slate-400 mt-2 max-w-3xl">Design practical performance props with a structured AI workspace, then expand the concept into build-ready instructions.</p>
+      </div>
 
-<div className="w-full h-full p-6">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div className="rounded-2xl border border-slate-800 bg-slate-950/20 p-5 md:p-6 space-y-4">
+          <div>
+            <div className="text-lg font-semibold text-slate-100">Prop Design Inputs</div>
+            <div className="text-sm text-slate-400 mt-1">Define the practical constraints so the concept fits your performance world.</div>
+          </div>
 
-<h1 className="text-2xl font-bold mb-4">Prop Generator</h1>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {[
+              ['propType','Prop Type'],
+              ['materials','Materials / constraints'],
+              ['skillLevel','Skill Level'],
+              ['audience','Audience Type'],
+              ['venue','Performance Setting'],
+              ['budget','Budget Range'],
+              ['transport','Transportability'],
+              ['reset','Reset Speed'],
+            ].map(([key,label]) => (
+              <label key={key} className={key === 'materials' ? 'md:col-span-2' : ''}>
+                <div className="text-sm font-medium text-slate-300 mb-1">{label}</div>
+                <input
+                  value={inputs[key as keyof typeof inputs]}
+                  onChange={e => updateInput(key as keyof typeof inputs, e.target.value)}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-900/50 px-3 py-2.5 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                  placeholder={label}
+                />
+              </label>
+            ))}
+          </div>
 
-<div className="grid grid-cols-2 gap-6">
+          {error && <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div>}
 
-{/* LEFT PANEL */}
+          <button
+            onClick={generate}
+            className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-3 rounded-xl w-full font-semibold transition disabled:opacity-50"
+            disabled={loading}
+          >
+            {loading ? "Generating..." : "Generate Prop"}
+          </button>
+        </div>
 
-<div className="space-y-3">
+        <div className="rounded-2xl border border-slate-800 bg-slate-950/20 p-5 md:p-6 flex flex-col min-h-[560px]">
+          <div className="flex items-center justify-between gap-4 mb-4">
+            <div>
+              <div className="text-lg font-semibold text-slate-100">Generated Prop Concept</div>
+              <div className="text-sm text-slate-400 mt-1">Collapsible result cards keep the workspace compact and easy to scan.</div>
+            </div>
+            {hasResult && (
+              <button
+                type="button"
+                onClick={generateBuildInstructions}
+                disabled={buildLoading}
+                className="rounded-xl border border-slate-700 bg-slate-900/40 px-4 py-2.5 text-sm font-semibold text-slate-100 hover:bg-slate-800/50 transition disabled:opacity-50"
+              >
+                {buildLoading ? 'Generating...' : 'Generate Build Instructions'}
+              </button>
+            )}
+          </div>
 
-<input placeholder="Prop Type"
-value={inputs.propType}
-onChange={e=>setInputs({...inputs,propType:e.target.value})}
-className="w-full border p-2 rounded"/>
+          {!hasResult ? (
+            <div className="flex-1 rounded-2xl border border-dashed border-slate-700/70 bg-slate-900/20 flex items-center justify-center text-center text-slate-500 p-8">
+              Generated prop concept will appear here.
+            </div>
+          ) : (
+            <>
+              <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                {sections.map((section) => (
+                  <CollapsibleCard
+                    key={section.key}
+                    title={section.title}
+                    isOpen={openSections.has(section.key)}
+                    onToggle={() => setOpenSections((prev) => { const next = new Set(prev); next.has(section.key) ? next.delete(section.key) : next.add(section.key); return next; })}
+                  >
+                    {section.content}
+                  </CollapsibleCard>
+                ))}
+              </div>
 
-<input placeholder="Materials"
-value={inputs.materials}
-onChange={e=>setInputs({...inputs,materials:e.target.value})}
-className="w-full border p-2 rounded"/>
-
-<input placeholder="Skill Level"
-value={inputs.skillLevel}
-onChange={e=>setInputs({...inputs,skillLevel:e.target.value})}
-className="w-full border p-2 rounded"/>
-
-<input placeholder="Audience Type"
-value={inputs.audience}
-onChange={e=>setInputs({...inputs,audience:e.target.value})}
-className="w-full border p-2 rounded"/>
-
-<input placeholder="Venue"
-value={inputs.venue}
-onChange={e=>setInputs({...inputs,venue:e.target.value})}
-className="w-full border p-2 rounded"/>
-
-<input placeholder="Budget"
-value={inputs.budget}
-onChange={e=>setInputs({...inputs,budget:e.target.value})}
-className="w-full border p-2 rounded"/>
-
-<input placeholder="Transport"
-value={inputs.transport}
-onChange={e=>setInputs({...inputs,transport:e.target.value})}
-className="w-full border p-2 rounded"/>
-
-<input placeholder="Reset Speed"
-value={inputs.reset}
-onChange={e=>setInputs({...inputs,reset:e.target.value})}
-className="w-full border p-2 rounded"/>
-
-<button
-onClick={generate}
-className="bg-purple-600 text-white px-4 py-2 rounded w-full"
->
-
-{loading ? "Generating..." : "Generate Prop"}
-
-</button>
-
-</div>
-
-{/* RIGHT PANEL */}
-
-<div className="border rounded p-4 bg-black/20">
-
-{!result && <div className="opacity-60">Generated prop concept will appear here.</div>}
-
-{result && (
-
-<div className="space-y-3">
-
-<h2 className="text-xl font-semibold">{result.propName}</h2>
-
-<p>{result.conceptSummary}</p>
-
-<div>
-<b>Performance Use</b>
-<p>{result.performanceUse}</p>
-</div>
-
-<div>
-<b>Construction Plan</b>
-<p>{result.constructionIdea}</p>
-</div>
-
-<div>
-<b>Materials</b>
-<ul>
-{result.materials.map((m,i)=><li key={i}>{m}</li>)}
-</ul>
-</div>
-
-<div>
-<b>Cost Estimate</b>
-<p>{result.estimatedCost}</p>
-</div>
-
-<div>
-<b>Transport</b>
-<p>{result.transportNotes}</p>
-</div>
-
-<div>
-<b>Reset Speed</b>
-<p>{result.resetSpeed}</p>
-</div>
-
-<div>
-<b>Safety Notes</b>
-<ul>
-{result.safetyNotes.map((m,i)=><li key={i}>{m}</li>)}
-</ul>
-</div>
-
-<div>
-<b>Angle Notes</b>
-<ul>
-{result.angleNotes.map((m,i)=><li key={i}>{m}</li>)}
-</ul>
-</div>
-
-</div>
-
-)}
-
-</div>
-
-</div>
-
-</div>
-
-  )
+              <div className="border-t border-slate-800 mt-4 pt-4 flex flex-wrap gap-3">
+                <button type="button" onClick={saveToIdeas} className="rounded-xl border border-slate-700 bg-slate-900/40 px-4 py-2.5 text-sm font-semibold text-slate-100 hover:bg-slate-800/50 transition">Save to Idea Vault</button>
+                <button type="button" onClick={sendToShowPlanner} className="rounded-xl border border-slate-700 bg-slate-900/40 px-4 py-2.5 text-sm font-semibold text-slate-100 hover:bg-slate-800/50 transition">Send to Show Planner</button>
+                <ShareButton title={result?.propName || 'Prop Concept'} text={JSON.stringify(result, null, 2)} className="rounded-xl border border-slate-700 bg-slate-900/40 px-4 py-2.5 text-sm font-semibold text-slate-100 hover:bg-slate-800/50 transition">Share</ShareButton>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
