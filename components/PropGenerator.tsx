@@ -184,8 +184,8 @@ export default function PropGenerator({ onIdeaSaved, onNavigateShowPlanner, onNa
     });
   }
 
-  async function callGenerate<T>(prompt: string) {
-    return aiJson<T>(prompt);
+  async function callGenerate<T>(prompt: string, system?: string, schemaName?: string) {
+    return aiJson<T>(prompt, system, schemaName);
   }
 
   async function generate(mode: 'base' | 'alternate' = 'base') {
@@ -223,7 +223,7 @@ Budget: ${inputs.budget}
 Transport: ${inputs.transport}
 Reset: ${inputs.reset}`;
 
-      const json = await callGenerate<any>(prompt);
+      const json = await callGenerate<any>(prompt, 'Return only valid JSON matching the requested schema. Do not wrap the response in markdown.');
       const concept = sanitizeConcept(json);
       setResult(concept);
       setOpenSections(new Set(defaultOpen));
@@ -267,7 +267,7 @@ Requirements:
 - Focus on materials prep, fabrication sequence, assembly order, finishing, transport readiness, and rehearsal readiness.
 - Do not include dangerous or illegal instructions.
 `;
-      const build = await callGenerate<PropBuildInstructions>(prompt);
+      const build = await callGenerate<PropBuildInstructions>(prompt, 'Return only valid JSON matching the requested schema. Do not wrap the response in markdown.');
       setResult((prev) => prev ? ({ ...prev, buildInstructions: {
         toolsRequired: Array.isArray(build.toolsRequired) ? build.toolsRequired.map(String) : [],
         constructionSteps: Array.isArray(build.constructionSteps) ? build.constructionSteps.map(String) : [],
