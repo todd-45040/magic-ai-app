@@ -127,13 +127,20 @@ export async function aiChat(prompt: string, system?: string) {
   return res.data.text;
 }
 
+function normalizeJsonResponse<T>(payload: any): T {
+  if (payload?.data?.json !== undefined) return payload.data.json as T;
+  if (payload?.json !== undefined) return payload.json as T;
+  if (payload?.data !== undefined) return payload.data as T;
+  return payload as T;
+}
+
 /** aiJson(prompt, system?, schemaName?) → structured JSON response */
 export async function aiJson<T = unknown>(
   prompt: string,
   system?: string,
   schemaName?: string
 ) {
-  const res = await safeFetchJson<{ json: T }>("/api/ai/json", {
+  const res = await safeFetchJson<any>("/api/ai/json", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -142,7 +149,7 @@ export async function aiJson<T = unknown>(
     }),
   });
 
-  return res.data.json;
+  return normalizeJsonResponse<T>(res.data);
 }
 
 /** aiImage(prompt, style?, size?) → returns array of image strings (urls or base64, depending on server) */
