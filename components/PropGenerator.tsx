@@ -5,7 +5,7 @@ import { createShow, addTasksToShow } from "../services/showsService";
 import { useAppDispatch, refreshIdeas, refreshShows } from "../store";
 import ShareButton from "./ShareButton";
 import { trackClientEvent } from "../services/telemetryClient";
-import { supabase } from "../supabase";
+import { aiJson } from "../services/aiProxy";
 
 type Props = {
   user?: User;
@@ -94,85 +94,6 @@ function CollapsibleCard({ title, isOpen, onToggle, children }: { title: string;
   );
 }
 
-async function getBearerToken(): Promise<string> {
-  try {
-    const { data } = await supabase.auth.getSession();
-    const token = data?.session?.access_token;
-    return token ? `Bearer ${token}` : 'Bearer guest';
-  } catch {
-    return 'Bearer guest';
-  }
-}
-
-function buildMessages(prompt: string, system?: string) {
-  const messages: Array<{ role: 'system' | 'user'; content: string }> = [];
-  if (system && system.trim()) messages.push({ role: 'system', content: system.trim() });
-  messages.push({ role: 'user', content: prompt });
-  return messages;
-}
-
-function normalizeJsonResponse<T>(payload: any): T {
-  if (payload == null) {
-    throw new Error('Empty AI response.');
-  }
-
-  // Current hardened endpoint success shape: { ok:true, data:{ json: ... } }
-  if (payload?.ok === true && payload?.data?.json !== undefined) {
-    return payload.data.json as T;
-  }
-
-  // Alternate success shapes we may still encounter in older builds.
-  if (payload?.data?.json !== undefined) {
-    return payload.data.json as T;
-  }
-  if (payload?.json !== undefined) {
-    return payload.json as T;
-  }
-  if (payload?.data !== undefined && typeof payload.data === 'object' && !Array.isArray(payload.data)) {
-    return payload.data as T;
-  }
-
-  // If the server already returned the raw JSON object, pass it through.
-  if (typeof payload === 'object') {
-    return payload as T;
-  }
-
-  throw new Error('Unexpected AI JSON response shape.');
-}
-
-async function requestAiJson<T>(prompt: string, system?: string, schemaName?: string): Promise<T> {
-  const response = await fetch('/api/ai/json', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: await getBearerToken(),
-    },
-    body: JSON.stringify({
-      messages: buildMessages(prompt, system),
-      config: schemaName ? { schemaName } : undefined,
-    }),
-  });
-
-  const text = await response.text();
-  let payload: any = null;
-  try {
-    payload = text ? JSON.parse(text) : null;
-  } catch {
-    throw new Error(`Non-JSON AI response (${response.status}). ${text.slice(0, 180)}`);
-  }
-
-  if (!response.ok) {
-    const message = payload?.message || payload?.error || `AI request failed (${response.status}).`;
-    throw new Error(message);
-  }
-
-  if (payload?.ok === false) {
-    throw new Error(payload?.message || 'AI request failed.');
-  }
-
-  return normalizeJsonResponse<T>(payload);
-}
-
 export default function PropGenerator({ onIdeaSaved, onNavigateShowPlanner, onNavigateDirectorMode }: Props) {
   const dispatch = useAppDispatch();
   const [loading, setLoading] = useState(false);
@@ -196,6 +117,7 @@ export default function PropGenerator({ onIdeaSaved, onNavigateShowPlanner, onNa
     setInputs((prev) => ({ ...prev, [key]: value }));
   }
 
+
   const telemetryMetadata = useMemo(() => ({
     prop_type: inputs.propType || 'unspecified',
     skill_level: inputs.skillLevel || 'unspecified',
@@ -214,6 +136,8 @@ export default function PropGenerator({ onIdeaSaved, onNavigateShowPlanner, onNa
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+
 
   function resetPage() {
     const confirmed = typeof window === 'undefined' ? true : window.confirm('Reset the Prop Generator and clear the current concept?');
@@ -260,6 +184,10 @@ export default function PropGenerator({ onIdeaSaved, onNavigateShowPlanner, onNa
     });
   }
 
+  async function callGenerate<T>(prompt: string) {
+    return aiJson<T>(prompt);
+  }
+
   async function generate(mode: 'base' | 'alternate' = 'base') {
     if (loading) return;
     setLoading(true);
@@ -295,8 +223,7 @@ Budget: ${inputs.budget}
 Transport: ${inputs.transport}
 Reset: ${inputs.reset}`;
 
-      const system = 'You are Magician\'s AI Wizard. Respond with valid JSON only. Do not wrap the answer in markdown fences. Do not add commentary before or after the JSON.';
-      const json = await requestAiJson<any>(prompt, system, 'propConcept');
+      const json = await callGenerate<any>(prompt);
       const concept = sanitizeConcept(json);
       setResult(concept);
       setOpenSections(new Set(defaultOpen));
@@ -308,7 +235,7 @@ Reset: ${inputs.reset}`;
       });
     } catch (e: any) {
       console.error(e);
-      setError(e?.message || 'Generation failed');
+      setError(e?.message || "Generation failed");
     } finally {
       setLoading(false);
     }
@@ -340,8 +267,7 @@ Requirements:
 - Focus on materials prep, fabrication sequence, assembly order, finishing, transport readiness, and rehearsal readiness.
 - Do not include dangerous or illegal instructions.
 `;
-      const system = 'You are Magician\'s AI Wizard. Respond with valid JSON only. Do not wrap the answer in markdown fences. Do not add commentary before or after the JSON.';
-      const build = await requestAiJson<PropBuildInstructions>(prompt, system, 'propBuildInstructions');
+      const build = await callGenerate<PropBuildInstructions>(prompt);
       setResult((prev) => prev ? ({ ...prev, buildInstructions: {
         toolsRequired: Array.isArray(build.toolsRequired) ? build.toolsRequired.map(String) : [],
         constructionSteps: Array.isArray(build.constructionSteps) ? build.constructionSteps.map(String) : [],
@@ -412,6 +338,7 @@ Requirements:
       setError(e?.message || 'Could not send to Show Planner.');
     }
   }
+
 
   async function sendToDirectorMode() {
     if (!result) return;
@@ -519,20 +446,36 @@ Requirements:
         </div>
 
         <div className="rounded-2xl border border-slate-800 bg-slate-950/20 p-5 md:p-6 flex flex-col min-h-[560px]">
-          <div className="flex items-center justify-between gap-4 mb-4">
+          <div className="flex flex-col gap-4 mb-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <div className="text-lg font-semibold text-slate-100">Generated Prop Concept</div>
               <div className="text-sm text-slate-400 mt-1">Collapsible result cards keep the workspace compact and easy to scan.</div>
             </div>
             {hasResult && (
-              <button
-                type="button"
-                onClick={generateBuildInstructions}
-                disabled={buildLoading}
-                className="rounded-xl border border-slate-700 bg-slate-900/40 px-4 py-2.5 text-sm font-semibold text-slate-100 hover:bg-slate-800/50 transition disabled:opacity-50"
-              >
-                {buildLoading ? 'Generating...' : 'Generate Build Instructions'}
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setOpenSections(new Set(sections.map((section) => section.key)))}
+                  className="rounded-xl border border-slate-700 bg-slate-900/40 px-3 py-2 text-sm font-semibold text-slate-100 hover:bg-slate-800/50 transition"
+                >
+                  Expand All
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOpenSections(new Set())}
+                  className="rounded-xl border border-slate-700 bg-slate-900/40 px-3 py-2 text-sm font-semibold text-slate-100 hover:bg-slate-800/50 transition"
+                >
+                  Compact All
+                </button>
+                <button
+                  type="button"
+                  onClick={generateBuildInstructions}
+                  disabled={buildLoading}
+                  className="rounded-xl border border-slate-700 bg-slate-900/40 px-4 py-2.5 text-sm font-semibold text-slate-100 hover:bg-slate-800/50 transition disabled:opacity-50"
+                >
+                  {buildLoading ? 'Generating...' : 'Generate Build Instructions'}
+                </button>
+              </div>
             )}
           </div>
 
