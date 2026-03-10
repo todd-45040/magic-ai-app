@@ -7,6 +7,8 @@ import ShareButton from "./ShareButton";
 import { trackClientEvent } from "../services/telemetryClient";
 import { aiJson } from "../services/aiProxy";
 
+const PROP_JSON_SYSTEM = `You are a structured JSON generator for Magic AI Wizard. Return valid JSON only. Do not wrap the result in markdown, prose, or code fences.`;
+
 type Props = {
   user?: User;
   onIdeaSaved?: () => void;
@@ -184,8 +186,18 @@ export default function PropGenerator({ onIdeaSaved, onNavigateShowPlanner, onNa
     });
   }
 
-  async function callGenerate<T>(prompt: string, system?: string, schemaName?: string) {
-    return aiJson<T>(prompt, system, schemaName);
+  async function callGenerate<T>(prompt: string, schemaName?: string) {
+    const response: any = await aiJson<any>(prompt, PROP_JSON_SYSTEM, schemaName);
+    // Defensive normalization: accept either direct JSON objects or legacy wrapped shapes.
+    if (response && typeof response === 'object') {
+      if ('data' in response && response.data && typeof response.data === 'object' && 'json' in response.data) {
+        return response.data.json as T;
+      }
+      if ('json' in response) {
+        return response.json as T;
+      }
+    }
+    return response as T;
   }
 
   async function generate(mode: 'base' | 'alternate' = 'base') {
@@ -223,7 +235,7 @@ Budget: ${inputs.budget}
 Transport: ${inputs.transport}
 Reset: ${inputs.reset}`;
 
-      const json = await callGenerate<any>(prompt, 'Return only valid JSON matching the requested schema. Do not wrap the response in markdown.');
+      const json = await callGenerate<any>(prompt, 'prop_concept');
       const concept = sanitizeConcept(json);
       setResult(concept);
       setOpenSections(new Set(defaultOpen));
@@ -267,7 +279,7 @@ Requirements:
 - Focus on materials prep, fabrication sequence, assembly order, finishing, transport readiness, and rehearsal readiness.
 - Do not include dangerous or illegal instructions.
 `;
-      const build = await callGenerate<PropBuildInstructions>(prompt, 'Return only valid JSON matching the requested schema. Do not wrap the response in markdown.');
+      const build = await callGenerate<PropBuildInstructions>(prompt, 'prop_build_instructions');
       setResult((prev) => prev ? ({ ...prev, buildInstructions: {
         toolsRequired: Array.isArray(build.toolsRequired) ? build.toolsRequired.map(String) : [],
         constructionSteps: Array.isArray(build.constructionSteps) ? build.constructionSteps.map(String) : [],
