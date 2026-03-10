@@ -16,92 +16,7 @@ interface MarketingCampaignProps {
     onIdeaSaved: () => void;
     onNavigateToShowPlanner?: (showId: string) => void;
     onNavigate?: (view: 'client-proposals' | 'booking-pitches', id: string) => void;
-
-
-type CampaignResult = {
-    campaignName: string;
-    campaignSummary: string;
-    targetAudience: string;
-    primaryHook: string;
-    taglines: string[];
-    pressRelease: string;
-    socialPosts: string[];
-    emailCampaign: string[];
-    posterCopy: string;
-    bookingPitch: string;
-    ctaStrategy: string;
-    rolloutPlan: string[];
-    notes: string[];
-};
-
-const emptyCampaignResult = (): CampaignResult => ({
-    campaignName: '', campaignSummary: '', targetAudience: '', primaryHook: '',
-    taglines: [], pressRelease: '', socialPosts: [], emailCampaign: [],
-    posterCopy: '', bookingPitch: '', ctaStrategy: '', rolloutPlan: [], notes: [],
-});
-
-const coerceStringArray = (value: unknown): string[] => {
-    if (Array.isArray(value)) return value.map(v => String(v).trim()).filter(Boolean);
-    if (typeof value === 'string') return value.split(/\n|•|- /).map(v => v.trim()).filter(Boolean);
-    return [];
-};
-
-const extractJsonObject = (raw: string): string => {
-    const cleaned = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
-    const fencedMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/i);
-    if (fencedMatch?.[1]) return fencedMatch[1].trim();
-    const start = cleaned.indexOf('{');
-    const end = cleaned.lastIndexOf('}');
-    if (start >= 0 && end > start) return cleaned.slice(start, end + 1);
-    throw new Error('The AI returned campaign text in an unexpected format. Please try again.');
-};
-
-const normalizeCampaignResult = (raw: unknown, fallback: { campaignName: string; targetAudience: string; primaryHook: string }): CampaignResult => {
-    const source = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
-    const result = emptyCampaignResult();
-    result.campaignName = String(source.campaignName ?? fallback.campaignName ?? '').trim();
-    result.campaignSummary = String(source.campaignSummary ?? '').trim();
-    result.targetAudience = String(source.targetAudience ?? fallback.targetAudience ?? '').trim();
-    result.primaryHook = String(source.primaryHook ?? fallback.primaryHook ?? '').trim();
-    result.taglines = coerceStringArray(source.taglines);
-    result.pressRelease = String(source.pressRelease ?? '').trim();
-    result.socialPosts = coerceStringArray(source.socialPosts);
-    result.emailCampaign = coerceStringArray(source.emailCampaign);
-    result.posterCopy = String(source.posterCopy ?? '').trim();
-    result.bookingPitch = String(source.bookingPitch ?? '').trim();
-    result.ctaStrategy = String(source.ctaStrategy ?? '').trim();
-    result.rolloutPlan = coerceStringArray(source.rolloutPlan);
-    result.notes = coerceStringArray(source.notes);
-    if (!result.campaignSummary && result.pressRelease) result.campaignSummary = result.pressRelease.split('\n').map(s => s.trim()).find(Boolean) ?? '';
-    if (!result.campaignName) result.campaignName = fallback.campaignName || 'Marketing Campaign';
-    if (!result.targetAudience) result.targetAudience = fallback.targetAudience || 'Not specified';
-    if (!result.primaryHook) result.primaryHook = fallback.primaryHook || 'Memorable participation';
-    return result;
-};
-
-const parseCampaignResponse = (raw: string, fallback: { campaignName: string; targetAudience: string; primaryHook: string }): CampaignResult => {
-    const parsed = JSON.parse(extractJsonObject(raw));
-    return normalizeCampaignResult(parsed, fallback);
-};
-
-const stringifyCampaignResult = (data: CampaignResult | null): string => {
-    if (!data) return '';
-    const sections: string[] = [
-        `# ${data.campaignName || 'Marketing Campaign'}`,
-        data.campaignSummary ? `## Campaign Summary\n${data.campaignSummary}` : '',
-        `## Audience & Offer\n- Target Audience: ${data.targetAudience || 'Not specified'}\n- Primary Hook: ${data.primaryHook || 'Not specified'}`,
-        data.taglines.length ? `## Taglines\n${data.taglines.map(item => `- ${item}`).join('\n')}` : '',
-        data.pressRelease ? `## Press Release\n${data.pressRelease}` : '',
-        data.socialPosts.length ? `## Social Posts\n${data.socialPosts.map(item => `- ${item}`).join('\n')}` : '',
-        data.emailCampaign.length ? `## Email Campaign\n${data.emailCampaign.map(item => `- ${item}`).join('\n')}` : '',
-        data.posterCopy ? `## Poster / Flyer Copy\n${data.posterCopy}` : '',
-        data.bookingPitch ? `## Booking Pitch\n${data.bookingPitch}` : '',
-        data.ctaStrategy ? `## CTA Strategy\n${data.ctaStrategy}` : '',
-        data.rolloutPlan.length ? `## Rollout Plan\n${data.rolloutPlan.map(item => `- ${item}`).join('\n')}` : '',
-        data.notes.length ? `## Notes\n${data.notes.map(item => `- ${item}`).join('\n')}` : '',
-    ].filter(Boolean);
-    return sections.join('\n\n');
-};
+}
 
 const LoadingIndicator: React.FC<{ stepText: string }> = ({ stepText }) => (
     <div className="flex flex-col items-center justify-center text-center p-8">
@@ -196,7 +111,7 @@ const MarketingCampaign: React.FC<MarketingCampaignProps> = ({ user, onIdeaSaved
 
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [result, setResult] = useState<CampaignResult | null>(null);
+    const [result, setResult] = useState<string | null>(null);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
 
     type ActionNotice = { message: string; actionLabel?: string; action?: () => void };
@@ -205,7 +120,7 @@ const MarketingCampaign: React.FC<MarketingCampaignProps> = ({ user, onIdeaSaved
     const [isSavingBlueprint, setIsSavingBlueprint] = useState(false);
     const [blueprintMenuOpen, setBlueprintMenuOpen] = useState(false);
     const [personaView, setPersonaView] = useState<(typeof PERSONA_VERSIONS)[number]['key']>('Base');
-    const [personaResults, setPersonaResults] = useState<Record<string, CampaignResult>>({});
+    const [personaResults, setPersonaResults] = useState<Record<string, string>>({});
     const [isGeneratingPersona, setIsGeneratingPersona] = useState(false);
     const [showSparkle, setShowSparkle] = useState(false);
     const [inputSectionsOpen, setInputSectionsOpen] = useState<Record<(typeof INPUT_SECTIONS)[number], boolean>>({ ...DEFAULT_SECTION_STATE });
@@ -490,8 +405,6 @@ const activeResult = useMemo(() => {
     return personaResults[personaView] || result;
 }, [personaResults, personaView, result]);
 
-const activeResultText = useMemo(() => stringifyCampaignResult(activeResult), [activeResult]);
-
 
 const generateButtonLabel = useMemo(() => {
         if (isLoading) return 'Generating Campaign…';
@@ -527,45 +440,23 @@ const generateButtonLabel = useMemo(() => {
         }
 
         const prompt = `
-            Generate a marketing campaign toolkit for the following magic show.
-            Return ONLY valid JSON using this schema.
-            Do not wrap the JSON in markdown code fences.
-            Do not include any commentary before or after the JSON.
-            {
-              "campaignName": "",
-              "campaignSummary": "",
-              "targetAudience": "",
-              "primaryHook": "",
-              "taglines": [],
-              "pressRelease": "",
-              "socialPosts": [],
-              "emailCampaign": [],
-              "posterCopy": "",
-              "bookingPitch": "",
-              "ctaStrategy": "",
-              "rolloutPlan": [],
-              "notes": []
-            }
-
-            Show Details:
-            - Show Title: ${showTitle}
-            - Target Audience: ${allAudiences.join(', ')}
-            - Performance Style: ${selectedStyles.join(', ') || 'Not specified'}
-            - Campaign Style: ${campaignStyle || 'Not specified'}
-            - Key Themes: ${keyThemes || 'Not specified'}
+            Generate a marketing campaign toolkit for the following magic show:
+            - **Show Title:** ${showTitle}
+            - **Target Audience:** ${allAudiences.join(', ')}
+            - **Performance Style/Persona:** ${selectedStyles.join(', ') || 'Not specified'}
+            - **Campaign Style Template:** ${campaignStyle || 'Not specified'}
+            - **Key Effects or Themes:** ${keyThemes || 'Not specified'}
         `;
         
         try {
           // FIX: Pass the user object to generateResponse as the 3rd argument.
           const response = await generateResponse(prompt, MARKETING_ASSISTANT_SYSTEM_INSTRUCTION, user);
-          const normalized = parseCampaignResponse(response, { campaignName: showTitle, targetAudience: allAudiences.join(', ') || liveAudiencesLabel, primaryHook: targetHook });
-          setResult(normalized);
+          setResult(response);
           // Micro-delight: brief sparkle/pulse on successful generation
           setShowSparkle(true);
           window.setTimeout(() => setShowSparkle(false), 350);
         } catch (err) {
-          console.error('Marketing campaign generation failed:', err);
-          setError(err instanceof Error ? err.message : 'The AI returned campaign text in an unexpected format. Please try again.');
+          setError(err instanceof Error ? err.message : "An unknown error occurred.");
         } finally {
           setIsLoading(false);
         }
@@ -713,7 +604,7 @@ const generateButtonLabel = useMemo(() => {
         }
 
         // Prepend header (keeps original sections intact below).
-        return normalizeCampaignResult(base, { campaignName: '', targetAudience: '', primaryHook: '' });
+        return header + out;
     };
 
     const handleGeneratePersona = (personaKey: (typeof PERSONA_VERSIONS)[number]['key']) => {
@@ -729,7 +620,7 @@ const generateButtonLabel = useMemo(() => {
         setActionNotice(null);
 
         try {
-            const transformed = normalizeCampaignResult({}, { campaignName: result.campaignName, targetAudience: result.targetAudience, primaryHook: result.primaryHook });
+            const transformed = localPersonaTransform(result, personaKey);
             setPersonaResults(prev => ({ ...prev, [personaKey]: transformed }));
             setPersonaView(personaKey);
             setActionNotice({ message: `Persona version generated locally for “${personaKey}”.` });
@@ -744,7 +635,7 @@ const generateButtonLabel = useMemo(() => {
 const handleSave = () => {
         if (activeResult) {
             const personaSuffix = personaView !== 'Base' ? ` (Persona: ${personaView})` : '';
-            const fullContent = `## Marketing Campaign for: ${showTitle}${personaSuffix}\n\n${activeResultText}`;
+            const fullContent = `## Marketing Campaign for: ${showTitle}${personaSuffix}\n\n${activeResult}`;
             saveIdea('text', fullContent, `Marketing for ${showTitle}`);
             onIdeaSaved();
             setSaveStatus('saved');
@@ -760,7 +651,7 @@ const handleSave = () => {
             `Readiness: ${readinessScore}%`,
         ].join('\n');
 
-        const body = result ? stringifyCampaignResult(result) : '(No generated output yet.)';
+        const body = result ? result : '(No generated output yet.)';
 
         return `## Marketing Campaign Blueprint — ${label}\n\n**Show:** ${showTitle || '(untitled)'}\n\n**Meta**\n${meta}\n\n---\n\n${body}`;
     };
@@ -809,11 +700,11 @@ const handleSave = () => {
             const created = await createShow(showTitle.trim(), description);
 
             const tasks = [
-                { title: 'Marketing: Press Release', notes: activeResultText, priority: 'Medium', status: 'To-Do' },
-                { title: 'Marketing: Social Posts', notes: activeResultText, priority: 'Medium', status: 'To-Do' },
-                { title: 'Marketing: Email Campaign', notes: activeResultText, priority: 'Medium', status: 'To-Do' },
-                { title: 'Marketing: Poster / Flyer Copy', notes: activeResultText, priority: 'Medium', status: 'To-Do' },
-                { title: 'Marketing: Booking Pitch', notes: activeResultText, priority: 'High', status: 'To-Do' },
+                { title: 'Marketing: Press Release', notes: result, priority: 'Medium', status: 'To-Do' },
+                { title: 'Marketing: Social Posts', notes: result, priority: 'Medium', status: 'To-Do' },
+                { title: 'Marketing: Email Campaign', notes: result, priority: 'Medium', status: 'To-Do' },
+                { title: 'Marketing: Poster / Flyer Copy', notes: result, priority: 'Medium', status: 'To-Do' },
+                { title: 'Marketing: Booking Pitch', notes: result, priority: 'High', status: 'To-Do' },
             ];
 
             await addTasksToShow(created.id, tasks as any);
@@ -853,7 +744,7 @@ const handleCreateClientProposal = async () => {
         const title = `${showTitle || 'Marketing Campaign'} — Client Proposal`;
         const { proposal, savedToIdeasFallback } = await createClientProposal({
             title,
-            content: activeResultText,
+            content: activeResult,
             source: {
                 showTitle,
                 targetAudience: liveAudiencesLabel,
@@ -888,7 +779,7 @@ const handleCreateBookingPitch = async () => {
         const title = `${showTitle || 'Marketing Campaign'} — Booking Pitch`;
         const { pitch, savedToIdeasFallback } = await createBookingPitch({
             title,
-            content: activeResultText,
+            content: activeResult,
             source: {
                 showTitle,
                 targetAudience: liveAudiencesLabel,
@@ -1274,7 +1165,7 @@ const handleCreateBookingPitch = async () => {
                             </div>
 
                             <div className="h-px my-4 bg-gradient-to-r from-transparent via-slate-400/20 to-transparent opacity-60" />
-                            <pre className="whitespace-pre-wrap break-words text-slate-200 font-sans text-sm">{activeResultText}</pre>
+                            <pre className="whitespace-pre-wrap break-words text-slate-200 font-sans text-sm">{activeResult}</pre>
                         </div>
                         <div className="sticky bottom-0 z-30 p-2.5 bg-slate-950/90 backdrop-blur-md flex flex-col gap-2 border-t border-slate-800 shadow-[0_-8px_24px_rgba(0,0,0,0.35)]">
                             {actionNotice && (
@@ -1336,14 +1227,14 @@ const handleCreateBookingPitch = async () => {
 
                             <div className="flex flex-wrap items-center justify-end gap-2">
                             <CohesionActions
-                                content={activeResultText || ''}
+                                content={activeResult || ''}
                                 defaultTitle={`Marketing Campaign — ${showTitle || 'Untitled'}`}
                                 defaultTags={["marketing", "campaign"]}
                                 compact
                             />
                             <ShareButton
                                 title={`Marketing Campaign for: ${showTitle}`}
-                                text={activeResultText || ''}
+                                text={activeResult || ''}
                                 className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 transition-colors"
                             >
                                 <ShareIcon className="w-4 h-4" />
