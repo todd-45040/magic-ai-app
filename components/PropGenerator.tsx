@@ -5,6 +5,7 @@ import { createShow, addTasksToShow } from "../services/showsService";
 import { useAppDispatch, refreshIdeas, refreshShows } from "../store";
 import ShareButton from "./ShareButton";
 import { trackClientEvent } from "../services/telemetryClient";
+import { aiJson } from "../services/aiProxy";
 
 type Props = {
   user?: User;
@@ -47,19 +48,6 @@ const demoResult: PropConcept = {
   angleNotes: ["Best presented front-facing on a banquet platform or stage.", "Keep interior handling shielded from extreme side seating during the reveal phase."],
   buildInstructions: null,
 };
-
-function parseJsonFromText<T>(text: string): T {
-  const trimmed = text.trim();
-  try {
-    return JSON.parse(trimmed) as T;
-  } catch {}
-  const match = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (match?.[1]) return JSON.parse(match[1]) as T;
-  const start = trimmed.indexOf('{');
-  const end = trimmed.lastIndexOf('}');
-  if (start >= 0 && end > start) return JSON.parse(trimmed.slice(start, end + 1)) as T;
-  throw new Error('Could not parse JSON response.');
-}
 
 function sanitizeConcept(raw: any): PropConcept {
   const list = (value: any) => Array.isArray(value) ? value.map((item) => String(item).trim()).filter(Boolean) : [];
@@ -196,15 +184,8 @@ export default function PropGenerator({ onIdeaSaved, onNavigateShowPlanner, onNa
     });
   }
 
-  async function callGenerate(prompt: string) {
-    const r = await fetch("/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt })
-    });
-    const text = await r.text();
-    if (!r.ok) throw new Error(text || 'Generation failed');
-    return text;
+  async function callGenerate<T>(prompt: string) {
+    return aiJson<T>(prompt);
   }
 
   async function generate(mode: 'base' | 'alternate' = 'base') {
@@ -242,8 +223,7 @@ Budget: ${inputs.budget}
 Transport: ${inputs.transport}
 Reset: ${inputs.reset}`;
 
-      const text = await callGenerate(prompt);
-      const json = parseJsonFromText<any>(text);
+      const json = await callGenerate<any>(prompt);
       const concept = sanitizeConcept(json);
       setResult(concept);
       setOpenSections(new Set(defaultOpen));
@@ -287,8 +267,7 @@ Requirements:
 - Focus on materials prep, fabrication sequence, assembly order, finishing, transport readiness, and rehearsal readiness.
 - Do not include dangerous or illegal instructions.
 `;
-      const text = await callGenerate(prompt);
-      const build = parseJsonFromText<PropBuildInstructions>(text);
+      const build = await callGenerate<PropBuildInstructions>(prompt);
       setResult((prev) => prev ? ({ ...prev, buildInstructions: {
         toolsRequired: Array.isArray(build.toolsRequired) ? build.toolsRequired.map(String) : [],
         constructionSteps: Array.isArray(build.constructionSteps) ? build.constructionSteps.map(String) : [],
