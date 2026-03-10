@@ -1,14 +1,16 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import type { PropBuildInstructions, PropConcept, Task, User } from "../types";
 import { saveIdea } from "../services/ideasService";
 import { createShow, addTasksToShow } from "../services/showsService";
 import { useAppDispatch, refreshIdeas, refreshShows } from "../store";
 import ShareButton from "./ShareButton";
+import { trackClientEvent } from "../services/telemetryClient";
 
 type Props = {
   user?: User;
   onIdeaSaved?: () => void;
   onNavigateShowPlanner?: () => void;
+  onNavigateDirectorMode?: () => void;
 };
 
 type SectionKey = "concept" | "use" | "construction" | "materials" | "cost" | "transport" | "safety" | "build";
@@ -79,7 +81,7 @@ function CollapsibleCard({ title, isOpen, onToggle, children }: { title: string;
   );
 }
 
-export default function PropGenerator({ onIdeaSaved, onNavigateShowPlanner }: Props) {
+export default function PropGenerator({ onIdeaSaved, onNavigateShowPlanner, onNavigateDirectorMode }: Props) {
   const dispatch = useAppDispatch();
   const [loading, setLoading] = useState(false);
   const [buildLoading, setBuildLoading] = useState(false);
@@ -102,6 +104,26 @@ export default function PropGenerator({ onIdeaSaved, onNavigateShowPlanner }: Pr
     setInputs((prev) => ({ ...prev, [key]: value }));
   }
 
+
+  const telemetryMetadata = useMemo(() => ({
+    prop_type: inputs.propType || 'unspecified',
+    skill_level: inputs.skillLevel || 'unspecified',
+    budget: inputs.budget || 'unspecified',
+    audience_type: inputs.audience || 'unspecified',
+    venue_type: inputs.venue || 'unspecified',
+    transportable: Boolean(String(inputs.transport || '').trim()),
+  }), [inputs]);
+
+  useEffect(() => {
+    void trackClientEvent({
+      tool: 'prop_generator',
+      action: 'prop_generator_opened',
+      metadata: telemetryMetadata,
+      outcome: 'ALLOWED',
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function callGenerate(prompt: string) {
     const r = await fetch("/api/generate", {
       method: "POST",
@@ -113,7 +135,7 @@ export default function PropGenerator({ onIdeaSaved, onNavigateShowPlanner }: Pr
     return text;
   }
 
-  async function generate() {
+  async function generate(mode: 'base' | 'alternate' = 'base') {
     if (loading) return;
     setLoading(true);
     setError(null);
@@ -135,7 +157,9 @@ Return JSON ONLY using this schema:
 }
 
 Keep it practical, non-exposure, and suitable for a magician building or commissioning a prop.
-
+${mode === 'alternate' && result ? `Generate a distinctly different alternate design from this existing concept, while keeping it appropriate for the same performance context:
+${JSON.stringify(result, null, 2)}
+` : ''}
 Inputs:
 Prop Type: ${inputs.propType}
 Materials: ${inputs.materials}
@@ -148,8 +172,15 @@ Reset: ${inputs.reset}`;
 
       const text = await callGenerate(prompt);
       const json = parseJsonFromText<any>(text);
-      setResult(sanitizeConcept(json));
+      const concept = sanitizeConcept(json);
+      setResult(concept);
       setOpenSections(new Set(defaultOpen));
+      await trackClientEvent({
+        tool: 'prop_generator',
+        action: mode === 'alternate' ? 'prop_alternate_generated' : 'prop_generated',
+        metadata: { ...telemetryMetadata, prop_name: concept.propName },
+        outcome: 'SUCCESS_NOT_CHARGED',
+      });
     } catch (e: any) {
       console.error(e);
       setError(e?.message || "Generation failed");
@@ -193,6 +224,12 @@ Requirements:
         difficultyRating: String(build.difficultyRating ?? '').trim(),
       } }) : prev);
       setOpenSections((prev) => new Set([...Array.from(prev), 'build']));
+      await trackClientEvent({
+        tool: 'prop_generator',
+        action: 'prop_build_instructions_generated',
+        metadata: { ...telemetryMetadata, prop_name: result.propName },
+        outcome: 'SUCCESS_NOT_CHARGED',
+      });
     } catch (e: any) {
       console.error(e);
       setError(e?.message || 'Build instruction generation failed');
@@ -212,6 +249,12 @@ Requirements:
         category: 'blueprint',
       });
       await refreshIdeas(dispatch);
+      await trackClientEvent({
+        tool: 'prop_generator',
+        action: 'prop_saved_to_ideas',
+        metadata: { ...telemetryMetadata, prop_name: result.propName },
+        outcome: 'SUCCESS_NOT_CHARGED',
+      });
       onIdeaSaved?.();
     } catch (e: any) {
       setError(e?.message || 'Could not save concept.');
@@ -233,9 +276,39 @@ Requirements:
       }
       await addTasksToShow(show.id, tasks);
       await refreshShows(dispatch);
+      await trackClientEvent({
+        tool: 'prop_generator',
+        action: 'prop_added_to_show',
+        metadata: { ...telemetryMetadata, prop_name: result.propName, show_id: show.id },
+        outcome: 'SUCCESS_NOT_CHARGED',
+      });
       onNavigateShowPlanner?.();
     } catch (e: any) {
       setError(e?.message || 'Could not send to Show Planner.');
+    }
+  }
+
+
+  async function sendToDirectorMode() {
+    if (!result) return;
+    try {
+      await saveIdea({
+        type: 'text',
+        title: `Director Seed: ${result.propName}`,
+        content: JSON.stringify({ inputs, result }, null, 2),
+        tags: ['prop-generator', 'director-mode', 'prop-concept'],
+        category: 'blueprint',
+      });
+      await refreshIdeas(dispatch);
+      await trackClientEvent({
+        tool: 'prop_generator',
+        action: 'prop_sent_to_director',
+        metadata: { ...telemetryMetadata, prop_name: result.propName },
+        outcome: 'SUCCESS_NOT_CHARGED',
+      });
+      onNavigateDirectorMode?.();
+    } catch (e: any) {
+      setError(e?.message || 'Could not send to Director Mode.');
     }
   }
 
@@ -342,7 +415,9 @@ Requirements:
 
               <div className="border-t border-slate-800 mt-4 pt-4 flex flex-wrap gap-3">
                 <button type="button" onClick={saveToIdeas} className="rounded-xl border border-slate-700 bg-slate-900/40 px-4 py-2.5 text-sm font-semibold text-slate-100 hover:bg-slate-800/50 transition">Save to Idea Vault</button>
-                <button type="button" onClick={sendToShowPlanner} className="rounded-xl border border-slate-700 bg-slate-900/40 px-4 py-2.5 text-sm font-semibold text-slate-100 hover:bg-slate-800/50 transition">Send to Show Planner</button>
+                <button type="button" onClick={sendToDirectorMode} className="rounded-xl border border-slate-700 bg-slate-900/40 px-4 py-2.5 text-sm font-semibold text-slate-100 hover:bg-slate-800/50 transition">Send to Director Mode</button>
+                <button type="button" onClick={sendToShowPlanner} className="rounded-xl border border-slate-700 bg-slate-900/40 px-4 py-2.5 text-sm font-semibold text-slate-100 hover:bg-slate-800/50 transition">Add to Show Planner</button>
+                <button type="button" onClick={() => generate('alternate')} disabled={loading} className="rounded-xl border border-slate-700 bg-slate-900/40 px-4 py-2.5 text-sm font-semibold text-slate-100 hover:bg-slate-800/50 transition disabled:opacity-50">Generate Alternate Design</button>
                 <ShareButton title={result?.propName || 'Prop Concept'} text={JSON.stringify(result, null, 2)} className="rounded-xl border border-slate-700 bg-slate-900/40 px-4 py-2.5 text-sm font-semibold text-slate-100 hover:bg-slate-800/50 transition">Share</ShareButton>
               </div>
             </>
