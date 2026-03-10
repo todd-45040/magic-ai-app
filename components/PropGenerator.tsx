@@ -184,8 +184,14 @@ export default function PropGenerator({ onIdeaSaved, onNavigateShowPlanner, onNa
     });
   }
 
-  async function callGenerate<T>(prompt: string) {
-    return aiJson<T>(prompt);
+  async function callGenerate<T>(prompt: string): Promise<T> {
+    const response: any = await aiJson<any>(prompt);
+
+    if (response?.data?.json) return response.data.json as T;
+    if (response?.json) return response.json as T;
+    if (response?.data) return response.data as T;
+
+    return response as T;
   }
 
   async function generate(mode: 'base' | 'alternate' = 'base') {
