@@ -23,6 +23,31 @@ type ResultSection = {
 
 const defaultOpen = new Set<SectionKey>(["concept"]);
 
+const demoInputs = {
+  propType: "Prediction Chest",
+  materials: "Wood + brass",
+  skillLevel: "Intermediate",
+  audience: "Corporate banquet",
+  venue: "Hotel ballroom stage",
+  budget: "$150",
+  transport: "Carry-on suitcase",
+  reset: "Instant",
+};
+
+const demoResult: PropConcept = {
+  propName: "Locked Prediction Chest",
+  conceptSummary: "A polished wooden prediction chest with engraved brass plates and a velvet-lined interior, designed to deliver a premium corporate reveal on stage.",
+  performanceUse: "Used as a centerpiece prediction prop for a corporate banquet finale, allowing a visible sealed prediction to be opened in a dramatic, elegant moment.",
+  constructionIdea: "Build a compact hardwood chest with decorative brass hardware, a hidden interior load chamber, and a soft velvet insert that frames the final reveal.",
+  materials: ["Hardwood box blank", "Brass corner hardware", "Decorative brass name plate", "Velvet lining", "Small lock and key", "Interior divider stock"],
+  estimatedCost: "Approximately $120–$150 depending on hardware finish and custom engraving.",
+  transportNotes: "Sized to travel inside a padded carry-on case with the prediction load secured separately until setup.",
+  resetSpeed: "Fast reset between sets once the interior load is prepped.",
+  safetyNotes: ["Round over exposed brass edges to avoid snags.", "Use secure interior fittings so nothing shifts during transport."],
+  angleNotes: ["Best presented front-facing on a banquet platform or stage.", "Keep interior handling shielded from extreme side seating during the reveal phase."],
+  buildInstructions: null,
+};
+
 function parseJsonFromText<T>(text: string): T {
   const trimmed = text.trim();
   try {
@@ -123,6 +148,53 @@ export default function PropGenerator({ onIdeaSaved, onNavigateShowPlanner, onNa
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+
+
+  function resetPage() {
+    const confirmed = typeof window === 'undefined' ? true : window.confirm('Reset the Prop Generator and clear the current concept?');
+    if (!confirmed) return;
+    setInputs({
+      propType: "",
+      materials: "",
+      skillLevel: "",
+      audience: "",
+      venue: "",
+      budget: "",
+      transport: "",
+      reset: "",
+    });
+    setResult(null);
+    setError(null);
+    setOpenSections(new Set(defaultOpen));
+    void trackClientEvent({
+      tool: 'prop_generator',
+      action: 'prop_generator_reset',
+      metadata: telemetryMetadata,
+      outcome: 'ALLOWED',
+    });
+  }
+
+  function loadDemoProp() {
+    setInputs(demoInputs);
+    setResult(demoResult);
+    setError(null);
+    setOpenSections(new Set(defaultOpen));
+    void trackClientEvent({
+      tool: 'prop_generator',
+      action: 'demo_prop_loaded',
+      metadata: {
+        prop_type: demoInputs.propType,
+        skill_level: demoInputs.skillLevel,
+        budget: demoInputs.budget,
+        audience_type: demoInputs.audience,
+        venue_type: demoInputs.venue,
+        transportable: true,
+        prop_name: demoResult.propName,
+      },
+      outcome: 'ALLOWED',
+    });
+  }
 
   async function callGenerate(prompt: string) {
     const r = await fetch("/api/generate", {
@@ -330,9 +402,27 @@ Requirements:
 
   return (
     <div className="w-full h-full p-4 md:p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl md:text-3xl font-bold text-slate-100">Prop Generator</h1>
-        <p className="text-slate-400 mt-2 max-w-3xl">Design practical performance props with a structured AI workspace, then expand the concept into build-ready instructions.</p>
+      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold text-slate-100">Prop Generator</h1>
+          <p className="text-slate-400 mt-2 max-w-3xl">Design practical performance props with a structured AI workspace, then expand the concept into build-ready instructions.</p>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={loadDemoProp}
+            className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm font-semibold text-amber-100 hover:bg-amber-500/20 transition"
+          >
+            🎭 Load Demo Prop
+          </button>
+          <button
+            type="button"
+            onClick={resetPage}
+            className="rounded-xl border border-slate-700 bg-slate-900/40 px-4 py-2.5 text-sm font-semibold text-slate-100 hover:bg-slate-800/50 transition"
+          >
+            Reset Page
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
