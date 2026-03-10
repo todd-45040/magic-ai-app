@@ -32,7 +32,11 @@ export type AiError = Error & {
 type OkResponse<T> = {
   ok: true;
   requestId?: string;
-  data: T;
+  data?: T;
+  json?: T;
+  text?: string;
+  images?: string[];
+  result?: T;
 };
 
 type ErrResponse = {
@@ -97,7 +101,25 @@ async function safeFetchJson<T>(
   }
 
   if (parsed && typeof parsed.ok === "boolean") {
-    if (parsed.ok) return parsed as OkResponse<T>;
+    if (parsed.ok) {
+      const normalized: OkResponse<T> = {
+        ok: true,
+        requestId: parsed.requestId,
+        data:
+          parsed.data !== undefined
+            ? parsed.data
+            : parsed.json !== undefined
+              ? parsed.json
+              : parsed.text !== undefined
+                ? parsed.text
+                : parsed.images !== undefined
+                  ? parsed.images
+                  : parsed.result !== undefined
+                    ? parsed.result
+                    : parsed,
+      };
+      return normalized;
+    }
 
     const err = parsed as ErrResponse;
     const e: AiError = new Error(err.message || "AI request failed");
@@ -124,14 +146,7 @@ export async function aiChat(prompt: string, system?: string) {
     body: JSON.stringify({ messages: buildMessages(prompt, system) }),
   });
 
-  return res.data.text;
-}
-
-function normalizeJsonResponse<T>(payload: any): T {
-  if (payload?.data?.json !== undefined) return payload.data.json as T;
-  if (payload?.json !== undefined) return payload.json as T;
-  if (payload?.data !== undefined) return payload.data as T;
-  return payload as T;
+  return String(res.data ?? "");
 }
 
 /** aiJson(prompt, system?, schemaName?) → structured JSON response */
@@ -140,7 +155,7 @@ export async function aiJson<T = unknown>(
   system?: string,
   schemaName?: string
 ) {
-  const res = await safeFetchJson<any>("/api/ai/json", {
+  const res = await safeFetchJson<{ json: T }>("/api/ai/json", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -149,7 +164,7 @@ export async function aiJson<T = unknown>(
     }),
   });
 
-  return normalizeJsonResponse<T>(res.data);
+  return res.data as T;
 }
 
 /** aiImage(prompt, style?, size?) → returns array of image strings (urls or base64, depending on server) */
@@ -164,7 +179,7 @@ export async function aiImage(
     body: JSON.stringify({ prompt, style, size }),
   });
 
-  return res.data.images;
+  return (Array.isArray(res.data) ? res.data : []) as string[];
 }
 
 /** aiIdentify(imageBase64, prompt?) → vision analysis result (generic type) */
@@ -178,5 +193,5 @@ export async function aiIdentify<T = unknown>(
     body: JSON.stringify({ imageBase64, prompt }),
   });
 
-  return res.data.result;
+  return res.data as T;
 }
