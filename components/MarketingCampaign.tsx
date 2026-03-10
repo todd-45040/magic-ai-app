@@ -96,47 +96,6 @@ const LOADING_STEPS = [
     const goldHeading = "text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-300 to-amber-200 drop-shadow-[0_1px_0_rgba(0,0,0,0.35)] transition duration-150 hover:drop-shadow-[0_0_10px_rgba(245,208,110,0.35)]";
     const goldHeadingSmall = "text-amber-200/90 drop-shadow-[0_1px_0_rgba(0,0,0,0.35)] transition duration-150 hover:text-amber-200 hover:drop-shadow-[0_0_10px_rgba(245,208,110,0.35)]";
 
-type ResultSection = {
-    title: string;
-    body: string;
-};
-
-const splitCampaignIntoSections = (content: string): ResultSection[] => {
-    const cleaned = content.replace(/```(?:markdown|md)?/gi, '').replace(/```/g, '').trim();
-    const lines = cleaned.split(/\r?\n/);
-    const sections: ResultSection[] = [];
-    let currentTitle = 'Campaign Overview';
-    let currentBody: string[] = [];
-
-    const pushCurrent = () => {
-        const body = currentBody.join('\n').trim();
-        if (currentTitle || body) sections.push({ title: currentTitle, body });
-    };
-
-    for (const line of lines) {
-        const headingMatch = line.match(/^#{2,4}\s+(.+)$/);
-        if (headingMatch) {
-            pushCurrent();
-            currentTitle = headingMatch[1].replace(/[*_`]/g, '').trim();
-            currentBody = [];
-        } else {
-            currentBody.push(line);
-        }
-    }
-
-    pushCurrent();
-
-    const filtered = sections
-        .map(section => ({
-            title: section.title.trim() || 'Campaign Overview',
-            body: section.body.trim(),
-        }))
-        .filter((section, index) => section.body.length > 0 || index === 0);
-
-    if (filtered.length === 0) return [{ title: 'Campaign Overview', body: cleaned }];
-    return filtered;
-};
-
 
 const MarketingCampaign: React.FC<MarketingCampaignProps> = ({ user, onIdeaSaved, onNavigateToShowPlanner, onNavigate }) => {
     const [showTitle, setShowTitle] = useState('');
@@ -165,8 +124,6 @@ const MarketingCampaign: React.FC<MarketingCampaignProps> = ({ user, onIdeaSaved
     const [isGeneratingPersona, setIsGeneratingPersona] = useState(false);
     const [showSparkle, setShowSparkle] = useState(false);
     const [inputSectionsOpen, setInputSectionsOpen] = useState<Record<(typeof INPUT_SECTIONS)[number], boolean>>({ ...DEFAULT_SECTION_STATE });
-
-    const [resultSectionsOpen, setResultSectionsOpen] = useState<Record<string, boolean>>({});
 
 
     useEffect(() => {
@@ -237,7 +194,6 @@ const MarketingCampaign: React.FC<MarketingCampaignProps> = ({ user, onIdeaSaved
         setIsGeneratingPersona(false);
         setShowSparkle(false);
         setInputSectionsOpen({ ...DEFAULT_SECTION_STATE });
-        setResultSectionsOpen({});
     };
 
     const loadDemoCampaign = () => {
@@ -272,35 +228,8 @@ const MarketingCampaign: React.FC<MarketingCampaignProps> = ({ user, onIdeaSaved
         return () => clearInterval(t);
     }, [isLoading]);
 
-    const resultSections = useMemo(() => (activeResult ? splitCampaignIntoSections(activeResult) : []), [activeResult]);
 
-    useEffect(() => {
-        if (!resultSections.length) {
-            setResultSectionsOpen({});
-            return;
-        }
-        setResultSectionsOpen(prev => {
-            const next: Record<string, boolean> = {};
-            resultSections.forEach((section, index) => {
-                next[section.title] = prev[section.title] ?? index < 2;
-            });
-            return next;
-        });
-    }, [resultSections]);
-
-    const toggleResultSection = (title: string) => {
-        setResultSectionsOpen(prev => ({ ...prev, [title]: !prev[title] }));
-    };
-
-    const expandAllResultSections = () => {
-        setResultSectionsOpen(Object.fromEntries(resultSections.map(section => [section.title, true])));
-    };
-
-    const compactAllResultSections = () => {
-        setResultSectionsOpen(Object.fromEntries(resultSections.map((section, index) => [section.title, index < 2])));
-    };
-
-
+    
 const readinessScore = useMemo(() => {
     // Simple, gamified completeness score (0-100)
     let score = 0;
@@ -1236,53 +1165,7 @@ const handleCreateBookingPitch = async () => {
                             </div>
 
                             <div className="h-px my-4 bg-gradient-to-r from-transparent via-slate-400/20 to-transparent opacity-60" />
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                                <p className={`text-sm font-semibold ${goldHeadingSmall}`}>Generated Campaign Workspace</p>
-                                <div className="flex flex-wrap gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={expandAllResultSections}
-                                        className="inline-flex items-center gap-2 rounded-md border border-slate-700 bg-slate-900/60 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800 transition-colors"
-                                    >
-                                        <ViewGridIcon className="w-4 h-4" />
-                                        <span>Expand Results</span>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={compactAllResultSections}
-                                        className="inline-flex items-center gap-2 rounded-md border border-slate-700 bg-slate-900/60 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800 transition-colors"
-                                    >
-                                        <ViewListIcon className="w-4 h-4" />
-                                        <span>Compact Results</span>
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div className="space-y-3">
-                                {resultSections.map((section, index) => {
-                                    const isOpen = resultSectionsOpen[section.title] ?? index < 2;
-                                    return (
-                                        <div key={`${section.title}-${index}`} className={`rounded-lg border transition-colors ${isOpen ? 'border-purple-500/40 bg-purple-500/5' : 'border-slate-800 bg-slate-950/30'}`}>
-                                            <button
-                                                type="button"
-                                                onClick={() => toggleResultSection(section.title)}
-                                                className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-slate-900/50 transition-colors"
-                                            >
-                                                <div>
-                                                    <p className={`font-semibold ${goldHeadingSmall}`}>{section.title}</p>
-                                                    <p className="text-xs text-slate-500 mt-1">{isOpen ? 'Expanded' : 'Collapsed'}</p>
-                                                </div>
-                                                <ChevronDownIcon className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-                                            </button>
-                                            {isOpen && (
-                                                <div className="border-t border-slate-800 px-4 py-4">
-                                                    <pre className="whitespace-pre-wrap break-words text-slate-200 font-sans text-sm">{section.body}</pre>
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
+                            <pre className="whitespace-pre-wrap break-words text-slate-200 font-sans text-sm">{activeResult}</pre>
                         </div>
                         <div className="sticky bottom-0 z-30 p-2.5 bg-slate-950/90 backdrop-blur-md flex flex-col gap-2 border-t border-slate-800 shadow-[0_-8px_24px_rgba(0,0,0,0.35)]">
                             {actionNotice && (
