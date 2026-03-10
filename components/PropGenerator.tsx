@@ -19,6 +19,7 @@ type SectionKey = "concept" | "use" | "construction" | "materials" | "cost" | "t
 type ResultSection = {
   key: SectionKey;
   title: string;
+  icon: string;
   content: React.ReactNode;
 };
 
@@ -78,7 +79,7 @@ function listNode(items: string[], empty = 'Not provided yet.') {
   return <ul className="list-disc pl-5 space-y-1 text-slate-200">{items.map((item, i) => <li key={`${item}-${i}`}>{item}</li>)}</ul>;
 }
 
-function CollapsibleCard({ title, isOpen, onToggle, children }: { title: string; isOpen: boolean; onToggle: () => void; children: React.ReactNode }) {
+function CollapsibleCard({ title, icon, isOpen, onToggle, children }: { title: string; icon?: string; isOpen: boolean; onToggle: () => void; children: React.ReactNode }) {
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900/30 overflow-hidden">
       <button
@@ -86,7 +87,7 @@ function CollapsibleCard({ title, isOpen, onToggle, children }: { title: string;
         onClick={onToggle}
         className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-slate-800/40 transition-colors"
       >
-        <span className="font-semibold text-slate-100">{title}</span>
+        <span className="font-semibold text-slate-100 flex items-center gap-2"><span aria-hidden="true" className="text-base">{icon}</span><span>{title}</span></span>
         <span className="text-slate-400 text-sm">{isOpen ? '▲' : '▼'}</span>
       </button>
       {isOpen && <div className="px-4 pb-4 text-sm leading-6">{children}</div>}
@@ -372,14 +373,14 @@ Requirements:
   const sections = useMemo<ResultSection[]>(() => {
     if (!result) return [];
     return [
-      { key: 'concept', title: 'Prop Concept', content: <div><h2 className="text-xl font-semibold text-slate-100 mb-2">{result.propName}</h2><p className="text-slate-200">{result.conceptSummary || 'No summary generated yet.'}</p></div> },
-      { key: 'use', title: 'Performance Use', content: <p className="text-slate-200">{result.performanceUse || 'No performance use generated yet.'}</p> },
-      { key: 'construction', title: 'Construction Plan', content: <p className="text-slate-200">{result.constructionIdea || 'No construction plan generated yet.'}</p> },
-      { key: 'materials', title: 'Materials List', content: listNode(result.materials, 'No materials listed yet.') },
-      { key: 'cost', title: 'Cost Estimate', content: <p className="text-slate-200">{result.estimatedCost || 'No cost estimate generated yet.'}</p> },
-      { key: 'transport', title: 'Transport & Reset', content: <div className="space-y-3 text-slate-200"><div><div className="font-semibold text-slate-100 mb-1">Transport Notes</div><p>{result.transportNotes || 'No transport notes generated yet.'}</p></div><div><div className="font-semibold text-slate-100 mb-1">Reset Speed</div><p>{result.resetSpeed || 'No reset notes generated yet.'}</p></div></div> },
-      { key: 'safety', title: 'Safety & Angles', content: <div className="space-y-3"><div><div className="font-semibold text-slate-100 mb-1">Safety Notes</div>{listNode(result.safetyNotes, 'No safety notes generated yet.')}</div><div><div className="font-semibold text-slate-100 mb-1">Angle Notes</div>{listNode(result.angleNotes, 'No angle notes generated yet.')}</div></div> },
-      { key: 'build', title: 'Build Instructions', content: result.buildInstructions ? <div className="space-y-3"><div><div className="font-semibold text-slate-100 mb-1">Tools Required</div>{listNode(result.buildInstructions.toolsRequired, 'No tools listed yet.')}</div><div><div className="font-semibold text-slate-100 mb-1">Construction Steps</div>{listNode(result.buildInstructions.constructionSteps, 'No build steps generated yet.')}</div><div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><div className="rounded-xl border border-slate-800 bg-slate-950/30 p-3"><div className="text-xs uppercase tracking-wide text-slate-400">Estimated Build Time</div><div className="text-slate-100 font-semibold mt-1">{result.buildInstructions.estimatedBuildTime || 'Not provided'}</div></div><div className="rounded-xl border border-slate-800 bg-slate-950/30 p-3"><div className="text-xs uppercase tracking-wide text-slate-400">Difficulty Rating</div><div className="text-slate-100 font-semibold mt-1">{result.buildInstructions.difficultyRating || 'Not provided'}</div></div></div></div> : <p className="text-slate-400">Click Generate Build Instructions to add a practical build plan.</p> },
+      { key: 'concept', title: 'Prop Concept', icon: '🎩', content: <div><h2 className="text-xl font-semibold text-slate-100 mb-2">{result.propName}</h2><p className="text-slate-200">{result.conceptSummary || 'No summary generated yet.'}</p></div> },
+      { key: 'use', title: 'Performance Use', icon: '🎭', content: <p className="text-slate-200">{result.performanceUse || 'No performance use generated yet.'}</p> },
+      { key: 'construction', title: 'Construction Plan', icon: '🧰', content: <p className="text-slate-200">{result.constructionIdea || 'No construction plan generated yet.'}</p> },
+      { key: 'materials', title: 'Materials List', icon: '📦', content: listNode(result.materials, 'No materials listed yet.') },
+      { key: 'cost', title: 'Cost Estimate', icon: '💰', content: <p className="text-slate-200">{result.estimatedCost || 'No cost estimate generated yet.'}</p> },
+      { key: 'transport', title: 'Transport & Reset', icon: '🚚', content: <div className="space-y-3 text-slate-200"><div><div className="font-semibold text-slate-100 mb-1">Transport Notes</div><p>{result.transportNotes || 'No transport notes generated yet.'}</p></div><div><div className="font-semibold text-slate-100 mb-1">Reset Speed</div><p>{result.resetSpeed || 'No reset notes generated yet.'}</p></div></div> },
+      { key: 'safety', title: 'Safety & Angles', icon: '⚠️', content: <div className="space-y-3"><div><div className="font-semibold text-slate-100 mb-1">Safety Notes</div>{listNode(result.safetyNotes, 'No safety notes generated yet.')}</div><div><div className="font-semibold text-slate-100 mb-1">Angle Notes</div>{listNode(result.angleNotes, 'No angle notes generated yet.')}</div></div> },
+      { key: 'build', title: 'Build Instructions', icon: '🔧', content: result.buildInstructions ? <div className="space-y-3"><div><div className="font-semibold text-slate-100 mb-1">Tools Required</div>{listNode(result.buildInstructions.toolsRequired, 'No tools listed yet.')}</div><div><div className="font-semibold text-slate-100 mb-1">Construction Steps</div>{listNode(result.buildInstructions.constructionSteps, 'No build steps generated yet.')}</div><div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><div className="rounded-xl border border-slate-800 bg-slate-950/30 p-3"><div className="text-xs uppercase tracking-wide text-slate-400">Estimated Build Time</div><div className="text-slate-100 font-semibold mt-1">{result.buildInstructions.estimatedBuildTime || 'Not provided'}</div></div><div className="rounded-xl border border-slate-800 bg-slate-950/30 p-3"><div className="text-xs uppercase tracking-wide text-slate-400">Difficulty Rating</div><div className="text-slate-100 font-semibold mt-1">{result.buildInstructions.difficultyRating || 'Not provided'}</div></div></div></div> : <p className="text-slate-400">Click Generate Build Instructions to add a practical build plan.</p> },
     ];
   }, [result]);
 
@@ -447,7 +448,7 @@ Requirements:
             className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-3 rounded-xl w-full font-semibold transition disabled:opacity-50"
             disabled={loading}
           >
-            {loading ? "Generating..." : "Generate Prop"}
+            {loading ? "Generating Prop..." : "Generate Prop"}
           </button>
         </div>
 
@@ -496,6 +497,7 @@ Requirements:
                   <CollapsibleCard
                     key={section.key}
                     title={section.title}
+                    icon={section.icon}
                     isOpen={openSections.has(section.key)}
                     onToggle={() => setOpenSections((prev) => { const next = new Set(prev); next.has(section.key) ? next.delete(section.key) : next.add(section.key); return next; })}
                   >

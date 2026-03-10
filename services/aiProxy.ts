@@ -32,11 +32,7 @@ export type AiError = Error & {
 type OkResponse<T> = {
   ok: true;
   requestId?: string;
-  data?: T;
-  json?: T;
-  text?: string;
-  images?: string[];
-  result?: T;
+  data: T;
 };
 
 type ErrResponse = {
@@ -101,25 +97,7 @@ async function safeFetchJson<T>(
   }
 
   if (parsed && typeof parsed.ok === "boolean") {
-    if (parsed.ok) {
-      const normalized: OkResponse<T> = {
-        ok: true,
-        requestId: parsed.requestId,
-        data:
-          parsed.data !== undefined
-            ? parsed.data
-            : parsed.json !== undefined
-              ? parsed.json
-              : parsed.text !== undefined
-                ? parsed.text
-                : parsed.images !== undefined
-                  ? parsed.images
-                  : parsed.result !== undefined
-                    ? parsed.result
-                    : parsed,
-      };
-      return normalized;
-    }
+    if (parsed.ok) return parsed as OkResponse<T>;
 
     const err = parsed as ErrResponse;
     const e: AiError = new Error(err.message || "AI request failed");
@@ -146,7 +124,7 @@ export async function aiChat(prompt: string, system?: string) {
     body: JSON.stringify({ messages: buildMessages(prompt, system) }),
   });
 
-  return String(res.data ?? "");
+  return res.data.text;
 }
 
 /** aiJson(prompt, system?, schemaName?) → structured JSON response */
@@ -164,7 +142,7 @@ export async function aiJson<T = unknown>(
     }),
   });
 
-  return res.data as T;
+  return res.data.json;
 }
 
 /** aiImage(prompt, style?, size?) → returns array of image strings (urls or base64, depending on server) */
@@ -179,7 +157,7 @@ export async function aiImage(
     body: JSON.stringify({ prompt, style, size }),
   });
 
-  return (Array.isArray(res.data) ? res.data : []) as string[];
+  return res.data.images;
 }
 
 /** aiIdentify(imageBase64, prompt?) → vision analysis result (generic type) */
@@ -193,5 +171,5 @@ export async function aiIdentify<T = unknown>(
     body: JSON.stringify({ imageBase64, prompt }),
   });
 
-  return res.data as T;
+  return res.data.result;
 }
