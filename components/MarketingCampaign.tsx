@@ -6,7 +6,7 @@ import { createClientProposal } from '../services/proposalsService';
 import { createBookingPitch } from '../services/pitchesService';
 import { createShow, addTasksToShow } from '../services/showsService';
 import { MARKETING_ASSISTANT_SYSTEM_INSTRUCTION } from '../constants';
-import { MegaphoneIcon, WandIcon, SaveIcon, CheckIcon, ShareIcon, UsersIcon, StageCurtainsIcon, CalendarIcon, FileTextIcon, MailIcon, BlueprintIcon, ChevronDownIcon, SendIcon } from './icons';
+import { MegaphoneIcon, WandIcon, SaveIcon, CheckIcon, ShareIcon, UsersIcon, StageCurtainsIcon, CalendarIcon, FileTextIcon, MailIcon, BlueprintIcon, ChevronDownIcon, SendIcon, TagIcon, TimerIcon, ViewGridIcon, ViewListIcon, CopyIcon, CustomizeIcon } from './icons';
 import ShareButton from './ShareButton';
 import { CohesionActions } from './CohesionActions';
 import type { User } from '../types';
@@ -64,11 +64,27 @@ const THEME_SUGGESTIONS = [
 
 const PERSONA_VERSIONS = [
     { key: 'Base', label: 'Default' },
-    { key: 'Corporate buyers', label: 'Corporate buyers' },
+    { key: 'Corporate Buyers', label: 'Corporate buyers' },
     { key: 'Parents', label: 'Parents' },
-    { key: 'Event planners', label: 'Event planners' },
-    { key: 'Festival coordinators', label: 'Festival coordinators' },
+    { key: 'Event Planners', label: 'Event planners' },
+    { key: 'Festival Coordinators', label: 'Festival coordinators' },
 ] as const;
+
+const INPUT_SECTIONS = [
+    'Show Basics',
+    'Audience & Booking Market',
+    'Brand / Performance Style',
+    'Campaign Strategy',
+    'Keywords / Themes',
+] as const;
+
+const DEFAULT_SECTION_STATE = {
+    'Show Basics': true,
+    'Audience & Booking Market': true,
+    'Brand / Performance Style': false,
+    'Campaign Strategy': false,
+    'Keywords / Themes': false,
+} as const;
 
 const LOADING_STEPS = [
     'Analyzing performance profile…',
@@ -107,6 +123,7 @@ const MarketingCampaign: React.FC<MarketingCampaignProps> = ({ user, onIdeaSaved
     const [personaResults, setPersonaResults] = useState<Record<string, string>>({});
     const [isGeneratingPersona, setIsGeneratingPersona] = useState(false);
     const [showSparkle, setShowSparkle] = useState(false);
+    const [inputSectionsOpen, setInputSectionsOpen] = useState<Record<(typeof INPUT_SECTIONS)[number], boolean>>({ ...DEFAULT_SECTION_STATE });
 
 
     useEffect(() => {
@@ -128,6 +145,70 @@ const MarketingCampaign: React.FC<MarketingCampaignProps> = ({ user, onIdeaSaved
         setSelectedStyles(prev => 
             prev.includes(style) ? prev.filter(s => s !== style) : [...prev, style]
         );
+    };
+
+    const toggleInputSection = (section: (typeof INPUT_SECTIONS)[number]) => {
+        setInputSectionsOpen(prev => ({ ...prev, [section]: !prev[section] }));
+    };
+
+    const expandAllSections = () => {
+        setInputSectionsOpen({
+            'Show Basics': true,
+            'Audience & Booking Market': true,
+            'Brand / Performance Style': true,
+            'Campaign Strategy': true,
+            'Keywords / Themes': true,
+        });
+    };
+
+    const compactAllSections = () => {
+        setInputSectionsOpen({
+            'Show Basics': true,
+            'Audience & Booking Market': false,
+            'Brand / Performance Style': false,
+            'Campaign Strategy': false,
+            'Keywords / Themes': false,
+        });
+    };
+
+    const resetPage = () => {
+        setShowTitle('');
+        setSelectedAudiences([]);
+        setCustomAudience('');
+        setSelectedStyles([]);
+        setKeyThemes('');
+        setCampaignStyle('');
+        setShowTitleTouched(false);
+        setAudienceTouched(false);
+        setLoadingStepIndex(0);
+        setIsLoading(false);
+        setError(null);
+        setResult(null);
+        setSaveStatus('idle');
+        setActionNotice(null);
+        setIsSendingToPlanner(false);
+        setIsSavingBlueprint(false);
+        setBlueprintMenuOpen(false);
+        setPersonaView('Base');
+        setPersonaResults({});
+        setIsGeneratingPersona(false);
+        setShowSparkle(false);
+        setInputSectionsOpen({ ...DEFAULT_SECTION_STATE });
+    };
+
+    const loadDemoCampaign = () => {
+        setShowTitle('Summer Library Show Promo Campaign');
+        setSelectedAudiences(['Family Show', 'Festival / Fair']);
+        setCustomAudience('Library youth services coordinators');
+        setSelectedStyles(['Interactive', 'Storytelling', 'Comedic']);
+        setCampaignStyle('High-Energy Festival');
+        setKeyThemes('Summer reading kickoff, family-friendly amazement, interactive comedy magic, colorful visuals, library community event, memorable photo moments.');
+        setShowTitleTouched(true);
+        setAudienceTouched(true);
+        setError(null);
+        setActionNotice({ message: 'Demo campaign loaded: Summer Library Show Promo Campaign.' });
+        expandAllSections();
+        window.setTimeout(() => setActionNotice(null), 2200);
     };
 
     const isFormValid = useMemo(() => {
@@ -666,8 +747,8 @@ const handleCreateClientProposal = async () => {
             content: activeResult,
             source: {
                 showTitle,
-                targetAudience: targetAudience === 'Other' ? otherAudience : targetAudience,
-                performanceStyle,
+                targetAudience: liveAudiencesLabel,
+                performanceStyle: selectedStyles.join(', ') || 'Not specified',
                 campaignStyle,
             }
         });
@@ -701,8 +782,8 @@ const handleCreateBookingPitch = async () => {
             content: activeResult,
             source: {
                 showTitle,
-                targetAudience: targetAudience === 'Other' ? otherAudience : targetAudience,
-                performanceStyle,
+                targetAudience: liveAudiencesLabel,
+                performanceStyle: selectedStyles.join(', ') || 'Not specified',
                 campaignStyle,
             }
         });
@@ -724,173 +805,259 @@ const handleCreateBookingPitch = async () => {
 };
 
     return (
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
-            {/* Control Panel */}
-            <div className="flex flex-col">
-                <h2 className={`text-xl font-bold mb-2 ${goldHeading}`}>Marketing Campaign Generator</h2>
-                <p className="text-slate-400 mb-4">Fill in your show details to generate a complete promotional toolkit, including press releases, social media posts, and more.</p>
-                
-                <div className="space-y-6">
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 animate-fade-in">
+            <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-4 md:p-5 shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
-                        <label htmlFor="show-title" className={`block text-sm font-medium mb-1 ${goldHeadingSmall}`}>Show Title*</label>
-                        <p className="text-xs text-slate-500 mb-2">The headline name of your performance.</p>
-                        <input id="show-title" type="text" value={showTitle} onChange={(e) => setShowTitle(e.target.value)} placeholder="e.g., Echoes of the Enchanted" className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white" />
-                        {showTitleTouched && showTitle.trim() === '' && (
-                            <p className="text-xs text-slate-400 mt-2">Show title helps the AI brand your campaign.</p>
-                        )}
-
-{showTitleSuggestionsVisible && (
-    <div className="mt-3">
-        <p className="text-xs text-slate-500 mb-2">Suggested show titles:</p>
-        <div className="flex flex-wrap gap-2">
-            {SHOW_TITLE_SUGGESTIONS.map(s => (
-                <button
-                    key={s}
-                    type="button"
-                    onClick={() => { setShowTitle(s); setShowTitleTouched(true); }}
-                    className="px-2.5 py-1 rounded-full text-xs bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 transition-colors"
-                >
-                    {s}
-                </button>
-            ))}
-        </div>
-    </div>
-)}
+                        <h2 className={`text-xl font-bold ${goldHeading}`}>Marketing Campaign Generator</h2>
+                        <p className="text-slate-400 mt-2 max-w-3xl">Build a polished campaign package for your show with a stronger studio workflow, smarter live preview, and a cleaner generated workspace.</p>
                     </div>
-
-                    <div>
-                        <label className={`block text-sm font-medium mb-2 flex items-center gap-2 ${goldHeadingSmall}`}>
-                            <UsersIcon className="w-5 h-5 text-slate-400" />
-                            Target Audience*
-                        </label>
-                        <p className="text-xs text-slate-500 mb-2">Choose who this campaign is for.</p>
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                            {AUDIENCE_CATEGORIES.map(cat => (
-                                <button key={cat} onClick={() => handleAudienceToggle(cat)} className={`py-2 px-3 rounded-md transition-colors text-sm font-semibold ${ selectedAudiences.includes(cat) ? 'bg-purple-600 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-300' }`}>
-                                    {cat}
-                                </button>
-                            ))}
-                        </div>
-                        <input type="text" value={customAudience} onChange={e => setCustomAudience(e.target.value)} placeholder="Other (please specify)..." className="w-full mt-2 px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white text-sm" />
-                        {audienceTouched && selectedAudiences.length === 0 && customAudience.trim() === '' && (
-                            <p className="text-xs text-slate-400 mt-2">Pick at least one audience so the AI can tailor tone + channels.</p>
-                        )}
+                    <div className="flex flex-wrap gap-2">
+                        <button type="button" onClick={loadDemoCampaign} className="inline-flex items-center gap-2 rounded-md border border-purple-500/40 bg-purple-600/15 px-3 py-2 text-sm font-medium text-purple-100 hover:bg-purple-600/25 transition-colors">
+                            <WandIcon className="w-4 h-4" />
+                            <span>Load Demo Campaign</span>
+                        </button>
+                        <button type="button" onClick={resetPage} className="inline-flex items-center gap-2 rounded-md border border-slate-700 bg-slate-900/60 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-800 transition-colors">
+                            <CustomizeIcon className="w-4 h-4" />
+                            <span>Reset Page</span>
+                        </button>
+                        <button type="button" onClick={expandAllSections} className="inline-flex items-center gap-2 rounded-md border border-slate-700 bg-slate-900/60 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-800 transition-colors">
+                            <ViewGridIcon className="w-4 h-4" />
+                            <span>Expand All</span>
+                        </button>
+                        <button type="button" onClick={compactAllSections} className="inline-flex items-center gap-2 rounded-md border border-slate-700 bg-slate-900/60 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-800 transition-colors">
+                            <ViewListIcon className="w-4 h-4" />
+                            <span>Compact All</span>
+                        </button>
                     </div>
-
-                    <div>
-                        <label className={`block text-sm font-medium mb-2 flex items-center gap-2 ${goldHeadingSmall}`}>
-                            <StageCurtainsIcon className="w-5 h-5 text-slate-400" />
-                            Performance Style
-                        </label>
-                        <p className="text-xs text-slate-500 mb-2">Select tone + persona branding.</p>
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                            {STYLE_CHOICES.map(style => (
-                                 <button key={style} onClick={() => handleStyleToggle(style)} className={`py-2 px-3 rounded-md transition-colors text-sm font-semibold ${ selectedStyles.includes(style) ? 'bg-purple-600 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-300' }`}>
-                                    {style}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div>
-                        
-<div>
-    <label htmlFor="campaign-style" className={`block text-sm font-medium mb-1 ${goldHeadingSmall}`}>Campaign Style</label>
-    <p className="text-xs text-slate-500 mb-2">Pick a template to shape tone, channels, and structure.</p>
-    <select
-        id="campaign-style"
-        value={campaignStyle}
-        onChange={(e) => setCampaignStyle(e.target.value as any)}
-        className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white text-sm"
-    >
-        <option value="">Select a campaign style…</option>
-        {CAMPAIGN_STYLES.map(s => (
-            <option key={s} value={s}>{s}</option>
-        ))}
-    </select>
-</div>
-
-<div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4 space-y-3">
-    <div className="flex items-center justify-between gap-3">
-        <div>
-	            <p className={`text-sm font-semibold ${goldHeadingSmall}`}>Live Preview</p>
-            <p className="text-xs text-slate-500 mt-0.5">Updates live as you select options.</p>
-        </div>
-
-        <div className="text-right">
-            <p className="text-xs text-slate-500">Campaign Readiness</p>
-	            <p className={`text-sm font-semibold ${goldHeadingSmall}`}>{conversionStrength} • {readinessScore}%</p>
-        </div>
-    </div>
-
-    <div className="h-2 rounded-full bg-slate-800 overflow-hidden border border-slate-700">
-        <div
-            className="h-full bg-purple-600 transition-all duration-500"
-            style={{ width: `${readinessScore}%` }}
-        />
-    </div>
-
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-        <div className="flex items-start justify-between gap-2 rounded-md bg-slate-900/40 border border-slate-800 p-2">
-            <span className="text-slate-400">Campaign Tone</span>
-            <span className="text-slate-200 text-right">{campaignTone}</span>
-        </div>
-        <div className="flex items-start justify-between gap-2 rounded-md bg-slate-900/40 border border-slate-800 p-2">
-            <span className="text-slate-400">Primary Angle</span>
-            <span className="text-slate-200 text-right">{primaryAngle}</span>
-        </div>
-        <div className="flex items-start justify-between gap-2 rounded-md bg-slate-900/40 border border-slate-800 p-2">
-            <span className="text-slate-400">Target Hook</span>
-            <span className="text-slate-200 text-right">{targetHook}</span>
-        </div>
-        <div className="flex items-start justify-between gap-2 rounded-md bg-slate-900/40 border border-slate-800 p-2">
-            <span className="text-slate-400">Estimated Conversion</span>
-            <span className="text-slate-200 text-right">{conversionStrength}</span>
-        </div>
-    </div>
-</div>
-
-<label htmlFor="key-themes" className={`block text-sm font-medium mb-1 ${goldHeadingSmall}`}>Key Effects or Themes (Optional)</label>
-                        <textarea id="key-themes" rows={3} value={keyThemes} onChange={(e) => setKeyThemes(e.target.value)} placeholder="e.g., Classic sleight of hand, modern mind reading, story of a magical artifact" className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white" />
-
-{themeSuggestionsVisible && (
-    <div className="mt-3">
-        <p className="text-xs text-slate-500 mb-2">Suggested themes:</p>
-        <div className="flex flex-wrap gap-2">
-            {THEME_SUGGESTIONS.map(s => (
-                <button
-                    key={s}
-                    type="button"
-                    onClick={() => {
-                        setKeyThemes(prev => {
-                            const p = prev.trim();
-                            if (!p) return s;
-                            if (p.toLowerCase().includes(s.toLowerCase())) return prev;
-                            return `${p}${p.endsWith('.') ? '' : '.'} ${s}`;
-                        });
-                    }}
-                    className="px-2.5 py-1 rounded-full text-xs bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 transition-colors"
-                >
-                    {s}
-                </button>
-            ))}
-        </div>
-    </div>
-)}
-
-                    </div>
-                    
-                    <button
-                        onClick={handleGenerate}
-                        disabled={isLoading}
-                        className="w-full py-3 mt-4 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
-                    >
-                        <WandIcon className="w-5 h-5" />
-                        <span>{generateButtonLabel}</span>
-                    </button>
-                    {error && <p className="text-red-400 mt-2 text-sm text-center">{error}</p>}
                 </div>
             </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="flex flex-col bg-slate-900/50 rounded-lg border border-slate-800 min-h-[300px]">
+                    <div className="border-b border-slate-800 px-4 py-4 md:px-5">
+                        <h3 className={`text-lg font-semibold ${goldHeading}`}>Campaign Inputs</h3>
+                        <p className="text-sm text-slate-400 mt-1">Organize your show details, audience fit, and campaign direction before generating marketing assets.</p>
+                    </div>
+                    <div className="p-4 md:p-5 space-y-4">
+                        <div className="rounded-xl border border-purple-500/20 bg-gradient-to-r from-purple-600/10 via-slate-900/40 to-slate-900/10 p-4">
+                            <div className="flex items-start justify-between gap-4">
+                                <div>
+                                    <p className={`text-sm font-semibold ${goldHeadingSmall}`}>Live Campaign Preview</p>
+                                    <p className="text-xs text-slate-400 mt-1">This updates as you shape the campaign. Load the demo preset for an ADMC-ready example.</p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-xs text-slate-500">Readiness</p>
+                                    <p className={`text-lg font-semibold ${goldHeading}`}>{readinessScore}%</p>
+                                </div>
+                            </div>
+                            <div className="mt-3 h-2 rounded-full bg-slate-800 overflow-hidden border border-slate-700">
+                                <div className="h-full bg-purple-600 transition-all duration-500" style={{ width: `${readinessScore}%` }} />
+                            </div>
+                            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                                <div className="flex items-start justify-between gap-2 rounded-md bg-slate-950/40 border border-slate-800 p-2">
+                                    <span className="text-slate-400">Campaign Tone</span>
+                                    <span className="text-slate-200 text-right">{campaignTone}</span>
+                                </div>
+                                <div className="flex items-start justify-between gap-2 rounded-md bg-slate-950/40 border border-slate-800 p-2">
+                                    <span className="text-slate-400">Primary Hook</span>
+                                    <span className="text-slate-200 text-right">{targetHook}</span>
+                                </div>
+                                <div className="flex items-start justify-between gap-2 rounded-md bg-slate-950/40 border border-slate-800 p-2">
+                                    <span className="text-slate-400">Buyer Type</span>
+                                    <span className="text-slate-200 text-right">{liveAudiencesLabel}</span>
+                                </div>
+                                <div className="flex items-start justify-between gap-2 rounded-md bg-slate-950/40 border border-slate-800 p-2">
+                                    <span className="text-slate-400">Best Use Case</span>
+                                    <span className="text-slate-200 text-right">{primaryAngle}</span>
+                                </div>
+                                <div className="flex items-start justify-between gap-2 rounded-md bg-slate-950/40 border border-slate-800 p-2 sm:col-span-2">
+                                    <span className="text-slate-400">Estimated Conversion Strength</span>
+                                    <span className="text-slate-200 text-right">{conversionStrength}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="space-y-3">
+                            <div className="rounded-lg border border-slate-800 overflow-hidden bg-slate-950/30">
+                                <button type="button" onClick={() => toggleInputSection('Show Basics')} className="w-full flex items-center justify-between px-4 py-3 text-left bg-slate-900/50 hover:bg-slate-900/70 transition-colors">
+                                    <div className="flex items-center gap-2">
+                                        <MegaphoneIcon className="w-4 h-4 text-purple-300" />
+                                        <span className={`font-semibold ${goldHeadingSmall}`}>Show Basics</span>
+                                    </div>
+                                    <ChevronDownIcon className={`w-4 h-4 text-slate-400 transition-transform ${inputSectionsOpen['Show Basics'] ? 'rotate-180' : ''}`} />
+                                </button>
+                                {inputSectionsOpen['Show Basics'] && (
+                                    <div className="p-4 space-y-4 border-t border-slate-800">
+                                        <div>
+                                            <label htmlFor="show-title" className={`block text-sm font-medium mb-1 ${goldHeadingSmall}`}>Show Title*</label>
+                                            <p className="text-xs text-slate-500 mb-2">The headline name of your performance.</p>
+                                            <input id="show-title" type="text" value={showTitle} onChange={(e) => setShowTitle(e.target.value)} placeholder="e.g., Echoes of the Enchanted" className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white" />
+                                            {showTitleTouched && showTitle.trim() === '' && (
+                                                <p className="text-xs text-slate-400 mt-2">Show title helps the AI brand your campaign.</p>
+                                            )}
+                                            {showTitleSuggestionsVisible && (
+                                                <div className="mt-3">
+                                                    <p className="text-xs text-slate-500 mb-2">Suggested show titles:</p>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {SHOW_TITLE_SUGGESTIONS.map(s => (
+                                                            <button key={s} type="button" onClick={() => { setShowTitle(s); setShowTitleTouched(true); }} className="px-2.5 py-1 rounded-full text-xs bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 transition-colors">
+                                                                {s}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="rounded-lg border border-slate-800 overflow-hidden bg-slate-950/30">
+                                <button type="button" onClick={() => toggleInputSection('Audience & Booking Market')} className="w-full flex items-center justify-between px-4 py-3 text-left bg-slate-900/50 hover:bg-slate-900/70 transition-colors">
+                                    <div className="flex items-center gap-2">
+                                        <UsersIcon className="w-4 h-4 text-purple-300" />
+                                        <span className={`font-semibold ${goldHeadingSmall}`}>Audience &amp; Booking Market</span>
+                                    </div>
+                                    <ChevronDownIcon className={`w-4 h-4 text-slate-400 transition-transform ${inputSectionsOpen['Audience & Booking Market'] ? 'rotate-180' : ''}`} />
+                                </button>
+                                {inputSectionsOpen['Audience & Booking Market'] && (
+                                    <div className="p-4 space-y-4 border-t border-slate-800">
+                                        <div>
+                                            <label className={`block text-sm font-medium mb-2 flex items-center gap-2 ${goldHeadingSmall}`}>
+                                                <UsersIcon className="w-5 h-5 text-slate-400" />
+                                                Target Audience*
+                                            </label>
+                                            <p className="text-xs text-slate-500 mb-2">Choose who this campaign is for.</p>
+                                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                                {AUDIENCE_CATEGORIES.map(cat => (
+                                                    <button key={cat} type="button" onClick={() => handleAudienceToggle(cat)} className={`py-2 px-3 rounded-md transition-colors text-sm font-semibold ${ selectedAudiences.includes(cat) ? 'bg-purple-600 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-300' }`}>
+                                                        {cat}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            <input type="text" value={customAudience} onChange={e => setCustomAudience(e.target.value)} placeholder="Other buyer type or venue (please specify)…" className="w-full mt-2 px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white text-sm" />
+                                            {audienceTouched && selectedAudiences.length === 0 && customAudience.trim() === '' && (
+                                                <p className="text-xs text-slate-400 mt-2">Pick at least one audience so the AI can tailor tone + channels.</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="rounded-lg border border-slate-800 overflow-hidden bg-slate-950/30">
+                                <button type="button" onClick={() => toggleInputSection('Brand / Performance Style')} className="w-full flex items-center justify-between px-4 py-3 text-left bg-slate-900/50 hover:bg-slate-900/70 transition-colors">
+                                    <div className="flex items-center gap-2">
+                                        <StageCurtainsIcon className="w-4 h-4 text-purple-300" />
+                                        <span className={`font-semibold ${goldHeadingSmall}`}>Brand / Performance Style</span>
+                                    </div>
+                                    <ChevronDownIcon className={`w-4 h-4 text-slate-400 transition-transform ${inputSectionsOpen['Brand / Performance Style'] ? 'rotate-180' : ''}`} />
+                                </button>
+                                {inputSectionsOpen['Brand / Performance Style'] && (
+                                    <div className="p-4 space-y-4 border-t border-slate-800">
+                                        <div>
+                                            <label className={`block text-sm font-medium mb-2 flex items-center gap-2 ${goldHeadingSmall}`}>
+                                                <StageCurtainsIcon className="w-5 h-5 text-slate-400" />
+                                                Performance Style
+                                            </label>
+                                            <p className="text-xs text-slate-500 mb-2">Select tone + persona branding.</p>
+                                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                                {STYLE_CHOICES.map(style => (
+                                                    <button key={style} type="button" onClick={() => handleStyleToggle(style)} className={`py-2 px-3 rounded-md transition-colors text-sm font-semibold ${ selectedStyles.includes(style) ? 'bg-purple-600 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-300' }`}>
+                                                        {style}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="rounded-lg border border-slate-800 overflow-hidden bg-slate-950/30">
+                                <button type="button" onClick={() => toggleInputSection('Campaign Strategy')} className="w-full flex items-center justify-between px-4 py-3 text-left bg-slate-900/50 hover:bg-slate-900/70 transition-colors">
+                                    <div className="flex items-center gap-2">
+                                        <TagIcon className="w-4 h-4 text-purple-300" />
+                                        <span className={`font-semibold ${goldHeadingSmall}`}>Campaign Strategy</span>
+                                    </div>
+                                    <ChevronDownIcon className={`w-4 h-4 text-slate-400 transition-transform ${inputSectionsOpen['Campaign Strategy'] ? 'rotate-180' : ''}`} />
+                                </button>
+                                {inputSectionsOpen['Campaign Strategy'] && (
+                                    <div className="p-4 space-y-4 border-t border-slate-800">
+                                        <div>
+                                            <label htmlFor="campaign-style" className={`block text-sm font-medium mb-1 ${goldHeadingSmall}`}>Campaign Style</label>
+                                            <p className="text-xs text-slate-500 mb-2">Pick a template to shape tone, channels, and structure.</p>
+                                            <select id="campaign-style" value={campaignStyle} onChange={(e) => setCampaignStyle(e.target.value as any)} className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white text-sm">
+                                                <option value="">Select a campaign style…</option>
+                                                {CAMPAIGN_STYLES.map(s => (
+                                                    <option key={s} value={s}>{s}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <TimerIcon className="w-4 h-4 text-slate-400" />
+                                                <p className={`text-sm font-semibold ${goldHeadingSmall}`}>Strategy Snapshot</p>
+                                            </div>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                                                <div className="rounded-md bg-slate-900/40 border border-slate-800 p-2">
+                                                    <span className="text-slate-400 block">Campaign Tone</span>
+                                                    <span className="text-slate-200">{campaignTone}</span>
+                                                </div>
+                                                <div className="rounded-md bg-slate-900/40 border border-slate-800 p-2">
+                                                    <span className="text-slate-400 block">Best Use Case</span>
+                                                    <span className="text-slate-200">{primaryAngle}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="rounded-lg border border-slate-800 overflow-hidden bg-slate-950/30">
+                                <button type="button" onClick={() => toggleInputSection('Keywords / Themes')} className="w-full flex items-center justify-between px-4 py-3 text-left bg-slate-900/50 hover:bg-slate-900/70 transition-colors">
+                                    <div className="flex items-center gap-2">
+                                        <CopyIcon className="w-4 h-4 text-purple-300" />
+                                        <span className={`font-semibold ${goldHeadingSmall}`}>Keywords / Themes</span>
+                                    </div>
+                                    <ChevronDownIcon className={`w-4 h-4 text-slate-400 transition-transform ${inputSectionsOpen['Keywords / Themes'] ? 'rotate-180' : ''}`} />
+                                </button>
+                                {inputSectionsOpen['Keywords / Themes'] && (
+                                    <div className="p-4 space-y-4 border-t border-slate-800">
+                                        <div>
+                                            <label htmlFor="key-themes" className={`block text-sm font-medium mb-1 ${goldHeadingSmall}`}>Key Effects or Themes (Optional)</label>
+                                            <textarea id="key-themes" rows={3} value={keyThemes} onChange={(e) => setKeyThemes(e.target.value)} placeholder="e.g., Classic sleight of hand, modern mind reading, story of a magical artifact" className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white" />
+                                            {themeSuggestionsVisible && (
+                                                <div className="mt-3">
+                                                    <p className="text-xs text-slate-500 mb-2">Suggested themes:</p>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {THEME_SUGGESTIONS.map(s => (
+                                                            <button key={s} type="button" onClick={() => {
+                                                                setKeyThemes(prev => {
+                                                                    const p = prev.trim();
+                                                                    if (!p) return s;
+                                                                    if (p.toLowerCase().includes(s.toLowerCase())) return prev;
+                                                                    return `${p}${p.endsWith('.') ? '' : '.'} ${s}`;
+                                                                });
+                                                            }} className="px-2.5 py-1 rounded-full text-xs bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 transition-colors">
+                                                                {s}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <button onClick={handleGenerate} disabled={isLoading} className="w-full py-3 mt-2 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed">
+                            <WandIcon className="w-5 h-5" />
+                            <span>{generateButtonLabel}</span>
+                        </button>
+                        {error && <p className="text-red-400 mt-2 text-sm text-center">{error}</p>}
+                    </div>
+                </div>
 
             {/* Result Display Area */}
             <div className="flex flex-col bg-slate-900/50 rounded-lg border border-slate-800 min-h-[300px]">
@@ -1134,6 +1301,7 @@ const handleCreateBookingPitch = async () => {
                     </div>
                 )}
             </div>
+        </div>
         </main>
     );
 };
