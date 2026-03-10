@@ -4,8 +4,8 @@
 // UI/components should import from here only (no direct Gemini SDK usage in the browser).
 //
 // Endpoints expected:
-//   POST /api/ai/chat      { prompt, system? }                 -> { ok:true, data:{ text } }
-//   POST /api/ai/json      { prompt, system?, schemaName? }     -> { ok:true, data:{ json } }
+//   POST /api/ai/chat      { messages:[...], contents? }        -> { ok:true, data:{ text } }
+//   POST /api/ai/json      { messages:[...], contents?, config? } -> { ok:true, data:{ json } }
 //   POST /api/ai/image     { prompt, style?, size? }            -> { ok:true, data:{ images } }
 //   POST /api/ai/identify  { imageBase64, prompt? }             -> { ok:true, data:{ result } }
 
@@ -61,6 +61,16 @@ async function withAuthHeaders(headers: Record<string, string> = {}): Promise<Re
   };
 }
 
+
+function buildMessages(prompt: string, system?: string) {
+  const messages: Array<{ role: 'system' | 'user'; content: string }> = [];
+  if (system && system.trim()) {
+    messages.push({ role: 'system', content: system.trim() });
+  }
+  messages.push({ role: 'user', content: prompt });
+  return messages;
+}
+
 // Reads response as text first, then parses JSON.
 // This makes debugging far easier when the server returns HTML (404/500) or empty responses.
 async function safeFetchJson<T>(
@@ -111,7 +121,7 @@ export async function aiChat(prompt: string, system?: string) {
   const res = await safeFetchJson<{ text: string }>("/api/ai/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt, system }),
+    body: JSON.stringify({ messages: buildMessages(prompt, system) }),
   });
 
   return res.data.text;
@@ -126,7 +136,10 @@ export async function aiJson<T = unknown>(
   const res = await safeFetchJson<{ json: T }>("/api/ai/json", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt, system, schemaName }),
+    body: JSON.stringify({
+      messages: buildMessages(prompt, system),
+      config: schemaName ? { schemaName } : undefined,
+    }),
   });
 
   return res.data.json;
