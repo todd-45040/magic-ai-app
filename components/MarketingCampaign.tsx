@@ -9,12 +9,14 @@ import { MARKETING_ASSISTANT_SYSTEM_INSTRUCTION } from '../constants';
 import { MegaphoneIcon, WandIcon, SaveIcon, CheckIcon, ShareIcon, UsersIcon, StageCurtainsIcon, CalendarIcon, FileTextIcon, MailIcon, BlueprintIcon, ChevronDownIcon, SendIcon, TagIcon, TimerIcon, ViewGridIcon, ViewListIcon, CopyIcon, CustomizeIcon } from './icons';
 import ShareButton from './ShareButton';
 import { CohesionActions } from './CohesionActions';
+import { trackClientEvent } from '../services/telemetryClient';
 import type { User } from '../types';
 
 interface MarketingCampaignProps {
     user: User;
     onIdeaSaved: () => void;
     onNavigateToShowPlanner?: (showId: string) => void;
+    onNavigateToDirectorMode?: () => void;
     onNavigate?: (view: 'client-proposals' | 'booking-pitches', id: string) => void;
 }
 
@@ -239,7 +241,7 @@ const LOADING_STEPS = [
     const goldHeadingSmall = "text-amber-200/90 drop-shadow-[0_1px_0_rgba(0,0,0,0.35)] transition duration-150 hover:text-amber-200 hover:drop-shadow-[0_0_10px_rgba(245,208,110,0.35)]";
 
 
-const MarketingCampaign: React.FC<MarketingCampaignProps> = ({ user, onIdeaSaved, onNavigateToShowPlanner, onNavigate }) => {
+const MarketingCampaign: React.FC<MarketingCampaignProps> = ({ user, onIdeaSaved, onNavigateToShowPlanner, onNavigateToDirectorMode, onNavigate }) => {
     const [showTitle, setShowTitle] = useState('');
     const [selectedAudiences, setSelectedAudiences] = useState<string[]>([]);
     const [customAudience, setCustomAudience] = useState('');
@@ -260,6 +262,10 @@ const MarketingCampaign: React.FC<MarketingCampaignProps> = ({ user, onIdeaSaved
     const [actionNotice, setActionNotice] = useState<ActionNotice | null>(null);
     const [isSendingToPlanner, setIsSendingToPlanner] = useState(false);
     const [isSavingBlueprint, setIsSavingBlueprint] = useState(false);
+    const [isGeneratingAlternate, setIsGeneratingAlternate] = useState(false);
+    const [isSendingToDirector, setIsSendingToDirector] = useState(false);
+    const [isSendingToCRM, setIsSendingToCRM] = useState(false);
+    const [copyStatus, setCopyStatus] = useState<'idle' | 'copied'>('idle');
     const [blueprintMenuOpen, setBlueprintMenuOpen] = useState(false);
     const [personaView, setPersonaView] = useState<(typeof PERSONA_VERSIONS)[number]['key']>('Base');
     const [personaResults, setPersonaResults] = useState<Record<string, CampaignResult>>({});
@@ -355,13 +361,23 @@ const MarketingCampaign: React.FC<MarketingCampaignProps> = ({ user, onIdeaSaved
         setActionNotice(null);
         setIsSendingToPlanner(false);
         setIsSavingBlueprint(false);
+        setIsGeneratingAlternate(false);
+        setIsSendingToDirector(false);
+        setIsSendingToCRM(false);
         setBlueprintMenuOpen(false);
+        setCopyStatus('idle');
         setPersonaView('Base');
         setPersonaResults({});
         setIsGeneratingPersona(false);
         setShowSparkle(false);
         setInputSectionsOpen({ ...DEFAULT_SECTION_STATE });
         setResultCardsOpen({ ...DEFAULT_RESULT_CARDS_STATE });
+        void trackClientEvent({
+            tool: 'marketing_campaign',
+            action: 'marketing_campaign_reset',
+            metadata: telemetryMetadata,
+            outcome: 'ALLOWED',
+        });
     };
 
     const loadDemoCampaign = () => {
@@ -377,6 +393,12 @@ const MarketingCampaign: React.FC<MarketingCampaignProps> = ({ user, onIdeaSaved
         setActionNotice({ message: 'Demo campaign loaded: Summer Library Show Promo Campaign.' });
         expandAllSections();
         setResultCardsOpen({ ...DEFAULT_RESULT_CARDS_STATE });
+        void trackClientEvent({
+            tool: 'marketing_campaign',
+            action: 'marketing_campaign_demo_loaded',
+            metadata: { ...telemetryMetadata, show_title: 'Summer Library Show Promo Campaign' },
+            outcome: 'ALLOWED',
+        });
         window.setTimeout(() => setActionNotice(null), 2200);
     };
 
@@ -576,6 +598,25 @@ const activeResult = useMemo(() => {
 
 const activeResultText = useMemo(() => stringifyCampaignResult(activeResult), [activeResult]);
 
+const telemetryMetadata = useMemo(() => ({
+    show_title: showTitle || 'untitled',
+    campaign_style: campaignStyle || 'Not specified',
+    target_audience: liveAudiencesLabel,
+    performance_style: selectedStyles.join(', ') || 'Not specified',
+    readiness_score: readinessScore,
+    has_result: Boolean(activeResult),
+    persona_view: personaView,
+}), [activeResult, campaignStyle, liveAudiencesLabel, personaView, readinessScore, selectedStyles, showTitle]);
+
+useEffect(() => {
+    void trackClientEvent({
+        tool: 'marketing_campaign',
+        action: 'marketing_campaign_opened',
+        metadata: telemetryMetadata,
+        outcome: 'ALLOWED',
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
 
 const generateButtonLabel = useMemo(() => {
         if (isLoading) return 'Generating Campaign…';
@@ -585,7 +626,7 @@ const generateButtonLabel = useMemo(() => {
         return 'Generate Campaign';
     }, [error, isFormValid, isLoading, result]);
 
-    const handleGenerate = async () => {
+    const generateCampaign = async (mode: 'primary' | 'alternate' = 'primary') => {
         setShowTitleTouched(true);
         setAudienceTouched(true);
 
@@ -593,17 +634,24 @@ const generateButtonLabel = useMemo(() => {
         const missingAudience = selectedAudiences.length === 0 && customAudience.trim() === '';
 
         if (missingTitle || missingAudience) {
-            // Keep this subtle: inline helper text for show title, light global error for audience.
             setError(missingAudience && !missingTitle ? 'Target audience helps the AI tailor your messaging.' : null);
             return;
         }
-        
-        setIsLoading(true);
+
+        if (mode === 'alternate') {
+            setIsGeneratingAlternate(true);
+        } else {
+            setIsLoading(true);
+        }
+
         setError(null);
-        setResult(null);
-        setPersonaResults({});
-        setPersonaView('Base');
-        setSaveStatus('idle');
+        if (mode === 'primary') {
+            setResult(null);
+            setPersonaResults({});
+            setPersonaView('Base');
+            setSaveStatus('idle');
+            setResultCardsOpen({ ...DEFAULT_RESULT_CARDS_STATE });
+        }
 
         const allAudiences = [...selectedAudiences];
         if (customAudience.trim()) {
@@ -612,8 +660,7 @@ const generateButtonLabel = useMemo(() => {
 
         const prompt = `
             Generate a marketing campaign toolkit for the following magic show.
-
-            Return the result ONLY as valid JSON using this exact schema:
+            Return the response ONLY as valid JSON using this schema:
             {
               "campaignName": "",
               "campaignSummary": "",
@@ -636,30 +683,47 @@ const generateButtonLabel = useMemo(() => {
             - Performance Style: ${selectedStyles.join(', ') || 'Not specified'}
             - Campaign Style: ${campaignStyle || 'Not specified'}
             - Key Themes: ${keyThemes || 'Not specified'}
+            ${mode === 'alternate' ? '- Direction: Create a distinctly different alternate campaign angle with fresh hooks, different wording, and a new rollout emphasis while staying aligned to the same show.' : ''}
         `;
-        
+
         try {
           const response = await generateResponse(prompt, MARKETING_ASSISTANT_SYSTEM_INSTRUCTION, user);
           const parsed = JSON.parse(extractJsonObject(response));
           const normalized = normalizeCampaignResult(parsed, {
             campaignName: showTitle,
-            targetAudience: allAudiences.join(', '),
+            targetAudience: allAudiences.join(', ') || liveAudiencesLabel,
             primaryHook: targetHook,
           });
           setResult(normalized);
-          setResultCardsOpen({ ...DEFAULT_RESULT_CARDS_STATE });
-          // Micro-delight: brief sparkle/pulse on successful generation
           setShowSparkle(true);
+          void trackClientEvent({
+            tool: 'marketing_campaign',
+            action: mode === 'alternate' ? 'marketing_campaign_alternate_generated' : 'marketing_campaign_generated',
+            metadata: { ...telemetryMetadata, result_campaign_name: normalized.campaignName },
+            outcome: 'SUCCESS_NOT_CHARGED',
+          });
+          if (mode === 'alternate') {
+            setActionNotice({ message: 'Alternate campaign generated with a fresh angle.' });
+            window.setTimeout(() => setActionNotice(null), 2200);
+          }
           window.setTimeout(() => setShowSparkle(false), 350);
         } catch (err) {
           setError(err instanceof Error ? err.message : "An unknown error occurred.");
         } finally {
           setIsLoading(false);
+          setIsGeneratingAlternate(false);
         }
     };
-  
-    
-    
+
+    const handleGenerate = async () => {
+        await generateCampaign('primary');
+    };
+
+    const handleGenerateAlternateCampaign = async () => {
+        if (!result) return;
+        await generateCampaign('alternate');
+    };
+
     const localPersonaTransform = (base: CampaignResult, personaKey: (typeof PERSONA_VERSIONS)[number]['key']): CampaignResult => {
         const profiles: Record<string, { tone: string; angle: string; hook: string; addOns: string[]; taglineSeeds: string[]; }> = {
             'Corporate Buyers': {
@@ -879,10 +943,98 @@ const handleSave = () => {
         const content = buildBlueprintContent(label);
         saveIdea('text', content, `${label} — ${showTitle || 'Untitled'}`);
         onIdeaSaved();
+        void trackClientEvent({
+            tool: 'marketing_campaign',
+            action: 'marketing_campaign_exported',
+            metadata: { ...telemetryMetadata, export_kind: kind },
+            outcome: 'ALLOWED',
+        });
         setActionNotice({ message: `${label} saved to Saved Ideas.` });
         window.setTimeout(() => setActionNotice(null), 2200);
     };
 
+
+    const handleSendToDirectorMode = async () => {
+        if (!activeResult) return;
+        setIsSendingToDirector(true);
+        setActionNotice(null);
+        try {
+            const content = `## Director Mode Brief — ${showTitle || 'Untitled'}
+
+${activeResultText}
+
+---
+
+Director Notes:
+- Primary Hook: ${activeResult.primaryHook || targetHook}
+- Best Use Case: ${primaryAngle}
+- Target Audience: ${activeResult.targetAudience || liveAudiencesLabel}`;
+            saveIdea('text', content, `Director Mode Brief — ${showTitle || 'Untitled'}`);
+            onIdeaSaved();
+            void trackClientEvent({
+                tool: 'marketing_campaign',
+                action: 'marketing_campaign_sent_to_director',
+                metadata: telemetryMetadata,
+                outcome: 'ALLOWED',
+            });
+            setActionNotice({
+                message: 'Director Mode brief saved to Idea Vault.',
+                actionLabel: onNavigateToDirectorMode ? 'Open Director Mode' : undefined,
+                action: onNavigateToDirectorMode,
+            });
+        } finally {
+            setIsSendingToDirector(false);
+            window.setTimeout(() => setActionNotice(null), 2600);
+        }
+    };
+
+    const handleSendToCRMNotes = async () => {
+        if (!activeResult) return;
+        setIsSendingToCRM(true);
+        setActionNotice(null);
+        try {
+            const content = `## CRM Campaign Notes — ${showTitle || 'Untitled'}
+
+${activeResultText}
+
+---
+
+Follow-up Notes:
+- Audience: ${liveAudiencesLabel}
+- Campaign Style: ${campaignStyle || 'Not specified'}
+- Recommended Hook: ${activeResult.primaryHook || targetHook}`;
+            saveIdea('text', content, `CRM Campaign Notes — ${showTitle || 'Untitled'}`);
+            onIdeaSaved();
+            void trackClientEvent({
+                tool: 'marketing_campaign',
+                action: 'marketing_campaign_sent_to_crm',
+                metadata: telemetryMetadata,
+                outcome: 'ALLOWED',
+            });
+            setActionNotice({ message: 'CRM campaign notes saved to Idea Vault for client follow-up.' });
+        } finally {
+            setIsSendingToCRM(false);
+            window.setTimeout(() => setActionNotice(null), 2600);
+        }
+    };
+
+    const handleCopyCampaign = async () => {
+        if (!activeResultText) return;
+        try {
+            await navigator.clipboard.writeText(activeResultText);
+            setCopyStatus('copied');
+            void trackClientEvent({
+                tool: 'marketing_campaign',
+                action: 'marketing_campaign_exported',
+                metadata: { ...telemetryMetadata, export_kind: 'copy_campaign' },
+                outcome: 'ALLOWED',
+            });
+            window.setTimeout(() => setCopyStatus('idle'), 1800);
+        } catch (err) {
+            setActionNotice({ message: 'Unable to copy campaign to clipboard.' });
+            window.setTimeout(() => setActionNotice(null), 2200);
+        }
+    };
 
 const handleCreateClientProposal = async () => {
     if (!activeResult) return;
@@ -1461,7 +1613,7 @@ const handleCreateBookingPitch = async () => {
                             )}
                             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
                             <div className="flex flex-wrap items-center gap-2">
-                                <span className="text-xs text-slate-400 mr-1">Send Campaign to:</span>
+                                <span className="text-xs text-slate-400 mr-1">Workflow Actions:</span>
                                 <button
                                     type="button"
                                     onClick={handleSendToShowPlanner}
@@ -1473,21 +1625,30 @@ const handleCreateBookingPitch = async () => {
                                 </button>
                                 <button
                                     type="button"
+                                    onClick={handleSendToDirectorMode}
+                                    disabled={!activeResult || isSendingToDirector}
+                                    className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <WandIcon className="w-4 h-4" />
+                                    <span>{isSendingToDirector ? 'Sending…' : 'Director Mode'}</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleSendToCRMNotes}
+                                    disabled={!activeResult || isSendingToCRM}
+                                    className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <UsersIcon className="w-4 h-4" />
+                                    <span>{isSendingToCRM ? 'Sending…' : 'CRM Notes'}</span>
+                                </button>
+                                <button
+                                    type="button"
                                     onClick={handleCreateClientProposal}
                                     disabled={!activeResult}
                                     className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     <FileTextIcon className="w-4 h-4" />
                                     <span>Client Proposal</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => handleQuickExportIdea('Social Scheduler')}
-                                    disabled={!activeResult}
-                                    className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    <SendIcon className="w-4 h-4" />
-                                    <span>Social Scheduler</span>
                                 </button>
                                 <button
                                     type="button"
@@ -1501,6 +1662,33 @@ const handleCreateBookingPitch = async () => {
                             </div>
 
                             <div className="flex flex-wrap items-center justify-end gap-2">
+                            <button
+                                type="button"
+                                onClick={handleGenerateAlternateCampaign}
+                                disabled={!activeResult || isGeneratingAlternate}
+                                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-purple-600/20 hover:bg-purple-600/30 rounded-md border border-purple-500/40 text-purple-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <CustomizeIcon className="w-4 h-4" />
+                                <span>{isGeneratingAlternate ? 'Generating…' : 'Alternate Campaign'}</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleCopyCampaign}
+                                disabled={!activeResultText}
+                                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <CopyIcon className="w-4 h-4" />
+                                <span>{copyStatus === 'copied' ? 'Copied!' : 'Copy Campaign'}</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleQuickExportIdea('Social Scheduler')}
+                                disabled={!activeResult}
+                                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <SendIcon className="w-4 h-4" />
+                                <span>Export Pack</span>
+                            </button>
                             <CohesionActions
                                 content={activeResultText || ''}
                                 defaultTitle={`Marketing Campaign — ${showTitle || 'Untitled'}`}
@@ -1528,7 +1716,7 @@ const handleCreateBookingPitch = async () => {
                                 ) : (
                                     <>
                                         <SaveIcon className="w-4 h-4" />
-                                        <span>Save Idea</span>
+                                        <span>Save to Idea Vault</span>
                                     </>
                                 )}
                             </button>
