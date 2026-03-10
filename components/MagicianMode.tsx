@@ -2911,7 +2911,6 @@ ${action.payload.content}`;
                 setInitialShowId(showId);
                 setActiveView('show-planner');
               }}
-              onNavigateToDirectorMode={() => setActiveView('director-mode')}
               onNavigate={(view, id) => {
                 if (view === 'client-proposals') {
                   setInitialProposalId(id);

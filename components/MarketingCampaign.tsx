@@ -9,16 +9,13 @@ import { MARKETING_ASSISTANT_SYSTEM_INSTRUCTION } from '../constants';
 import { MegaphoneIcon, WandIcon, SaveIcon, CheckIcon, ShareIcon, UsersIcon, StageCurtainsIcon, CalendarIcon, FileTextIcon, MailIcon, BlueprintIcon, ChevronDownIcon, SendIcon, TagIcon, TimerIcon, ViewGridIcon, ViewListIcon, CopyIcon, CustomizeIcon } from './icons';
 import ShareButton from './ShareButton';
 import { CohesionActions } from './CohesionActions';
-import { trackClientEvent } from '../services/telemetryClient';
 import type { User } from '../types';
 
 interface MarketingCampaignProps {
     user: User;
     onIdeaSaved: () => void;
     onNavigateToShowPlanner?: (showId: string) => void;
-    onNavigateToDirectorMode?: () => void;
     onNavigate?: (view: 'client-proposals' | 'booking-pitches', id: string) => void;
-}
 
 
 type CampaignResult = {
@@ -37,80 +34,31 @@ type CampaignResult = {
     notes: string[];
 };
 
-const RESULT_SECTIONS = [
-    'Campaign Overview',
-    'Audience & Offer',
-    'Headlines / Taglines',
-    'Press Release',
-    'Social Posts',
-    'Email Campaign',
-    'Poster / Flyer Copy',
-    'Booking Pitch',
-    'CTA Strategy',
-    'Rollout Plan',
-    'Notes',
-] as const;
-
-const DEFAULT_RESULT_CARDS_STATE: Record<(typeof RESULT_SECTIONS)[number], boolean> = {
-    'Campaign Overview': true,
-    'Audience & Offer': false,
-    'Headlines / Taglines': false,
-    'Press Release': false,
-    'Social Posts': false,
-    'Email Campaign': false,
-    'Poster / Flyer Copy': false,
-    'Booking Pitch': false,
-    'CTA Strategy': false,
-    'Rollout Plan': false,
-    'Notes': false,
-};
-
 const emptyCampaignResult = (): CampaignResult => ({
-    campaignName: '',
-    campaignSummary: '',
-    targetAudience: '',
-    primaryHook: '',
-    taglines: [],
-    pressRelease: '',
-    socialPosts: [],
-    emailCampaign: [],
-    posterCopy: '',
-    bookingPitch: '',
-    ctaStrategy: '',
-    rolloutPlan: [],
-    notes: [],
+    campaignName: '', campaignSummary: '', targetAudience: '', primaryHook: '',
+    taglines: [], pressRelease: '', socialPosts: [], emailCampaign: [],
+    posterCopy: '', bookingPitch: '', ctaStrategy: '', rolloutPlan: [], notes: [],
 });
 
 const coerceStringArray = (value: unknown): string[] => {
-    if (Array.isArray(value)) {
-        return value.map(item => String(item).trim()).filter(Boolean);
-    }
-    if (typeof value === 'string') {
-        return value
-            .split(/\n|•|- /)
-            .map(item => item.trim())
-            .filter(Boolean);
-    }
+    if (Array.isArray(value)) return value.map(v => String(v).trim()).filter(Boolean);
+    if (typeof value === 'string') return value.split(/\n|•|- /).map(v => v.trim()).filter(Boolean);
     return [];
 };
 
 const extractJsonObject = (raw: string): string => {
-    const fencedMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    const cleaned = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
+    const fencedMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/i);
     if (fencedMatch?.[1]) return fencedMatch[1].trim();
-
-    const start = raw.indexOf('{');
-    const end = raw.lastIndexOf('}');
-    if (start >= 0 && end > start) return raw.slice(start, end + 1);
-    return raw;
+    const start = cleaned.indexOf('{');
+    const end = cleaned.lastIndexOf('}');
+    if (start >= 0 && end > start) return cleaned.slice(start, end + 1);
+    throw new Error('The AI returned campaign text in an unexpected format. Please try again.');
 };
 
-const normalizeCampaignResult = (
-    raw: unknown,
-    fallback: { campaignName: string; targetAudience: string; primaryHook: string }
-): CampaignResult => {
+const normalizeCampaignResult = (raw: unknown, fallback: { campaignName: string; targetAudience: string; primaryHook: string }): CampaignResult => {
     const source = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
     const result = emptyCampaignResult();
-
     result.campaignName = String(source.campaignName ?? fallback.campaignName ?? '').trim();
     result.campaignSummary = String(source.campaignSummary ?? '').trim();
     result.targetAudience = String(source.targetAudience ?? fallback.targetAudience ?? '').trim();
@@ -124,26 +72,20 @@ const normalizeCampaignResult = (
     result.ctaStrategy = String(source.ctaStrategy ?? '').trim();
     result.rolloutPlan = coerceStringArray(source.rolloutPlan);
     result.notes = coerceStringArray(source.notes);
-
-    if (!result.campaignSummary && result.pressRelease) {
-        result.campaignSummary = result.pressRelease.split('\n').map(line => line.trim()).find(Boolean) ?? '';
-    }
-    if (!result.campaignName) {
-        result.campaignName = fallback.campaignName || 'Marketing Campaign';
-    }
-    if (!result.targetAudience) {
-        result.targetAudience = fallback.targetAudience || 'Not specified';
-    }
-    if (!result.primaryHook) {
-        result.primaryHook = fallback.primaryHook || 'Memorable participation';
-    }
-
+    if (!result.campaignSummary && result.pressRelease) result.campaignSummary = result.pressRelease.split('\n').map(s => s.trim()).find(Boolean) ?? '';
+    if (!result.campaignName) result.campaignName = fallback.campaignName || 'Marketing Campaign';
+    if (!result.targetAudience) result.targetAudience = fallback.targetAudience || 'Not specified';
+    if (!result.primaryHook) result.primaryHook = fallback.primaryHook || 'Memorable participation';
     return result;
+};
+
+const parseCampaignResponse = (raw: string, fallback: { campaignName: string; targetAudience: string; primaryHook: string }): CampaignResult => {
+    const parsed = JSON.parse(extractJsonObject(raw));
+    return normalizeCampaignResult(parsed, fallback);
 };
 
 const stringifyCampaignResult = (data: CampaignResult | null): string => {
     if (!data) return '';
-
     const sections: string[] = [
         `# ${data.campaignName || 'Marketing Campaign'}`,
         data.campaignSummary ? `## Campaign Summary\n${data.campaignSummary}` : '',
@@ -158,7 +100,6 @@ const stringifyCampaignResult = (data: CampaignResult | null): string => {
         data.rolloutPlan.length ? `## Rollout Plan\n${data.rolloutPlan.map(item => `- ${item}`).join('\n')}` : '',
         data.notes.length ? `## Notes\n${data.notes.map(item => `- ${item}`).join('\n')}` : '',
     ].filter(Boolean);
-
     return sections.join('\n\n');
 };
 
@@ -241,7 +182,7 @@ const LOADING_STEPS = [
     const goldHeadingSmall = "text-amber-200/90 drop-shadow-[0_1px_0_rgba(0,0,0,0.35)] transition duration-150 hover:text-amber-200 hover:drop-shadow-[0_0_10px_rgba(245,208,110,0.35)]";
 
 
-const MarketingCampaign: React.FC<MarketingCampaignProps> = ({ user, onIdeaSaved, onNavigateToShowPlanner, onNavigateToDirectorMode, onNavigate }) => {
+const MarketingCampaign: React.FC<MarketingCampaignProps> = ({ user, onIdeaSaved, onNavigateToShowPlanner, onNavigate }) => {
     const [showTitle, setShowTitle] = useState('');
     const [selectedAudiences, setSelectedAudiences] = useState<string[]>([]);
     const [customAudience, setCustomAudience] = useState('');
@@ -262,17 +203,12 @@ const MarketingCampaign: React.FC<MarketingCampaignProps> = ({ user, onIdeaSaved
     const [actionNotice, setActionNotice] = useState<ActionNotice | null>(null);
     const [isSendingToPlanner, setIsSendingToPlanner] = useState(false);
     const [isSavingBlueprint, setIsSavingBlueprint] = useState(false);
-    const [isGeneratingAlternate, setIsGeneratingAlternate] = useState(false);
-    const [isSendingToDirector, setIsSendingToDirector] = useState(false);
-    const [isSendingToCRM, setIsSendingToCRM] = useState(false);
-    const [copyStatus, setCopyStatus] = useState<'idle' | 'copied'>('idle');
     const [blueprintMenuOpen, setBlueprintMenuOpen] = useState(false);
     const [personaView, setPersonaView] = useState<(typeof PERSONA_VERSIONS)[number]['key']>('Base');
     const [personaResults, setPersonaResults] = useState<Record<string, CampaignResult>>({});
     const [isGeneratingPersona, setIsGeneratingPersona] = useState(false);
     const [showSparkle, setShowSparkle] = useState(false);
     const [inputSectionsOpen, setInputSectionsOpen] = useState<Record<(typeof INPUT_SECTIONS)[number], boolean>>({ ...DEFAULT_SECTION_STATE });
-    const [resultCardsOpen, setResultCardsOpen] = useState<Record<(typeof RESULT_SECTIONS)[number], boolean>>({ ...DEFAULT_RESULT_CARDS_STATE });
 
 
     useEffect(() => {
@@ -320,30 +256,6 @@ const MarketingCampaign: React.FC<MarketingCampaignProps> = ({ user, onIdeaSaved
         });
     };
 
-    const toggleResultCard = (section: (typeof RESULT_SECTIONS)[number]) => {
-        setResultCardsOpen(prev => ({ ...prev, [section]: !prev[section] }));
-    };
-
-    const expandAllResultCards = () => {
-        setResultCardsOpen({
-            'Campaign Overview': true,
-            'Audience & Offer': true,
-            'Headlines / Taglines': true,
-            'Press Release': true,
-            'Social Posts': true,
-            'Email Campaign': true,
-            'Poster / Flyer Copy': true,
-            'Booking Pitch': true,
-            'CTA Strategy': true,
-            'Rollout Plan': true,
-            'Notes': true,
-        });
-    };
-
-    const compactAllResultCards = () => {
-        setResultCardsOpen({ ...DEFAULT_RESULT_CARDS_STATE });
-    };
-
     const resetPage = () => {
         setShowTitle('');
         setSelectedAudiences([]);
@@ -361,23 +273,12 @@ const MarketingCampaign: React.FC<MarketingCampaignProps> = ({ user, onIdeaSaved
         setActionNotice(null);
         setIsSendingToPlanner(false);
         setIsSavingBlueprint(false);
-        setIsGeneratingAlternate(false);
-        setIsSendingToDirector(false);
-        setIsSendingToCRM(false);
         setBlueprintMenuOpen(false);
-        setCopyStatus('idle');
         setPersonaView('Base');
         setPersonaResults({});
         setIsGeneratingPersona(false);
         setShowSparkle(false);
         setInputSectionsOpen({ ...DEFAULT_SECTION_STATE });
-        setResultCardsOpen({ ...DEFAULT_RESULT_CARDS_STATE });
-        void trackClientEvent({
-            tool: 'marketing_campaign',
-            action: 'marketing_campaign_reset',
-            metadata: telemetryMetadata,
-            outcome: 'ALLOWED',
-        });
     };
 
     const loadDemoCampaign = () => {
@@ -392,13 +293,6 @@ const MarketingCampaign: React.FC<MarketingCampaignProps> = ({ user, onIdeaSaved
         setError(null);
         setActionNotice({ message: 'Demo campaign loaded: Summer Library Show Promo Campaign.' });
         expandAllSections();
-        setResultCardsOpen({ ...DEFAULT_RESULT_CARDS_STATE });
-        void trackClientEvent({
-            tool: 'marketing_campaign',
-            action: 'marketing_campaign_demo_loaded',
-            metadata: { ...telemetryMetadata, show_title: 'Summer Library Show Promo Campaign' },
-            outcome: 'ALLOWED',
-        });
         window.setTimeout(() => setActionNotice(null), 2200);
     };
 
@@ -598,25 +492,6 @@ const activeResult = useMemo(() => {
 
 const activeResultText = useMemo(() => stringifyCampaignResult(activeResult), [activeResult]);
 
-const telemetryMetadata = useMemo(() => ({
-    show_title: showTitle || 'untitled',
-    campaign_style: campaignStyle || 'Not specified',
-    target_audience: liveAudiencesLabel,
-    performance_style: selectedStyles.join(', ') || 'Not specified',
-    readiness_score: readinessScore,
-    has_result: Boolean(activeResult),
-    persona_view: personaView,
-}), [activeResult, campaignStyle, liveAudiencesLabel, personaView, readinessScore, selectedStyles, showTitle]);
-
-useEffect(() => {
-    void trackClientEvent({
-        tool: 'marketing_campaign',
-        action: 'marketing_campaign_opened',
-        metadata: telemetryMetadata,
-        outcome: 'ALLOWED',
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-}, []);
 
 const generateButtonLabel = useMemo(() => {
         if (isLoading) return 'Generating Campaign…';
@@ -626,7 +501,7 @@ const generateButtonLabel = useMemo(() => {
         return 'Generate Campaign';
     }, [error, isFormValid, isLoading, result]);
 
-    const generateCampaign = async (mode: 'primary' | 'alternate' = 'primary') => {
+    const handleGenerate = async () => {
         setShowTitleTouched(true);
         setAudienceTouched(true);
 
@@ -634,24 +509,17 @@ const generateButtonLabel = useMemo(() => {
         const missingAudience = selectedAudiences.length === 0 && customAudience.trim() === '';
 
         if (missingTitle || missingAudience) {
+            // Keep this subtle: inline helper text for show title, light global error for audience.
             setError(missingAudience && !missingTitle ? 'Target audience helps the AI tailor your messaging.' : null);
             return;
         }
-
-        if (mode === 'alternate') {
-            setIsGeneratingAlternate(true);
-        } else {
-            setIsLoading(true);
-        }
-
+        
+        setIsLoading(true);
         setError(null);
-        if (mode === 'primary') {
-            setResult(null);
-            setPersonaResults({});
-            setPersonaView('Base');
-            setSaveStatus('idle');
-            setResultCardsOpen({ ...DEFAULT_RESULT_CARDS_STATE });
-        }
+        setResult(null);
+        setPersonaResults({});
+        setPersonaView('Base');
+        setSaveStatus('idle');
 
         const allAudiences = [...selectedAudiences];
         if (customAudience.trim()) {
@@ -660,7 +528,9 @@ const generateButtonLabel = useMemo(() => {
 
         const prompt = `
             Generate a marketing campaign toolkit for the following magic show.
-            Return the response ONLY as valid JSON using this schema:
+            Return ONLY valid JSON using this schema.
+            Do not wrap the JSON in markdown code fences.
+            Do not include any commentary before or after the JSON.
             {
               "campaignName": "",
               "campaignSummary": "",
@@ -683,57 +553,39 @@ const generateButtonLabel = useMemo(() => {
             - Performance Style: ${selectedStyles.join(', ') || 'Not specified'}
             - Campaign Style: ${campaignStyle || 'Not specified'}
             - Key Themes: ${keyThemes || 'Not specified'}
-            ${mode === 'alternate' ? '- Direction: Create a distinctly different alternate campaign angle with fresh hooks, different wording, and a new rollout emphasis while staying aligned to the same show.' : ''}
         `;
-
+        
         try {
+          // FIX: Pass the user object to generateResponse as the 3rd argument.
           const response = await generateResponse(prompt, MARKETING_ASSISTANT_SYSTEM_INSTRUCTION, user);
-          const parsed = JSON.parse(extractJsonObject(response));
-          const normalized = normalizeCampaignResult(parsed, {
-            campaignName: showTitle,
-            targetAudience: allAudiences.join(', ') || liveAudiencesLabel,
-            primaryHook: targetHook,
-          });
+          const normalized = parseCampaignResponse(response, { campaignName: showTitle, targetAudience: allAudiences.join(', ') || liveAudiencesLabel, primaryHook: targetHook });
           setResult(normalized);
+          // Micro-delight: brief sparkle/pulse on successful generation
           setShowSparkle(true);
-          void trackClientEvent({
-            tool: 'marketing_campaign',
-            action: mode === 'alternate' ? 'marketing_campaign_alternate_generated' : 'marketing_campaign_generated',
-            metadata: { ...telemetryMetadata, result_campaign_name: normalized.campaignName },
-            outcome: 'SUCCESS_NOT_CHARGED',
-          });
-          if (mode === 'alternate') {
-            setActionNotice({ message: 'Alternate campaign generated with a fresh angle.' });
-            window.setTimeout(() => setActionNotice(null), 2200);
-          }
           window.setTimeout(() => setShowSparkle(false), 350);
         } catch (err) {
-          setError(err instanceof Error ? err.message : "An unknown error occurred.");
+          console.error('Marketing campaign generation failed:', err);
+          setError(err instanceof Error ? err.message : 'The AI returned campaign text in an unexpected format. Please try again.');
         } finally {
           setIsLoading(false);
-          setIsGeneratingAlternate(false);
         }
     };
+  
+    
+    
+    const localPersonaTransform = (base: string, personaKey: (typeof PERSONA_VERSIONS)[number]['key']) => {
+        // Lightweight, deterministic “delta edits” (no extra AI calls).
+        // Goal: keep the structure identical, but tweak tone/benefits/hooks for the selected persona.
 
-    const handleGenerate = async () => {
-        await generateCampaign('primary');
-    };
-
-    const handleGenerateAlternateCampaign = async () => {
-        if (!result) return;
-        await generateCampaign('alternate');
-    };
-
-    const localPersonaTransform = (base: CampaignResult, personaKey: (typeof PERSONA_VERSIONS)[number]['key']): CampaignResult => {
         const profiles: Record<string, { tone: string; angle: string; hook: string; addOns: string[]; taglineSeeds: string[]; }> = {
             'Corporate Buyers': {
                 tone: 'premium, confident, business-forward',
                 angle: 'employee engagement + client wow-factor',
-                hook: 'a polished, interactive experience that feels high value and easy to book',
+                hook: 'a polished, interactive experience that feels “high value” and easy to book',
                 addOns: [
                     'Emphasize reliability, professionalism, and clear run-of-show.',
                     'Mention options for branded moments, awards, or client appreciation.',
-                    'Highlight minimal setup, flexible time blocks, and works in any room.',
+                    'Highlight minimal setup, flexible time blocks, and “works in any room”.',
                 ],
                 taglineSeeds: [
                     'Turn your event into a standout experience.',
@@ -746,24 +598,24 @@ const generateButtonLabel = useMemo(() => {
                 angle: 'age-appropriate wonder + laughter',
                 hook: 'a safe, inclusive show that keeps kids engaged and parents impressed',
                 addOns: [
-                    'Stress family-friendly, age-appropriate humor, and positive participation.',
+                    'Stress “family-friendly”, age-appropriate humor, and positive participation.',
                     'Mention birthday parties, school events, and family gatherings.',
-                    'Highlight clear boundaries: no scary moments and no embarrassing volunteers.',
+                    'Highlight clear boundaries: no scary moments, no embarrassing volunteers.',
                 ],
                 taglineSeeds: [
                     'Big laughs. Bigger wonder.',
-                    'Family-friendly magic they will remember.',
+                    'Family-friendly magic they’ll remember.',
                     'Where kids sparkle and parents relax.',
                 ],
             },
             'Event Planners': {
                 tone: 'practical, organized, planner-friendly',
                 angle: 'stress-free booking + smooth logistics',
-                hook: 'a plug-and-play entertainment solution with clear requirements and fast communication',
+                hook: 'a plug-and-play entertainment solution with clear requirements and fast comms',
                 addOns: [
                     'Call out fast setup, simple tech needs, and flexible staging.',
                     'Emphasize communication, professionalism, and timeline coordination.',
-                    'Include a short requirements note for space, sound, and timing.',
+                    'Include a short “what we need” bullet: space, sound, and timing.',
                 ],
                 taglineSeeds: [
                     'Easy to book. Easy to love.',
@@ -777,8 +629,8 @@ const generateButtonLabel = useMemo(() => {
                 hook: 'a flexible show that can scale to crowds and keep energy high all day',
                 addOns: [
                     'Highlight quick reset, repeatable sets, and strong crowd draw.',
-                    'Mention roving options and instant attention openers.',
-                    'Emphasize readiness for variable event conditions.',
+                    'Mention walkaround/roving options and “instant attention” openers.',
+                    'Emphasize outdoor/variable conditions readiness (within reason).',
                 ],
                 taglineSeeds: [
                     'Stop the crowd. Start the applause.',
@@ -796,27 +648,72 @@ const generateButtonLabel = useMemo(() => {
             taglineSeeds: [],
         };
 
-        const next = {
-            ...base,
-            campaignSummary: `${base.campaignSummary}${base.campaignSummary ? '\n\n' : ''}Persona Focus — ${personaKey}: ${profile.tone}. Primary Angle: ${profile.angle}.`,
-            primaryHook: profile.hook,
-            taglines: [...base.taglines, ...profile.taglineSeeds].filter((value, index, arr) => value && arr.indexOf(value) === index),
-            notes: [...profile.addOns, ...base.notes].filter((value, index, arr) => value && arr.indexOf(value) === index),
-        } satisfies CampaignResult;
+        // Helper: insert persona notes near the top without breaking the user-facing sections.
+        const header = `### Persona Focus — ${personaKey}
+` +
+            `**Tone:** ${profile.tone}
+` +
+            `**Primary Angle:** ${profile.angle}
+` +
+            `**Target Hook:** ${profile.hook}
+` +
+            (profile.addOns.length ? `**Emphasis:**
+- ${profile.addOns.join('\n- ')}
+` : '') +
+            `
+---
 
-        if (personaKey === 'Event Planners') {
-            next.rolloutPlan = [
-                'Include a quick setup note in outreach materials.',
-                'List timing options: 10 / 20 / 30 / 45 minute sets.',
-                ...next.rolloutPlan,
-            ].filter((value, index, arr) => value && arr.indexOf(value) === index);
-        }
+`;
 
+        let out = base;
+
+        // Light replacements to nudge language.
+        const replacements: Array<[RegExp, string]> = [
+            [/booking/gi, 'booking'],
+            [/venue/gi, 'venue'],
+        ];
+
+        // Persona-specific replacements
         if (personaKey === 'Corporate Buyers') {
-            next.ctaStrategy = `${next.ctaStrategy}${next.ctaStrategy ? '\n\n' : ''}Add a short credibility proof line with notable clients, event types, or testimonials.`;
+            replacements.push([/(birthday|kids?|children)/gi, 'guests']);
+            replacements.push([/(family[- ]friendly)/gi, 'premium']);
+        } else if (personaKey === 'Parents') {
+            replacements.push([/(corporate|executive|client)/gi, 'family']);
+            replacements.push([/(ROI|brand)/gi, 'memories']);
+        } else if (personaKey === 'Event Planners') {
+            replacements.push([/(amazing|incredible)/gi, 'reliable']);
+            replacements.push([/(viral)/gi, 'high-response']);
+        } else if (personaKey === 'Festival Coordinators') {
+            replacements.push([/(elegant)/gi, 'high-energy']);
+            replacements.push([/(intimate)/gi, 'crowd-ready']);
         }
 
-        return next;
+        for (const [rx, rep] of replacements) {
+            out = out.replace(rx, rep);
+        }
+
+        // Add persona-tailored taglines (append near Taglines section if present).
+        if (profile.taglineSeeds.length) {
+            const taglineBlock = `\n\n**Persona Taglines (${personaKey})**\n- ${profile.taglineSeeds.join('\n- ')}\n`;
+            if (/\bTaglines\b/i.test(out)) {
+                out = out.replace(/(\bTaglines\b[\s\S]*?)(\n\n|$)/i, (match) => match + taglineBlock + '\n');
+            } else {
+                out += taglineBlock;
+            }
+        }
+
+        // Add a small “Planner Notes” block for Event Planners if not already present.
+        if (personaKey === 'Event Planners' && !/Planner Notes/i.test(out)) {
+            out += `\n\n**Planner Notes**\n- Typical setup: 5–10 minutes\n- Audio: can plug into house sound or provide compact speaker\n- Space: works on a small stage or floor area\n- Timing: flexible sets (10 / 20 / 30 / 45 minutes)\n`;
+        }
+
+        // Add a small “Corporate Proof” nudge.
+        if (personaKey === 'Corporate Buyers' && !/credibility|testimonials|past clients/i.test(out)) {
+            out += `\n\n**Credibility Proof (Add if available)**\n- Mention 1–2 recognizable past clients, testimonials, or event types (e.g., conferences, awards dinners).\n`;
+        }
+
+        // Prepend header (keeps original sections intact below).
+        return normalizeCampaignResult(base, { campaignName: '', targetAudience: '', primaryHook: '' });
     };
 
     const handleGeneratePersona = (personaKey: (typeof PERSONA_VERSIONS)[number]['key']) => {
@@ -832,7 +729,7 @@ const generateButtonLabel = useMemo(() => {
         setActionNotice(null);
 
         try {
-            const transformed = localPersonaTransform(result, personaKey);
+            const transformed = normalizeCampaignResult({}, { campaignName: result.campaignName, targetAudience: result.targetAudience, primaryHook: result.primaryHook });
             setPersonaResults(prev => ({ ...prev, [personaKey]: transformed }));
             setPersonaView(personaKey);
             setActionNotice({ message: `Persona version generated locally for “${personaKey}”.` });
@@ -847,7 +744,7 @@ const generateButtonLabel = useMemo(() => {
 const handleSave = () => {
         if (activeResult) {
             const personaSuffix = personaView !== 'Base' ? ` (Persona: ${personaView})` : '';
-            const fullContent = `## Marketing Campaign for: ${showTitle}${personaSuffix}\n\n${activeResult}`;
+            const fullContent = `## Marketing Campaign for: ${showTitle}${personaSuffix}\n\n${activeResultText}`;
             saveIdea('text', fullContent, `Marketing for ${showTitle}`);
             onIdeaSaved();
             setSaveStatus('saved');
@@ -943,98 +840,10 @@ const handleSave = () => {
         const content = buildBlueprintContent(label);
         saveIdea('text', content, `${label} — ${showTitle || 'Untitled'}`);
         onIdeaSaved();
-        void trackClientEvent({
-            tool: 'marketing_campaign',
-            action: 'marketing_campaign_exported',
-            metadata: { ...telemetryMetadata, export_kind: kind },
-            outcome: 'ALLOWED',
-        });
         setActionNotice({ message: `${label} saved to Saved Ideas.` });
         window.setTimeout(() => setActionNotice(null), 2200);
     };
 
-
-    const handleSendToDirectorMode = async () => {
-        if (!activeResult) return;
-        setIsSendingToDirector(true);
-        setActionNotice(null);
-        try {
-            const content = `## Director Mode Brief — ${showTitle || 'Untitled'}
-
-${activeResultText}
-
----
-
-Director Notes:
-- Primary Hook: ${activeResult.primaryHook || targetHook}
-- Best Use Case: ${primaryAngle}
-- Target Audience: ${activeResult.targetAudience || liveAudiencesLabel}`;
-            saveIdea('text', content, `Director Mode Brief — ${showTitle || 'Untitled'}`);
-            onIdeaSaved();
-            void trackClientEvent({
-                tool: 'marketing_campaign',
-                action: 'marketing_campaign_sent_to_director',
-                metadata: telemetryMetadata,
-                outcome: 'ALLOWED',
-            });
-            setActionNotice({
-                message: 'Director Mode brief saved to Idea Vault.',
-                actionLabel: onNavigateToDirectorMode ? 'Open Director Mode' : undefined,
-                action: onNavigateToDirectorMode,
-            });
-        } finally {
-            setIsSendingToDirector(false);
-            window.setTimeout(() => setActionNotice(null), 2600);
-        }
-    };
-
-    const handleSendToCRMNotes = async () => {
-        if (!activeResult) return;
-        setIsSendingToCRM(true);
-        setActionNotice(null);
-        try {
-            const content = `## CRM Campaign Notes — ${showTitle || 'Untitled'}
-
-${activeResultText}
-
----
-
-Follow-up Notes:
-- Audience: ${liveAudiencesLabel}
-- Campaign Style: ${campaignStyle || 'Not specified'}
-- Recommended Hook: ${activeResult.primaryHook || targetHook}`;
-            saveIdea('text', content, `CRM Campaign Notes — ${showTitle || 'Untitled'}`);
-            onIdeaSaved();
-            void trackClientEvent({
-                tool: 'marketing_campaign',
-                action: 'marketing_campaign_sent_to_crm',
-                metadata: telemetryMetadata,
-                outcome: 'ALLOWED',
-            });
-            setActionNotice({ message: 'CRM campaign notes saved to Idea Vault for client follow-up.' });
-        } finally {
-            setIsSendingToCRM(false);
-            window.setTimeout(() => setActionNotice(null), 2600);
-        }
-    };
-
-    const handleCopyCampaign = async () => {
-        if (!activeResultText) return;
-        try {
-            await navigator.clipboard.writeText(activeResultText);
-            setCopyStatus('copied');
-            void trackClientEvent({
-                tool: 'marketing_campaign',
-                action: 'marketing_campaign_exported',
-                metadata: { ...telemetryMetadata, export_kind: 'copy_campaign' },
-                outcome: 'ALLOWED',
-            });
-            window.setTimeout(() => setCopyStatus('idle'), 1800);
-        } catch (err) {
-            setActionNotice({ message: 'Unable to copy campaign to clipboard.' });
-            window.setTimeout(() => setActionNotice(null), 2200);
-        }
-    };
 
 const handleCreateClientProposal = async () => {
     if (!activeResult) return;
@@ -1465,134 +1274,7 @@ const handleCreateBookingPitch = async () => {
                             </div>
 
                             <div className="h-px my-4 bg-gradient-to-r from-transparent via-slate-400/20 to-transparent opacity-60" />
-                            <div className="rounded-xl border border-slate-800 bg-slate-950/40 overflow-hidden">
-                                <div className="flex flex-col gap-3 border-b border-slate-800 px-4 py-4 md:flex-row md:items-center md:justify-between">
-                                    <div>
-                                        <h3 className={`text-lg font-semibold ${goldHeading}`}>Generated Campaign Workspace</h3>
-                                        <p className="text-sm text-slate-400 mt-1">Structured campaign assets rendered as expandable cards for easier review and reuse.</p>
-                                    </div>
-                                    <div className="flex flex-wrap gap-2">
-                                        <button type="button" onClick={expandAllResultCards} className="inline-flex items-center gap-2 rounded-md border border-slate-700 bg-slate-900/60 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-800 transition-colors">
-                                            <ViewGridIcon className="w-4 h-4" />
-                                            <span>Expand Results</span>
-                                        </button>
-                                        <button type="button" onClick={compactAllResultCards} className="inline-flex items-center gap-2 rounded-md border border-slate-700 bg-slate-900/60 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-800 transition-colors">
-                                            <ViewListIcon className="w-4 h-4" />
-                                            <span>Compact Results</span>
-                                        </button>
-                                    </div>
-                                </div>
-                                <div className="p-4 space-y-3">
-                                    {([
-                                        {
-                                            key: 'Campaign Overview' as const,
-                                            content: (
-                                                <div className="space-y-3 text-sm text-slate-200">
-                                                    <div>
-                                                        <p className="text-xs uppercase tracking-wide text-slate-500">Campaign Name</p>
-                                                        <p className="mt-1 text-base font-semibold text-slate-100">{activeResult?.campaignName || showTitle || 'Marketing Campaign'}</p>
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-xs uppercase tracking-wide text-slate-500">Campaign Summary</p>
-                                                        <p className="mt-1 whitespace-pre-wrap">{activeResult?.campaignSummary || 'No summary generated yet.'}</p>
-                                                    </div>
-                                                </div>
-                                            ),
-                                        },
-                                        {
-                                            key: 'Audience & Offer' as const,
-                                            content: (
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-slate-200">
-                                                    <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
-                                                        <p className="text-xs uppercase tracking-wide text-slate-500">Target Audience</p>
-                                                        <p className="mt-1">{activeResult?.targetAudience || liveAudiencesLabel}</p>
-                                                    </div>
-                                                    <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
-                                                        <p className="text-xs uppercase tracking-wide text-slate-500">Primary Hook</p>
-                                                        <p className="mt-1">{activeResult?.primaryHook || targetHook}</p>
-                                                    </div>
-                                                </div>
-                                            ),
-                                        },
-                                        {
-                                            key: 'Headlines / Taglines' as const,
-                                            content: activeResult?.taglines?.length ? (
-                                                <ul className="space-y-2 text-sm text-slate-200">
-                                                    {activeResult.taglines.map((item, index) => (
-                                                        <li key={`${item}-${index}`} className="rounded-md border border-slate-800 bg-slate-900/40 p-3">• {item}</li>
-                                                    ))}
-                                                </ul>
-                                            ) : <p className="text-sm text-slate-400">No taglines generated.</p>,
-                                        },
-                                        {
-                                            key: 'Press Release' as const,
-                                            content: <p className="whitespace-pre-wrap text-sm text-slate-200">{activeResult?.pressRelease || 'No press release generated.'}</p>,
-                                        },
-                                        {
-                                            key: 'Social Posts' as const,
-                                            content: activeResult?.socialPosts?.length ? (
-                                                <div className="space-y-2 text-sm text-slate-200">
-                                                    {activeResult.socialPosts.map((item, index) => (
-                                                        <div key={`${item}-${index}`} className="rounded-md border border-slate-800 bg-slate-900/40 p-3">{item}</div>
-                                                    ))}
-                                                </div>
-                                            ) : <p className="text-sm text-slate-400">No social posts generated.</p>,
-                                        },
-                                        {
-                                            key: 'Email Campaign' as const,
-                                            content: activeResult?.emailCampaign?.length ? (
-                                                <div className="space-y-2 text-sm text-slate-200">
-                                                    {activeResult.emailCampaign.map((item, index) => (
-                                                        <div key={`${item}-${index}`} className="rounded-md border border-slate-800 bg-slate-900/40 p-3">{item}</div>
-                                                    ))}
-                                                </div>
-                                            ) : <p className="text-sm text-slate-400">No email campaign ideas generated.</p>,
-                                        },
-                                        {
-                                            key: 'Poster / Flyer Copy' as const,
-                                            content: <p className="whitespace-pre-wrap text-sm text-slate-200">{activeResult?.posterCopy || 'No poster copy generated.'}</p>,
-                                        },
-                                        {
-                                            key: 'Booking Pitch' as const,
-                                            content: <p className="whitespace-pre-wrap text-sm text-slate-200">{activeResult?.bookingPitch || 'No booking pitch generated.'}</p>,
-                                        },
-                                        {
-                                            key: 'CTA Strategy' as const,
-                                            content: <p className="whitespace-pre-wrap text-sm text-slate-200">{activeResult?.ctaStrategy || 'No CTA strategy generated.'}</p>,
-                                        },
-                                        {
-                                            key: 'Rollout Plan' as const,
-                                            content: activeResult?.rolloutPlan?.length ? (
-                                                <ol className="space-y-2 text-sm text-slate-200 list-decimal list-inside">
-                                                    {activeResult.rolloutPlan.map((item, index) => (
-                                                        <li key={`${item}-${index}`} className="rounded-md border border-slate-800 bg-slate-900/40 p-3">{item}</li>
-                                                    ))}
-                                                </ol>
-                                            ) : <p className="text-sm text-slate-400">No rollout plan generated.</p>,
-                                        },
-                                        {
-                                            key: 'Notes' as const,
-                                            content: activeResult?.notes?.length ? (
-                                                <ul className="space-y-2 text-sm text-slate-200">
-                                                    {activeResult.notes.map((item, index) => (
-                                                        <li key={`${item}-${index}`} className="rounded-md border border-slate-800 bg-slate-900/40 p-3">• {item}</li>
-                                                    ))}
-                                                </ul>
-                                            ) : <p className="text-sm text-slate-400">No notes generated.</p>,
-                                        },
-                                    ] as const).map(section => (
-                                        <div key={section.key} className={`rounded-lg border transition-colors ${resultCardsOpen[section.key] ? 'border-purple-500/40 bg-purple-500/5' : 'border-slate-800 bg-slate-950/30'}`}>
-                                            <button type="button" onClick={() => toggleResultCard(section.key)} className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-slate-900/40 transition-colors">
-                                                <span className={`font-semibold ${goldHeadingSmall}`}>{section.key}</span>
-                                                <ChevronDownIcon className={`w-4 h-4 text-slate-400 transition-transform ${resultCardsOpen[section.key] ? 'rotate-180' : ''}`} />
-                                            </button>
-                                            {resultCardsOpen[section.key] && (
-                                                <div className="border-t border-slate-800 p-4">{section.content}</div>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
+                            <pre className="whitespace-pre-wrap break-words text-slate-200 font-sans text-sm">{activeResultText}</pre>
                         </div>
                         <div className="sticky bottom-0 z-30 p-2.5 bg-slate-950/90 backdrop-blur-md flex flex-col gap-2 border-t border-slate-800 shadow-[0_-8px_24px_rgba(0,0,0,0.35)]">
                             {actionNotice && (
@@ -1613,7 +1295,7 @@ const handleCreateBookingPitch = async () => {
                             )}
                             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
                             <div className="flex flex-wrap items-center gap-2">
-                                <span className="text-xs text-slate-400 mr-1">Workflow Actions:</span>
+                                <span className="text-xs text-slate-400 mr-1">Send Campaign to:</span>
                                 <button
                                     type="button"
                                     onClick={handleSendToShowPlanner}
@@ -1625,30 +1307,21 @@ const handleCreateBookingPitch = async () => {
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={handleSendToDirectorMode}
-                                    disabled={!activeResult || isSendingToDirector}
-                                    className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    <WandIcon className="w-4 h-4" />
-                                    <span>{isSendingToDirector ? 'Sending…' : 'Director Mode'}</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleSendToCRMNotes}
-                                    disabled={!activeResult || isSendingToCRM}
-                                    className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    <UsersIcon className="w-4 h-4" />
-                                    <span>{isSendingToCRM ? 'Sending…' : 'CRM Notes'}</span>
-                                </button>
-                                <button
-                                    type="button"
                                     onClick={handleCreateClientProposal}
                                     disabled={!activeResult}
                                     className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     <FileTextIcon className="w-4 h-4" />
                                     <span>Client Proposal</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleQuickExportIdea('Social Scheduler')}
+                                    disabled={!activeResult}
+                                    className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <SendIcon className="w-4 h-4" />
+                                    <span>Social Scheduler</span>
                                 </button>
                                 <button
                                     type="button"
@@ -1662,33 +1335,6 @@ const handleCreateBookingPitch = async () => {
                             </div>
 
                             <div className="flex flex-wrap items-center justify-end gap-2">
-                            <button
-                                type="button"
-                                onClick={handleGenerateAlternateCampaign}
-                                disabled={!activeResult || isGeneratingAlternate}
-                                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-purple-600/20 hover:bg-purple-600/30 rounded-md border border-purple-500/40 text-purple-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                <CustomizeIcon className="w-4 h-4" />
-                                <span>{isGeneratingAlternate ? 'Generating…' : 'Alternate Campaign'}</span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleCopyCampaign}
-                                disabled={!activeResultText}
-                                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                <CopyIcon className="w-4 h-4" />
-                                <span>{copyStatus === 'copied' ? 'Copied!' : 'Copy Campaign'}</span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => handleQuickExportIdea('Social Scheduler')}
-                                disabled={!activeResult}
-                                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md text-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                <SendIcon className="w-4 h-4" />
-                                <span>Export Pack</span>
-                            </button>
                             <CohesionActions
                                 content={activeResultText || ''}
                                 defaultTitle={`Marketing Campaign — ${showTitle || 'Untitled'}`}
@@ -1716,7 +1362,7 @@ const handleCreateBookingPitch = async () => {
                                 ) : (
                                     <>
                                         <SaveIcon className="w-4 h-4" />
-                                        <span>Save to Idea Vault</span>
+                                        <span>Save Idea</span>
                                     </>
                                 )}
                             </button>
