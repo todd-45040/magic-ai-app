@@ -116,6 +116,36 @@ async function safeFetchJson<T>(
   throw e;
 }
 
+
+function unwrapAiPayload<T = unknown>(res: any): T {
+  if (res?.data?.json !== undefined) return res.data.json as T;
+  if (res?.json !== undefined) return res.json as T;
+  if (res?.data !== undefined) return res.data as T;
+  return res as T;
+}
+
+function unwrapAiText(res: any): string {
+  if (res?.data?.text !== undefined) return String(res.data.text);
+  if (res?.text !== undefined) return String(res.text);
+  if (typeof res?.data === 'string') return res.data;
+  if (typeof res === 'string') return res;
+  return '';
+}
+
+function unwrapAiImages(res: any): string[] {
+  if (Array.isArray(res?.data?.images)) return res.data.images as string[];
+  if (Array.isArray(res?.images)) return res.images as string[];
+  if (Array.isArray(res?.data)) return res.data as string[];
+  return [];
+}
+
+function unwrapAiResult<T = unknown>(res: any): T {
+  if (res?.data?.result !== undefined) return res.data.result as T;
+  if (res?.result !== undefined) return res.result as T;
+  if (res?.data !== undefined) return res.data as T;
+  return res as T;
+}
+
 /** aiChat(prompt, system?) → plain text response */
 export async function aiChat(prompt: string, system?: string) {
   const res = await safeFetchJson<{ text: string }>("/api/ai/chat", {
@@ -124,7 +154,7 @@ export async function aiChat(prompt: string, system?: string) {
     body: JSON.stringify({ messages: buildMessages(prompt, system) }),
   });
 
-  return res.data.text;
+  return unwrapAiText(res);
 }
 
 /** aiJson(prompt, system?, schemaName?) → structured JSON response */
@@ -142,7 +172,7 @@ export async function aiJson<T = unknown>(
     }),
   });
 
-  return res.data.json;
+  return unwrapAiPayload<T>(res);
 }
 
 /** aiImage(prompt, style?, size?) → returns array of image strings (urls or base64, depending on server) */
@@ -157,7 +187,7 @@ export async function aiImage(
     body: JSON.stringify({ prompt, style, size }),
   });
 
-  return res.data.images;
+  return unwrapAiImages(res);
 }
 
 /** aiIdentify(imageBase64, prompt?) → vision analysis result (generic type) */
@@ -171,5 +201,5 @@ export async function aiIdentify<T = unknown>(
     body: JSON.stringify({ imageBase64, prompt }),
   });
 
-  return res.data.result;
+  return unwrapAiResult<T>(res);
 }
