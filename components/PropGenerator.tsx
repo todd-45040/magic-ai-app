@@ -5,9 +5,7 @@ import { createShow, addTasksToShow } from "../services/showsService";
 import { useAppDispatch, refreshIdeas, refreshShows } from "../store";
 import ShareButton from "./ShareButton";
 import { trackClientEvent } from "../services/telemetryClient";
-import { aiJson } from "../services/aiProxy";
-
-const PROP_JSON_SYSTEM = `You are a structured JSON generator for Magic AI Wizard. Return valid JSON only. Do not wrap the result in markdown, prose, or code fences.`;
+import { supabase } from "../supabase";
 
 type Props = {
   user?: User;
@@ -96,6 +94,85 @@ function CollapsibleCard({ title, isOpen, onToggle, children }: { title: string;
   );
 }
 
+async function getBearerToken(): Promise<string> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    const token = data?.session?.access_token;
+    return token ? `Bearer ${token}` : 'Bearer guest';
+  } catch {
+    return 'Bearer guest';
+  }
+}
+
+function buildMessages(prompt: string, system?: string) {
+  const messages: Array<{ role: 'system' | 'user'; content: string }> = [];
+  if (system && system.trim()) messages.push({ role: 'system', content: system.trim() });
+  messages.push({ role: 'user', content: prompt });
+  return messages;
+}
+
+function normalizeJsonResponse<T>(payload: any): T {
+  if (payload == null) {
+    throw new Error('Empty AI response.');
+  }
+
+  // Current hardened endpoint success shape: { ok:true, data:{ json: ... } }
+  if (payload?.ok === true && payload?.data?.json !== undefined) {
+    return payload.data.json as T;
+  }
+
+  // Alternate success shapes we may still encounter in older builds.
+  if (payload?.data?.json !== undefined) {
+    return payload.data.json as T;
+  }
+  if (payload?.json !== undefined) {
+    return payload.json as T;
+  }
+  if (payload?.data !== undefined && typeof payload.data === 'object' && !Array.isArray(payload.data)) {
+    return payload.data as T;
+  }
+
+  // If the server already returned the raw JSON object, pass it through.
+  if (typeof payload === 'object') {
+    return payload as T;
+  }
+
+  throw new Error('Unexpected AI JSON response shape.');
+}
+
+async function requestAiJson<T>(prompt: string, system?: string, schemaName?: string): Promise<T> {
+  const response = await fetch('/api/ai/json', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: await getBearerToken(),
+    },
+    body: JSON.stringify({
+      messages: buildMessages(prompt, system),
+      config: schemaName ? { schemaName } : undefined,
+    }),
+  });
+
+  const text = await response.text();
+  let payload: any = null;
+  try {
+    payload = text ? JSON.parse(text) : null;
+  } catch {
+    throw new Error(`Non-JSON AI response (${response.status}). ${text.slice(0, 180)}`);
+  }
+
+  if (!response.ok) {
+    const message = payload?.message || payload?.error || `AI request failed (${response.status}).`;
+    throw new Error(message);
+  }
+
+  if (payload?.ok === false) {
+    throw new Error(payload?.message || 'AI request failed.');
+  }
+
+  return normalizeJsonResponse<T>(payload);
+}
+
 export default function PropGenerator({ onIdeaSaved, onNavigateShowPlanner, onNavigateDirectorMode }: Props) {
   const dispatch = useAppDispatch();
   const [loading, setLoading] = useState(false);
@@ -119,7 +196,6 @@ export default function PropGenerator({ onIdeaSaved, onNavigateShowPlanner, onNa
     setInputs((prev) => ({ ...prev, [key]: value }));
   }
 
-
   const telemetryMetadata = useMemo(() => ({
     prop_type: inputs.propType || 'unspecified',
     skill_level: inputs.skillLevel || 'unspecified',
@@ -138,8 +214,6 @@ export default function PropGenerator({ onIdeaSaved, onNavigateShowPlanner, onNa
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-
 
   function resetPage() {
     const confirmed = typeof window === 'undefined' ? true : window.confirm('Reset the Prop Generator and clear the current concept?');
@@ -186,20 +260,6 @@ export default function PropGenerator({ onIdeaSaved, onNavigateShowPlanner, onNa
     });
   }
 
-  async function callGenerate<T>(prompt: string, schemaName?: string) {
-    const response: any = await aiJson<any>(prompt, PROP_JSON_SYSTEM, schemaName);
-    // Defensive normalization: accept either direct JSON objects or legacy wrapped shapes.
-    if (response && typeof response === 'object') {
-      if ('data' in response && response.data && typeof response.data === 'object' && 'json' in response.data) {
-        return response.data.json as T;
-      }
-      if ('json' in response) {
-        return response.json as T;
-      }
-    }
-    return response as T;
-  }
-
   async function generate(mode: 'base' | 'alternate' = 'base') {
     if (loading) return;
     setLoading(true);
@@ -235,7 +295,8 @@ Budget: ${inputs.budget}
 Transport: ${inputs.transport}
 Reset: ${inputs.reset}`;
 
-      const json = await callGenerate<any>(prompt, 'prop_concept');
+      const system = 'You are Magician\'s AI Wizard. Respond with valid JSON only. Do not wrap the answer in markdown fences. Do not add commentary before or after the JSON.';
+      const json = await requestAiJson<any>(prompt, system, 'propConcept');
       const concept = sanitizeConcept(json);
       setResult(concept);
       setOpenSections(new Set(defaultOpen));
@@ -247,7 +308,7 @@ Reset: ${inputs.reset}`;
       });
     } catch (e: any) {
       console.error(e);
-      setError(e?.message || "Generation failed");
+      setError(e?.message || 'Generation failed');
     } finally {
       setLoading(false);
     }
@@ -279,7 +340,8 @@ Requirements:
 - Focus on materials prep, fabrication sequence, assembly order, finishing, transport readiness, and rehearsal readiness.
 - Do not include dangerous or illegal instructions.
 `;
-      const build = await callGenerate<PropBuildInstructions>(prompt, 'prop_build_instructions');
+      const system = 'You are Magician\'s AI Wizard. Respond with valid JSON only. Do not wrap the answer in markdown fences. Do not add commentary before or after the JSON.';
+      const build = await requestAiJson<PropBuildInstructions>(prompt, system, 'propBuildInstructions');
       setResult((prev) => prev ? ({ ...prev, buildInstructions: {
         toolsRequired: Array.isArray(build.toolsRequired) ? build.toolsRequired.map(String) : [],
         constructionSteps: Array.isArray(build.constructionSteps) ? build.constructionSteps.map(String) : [],
@@ -350,7 +412,6 @@ Requirements:
       setError(e?.message || 'Could not send to Show Planner.');
     }
   }
-
 
   async function sendToDirectorMode() {
     if (!result) return;
