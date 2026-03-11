@@ -7,6 +7,8 @@ import { trackClientEvent } from "../services/telemetryClient"
 
 type SearchResultType = "Idea" | "Show" | "Task" | "Feedback"
 
+type SearchMode = "all" | "titles"
+
 type SearchResult = {
   id: string
   title: string
@@ -14,7 +16,11 @@ type SearchResult = {
   type: SearchResultType
   source: string
   date?: string | number
+  normalizedDate?: number
   score: number
+  category?: string
+  toolName?: string
+  tags: string[]
   showId?: string
   taskId?: string
   ideaId?: string
@@ -61,6 +67,13 @@ export default function GlobalSearch({
   const [showTasks, setShowTasks] = useState(true)
 
   const [dateRange, setDateRange] = useState("all")
+  const [searchMode, setSearchMode] = useState<SearchMode>("all")
+
+  const [categoryFilter, setCategoryFilter] = useState("all")
+  const [toolFilter, setToolFilter] = useState("all")
+  const [sourceFilter, setSourceFilter] = useState("all")
+  const [tagInput, setTagInput] = useState("")
+  const [activeTagFilters, setActiveTagFilters] = useState<string[]>([])
 
   const [queryOpen, setQueryOpen] = useState(true)
   const [filtersOpen, setFiltersOpen] = useState(true)
@@ -91,6 +104,12 @@ export default function GlobalSearch({
     setShowTasks(true)
 
     setDateRange("all")
+    setSearchMode("all")
+    setCategoryFilter("all")
+    setToolFilter("all")
+    setSourceFilter("all")
+    setTagInput("")
+    setActiveTagFilters([])
 
     setIdeasGroupOpen(true)
     setShowsGroupOpen(true)
@@ -108,20 +127,34 @@ export default function GlobalSearch({
     return String(value ?? "").toLowerCase().trim()
   }
 
+  function normalizeArray(values: unknown): string[] {
+    if (!Array.isArray(values)) return []
+    return values
+      .map((value) => normalizeText(value))
+      .filter(Boolean)
+  }
+
   function tokenizeQuery(value: string) {
     return normalizeText(value)
       .split(/\s+/)
       .filter(Boolean)
   }
 
-  function withinDateRange(value?: string | number) {
-    if (dateRange === "all") return true
-    if (!value) return true
+  function normalizeDate(value?: string | number) {
+    if (!value && value !== 0) return undefined
 
     const timestamp =
       typeof value === "number" ? value : new Date(value).getTime()
 
-    if (!Number.isFinite(timestamp)) return true
+    if (!Number.isFinite(timestamp)) return undefined
+    return timestamp
+  }
+
+  function withinDateRange(value?: string | number) {
+    if (dateRange === "all") return true
+
+    const timestamp = normalizeDate(value)
+    if (!timestamp) return true
 
     const now = Date.now()
     const diff = now - timestamp
@@ -129,11 +162,17 @@ export default function GlobalSearch({
 
     if (dateRange === "7") return days <= 7
     if (dateRange === "30") return days <= 30
+    if (dateRange === "90") return days <= 90
 
     return true
   }
 
-  function scoreRecord(title: string, content: string, fullRecord: unknown, date?: string | number) {
+  function scoreRecord(
+    title: string,
+    content: string,
+    fullRecord: unknown,
+    date?: string | number
+  ) {
     const trimmedQuery = query.trim()
     if (!trimmedQuery) {
       return 1
@@ -156,34 +195,315 @@ export default function GlobalSearch({
       score += 500
     }
 
-    if (contentText.includes(normalizedQuery)) {
+    if (searchMode === "all" && contentText.includes(normalizedQuery)) {
       score += 250
     }
 
-    if (fullText.includes(normalizedQuery)) {
+    if (searchMode === "all" && fullText.includes(normalizedQuery)) {
       score += 150
     }
 
     for (const token of tokens) {
       if (titleText.includes(token)) score += 40
-      if (contentText.includes(token)) score += 20
-      if (fullText.includes(token)) score += 10
+      if (searchMode === "all" && contentText.includes(token)) score += 20
+      if (searchMode === "all" && fullText.includes(token)) score += 10
     }
 
-    if (date) {
-      const timestamp =
-        typeof date === "number" ? date : new Date(date).getTime()
+    const timestamp = normalizeDate(date)
 
-      if (Number.isFinite(timestamp)) {
-        const ageInDays = Math.max(0, (Date.now() - timestamp) / (1000 * 60 * 60 * 24))
+    if (timestamp) {
+      const ageInDays = Math.max(0, (Date.now() - timestamp) / (1000 * 60 * 60 * 24))
 
-        if (ageInDays <= 7) score += 25
-        else if (ageInDays <= 30) score += 15
-        else if (ageInDays <= 90) score += 8
-      }
+      if (ageInDays <= 7) score += 25
+      else if (ageInDays <= 30) score += 15
+      else if (ageInDays <= 90) score += 8
     }
 
     return score
+  }
+
+  function matchesStructuredFilters(result: SearchResult) {
+    if (sourceFilter !== "all" && normalizeText(result.source) !== normalizeText(sourceFilter)) {
+      return false
+    }
+
+    if (categoryFilter !== "all") {
+      const resultCategory = normalizeText(result.category)
+      if (resultCategory !== normalizeText(categoryFilter)) {
+        return false
+      }
+    }
+
+    if (toolFilter !== "all") {
+      const resultTool = normalizeText(result.toolName)
+      if (resultTool !== normalizeText(toolFilter)) {
+        return false
+      }
+    }
+
+    if (activeTagFilters.length > 0) {
+      const resultTags = result.tags.map((tag) => normalizeText(tag))
+      const allTagsPresent = activeTagFilters.every((tag) => resultTags.includes(normalizeText(tag)))
+      if (!allTagsPresent) {
+        return false
+      }
+    }
+
+    return true
+  }
+
+  function extractTags(...sources: unknown[]) {
+    const output = new Set<string>()
+
+    sources.forEach((source) => {
+      if (Array.isArray(source)) {
+        source.forEach((item) => {
+          const normalized = normalizeText(item)
+          if (normalized) output.add(normalized)
+        })
+        return
+      }
+
+      if (typeof source === "string") {
+        source
+          .split(",")
+          .map((piece) => normalizeText(piece))
+          .filter(Boolean)
+          .forEach((piece) => output.add(piece))
+      }
+    })
+
+    return Array.from(output)
+  }
+
+  function normalizeIdea(idea: any): SearchResult | null {
+    const rawDate = idea.timestamp || idea.createdAt || idea.created_at
+    const normalizedDate = normalizeDate(rawDate)
+    const title = idea.title || "Idea"
+    const content =
+      idea.content ||
+      idea.description ||
+      idea.notes ||
+      ""
+
+    const category =
+      idea.category ||
+      idea.ideaCategory ||
+      "Idea"
+
+    const toolName =
+      idea.tool ||
+      idea.toolName ||
+      "Saved Ideas"
+
+    const tags = extractTags(
+      idea.tags,
+      idea.tag,
+      idea.labels,
+      idea.audience,
+      idea.style
+    )
+
+    if (!withinDateRange(rawDate)) return null
+
+    const score = scoreRecord(title, content, idea, rawDate)
+    if (query.trim() && score <= 0) return null
+
+    const result: SearchResult = {
+      id: String(idea.id),
+      title,
+      content,
+      type: "Idea",
+      source: "ideas",
+      date: rawDate,
+      normalizedDate,
+      score,
+      category,
+      toolName,
+      tags,
+      ideaId: String(idea.id),
+      showId: idea.showId ? String(idea.showId) : undefined,
+      relatedShowTitle: idea.showTitle || idea.showName || undefined,
+    }
+
+    return matchesStructuredFilters(result) ? result : null
+  }
+
+  function normalizeShow(show: any): SearchResult | null {
+    const rawDate = show.createdAt || show.created_at || show.updatedAt || show.updated_at
+    const normalizedDate = normalizeDate(rawDate)
+    const title = show.title || show.name || "Show"
+    const content =
+      show.description ||
+      show.notes ||
+      show.summary ||
+      ""
+
+    const category =
+      show.category ||
+      show.showType ||
+      show.type ||
+      "Show"
+
+    const toolName =
+      show.tool ||
+      show.toolName ||
+      "Show Planner"
+
+    const tags = extractTags(
+      show.tags,
+      show.tag,
+      show.labels,
+      show.audience,
+      show.theme,
+      show.venueType
+    )
+
+    if (!withinDateRange(rawDate)) return null
+
+    const score = scoreRecord(title, content, show, rawDate)
+    if (query.trim() && score <= 0) return null
+
+    const result: SearchResult = {
+      id: String(show.id),
+      title,
+      content,
+      type: "Show",
+      source: "shows",
+      date: rawDate,
+      normalizedDate,
+      score,
+      category,
+      toolName,
+      tags,
+      showId: String(show.id),
+    }
+
+    return matchesStructuredFilters(result) ? result : null
+  }
+
+  function normalizeTask(task: any, parentShow: any): SearchResult | null {
+    const rawDate =
+      task.createdAt ||
+      task.created_at ||
+      task.updatedAt ||
+      task.updated_at ||
+      task.dueDate ||
+      task.due_date
+
+    const normalizedDate = normalizeDate(rawDate)
+    const title = task.title || "Task"
+    const content =
+      task.notes ||
+      task.description ||
+      task.details ||
+      ""
+
+    const category =
+      task.category ||
+      task.status ||
+      task.taskType ||
+      "Task"
+
+    const toolName =
+      task.tool ||
+      task.toolName ||
+      "Show Planner"
+
+    const relatedShowTitle = parentShow?.title || parentShow?.name || "Show"
+
+    const tags = extractTags(
+      task.tags,
+      task.tag,
+      task.labels,
+      task.priority,
+      task.status,
+      relatedShowTitle
+    )
+
+    const enrichedRecord = {
+      ...task,
+      parentShowTitle: relatedShowTitle,
+    }
+
+    if (!withinDateRange(rawDate)) return null
+
+    const score = scoreRecord(title, content, enrichedRecord, rawDate)
+    if (query.trim() && score <= 0) return null
+
+    const result: SearchResult = {
+      id: `${parentShow?.id}-${task.id}`,
+      title,
+      content,
+      type: "Task",
+      source: "tasks",
+      date: rawDate,
+      normalizedDate,
+      score,
+      category,
+      toolName,
+      tags,
+      showId: parentShow?.id ? String(parentShow.id) : undefined,
+      taskId: String(task.id),
+      relatedShowTitle,
+    }
+
+    return matchesStructuredFilters(result) ? result : null
+  }
+
+  function normalizeFeedback(item: any): SearchResult | null {
+    const rawDate = item.timestamp || item.createdAt || item.created_at
+    const normalizedDate = normalizeDate(rawDate)
+    const title = item.showTitle || item.name || item.title || "Feedback"
+    const content =
+      item.comment ||
+      item.notes ||
+      item.content ||
+      item.summary ||
+      ""
+
+    const category =
+      item.category ||
+      item.sentiment ||
+      item.feedbackType ||
+      "Feedback"
+
+    const toolName =
+      item.tool ||
+      item.toolName ||
+      "Audience Feedback"
+
+    const tags = extractTags(
+      item.tags,
+      item.tag,
+      item.labels,
+      item.sentiment,
+      item.showTitle
+    )
+
+    if (!withinDateRange(rawDate)) return null
+
+    const score = scoreRecord(title, content, item, rawDate)
+    if (query.trim() && score <= 0) return null
+
+    const result: SearchResult = {
+      id: String(item.id),
+      title,
+      content,
+      type: "Feedback",
+      source: "feedback",
+      date: rawDate,
+      normalizedDate,
+      score,
+      category,
+      toolName,
+      tags,
+      feedbackId: String(item.id),
+      showId: item.showId ? String(item.showId) : undefined,
+      relatedShowTitle: item.showTitle || undefined,
+    }
+
+    return matchesStructuredFilters(result) ? result : null
   }
 
   async function runSearch() {
@@ -224,51 +544,15 @@ export default function GlobalSearch({
 
       if (showIdeas) {
         ideas.forEach((idea: any) => {
-          const recordDate = idea.timestamp
-          const title = idea.title || "Idea"
-          const content = idea.content || ""
-
-          if (!withinDateRange(recordDate)) return
-
-          const score = scoreRecord(title, content, idea, recordDate)
-          if (query.trim() && score <= 0) return
-
-          allResults.push({
-            id: String(idea.id),
-            title,
-            content,
-            type: "Idea",
-            source: "ideas",
-            date: recordDate,
-            score,
-            ideaId: String(idea.id),
-            showId: idea.showId ? String(idea.showId) : undefined,
-            relatedShowTitle: idea.showTitle || undefined,
-          })
+          const normalized = normalizeIdea(idea)
+          if (normalized) allResults.push(normalized)
         })
       }
 
       if (showShows) {
         shows.forEach((show: any) => {
-          const recordDate = show.createdAt || show.created_at
-          const title = show.title || show.name || "Show"
-          const content = show.description || show.notes || ""
-
-          if (!withinDateRange(recordDate)) return
-
-          const score = scoreRecord(title, content, show, recordDate)
-          if (query.trim() && score <= 0) return
-
-          allResults.push({
-            id: String(show.id),
-            title,
-            content,
-            type: "Show",
-            source: "shows",
-            date: recordDate,
-            score,
-            showId: String(show.id),
-          })
+          const normalized = normalizeShow(show)
+          if (normalized) allResults.push(normalized)
         })
       }
 
@@ -277,85 +561,22 @@ export default function GlobalSearch({
           const tasks = Array.isArray(show.tasks) ? show.tasks : []
 
           tasks.forEach((task: any) => {
-            const recordDate =
-              task.createdAt || task.created_at || task.dueDate || task.due_date
-
-            const title = task.title || "Task"
-            const content = task.notes || task.description || ""
-            const enrichedRecord = {
-              ...task,
-              parentShowTitle: show.title || show.name || "",
-            }
-
-            if (!withinDateRange(recordDate)) return
-
-            const score = scoreRecord(title, content, enrichedRecord, recordDate)
-            if (query.trim() && score <= 0) return
-
-            allResults.push({
-              id: `${show.id}-${task.id}`,
-              title,
-              content,
-              type: "Task",
-              source: "tasks",
-              date: recordDate,
-              score,
-              showId: String(show.id),
-              taskId: String(task.id),
-              relatedShowTitle: show.title || show.name || "Show",
-            })
+            const normalized = normalizeTask(task, show)
+            if (normalized) allResults.push(normalized)
           })
         })
       }
 
       if (showFeedback) {
         feedback.forEach((item: any) => {
-          const recordDate = item.timestamp
-          const title = item.showTitle || item.name || "Feedback"
-          const content =
-            item.comment ||
-            item.notes ||
-            item.content ||
-            ""
-
-          if (!withinDateRange(recordDate)) return
-
-          const score = scoreRecord(title, content, item, recordDate)
-          if (query.trim() && score <= 0) return
-
-          allResults.push({
-            id: String(item.id),
-            title,
-            content,
-            type: "Feedback",
-            source: "feedback",
-            date: recordDate,
-            score,
-            feedbackId: String(item.id),
-            showId: item.showId ? String(item.showId) : undefined,
-            relatedShowTitle: item.showTitle || undefined,
-          })
+          const normalized = normalizeFeedback(item)
+          if (normalized) allResults.push(normalized)
         })
       }
 
       allResults.sort((a, b) => {
         if (b.score !== a.score) return b.score - a.score
-
-        const aTime =
-          typeof a.date === "number"
-            ? a.date
-            : a.date
-              ? new Date(a.date).getTime()
-              : 0
-
-        const bTime =
-          typeof b.date === "number"
-            ? b.date
-            : b.date
-              ? new Date(b.date).getTime()
-              : 0
-
-        return bTime - aTime
+        return (b.normalizedDate || 0) - (a.normalizedDate || 0)
       })
 
       setResults(allResults)
@@ -372,6 +593,11 @@ export default function GlobalSearch({
             showFeedback,
             showTasks,
             dateRange,
+            searchMode,
+            categoryFilter,
+            toolFilter,
+            sourceFilter,
+            activeTagFilters,
           },
         },
       })
@@ -537,6 +763,21 @@ export default function GlobalSearch({
     )
   }
 
+  function addTagFilter() {
+    const normalized = normalizeText(tagInput)
+    if (!normalized) return
+    if (activeTagFilters.includes(normalized)) {
+      setTagInput("")
+      return
+    }
+    setActiveTagFilters((prev) => [...prev, normalized])
+    setTagInput("")
+  }
+
+  function removeTagFilter(tag: string) {
+    setActiveTagFilters((prev) => prev.filter((item) => item !== tag))
+  }
+
   const groupedResults = useMemo<ResultGroups>(() => {
     const groups: ResultGroups = {
       ideas: [],
@@ -565,6 +806,28 @@ export default function GlobalSearch({
 
   const activeSourceCount = [showIdeas, showShows, showTasks, showFeedback].filter(Boolean).length
 
+  const availableCategories = useMemo(() => {
+    const values = new Set<string>()
+
+    results.forEach((result) => {
+      const normalized = normalizeText(result.category)
+      if (normalized) values.add(result.category as string)
+    })
+
+    return Array.from(values).sort((a, b) => a.localeCompare(b))
+  }, [results])
+
+  const availableTools = useMemo(() => {
+    const values = new Set<string>()
+
+    results.forEach((result) => {
+      const normalized = normalizeText(result.toolName)
+      if (normalized) values.add(result.toolName as string)
+    })
+
+    return Array.from(values).sort((a, b) => a.localeCompare(b))
+  }, [results])
+
   function groupIsOpen(group: keyof ResultGroups) {
     if (group === "ideas") return ideasGroupOpen
     if (group === "shows") return showsGroupOpen
@@ -588,10 +851,9 @@ export default function GlobalSearch({
   }
 
   function formatDate(value?: string | number) {
-    if (!value) return ""
-    const date = typeof value === "number" ? new Date(value) : new Date(value)
-    if (Number.isNaN(date.getTime())) return ""
-    return date.toLocaleDateString()
+    const timestamp = normalizeDate(value)
+    if (!timestamp) return ""
+    return new Date(timestamp).toLocaleDateString()
   }
 
   return (
@@ -624,6 +886,18 @@ export default function GlobalSearch({
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
+
+              <div className="mt-3">
+                <label className="block text-sm mb-2 text-white/70">Search Mode</label>
+                <select
+                  value={searchMode}
+                  onChange={(e) => setSearchMode(e.target.value as SearchMode)}
+                  className="w-full p-3 rounded-xl border border-white/10 bg-black/30"
+                >
+                  <option value="all">Search all text</option>
+                  <option value="titles">Titles only</option>
+                </select>
+              </div>
 
               <button
                 onClick={runSearch}
@@ -693,18 +967,108 @@ export default function GlobalSearch({
           </button>
 
           {advancedOpen && (
-            <div className="px-4 pb-4">
-              <label className="block text-sm mb-2">Date Range</label>
+            <div className="px-4 pb-4 space-y-4">
+              <div>
+                <label className="block text-sm mb-2">Date Range</label>
+                <select
+                  value={dateRange}
+                  onChange={(e) => setDateRange(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-white/10 bg-black/30"
+                >
+                  <option value="all">All Time</option>
+                  <option value="90">Last 90 Days</option>
+                  <option value="30">Last 30 Days</option>
+                  <option value="7">Last 7 Days</option>
+                </select>
+              </div>
 
-              <select
-                value={dateRange}
-                onChange={(e) => setDateRange(e.target.value)}
-                className="w-full p-3 rounded-xl border border-white/10 bg-black/30"
-              >
-                <option value="all">All Time</option>
-                <option value="30">Last 30 Days</option>
-                <option value="7">Last 7 Days</option>
-              </select>
+              <div>
+                <label className="block text-sm mb-2">Source</label>
+                <select
+                  value={sourceFilter}
+                  onChange={(e) => setSourceFilter(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-white/10 bg-black/30"
+                >
+                  <option value="all">All Sources</option>
+                  <option value="ideas">Ideas</option>
+                  <option value="shows">Shows</option>
+                  <option value="tasks">Tasks</option>
+                  <option value="feedback">Feedback</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm mb-2">Category</label>
+                <select
+                  value={categoryFilter}
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-white/10 bg-black/30"
+                >
+                  <option value="all">All Categories</option>
+                  {availableCategories.map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm mb-2">Tool</label>
+                <select
+                  value={toolFilter}
+                  onChange={(e) => setToolFilter(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-white/10 bg-black/30"
+                >
+                  <option value="all">All Tools</option>
+                  {availableTools.map((tool) => (
+                    <option key={tool} value={tool}>
+                      {tool}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm mb-2">Tag Filter</label>
+
+                <div className="flex gap-2">
+                  <input
+                    className="flex-1 p-3 rounded-xl border border-white/10 bg-black/30"
+                    placeholder="Add tag..."
+                    value={tagInput}
+                    onChange={(e) => setTagInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault()
+                        addTagFilter()
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={addTagFilter}
+                    className="px-3 py-2 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10"
+                  >
+                    Add
+                  </button>
+                </div>
+
+                {activeTagFilters.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {activeTagFilters.map((tag) => (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => removeTagFilter(tag)}
+                        className="text-xs px-2.5 py-1.5 rounded-full border border-purple-400/30 bg-purple-500/10 text-white/85"
+                      >
+                        #{tag} ×
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -726,7 +1090,7 @@ export default function GlobalSearch({
           <div className="rounded-2xl border border-white/10 bg-white/5 p-5 text-white/70 mb-4">
             <div className="font-semibold text-white mb-2">No results found</div>
             <div className="text-sm">
-              Try a broader keyword, expand your content type filters, or switch the date range to All Time.
+              Try a broader keyword, expand your content type filters, remove a tag filter, or switch the date range to All Time.
             </div>
           </div>
         )}
@@ -776,6 +1140,8 @@ export default function GlobalSearch({
                             <div className="font-semibold text-white">{result.title}</div>
                             <div className="text-xs text-white/50 mt-1">
                               {result.type} • {result.source}
+                              {result.category ? ` • ${result.category}` : ""}
+                              {result.toolName ? ` • ${result.toolName}` : ""}
                               {result.relatedShowTitle ? ` • ${result.relatedShowTitle}` : ""}
                               {result.date ? ` • ${formatDate(result.date)}` : ""}
                             </div>
@@ -789,6 +1155,19 @@ export default function GlobalSearch({
                         <div className="text-sm mt-3 line-clamp-3 text-white/80">
                           {result.content || "No preview available."}
                         </div>
+
+                        {result.tags.length > 0 && (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {result.tags.slice(0, 6).map((tag) => (
+                              <span
+                                key={`${result.id}-${tag}`}
+                                className="text-[11px] px-2 py-1 rounded-full bg-white/10 text-white/65"
+                              >
+                                #{tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
 
                         {renderActionButtons(result)}
                       </div>
@@ -806,9 +1185,24 @@ export default function GlobalSearch({
 
             <div className="text-sm text-white/50 mb-3">
               {selected.type} • {selected.source}
+              {selected.category ? ` • ${selected.category}` : ""}
+              {selected.toolName ? ` • ${selected.toolName}` : ""}
               {selected.relatedShowTitle ? ` • ${selected.relatedShowTitle}` : ""}
               {selected.date ? ` • ${formatDate(selected.date)}` : ""}
             </div>
+
+            {selected.tags.length > 0 && (
+              <div className="mb-3 flex flex-wrap gap-2">
+                {selected.tags.map((tag) => (
+                  <span
+                    key={`selected-${selected.id}-${tag}`}
+                    className="text-[11px] px-2 py-1 rounded-full bg-white/10 text-white/70"
+                  >
+                    #{tag}
+                  </span>
+                ))}
+              </div>
+            )}
 
             <div className="whitespace-pre-wrap text-white/90">
               {selected.content || "No additional content available."}
