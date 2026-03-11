@@ -6,7 +6,6 @@ import { getFeedback } from "../services/feedbackService"
 import { trackClientEvent } from "../services/telemetryClient"
 
 type SearchResultType = "Idea" | "Show" | "Task" | "Feedback"
-
 type SearchMode = "all" | "titles"
 
 type SearchResult = {
@@ -35,10 +34,55 @@ type ResultGroups = {
   feedback: SearchResult[]
 }
 
+type SearchSummary = {
+  totalItems: number
+  ideasCount: number
+  showsCount: number
+  tasksCount: number
+  feedbackCount: number
+  recentCount7d: number
+  recentCount30d: number
+}
+
+type RecentSearchItem = {
+  id: string
+  query: string
+  createdAt: number
+  filters: {
+    dateRange: string
+    searchMode: SearchMode
+    sourceFilter: string
+    categoryFilter: string
+    toolFilter: string
+    activeTagFilters: string[]
+    contentTypesEnabled: {
+      ideas: boolean
+      shows: boolean
+      tasks: boolean
+      feedback: boolean
+    }
+  }
+}
+
+type RecentActivityItem = {
+  id: string
+  label: string
+  sublabel: string
+  date?: number
+  result: SearchResult
+}
+
 type GlobalSearchProps = {
   shows?: any[]
   ideas?: any[]
   onNavigate?: (view: string, primaryId: string, secondaryId?: string) => void
+  universalQuery?: string
+  launchSource?: string
+  onPromoteToDashboard?: (payload: {
+    query: string
+    resultCount: number
+    summary: SearchSummary
+  }) => void
 }
 
 const GROUP_ORDER: Array<keyof ResultGroups> = ["ideas", "shows", "tasks", "feedback"]
@@ -50,10 +94,16 @@ const GROUP_LABELS: Record<keyof ResultGroups, string> = {
   feedback: "Feedback",
 }
 
+const RECENT_SEARCHES_STORAGE_KEY = "maw-global-search-recent-searches"
+const MAX_RECENT_SEARCHES = 8
+
 export default function GlobalSearch({
   shows: showsProp,
   ideas: ideasProp,
   onNavigate,
+  universalQuery,
+  launchSource,
+  onPromoteToDashboard,
 }: GlobalSearchProps) {
   const [query, setQuery] = useState("")
   const [results, setResults] = useState<SearchResult[]>([])
@@ -78,13 +128,19 @@ export default function GlobalSearch({
   const [queryOpen, setQueryOpen] = useState(true)
   const [filtersOpen, setFiltersOpen] = useState(true)
   const [advancedOpen, setAdvancedOpen] = useState(false)
+  const [dashboardOpen, setDashboardOpen] = useState(true)
+  const [recentSearchesOpen, setRecentSearchesOpen] = useState(true)
+  const [activityOpen, setActivityOpen] = useState(true)
 
   const [ideasGroupOpen, setIdeasGroupOpen] = useState(true)
   const [showsGroupOpen, setShowsGroupOpen] = useState(true)
   const [tasksGroupOpen, setTasksGroupOpen] = useState(true)
   const [feedbackGroupOpen, setFeedbackGroupOpen] = useState(true)
 
+  const [recentSearches, setRecentSearches] = useState<RecentSearchItem[]>([])
+
   const hasMountedFilterTelemetry = useRef(false)
+  const hasAppliedUniversalQuery = useRef(false)
 
   useEffect(() => {
     void trackClientEvent({
@@ -92,6 +148,7 @@ export default function GlobalSearch({
       action: "search_page_opened",
       metadata: {
         source: "GlobalSearch",
+        launchSource: launchSource || "search-page",
         contentTypesEnabled: {
           ideas: showIdeas,
           shows: showShows,
@@ -100,7 +157,33 @@ export default function GlobalSearch({
         },
       },
     })
+
+    try {
+      const raw = window.localStorage.getItem(RECENT_SEARCHES_STORAGE_KEY)
+      if (!raw) return
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) {
+        setRecentSearches(parsed)
+      }
+    } catch (error) {
+      console.error("Failed to load recent searches", error)
+    }
   }, [])
+
+  useEffect(() => {
+    if (!universalQuery || hasAppliedUniversalQuery.current) return
+    hasAppliedUniversalQuery.current = true
+    setQuery(universalQuery)
+
+    void trackClientEvent({
+      tool: "global_search",
+      action: "search_universal_entry_received",
+      metadata: {
+        launchSource: launchSource || "unknown",
+        query: universalQuery,
+      },
+    })
+  }, [universalQuery, launchSource])
 
   useEffect(() => {
     if (!hasMountedFilterTelemetry.current) {
@@ -173,13 +256,6 @@ export default function GlobalSearch({
 
   function normalizeText(value: unknown) {
     return String(value ?? "").toLowerCase().trim()
-  }
-
-  function normalizeArray(values: unknown): string[] {
-    if (!Array.isArray(values)) return []
-    return values
-      .map((value) => normalizeText(value))
-      .filter(Boolean)
   }
 
   function tokenizeQuery(value: string) {
@@ -554,7 +630,10 @@ export default function GlobalSearch({
     return matchesStructuredFilters(result) ? result : null
   }
 
-  function summarizeUsageBy<T extends string>(items: SearchResult[], selector: (item: SearchResult) => T) {
+  function summarizeUsageBy<T extends string>(
+    items: SearchResult[],
+    selector: (item: SearchResult) => T
+  ) {
     const summary: Record<string, number> = {}
 
     items.forEach((item) => {
@@ -565,7 +644,51 @@ export default function GlobalSearch({
     return summary
   }
 
-  async function runSearch() {
+  function buildSummary(items: SearchResult[]): SearchSummary {
+    const now = Date.now()
+
+    return {
+      totalItems: items.length,
+      ideasCount: items.filter((item) => item.type === "Idea").length,
+      showsCount: items.filter((item) => item.type === "Show").length,
+      tasksCount: items.filter((item) => item.type === "Task").length,
+      feedbackCount: items.filter((item) => item.type === "Feedback").length,
+      recentCount7d: items.filter((item) => {
+        const t = item.normalizedDate || 0
+        return t > 0 && now - t <= 7 * 24 * 60 * 60 * 1000
+      }).length,
+      recentCount30d: items.filter((item) => {
+        const t = item.normalizedDate || 0
+        return t > 0 && now - t <= 30 * 24 * 60 * 60 * 1000
+      }).length,
+    }
+  }
+
+  function saveRecentSearch(nextItem: RecentSearchItem) {
+    try {
+      const existing = recentSearches.filter(
+        (item) =>
+          !(
+            item.query === nextItem.query &&
+            JSON.stringify(item.filters) === JSON.stringify(nextItem.filters)
+          )
+      )
+
+      const next = [nextItem, ...existing].slice(0, MAX_RECENT_SEARCHES)
+      setRecentSearches(next)
+      window.localStorage.setItem(RECENT_SEARCHES_STORAGE_KEY, JSON.stringify(next))
+    } catch (error) {
+      console.error("Failed to save recent search", error)
+    }
+  }
+
+  async function runSearch(queryOverride?: string) {
+    const activeQuery = typeof queryOverride === "string" ? queryOverride : query
+
+    if (typeof queryOverride === "string") {
+      setQuery(queryOverride)
+    }
+
     setIsLoading(true)
     setSelected(null)
     setHasSearched(true)
@@ -601,9 +724,16 @@ export default function GlobalSearch({
         }
       }
 
+      const originalQuery = query
+      if (typeof queryOverride === "string") {
+        setQuery(queryOverride)
+      }
+
       if (showIdeas) {
         ideas.forEach((idea: any) => {
-          const normalized = normalizeIdea(idea)
+          const normalized = normalizeIdea({
+            ...idea,
+          })
           if (normalized) allResults.push(normalized)
         })
       }
@@ -633,6 +763,10 @@ export default function GlobalSearch({
         })
       }
 
+      if (typeof queryOverride === "string" && originalQuery !== queryOverride) {
+        // state already set above; no reset needed
+      }
+
       allResults.sort((a, b) => {
         if (b.score !== a.score) return b.score - a.score
         return (b.normalizedDate || 0) - (a.normalizedDate || 0)
@@ -647,12 +781,38 @@ export default function GlobalSearch({
         (item) => item.toolName as string
       )
 
+      const summary = buildSummary(allResults)
+
+      const recentItem: RecentSearchItem = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        query: activeQuery.trim(),
+        createdAt: Date.now(),
+        filters: {
+          dateRange,
+          searchMode,
+          sourceFilter,
+          categoryFilter,
+          toolFilter,
+          activeTagFilters,
+          contentTypesEnabled: {
+            ideas: showIdeas,
+            shows: showShows,
+            tasks: showTasks,
+            feedback: showFeedback,
+          },
+        },
+      }
+
+      if (activeQuery.trim()) {
+        saveRecentSearch(recentItem)
+      }
+
       void trackClientEvent({
         tool: "global_search",
         action: "search_query_run",
         metadata: {
-          query,
-          queryLength: query.trim().length,
+          query: activeQuery,
+          queryLength: activeQuery.trim().length,
           resultCount: allResults.length,
           zeroResults: allResults.length === 0,
           filters: {
@@ -670,6 +830,7 @@ export default function GlobalSearch({
           sourceUsage,
           typeUsage,
           toolUsage,
+          summary,
         },
       })
 
@@ -678,8 +839,8 @@ export default function GlobalSearch({
           tool: "global_search",
           action: "search_zero_results",
           metadata: {
-            query,
-            queryLength: query.trim().length,
+            query: activeQuery,
+            queryLength: activeQuery.trim().length,
             filters: {
               showIdeas,
               showShows,
@@ -695,6 +856,12 @@ export default function GlobalSearch({
           },
         })
       }
+
+      onPromoteToDashboard?.({
+        query: activeQuery,
+        resultCount: allResults.length,
+        summary,
+      })
     } finally {
       setIsLoading(false)
     }
@@ -906,6 +1073,44 @@ export default function GlobalSearch({
     })
   }
 
+  function applyRecentSearch(item: RecentSearchItem) {
+    setQuery(item.query)
+    setDateRange(item.filters.dateRange)
+    setSearchMode(item.filters.searchMode)
+    setSourceFilter(item.filters.sourceFilter)
+    setCategoryFilter(item.filters.categoryFilter)
+    setToolFilter(item.filters.toolFilter)
+    setActiveTagFilters(item.filters.activeTagFilters)
+    setShowIdeas(item.filters.contentTypesEnabled.ideas)
+    setShowShows(item.filters.contentTypesEnabled.shows)
+    setShowTasks(item.filters.contentTypesEnabled.tasks)
+    setShowFeedback(item.filters.contentTypesEnabled.feedback)
+
+    void trackClientEvent({
+      tool: "global_search",
+      action: "search_recent_search_applied",
+      metadata: {
+        query: item.query,
+        createdAt: item.createdAt,
+      },
+    })
+
+    void runSearch(item.query)
+  }
+
+  function clearRecentSearches() {
+    setRecentSearches([])
+    try {
+      window.localStorage.removeItem(RECENT_SEARCHES_STORAGE_KEY)
+    } catch {}
+
+    void trackClientEvent({
+      tool: "global_search",
+      action: "search_recent_searches_cleared",
+      metadata: {},
+    })
+  }
+
   const groupedResults = useMemo<ResultGroups>(() => {
     const groups: ResultGroups = {
       ideas: [],
@@ -956,6 +1161,28 @@ export default function GlobalSearch({
     return Array.from(values).sort((a, b) => a.localeCompare(b))
   }, [results])
 
+  const searchSummary = useMemo(() => buildSummary(results), [results])
+
+  const recentActivity = useMemo<RecentActivityItem[]>(() => {
+    return [...results]
+      .sort((a, b) => (b.normalizedDate || 0) - (a.normalizedDate || 0))
+      .slice(0, 8)
+      .map((result) => ({
+        id: `${result.type}-${result.id}`,
+        label: result.title,
+        sublabel: `${result.type} • ${result.toolName || result.source}`,
+        date: result.normalizedDate,
+        result,
+      }))
+  }, [results])
+
+  const surfacedRecentItems = useMemo(() => {
+    return [...results]
+      .filter((item) => Boolean(item.normalizedDate))
+      .sort((a, b) => (b.normalizedDate || 0) - (a.normalizedDate || 0))
+      .slice(0, 6)
+  }, [results])
+
   function groupIsOpen(group: keyof ResultGroups) {
     if (group === "ideas") return ideasGroupOpen
     if (group === "shows") return showsGroupOpen
@@ -993,6 +1220,18 @@ export default function GlobalSearch({
     const timestamp = normalizeDate(value)
     if (!timestamp) return ""
     return new Date(timestamp).toLocaleDateString()
+  }
+
+  function formatRelativeTime(timestamp?: number) {
+    if (!timestamp) return ""
+    const diff = Date.now() - timestamp
+    const minutes = Math.floor(diff / (1000 * 60))
+    const hours = Math.floor(diff / (1000 * 60 * 60))
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+
+    if (minutes < 60) return `${Math.max(1, minutes)}m ago`
+    if (hours < 24) return `${hours}h ago`
+    return `${days}d ago`
   }
 
   return (
@@ -1039,7 +1278,7 @@ export default function GlobalSearch({
               </div>
 
               <button
-                onClick={runSearch}
+                onClick={() => void runSearch()}
                 className="mt-3 px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500"
               >
                 {isLoading ? "Searching..." : "Search"}
@@ -1211,6 +1450,50 @@ export default function GlobalSearch({
             </div>
           )}
         </div>
+
+        <div className="mb-4 rounded-2xl border border-white/10 bg-white/5">
+          <button
+            onClick={() => setRecentSearchesOpen(!recentSearchesOpen)}
+            className="font-semibold w-full text-left px-4 py-3 flex items-center justify-between"
+          >
+            <span>Recent Searches</span>
+            <span className="text-white/60">{recentSearchesOpen ? "−" : "+"}</span>
+          </button>
+
+          {recentSearchesOpen && (
+            <div className="px-4 pb-4">
+              {recentSearches.length === 0 ? (
+                <div className="text-sm text-white/50">
+                  Recent searches will appear here after you run searches.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {recentSearches.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => applyRecentSearch(item)}
+                      className="w-full text-left p-3 rounded-xl border border-white/10 bg-black/20 hover:bg-white/5"
+                    >
+                      <div className="font-medium text-sm text-white">{item.query}</div>
+                      <div className="text-xs text-white/50 mt-1">
+                        {formatRelativeTime(item.createdAt)} • {item.filters.searchMode} • {item.filters.dateRange}
+                      </div>
+                    </button>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={clearRecentSearches}
+                    className="text-xs px-3 py-1.5 rounded-full border border-white/10 bg-white/5 hover:bg-white/10"
+                  >
+                    Clear recent searches
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 p-4 overflow-y-auto">
@@ -1218,6 +1501,108 @@ export default function GlobalSearch({
           <h2 className="text-xl font-bold">Search Results</h2>
           <div className="text-sm text-white/60">{resultCountLabel}</div>
         </div>
+
+        <div className="mb-4 rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
+          <button
+            onClick={() => setDashboardOpen(!dashboardOpen)}
+            className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-white/5"
+          >
+            <span className="font-semibold">Dashboard Search Summary</span>
+            <span className="text-white/60">{dashboardOpen ? "−" : "+"}</span>
+          </button>
+
+          {dashboardOpen && (
+            <div className="p-4 pt-0">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                  <div className="text-xs text-white/50">Total Results</div>
+                  <div className="text-lg font-semibold">{searchSummary.totalItems}</div>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                  <div className="text-xs text-white/50">Ideas</div>
+                  <div className="text-lg font-semibold">{searchSummary.ideasCount}</div>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                  <div className="text-xs text-white/50">Shows</div>
+                  <div className="text-lg font-semibold">{searchSummary.showsCount}</div>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                  <div className="text-xs text-white/50">Tasks</div>
+                  <div className="text-lg font-semibold">{searchSummary.tasksCount}</div>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                  <div className="text-xs text-white/50">Feedback</div>
+                  <div className="text-lg font-semibold">{searchSummary.feedbackCount}</div>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                  <div className="text-xs text-white/50">Recent 30 Days</div>
+                  <div className="text-lg font-semibold">{searchSummary.recentCount30d}</div>
+                </div>
+              </div>
+
+              {hasSearched && (
+                <div className="mt-3 text-xs text-white/50">
+                  Search intelligence snapshot for dashboard-level surfacing.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="mb-4 rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
+          <button
+            onClick={() => setActivityOpen(!activityOpen)}
+            className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-white/5"
+          >
+            <span className="font-semibold">Recent Activity Feed</span>
+            <span className="text-white/60">{activityOpen ? "−" : "+"}</span>
+          </button>
+
+          {activityOpen && (
+            <div className="p-4 pt-0">
+              {recentActivity.length === 0 ? (
+                <div className="text-sm text-white/50">
+                  Recent activity will appear after results are loaded.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {recentActivity.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => toggleResult(item.result)}
+                      className="w-full text-left p-3 rounded-xl border border-white/10 bg-black/20 hover:bg-white/5"
+                    >
+                      <div className="font-medium text-sm text-white">{item.label}</div>
+                      <div className="text-xs text-white/50 mt-1">
+                        {item.sublabel}
+                        {item.date ? ` • ${formatRelativeTime(item.date)}` : ""}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {surfacedRecentItems.length > 0 && (
+          <div className="mb-4 rounded-2xl border border-white/10 bg-white/5 p-4">
+            <div className="font-semibold mb-3">Recently Created / Updated</div>
+            <div className="flex flex-wrap gap-2">
+              {surfacedRecentItems.map((item) => (
+                <button
+                  key={`recent-${item.id}`}
+                  type="button"
+                  onClick={() => toggleResult(item)}
+                  className="text-xs px-3 py-2 rounded-full border border-white/10 bg-black/20 hover:bg-white/5"
+                >
+                  {item.title} • {formatDate(item.date)}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {!hasSearched && !isLoading && (
           <div className="rounded-2xl border border-white/10 bg-white/5 p-5 text-white/75 mb-4">
