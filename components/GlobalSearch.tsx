@@ -15,6 +15,11 @@ type SearchResult = {
   source: string
   date?: string | number
   score: number
+  showId?: string
+  taskId?: string
+  ideaId?: string
+  feedbackId?: string
+  relatedShowTitle?: string
 }
 
 type ResultGroups = {
@@ -22,6 +27,12 @@ type ResultGroups = {
   shows: SearchResult[]
   tasks: SearchResult[]
   feedback: SearchResult[]
+}
+
+type GlobalSearchProps = {
+  shows?: any[]
+  ideas?: any[]
+  onNavigate?: (view: string, primaryId: string, secondaryId?: string) => void
 }
 
 const GROUP_ORDER: Array<keyof ResultGroups> = ["ideas", "shows", "tasks", "feedback"]
@@ -33,7 +44,11 @@ const GROUP_LABELS: Record<keyof ResultGroups, string> = {
   feedback: "Feedback",
 }
 
-export default function GlobalSearch() {
+export default function GlobalSearch({
+  shows: showsProp,
+  ideas: ideasProp,
+  onNavigate,
+}: GlobalSearchProps) {
   const [query, setQuery] = useState("")
   const [results, setResults] = useState<SearchResult[]>([])
   const [selected, setSelected] = useState<SearchResult | null>(null)
@@ -179,11 +194,11 @@ export default function GlobalSearch() {
     try {
       const allResults: SearchResult[] = []
 
-      let shows: any[] = []
-      let ideas: any[] = []
+      let shows: any[] = Array.isArray(showsProp) ? showsProp : []
+      let ideas: any[] = Array.isArray(ideasProp) ? ideasProp : []
       let feedback: any[] = []
 
-      if (showShows || showTasks) {
+      if ((showShows || showTasks) && shows.length === 0) {
         try {
           shows = await showsService.getShows()
         } catch (error) {
@@ -191,7 +206,7 @@ export default function GlobalSearch() {
         }
       }
 
-      if (showIdeas) {
+      if (showIdeas && ideas.length === 0) {
         try {
           ideas = await ideasService.getSavedIdeas()
         } catch (error) {
@@ -226,6 +241,9 @@ export default function GlobalSearch() {
             source: "ideas",
             date: recordDate,
             score,
+            ideaId: String(idea.id),
+            showId: idea.showId ? String(idea.showId) : undefined,
+            relatedShowTitle: idea.showTitle || undefined,
           })
         })
       }
@@ -249,6 +267,7 @@ export default function GlobalSearch() {
             source: "shows",
             date: recordDate,
             score,
+            showId: String(show.id),
           })
         })
       }
@@ -281,6 +300,9 @@ export default function GlobalSearch() {
               source: "tasks",
               date: recordDate,
               score,
+              showId: String(show.id),
+              taskId: String(task.id),
+              relatedShowTitle: show.title || show.name || "Show",
             })
           })
         })
@@ -290,7 +312,11 @@ export default function GlobalSearch() {
         feedback.forEach((item: any) => {
           const recordDate = item.timestamp
           const title = item.showTitle || item.name || "Feedback"
-          const content = item.comment || ""
+          const content =
+            item.comment ||
+            item.notes ||
+            item.content ||
+            ""
 
           if (!withinDateRange(recordDate)) return
 
@@ -305,6 +331,9 @@ export default function GlobalSearch() {
             source: "feedback",
             date: recordDate,
             score,
+            feedbackId: String(item.id),
+            showId: item.showId ? String(item.showId) : undefined,
+            relatedShowTitle: item.showTitle || undefined,
           })
         })
       }
@@ -365,6 +394,149 @@ export default function GlobalSearch() {
     })
   }
 
+  function navigateTo(view: string, primaryId: string, secondaryId?: string) {
+    try {
+      onNavigate?.(view, primaryId, secondaryId)
+    } catch (error) {
+      console.error("onNavigate failed", error)
+    }
+
+    try {
+      window.dispatchEvent(
+        new CustomEvent("maw:navigate", {
+          detail: {
+            view,
+            primaryId,
+            secondaryId,
+            showId: primaryId,
+            taskId: secondaryId,
+          },
+        })
+      )
+    } catch {}
+  }
+
+  function handleOpenSavedIdea(result: SearchResult) {
+    if (!result.ideaId) return
+
+    void trackClientEvent({
+      tool: "global_search",
+      action: "search_open_saved_idea",
+      metadata: {
+        resultId: result.id,
+        ideaId: result.ideaId,
+      },
+    })
+
+    navigateTo("saved-ideas", result.ideaId)
+  }
+
+  function handleOpenShowPlanner(result: SearchResult) {
+    if (!result.showId) return
+
+    void trackClientEvent({
+      tool: "global_search",
+      action: "search_open_show_planner",
+      metadata: {
+        resultId: result.id,
+        showId: result.showId,
+        taskId: result.taskId || null,
+      },
+    })
+
+    navigateTo("show-planner", result.showId, result.taskId)
+  }
+
+  function handleOpenAudienceFeedback(result: SearchResult) {
+    void trackClientEvent({
+      tool: "global_search",
+      action: "search_open_audience_feedback",
+      metadata: {
+        resultId: result.id,
+        feedbackId: result.feedbackId || null,
+        showId: result.showId || null,
+      },
+    })
+
+    navigateTo("show-feedback", result.feedbackId || result.showId || result.id)
+  }
+
+  function renderActionButtons(result: SearchResult) {
+    const actions: Array<{
+      key: string
+      label: string
+      onClick: () => void
+    }> = []
+
+    if (result.type === "Idea" && result.ideaId) {
+      actions.push({
+        key: "open-idea",
+        label: "Open in Saved Ideas",
+        onClick: () => handleOpenSavedIdea(result),
+      })
+    }
+
+    if (result.type === "Show" && result.showId) {
+      actions.push({
+        key: "open-show",
+        label: "Open in Show Planner",
+        onClick: () => handleOpenShowPlanner(result),
+      })
+    }
+
+    if (result.type === "Task" && result.showId) {
+      actions.push({
+        key: "open-task",
+        label: result.taskId ? "Open related show/task" : "Open related show",
+        onClick: () => handleOpenShowPlanner(result),
+      })
+    }
+
+    if (result.type === "Feedback") {
+      actions.push({
+        key: "open-feedback",
+        label: "Open in Audience Feedback",
+        onClick: () => handleOpenAudienceFeedback(result),
+      })
+
+      if (result.showId) {
+        actions.push({
+          key: "open-feedback-show",
+          label: "Open related show",
+          onClick: () => handleOpenShowPlanner(result),
+        })
+      }
+    }
+
+    if (result.type === "Idea" && result.showId) {
+      actions.push({
+        key: "open-idea-show",
+        label: "Open related show",
+        onClick: () => handleOpenShowPlanner(result),
+      })
+    }
+
+    if (actions.length === 0) return null
+
+    return (
+      <div className="mt-3 flex flex-wrap gap-2">
+        {actions.map((action) => (
+          <button
+            key={action.key}
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation()
+              action.onClick()
+            }}
+            className="text-xs px-2.5 py-1.5 rounded-full border border-white/10 bg-white/5 text-white/80 hover:bg-white/10"
+          >
+            {action.label}
+          </button>
+        ))}
+      </div>
+    )
+  }
+
   const groupedResults = useMemo<ResultGroups>(() => {
     const groups: ResultGroups = {
       ideas: [],
@@ -405,6 +577,14 @@ export default function GlobalSearch() {
     if (group === "shows") setShowsGroupOpen((prev) => !prev)
     if (group === "tasks") setTasksGroupOpen((prev) => !prev)
     if (group === "feedback") setFeedbackGroupOpen((prev) => !prev)
+
+    void trackClientEvent({
+      tool: "global_search",
+      action: "search_group_toggled",
+      metadata: {
+        group,
+      },
+    })
   }
 
   function formatDate(value?: string | number) {
@@ -596,6 +776,7 @@ export default function GlobalSearch() {
                             <div className="font-semibold text-white">{result.title}</div>
                             <div className="text-xs text-white/50 mt-1">
                               {result.type} • {result.source}
+                              {result.relatedShowTitle ? ` • ${result.relatedShowTitle}` : ""}
                               {result.date ? ` • ${formatDate(result.date)}` : ""}
                             </div>
                           </div>
@@ -608,6 +789,8 @@ export default function GlobalSearch() {
                         <div className="text-sm mt-3 line-clamp-3 text-white/80">
                           {result.content || "No preview available."}
                         </div>
+
+                        {renderActionButtons(result)}
                       </div>
                     )
                   })}
@@ -623,12 +806,15 @@ export default function GlobalSearch() {
 
             <div className="text-sm text-white/50 mb-3">
               {selected.type} • {selected.source}
+              {selected.relatedShowTitle ? ` • ${selected.relatedShowTitle}` : ""}
               {selected.date ? ` • ${formatDate(selected.date)}` : ""}
             </div>
 
             <div className="whitespace-pre-wrap text-white/90">
               {selected.content || "No additional content available."}
             </div>
+
+            {renderActionButtons(selected)}
           </div>
         )}
 
