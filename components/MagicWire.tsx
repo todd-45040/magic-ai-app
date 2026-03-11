@@ -114,6 +114,42 @@ function inferTags(item: MagicWireItem, category: string, source: string, type: 
   return Array.from(tags).slice(0, 4);
 }
 
+function sourcePriority(source: string) {
+  const normalized = source.toLowerCase();
+
+  const priorities: Array<[string, number]> = [
+    ["genii", 100],
+    ["magic magazine", 95],
+    ["vanishing", 90],
+    ["theory11", 85],
+    ["magic cafe", 80],
+    ["reddit", 70],
+  ];
+
+  const match = priorities.find(([key]) => normalized.includes(key));
+  return match?.[1] ?? 40;
+}
+
+function normalizeTitle(title: string) {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function titleSimilarity(a: string, b: string) {
+  const aWords = new Set(normalizeTitle(a).split(" ").filter(Boolean));
+  const bWords = new Set(normalizeTitle(b).split(" ").filter(Boolean));
+
+  if (aWords.size === 0 || bWords.size === 0) return 0;
+
+  const intersection = [...aWords].filter((word) => bWords.has(word)).length;
+  const union = new Set([...aWords, ...bWords]).size;
+
+  return union === 0 ? 0 : intersection / union;
+}
+
 function buildCard(item: MagicWireItem, idx: number): WireCard {
   const source = publisherFromItem(item);
   const category = inferCategory(item);
@@ -139,6 +175,27 @@ function buildCard(item: MagicWireItem, idx: number): WireCard {
     type,
     tags: inferTags(item, category, source, type),
   };
+}
+
+function dedupeCards(cards: WireCard[]) {
+  const sorted = [...cards].sort((a, b) => {
+    const aPriority = sourcePriority(a.source);
+    const bPriority = sourcePriority(b.source);
+    if (bPriority !== aPriority) return bPriority - aPriority;
+
+    const aTs = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
+    const bTs = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
+    return bTs - aTs;
+  });
+
+  const unique: WireCard[] = [];
+
+  for (const card of sorted) {
+    const isDuplicate = unique.some((existing) => titleSimilarity(existing.title, card.title) >= 0.9);
+    if (!isDuplicate) unique.push(card);
+  }
+
+  return unique;
 }
 
 function StatPill({ label, value }: { label: string; value: string | number }) {
@@ -167,7 +224,7 @@ export default function MagicWire() {
     saved: true,
   });
 
-  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(true);
   const [actionNotice, setActionNotice] = useState("");
   const [saveStateById, setSaveStateById] = useState<Record<string, "idle" | "saving" | "saved">>({});
   const [activeAction, setActiveAction] = useState<{ id: string; type: "open" | "share" } | null>(null);
@@ -230,7 +287,7 @@ export default function MagicWire() {
     };
   }, []);
 
-  const cards = useMemo(() => items.map(buildCard), [items]);
+  const cards = useMemo(() => dedupeCards(items.map(buildCard)), [items]);
 
   const categories = useMemo(
     () => Array.from(new Set(cards.map((c) => c.category))).sort(),
@@ -238,7 +295,11 @@ export default function MagicWire() {
   );
 
   const sources = useMemo(
-    () => Array.from(new Set(cards.map((c) => c.source))).sort(),
+    () =>
+      Array.from(new Set(cards.map((c) => c.source))).sort((a, b) => {
+        const diff = sourcePriority(b) - sourcePriority(a);
+        return diff !== 0 ? diff : a.localeCompare(b);
+      }),
     [cards]
   );
 
@@ -278,15 +339,78 @@ export default function MagicWire() {
     }).length;
   }, [cards]);
 
-  const trendingTopic = useMemo(() => {
-    if (filteredCards.length === 0) return "No topic yet";
+  const topCategory = useMemo(() => {
+    if (filteredCards.length === 0) return "No category yet";
 
     const counts = filteredCards.reduce<Record<string, number>>((acc, card) => {
       acc[card.category] = (acc[card.category] || 0) + 1;
       return acc;
     }, {});
 
+    return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || "No category yet";
+  }, [filteredCards]);
+
+  const topSource = useMemo(() => {
+    if (filteredCards.length === 0) return "No source yet";
+
+    const counts = filteredCards.reduce<Record<string, number>>((acc, card) => {
+      acc[card.source] = (acc[card.source] || 0) + 1;
+      return acc;
+    }, {});
+
+    return (
+      Object.entries(counts)
+        .sort((a, b) => {
+          if (b[1] !== a[1]) return b[1] - a[1];
+          return sourcePriority(b[0]) - sourcePriority(a[0]);
+        })[0]?.[0] || "No source yet"
+    );
+  }, [filteredCards]);
+
+  const trendingTopic = useMemo(() => {
+    const now = Date.now();
+    const recentCards = filteredCards.filter((card) => {
+      if (!card.publishedAt) return false;
+      const ts = new Date(card.publishedAt).getTime();
+      if (Number.isNaN(ts)) return false;
+      return now - ts <= 48 * 60 * 60 * 1000;
+    });
+
+    const tagPool = recentCards.length > 0 ? recentCards : filteredCards;
+    if (tagPool.length === 0) return "No topic yet";
+
+    const counts = tagPool.reduce<Record<string, number>>((acc, card) => {
+      card.tags.forEach((tag) => {
+        acc[tag] = (acc[tag] || 0) + 1;
+      });
+      return acc;
+    }, {});
+
     return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || "No topic yet";
+  }, [filteredCards]);
+
+  const trendingTags = useMemo(() => {
+    const now = Date.now();
+    const recentCards = filteredCards.filter((card) => {
+      if (!card.publishedAt) return false;
+      const ts = new Date(card.publishedAt).getTime();
+      if (Number.isNaN(ts)) return false;
+      return now - ts <= 48 * 60 * 60 * 1000;
+    });
+
+    const tagPool = recentCards.length > 0 ? recentCards : filteredCards;
+
+    const counts = tagPool.reduce<Record<string, number>>((acc, card) => {
+      card.tags.forEach((tag) => {
+        acc[tag] = (acc[tag] || 0) + 1;
+      });
+      return acc;
+    }, {});
+
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 4)
+      .map(([tag]) => tag);
   }, [filteredCards]);
 
   const latestSource = useMemo(() => {
@@ -299,6 +423,22 @@ export default function MagicWire() {
     });
 
     return sorted[0]?.source || "No source yet";
+  }, [filteredCards]);
+
+  const featuredStory = useMemo(() => {
+    if (filteredCards.length === 0) return null;
+
+    const ranked = [...filteredCards].sort((a, b) => {
+      const aPriority = sourcePriority(a.source);
+      const bPriority = sourcePriority(b.source);
+      const aTs = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
+      const bTs = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
+      const aScore = aPriority * 10000000000000 + aTs;
+      const bScore = bPriority * 10000000000000 + bTs;
+      return bScore - aScore;
+    });
+
+    return ranked[0] || null;
   }, [filteredCards]);
 
   const toggleCategory = (category: string) => {
@@ -670,14 +810,21 @@ export default function MagicWire() {
               className="w-full px-4 py-3 flex items-center justify-between text-left"
             >
               <span className="font-semibold text-white">
-                Saved <span className="ml-1 rounded-full border border-purple-500/40 bg-purple-500/10 px-2 py-0.5 text-[11px] text-purple-200">{savedPosts.length}</span>
+                Saved{" "}
+                <span className="ml-1 rounded-full border border-purple-500/40 bg-purple-500/10 px-2 py-0.5 text-[11px] text-purple-200">
+                  {savedPosts.length}
+                </span>
               </span>
               <span className="text-slate-400">{filtersOpen.saved ? "−" : "+"}</span>
             </button>
 
             {filtersOpen.saved && (
               <div className="px-4 pb-4">
-                <label className={`flex items-center gap-3 rounded-lg border px-3 py-3 cursor-pointer transition-colors ${savedOnly ? "border-purple-400 bg-purple-600/20" : "border-slate-800 bg-slate-950/30"}`}>
+                <label
+                  className={`flex items-center gap-3 rounded-lg border px-3 py-3 cursor-pointer transition-colors ${
+                    savedOnly ? "border-purple-400 bg-purple-600/20" : "border-slate-800 bg-slate-950/30"
+                  }`}
+                >
                   <input
                     type="checkbox"
                     checked={savedOnly}
@@ -692,6 +839,81 @@ export default function MagicWire() {
         </aside>
 
         <section className="space-y-4">
+          {featuredStory ? (
+            <div className="rounded-2xl border border-purple-500/30 bg-gradient-to-br from-purple-900/25 via-slate-900/60 to-slate-950/80 p-5 shadow-[0_0_30px_rgba(88,28,135,0.16)]">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-[0.2em] text-purple-200">
+                    Featured Story
+                  </div>
+                  <h2 className="mt-2 text-2xl font-bold text-white max-w-3xl">
+                    {featuredStory.title}
+                  </h2>
+                  <p className="mt-3 max-w-3xl text-sm text-slate-300/90">
+                    {featuredStory.summary}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <span className="rounded-full border border-purple-500/40 bg-purple-500/10 px-3 py-1 text-xs text-purple-200">
+                    {featuredStory.source}
+                  </span>
+                  <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-xs text-amber-200">
+                    {featuredStory.category}
+                  </span>
+                </div>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                {featuredStory.tags.map((tag) => (
+                  <span
+                    key={`featured-${tag}`}
+                    className="rounded-full border border-slate-700 bg-slate-950/30 px-2.5 py-1 text-[11px] text-slate-300"
+                  >
+                    #{tag}
+                  </span>
+                ))}
+              </div>
+
+              <div className="mt-5 flex flex-wrap items-center gap-3 text-sm text-slate-400">
+                <span>{featuredStory.when || "Recent"}</span>
+                <span>•</span>
+                <span>Top source weight: {sourcePriority(featuredStory.source)}</span>
+                {featuredStory.publishedAt ? (
+                  <>
+                    <span>•</span>
+                    <span>{new Date(featuredStory.publishedAt).toLocaleDateString()}</span>
+                  </>
+                ) : null}
+              </div>
+
+              <div className="mt-5 flex flex-wrap gap-2">
+                <button
+                  onClick={() => openOriginal(featuredStory)}
+                  disabled={!featuredStory.sourceUrl}
+                  className={`rounded-lg border px-4 py-2 text-sm transition-colors ${
+                    featuredStory.sourceUrl
+                      ? "border-slate-700 bg-slate-950/40 text-slate-100 hover:border-slate-600"
+                      : "border-slate-800 bg-slate-950/20 text-slate-500 opacity-40 cursor-not-allowed"
+                  }`}
+                >
+                  {featuredStory.sourceUrl ? "Open Featured Story" : "Unavailable"}
+                </button>
+                <button
+                  onClick={() => void shareCard(featuredStory)}
+                  className="rounded-lg border border-purple-500/40 bg-purple-500/10 px-4 py-2 text-sm text-purple-200 transition-colors hover:bg-purple-500/15"
+                >
+                  Share Featured Story
+                </button>
+                <button
+                  onClick={() => void toggleSaved(featuredStory)}
+                  className="rounded-lg border border-green-500/40 bg-green-500/10 px-4 py-2 text-sm text-green-200 transition-colors hover:bg-green-500/15"
+                >
+                  {savedIds.has(featuredStory.id) ? "Saved ✓" : "Save Featured Story"}
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           <div className="rounded-2xl border border-slate-800 bg-slate-900/35 overflow-hidden">
             <button
               onClick={() => setSummaryOpen((prev) => !prev)}
@@ -711,9 +933,9 @@ export default function MagicWire() {
             {summaryOpen && (
               <div className="px-4 pb-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
                 <StatPill label="Posts Today" value={postsToday} />
-                <StatPill label="Saved Posts" value={savedPosts.length} />
+                <StatPill label="Top Category" value={topCategory} />
+                <StatPill label="Top Source" value={topSource} />
                 <StatPill label="Trending Topic" value={trendingTopic} />
-                <StatPill label="Latest Source" value={latestSource} />
               </div>
             )}
           </div>
@@ -751,6 +973,14 @@ export default function MagicWire() {
                     Saved Only
                   </span>
                 )}
+                {trendingTags.map((tag) => (
+                  <span
+                    key={`trend-${tag}`}
+                    className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-200"
+                  >
+                    #{tag}
+                  </span>
+                ))}
               </div>
             </div>
           </div>
@@ -786,7 +1016,11 @@ export default function MagicWire() {
                 return (
                   <article
                     key={card.id}
-                    className={`rounded-2xl border p-4 transition-all duration-200 ${saved ? "border-purple-400/60 bg-purple-500/5 shadow-[0_0_0_1px_rgba(192,132,252,0.08)]" : "border-slate-800 bg-slate-900/40"} hover:bg-slate-900/55 hover:border-purple-500 hover:shadow-lg hover:shadow-purple-900/20`}
+                    className={`rounded-2xl border p-4 transition-all duration-200 ${
+                      saved
+                        ? "border-purple-400/60 bg-purple-500/5 shadow-[0_0_0_1px_rgba(192,132,252,0.08)]"
+                        : "border-slate-800 bg-slate-900/40"
+                    } hover:bg-slate-900/55 hover:border-purple-500 hover:shadow-lg hover:shadow-purple-900/20`}
                   >
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="rounded-full border border-slate-700 bg-slate-950/50 px-2.5 py-1 text-[11px] uppercase tracking-wide text-slate-300">
@@ -875,7 +1109,11 @@ export default function MagicWire() {
                             : "border-slate-800 bg-slate-950/20 text-slate-500 opacity-40 cursor-not-allowed"
                         }`}
                       >
-                        {!card.sourceUrl ? "Unavailable" : activeAction?.id === card.id && activeAction.type === "open" ? "Opening..." : "Open"}
+                        {!card.sourceUrl
+                          ? "Unavailable"
+                          : activeAction?.id === card.id && activeAction.type === "open"
+                            ? "Opening..."
+                            : "Open"}
                       </button>
 
                       <button
@@ -886,7 +1124,9 @@ export default function MagicWire() {
                             : "border-slate-700 bg-slate-950/40 text-slate-200 hover:border-slate-600"
                         }`}
                       >
-                        {activeAction?.id === card.id && activeAction.type === "share" ? "Sharing..." : "Share"}
+                        {activeAction?.id === card.id && activeAction.type === "share"
+                          ? "Sharing..."
+                          : "Share"}
                       </button>
                     </div>
                   </article>
