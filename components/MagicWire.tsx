@@ -167,7 +167,7 @@ export default function MagicWire() {
     saved: true,
   });
 
-  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(true);
   const [actionNotice, setActionNotice] = useState("");
   const [saveStateById, setSaveStateById] = useState<Record<string, "idle" | "saving" | "saved">>({});
   const [activeAction, setActiveAction] = useState<{ id: string; type: "open" | "share" } | null>(null);
