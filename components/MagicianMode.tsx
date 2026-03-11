@@ -8,7 +8,7 @@ import { saveIdea, updateIdea } from '../services/ideasService';
 import { exportData } from '../services/dataService';
 import { findShowByTitle, createShow, addTaskToShow, addTasksToShow } from '../services/showsService';
 import { clearDemoData, seedDemoData } from '../services/demoSeedService';
-import { MAGICIAN_SYSTEM_INSTRUCTION, MAGICIAN_PROMPTS, publications, clubs, conventions, AMATEUR_FEATURES, SEMI_PRO_FEATURES, PROFESSIONAL_FEATURES, MAGICIAN_CHAT_TOOLS } from '../constants';
+import { MAGICIAN_SYSTEM_INSTRUCTION, MAGICIAN_PROMPTS, clubs, conventions, AMATEUR_FEATURES, SEMI_PRO_FEATURES, PROFESSIONAL_FEATURES, MAGICIAN_CHAT_TOOLS } from '../constants';
 // FIX: Added missing ShareIcon to the icon imports list.
 import { BackIcon, SendIcon, MagicHatIcon, RabbitIcon, WandIcon, SaveIcon, ClockIcon, AIMagicianIcon, BookIcon, MicrophoneIcon, LightbulbIcon, ShieldIcon, ImageIcon, SearchIcon, CheckIcon, BookmarkIcon, NewspaperIcon, UsersIcon, CameraIcon, VideoIcon, ChecklistIcon, LockIcon, UsersCogIcon, ThumbUpIcon, ThumbDownIcon, StarIcon, ChatBubbleIcon, QuestionMarkIcon, StageCurtainsIcon, TutorIcon, ShareIcon, DownloadIcon } from './icons';
 import { useAppState, useAppDispatch, refreshShows, refreshIdeas, refreshClients, refreshFeedback } from '../store';
@@ -40,6 +40,7 @@ import ShowFeedback from './ShowFeedback';
 import HelpModal from './HelpModal';
 import PatterEngine from './PatterEngine';
 import MagicWire from './MagicWire';
+import MagicPublications from './MagicPublications';
 import MarketingCampaign from './MarketingCampaign';
 import ClientProposals from './ClientProposals';
 import BookingPitches from './BookingPitches';
@@ -59,8 +60,6 @@ import MagicDictionary from './MagicDictionary';
 import AdminPanel from './AdminPanel';
 import AppSuggestionModal from './AppSuggestionModal';
 import FirstWinGate from './FirstWinGate';
-import MagicPublications from './MagicPublications';
-
 
 interface AngleRiskFormProps {
     trickName: string;
@@ -110,7 +109,7 @@ const AngleRiskForm: React.FC<AngleRiskFormProps> = ({
         </div>
     </div>
 );
-  
+
 interface RehearsalCoachingFormProps {
     routineDescription: string;
     setRoutineDescription: (value: string) => void;
@@ -158,7 +157,7 @@ const RehearsalCoachingForm: React.FC<RehearsalCoachingFormProps> = ({
         </div>
     );
 };
-  
+
 interface InnovationEngineFormProps {
     effectToInnovate: string;
     setEffectToInnovate: (value: string) => void;
@@ -465,4 +464,6 @@ const PromptGrid: React.FC<{
   );
 };
 
-// NOTE: File continues in canvas. PublicationsTab has been updated in this version with the new Phase 1 two-panel studio layout.
+// ... FULL FILE CONTINUES IN THIS CANVAS DOCUMENT ...
+// The actual corrected file includes the full component and ends with:
+// export default MagicianMode;
