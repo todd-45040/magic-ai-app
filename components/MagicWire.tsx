@@ -1,18 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
-
-type WireItem = {
-  id?: string;
-  category?: string;
-  type?: string;
-  headline: string;
-  title?: string;
-  summary?: string;
-  body?: string;
-  source?: string;
-  sourceUrl?: string | null;
-  publishedAt?: string;
-  tags?: string[];
-};
+import { trackClientEvent } from "../services/telemetryClient";
+import {
+  getPosts,
+  getSavedPosts,
+  isPostSaved,
+  removeSavedPost,
+  savePost,
+  type MagicWireItem,
+  type MagicWireSavedPost,
+} from "../services/magicWireService";
 
 type WireCard = {
   id: string;
@@ -27,8 +23,6 @@ type WireCard = {
   tags: string[];
 };
 
-const SAVED_STORAGE_KEY = "magic-wire-saved-posts";
-
 function domainFromUrl(url?: string | null) {
   if (!url) return "";
   try {
@@ -38,7 +32,7 @@ function domainFromUrl(url?: string | null) {
   }
 }
 
-function publisherFromItem(it: WireItem) {
+function publisherFromItem(it: MagicWireItem) {
   const host = domainFromUrl(it.sourceUrl);
   if (host && host !== "news.google.com") return host;
 
@@ -66,12 +60,6 @@ function timeAgo(dateStr?: string) {
   return "Just now";
 }
 
-function normalizePayload(payload: any): WireItem[] {
-  if (Array.isArray(payload)) return payload;
-  if (payload?.items && Array.isArray(payload.items)) return payload.items;
-  return [];
-}
-
 function titleCase(value: string) {
   return value
     .split(/[\s-]+/)
@@ -80,7 +68,7 @@ function titleCase(value: string) {
     .join(" ");
 }
 
-function inferCategory(item: WireItem): string {
+function inferCategory(item: MagicWireItem): string {
   const raw = (item.category || item.type || "").toLowerCase();
   const text = `${item.headline || ""} ${item.title || ""} ${item.summary || ""} ${item.body || ""}`.toLowerCase();
 
@@ -92,7 +80,7 @@ function inferCategory(item: WireItem): string {
   return "Industry News";
 }
 
-function inferType(item: WireItem): string {
+function inferType(item: MagicWireItem): string {
   const raw = (item.type || item.category || "").toLowerCase();
   const text = `${item.headline || ""} ${item.title || ""} ${item.summary || ""}`.toLowerCase();
 
@@ -104,7 +92,7 @@ function inferType(item: WireItem): string {
   return "news";
 }
 
-function inferTags(item: WireItem, category: string, source: string, type: string): string[] {
+function inferTags(item: MagicWireItem, category: string, source: string, type: string): string[] {
   const tags = new Set<string>();
 
   if (category) tags.add(category);
@@ -126,26 +114,7 @@ function inferTags(item: WireItem, category: string, source: string, type: strin
   return Array.from(tags).slice(0, 4);
 }
 
-function loadSavedIds(): string[] {
-  try {
-    const raw = localStorage.getItem(SAVED_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((x) => typeof x === "string") : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveSavedIds(ids: string[]) {
-  try {
-    localStorage.setItem(SAVED_STORAGE_KEY, JSON.stringify(ids));
-  } catch {
-    // no-op
-  }
-}
-
-function buildCard(item: WireItem, idx: number): WireCard {
+function buildCard(item: MagicWireItem, idx: number): WireCard {
   const source = publisherFromItem(item);
   const category = inferCategory(item);
   const type = inferType(item);
@@ -182,10 +151,10 @@ function StatPill({ label, value }: { label: string; value: string | number }) {
 }
 
 export default function MagicWire() {
-  const [items, setItems] = useState<WireItem[]>([]);
+  const [items, setItems] = useState<MagicWireItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [savedIds, setSavedIds] = useState<string[]>([]);
+  const [savedPosts, setSavedPosts] = useState<MagicWireSavedPost[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
   const [dateRange, setDateRange] = useState<"all" | "7d" | "30d">("all");
@@ -205,28 +174,45 @@ export default function MagicWire() {
     try {
       setLoading(true);
       setError("");
+      const data = await getPosts({ count: 12, refresh });
+      setItems(data);
 
-      const url = refresh
-        ? "/api/magicWire?count=12&refresh=1"
-        : "/api/magicWire?count=12";
-
-      const res = await fetch(url, { cache: "no-store" });
-      if (!res.ok) throw new Error(`Feed request failed (${res.status})`);
-
-      const json = await res.json();
-      setItems(normalizePayload(json));
-    } catch (err) {
+      if (refresh) {
+        void trackClientEvent({
+          tool: "magic_wire",
+          action: "magic_wire_click",
+          outcome: "SUCCESS_NOT_CHARGED",
+          metadata: {
+            target: "refresh_feed",
+            count: data.length,
+          },
+        });
+      }
+    } catch (err: any) {
       console.error("Magic Wire load error:", err);
       setError("Magic Wire could not load right now.");
       setItems([]);
+
+      if (refresh) {
+        void trackClientEvent({
+          tool: "magic_wire",
+          action: "magic_wire_click",
+          outcome: "ERROR_UPSTREAM",
+          metadata: {
+            target: "refresh_feed",
+            message: err?.message || "unknown error",
+          },
+          error_code: "MAGIC_WIRE_REFRESH_ERROR",
+        });
+      }
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    load();
-    setSavedIds(loadSavedIds());
+    void load();
+    setSavedPosts(getSavedPosts());
   }, []);
 
   useEffect(() => {
@@ -247,6 +233,8 @@ export default function MagicWire() {
     [cards]
   );
 
+  const savedIds = useMemo(() => new Set(savedPosts.map((p) => p.id)), [savedPosts]);
+
   const filteredCards = useMemo(() => {
     return cards.filter((card) => {
       const categoryMatch =
@@ -255,7 +243,7 @@ export default function MagicWire() {
       const sourceMatch =
         selectedSources.length === 0 || selectedSources.includes(card.source);
 
-      const savedMatch = !savedOnly || savedIds.includes(card.id);
+      const savedMatch = !savedOnly || savedIds.has(card.id);
 
       let dateMatch = true;
       if (dateRange !== "all" && card.publishedAt) {
@@ -316,23 +304,80 @@ export default function MagicWire() {
     );
   };
 
-  const toggleSaved = (id: string) => {
-    const next = savedIds.includes(id)
-      ? savedIds.filter((savedId) => savedId !== id)
-      : [...savedIds, id];
+  const toggleSaved = (card: WireCard) => {
+    const currentlySaved = isPostSaved(card.id);
 
-    setSavedIds(next);
-    saveSavedIds(next);
-    setActionNotice(savedIds.includes(id) ? "Removed from saved posts." : "Saved to Magic Wire.");
+    if (currentlySaved) {
+      removeSavedPost(card.id);
+      setSavedPosts(getSavedPosts());
+      setActionNotice("Removed from saved posts.");
+
+      void trackClientEvent({
+        tool: "magic_wire",
+        action: "magic_wire_save",
+        outcome: "SUCCESS_NOT_CHARGED",
+        metadata: {
+          mode: "remove",
+          post_id: card.id,
+          title: card.title,
+          category: card.category,
+          source: card.source,
+        },
+      });
+      return;
+    }
+
+    savePost({
+      id: card.id,
+      title: card.title,
+      summary: card.summary,
+      source: card.source,
+      sourceUrl: card.sourceUrl,
+      publishedAt: card.publishedAt,
+      category: card.category,
+      type: card.type,
+      tags: card.tags,
+    });
+
+    setSavedPosts(getSavedPosts());
+    setActionNotice("Saved to Magic Wire.");
+
+    void trackClientEvent({
+      tool: "magic_wire",
+      action: "magic_wire_save",
+      outcome: "SUCCESS_NOT_CHARGED",
+      metadata: {
+        mode: "save",
+        post_id: card.id,
+        title: card.title,
+        category: card.category,
+        source: card.source,
+      },
+    });
   };
 
-  const openOriginal = (url?: string | null) => {
-    if (!url) return;
-    window.open(url, "_blank", "noopener,noreferrer");
+  const openOriginal = (card: WireCard) => {
+    if (!card.sourceUrl) return;
+
+    void trackClientEvent({
+      tool: "magic_wire",
+      action: "magic_wire_open",
+      outcome: "SUCCESS_NOT_CHARGED",
+      metadata: {
+        post_id: card.id,
+        title: card.title,
+        category: card.category,
+        source: card.source,
+        url: card.sourceUrl,
+      },
+    });
+
+    window.open(card.sourceUrl, "_blank", "noopener,noreferrer");
   };
 
   const shareCard = async (card: WireCard) => {
     const shareUrl = card.sourceUrl || window.location.href;
+
     try {
       if (navigator.share) {
         await navigator.share({
@@ -340,14 +385,65 @@ export default function MagicWire() {
           text: card.summary,
           url: shareUrl,
         });
+
+        void trackClientEvent({
+          tool: "magic_wire",
+          action: "magic_wire_click",
+          outcome: "SUCCESS_NOT_CHARGED",
+          metadata: {
+            target: "share",
+            method: "native",
+            post_id: card.id,
+            title: card.title,
+            source: card.source,
+          },
+        });
       } else if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(shareUrl);
         setActionNotice("Article link copied to clipboard.");
+
+        void trackClientEvent({
+          tool: "magic_wire",
+          action: "magic_wire_click",
+          outcome: "SUCCESS_NOT_CHARGED",
+          metadata: {
+            target: "share",
+            method: "clipboard",
+            post_id: card.id,
+            title: card.title,
+            source: card.source,
+          },
+        });
       } else {
         setActionNotice("Sharing is not available in this browser.");
+
+        void trackClientEvent({
+          tool: "magic_wire",
+          action: "magic_wire_click",
+          outcome: "ERROR_UPSTREAM",
+          metadata: {
+            target: "share",
+            method: "unsupported",
+            post_id: card.id,
+            title: card.title,
+          },
+          error_code: "MAGIC_WIRE_SHARE_UNSUPPORTED",
+        });
       }
     } catch {
       setActionNotice("Share was cancelled.");
+
+      void trackClientEvent({
+        tool: "magic_wire",
+        action: "magic_wire_click",
+        outcome: "SUCCESS_NOT_CHARGED",
+        metadata: {
+          target: "share",
+          method: "cancelled",
+          post_id: card.id,
+          title: card.title,
+        },
+      });
     }
   };
 
@@ -356,11 +452,19 @@ export default function MagicWire() {
     setSelectedSources([]);
     setDateRange("all");
     setSavedOnly(false);
+
+    void trackClientEvent({
+      tool: "magic_wire",
+      action: "magic_wire_click",
+      outcome: "SUCCESS_NOT_CHARGED",
+      metadata: {
+        target: "reset_filters",
+      },
+    });
   };
 
   return (
     <div className="w-full">
-      {/* Header */}
       <div className="flex flex-col gap-4 mb-6 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Magic Wire</h1>
@@ -377,7 +481,7 @@ export default function MagicWire() {
           ) : null}
 
           <button
-            onClick={() => load(true)}
+            onClick={() => void load(true)}
             disabled={loading}
             className="px-4 py-2 rounded-lg bg-slate-900/50 border border-slate-800 hover:border-purple-500 hover:shadow-lg hover:shadow-purple-900/20 text-white disabled:opacity-60 disabled:cursor-not-allowed"
           >
@@ -386,9 +490,7 @@ export default function MagicWire() {
         </div>
       </div>
 
-      {/* Main Layout */}
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
-        {/* Left Panel */}
         <aside className="space-y-4">
           <div className="rounded-2xl border border-slate-800 bg-slate-900/35 p-4">
             <div className="flex items-center justify-between gap-3">
@@ -409,7 +511,6 @@ export default function MagicWire() {
             </div>
           </div>
 
-          {/* Categories */}
           <div className="rounded-2xl border border-slate-800 bg-slate-900/35 overflow-hidden">
             <button
               onClick={() =>
@@ -447,7 +548,6 @@ export default function MagicWire() {
             )}
           </div>
 
-          {/* Sources */}
           <div className="rounded-2xl border border-slate-800 bg-slate-900/35 overflow-hidden">
             <button
               onClick={() =>
@@ -485,7 +585,6 @@ export default function MagicWire() {
             )}
           </div>
 
-          {/* Date Range */}
           <div className="rounded-2xl border border-slate-800 bg-slate-900/35 overflow-hidden">
             <button
               onClick={() =>
@@ -523,7 +622,6 @@ export default function MagicWire() {
             )}
           </div>
 
-          {/* Saved Only */}
           <div className="rounded-2xl border border-slate-800 bg-slate-900/35 overflow-hidden">
             <button
               onClick={() =>
@@ -551,9 +649,7 @@ export default function MagicWire() {
           </div>
         </aside>
 
-        {/* Right Panel */}
         <section className="space-y-4">
-          {/* Summary Panel */}
           <div className="rounded-2xl border border-slate-800 bg-slate-900/35 overflow-hidden">
             <button
               onClick={() => setSummaryOpen((prev) => !prev)}
@@ -573,14 +669,13 @@ export default function MagicWire() {
             {summaryOpen && (
               <div className="px-4 pb-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
                 <StatPill label="Posts Today" value={postsToday} />
-                <StatPill label="Saved Posts" value={savedIds.length} />
+                <StatPill label="Saved Posts" value={savedPosts.length} />
                 <StatPill label="Trending Topic" value={trendingTopic} />
                 <StatPill label="Latest Source" value={latestSource} />
               </div>
             )}
           </div>
 
-          {/* Feed Workspace */}
           <div className="rounded-2xl border border-slate-800 bg-slate-900/25 p-4">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
@@ -610,7 +705,6 @@ export default function MagicWire() {
             </div>
           </div>
 
-          {/* States */}
           {loading ? (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
               {Array.from({ length: 6 }).map((_, i) => (
@@ -637,7 +731,7 @@ export default function MagicWire() {
           ) : (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
               {filteredCards.map((card) => {
-                const isSaved = savedIds.includes(card.id);
+                const saved = savedIds.has(card.id);
 
                 return (
                   <article
@@ -672,6 +766,16 @@ export default function MagicWire() {
                             onClick={() => {
                               if (categories.includes(tag)) {
                                 toggleCategory(tag);
+                                void trackClientEvent({
+                                  tool: "magic_wire",
+                                  action: "magic_wire_click",
+                                  outcome: "SUCCESS_NOT_CHARGED",
+                                  metadata: {
+                                    target: "tag_filter",
+                                    tag,
+                                    post_id: card.id,
+                                  },
+                                });
                               }
                             }}
                             className="rounded-full border border-slate-700 bg-slate-950/30 px-2.5 py-1 text-[11px] text-slate-300"
@@ -690,18 +794,18 @@ export default function MagicWire() {
 
                     <div className="mt-4 flex flex-wrap gap-2">
                       <button
-                        onClick={() => toggleSaved(card.id)}
+                        onClick={() => toggleSaved(card)}
                         className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
-                          isSaved
+                          saved
                             ? "border-amber-500/40 bg-amber-500/10 text-amber-200"
                             : "border-slate-700 bg-slate-950/40 text-slate-200 hover:border-slate-600"
                         }`}
                       >
-                        {isSaved ? "Saved" : "Save"}
+                        {saved ? "Saved" : "Save"}
                       </button>
 
                       <button
-                        onClick={() => openOriginal(card.sourceUrl)}
+                        onClick={() => openOriginal(card)}
                         disabled={!card.sourceUrl}
                         className="rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-slate-200 hover:border-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
@@ -709,7 +813,7 @@ export default function MagicWire() {
                       </button>
 
                       <button
-                        onClick={() => shareCard(card)}
+                        onClick={() => void shareCard(card)}
                         className="rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-slate-200 hover:border-slate-600"
                       >
                         Share
