@@ -25,7 +25,7 @@ export type MagicWireSavedPost = {
   savedAt: number;
 };
 
-const SAVED_STORAGE_KEY = 'maw_magic_wire_saved_posts_v1';
+const SAVED_STORAGE_KEY = "maw_magic_wire_saved_posts_v1";
 
 function normalizePayload(payload: any): MagicWireItem[] {
   if (Array.isArray(payload)) return payload;
@@ -44,7 +44,7 @@ export async function getPosts(opts?: {
     ? `/api/magicWire?count=${count}&refresh=1`
     : `/api/magicWire?count=${count}`;
 
-  const res = await fetch(url, { cache: 'no-store' });
+  const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) {
     throw new Error(`Magic Wire request failed (${res.status})`);
   }
@@ -58,7 +58,7 @@ function loadSavedMap(): Record<string, MagicWireSavedPost> {
     const raw = localStorage.getItem(SAVED_STORAGE_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : {};
+    return parsed && typeof parsed === "object" ? parsed : {};
   } catch {
     return {};
   }
@@ -83,7 +83,7 @@ export function isPostSaved(id: string): boolean {
   return Boolean(map[id]);
 }
 
-export function savePost(post: Omit<MagicWireSavedPost, 'savedAt'>): MagicWireSavedPost {
+export function savePost(post: Omit<MagicWireSavedPost, "savedAt">): MagicWireSavedPost {
   const map = loadSavedMap();
   const saved: MagicWireSavedPost = {
     ...post,
