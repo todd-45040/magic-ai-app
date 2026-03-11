@@ -126,16 +126,16 @@ export default function GlobalSearch({
   const [activeTagFilters, setActiveTagFilters] = useState<string[]>([])
 
   const [queryOpen, setQueryOpen] = useState(true)
-  const [filtersOpen, setFiltersOpen] = useState(true)
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
-  const [dashboardOpen, setDashboardOpen] = useState(true)
-  const [recentSearchesOpen, setRecentSearchesOpen] = useState(true)
-  const [activityOpen, setActivityOpen] = useState(true)
+  const [dashboardOpen, setDashboardOpen] = useState(false)
+  const [recentSearchesOpen, setRecentSearchesOpen] = useState(false)
+  const [activityOpen, setActivityOpen] = useState(false)
 
-  const [ideasGroupOpen, setIdeasGroupOpen] = useState(true)
-  const [showsGroupOpen, setShowsGroupOpen] = useState(true)
-  const [tasksGroupOpen, setTasksGroupOpen] = useState(true)
-  const [feedbackGroupOpen, setFeedbackGroupOpen] = useState(true)
+  const [ideasGroupOpen, setIdeasGroupOpen] = useState(false)
+  const [showsGroupOpen, setShowsGroupOpen] = useState(false)
+  const [tasksGroupOpen, setTasksGroupOpen] = useState(false)
+  const [feedbackGroupOpen, setFeedbackGroupOpen] = useState(false)
 
   const [recentSearches, setRecentSearches] = useState<RecentSearchItem[]>([])
 
@@ -242,10 +242,17 @@ export default function GlobalSearch({
     setTagInput("")
     setActiveTagFilters([])
 
-    setIdeasGroupOpen(true)
-    setShowsGroupOpen(true)
-    setTasksGroupOpen(true)
-    setFeedbackGroupOpen(true)
+    setQueryOpen(true)
+    setFiltersOpen(false)
+    setAdvancedOpen(false)
+    setDashboardOpen(false)
+    setRecentSearchesOpen(false)
+    setActivityOpen(false)
+
+    setIdeasGroupOpen(false)
+    setShowsGroupOpen(false)
+    setTasksGroupOpen(false)
+    setFeedbackGroupOpen(false)
 
     void trackClientEvent({
       tool: "global_search",
@@ -764,7 +771,6 @@ export default function GlobalSearch({
       }
 
       if (typeof queryOverride === "string" && originalQuery !== queryOverride) {
-        // state already set above; no reset needed
       }
 
       allResults.sort((a, b) => {
