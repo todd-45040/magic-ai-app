@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { trackClientEvent } from "../services/telemetryClient";
 import {
   getPosts,
@@ -169,6 +169,9 @@ export default function MagicWire() {
 
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [actionNotice, setActionNotice] = useState("");
+  const [saveStateById, setSaveStateById] = useState<Record<string, "idle" | "saving" | "saved">>({});
+  const [activeAction, setActiveAction] = useState<{ id: string; type: "open" | "share" } | null>(null);
+  const saveTimeoutsRef = useRef<Record<string, number>>({});
 
   async function load(refresh = false) {
     try {
@@ -220,6 +223,12 @@ export default function MagicWire() {
     const t = window.setTimeout(() => setActionNotice(""), 2200);
     return () => window.clearTimeout(t);
   }, [actionNotice]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(saveTimeoutsRef.current).forEach((timeoutId) => window.clearTimeout(timeoutId));
+    };
+  }, []);
 
   const cards = useMemo(() => items.map(buildCard), [items]);
 
@@ -304,12 +313,18 @@ export default function MagicWire() {
     );
   };
 
-  const toggleSaved = (card: WireCard) => {
+  const toggleSaved = async (card: WireCard) => {
     const currentlySaved = isPostSaved(card.id);
+
+    if (saveTimeoutsRef.current[card.id]) {
+      window.clearTimeout(saveTimeoutsRef.current[card.id]);
+      delete saveTimeoutsRef.current[card.id];
+    }
 
     if (currentlySaved) {
       removeSavedPost(card.id);
       setSavedPosts(getSavedPosts());
+      setSaveStateById((prev) => ({ ...prev, [card.id]: "idle" }));
       setActionNotice("Removed from saved posts.");
 
       void trackClientEvent({
@@ -327,6 +342,9 @@ export default function MagicWire() {
       return;
     }
 
+    setSaveStateById((prev) => ({ ...prev, [card.id]: "saving" }));
+    await new Promise((resolve) => window.setTimeout(resolve, 220));
+
     savePost({
       id: card.id,
       title: card.title,
@@ -340,7 +358,13 @@ export default function MagicWire() {
     });
 
     setSavedPosts(getSavedPosts());
+    setSaveStateById((prev) => ({ ...prev, [card.id]: "saved" }));
     setActionNotice("Saved to Magic Wire.");
+
+    saveTimeoutsRef.current[card.id] = window.setTimeout(() => {
+      setSaveStateById((prev) => ({ ...prev, [card.id]: "idle" }));
+      delete saveTimeoutsRef.current[card.id];
+    }, 1800);
 
     void trackClientEvent({
       tool: "magic_wire",
@@ -359,6 +383,8 @@ export default function MagicWire() {
   const openOriginal = (card: WireCard) => {
     if (!card.sourceUrl) return;
 
+    setActiveAction({ id: card.id, type: "open" });
+
     void trackClientEvent({
       tool: "magic_wire",
       action: "magic_wire_open",
@@ -373,10 +399,18 @@ export default function MagicWire() {
     });
 
     window.open(card.sourceUrl, "_blank", "noopener,noreferrer");
+
+    window.setTimeout(() => {
+      setActiveAction((prev) =>
+        prev?.id === card.id && prev.type === "open" ? null : prev
+      );
+    }, 800);
   };
 
   const shareCard = async (card: WireCard) => {
     const shareUrl = card.sourceUrl || window.location.href;
+
+    setActiveAction({ id: card.id, type: "share" });
 
     try {
       if (navigator.share) {
@@ -444,6 +478,12 @@ export default function MagicWire() {
           title: card.title,
         },
       });
+    } finally {
+      window.setTimeout(() => {
+        setActiveAction((prev) =>
+          prev?.id === card.id && prev.type === "share" ? null : prev
+        );
+      }, 900);
     }
   };
 
@@ -535,7 +575,7 @@ export default function MagicWire() {
                         onClick={() => toggleCategory(category)}
                         className={`w-full rounded-lg border px-3 py-2 text-sm text-left transition-colors ${
                           active
-                            ? "border-purple-500 bg-purple-500/10 text-white"
+                            ? "border-purple-400 bg-purple-600/20 text-white shadow-[0_0_0_1px_rgba(192,132,252,0.15)]"
                             : "border-slate-800 bg-slate-950/30 text-slate-300 hover:border-slate-700"
                         }`}
                       >
@@ -572,7 +612,7 @@ export default function MagicWire() {
                         onClick={() => toggleSource(source)}
                         className={`w-full rounded-lg border px-3 py-2 text-sm text-left transition-colors ${
                           active
-                            ? "border-purple-500 bg-purple-500/10 text-white"
+                            ? "border-purple-400 bg-purple-600/20 text-white shadow-[0_0_0_1px_rgba(192,132,252,0.15)]"
                             : "border-slate-800 bg-slate-950/30 text-slate-300 hover:border-slate-700"
                         }`}
                       >
@@ -610,7 +650,7 @@ export default function MagicWire() {
                       onClick={() => setDateRange(option.value as "all" | "7d" | "30d")}
                       className={`w-full rounded-lg border px-3 py-2 text-sm text-left transition-colors ${
                         active
-                          ? "border-purple-500 bg-purple-500/10 text-white"
+                          ? "border-purple-400 bg-purple-600/20 text-white shadow-[0_0_0_1px_rgba(192,132,252,0.15)]"
                           : "border-slate-800 bg-slate-950/30 text-slate-300 hover:border-slate-700"
                       }`}
                     >
@@ -629,13 +669,15 @@ export default function MagicWire() {
               }
               className="w-full px-4 py-3 flex items-center justify-between text-left"
             >
-              <span className="font-semibold text-white">Saved</span>
+              <span className="font-semibold text-white">
+                Saved <span className="ml-1 rounded-full border border-purple-500/40 bg-purple-500/10 px-2 py-0.5 text-[11px] text-purple-200">{savedPosts.length}</span>
+              </span>
               <span className="text-slate-400">{filtersOpen.saved ? "−" : "+"}</span>
             </button>
 
             {filtersOpen.saved && (
               <div className="px-4 pb-4">
-                <label className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-950/30 px-3 py-3 cursor-pointer">
+                <label className={`flex items-center gap-3 rounded-lg border px-3 py-3 cursor-pointer transition-colors ${savedOnly ? "border-purple-400 bg-purple-600/20" : "border-slate-800 bg-slate-950/30"}`}>
                   <input
                     type="checkbox"
                     checked={savedOnly}
@@ -696,6 +738,14 @@ export default function MagicWire() {
                     {category}
                   </span>
                 ))}
+                {selectedSources.map((source) => (
+                  <span
+                    key={source}
+                    className="rounded-full border border-fuchsia-500/40 bg-fuchsia-500/10 px-3 py-1 text-xs text-fuchsia-200"
+                  >
+                    {source}
+                  </span>
+                ))}
                 {savedOnly && (
                   <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-xs text-amber-200">
                     Saved Only
@@ -736,7 +786,7 @@ export default function MagicWire() {
                 return (
                   <article
                     key={card.id}
-                    className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 hover:bg-slate-900/55 hover:border-purple-500 hover:shadow-lg hover:shadow-purple-900/20 transition-colors transition-shadow duration-200"
+                    className={`rounded-2xl border p-4 transition-all duration-200 ${saved ? "border-purple-400/60 bg-purple-500/5 shadow-[0_0_0_1px_rgba(192,132,252,0.08)]" : "border-slate-800 bg-slate-900/40"} hover:bg-slate-900/55 hover:border-purple-500 hover:shadow-lg hover:shadow-purple-900/20`}
                   >
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="rounded-full border border-slate-700 bg-slate-950/50 px-2.5 py-1 text-[11px] uppercase tracking-wide text-slate-300">
@@ -748,6 +798,11 @@ export default function MagicWire() {
                       <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] uppercase tracking-wide text-amber-200">
                         {titleCase(card.type)}
                       </span>
+                      {saved && (
+                        <span className="rounded-full border border-purple-400/50 bg-purple-500/10 px-2.5 py-1 text-[11px] uppercase tracking-wide text-purple-200">
+                          ★ Saved
+                        </span>
+                      )}
                     </div>
 
                     <h3 className="mt-3 text-lg font-bold text-amber-400 line-clamp-2">
@@ -794,29 +849,44 @@ export default function MagicWire() {
 
                     <div className="mt-4 flex flex-wrap gap-2">
                       <button
-                        onClick={() => toggleSaved(card)}
-                        className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
-                          saved
-                            ? "border-amber-500/40 bg-amber-500/10 text-amber-200"
-                            : "border-slate-700 bg-slate-950/40 text-slate-200 hover:border-slate-600"
-                        }`}
+                        onClick={() => void toggleSaved(card)}
+                        disabled={saveStateById[card.id] === "saving"}
+                        className={`rounded-lg border px-3 py-2 text-sm transition-all duration-200 ${
+                          saveStateById[card.id] === "saving"
+                            ? "border-green-400/50 bg-green-500/10 text-green-200 cursor-wait"
+                            : saved || saveStateById[card.id] === "saved"
+                              ? "border-green-400 bg-green-500/20 text-green-300 shadow-[0_0_18px_rgba(74,222,128,0.14)]"
+                              : "border-slate-700 bg-slate-950/40 text-slate-200 hover:border-slate-600"
+                        } disabled:cursor-not-allowed`}
                       >
-                        {saved ? "Saved" : "Save"}
+                        {saveStateById[card.id] === "saving"
+                          ? "Saving..."
+                          : saved || saveStateById[card.id] === "saved"
+                            ? "Saved ✓"
+                            : "Save"}
                       </button>
 
                       <button
                         onClick={() => openOriginal(card)}
                         disabled={!card.sourceUrl}
-                        className="rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-slate-200 hover:border-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
+                          card.sourceUrl
+                            ? "border-slate-700 bg-slate-950/40 text-slate-200 hover:border-slate-600"
+                            : "border-slate-800 bg-slate-950/20 text-slate-500 opacity-40 cursor-not-allowed"
+                        }`}
                       >
-                        Open
+                        {!card.sourceUrl ? "Unavailable" : activeAction?.id === card.id && activeAction.type === "open" ? "Opening..." : "Open"}
                       </button>
 
                       <button
                         onClick={() => void shareCard(card)}
-                        className="rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-slate-200 hover:border-slate-600"
+                        className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
+                          activeAction?.id === card.id && activeAction.type === "share"
+                            ? "border-purple-400 bg-purple-500/15 text-purple-200"
+                            : "border-slate-700 bg-slate-950/40 text-slate-200 hover:border-slate-600"
+                        }`}
                       >
-                        Share
+                        {activeAction?.id === card.id && activeAction.type === "share" ? "Sharing..." : "Share"}
                       </button>
                     </div>
                   </article>
