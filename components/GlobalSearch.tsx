@@ -126,9 +126,9 @@ export default function GlobalSearch({
   const [activeTagFilters, setActiveTagFilters] = useState<string[]>([])
 
   const [queryOpen, setQueryOpen] = useState(true)
-  const [filtersOpen, setFiltersOpen] = useState(false)
-  const [advancedOpen, setAdvancedOpen] = useState(false)
-  const [dashboardOpen, setDashboardOpen] = useState(false)
+  const [filtersOpen, setFiltersOpen] = useState(true)
+  const [advancedOpen, setAdvancedOpen] = useState(true)
+  const [dashboardOpen, setDashboardOpen] = useState(true)
   const [recentSearchesOpen, setRecentSearchesOpen] = useState(false)
   const [activityOpen, setActivityOpen] = useState(false)
 
@@ -243,9 +243,9 @@ export default function GlobalSearch({
     setActiveTagFilters([])
 
     setQueryOpen(true)
-    setFiltersOpen(false)
-    setAdvancedOpen(false)
-    setDashboardOpen(false)
+    setFiltersOpen(true)
+    setAdvancedOpen(true)
+    setDashboardOpen(true)
     setRecentSearchesOpen(false)
     setActivityOpen(false)
 
@@ -731,16 +731,9 @@ export default function GlobalSearch({
         }
       }
 
-      const originalQuery = query
-      if (typeof queryOverride === "string") {
-        setQuery(queryOverride)
-      }
-
       if (showIdeas) {
         ideas.forEach((idea: any) => {
-          const normalized = normalizeIdea({
-            ...idea,
-          })
+          const normalized = normalizeIdea({ ...idea })
           if (normalized) allResults.push(normalized)
         })
       }
@@ -768,9 +761,6 @@ export default function GlobalSearch({
           const normalized = normalizeFeedback(item)
           if (normalized) allResults.push(normalized)
         })
-      }
-
-      if (typeof queryOverride === "string" && originalQuery !== queryOverride) {
       }
 
       allResults.sort((a, b) => {
