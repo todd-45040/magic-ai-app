@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 
 import * as ideasService from "../services/ideasService"
 import * as showsService from "../services/showsService"
@@ -84,13 +84,61 @@ export default function GlobalSearch({
   const [tasksGroupOpen, setTasksGroupOpen] = useState(true)
   const [feedbackGroupOpen, setFeedbackGroupOpen] = useState(true)
 
+  const hasMountedFilterTelemetry = useRef(false)
+
   useEffect(() => {
     void trackClientEvent({
       tool: "global_search",
       action: "search_page_opened",
-      metadata: { source: "GlobalSearch" },
+      metadata: {
+        source: "GlobalSearch",
+        contentTypesEnabled: {
+          ideas: showIdeas,
+          shows: showShows,
+          tasks: showTasks,
+          feedback: showFeedback,
+        },
+      },
     })
   }, [])
+
+  useEffect(() => {
+    if (!hasMountedFilterTelemetry.current) {
+      hasMountedFilterTelemetry.current = true
+      return
+    }
+
+    void trackClientEvent({
+      tool: "global_search",
+      action: "search_filters_changed",
+      metadata: {
+        queryLength: query.trim().length,
+        dateRange,
+        searchMode,
+        categoryFilter,
+        toolFilter,
+        sourceFilter,
+        activeTagFilters,
+        contentTypesEnabled: {
+          ideas: showIdeas,
+          shows: showShows,
+          tasks: showTasks,
+          feedback: showFeedback,
+        },
+      },
+    })
+  }, [
+    showIdeas,
+    showShows,
+    showFeedback,
+    showTasks,
+    dateRange,
+    searchMode,
+    categoryFilter,
+    toolFilter,
+    sourceFilter,
+    activeTagFilters,
+  ])
 
   function resetSearch() {
     setQuery("")
@@ -506,6 +554,17 @@ export default function GlobalSearch({
     return matchesStructuredFilters(result) ? result : null
   }
 
+  function summarizeUsageBy<T extends string>(items: SearchResult[], selector: (item: SearchResult) => T) {
+    const summary: Record<string, number> = {}
+
+    items.forEach((item) => {
+      const key = selector(item)
+      summary[key] = (summary[key] || 0) + 1
+    })
+
+    return summary
+  }
+
   async function runSearch() {
     setIsLoading(true)
     setSelected(null)
@@ -581,12 +640,21 @@ export default function GlobalSearch({
 
       setResults(allResults)
 
+      const sourceUsage = summarizeUsageBy(allResults, (item) => item.source)
+      const typeUsage = summarizeUsageBy(allResults, (item) => item.type)
+      const toolUsage = summarizeUsageBy(
+        allResults.filter((item) => Boolean(item.toolName)),
+        (item) => item.toolName as string
+      )
+
       void trackClientEvent({
         tool: "global_search",
         action: "search_query_run",
         metadata: {
           query,
+          queryLength: query.trim().length,
           resultCount: allResults.length,
+          zeroResults: allResults.length === 0,
           filters: {
             showIdeas,
             showShows,
@@ -599,8 +667,34 @@ export default function GlobalSearch({
             sourceFilter,
             activeTagFilters,
           },
+          sourceUsage,
+          typeUsage,
+          toolUsage,
         },
       })
+
+      if (allResults.length === 0) {
+        void trackClientEvent({
+          tool: "global_search",
+          action: "search_zero_results",
+          metadata: {
+            query,
+            queryLength: query.trim().length,
+            filters: {
+              showIdeas,
+              showShows,
+              showFeedback,
+              showTasks,
+              dateRange,
+              searchMode,
+              categoryFilter,
+              toolFilter,
+              sourceFilter,
+              activeTagFilters,
+            },
+          },
+        })
+      }
     } finally {
       setIsLoading(false)
     }
@@ -616,6 +710,10 @@ export default function GlobalSearch({
         type: result.type,
         source: result.source,
         id: result.id,
+        title: result.title,
+        category: result.category || null,
+        toolName: result.toolName || null,
+        hasRelatedShow: Boolean(result.showId),
       },
     })
   }
@@ -647,9 +745,12 @@ export default function GlobalSearch({
 
     void trackClientEvent({
       tool: "global_search",
-      action: "search_open_saved_idea",
+      action: "search_deeplink_clicked",
       metadata: {
+        destination: "saved-ideas",
         resultId: result.id,
+        resultType: result.type,
+        resultSource: result.source,
         ideaId: result.ideaId,
       },
     })
@@ -662,9 +763,12 @@ export default function GlobalSearch({
 
     void trackClientEvent({
       tool: "global_search",
-      action: "search_open_show_planner",
+      action: "search_deeplink_clicked",
       metadata: {
+        destination: "show-planner",
         resultId: result.id,
+        resultType: result.type,
+        resultSource: result.source,
         showId: result.showId,
         taskId: result.taskId || null,
       },
@@ -676,9 +780,12 @@ export default function GlobalSearch({
   function handleOpenAudienceFeedback(result: SearchResult) {
     void trackClientEvent({
       tool: "global_search",
-      action: "search_open_audience_feedback",
+      action: "search_deeplink_clicked",
       metadata: {
+        destination: "show-feedback",
         resultId: result.id,
+        resultType: result.type,
+        resultSource: result.source,
         feedbackId: result.feedbackId || null,
         showId: result.showId || null,
       },
@@ -770,12 +877,33 @@ export default function GlobalSearch({
       setTagInput("")
       return
     }
-    setActiveTagFilters((prev) => [...prev, normalized])
+
+    const nextTags = [...activeTagFilters, normalized]
+    setActiveTagFilters(nextTags)
     setTagInput("")
+
+    void trackClientEvent({
+      tool: "global_search",
+      action: "search_tag_filter_added",
+      metadata: {
+        addedTag: normalized,
+        activeTagFilters: nextTags,
+      },
+    })
   }
 
   function removeTagFilter(tag: string) {
-    setActiveTagFilters((prev) => prev.filter((item) => item !== tag))
+    const nextTags = activeTagFilters.filter((item) => item !== tag)
+    setActiveTagFilters(nextTags)
+
+    void trackClientEvent({
+      tool: "global_search",
+      action: "search_tag_filter_removed",
+      metadata: {
+        removedTag: tag,
+        activeTagFilters: nextTags,
+      },
+    })
   }
 
   const groupedResults = useMemo<ResultGroups>(() => {
@@ -836,6 +964,8 @@ export default function GlobalSearch({
   }
 
   function toggleGroup(group: keyof ResultGroups) {
+    const openBefore = groupIsOpen(group)
+
     if (group === "ideas") setIdeasGroupOpen((prev) => !prev)
     if (group === "shows") setShowsGroupOpen((prev) => !prev)
     if (group === "tasks") setTasksGroupOpen((prev) => !prev)
@@ -846,6 +976,15 @@ export default function GlobalSearch({
       action: "search_group_toggled",
       metadata: {
         group,
+        state: openBefore ? "collapsed" : "expanded",
+        resultCount:
+          group === "ideas"
+            ? groupedResults.ideas.length
+            : group === "shows"
+              ? groupedResults.shows.length
+              : group === "tasks"
+                ? groupedResults.tasks.length
+                : groupedResults.feedback.length,
       },
     })
   }
