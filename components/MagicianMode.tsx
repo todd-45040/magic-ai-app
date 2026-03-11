@@ -59,6 +59,8 @@ import MagicDictionary from './MagicDictionary';
 import AdminPanel from './AdminPanel';
 import AppSuggestionModal from './AppSuggestionModal';
 import FirstWinGate from './FirstWinGate';
+import MagicPublications from './MagicPublications';
+
 
 interface AngleRiskFormProps {
     trickName: string;
