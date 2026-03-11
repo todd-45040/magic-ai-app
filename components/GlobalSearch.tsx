@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
-import ideasService from "../services/ideasService"
-import showsService from "../services/showsService"
-import feedbackService from "../services/feedbackService"
-import tasksService from "../services/tasksService"
+import * as ideasService from "../services/ideasService"
+import * as showsService from "../services/showsService"
+import { getFeedback } from "../services/feedbackService"
+import { trackClientEvent } from "../services/telemetryClient"
 
 type SearchResult = {
   id: string
@@ -11,14 +11,14 @@ type SearchResult = {
   content: string
   type: string
   source: string
-  date?: string
+  date?: string | number
 }
 
 export default function GlobalSearch() {
-
   const [query, setQuery] = useState("")
   const [results, setResults] = useState<SearchResult[]>([])
   const [selected, setSelected] = useState<SearchResult | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
 
   const [showIdeas, setShowIdeas] = useState(true)
   const [showShows, setShowShows] = useState(true)
@@ -32,17 +32,14 @@ export default function GlobalSearch() {
   const [advancedOpen, setAdvancedOpen] = useState(false)
 
   useEffect(() => {
-    track("search_page_opened")
+    void trackClientEvent({
+      tool: "global_search",
+      action: "search_page_opened",
+      metadata: { source: "GlobalSearch" },
+    })
   }, [])
 
-  function track(event: string, data: any = {}) {
-    try {
-      console.log("telemetry", event, data)
-    } catch {}
-  }
-
   function resetSearch() {
-
     setQuery("")
     setResults([])
     setSelected(null)
@@ -54,147 +51,233 @@ export default function GlobalSearch() {
 
     setDateRange("all")
 
-    track("search_reset")
+    void trackClientEvent({
+      tool: "global_search",
+      action: "search_reset",
+      metadata: {},
+    })
   }
 
-  function runSearch() {
-
-    track("search_query_run", { query })
-
-    const allResults: SearchResult[] = []
-
-    if (showIdeas) {
-      const ideas = ideasService.getIdeas?.() || []
-      ideas.forEach((idea: any) => {
-
-        if (matches(idea)) {
-          allResults.push({
-            id: idea.id,
-            title: idea.title || "Idea",
-            content: idea.content || "",
-            type: "Idea",
-            source: "ideas",
-            date: idea.created
-          })
-        }
-
-      })
-    }
-
-    if (showShows) {
-      const shows = showsService.getShows?.() || []
-
-      shows.forEach((show: any) => {
-
-        if (matches(show)) {
-          allResults.push({
-            id: show.id,
-            title: show.name || "Show",
-            content: show.description || "",
-            type: "Show",
-            source: "shows",
-            date: show.created
-          })
-        }
-
-      })
-    }
-
-    if (showFeedback) {
-
-      const feedback = feedbackService.getFeedback?.() || []
-
-      feedback.forEach((item: any) => {
-
-        if (matches(item)) {
-          allResults.push({
-            id: item.id,
-            title: item.title || "Feedback",
-            content: item.notes || "",
-            type: "Feedback",
-            source: "feedback",
-            date: item.created
-          })
-        }
-
-      })
-
-    }
-
-    if (showTasks) {
-
-      const tasks = tasksService.getTasks?.() || []
-
-      tasks.forEach((task: any) => {
-
-        if (matches(task)) {
-          allResults.push({
-            id: task.id,
-            title: task.title || "Task",
-            content: task.notes || "",
-            type: "Task",
-            source: "tasks",
-            date: task.created
-          })
-        }
-
-      })
-
-    }
-
-    setResults(allResults)
+  function matchesQuery(record: unknown) {
+    if (!query.trim()) return true
+    const text = JSON.stringify(record ?? {}).toLowerCase()
+    return text.includes(query.trim().toLowerCase())
   }
 
-  function matches(record: any) {
+  function withinDateRange(value?: string | number) {
+    if (dateRange === "all") return true
+    if (!value) return true
 
-    if (!query) return true
+    const timestamp =
+      typeof value === "number" ? value : new Date(value).getTime()
 
-    const text = JSON.stringify(record).toLowerCase()
+    if (!Number.isFinite(timestamp)) return true
 
-    return text.includes(query.toLowerCase())
+    const now = Date.now()
+    const diff = now - timestamp
+    const days = diff / (1000 * 60 * 60 * 24)
+
+    if (dateRange === "7") return days <= 7
+    if (dateRange === "30") return days <= 30
+
+    return true
+  }
+
+  async function runSearch() {
+    setIsLoading(true)
+    setSelected(null)
+
+    try {
+      const allResults: SearchResult[] = []
+
+      let shows: any[] = []
+      let ideas: any[] = []
+      let feedback: any[] = []
+
+      if (showShows || showTasks) {
+        try {
+          shows = await showsService.getShows()
+        } catch (error) {
+          console.error("Failed to load shows", error)
+        }
+      }
+
+      if (showIdeas) {
+        try {
+          ideas = await ideasService.getSavedIdeas()
+        } catch (error) {
+          console.error("Failed to load ideas", error)
+        }
+      }
+
+      if (showFeedback) {
+        try {
+          feedback = getFeedback() || []
+        } catch (error) {
+          console.error("Failed to load feedback", error)
+        }
+      }
+
+      if (showIdeas) {
+        ideas.forEach((idea: any) => {
+          const recordDate = idea.timestamp
+
+          if (matchesQuery(idea) && withinDateRange(recordDate)) {
+            allResults.push({
+              id: String(idea.id),
+              title: idea.title || "Idea",
+              content: idea.content || "",
+              type: "Idea",
+              source: "ideas",
+              date: recordDate,
+            })
+          }
+        })
+      }
+
+      if (showShows) {
+        shows.forEach((show: any) => {
+          const recordDate = show.createdAt || show.created_at
+
+          if (matchesQuery(show) && withinDateRange(recordDate)) {
+            allResults.push({
+              id: String(show.id),
+              title: show.title || show.name || "Show",
+              content: show.description || show.notes || "",
+              type: "Show",
+              source: "shows",
+              date: recordDate,
+            })
+          }
+        })
+      }
+
+      if (showTasks) {
+        shows.forEach((show: any) => {
+          const tasks = Array.isArray(show.tasks) ? show.tasks : []
+
+          tasks.forEach((task: any) => {
+            const recordDate =
+              task.createdAt || task.created_at || task.dueDate || task.due_date
+
+            if (matchesQuery(task) && withinDateRange(recordDate)) {
+              allResults.push({
+                id: `${show.id}-${task.id}`,
+                title: task.title || "Task",
+                content: task.notes || task.description || "",
+                type: "Task",
+                source: "tasks",
+                date: recordDate,
+              })
+            }
+          })
+        })
+      }
+
+      if (showFeedback) {
+        feedback.forEach((item: any) => {
+          const recordDate = item.timestamp
+
+          if (matchesQuery(item) && withinDateRange(recordDate)) {
+            allResults.push({
+              id: String(item.id),
+              title: item.showTitle || item.name || "Feedback",
+              content: item.comment || "",
+              type: "Feedback",
+              source: "feedback",
+              date: recordDate,
+            })
+          }
+        })
+      }
+
+      allResults.sort((a, b) => {
+        const aTime =
+          typeof a.date === "number"
+            ? a.date
+            : a.date
+              ? new Date(a.date).getTime()
+              : 0
+
+        const bTime =
+          typeof b.date === "number"
+            ? b.date
+            : b.date
+              ? new Date(b.date).getTime()
+              : 0
+
+        return bTime - aTime
+      })
+
+      setResults(allResults)
+
+      void trackClientEvent({
+        tool: "global_search",
+        action: "search_query_run",
+        metadata: {
+          query,
+          resultCount: allResults.length,
+          filters: {
+            showIdeas,
+            showShows,
+            showFeedback,
+            showTasks,
+            dateRange,
+          },
+        },
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   function toggleResult(r: SearchResult) {
     setSelected(r)
-    track("search_result_opened", { type: r.type })
+
+    void trackClientEvent({
+      tool: "global_search",
+      action: "search_result_opened",
+      metadata: {
+        type: r.type,
+        source: r.source,
+        id: r.id,
+      },
+    })
   }
 
+  const resultCountLabel = useMemo(() => {
+    if (isLoading) return "Searching..."
+    if (results.length === 0) return "No results"
+    if (results.length === 1) return "1 result"
+    return `${results.length} results`
+  }, [isLoading, results.length])
+
   return (
-
-    <div className="flex w-full h-full">
-
-      {/* LEFT PANEL */}
-
-      <div className="w-1/3 p-4 border-r border-gray-700">
-
+    <div className="flex w-full h-full min-h-0 bg-[#0b1020] text-white">
+      <div className="w-full max-w-[380px] border-r border-white/10 p-4 overflow-y-auto">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-bold">Search</h2>
 
           <button
             onClick={resetSearch}
-            className="text-sm px-3 py-1 border rounded"
+            className="text-sm px-3 py-1.5 rounded-lg border border-white/15 bg-white/5 hover:bg-white/10"
           >
             Reset
           </button>
         </div>
 
-        {/* QUERY */}
-
-        <div className="mb-4">
-
+        <div className="mb-4 rounded-2xl border border-white/10 bg-white/5">
           <button
             onClick={() => setQueryOpen(!queryOpen)}
-            className="font-semibold w-full text-left"
+            className="font-semibold w-full text-left px-4 py-3"
           >
             Search Query
           </button>
 
           {queryOpen && (
-
-            <div className="mt-2">
-
+            <div className="px-4 pb-4">
               <input
-                className="w-full p-2 border rounded bg-black"
+                className="w-full p-3 rounded-xl border border-white/10 bg-black/30"
                 placeholder="Search keyword..."
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -202,174 +285,131 @@ export default function GlobalSearch() {
 
               <button
                 onClick={runSearch}
-                className="mt-2 px-4 py-2 bg-purple-600 rounded"
+                className="mt-3 px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500"
               >
-                Search
+                {isLoading ? "Searching..." : "Search"}
               </button>
-
             </div>
-
           )}
-
         </div>
 
-        {/* CONTENT TYPE */}
-
-        <div className="mb-4">
-
+        <div className="mb-4 rounded-2xl border border-white/10 bg-white/5">
           <button
             onClick={() => setFiltersOpen(!filtersOpen)}
-            className="font-semibold w-full text-left"
+            className="font-semibold w-full text-left px-4 py-3"
           >
             Content Type
           </button>
 
           {filtersOpen && (
-
-            <div className="mt-2 space-y-1">
-
-              <label className="block">
+            <div className="px-4 pb-4 space-y-2">
+              <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
                   checked={showIdeas}
                   onChange={() => setShowIdeas(!showIdeas)}
                 />
-                Ideas
+                <span>Ideas</span>
               </label>
 
-              <label className="block">
+              <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
                   checked={showShows}
                   onChange={() => setShowShows(!showShows)}
                 />
-                Shows
+                <span>Shows</span>
               </label>
 
-              <label className="block">
-                <input
-                  type="checkbox"
-                  checked={showFeedback}
-                  onChange={() => setShowFeedback(!showFeedback)}
-                />
-                Feedback
-              </label>
-
-              <label className="block">
+              <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
                   checked={showTasks}
                   onChange={() => setShowTasks(!showTasks)}
                 />
-                Tasks
+                <span>Tasks</span>
               </label>
 
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={showFeedback}
+                  onChange={() => setShowFeedback(!showFeedback)}
+                />
+                <span>Feedback</span>
+              </label>
             </div>
-
           )}
-
         </div>
 
-        {/* ADVANCED */}
-
-        <div className="mb-4">
-
+        <div className="mb-4 rounded-2xl border border-white/10 bg-white/5">
           <button
             onClick={() => setAdvancedOpen(!advancedOpen)}
-            className="font-semibold w-full text-left"
+            className="font-semibold w-full text-left px-4 py-3"
           >
             Advanced Filters
           </button>
 
           {advancedOpen && (
-
-            <div className="mt-2">
-
-              <label className="block text-sm mb-1">
-                Date Range
-              </label>
+            <div className="px-4 pb-4">
+              <label className="block text-sm mb-2">Date Range</label>
 
               <select
                 value={dateRange}
                 onChange={(e) => setDateRange(e.target.value)}
-                className="w-full p-2 border rounded bg-black"
+                className="w-full p-3 rounded-xl border border-white/10 bg-black/30"
               >
-
                 <option value="all">All Time</option>
                 <option value="30">Last 30 Days</option>
                 <option value="7">Last 7 Days</option>
-
               </select>
-
             </div>
-
           )}
-
         </div>
-
       </div>
 
-      {/* RIGHT PANEL */}
-
       <div className="flex-1 p-4 overflow-y-auto">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-bold">Search Results</h2>
+          <div className="text-sm text-white/60">{resultCountLabel}</div>
+        </div>
 
-        <h2 className="text-xl font-bold mb-4">Search Results</h2>
-
-        {results.length === 0 && (
-          <div className="text-gray-400">
+        {!isLoading && results.length === 0 && (
+          <div className="text-white/50 rounded-2xl border border-white/10 bg-white/5 p-4">
             No results yet.
           </div>
         )}
 
         <div className="space-y-3">
-
           {results.map((r) => (
-
             <div
               key={r.id}
-              className="p-3 border rounded cursor-pointer hover:bg-gray-800"
+              className="p-4 rounded-2xl border border-white/10 bg-white/5 cursor-pointer hover:bg-white/10"
               onClick={() => toggleResult(r)}
             >
-
               <div className="font-semibold">{r.title}</div>
-
-              <div className="text-sm text-gray-400">
-                {r.type}
-              </div>
-
-              <div className="text-sm mt-1 line-clamp-2">
+              <div className="text-sm text-white/50 mt-1">{r.type}</div>
+              <div className="text-sm mt-2 line-clamp-2 text-white/80">
                 {r.content}
               </div>
-
             </div>
-
           ))}
-
         </div>
 
         {selected && (
+          <div className="mt-6 p-4 rounded-2xl border border-purple-400/30 bg-purple-500/5">
+            <h3 className="font-bold text-lg mb-2">{selected.title}</h3>
 
-          <div className="mt-6 p-4 border rounded bg-gray-900">
-
-            <h3 className="font-bold text-lg mb-2">
-              {selected.title}
-            </h3>
-
-            <div className="text-sm text-gray-400 mb-2">
-              {selected.type}
+            <div className="text-sm text-white/50 mb-3">
+              {selected.type} • {selected.source}
             </div>
 
-            <div className="whitespace-pre-wrap">
+            <div className="whitespace-pre-wrap text-white/90">
               {selected.content}
             </div>
-
           </div>
-
         )}
-
       </div>
-
     </div>
-
   )
 }
