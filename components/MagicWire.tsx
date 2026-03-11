@@ -32,42 +32,15 @@ function domainFromUrl(url?: string | null) {
   }
 }
 
-function normalizeSourceName(value?: string | null) {
-  const raw = (value || "").trim();
-  if (!raw) return "Source";
-
-  const lower = raw.toLowerCase();
-
-  if (lower.includes("genii")) return "Genii";
-  if (lower.includes("magic magazine")) return "Magic Magazine";
-  if (lower.includes("vanishing")) return "Vanishing Inc";
-  if (lower.includes("theory11")) return "Theory11";
-  if (lower.includes("magic cafe") || lower.includes("themagiccafe")) return "Magic Cafe";
-  if (lower.includes("reddit")) return "Reddit";
-  if (lower.includes("penguin")) return "Penguin Magic";
-  if (lower.includes("murphy")) return "Murphy's Magic";
-  if (lower.includes("ellusionist")) return "Ellusionist";
-  if (lower.includes("youtube")) return "YouTube";
-
-  return raw
-    .replace(/\.(com|net|org|co|io)$/i, "")
-    .replace(/[-_]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .split(" ")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-    .join(" ");
-}
-
 function publisherFromItem(it: MagicWireItem) {
   const host = domainFromUrl(it.sourceUrl);
-  if (host && host !== "news.google.com") return normalizeSourceName(host);
+  if (host && host !== "news.google.com") return host;
 
   const h = it.headline || it.title || "";
   const parts = h.split(" - ");
-  if (parts.length > 1) return normalizeSourceName(parts[parts.length - 1].trim());
+  if (parts.length > 1) return parts[parts.length - 1].trim();
 
-  return normalizeSourceName(it.source || host || "Source");
+  return it.source || host || "Source";
 }
 
 function timeAgo(dateStr?: string) {
@@ -95,43 +68,15 @@ function titleCase(value: string) {
     .join(" ");
 }
 
-function stripHtml(value: string) {
-  return value.replace(/<[^>]*>/g, " ");
-}
-
-function cleanSummary(value?: string | null) {
-  const text = stripHtml(value || "")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  if (!text) return "No summary available.";
-  if (text.length <= 140) return text;
-  return `${text.slice(0, 137).trimEnd()}...`;
-}
-
-function resolvePublishedAt(item: MagicWireItem) {
-  return (
-    item.publishedAt ||
-    (item as any).createdAt ||
-    (item as any).ingestedAt ||
-    new Date().toISOString()
-  );
-}
-
 function inferCategory(item: MagicWireItem): string {
   const raw = (item.category || item.type || "").toLowerCase();
   const text = `${item.headline || ""} ${item.title || ""} ${item.summary || ""} ${item.body || ""}`.toLowerCase();
 
   if (raw.includes("video") || text.includes("youtube") || text.includes("video")) return "Videos";
-  if (raw.includes("lecture") || text.includes("lecture") || text.includes("forum") || text.includes("club")) return "Community";
-  if (raw.includes("community") || text.includes("community")) return "Community";
   if (raw.includes("tip") || text.includes("tip") || text.includes("advice") || text.includes("lesson")) return "Performance Tips";
-  if (raw.includes("release") || text.includes("release") || text.includes("launch") || text.includes("new effect")) return "New Tricks";
+  if (raw.includes("community") || text.includes("community") || text.includes("forum") || text.includes("club")) return "Community";
+  if (raw.includes("announcement") || text.includes("launch") || text.includes("announcement") || text.includes("update")) return "Platform Updates";
   if (raw.includes("trick") || text.includes("trick") || text.includes("effect") || text.includes("routine")) return "New Tricks";
-  if (raw.includes("announcement") || text.includes("announcement") || text.includes("update")) return "Platform Updates";
-  if (raw.includes("review") || text.includes("review")) return "Industry News";
   return "Industry News";
 }
 
@@ -174,11 +119,10 @@ function buildCard(item: MagicWireItem, idx: number): WireCard {
   const category = inferCategory(item);
   const type = inferType(item);
   const title = item.headline || item.title || "Untitled";
-  const publishedAt = resolvePublishedAt(item);
-  const summary = cleanSummary(item.summary || item.body);
+  const summary = item.summary || item.body || "No summary available.";
   const id =
     item.id ||
-    `${idx}-${title}-${publishedAt || ""}-${item.sourceUrl || ""}`
+    `${idx}-${title}-${item.publishedAt || ""}-${item.sourceUrl || ""}`
       .toLowerCase()
       .replace(/\s+/g, "-")
       .slice(0, 140);
@@ -189,8 +133,8 @@ function buildCard(item: MagicWireItem, idx: number): WireCard {
     summary,
     source,
     sourceUrl: item.sourceUrl,
-    publishedAt,
-    when: timeAgo(publishedAt),
+    publishedAt: item.publishedAt,
+    when: timeAgo(item.publishedAt),
     category,
     type,
     tags: inferTags(item, category, source, type),
@@ -861,7 +805,7 @@ export default function MagicWire() {
                       )}
                     </div>
 
-                    <h3 className="mt-3 text-lg font-bold text-amber-400 line-clamp-2">
+                    <h3 className="mt-3 text-lg font-bold text-amber-200/85 line-clamp-2">
                       {card.title}
                     </h3>
 
