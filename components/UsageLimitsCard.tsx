@@ -51,6 +51,30 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
     return v;
   }, [dailyUsed, dailyLimit]);
 
+
+
+  const monthlySummary = useMemo(() => {
+    const summary: Array<{ label: string; used: number; limit: number; unit: string }> = [];
+
+    if (dailyLimit > 0) {
+      summary.push({ label: 'Text', used: dailyUsed, limit: dailyLimit, unit: '' });
+    }
+
+    const imageLimit = Number(quota?.image_gen?.limit ?? 0);
+    const imageRemaining = Number(quota?.image_gen?.remaining ?? 0);
+    if (imageLimit > 0) {
+      summary.push({ label: 'Images', used: Math.max(0, imageLimit - Math.max(0, imageRemaining)), limit: imageLimit, unit: '' });
+    }
+
+    const rehearsalLimit = Number(quota?.live_audio_minutes?.limit ?? 0);
+    const rehearsalRemaining = Number(quota?.live_audio_minutes?.remaining ?? 0);
+    if (rehearsalLimit > 0) {
+      summary.push({ label: 'Rehearsal', used: Math.max(0, rehearsalLimit - Math.max(0, rehearsalRemaining)), limit: rehearsalLimit, unit: 'min' });
+    }
+
+    return summary;
+  }, [dailyLimit, dailyUsed, quota]);
+
   const quotaRow = (label: string, key: string, opts?: { proOnly?: boolean; unit?: string }) => {
     const node = quota?.[key];
     const remaining = node?.remaining;
@@ -118,6 +142,18 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
         </div>
 
         <div className="flex items-center gap-2">
+          {!open && monthlySummary.length > 0 && (
+            <div className="hidden md:flex items-center gap-3 mr-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-1.5">
+              {monthlySummary.map((item) => (
+                <div key={item.label} className="flex items-center gap-1.5 text-[11px] text-slate-300/85 tabular-nums">
+                  <span className="font-medium text-slate-300/70">{item.label}:</span>
+                  <span className="font-semibold text-slate-100">
+                    {item.used} / {item.limit}{item.unit ? ` ${item.unit}` : ''}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
           {onRequestUpgrade && (nearLimit || upgradeRecommended) && (
             <span className="hidden sm:inline text-xs text-slate-200/80">More capacity →</span>
           )}

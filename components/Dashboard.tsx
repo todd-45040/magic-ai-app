@@ -514,7 +514,7 @@ const Dashboard: React.FC<DashboardProps> = ({ variant = 'full', user, shows, fe
             <div className="px-4 md:px-6 pb-10 space-y-6">
                 <FirstActionGuidance shows={shows} ideas={ideas} onNavigate={onNavigate} />
                 <div>
-                    <h2 className="text-sm uppercase tracking-wider text-slate-400">Quick Paths</h2>
+                    <h2 className="text-sm uppercase tracking-[0.08em] font-semibold text-slate-400/85">Quick Paths</h2>
                     <div className="mt-3">
                         <QuickActionsWidget onNavigate={onNavigate} />
                     </div>
@@ -522,7 +522,7 @@ const Dashboard: React.FC<DashboardProps> = ({ variant = 'full', user, shows, fe
 
 
                 <div>
-                    <h2 className="text-sm uppercase tracking-wider text-slate-400">At a Glance</h2>
+                    <h2 className="text-sm uppercase tracking-[0.08em] font-semibold text-slate-400/85">At a Glance</h2>
                     <div className="mt-3">
                         <HomeMetricsStrip shows={shows} feedback={feedback} />
                     </div>
