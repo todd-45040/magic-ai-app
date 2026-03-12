@@ -9,9 +9,10 @@ import { ChevronDownIcon, DatabaseIcon } from "./icons";
 interface AccountMenuProps {
   user: User;
   onLogout: () => void | Promise<void>;
+  onOpenBilling: () => void;
 }
 
-export default function AccountMenu({ user, onLogout }: AccountMenuProps) {
+export default function AccountMenu({ user, onLogout, onOpenBilling }: AccountMenuProps) {
   const [open, setOpen] = useState(false);
   const [openAdmin, setOpenAdmin] = useState(false);
   const [openSuggestions, setOpenSuggestions] = useState(false);
@@ -81,6 +82,17 @@ const [pos, setPos] = useState({ top: 0, left: 0, width: 288 });
         </div>
 
         <div className="p-2">
+          <button type="button"
+            onClick={() => {
+              setOpen(false);
+              onOpenBilling();
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-slate-200 hover:bg-slate-800/60"
+          >
+            <span className="w-4 h-4 text-emerald-300 font-bold">$</span>
+            Billing &amp; Plan
+          </button>
+
           <button type="button"
             onClick={async () => {
               await exportData();

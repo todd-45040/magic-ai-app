@@ -59,6 +59,7 @@ import MagicTheoryTutor from './MagicTheoryTutor';
 import MagicDictionary from './MagicDictionary';
 import AdminPanel from './AdminPanel';
 import AppSuggestionModal from './AppSuggestionModal';
+import BillingSettings from './BillingSettings';
 
 interface AngleRiskFormProps {
     trickName: string;
@@ -4250,6 +4251,8 @@ ${action.payload.content}`;
               onRequestUpgrade={() => setIsUpgradeModalOpen(true)}
             />
           );
+        case 'billing-settings':
+          return <BillingSettings user={user} onUpgrade={handleUpgrade} />;
         case 'persona-simulator': return <PersonaSimulator onIdeaSaved={() => handleIdeaSaved('Persona simulation saved!')} user={user} />;
         case 'gospel-magic-assistant':
           return (
@@ -4586,7 +4589,7 @@ const renderIntentSubnav = () => {
             <button onClick={() => setIsHelpModalOpen(true)} className="p-2 rounded-full text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Help" aria-label="Open help center">
                 <QuestionMarkIcon className="w-6 h-6" />
             </button>
-            <AccountMenu user={user} onLogout={onLogout} />
+            <AccountMenu user={user} onLogout={onLogout} onOpenBilling={() => setActiveView('billing-settings')} />
         </div>
       </header>
 

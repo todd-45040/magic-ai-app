@@ -23,6 +23,7 @@ import DemoBanner from './components/DemoBanner';
 import FoundingCirclePage from './components/FoundingCirclePage';
 import FounderSuccessPage from './components/FounderSuccessPage';
 import { isDemoEnabled, enableDemo, seedDemoData } from './services/demoSeedService';
+import { createCheckoutSession, resolveCheckoutLookupKey } from './services/billingClient';
 
 const DISCLAIMER_ACKNOWLEDGED_KEY = 'magician_ai_disclaimer_acknowledged';
 
@@ -44,32 +45,17 @@ function App() {
 
   const handleUpgrade = async (tier: 'amateur' | 'professional') => {
     try {
-      const { data } = await supabase.auth.getSession();
-      const token = data?.session?.access_token;
-      if (!token) {
-        alert('Please sign in to upgrade.');
+      const lookupKey = resolveCheckoutLookupKey(tier, user);
+      const result = await createCheckoutSession(lookupKey);
+
+      if (result?.url) {
+        window.location.href = String(result.url);
         return;
       }
 
-      const r = await fetch('/api/stripeCheckout', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ tier, billing: 'monthly' }),
-      });
-
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok || !j?.url) {
-        const msg = j?.error || 'Stripe is not configured yet.';
-        alert(msg);
-        return;
-      }
-
-      window.location.href = String(j.url);
+      alert(result?.message || (result?.stripeConfigured ? 'Upgrade session is not ready yet.' : 'Stripe is not configured yet.'));
     } catch (e: any) {
-      alert('Upgrade could not start. Please try again.');
+      alert(e?.message || 'Upgrade could not start. Please try again.');
       console.error(e);
     }
   };

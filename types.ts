@@ -443,4 +443,5 @@ export type MagicianView =
   | 'performance-analytics'
   | 'illusion-blueprint'
   | 'magic-theory-tutor'
-  | 'magic-dictionary';
+  | 'magic-dictionary'
+  | 'billing-settings';
