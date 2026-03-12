@@ -50,8 +50,9 @@ const InfoTile: React.FC<{
   label: string;
   value: string;
   hint?: string;
-}> = ({ icon: Icon, label, value, hint }) => (
-  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+  accentClassName?: string;
+}> = ({ icon: Icon, label, value, hint, accentClassName }) => (
+  <div className={`rounded-2xl border border-white/10 bg-white/[0.03] p-4 ${accentClassName || ''}`}>
     <div className="flex items-start gap-3">
       <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-purple-400/20 bg-purple-500/10 text-purple-200">
         <Icon className="h-5 w-5" />
@@ -89,16 +90,14 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
     void loadStatus();
   }, [loadStatus]);
 
-  const currentPlanLabel = useMemo(() => {
-    if (status?.planKey) return humanizePlan(status.planKey);
-    return humanizePlan(user?.membership === 'professional' ? 'professional' : user?.membership === 'amateur' ? 'amateur' : 'free');
-  }, [status?.planKey, user?.membership]);
+  const currentPlanKey = status?.planKey || (user?.membership === 'professional' ? 'professional' : user?.membership === 'amateur' ? 'amateur' : 'free');
+  const currentPlanLabel = useMemo(() => humanizePlan(currentPlanKey), [currentPlanKey]);
 
   const founderNotice = useMemo(() => {
-    if (!status?.founderProtected) return 'No founder pricing lock is attached to this account.';
+    if (!status?.founderProtected) return 'No founder protection is attached to this account.';
     const lockedPlan = humanizePlan(status.founderLockedPlan);
     const lockedRate = formatPriceCents(status.founderLockedPriceCents);
-    return `${lockedPlan} remains protected on this account. Locked rate: ${lockedRate}.`;
+    return `${lockedPlan} remains founder protected on this account. Locked rate: ${lockedRate}.`;
   }, [status?.founderLockedPlan, status?.founderLockedPriceCents, status?.founderProtected]);
 
   const openPortal = useCallback(async () => {
@@ -119,16 +118,21 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
     }
   }, []);
 
+  const amateurUpgradeAvailable = Boolean(status?.upgradeTargets.includes('amateur'));
+  const professionalUpgradeAvailable = Boolean(status?.upgradeTargets.includes('professional') || status?.upgradeTargets.includes('founder_professional'));
+  const isCurrentAmateur = currentPlanKey === 'amateur';
+  const isCurrentProfessional = currentPlanKey === 'professional' || currentPlanKey === 'founder_professional';
+
   return (
-    <div className="px-4 md:px-6 py-6 space-y-6 animate-fade-in">
+    <div className="px-4 py-6 space-y-6 md:px-6 animate-fade-in">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="text-sm uppercase tracking-[0.08em] font-semibold text-yellow-300/80">Billing & Account</p>
-          <h1 className="mt-2 text-2xl md:text-3xl font-semibold text-white leading-tight">
+          <p className="text-sm font-semibold uppercase tracking-[0.08em] text-yellow-300/80">Billing & Account</p>
+          <h1 className="mt-2 text-2xl font-semibold leading-tight text-white md:text-3xl">
             Billing settings and upgrade controls
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-white/70">
-            This page reads the billing status endpoint directly, so upgrade controls stay aligned with entitlement truth and Stripe placeholder mode.
+            This page reads the billing status endpoint directly, so current plan state, upgrade availability, and founder protection stay aligned with entitlement truth.
           </p>
         </div>
         <button
@@ -144,10 +148,27 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
           <div className="flex items-start gap-3">
             <LockIcon className="mt-0.5 h-5 w-5 text-amber-200" />
             <div>
-              <p className="font-semibold">Stripe is not connected yet.</p>
+              <p className="font-semibold">Stripe not connected yet</p>
               <p className="mt-1 text-amber-100/85">
-                Upgrade actions are wired to the billing endpoint layer now. Until Stripe is connected, checkout and portal actions return structured placeholder responses instead of granting access.
+                Upgrade available actions are already routed through the billing endpoint layer. Until Stripe is connected, checkout and portal actions return structured placeholder responses and do not change access.
               </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {status?.founderProtected ? (
+        <div className="rounded-2xl border border-yellow-300/30 bg-yellow-500/10 px-5 py-4 text-sm text-yellow-50">
+          <div className="flex items-start gap-3">
+            <ShieldIcon className="mt-0.5 h-5 w-5 text-yellow-200" />
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="font-semibold">Founder protected</p>
+                <span className="rounded-full border border-yellow-300/30 bg-yellow-400/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-yellow-100">
+                  Locked pricing preserved
+                </span>
+              </div>
+              <p className="mt-1 text-yellow-50/90">{founderNotice}</p>
             </div>
           </div>
         </div>
@@ -164,19 +185,21 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
           icon={WandIcon}
           label="Current plan"
           value={loading ? 'Loading…' : currentPlanLabel}
-          hint={status ? `Access state: ${status.accessState}` : 'Resolved from billing status when available.'}
+          hint={status ? `Current plan state: ${status.accessState}` : 'Resolved from billing status when available.'}
+          accentClassName={isCurrentProfessional ? 'border-amber-400/20 bg-amber-500/5' : isCurrentAmateur ? 'border-purple-400/20 bg-purple-500/5' : ''}
         />
         <InfoTile
           icon={ShieldIcon}
           label="Founder protection"
           value={status?.founderProtected ? 'Founder protected' : 'Standard pricing'}
-          hint={loading ? 'Loading founder lock…' : founderNotice}
+          hint={loading ? 'Loading founder protection…' : founderNotice}
+          accentClassName={status?.founderProtected ? 'border-yellow-300/20 bg-yellow-500/5' : ''}
         />
         <InfoTile
           icon={ClockIcon}
           label="Billing state"
           value={loading ? 'Loading…' : (status?.billingStatus || 'Unknown')}
-          hint={status?.cancelAtPeriodEnd ? 'Cancellation is scheduled at period end.' : 'No end-of-period cancellation is scheduled.'}
+          hint={status?.cancelAtPeriodEnd ? 'Cancellation scheduled at period end.' : 'No end-of-period cancellation is scheduled.'}
         />
       </div>
 
@@ -184,13 +207,17 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
         <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
           <div className="flex items-center gap-3">
             <CalendarIcon className="h-5 w-5 text-purple-200" />
-            <h2 className="text-lg font-semibold text-white">Cycle timing</h2>
+            <div>
+              <h2 className="text-lg font-semibold text-white">Billing timing</h2>
+              <p className="mt-1 text-sm text-white/60">Renewal, cancellation, and usage window dates in one place.</p>
+            </div>
           </div>
           <div className="mt-4 space-y-4">
             <div className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-black/20 px-4 py-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/45">Renewal date</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/45">Renewal</p>
                 <p className="mt-1 text-sm text-white">{loading ? 'Loading…' : formatDate(status?.renewalDate || null)}</p>
+                <p className="mt-1 text-xs text-white/50">{status?.cancelAtPeriodEnd ? 'Cancellation scheduled at period end.' : 'Renews normally when billing is active.'}</p>
               </div>
               <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusTone[status?.billingStatus || 'unknown'] || statusTone.unknown}`}>
                 {status?.billingStatus || 'unknown'}
@@ -212,26 +239,35 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
         <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
           <div className="flex items-center gap-3">
             <DollarSignIcon className="h-5 w-5 text-amber-200" />
-            <h2 className="text-lg font-semibold text-white">Portal & customer record</h2>
+            <div>
+              <h2 className="text-lg font-semibold text-white">Portal & customer record</h2>
+              <p className="mt-1 text-sm text-white/60">Pre-Stripe placeholder messaging stays calm and intentional here.</p>
+            </div>
           </div>
           <div className="mt-4 space-y-3 text-sm text-white/70">
             <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/45">Billing customer</p>
               <p className="mt-1 text-sm text-white">
-                {loading ? 'Loading…' : status?.billingCustomerExists ? 'Customer record exists' : 'No billing customer yet'}
+                {loading ? 'Loading…' : status?.billingCustomerExists ? 'Customer record exists' : 'Customer record not created yet'}
               </p>
-              <p className="mt-1 text-xs text-white/55">
-                {loading ? 'Loading…' : status?.stripeCustomerIdPresent ? 'Stripe customer id is present in billing records.' : 'A Stripe customer will appear here after Stripe goes live.'}
+              <p className="mt-1 text-xs text-white/50">
+                {status?.stripeConfigured
+                  ? 'Portal access will use the billing customer record when Stripe is connected.'
+                  : 'Expected before Stripe launch. This account is still in placeholder mode.'}
               </p>
             </div>
             <button
               onClick={() => void openPortal()}
-              disabled={portalBusy || loading}
-              className="inline-flex w-full items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={portalBusy}
+              className="inline-flex w-full items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {portalBusy ? 'Opening billing portal…' : 'Open billing portal'}
+              {portalBusy ? 'Checking billing portal…' : status?.stripeConfigured ? 'Open billing portal' : 'Billing portal coming soon'}
             </button>
-            {portalMessage ? <p className="text-sm text-amber-100">{portalMessage}</p> : null}
+            {portalMessage ? (
+              <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/75">
+                {portalMessage}
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -241,7 +277,7 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
           <div>
             <h2 className="text-lg font-semibold text-white">Upgrade actions</h2>
             <p className="mt-1 text-sm text-white/65">
-              All upgrade actions route through the billing endpoint layer. No client-side plan mutation is performed here.
+              All upgrade actions route through the billing endpoint layer. Labels stay consistent with locked by plan, upgrade available, and founder protected states.
             </p>
           </div>
           <div className="text-xs text-white/45">
@@ -250,27 +286,53 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
         </div>
 
         <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <div className="rounded-2xl border border-purple-400/20 bg-purple-500/10 p-5">
+          <div className={`rounded-2xl p-5 ${isCurrentAmateur ? 'border border-purple-300/30 bg-purple-500/12' : 'border border-purple-400/20 bg-purple-500/10'}`}>
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-purple-100">Amateur</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-semibold text-purple-100">Amateur</p>
+                  {isCurrentAmateur ? (
+                    <span className="rounded-full border border-purple-300/30 bg-purple-300/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-purple-100">
+                      Current plan
+                    </span>
+                  ) : amateurUpgradeAvailable ? (
+                    <span className="rounded-full border border-purple-300/25 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-purple-100">
+                      Upgrade available
+                    </span>
+                  ) : null}
+                </div>
                 <p className="mt-1 text-sm text-white/65">Expanded creation limits with Show Planner, Search, and Saved Ideas access.</p>
               </div>
               <span className="rounded-full border border-purple-400/25 px-3 py-1 text-xs font-semibold text-purple-200">$9.95/mo</span>
             </div>
             <button
               onClick={() => void onUpgrade('amateur')}
-              disabled={loading || !status?.upgradeTargets.includes('amateur')}
+              disabled={loading || !amateurUpgradeAvailable || isCurrentAmateur}
               className="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-purple-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Upgrade to Amateur
+              {isCurrentAmateur ? 'Current plan' : amateurUpgradeAvailable ? 'Upgrade to Amateur' : 'Locked by plan'}
             </button>
           </div>
 
-          <div className="rounded-2xl border border-amber-400/30 bg-amber-500/10 p-5">
+          <div className={`rounded-2xl p-5 ${isCurrentProfessional ? 'border border-amber-300/35 bg-amber-500/12' : 'border border-amber-400/30 bg-amber-500/10'}`}>
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-amber-100">Professional</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-semibold text-amber-100">Professional</p>
+                  {isCurrentProfessional ? (
+                    <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-100">
+                      Current plan
+                    </span>
+                  ) : status?.founderProtected ? (
+                    <span className="rounded-full border border-yellow-300/30 bg-yellow-400/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-yellow-100">
+                      Founder protected
+                    </span>
+                  ) : professionalUpgradeAvailable ? (
+                    <span className="rounded-full border border-amber-300/25 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-100">
+                      Upgrade available
+                    </span>
+                  ) : null}
+                </div>
                 <p className="mt-1 text-sm text-white/65">Highest limits, rehearsal tools, business tools, and founder-aware upgrade protection.</p>
               </div>
               <span className="rounded-full border border-amber-400/25 px-3 py-1 text-xs font-semibold text-amber-100">
@@ -279,10 +341,16 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
             </div>
             <button
               onClick={() => void onUpgrade('professional')}
-              disabled={loading || !(status?.upgradeTargets.includes('professional') || status?.upgradeTargets.includes('founder_professional'))}
+              disabled={loading || !professionalUpgradeAvailable || isCurrentProfessional}
               className="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-amber-500 px-4 py-3 text-sm font-extrabold text-slate-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {status?.founderProtected ? 'Continue with founder pricing' : 'Upgrade to Professional'}
+              {isCurrentProfessional
+                ? 'Current plan'
+                : status?.founderProtected
+                  ? 'Continue with founder pricing'
+                  : professionalUpgradeAvailable
+                    ? 'Upgrade to Professional'
+                    : 'Locked by plan'}
             </button>
           </div>
         </div>
