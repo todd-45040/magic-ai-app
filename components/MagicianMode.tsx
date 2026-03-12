@@ -1728,12 +1728,140 @@ const CommunityTab: React.FC = () => {
   const totalMatches = filteredOnlineCommunities.length + filteredClubs.length + filteredConventions.length;
   const filterChips: Array<'All' | 'Forums' | 'Clubs' | 'Conventions' | 'Organizations'> = ['All', 'Forums', 'Clubs', 'Conventions', 'Organizations'];
 
+  type CommunityDirectoryItem =
+    | (typeof onlineCommunities)[number]
+    | (typeof clubDirectory)[number]
+    | (typeof conventionDirectory)[number];
+
+  const visibleCommunityItems: CommunityDirectoryItem[] = [
+    ...filteredOnlineCommunities,
+    ...filteredClubs,
+    ...filteredConventions,
+  ];
+
+  const getVisibleItemByName = (name: string) => visibleCommunityItems.find(item => item.name === name);
+
+  const featuredCommunity = getVisibleItemByName('The Magic Café') ?? visibleCommunityItems[0] ?? null;
+  const conventionSpotlight =
+    getVisibleItemByName('Blackpool Magic Convention') ??
+    getVisibleItemByName('FISM') ??
+    filteredConventions[0] ??
+    null;
+
+  const editorsPickNames = ['The Magic Café', 'Genii Forum', 'The Magic Castle', 'Blackpool Magic Convention'];
+  const beginnerPickNames = ['r/Magic (Reddit)', 'Society of American Magicians (SAM)', "Abbott's Magic Get-Together"];
+  const proNetworkPickNames = ['The Magic Castle', 'International Brotherhood of Magicians (IBM)', 'FISM'];
+
+  const editorPicks = editorsPickNames
+    .map(getVisibleItemByName)
+    .filter((item): item is CommunityDirectoryItem => Boolean(item));
+
+  const beginnerFriendlyPicks = beginnerPickNames
+    .map(getVisibleItemByName)
+    .filter((item): item is CommunityDirectoryItem => Boolean(item));
+
+  const professionalNetworkPicks = proNetworkPickNames
+    .map(getVisibleItemByName)
+    .filter((item): item is CommunityDirectoryItem => Boolean(item));
+
+  const getCommunityWhyItMatters = (item: CommunityDirectoryItem) => {
+    switch (item.name) {
+      case 'The Magic Café':
+        return 'Worth joining for the depth of archived discussion and the sheer number of working magicians who still reference it.';
+      case 'Genii Forum':
+        return 'Worth joining for thoughtful conversations that often connect magazine-level insight with real performer experience.';
+      case 'r/Magic (Reddit)':
+        return 'Worth joining for easy discovery, quick questions, and a lower-friction entry point for newer magicians.';
+      case 'The Magic Castle':
+        return 'Worth tracking because it represents one of the strongest professional identity and networking signals in magic.';
+      case 'International Brotherhood of Magicians (IBM)':
+        return 'Worth joining for chapter-based networking, education, and broad access to established performers.';
+      case 'Society of American Magicians (SAM)':
+        return 'Worth joining for legacy, structure, and connections to a wide national network of magicians.';
+      case 'Blackpool Magic Convention':
+        return 'Worth tracking because it is one of the largest and most visible destination events in the magic world.';
+      case 'FISM':
+        return 'Worth tracking because it represents elite international visibility, innovation, and serious peer benchmarking.';
+      default:
+        return item.category === 'Conventions'
+          ? 'Worth tracking for in-person inspiration, networking, and exposure to the broader magic ecosystem.'
+          : item.category === 'Organizations'
+            ? 'Worth joining for structure, reputation, and longer-term community connections.'
+            : 'Worth exploring for community access, idea flow, and stronger connection to the wider magic scene.';
+    }
+  };
+
   const renderMetaPill = (label: string, value: string) => (
     <div className="rounded-lg border border-slate-700/60 bg-slate-950/35 px-2.5 py-2">
       <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</div>
       <div className="mt-1 text-xs text-slate-200">{value}</div>
     </div>
   );
+
+  const renderCuratedCard = (item: CommunityDirectoryItem, tone: 'featured' | 'standard' = 'standard') => {
+    const Icon = item.Icon;
+    const isFeatured = tone === 'featured';
+
+    return (
+      <a
+        key={`${tone}-${item.name}`}
+        href={(item as any).url}
+        target="_blank"
+        rel="noreferrer"
+        className={`group block rounded-2xl border p-4 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-purple-500/40 ${
+          isFeatured
+            ? 'border-purple-500/30 bg-gradient-to-br from-purple-500/18 via-slate-900/92 to-slate-950/95 shadow-[0_18px_60px_rgba(88,28,135,0.22)] hover:-translate-y-1 hover:border-purple-400/50'
+            : 'border-slate-700/60 bg-slate-900/40 shadow-sm hover:-translate-y-1 hover:border-purple-500/35 hover:bg-slate-900/55 hover:shadow-[0_18px_50px_rgba(15,23,42,0.35)]'
+        }`}
+      >
+        <div className="flex items-start gap-3">
+          <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border text-purple-200 shadow-inner ${
+            isFeatured
+              ? 'border-purple-400/30 bg-gradient-to-br from-purple-400/25 via-slate-900/90 to-slate-950'
+              : 'border-purple-500/20 bg-gradient-to-br from-purple-500/20 via-slate-900/90 to-slate-950'
+          }`}>
+            <Icon className="h-5 w-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center rounded-full border border-slate-700/60 bg-slate-950/25 px-2.5 py-1 text-[11px] text-purple-200">{item.badge}</span>
+              <span className="inline-flex items-center rounded-full border border-slate-700/60 bg-slate-950/25 px-2.5 py-1 text-[11px] text-slate-300">{item.category}</span>
+              {item.isOfficial && (
+                <span className="inline-flex items-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-300">Official</span>
+              )}
+            </div>
+            <h4 className={`mt-3 font-bold text-slate-100 transition-colors group-hover:text-white ${isFeatured ? 'text-2xl font-cinzel' : 'text-base'}`}>
+              {item.name}
+            </h4>
+            <p className={`mt-2 text-sm leading-6 ${isFeatured ? 'text-slate-300' : 'text-slate-400 line-clamp-3'}`}>
+              {item.description}
+            </p>
+          </div>
+        </div>
+
+        <div className={`mt-4 grid gap-2 ${isFeatured ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-3'}`}>
+          {renderMetaPill('Type', item.typeLabel)}
+          {renderMetaPill('Region', item.region)}
+          {renderMetaPill('Audience', item.audience)}
+        </div>
+
+        <div className={`mt-4 rounded-xl border px-3.5 py-3 ${
+          isFeatured ? 'border-purple-500/25 bg-slate-950/35' : 'border-slate-700/60 bg-slate-950/25'
+        }`}>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-purple-300/80">Why this is worth joining</div>
+          <p className="mt-2 text-sm leading-6 text-slate-300">{getCommunityWhyItMatters(item)}</p>
+        </div>
+
+        <div className={`mt-4 inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 text-xs font-semibold transition ${
+          isFeatured
+            ? 'border-purple-400/45 bg-purple-500/18 text-purple-100 group-hover:border-purple-300/60 group-hover:bg-purple-500/24'
+            : 'border-purple-500/30 bg-purple-500/12 text-purple-100 group-hover:border-purple-400/50 group-hover:bg-purple-500/18'
+        }`}>
+          Visit {item.category === 'Conventions' ? 'event' : item.category === 'Forums' ? 'community' : 'organization'} <span aria-hidden="true">↗</span>
+        </div>
+      </a>
+    );
+  };
 
   return (
     <div className="flex-1 overflow-y-auto p-4 md:p-5">
@@ -1801,6 +1929,86 @@ const CommunityTab: React.FC = () => {
             </div>
           </div>
         </section>
+
+        {(featuredCommunity || conventionSpotlight || editorPicks.length > 0 || beginnerFriendlyPicks.length > 0 || professionalNetworkPicks.length > 0) && (
+          <section className="max-w-6xl mx-auto space-y-6">
+            <div className="flex flex-col gap-2">
+              <div className="text-sm font-semibold uppercase tracking-[0.2em] text-purple-300/80">Curated Community Layer</div>
+              <h3 className="text-2xl md:text-3xl font-bold text-slate-100 font-cinzel">Guided places to start, connect, and show up</h3>
+              <p className="text-sm md:text-base text-slate-400 max-w-3xl">Community now surfaces a more editorial view of the magic world so users can discover high-value groups and events faster, not just scroll a static directory.</p>
+            </div>
+
+            {featuredCommunity && (
+              <div>
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Featured community</div>
+                    <div className="mt-1 text-lg font-semibold text-slate-100">A strong first stop for conversation and discovery</div>
+                  </div>
+                  <div className="text-xs text-slate-500">Editorial pick</div>
+                </div>
+                {renderCuratedCard(featuredCommunity, 'featured')}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 xl:grid-cols-[1.35fr_0.95fr] gap-6">
+              <div className="space-y-6">
+                {editorPicks.length > 0 && (
+                  <div className="rounded-2xl border border-slate-700/60 bg-slate-900/35 p-4 md:p-5">
+                    <div className="mb-4">
+                      <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Editor’s Picks</div>
+                      <h4 className="mt-1 text-xl font-bold text-slate-100">Recommended places to join or watch closely</h4>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {editorPicks.map(item => renderCuratedCard(item))}
+                    </div>
+                  </div>
+                )}
+
+                {professionalNetworkPicks.length > 0 && (
+                  <div className="rounded-2xl border border-slate-700/60 bg-slate-900/35 p-4 md:p-5">
+                    <div className="mb-4">
+                      <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Professional Network Picks</div>
+                      <h4 className="mt-1 text-xl font-bold text-slate-100">High-value communities for serious networking</h4>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {professionalNetworkPicks.map(item => renderCuratedCard(item))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-6">
+                {beginnerFriendlyPicks.length > 0 && (
+                  <div className="rounded-2xl border border-slate-700/60 bg-slate-900/35 p-4 md:p-5">
+                    <div className="mb-4">
+                      <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Beginner-Friendly Picks</div>
+                      <h4 className="mt-1 text-xl font-bold text-slate-100">Easy entry points into the community</h4>
+                    </div>
+                    <div className="space-y-4">
+                      {beginnerFriendlyPicks.map(item => renderCuratedCard(item))}
+                    </div>
+                  </div>
+                )}
+
+                {conventionSpotlight && (
+                  <div className="rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-500/10 via-slate-900/85 to-slate-950 p-4 md:p-5 shadow-[0_18px_50px_rgba(120,53,15,0.18)]">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-200/80">Convention Spotlight</div>
+                        <h4 className="mt-1 text-xl font-bold text-slate-100">One event worth paying attention to</h4>
+                      </div>
+                      <span className="inline-flex items-center rounded-full border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-[11px] text-amber-200">Spotlight</span>
+                    </div>
+                    <div className="mt-4">
+                      {renderCuratedCard(conventionSpotlight)}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
 
         <section className="space-y-4">
           <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
