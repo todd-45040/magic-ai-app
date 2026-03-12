@@ -1605,54 +1605,144 @@ const PublicationsTab: React.FC = () => {
 
 const CommunityTab: React.FC = () => {
   const [query, setQuery] = useState('');
-
-  const q = query.trim().toLowerCase();
-
-  const filteredClubs = q
-    ? clubs.filter(c => (c.name + ' ' + c.description).toLowerCase().includes(q))
-    : clubs;
-
-  const filteredConventions = q
-    ? conventions.filter(c => (c.name + ' ' + c.description + ' ' + (c.date ?? '')).toLowerCase().includes(q))
-    : conventions;
+  const [activeFilter, setActiveFilter] = useState<'All' | 'Forums' | 'Clubs' | 'Conventions' | 'Organizations'>('All');
 
   const onlineCommunities = [
     {
       name: 'The Magic Café',
       description: 'The classic online forum with deep threads on sleights, theory, reviews, and pros-only topics.',
-      url: 'https://www.themagiccafe.com/'
+      url: 'https://www.themagiccafe.com/',
+      category: 'Forums' as const,
     },
     {
       name: 'r/Magic (Reddit)',
       description: 'Active community for discussions, recommendations, and sharing resources.',
-      url: 'https://www.reddit.com/r/Magic/'
+      url: 'https://www.reddit.com/r/Magic/',
+      category: 'Forums' as const,
     },
     {
       name: 'Genii Forum',
       description: 'Discussion board connected to Genii Magazine, with thoughtful threads and industry news.',
-      url: 'https://forums.geniimagazine.com/'
+      url: 'https://forums.geniimagazine.com/',
+      category: 'Forums' as const,
     }
   ];
 
+  const clubDirectory = clubs.map(club => ({
+    ...club,
+    category:
+      club.name.includes('Society') || club.name.includes('Brotherhood') || club.description.toLowerCase().includes('organization')
+        ? ('Organizations' as const)
+        : ('Clubs' as const),
+  }));
+
+  const conventionDirectory = conventions.map(convention => ({
+    ...convention,
+    category: 'Conventions' as const,
+  }));
+
+  const normalizedQuery = query.trim().toLowerCase();
+
+  const matchesQuery = (value: string) =>
+    normalizedQuery.length === 0 || value.toLowerCase().includes(normalizedQuery);
+
+  const matchesFilter = (category: 'Forums' | 'Clubs' | 'Conventions' | 'Organizations') =>
+    activeFilter === 'All' || activeFilter === category;
+
+  const filteredOnlineCommunities = onlineCommunities.filter(item =>
+    matchesFilter(item.category) && matchesQuery(`${item.name} ${item.description} ${item.category}`)
+  );
+
+  const filteredClubs = clubDirectory.filter(club =>
+    matchesFilter(club.category) && matchesQuery(`${club.name} ${club.description} ${club.category}`)
+  );
+
+  const filteredConventions = conventionDirectory.filter(convention =>
+    matchesFilter(convention.category) && matchesQuery(`${convention.name} ${convention.description} ${convention.date ?? ''} ${convention.category}`)
+  );
+
+  const totalMatches = filteredOnlineCommunities.length + filteredClubs.length + filteredConventions.length;
+  const filterChips: Array<'All' | 'Forums' | 'Clubs' | 'Conventions' | 'Organizations'> = ['All', 'Forums', 'Clubs', 'Conventions', 'Organizations'];
+
   return (
     <div className="flex-1 overflow-y-auto p-4 md:p-5">
-      <div className="animate-fade-in space-y-8">
-        <div className="text-center">
+      <div className="animate-fade-in space-y-8 md:space-y-10">
+        <div className="text-center pt-1">
           <h2 className="text-3xl font-bold text-slate-200 font-cinzel">Magic Community</h2>
-          <p className="text-slate-400 mt-2">
+          <p className="mt-2 text-slate-400">
             Connect with peers, explore organizations, and discover major conventions.
           </p>
         </div>
 
+        <section className="max-w-5xl mx-auto">
+          <div className="rounded-2xl border border-slate-700/60 bg-slate-900/35 p-4 md:p-5 shadow-sm">
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                <div>
+                  <div className="text-sm font-semibold uppercase tracking-[0.2em] text-purple-300/80">Community Directory</div>
+                  <div className="mt-1 text-lg font-semibold text-slate-100">Search the full magic community in one place</div>
+                  <div className="mt-1 text-sm text-slate-500">Browse forums, clubs, organizations, and conventions without leaving the page.</div>
+                </div>
+                <div className="text-xs text-slate-500">{totalMatches} result{totalMatches === 1 ? '' : 's'} shown</div>
+              </div>
+
+              <div className="relative">
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search communities, clubs, organizations, or conventions…"
+                  className="w-full rounded-xl bg-slate-950/40 border border-slate-700/60 px-4 py-3 pl-11 text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 focus:border-purple-500/50"
+                />
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
+                  <SearchIcon className="w-4 h-4" />
+                </div>
+                {query.trim().length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition"
+                    title="Clear"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {filterChips.map(chip => {
+                  const isActive = activeFilter === chip;
+                  return (
+                    <button
+                      key={chip}
+                      type="button"
+                      onClick={() => setActiveFilter(chip)}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                        isActive
+                          ? 'border-purple-400/50 bg-purple-500/20 text-purple-100 shadow-[0_0_0_1px_rgba(168,85,247,0.15)]'
+                          : 'border-slate-700/70 bg-slate-950/30 text-slate-300 hover:border-slate-500/70 hover:text-white'
+                      }`}
+                    >
+                      {chip}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* Online communities */}
         <section className="space-y-4">
-          <div className="flex items-end justify-between gap-4">
-            <h3 className="text-2xl font-bold text-slate-200 font-cinzel">Online Communities</h3>
-            <div className="text-xs text-slate-500">Links open in a new tab</div>
+          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Forums & discussion spaces</div>
+              <h3 className="mt-1 text-2xl font-bold text-slate-200 font-cinzel">Online Communities</h3>
+            </div>
+            <div className="text-xs text-slate-500">{filteredOnlineCommunities.length} shown • Links open in a new tab</div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {onlineCommunities.map(item => (
+            {filteredOnlineCommunities.map(item => (
               <a
                 key={item.name}
                 href={item.url}
@@ -1670,18 +1760,31 @@ const CommunityTab: React.FC = () => {
 
                 <p className="text-slate-400 text-sm mt-1 line-clamp-3">{item.description}</p>
 
+                <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-slate-700/60 bg-slate-950/25 px-2.5 py-1 text-[11px] text-purple-300">
+                  Forum
+                </div>
+
                 <div className="mt-3 inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg border border-slate-700/60 bg-slate-950/30 group-hover:bg-slate-950/60 text-purple-400 group-hover:text-white transition">
                   Visit <span aria-hidden="true">↗</span>
                 </div>
               </a>
             ))}
           </div>
+
+          {(query || activeFilter !== 'All') && filteredOnlineCommunities.length === 0 && (
+            <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/35 p-5 text-center text-sm text-slate-500">
+              No online communities match the current search or filter.
+            </div>
+          )}
         </section>
 
         {/* Clubs */}
         <section className="space-y-4">
-          <div className="flex items-end justify-between gap-4">
-            <h3 className="text-2xl font-bold text-slate-200 font-cinzel">Major Magic Clubs & Organizations</h3>
+          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Membership, networking, and official groups</div>
+              <h3 className="mt-1 text-2xl font-bold text-slate-200 font-cinzel">Major Magic Clubs & Organizations</h3>
+            </div>
             <div className="text-xs text-slate-500">{filteredClubs.length} shown</div>
           </div>
 
@@ -1706,7 +1809,7 @@ const CommunityTab: React.FC = () => {
 
                 <div className="mt-3 flex items-center justify-between gap-3">
                   <div className="inline-flex items-center gap-2 text-[11px] px-2.5 py-1 rounded-full border border-slate-700/60 bg-slate-950/25 text-purple-400">
-                    Club / Org
+                    {club.category === 'Organizations' ? 'Organization' : 'Club'}
                   </div>
                   <div className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg border border-slate-700/60 bg-slate-950/30 group-hover:bg-slate-950/60 text-purple-400 group-hover:text-white transition">
                     Visit <span aria-hidden="true">↗</span>
@@ -1716,17 +1819,20 @@ const CommunityTab: React.FC = () => {
             ))}
           </div>
 
-          {q && filteredClubs.length === 0 && (
-            <div className="text-center text-slate-500 text-sm py-6">
-              No clubs match “{query}”.
+          {(query || activeFilter !== 'All') && filteredClubs.length === 0 && (
+            <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/35 p-5 text-center text-sm text-slate-500">
+              No clubs or organizations match the current search or filter.
             </div>
           )}
         </section>
 
         {/* Conventions */}
         <section className="space-y-4">
-          <div className="flex items-end justify-between gap-4">
-            <h3 className="text-2xl font-bold text-slate-200 font-cinzel">Popular Magic Conventions</h3>
+          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Events and destination gatherings</div>
+              <h3 className="mt-1 text-2xl font-bold text-slate-200 font-cinzel">Popular Magic Conventions</h3>
+            </div>
             <div className="text-xs text-slate-500">{filteredConventions.length} shown</div>
           </div>
 
@@ -1768,53 +1874,26 @@ const CommunityTab: React.FC = () => {
             ))}
           </div>
 
-          {q && filteredConventions.length === 0 && (
-            <div className="text-center text-slate-500 text-sm py-6">
-              No conventions match “{query}”.
+          {(query || activeFilter !== 'All') && filteredConventions.length === 0 && (
+            <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/35 p-5 text-center text-sm text-slate-500">
+              No conventions match the current search or filter.
             </div>
           )}
         </section>
 
-        {/* Search (moved to bottom) */}
-        <section className="pt-2">
-          <div className="max-w-2xl mx-auto">
-            <div className="bg-slate-900/30 border border-slate-700/60 rounded-2xl p-4 md:p-5">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-sm font-semibold text-slate-200">Search clubs and conventions</div>
-                  <div className="text-xs text-slate-500 mt-0.5">Tip: try “IBM”, “SAM”, “Blackpool”, or “FISM”.</div>
-                </div>
-                <div className="text-[11px] text-slate-500 hidden md:block">Filters results above</div>
-              </div>
-
-              <div className="mt-3 relative">
-                <input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Type to filter…"
-                  className="w-full rounded-xl bg-slate-950/40 border border-slate-700/60 px-4 py-3 pl-10 text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 focus:border-purple-500/50"
-                />
-                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
-                  <span aria-hidden="true">🔎</span>
-                </div>
-                {query.trim().length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setQuery('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition"
-                    title="Clear"
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
+        {totalMatches === 0 && (
+          <section>
+            <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/30 p-8 text-center">
+              <div className="text-sm font-medium text-slate-300">No community results matched your current filters.</div>
+              <div className="mt-1 text-sm text-slate-500">Try another keyword or switch back to a broader category.</div>
             </div>
-          </div>
-        </section>
+          </section>
+        )}
       </div>
     </div>
   );
 };
+
 
 
 interface MagicianModeProps {
