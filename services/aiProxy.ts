@@ -101,7 +101,7 @@ async function safeFetchJson<T>(
 
     const err = parsed as ErrResponse;
     const e: AiError = new Error(err.message || "AI request failed");
-    e.code = err.error_code || "UNKNOWN_ERROR";
+    e.code = (err as any).errorCode || err.error_code || "UNKNOWN_ERROR";
     e.retryable = Boolean(err.retryable);
     e.status = r.status;
     e.requestId = err.requestId;
@@ -120,12 +120,14 @@ async function safeFetchJson<T>(
 function unwrapAiPayload<T = unknown>(res: any): T {
   if (res?.data?.json !== undefined) return res.data.json as T;
   if (res?.json !== undefined) return res.json as T;
+  if (res?.content !== undefined && !Array.isArray(res?.content) && typeof res?.content !== 'string') return res.content as T;
   if (res?.data !== undefined) return res.data as T;
   return res as T;
 }
 
 function unwrapAiText(res: any): string {
   if (res?.data?.text !== undefined) return String(res.data.text);
+  if (typeof res?.content === 'string') return String(res.content);
   if (res?.text !== undefined) return String(res.text);
   if (typeof res?.data === 'string') return res.data;
   if (typeof res === 'string') return res;
@@ -134,6 +136,7 @@ function unwrapAiText(res: any): string {
 
 function unwrapAiImages(res: any): string[] {
   if (Array.isArray(res?.data?.images)) return res.data.images as string[];
+  if (Array.isArray(res?.content)) return res.content as string[];
   if (Array.isArray(res?.images)) return res.images as string[];
   if (Array.isArray(res?.data)) return res.data as string[];
   return [];
@@ -141,6 +144,7 @@ function unwrapAiImages(res: any): string[] {
 
 function unwrapAiResult<T = unknown>(res: any): T {
   if (res?.data?.result !== undefined) return res.data.result as T;
+  if (res?.content !== undefined) return res.content as T;
   if (res?.result !== undefined) return res.result as T;
   if (res?.data !== undefined) return res.data as T;
   return res as T;

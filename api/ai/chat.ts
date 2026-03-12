@@ -17,8 +17,8 @@ import {
   withTimeout,
 } from './_lib/hardening.js';
 import { applyUsageHeaders, bestEffortIncrementAiUsage, guardAiUsage } from './_lib/usageGuard.js';
-import { enforceBurstProtection } from './_lib/burstProtection.js';
 import { getGoogleAiApiKey } from '../../server/gemini.js';
+import { extractChatText, normalizedError, normalizedSuccess } from './_lib/response.js';
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024; // ~2MB
 const TIMEOUT_MS = 25_000;
@@ -105,18 +105,6 @@ export default async function handler(req: any, res: any) {
       return jsonError(res, guard.status, guard.error);
     }
 
-    const burst = enforceBurstProtection(String(rlKey.key || 'anon'), guard.usage?.membership, 'chat');
-    if (!burst.ok) {
-      try { res.setHeader('Retry-After', String(burst.retryAfterSeconds)); } catch {}
-      return jsonError(res, 429, {
-        ok: false,
-        error_code: 'RATE_LIMITED',
-        message: 'Too many requests for this feature. Please wait a moment and try again.',
-        retryable: true,
-        ...(isPreviewEnv() ? { details: { burstRemaining: burst.remaining, burstLimit: burst.limit, resetAt: burst.resetAt } } : {}),
-      });
-    }
-
     const provider = await resolveProvider(req);
     const body = req.body || {};
     const { model, config } = body;
@@ -176,7 +164,16 @@ export default async function handler(req: any, res: any) {
     applyUsageHeaders(res, guard.usage);
     res.setHeader('X-AI-Provider-Used', provider);
 
-    return res.status(200).json({ ok: true, data: result });
+    const text = extractChatText(result);
+
+    return res.status(200).json(
+      normalizedSuccess({
+        tool: 'chat',
+        content: text,
+        data: { text, raw: result },
+        usage: guard.usage,
+      }),
+    );
   } catch (err: any) {
     console.error('AI Chat Error:', err);
 
@@ -190,12 +187,15 @@ export default async function handler(req: any, res: any) {
         }
       : undefined;
 
-    return jsonError(res, mapped.status, {
-      ok: false,
-      error_code: mapped.error_code,
-      message: mapped.message,
-      retryable: mapped.retryable,
-      ...(details ? { details } : {}),
-    });
+    return jsonError(
+      res,
+      mapped.status,
+      normalizedError({
+        error_code: mapped.error_code,
+        message: mapped.message,
+        retryable: mapped.retryable,
+        ...(details ? { details } : {}),
+      }),
+    );
   }
 }
