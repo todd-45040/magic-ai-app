@@ -2146,28 +2146,30 @@ ${prompt}`);
   return (
     <div className="flex-1 overflow-y-auto p-4 md:p-5">
       <div className="animate-fade-in space-y-8 md:space-y-10">
-        <div className="text-center pt-1">
-          <h2 className="text-3xl font-bold text-slate-200 font-cinzel">Magic Community</h2>
-          <p className="mt-2 text-slate-400">
-            Connect with peers, explore organizations, and discover major conventions.
-          </p>
-        </div>
+        <div className="flex flex-col gap-4 pt-1 md:flex-row md:items-end md:justify-between">
+          <div className="space-y-2">
+            <h2 className="text-3xl font-bold text-slate-200 font-cinzel md:text-4xl">Magic Community</h2>
+            <p className="max-w-3xl text-slate-400">
+              Connect with peers, explore organizations, and discover major conventions.
+            </p>
+          </div>
 
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={expandAllCommunityPanels}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-700/70 bg-slate-900/35 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:border-purple-400/40 hover:text-white"
-          >
-            Expand All
-          </button>
-          <button
-            type="button"
-            onClick={collapseAllCommunityPanels}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-700/70 bg-slate-900/35 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-slate-500/70 hover:text-white"
-          >
-            Collapse All
-          </button>
+          <div className="flex flex-wrap items-center gap-2 md:justify-end">
+            <button
+              type="button"
+              onClick={expandAllCommunityPanels}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-700/70 bg-slate-900/35 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:border-purple-400/40 hover:text-white"
+            >
+              Expand All
+            </button>
+            <button
+              type="button"
+              onClick={collapseAllCommunityPanels}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-700/70 bg-slate-900/35 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-slate-500/70 hover:text-white"
+            >
+              Collapse All
+            </button>
+          </div>
         </div>
 
         <section className="space-y-3">
