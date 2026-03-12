@@ -8,7 +8,6 @@ import ActivationProgress from './ActivationProgress';
 type Props = {
   user?: User | null;
   onNavigate: (view: string) => void;
-  onDismiss?: () => void;
 };
 
 const FIRST_WIN_SYSTEM = `You are Magic AI Wizard — the operating system for professional magicians.
@@ -40,7 +39,7 @@ function buildFirstRoutinePrompt() {
   ].join('\n');
 }
 
-export default function FirstWinGate({ user, onNavigate, onDismiss }: Props) {
+export default function FirstWinGate({ user, onNavigate }: Props) {
   const dispatch = useAppDispatch();
   const { ideas, shows } = useAppState();
 
@@ -78,6 +77,11 @@ export default function FirstWinGate({ user, onNavigate, onDismiss }: Props) {
     }
   };
 
+  // Once the user has activated, we should let them see the normal dashboard.
+  // MagicianMode will naturally re-render out of this gate once store updates.
+  if (hasActivated && !busy && !createdIdeaId) {
+    return null;
+  }
 
   return (
     <div className="px-4 md:px-6 py-6">
@@ -85,26 +89,15 @@ export default function FirstWinGate({ user, onNavigate, onDismiss }: Props) {
         <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] p-6 md:p-8">
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-purple-500/10 via-transparent to-yellow-500/5" />
           <div className="relative">
-            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-              <div className="flex flex-col gap-3">
-                <p className="inline-flex w-fit items-center gap-2 rounded-full border border-yellow-400/20 bg-yellow-500/10 px-3 py-1 text-xs font-semibold text-yellow-100">
-                  ✨ First Win
-                  <span className="text-yellow-100/70">under 90 seconds</span>
-                </p>
-                <h1 className="text-2xl md:text-3xl font-semibold text-white">What are you working on today?</h1>
-                <p className="text-sm md:text-base text-white/65 max-w-2xl">
-                  Pick one. We’ll generate something real and save it to your workspace — so you leave with momentum, not tabs.
-                </p>
-              </div>
-              {onDismiss && (
-                <button
-                  onClick={onDismiss}
-                  className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-medium text-white/80 transition hover:border-white/20 hover:bg-white/[0.06] hover:text-white focus:outline-none focus:ring-2 focus:ring-white/20"
-                  aria-label="Dismiss intro"
-                >
-                  Dismiss
-                </button>
-              )}
+            <div className="flex flex-col gap-3">
+              <p className="inline-flex w-fit items-center gap-2 rounded-full border border-yellow-400/20 bg-yellow-500/10 px-3 py-1 text-xs font-semibold text-yellow-100">
+                ✨ First Win
+                <span className="text-yellow-100/70">under 90 seconds</span>
+              </p>
+              <h1 className="text-2xl md:text-3xl font-semibold text-white">What are you working on today?</h1>
+              <p className="text-sm md:text-base text-white/65 max-w-2xl">
+                Pick one. We’ll generate something real and save it to your workspace — so you leave with momentum, not tabs.
+              </p>
             </div>
 
             <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -127,7 +120,7 @@ export default function FirstWinGate({ user, onNavigate, onDismiss }: Props) {
                 className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-4 text-left transition hover:bg-white/[0.04] hover:border-white/15 focus:outline-none focus:ring-2 focus:ring-white/20"
               >
                 <p className="text-sm font-semibold text-white">🗂 Plan a show</p>
-                <p className="mt-1 text-sm text-white/60">{hasActivated ? 'Jump back into your show planner.' : 'Start a show plan and tasks.'}</p>
+                <p className="mt-1 text-sm text-white/60">Start a show plan and tasks.</p>
               </button>
 
               <button

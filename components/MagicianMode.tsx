@@ -61,8 +61,6 @@ import AdminPanel from './AdminPanel';
 import AppSuggestionModal from './AppSuggestionModal';
 import FirstWinGate from './FirstWinGate';
 
-const HOME_INTRO_DISMISSED_KEY = 'maw_home_intro_dismissed_v1';
-
 interface AngleRiskFormProps {
     trickName: string;
     setTrickName: (value: string) => void;
@@ -2662,19 +2660,7 @@ const createChatMessage = (role: 'user' | 'model', text: string): ChatMessage =>
 
 
 const MagicianMode: React.FC<MagicianModeProps> = ({ onBack, user, onUpgrade, onLogout }) => {
-  const { shows, clients, feedback, ideas, isLoaded } = useAppState();
-  const [isHomeIntroDismissed, setIsHomeIntroDismissed] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    return window.localStorage.getItem(HOME_INTRO_DISMISSED_KEY) === 'true';
-  });
-
-  const dismissHomeIntro = () => {
-    setIsHomeIntroDismissed(true);
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(HOME_INTRO_DISMISSED_KEY, 'true');
-    }
-  };
-
+  const { shows, clients, feedback, ideas } = useAppState();
   const dispatch = useAppDispatch();
   const { showToast } = useToast();
 
@@ -4074,11 +4060,11 @@ ${action.payload.content}`;
   const renderContent = () => {
     switch(activeView) {
         case 'dashboard': {
-          // Home intro / first-win overlay
-          // Keep it visible until the user dismisses it so it does not flash away during hydration.
-          const showFirstWinGate = isLoaded && !user?.isAdmin && !isHomeIntroDismissed;
+          // Phase 2 (Activation Optimization): First Win Under 90 Seconds
+          // If the user has no ideas and no shows yet, guide them into a single-click flow.
+          const showFirstWinGate = !user?.isAdmin && (ideas?.length ?? 0) === 0 && (shows?.length ?? 0) === 0;
           if (showFirstWinGate) {
-            return <FirstWinGate user={user} onNavigate={handleNavigate} onDismiss={dismissHomeIntro} />;
+            return <FirstWinGate user={user} onNavigate={handleNavigate} />;
           }
 
           return (
@@ -4090,10 +4076,10 @@ ${action.payload.content}`;
               <h1 className="mt-2 text-2xl md:text-3xl font-semibold text-white leading-tight">
                 Your Home Base for Creating, Rehearsing, and Running <span className="text-yellow-200">Better Magic Shows</span>
               </h1>
-              <p className="mt-2 max-w-2xl text-sm text-white/70">
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-white/70">
                 Everything you need to create effects, rehearse performances, and manage your shows.
               </p>
-              <p className="mt-2 text-sm text-white/55">
+              <p className="mt-4 text-sm text-white/55">
                 Welcome back, {user.name || (user.email ? user.email.split('@')[0] : 'magician')}.
               </p>
             </div>
@@ -4155,7 +4141,7 @@ ${action.payload.content}`;
                     return (
                       <div
                         key={insight.key}
-                        className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] p-4"
+                        className="relative min-h-[92px] overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] p-4"
                       >
                         <div className={`pointer-events-none absolute inset-0 ${glowClasses}`} />
                         <div className="relative flex items-start gap-3">

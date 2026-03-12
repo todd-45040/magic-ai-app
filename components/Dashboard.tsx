@@ -270,11 +270,11 @@ const HomeMetricsStrip: React.FC<{ shows: Show[]; feedback: Feedback[] }> = ({ s
     ];
 
     return (
-        <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
+        <div className="rounded-xl border border-white/12 bg-white/[0.04] px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
             <div className="flex items-center justify-between gap-3 overflow-x-auto no-scrollbar">
                 {items.map((it) => (
                     <div key={it.label} className="min-w-[110px] px-2 py-1">
-                        <div className="text-[11px] uppercase tracking-wider text-white/50">{it.label}</div>
+                        <div className="text-[11px] uppercase tracking-[0.08em] text-white/55">{it.label}</div>
                         <div className="mt-0.5 text-sm font-semibold text-white">{it.value}</div>
                     </div>
                 ))}
@@ -514,7 +514,7 @@ const Dashboard: React.FC<DashboardProps> = ({ variant = 'full', user, shows, fe
             <div className="px-4 md:px-6 pb-10 space-y-6">
                 <FirstActionGuidance shows={shows} ideas={ideas} onNavigate={onNavigate} />
                 <div>
-                    <h2 className="text-sm uppercase tracking-[0.08em] font-semibold text-slate-400/85">Quick Paths</h2>
+                    <h2 className="text-xs uppercase tracking-[0.08em] font-semibold text-slate-400/85">Quick Paths</h2>
                     <div className="mt-3">
                         <QuickActionsWidget onNavigate={onNavigate} />
                     </div>
@@ -522,7 +522,7 @@ const Dashboard: React.FC<DashboardProps> = ({ variant = 'full', user, shows, fe
 
 
                 <div>
-                    <h2 className="text-sm uppercase tracking-[0.08em] font-semibold text-slate-400/85">At a Glance</h2>
+                    <h2 className="text-xs uppercase tracking-[0.08em] font-semibold text-slate-400/85">At a Glance</h2>
                     <div className="mt-3">
                         <HomeMetricsStrip shows={shows} feedback={feedback} />
                     </div>
