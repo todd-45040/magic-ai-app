@@ -61,6 +61,8 @@ import AdminPanel from './AdminPanel';
 import AppSuggestionModal from './AppSuggestionModal';
 import FirstWinGate from './FirstWinGate';
 
+const HOME_INTRO_DISMISSED_KEY = 'maw_home_intro_dismissed_v1';
+
 interface AngleRiskFormProps {
     trickName: string;
     setTrickName: (value: string) => void;
@@ -2660,7 +2662,19 @@ const createChatMessage = (role: 'user' | 'model', text: string): ChatMessage =>
 
 
 const MagicianMode: React.FC<MagicianModeProps> = ({ onBack, user, onUpgrade, onLogout }) => {
-  const { shows, clients, feedback, ideas } = useAppState();
+  const { shows, clients, feedback, ideas, isLoaded } = useAppState();
+  const [isHomeIntroDismissed, setIsHomeIntroDismissed] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem(HOME_INTRO_DISMISSED_KEY) === 'true';
+  });
+
+  const dismissHomeIntro = () => {
+    setIsHomeIntroDismissed(true);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(HOME_INTRO_DISMISSED_KEY, 'true');
+    }
+  };
+
   const dispatch = useAppDispatch();
   const { showToast } = useToast();
 
@@ -4060,11 +4074,11 @@ ${action.payload.content}`;
   const renderContent = () => {
     switch(activeView) {
         case 'dashboard': {
-          // Phase 2 (Activation Optimization): First Win Under 90 Seconds
-          // If the user has no ideas and no shows yet, guide them into a single-click flow.
-          const showFirstWinGate = !user?.isAdmin && (ideas?.length ?? 0) === 0 && (shows?.length ?? 0) === 0;
+          // Home intro / first-win overlay
+          // Keep it visible until the user dismisses it so it does not flash away during hydration.
+          const showFirstWinGate = isLoaded && !user?.isAdmin && !isHomeIntroDismissed;
           if (showFirstWinGate) {
-            return <FirstWinGate user={user} onNavigate={handleNavigate} />;
+            return <FirstWinGate user={user} onNavigate={handleNavigate} onDismiss={dismissHomeIntro} />;
           }
 
           return (
