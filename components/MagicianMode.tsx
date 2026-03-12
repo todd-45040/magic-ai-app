@@ -1607,6 +1607,8 @@ const CommunityTab: React.FC = () => {
   const [query, setQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<'All' | 'Forums' | 'Clubs' | 'Conventions' | 'Organizations'>('All');
   const COMMUNITY_FOLLOW_STORAGE_KEY = 'magic-community-following';
+  const COMMUNITY_CONVENTION_INTEREST_STORAGE_KEY = 'magic-community-convention-interest';
+  const COMMUNITY_NOTES_STORAGE_KEY = 'magic-community-networking-notes';
   const [followedCommunities, setFollowedCommunities] = useState<string[]>(() => {
     if (typeof window === 'undefined') return [];
     try {
@@ -1616,6 +1618,25 @@ const CommunityTab: React.FC = () => {
       return [];
     }
   });
+  const [interestedConventions, setInterestedConventions] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = window.localStorage.getItem(COMMUNITY_CONVENTION_INTEREST_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [communityNotes, setCommunityNotes] = useState<Record<string, string>>(() => {
+    if (typeof window === 'undefined') return {};
+    try {
+      const raw = window.localStorage.getItem(COMMUNITY_NOTES_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  });
+  const [performerType, setPerformerType] = useState<'beginner' | 'hobbyist' | 'working pro' | 'mentalist' | 'kids performer' | 'close-up performer'>('beginner');
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1625,6 +1646,24 @@ const CommunityTab: React.FC = () => {
       // no-op
     }
   }, [followedCommunities]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(COMMUNITY_CONVENTION_INTEREST_STORAGE_KEY, JSON.stringify(interestedConventions));
+    } catch {
+      // no-op
+    }
+  }, [interestedConventions]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(COMMUNITY_NOTES_STORAGE_KEY, JSON.stringify(communityNotes));
+    } catch {
+      // no-op
+    }
+  }, [communityNotes]);
 
   const onlineCommunities = [
     {
@@ -1758,6 +1797,16 @@ const CommunityTab: React.FC = () => {
     );
   };
 
+  const toggleConventionInterest = (name: string) => {
+    setInterestedConventions(prev =>
+      prev.includes(name) ? prev.filter(item => item !== name) : [...prev, name]
+    );
+  };
+
+  const updateNetworkingNote = (name: string, value: string) => {
+    setCommunityNotes(prev => ({ ...prev, [name]: value }));
+  };
+
   const discussCommunityWithAI = (item: CommunityDirectoryItem) => {
     const prompt = `Help me evaluate ${item.name} for my magic networking strategy. Explain who it is best for, what kind of value it offers, whether it connects more strongly to Magic Wire news, Publications research, or ongoing networking, and give me one practical next step.`;
     alert(`AI Assistant Prompt:
@@ -1805,6 +1854,29 @@ ${prompt}`);
   ];
 
   const getVisibleItemByName = (name: string) => visibleCommunityItems.find(item => item.name === name);
+  const allCommunityItems: CommunityDirectoryItem[] = [...onlineCommunities, ...clubDirectory, ...conventionDirectory];
+  const getAnyCommunityItemByName = (name: string) => allCommunityItems.find(item => item.name === name);
+
+  const savedCommunityItems = followedCommunities
+    .map(getAnyCommunityItemByName)
+    .filter((item): item is CommunityDirectoryItem => Boolean(item));
+
+  const interestedConventionItems = interestedConventions
+    .map(name => conventionDirectory.find(item => item.name === name))
+    .filter((item): item is (typeof conventionDirectory)[number] => Boolean(item));
+
+  const performerTypeRecommendations: Record<'beginner' | 'hobbyist' | 'working pro' | 'mentalist' | 'kids performer' | 'close-up performer', string[]> = {
+    'beginner': ['r/Magic (Reddit)', 'Society of American Magicians (SAM)', "Abbott's Magic Get-Together"],
+    'hobbyist': ['The Magic Café', 'Genii Forum', 'International Brotherhood of Magicians (IBM)'],
+    'working pro': ['The Magic Castle', 'International Brotherhood of Magicians (IBM)', 'FISM'],
+    'mentalist': ['Genii Forum', 'The Magic Café', 'FISM'],
+    'kids performer': ["Abbott's Magic Get-Together", 'Society of American Magicians (SAM)', 'The Magic Café'],
+    'close-up performer': ['The Magic Castle', 'The Magic Café', 'Blackpool Magic Convention'],
+  };
+
+  const recommendedCommunities = performerTypeRecommendations[performerType]
+    .map(getAnyCommunityItemByName)
+    .filter((item): item is CommunityDirectoryItem => Boolean(item));
 
   const featuredCommunity = getVisibleItemByName('The Magic Café') ?? visibleCommunityItems[0] ?? null;
   const conventionSpotlight =
@@ -1956,6 +2028,20 @@ ${prompt}`);
             <span aria-hidden="true">{isFollowing ? '★' : '☆'}</span>
             {isFollowing ? 'Following' : 'Follow'}
           </button>
+          {item.category === 'Conventions' && (
+            <button
+              type="button"
+              onClick={() => toggleConventionInterest(item.name)}
+              className={`inline-flex items-center gap-1 rounded-xl border px-3.5 py-2 text-xs font-semibold transition ${
+                interestedConventions.includes(item.name)
+                  ? 'border-cyan-500/35 bg-cyan-500/10 text-cyan-200'
+                  : 'border-slate-600 bg-slate-900/35 text-slate-300 hover:border-cyan-500/30 hover:text-cyan-200'
+              }`}
+            >
+              <span aria-hidden="true">{interestedConventions.includes(item.name) ? '✓' : '+'}</span>
+              {interestedConventions.includes(item.name) ? 'Interested' : 'Track event'}
+            </button>
+          )}
           <a
             href={(item as any).url}
             target="_blank"
@@ -2120,6 +2206,183 @@ ${prompt}`);
             </div>
           </section>
         )}
+
+        <section className="max-w-6xl mx-auto space-y-6">
+          <div className="flex flex-col gap-2">
+            <div className="text-sm font-semibold uppercase tracking-[0.2em] text-purple-300/80">Community Utility Layer</div>
+            <h3 className="text-2xl md:text-3xl font-bold text-slate-100 font-cinzel">Turn discovery into a working community plan</h3>
+            <p className="text-sm md:text-base text-slate-400 max-w-3xl">Save high-value communities, track conventions you may want to attend, keep lightweight networking notes, and get recommendations shaped to your performer profile.</p>
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-6">
+            <div className="space-y-6">
+              <div className="rounded-2xl border border-slate-700/60 bg-slate-900/35 p-4 md:p-5">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Saved Communities Shelf</div>
+                    <h4 className="mt-1 text-xl font-bold text-slate-100">Your followed communities and organizations</h4>
+                  </div>
+                  <div className="text-xs text-slate-500">{savedCommunityItems.length} saved</div>
+                </div>
+                {savedCommunityItems.length > 0 ? (
+                  <div className="space-y-4">
+                    {savedCommunityItems.map(item => (
+                      <div key={`saved-${item.name}`} className="rounded-xl border border-slate-700/60 bg-slate-950/30 p-4">
+                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <div className="text-base font-semibold text-slate-100">{item.name}</div>
+                              <span className="inline-flex items-center rounded-full border border-slate-700/60 bg-slate-900/65 px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] text-slate-300">{item.category}</span>
+                              <span className="inline-flex items-center rounded-full border border-slate-700/60 bg-slate-900/65 px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] text-slate-300">{item.region}</span>
+                            </div>
+                            <p className="mt-2 text-sm leading-6 text-slate-400">{item.description}</p>
+                          </div>
+                          <a
+                            href={(item as any).url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-2 rounded-xl border border-purple-500/30 bg-purple-500/12 px-3.5 py-2 text-xs font-semibold text-purple-100 transition hover:border-purple-400/50 hover:bg-purple-500/18"
+                          >
+                            Visit <span aria-hidden="true">↗</span>
+                          </a>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-slate-700/70 bg-slate-950/25 p-4 text-sm text-slate-400">
+                    Follow a few communities above and they will appear here as your quick-access shelf.
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-2xl border border-slate-700/60 bg-slate-900/35 p-4 md:p-5">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Networking Notes</div>
+                    <h4 className="mt-1 text-xl font-bold text-slate-100">Keep quick notes on who to revisit, join, or research</h4>
+                  </div>
+                  <div className="text-xs text-slate-500">Persistent in this browser</div>
+                </div>
+                {savedCommunityItems.length > 0 ? (
+                  <div className="space-y-4">
+                    {savedCommunityItems.map(item => (
+                      <div key={`note-${item.name}`} className="rounded-xl border border-slate-700/60 bg-slate-950/30 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-semibold text-slate-100">{item.name}</div>
+                            <div className="mt-1 text-xs uppercase tracking-[0.16em] text-slate-500">{item.category} • {item.audience}</div>
+                          </div>
+                        </div>
+                        <textarea
+                          value={communityNotes[item.name] ?? ''}
+                          onChange={(e) => updateNetworkingNote(item.name, e.target.value)}
+                          placeholder="Add a quick note: who to contact, why it matters, which publication or Magic Wire thread to revisit..."
+                          className="mt-3 min-h-[88px] w-full rounded-xl border border-slate-700/60 bg-slate-950/40 px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 focus:border-purple-500/50"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-slate-700/70 bg-slate-950/25 p-4 text-sm text-slate-400">
+                    Save a few communities first, then use this area as a lightweight networking notebook.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <div className="rounded-2xl border border-slate-700/60 bg-slate-900/35 p-4 md:p-5">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Convention Interest List</div>
+                    <h4 className="mt-1 text-xl font-bold text-slate-100">Events you may want to watch or attend</h4>
+                  </div>
+                  <div className="text-xs text-slate-500">{interestedConventionItems.length} tracked</div>
+                </div>
+                {interestedConventionItems.length > 0 ? (
+                  <div className="space-y-3">
+                    {interestedConventionItems.map(item => (
+                      <div key={`interest-${item.name}`} className="rounded-xl border border-slate-700/60 bg-slate-950/30 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-semibold text-slate-100">{item.name}</div>
+                            {'date' in item && item.date && <div className="mt-1 text-xs uppercase tracking-[0.16em] text-cyan-200">{item.date}</div>}
+                            <p className="mt-2 text-sm leading-6 text-slate-400">{item.description}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => toggleConventionInterest(item.name)}
+                            className="inline-flex items-center gap-2 rounded-xl border border-slate-600 bg-slate-900/35 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-cyan-500/30 hover:text-cyan-200"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-slate-700/70 bg-slate-950/25 p-4 text-sm text-slate-400">
+                    Use the Track event button on convention cards to build your interest list.
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-2xl border border-slate-700/60 bg-slate-900/35 p-4 md:p-5">
+                <div className="mb-4">
+                  <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Recommendations by Performer Type</div>
+                  <h4 className="mt-1 text-xl font-bold text-slate-100">Suggested places to engage next</h4>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {(['beginner', 'hobbyist', 'working pro', 'mentalist', 'kids performer', 'close-up performer'] as const).map(type => {
+                    const isActive = performerType === type;
+                    return (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => setPerformerType(type)}
+                        className={`rounded-full border px-3 py-1.5 text-xs font-medium capitalize transition ${
+                          isActive
+                            ? 'border-purple-400/50 bg-purple-500/20 text-purple-100 shadow-[0_0_0_1px_rgba(168,85,247,0.15)]'
+                            : 'border-slate-700/70 bg-slate-950/30 text-slate-300 hover:border-slate-500/70 hover:text-white'
+                        }`}
+                      >
+                        {type}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="mt-4 space-y-3">
+                  {recommendedCommunities.map(item => (
+                    <div key={`recommend-${performerType}-${item.name}`} className="rounded-xl border border-slate-700/60 bg-slate-950/30 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="text-sm font-semibold text-slate-100">{item.name}</div>
+                            <span className="inline-flex items-center rounded-full border border-slate-700/60 bg-slate-900/65 px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] text-slate-300">{item.category}</span>
+                          </div>
+                          <p className="mt-2 text-sm leading-6 text-slate-400">{getCommunityWhyItMatters(item)}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => toggleFollowCommunity(item.name)}
+                          className={`inline-flex items-center gap-1 rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+                            followedCommunities.includes(item.name)
+                              ? 'border-yellow-500/35 bg-yellow-500/10 text-yellow-200'
+                              : 'border-slate-600 bg-slate-900/35 text-slate-300 hover:border-yellow-500/30 hover:text-yellow-200'
+                          }`}
+                        >
+                          <span aria-hidden="true">{followedCommunities.includes(item.name) ? '★' : '☆'}</span>
+                          {followedCommunities.includes(item.name) ? 'Saved' : 'Save'}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
 
         <section className="space-y-4">
           <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
