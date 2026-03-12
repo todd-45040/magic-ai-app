@@ -1,3 +1,9 @@
+/**
+ * Billing status is the server source of truth for current access.
+ * Checkout return URLs are informational only and must never grant entitlements.
+ * Future live billing changes reconcile through webhook processing.
+ */
+
 import type { BillingPlanKey } from '../../services/planCatalog.js';
 import { BILLING_PLAN_CATALOG } from '../../services/planCatalog.js';
 import { deriveFounderProtection } from './founderProtection.js';

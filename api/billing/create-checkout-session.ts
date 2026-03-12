@@ -1,3 +1,10 @@
+/**
+ * Billing flow guardrail:
+ * - entitlements are resolved from server-side billing state
+ * - checkout return must not grant access
+ * - future live access changes reconcile through verified webhook processing
+ */
+
 import { requireSupabaseAuth } from '../_auth.js';
 import { getBillingConfig, getBillingPlanPlaceholder, isBillingCheckoutLookupKey } from '../../server/billing/billingConfig.js';
 import { resolveBillingStatusForUser } from '../../server/billing/status.js';

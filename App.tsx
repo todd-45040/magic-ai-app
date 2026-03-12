@@ -43,8 +43,10 @@ function App() {
   const dispatch = useAppDispatch();
   const loggingOutRef = useRef(false);
 
-  // All user-facing upgrades must flow through the billing endpoint layer.
-  // This starts checkout only; it does not grant client-side entitlements.
+  // Billing guardrail:
+  // - all user-facing upgrades must flow through the billing endpoint layer
+  // - checkout return must not grant access
+  // - future live entitlement changes reconcile through webhook processing
   const handleUpgrade = async (tier: 'amateur' | 'professional') => {
     try {
       const lookupKey = resolveCheckoutLookupKey(tier, user);

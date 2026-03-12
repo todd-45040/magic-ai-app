@@ -1,3 +1,9 @@
+/**
+ * Admin-only Stripe readiness checks.
+ * Dry-run URLs are transport placeholders only and must not be used to infer
+ * entitlements. Live access remains server-truth and webhook-reconciled.
+ */
+
 import { requireSupabaseAuth } from './_auth';
 import { getStripeEnvironmentReport } from '../server/billing/stripeConfig.js';
 
@@ -107,8 +113,8 @@ export default async function handler(req: any, res: any) {
       params.set('mode', 'subscription');
       params.set('line_items[0][price]', priceId);
       params.set('line_items[0][quantity]', '1');
-      params.set('success_url', `${origin}/membership?stripe=success&dryRun=1`);
-      params.set('cancel_url', `${origin}/membership?stripe=cancel&dryRun=1`);
+      params.set('success_url', `${origin}/membership?billingDryRun=checkout`);
+      params.set('cancel_url', `${origin}/membership?billingDryRun=portal`);
       params.set('client_reference_id', `stripe_readiness_dry_run_${Date.now()}`);
       params.set('metadata[source]', 'admin_stripe_readiness');
       params.set('metadata[dry_run]', 'true');

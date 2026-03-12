@@ -1,3 +1,10 @@
+/**
+ * Billing flow guardrail:
+ * - entitlements are server truth
+ * - client route changes and checkout return params do not grant access
+ * - webhook reconciliation is the future live sync path
+ */
+
 import { requireSupabaseAuth } from '../_auth.js';
 import { resolveBillingStatusForUser } from '../../server/billing/status.js';
 

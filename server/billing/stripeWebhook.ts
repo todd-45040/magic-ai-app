@@ -1,3 +1,9 @@
+/**
+ * Stripe webhook processing is the only future live path that should reconcile
+ * checkout completion into durable subscription state and entitlements.
+ * Client-side checkout return handling must remain non-authoritative.
+ */
+
 import crypto from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import type { BillingPlanKey } from '../../services/planCatalog.js';

@@ -1,3 +1,10 @@
+/**
+ * Billing client guardrail:
+ * - entitlements are server truth
+ * - checkout return does not grant access
+ * - webhook reconciliation is the future live sync path
+ */
+
 import { supabase } from '../supabase';
 import type { BillingPlanKey } from './planCatalog';
 import type { User } from '../types';
