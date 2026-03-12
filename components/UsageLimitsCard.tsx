@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { getUpgradeUxCopy } from '../services/upgradeUx';
 
 type UsageSnapshot = any;
 
@@ -29,6 +30,8 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
   const resetHourLocal = usageSnapshot?.resetHourLocal;
   const resetTz = usageSnapshot?.resetTz;
   const monthlyResetAt = usageSnapshot?.quota?.nextResetAt ?? usageSnapshot?.quota?.resetAt ?? null;
+
+  const upgradeCopy = useMemo(() => getUpgradeUxCopy(nearLimit || upgradeRecommended ? 'upgrade_available' : 'limit_reached', { targetPlan: plan === 'free' || plan === 'trial' ? 'Amateur' : 'Professional' }), [nearLimit, upgradeRecommended, plan]);
 
   const planLabel = useMemo(() => {
     if (plan === 'admin') return 'Admin';
@@ -113,14 +116,14 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
           </span>
           {(nearLimit || upgradeRecommended) && (
             <span className="text-[11px] px-2 py-0.5 rounded-full border border-[#E6C77A]/25 bg-[#E6C77A]/10 text-[#E6C77A]">
-              Upgrade recommended
+              Upgrade available
             </span>
           )}
         </div>
 
         <div className="flex items-center gap-2">
           {onRequestUpgrade && (nearLimit || upgradeRecommended) && (
-            <span className="hidden sm:inline text-xs text-slate-200/80">More capacity →</span>
+            <span className="hidden sm:inline text-xs text-slate-200/80">Upgrade available →</span>
           )}
           <span className="text-xs text-slate-300/80">{open ? 'Hide' : 'Show'}</span>
           <svg
@@ -191,7 +194,7 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
                       onClick={onRequestUpgrade}
                       className="px-4 py-2 rounded-xl border border-[#E6C77A]/25 bg-[#E6C77A]/10 text-[#E6C77A] text-sm font-semibold hover:bg-[#E6C77A]/15 transition-colors"
                     >
-                      Upgrade
+                      {upgradeCopy.primaryCta}
                     </button>
                   </div>
                 )}

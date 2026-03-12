@@ -34,7 +34,7 @@ const BlockedPanel: React.FC<Props> = ({ ui, onUpgrade, onTryAgain, onDismiss })
                 className="inline-flex items-center gap-2 rounded-lg bg-amber-500/90 hover:bg-amber-500 px-4 py-2 text-slate-950 font-semibold transition"
               >
                 <LockIcon className="h-4 w-4" />
-                Upgrade
+                {ui.upgradeLabel || 'Upgrade'}
               </button>
             ) : null}
 

@@ -240,20 +240,25 @@ async function upsertBillingCustomer(admin: any, params: { userId: string | null
   return data?.id as string | null;
 }
 
-async function upsertFounderOverride(admin: any, params: { userId: string | null; planKey: BillingPlanKey; metadata: any }) {
+async function getFounderOverride(admin: any, userId: string | null) {
+  if (!userId) return null;
+  const { data, error } = await admin.from('founder_overrides').select('locked_plan_key, locked_price_cents, pricing_lock, founder_bucket, override_active').eq('user_id', userId).maybeSingle();
+  if (error) return null;
+  return data || null;
+}
+
+async function upsertFounderOverride(admin: any, params: { userId: string | null; planKey: BillingPlanKey; metadata: any; existingOverride?: any }) {
   if (!params.userId || params.planKey !== 'founder_professional') return;
-  const pricingLockRaw = String(params.metadata?.pricing_lock || '').trim();
-  const founderBucket = String(params.metadata?.founding_bucket || params.metadata?.founding_source || '').trim() || null;
-  const lockedPriceCents = pricingLockRaw ? 2995 : 2995;
+  const founderState = deriveFounderProtection({ metadata: params.metadata, founderOverride: params.existingOverride || null });
 
   await admin.from('founder_overrides').upsert([
     {
       user_id: params.userId,
       locked_plan_key: 'founder_professional',
-      locked_price_cents: lockedPriceCents,
+      locked_price_cents: founderState.lockedPriceCents || 2995,
       override_active: true,
-      pricing_lock: pricingLockRaw || 'founding_pro_admc_2026',
-      founder_bucket: founderBucket,
+      pricing_lock: founderState.pricingLockKey || 'founding_pro_admc_2026',
+      founder_bucket: founderState.bucket,
       granted_reason: 'stripe_webhook_sync',
       source_updated_at: new Date().toISOString(),
       last_synced_at: new Date().toISOString(),
@@ -332,16 +337,19 @@ async function syncFromEvent(admin: any, event: any) {
   const metadata = object?.metadata || {};
   const firstPrice = object?.items?.data?.[0]?.price || object?.lines?.data?.[0]?.price || object?.plan || null;
 
-  const planKey = normalizePlanFromObject(object);
-  const billingStatus = normalizeStatusFromEvent(eventType, object);
   const userId = String(metadata?.user_id || object?.client_reference_id || '').trim() || null;
+  const existingFounderOverride = await getFounderOverride(admin, userId);
+  const founderState = deriveFounderProtection({ metadata, founderOverride: existingFounderOverride });
+  const normalizedPlanKey = normalizePlanFromObject(object);
+  const planKey = founderState.founderProtected && founderState.lockedPlan ? founderState.lockedPlan : normalizedPlanKey;
+  const billingStatus = normalizeStatusFromEvent(eventType, object);
   const stripeCustomerId = String(object?.customer || '').trim() || null;
   const stripeSubscriptionId = String(object?.subscription || (object?.object === 'subscription' ? object?.id : '') || '').trim() || null;
   const checkoutSessionId = object?.object === 'checkout.session' ? String(object?.id || '').trim() || null : null;
   const currentPeriodStart = safeIsoFromUnixSeconds(object?.current_period_start || object?.period_start) || null;
   const currentPeriodEnd = safeIsoFromUnixSeconds(object?.current_period_end || object?.period_end) || null;
-  const founderLockedPlan = planKey === 'founder_professional' ? 'founder_professional' : null;
-  const founderLockedPrice = founderLockedPlan ? 2995 : null;
+  const founderLockedPlan = founderState.founderProtected && founderState.lockedPlan ? founderState.lockedPlan : (planKey === 'founder_professional' ? 'founder_professional' : null);
+  const founderLockedPrice = founderState.founderProtected ? (founderState.lockedPriceCents || 2995) : null;
 
   const billingCustomerId = await upsertBillingCustomer(admin, {
     userId,
@@ -351,7 +359,7 @@ async function syncFromEvent(admin: any, event: any) {
   });
 
   if (founderLockedPlan) {
-    await upsertFounderOverride(admin, { userId, planKey, metadata });
+    await upsertFounderOverride(admin, { userId, planKey, metadata, existingOverride: existingFounderOverride });
   }
 
   const subscriptionId = await upsertSubscription(admin, {

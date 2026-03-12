@@ -26,6 +26,7 @@ export type BlockedUx = {
   retryable: boolean;
   showUpgrade: boolean;
   showTryAgain: boolean;
+  upgradeLabel?: string;
 };
 
 type AnyErr = any;
@@ -103,6 +104,7 @@ export function normalizeBlockedUx(err: unknown, opts?: { toolName?: string; pla
       retryable: Boolean((err as any)?.retryable),
       showUpgrade: false,
       showTryAgain: true,
+      upgradeLabel: undefined,
     };
   }
 
@@ -121,33 +123,33 @@ export function normalizeBlockedUx(err: unknown, opts?: { toolName?: string; pla
   const showTryAgain = retryable || inferred === 'UNAUTHORIZED';
 
   const title =
-    inferred === 'RATE_LIMITED' ? 'Slow down for a moment' :
-    inferred === 'TIMEOUT' ? 'That took too long' :
-    inferred === 'SERVICE_UNAVAILABLE' ? 'Service temporarily unavailable' :
+    inferred === 'RATE_LIMITED' ? 'Please wait a moment' :
+    inferred === 'TIMEOUT' ? 'The request timed out' :
+    inferred === 'SERVICE_UNAVAILABLE' ? 'AI service temporarily unavailable' :
     inferred === 'UNAUTHORIZED' ? 'Please sign in' :
-    inferred === 'PRO_ONLY' ? 'Pro feature' :
-    inferred === 'TIER_RESTRICTED' ? 'Upgrade required' :
-    inferred === 'QUOTA_EXCEEDED' ? 'Monthly quota reached' :
-    inferred === 'USAGE_LIMIT_REACHED' ? 'Daily limit reached' :
+    inferred === 'PRO_ONLY' ? 'Locked by plan' :
+    inferred === 'TIER_RESTRICTED' ? 'Locked by plan' :
+    inferred === 'QUOTA_EXCEEDED' ? 'Limit reached' :
+    inferred === 'USAGE_LIMIT_REACHED' ? 'Limit reached' :
     'Blocked';
 
   const message =
     inferred === 'UNAUTHORIZED'
       ? `You need to sign in to use ${toolName}.`
       : inferred === 'RATE_LIMITED'
-        ? `We’re receiving too many requests. Please wait a moment, then try again.`
+        ? `We’re receiving too many requests right now. Please wait a moment, then try again.`
         : inferred === 'TIMEOUT'
-          ? `The request timed out. Please try again.`
+          ? `The request took too long. Please try again.`
           : inferred === 'SERVICE_UNAVAILABLE'
             ? `The AI service is temporarily unavailable. Please try again shortly.`
             : inferred === 'PRO_ONLY'
-              ? `${toolName} is Pro-only. Upgrade to unlock it.`
+              ? `${toolName} requires a Professional plan. Upgrade to unlock it.`
               : inferred === 'TIER_RESTRICTED'
-                ? `${toolName} isn’t included in your current plan. Upgrade to unlock it.`
+                ? `${toolName} is not included in your current plan. Upgrade to unlock it.`
                 : inferred === 'QUOTA_EXCEEDED'
-                  ? `You’ve used all of your monthly quota for ${toolName}. Upgrade for more, or wait until your quota resets.`
+                  ? `You have reached the monthly limit for ${toolName}. Upgrade for more capacity or wait for your quota reset.`
                   : inferred === 'USAGE_LIMIT_REACHED'
-                    ? `You’ve hit today’s usage limit. Try again after the daily reset.`
+                    ? `You have reached the current limit for ${toolName}. Try again after the reset or upgrade for more capacity.`
                     : (rawMsg || `Blocked from using ${toolName}.`);
 
   return {
@@ -158,5 +160,6 @@ export function normalizeBlockedUx(err: unknown, opts?: { toolName?: string; pla
     retryable,
     showUpgrade,
     showTryAgain,
+    upgradeLabel: inferred === 'PRO_ONLY' || inferred === 'TIER_RESTRICTED' ? 'Upgrade plan' : showUpgrade ? 'Upgrade for more capacity' : undefined,
   };
 }

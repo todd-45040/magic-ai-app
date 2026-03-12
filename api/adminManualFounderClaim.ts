@@ -138,6 +138,25 @@ try {
     console.warn('manual founder claim: user update failed', e);
   }
 
+  // Persist founder protection in the billing domain as well so webhook sync, admin changes, and reactivation all resolve to the same founder record.
+  try {
+    await admin.from('founder_overrides').upsert([
+      {
+        user_id: String(user.id),
+        locked_plan_key: 'founder_professional',
+        locked_price_cents: 2995,
+        override_active: true,
+        pricing_lock,
+        founder_bucket: founding_bucket,
+        granted_reason: 'admin_manual_founder_claim',
+        source_updated_at: new Date().toISOString(),
+        last_synced_at: new Date().toISOString(),
+      },
+    ], { onConflict: 'user_id' });
+  } catch (e) {
+    console.warn('manual founder claim: founder override upsert failed', e);
+  }
+
   // Update lead table (best-effort)
   try {
     await admin.from('maw_founding_circle_leads').upsert(
