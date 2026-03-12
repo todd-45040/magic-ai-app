@@ -12,8 +12,8 @@ import { getBillingConfig } from './billingConfig.js';
 
 export type BillingStatusResponse = {
   ok: true;
-  planKey: BillingPlanKey;
-  billingStatus: string;
+  membershipTier: BillingPlanKey;
+  subscriptionStatus: string;
   accessState: string;
   renewalDate: string | null;
   cancelAtPeriodEnd: boolean;
@@ -119,8 +119,8 @@ export async function resolveBillingStatusForUser(admin: any, userId: string): P
 
   return {
     ok: true,
-    planKey: effectivePlanKey,
-    billingStatus: resolved.billingStatus,
+    membershipTier: effectivePlanKey,
+    subscriptionStatus: resolved.billingStatus,
     accessState: resolved.accessState,
     renewalDate: asIso(subscription?.current_period_end),
     cancelAtPeriodEnd: Boolean(subscription?.cancel_at_period_end),

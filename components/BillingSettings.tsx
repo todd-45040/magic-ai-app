@@ -90,7 +90,7 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
     void loadStatus();
   }, [loadStatus]);
 
-  const currentPlanKey = status?.planKey || (user?.membership === 'professional' ? 'professional' : user?.membership === 'amateur' ? 'amateur' : 'free');
+  const currentPlanKey = status?.membershipTier || (user?.membership === 'professional' ? 'professional' : user?.membership === 'amateur' ? 'amateur' : 'free');
   const currentPlanLabel = useMemo(() => humanizePlan(currentPlanKey), [currentPlanKey]);
 
   const founderNotice = useMemo(() => {
@@ -198,7 +198,7 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
         <InfoTile
           icon={ClockIcon}
           label="Billing state"
-          value={loading ? 'Loading…' : (status?.billingStatus || 'Unknown')}
+          value={loading ? 'Loading…' : (status?.subscriptionStatus || 'Unknown')}
           hint={status?.cancelAtPeriodEnd ? 'Cancellation scheduled at period end.' : 'No end-of-period cancellation is scheduled.'}
         />
       </div>
@@ -219,8 +219,8 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
                 <p className="mt-1 text-sm text-white">{loading ? 'Loading…' : formatDate(status?.renewalDate || null)}</p>
                 <p className="mt-1 text-xs text-white/50">{status?.cancelAtPeriodEnd ? 'Cancellation scheduled at period end.' : 'Renews normally when billing is active.'}</p>
               </div>
-              <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusTone[status?.billingStatus || 'unknown'] || statusTone.unknown}`}>
-                {status?.billingStatus || 'unknown'}
+              <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusTone[status?.subscriptionStatus || 'unknown'] || statusTone.unknown}`}>
+                {status?.subscriptionStatus || 'unknown'}
               </span>
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

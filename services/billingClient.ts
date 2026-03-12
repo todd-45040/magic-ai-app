@@ -17,8 +17,8 @@ export type BillingCheckoutLookupKey =
 
 export type BillingStatusPayload = {
   ok: true;
-  planKey: BillingPlanKey;
-  billingStatus: string;
+  membershipTier: BillingPlanKey;
+  subscriptionStatus: string;
   accessState: string;
   renewalDate: string | null;
   cancelAtPeriodEnd: boolean;
@@ -39,8 +39,8 @@ export type BillingCheckoutPayload = {
   mode?: 'placeholder';
   stripeConfigured: boolean;
   message?: string;
-  targetPlanKey?: BillingPlanKey;
-  targetLookupKey?: BillingCheckoutLookupKey;
+  membershipTier?: BillingPlanKey;
+  lookupKey?: BillingCheckoutLookupKey;
   successUrl?: string;
   cancelUrl?: string;
   url?: string;
@@ -102,10 +102,10 @@ export async function fetchBillingStatus(): Promise<BillingStatusPayload> {
 
 // Starts checkout only. Access is not granted from the client or from the return URL.
 // Live entitlements must be reconciled server-side.
-export async function createCheckoutSession(planKey: BillingCheckoutLookupKey): Promise<BillingCheckoutPayload> {
+export async function createCheckoutSession(lookupKey: BillingCheckoutLookupKey): Promise<BillingCheckoutPayload> {
   return authorizedFetch<BillingCheckoutPayload>('/api/billing/create-checkout-session', {
     method: 'POST',
-    body: JSON.stringify({ planKey }),
+    body: JSON.stringify({ lookupKey }),
   });
 }
 

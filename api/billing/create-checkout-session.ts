@@ -20,21 +20,21 @@ export default async function handler(request: any, response: any) {
       return response.status(auth.status).json({ error: auth.error || 'Unauthorized' });
     }
 
-    const planKey = request?.body?.planKey;
-    if (!isBillingCheckoutLookupKey(planKey)) {
+    const lookupKey = request?.body?.lookupKey;
+    if (!isBillingCheckoutLookupKey(lookupKey)) {
       return response.status(400).json({
         error: 'Invalid plan key. Client must send an internal billing lookup key only.',
       });
     }
 
     const billingStatus = await resolveBillingStatusForUser(auth.admin, auth.userId);
-    const target = getBillingPlanPlaceholder(planKey);
+    const target = getBillingPlanPlaceholder(lookupKey);
     const allowedTarget = billingStatus.upgradeTargets.includes(target.internalPlanKey);
 
     if (!allowedTarget) {
       return response.status(403).json({
         error: 'Requested upgrade path is not allowed for this account.',
-        currentPlan: billingStatus.planKey,
+        currentMembershipTier: billingStatus.membershipTier,
         allowedTargets: billingStatus.upgradeTargets,
         requestedPlan: target.internalPlanKey,
       });
@@ -54,8 +54,8 @@ export default async function handler(request: any, response: any) {
         mode: 'placeholder',
         stripeConfigured: false,
         message: 'Stripe not configured yet',
-        targetPlanKey: target.internalPlanKey,
-        targetLookupKey: target.internalLookupKey,
+        membershipTier: target.internalPlanKey,
+        lookupKey: target.internalLookupKey,
         successUrl: config.successUrl,
         cancelUrl: config.cancelUrl,
       });
@@ -63,8 +63,8 @@ export default async function handler(request: any, response: any) {
 
     return response.status(501).json({
       error: 'Stripe checkout session creation is not connected yet.',
-      targetPlanKey: target.internalPlanKey,
-      targetLookupKey: target.internalLookupKey,
+      membershipTier: target.internalPlanKey,
+      lookupKey: target.internalLookupKey,
     });
   } catch (err: any) {
     console.error('billing/create-checkout-session error:', err);
