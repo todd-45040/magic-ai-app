@@ -2923,9 +2923,29 @@ useEffect(() => {
         // We'll re-fetch immediately when auth state changes.
         if (token) headers.Authorization = `Bearer ${token}`;
 
+        headers.Accept = 'application/json';
+
         const r = await fetch('/api/ai/usage', { method: 'GET', headers });
+        const contentType = r.headers.get('content-type') || '';
         const txt = await r.text();
-        const parsed = txt ? JSON.parse(txt) : null;
+
+        let parsed: any = null;
+        if (txt) {
+          if (contentType.includes('application/json')) {
+            try {
+              parsed = JSON.parse(txt);
+            } catch {
+              parsed = null;
+            }
+          } else {
+            const firstLine = txt
+              .replace(/<[^>]*>/g, ' ')
+              .replace(/\s+/g, ' ')
+              .trim()
+              .slice(0, 160);
+            throw new Error(firstLine || 'Usage service returned a non-JSON response.');
+          }
+        }
 
         if (!cancelled) {
           if (!r.ok || !parsed?.ok) {
