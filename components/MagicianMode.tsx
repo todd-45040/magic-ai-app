@@ -1637,6 +1637,23 @@ const CommunityTab: React.FC = () => {
     }
   });
   const [performerType, setPerformerType] = useState<'beginner' | 'hobbyist' | 'working pro' | 'mentalist' | 'kids performer' | 'close-up performer'>('beginner');
+  type CommunitySectionKey = 'directory' | 'curated' | 'utility' | 'online' | 'clubs' | 'conventions';
+  type CuratedSectionKey = 'featured' | 'editors' | 'beginner' | 'pro' | 'spotlight';
+  const [sectionOpen, setSectionOpen] = useState<Record<CommunitySectionKey, boolean>>({
+    directory: true,
+    curated: true,
+    utility: false,
+    online: false,
+    clubs: false,
+    conventions: false,
+  });
+  const [curatedOpen, setCuratedOpen] = useState<Record<CuratedSectionKey, boolean>>({
+    featured: true,
+    editors: false,
+    beginner: false,
+    pro: false,
+    spotlight: false,
+  });
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1935,6 +1952,72 @@ ${prompt}`);
     </div>
   );
 
+  const toggleSection = (key: CommunitySectionKey) => {
+    setSectionOpen(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const toggleCuratedSection = (key: CuratedSectionKey) => {
+    setCuratedOpen(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const expandAllCommunityPanels = () => {
+    setSectionOpen({
+      directory: true,
+      curated: true,
+      utility: true,
+      online: true,
+      clubs: true,
+      conventions: true,
+    });
+    setCuratedOpen({ featured: true, editors: true, beginner: true, pro: true, spotlight: true });
+  };
+
+  const collapseAllCommunityPanels = () => {
+    setSectionOpen({
+      directory: true,
+      curated: true,
+      utility: false,
+      online: false,
+      clubs: false,
+      conventions: false,
+    });
+    setCuratedOpen({ featured: true, editors: false, beginner: false, pro: false, spotlight: false });
+  };
+
+  const renderPanelToggle = (isOpen: boolean) => (
+    <span className="ml-3 inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-700/70 bg-slate-950/40 text-sm text-slate-300">
+      {isOpen ? '−' : '+'}
+    </span>
+  );
+
+  const renderSectionHeader = (
+    eyebrow: string,
+    title: string,
+    description: string,
+    isOpen: boolean,
+    onClick: () => void,
+    meta?: string,
+    accent: 'purple' | 'amber' = 'purple'
+  ) => (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full rounded-2xl border px-4 py-4 text-left transition hover:border-slate-500/70 hover:bg-slate-900/45 ${accent === 'amber' ? 'border-amber-500/20 bg-gradient-to-br from-amber-500/8 via-slate-900/85 to-slate-950' : 'border-slate-700/60 bg-slate-900/35'}`}
+    >
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <div className={`text-xs font-semibold uppercase tracking-[0.2em] ${accent === 'amber' ? 'text-amber-200/80' : 'text-purple-300/80'}`}>{eyebrow}</div>
+          <div className="mt-1 text-lg font-semibold text-slate-100 md:text-xl">{title}</div>
+          <div className="mt-1 text-sm text-slate-500">{description}</div>
+        </div>
+        <div className="flex items-center justify-between gap-3 md:justify-end">
+          {meta ? <div className="text-xs text-slate-500">{meta}</div> : <span />}
+          {renderPanelToggle(isOpen)}
+        </div>
+      </div>
+    </button>
+  );
+
   const renderCommunityCard = (
     item: CommunityDirectoryItem,
     options: { tone?: 'featured' | 'standard'; visitLabel?: string; showDateBadge?: boolean } = {}
@@ -2070,19 +2153,37 @@ ${prompt}`);
           </p>
         </div>
 
-        <section className="max-w-5xl mx-auto">
-          <div className="rounded-2xl border border-slate-700/60 bg-slate-900/35 p-4 md:p-5 shadow-sm">
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-                <div>
-                  <div className="text-sm font-semibold uppercase tracking-[0.2em] text-purple-300/80">Community Directory</div>
-                  <div className="mt-1 text-lg font-semibold text-slate-100">Search the full magic community in one place</div>
-                  <div className="mt-1 text-sm text-slate-500">Browse forums, clubs, organizations, and conventions without leaving the page.</div>
-                </div>
-                <div className="text-xs text-slate-500">{totalMatches} result{totalMatches === 1 ? '' : 's'} shown{followedCommunities.length > 0 ? ` • ${followedCommunities.length} following` : ''}</div>
-              </div>
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={expandAllCommunityPanels}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-700/70 bg-slate-900/35 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:border-purple-400/40 hover:text-white"
+          >
+            Expand All
+          </button>
+          <button
+            type="button"
+            onClick={collapseAllCommunityPanels}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-700/70 bg-slate-900/35 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-slate-500/70 hover:text-white"
+          >
+            Collapse All
+          </button>
+        </div>
 
-              <div className="relative">
+        <section className="max-w-5xl mx-auto space-y-3">
+          {renderSectionHeader(
+            'Community Directory',
+            'Search the full magic community in one place',
+            'Browse forums, clubs, organizations, and conventions without leaving the page.',
+            sectionOpen.directory,
+            () => toggleSection('directory'),
+            `${totalMatches} result${totalMatches === 1 ? '' : 's'} shown${followedCommunities.length > 0 ? ` • ${followedCommunities.length} following` : ''}`
+          )}
+
+          {sectionOpen.directory && (
+            <div className="rounded-2xl border border-slate-700/60 bg-slate-900/35 p-4 md:p-5 shadow-sm">
+              <div className="flex flex-col gap-4">
+                <div className="relative">
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
@@ -2124,97 +2225,133 @@ ${prompt}`);
                 })}
               </div>
             </div>
-          </div>
+            </div>
+          )}
         </section>
 
         {(featuredCommunity || conventionSpotlight || editorPicks.length > 0 || beginnerFriendlyPicks.length > 0 || professionalNetworkPicks.length > 0) && (
-          <section className="max-w-6xl mx-auto space-y-6">
-            <div className="flex flex-col gap-2">
-              <div className="text-sm font-semibold uppercase tracking-[0.2em] text-purple-300/80">Curated Community Layer</div>
-              <h3 className="text-2xl md:text-3xl font-bold text-slate-100 font-cinzel">Guided places to start, connect, and show up</h3>
-              <p className="text-sm md:text-base text-slate-400 max-w-3xl">Community now surfaces a more editorial view of the magic world so users can discover high-value groups and events faster, not just scroll a static directory.</p>
-            </div>
+          <section className="max-w-6xl mx-auto space-y-3">
+            {renderSectionHeader(
+              'Curated Community Layer',
+              'Guided places to start, connect, and show up',
+              'Community now surfaces a more editorial view of the magic world so users can discover high-value groups and events faster, not just scroll a static directory.',
+              sectionOpen.curated,
+              () => toggleSection('curated')
+            )}
 
+            {sectionOpen.curated && (
+              <>
             {featuredCommunity && (
-              <div>
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Featured community</div>
-                    <div className="mt-1 text-lg font-semibold text-slate-100">A strong first stop for conversation and discovery</div>
-                  </div>
-                  <div className="text-xs text-slate-500">Editorial pick</div>
-                </div>
-                {renderCommunityCard(featuredCommunity, { tone: 'featured', visitLabel: 'Visit community' })}
+              <div className="space-y-3">
+                {renderSectionHeader(
+                  'Featured Community',
+                  'A strong first stop for conversation and discovery',
+                  'Lead with one standout place to connect before exploring the wider directory.',
+                  curatedOpen.featured,
+                  () => toggleCuratedSection('featured'),
+                  'Editorial pick'
+                )}
+                {curatedOpen.featured && renderCommunityCard(featuredCommunity, { tone: 'featured', visitLabel: 'Visit community' })}
               </div>
             )}
 
             <div className="grid grid-cols-1 xl:grid-cols-[1.35fr_0.95fr] gap-6">
               <div className="space-y-6">
                 {editorPicks.length > 0 && (
-                  <div className="rounded-2xl border border-slate-700/60 bg-slate-900/35 p-4 md:p-5">
-                    <div className="mb-4">
-                      <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Editor’s Picks</div>
-                      <h4 className="mt-1 text-xl font-bold text-slate-100">Recommended places to join or watch closely</h4>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {editorPicks.map(item => renderCommunityCard(item, { visitLabel: item.category === 'Conventions' ? 'Visit event' : item.category === 'Forums' ? 'Visit community' : 'Visit organization', showDateBadge: item.category === 'Conventions' }))}
-                    </div>
+                  <div className="space-y-3">
+                    {renderSectionHeader(
+                      'Editor’s Picks',
+                      'Recommended places to join or watch closely',
+                      'A tighter short list of communities and events worth your immediate attention.',
+                      curatedOpen.editors,
+                      () => toggleCuratedSection('editors')
+                    )}
+                    {curatedOpen.editors && (
+                      <div className="rounded-2xl border border-slate-700/60 bg-slate-900/35 p-4 md:p-5">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {editorPicks.map(item => renderCommunityCard(item, { visitLabel: item.category === 'Conventions' ? 'Visit event' : item.category === 'Forums' ? 'Visit community' : 'Visit organization', showDateBadge: item.category === 'Conventions' }))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
                 {professionalNetworkPicks.length > 0 && (
-                  <div className="rounded-2xl border border-slate-700/60 bg-slate-900/35 p-4 md:p-5">
-                    <div className="mb-4">
-                      <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Professional Network Picks</div>
-                      <h4 className="mt-1 text-xl font-bold text-slate-100">High-value communities for serious networking</h4>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {professionalNetworkPicks.map(item => renderCommunityCard(item, { visitLabel: item.category === 'Conventions' ? 'Visit event' : item.category === 'Forums' ? 'Visit community' : 'Visit organization', showDateBadge: item.category === 'Conventions' }))}
-                    </div>
+                  <div className="space-y-3">
+                    {renderSectionHeader(
+                      'Professional Network Picks',
+                      'High-value communities for serious networking',
+                      'Keep a focused list of stronger relationship and visibility opportunities.',
+                      curatedOpen.pro,
+                      () => toggleCuratedSection('pro')
+                    )}
+                    {curatedOpen.pro && (
+                      <div className="rounded-2xl border border-slate-700/60 bg-slate-900/35 p-4 md:p-5">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {professionalNetworkPicks.map(item => renderCommunityCard(item, { visitLabel: item.category === 'Conventions' ? 'Visit event' : item.category === 'Forums' ? 'Visit community' : 'Visit organization', showDateBadge: item.category === 'Conventions' }))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
 
               <div className="space-y-6">
                 {beginnerFriendlyPicks.length > 0 && (
-                  <div className="rounded-2xl border border-slate-700/60 bg-slate-900/35 p-4 md:p-5">
-                    <div className="mb-4">
-                      <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Beginner-Friendly Picks</div>
-                      <h4 className="mt-1 text-xl font-bold text-slate-100">Easy entry points into the community</h4>
-                    </div>
-                    <div className="space-y-4">
-                      {beginnerFriendlyPicks.map(item => renderCommunityCard(item, { visitLabel: item.category === 'Conventions' ? 'Visit event' : item.category === 'Forums' ? 'Visit community' : 'Visit organization', showDateBadge: item.category === 'Conventions' }))}
-                    </div>
+                  <div className="space-y-3">
+                    {renderSectionHeader(
+                      'Beginner-Friendly Picks',
+                      'Easy entry points into the community',
+                      'Good first stops when someone needs lower-friction places to ask, read, and learn.',
+                      curatedOpen.beginner,
+                      () => toggleCuratedSection('beginner')
+                    )}
+                    {curatedOpen.beginner && (
+                      <div className="rounded-2xl border border-slate-700/60 bg-slate-900/35 p-4 md:p-5">
+                        <div className="space-y-4">
+                          {beginnerFriendlyPicks.map(item => renderCommunityCard(item, { visitLabel: item.category === 'Conventions' ? 'Visit event' : item.category === 'Forums' ? 'Visit community' : 'Visit organization', showDateBadge: item.category === 'Conventions' }))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
                 {conventionSpotlight && (
-                  <div className="rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-500/10 via-slate-900/85 to-slate-950 p-4 md:p-5 shadow-[0_18px_50px_rgba(120,53,15,0.18)]">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-200/80">Convention Spotlight</div>
-                        <h4 className="mt-1 text-xl font-bold text-slate-100">One event worth paying attention to</h4>
+                  <div className="space-y-3">
+                    {renderSectionHeader(
+                      'Convention Spotlight',
+                      'One event worth paying attention to',
+                      'Call out a standout gathering without forcing the full card open by default.',
+                      curatedOpen.spotlight,
+                      () => toggleCuratedSection('spotlight'),
+                      'Spotlight',
+                      'amber'
+                    )}
+                    {curatedOpen.spotlight && (
+                      <div className="rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-500/10 via-slate-900/85 to-slate-950 p-4 md:p-5 shadow-[0_18px_50px_rgba(120,53,15,0.18)]">
+                        {renderCommunityCard(conventionSpotlight, { visitLabel: 'Visit event', showDateBadge: true })}
                       </div>
-                      <span className="inline-flex items-center rounded-full border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-[11px] text-amber-200">Spotlight</span>
-                    </div>
-                    <div className="mt-4">
-                      {renderCommunityCard(conventionSpotlight, { visitLabel: 'Visit event', showDateBadge: true })}
-                    </div>
+                    )}
                   </div>
                 )}
               </div>
             </div>
+              </>
+            )}
           </section>
         )}
 
-        <section className="max-w-6xl mx-auto space-y-6">
-          <div className="flex flex-col gap-2">
-            <div className="text-sm font-semibold uppercase tracking-[0.2em] text-purple-300/80">Community Utility Layer</div>
-            <h3 className="text-2xl md:text-3xl font-bold text-slate-100 font-cinzel">Turn discovery into a working community plan</h3>
-            <p className="text-sm md:text-base text-slate-400 max-w-3xl">Save high-value communities, track conventions you may want to attend, keep lightweight networking notes, and get recommendations shaped to your performer profile.</p>
-          </div>
+        <section className="max-w-6xl mx-auto space-y-3">
+          {renderSectionHeader(
+            'Community Utility Layer',
+            'Turn discovery into a working community plan',
+            'Save high-value communities, track conventions you may want to attend, keep lightweight networking notes, and get recommendations shaped to your performer profile.',
+            sectionOpen.utility,
+            () => toggleSection('utility')
+          )}
 
-          <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-6">
+          {sectionOpen.utility && (
+            <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-6">
             <div className="space-y-6">
               <div className="rounded-2xl border border-slate-700/60 bg-slate-900/35 p-4 md:p-5">
                 <div className="mb-4 flex items-center justify-between gap-3">
@@ -2382,65 +2519,81 @@ ${prompt}`);
               </div>
             </div>
           </div>
-        </section>
-
-        <section className="space-y-4">
-          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Forums & discussion spaces</div>
-              <h3 className="mt-1 text-2xl font-bold text-slate-200 font-cinzel">Online Communities</h3>
-            </div>
-            <div className="text-xs text-slate-500">{filteredOnlineCommunities.length} shown • Links open in a new tab</div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {filteredOnlineCommunities.map(item => renderCommunityCard(item, { visitLabel: 'Visit community' }))}
-          </div>
-
-          {(query || activeFilter !== 'All') && filteredOnlineCommunities.length === 0 && (
-            <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/35 p-5 text-center text-sm text-slate-500">
-              No online communities match the current search or filter.
-            </div>
           )}
         </section>
 
-        <section className="space-y-4">
-          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Membership, networking, and official groups</div>
-              <h3 className="mt-1 text-2xl font-bold text-slate-200 font-cinzel">Major Magic Clubs & Organizations</h3>
-            </div>
-            <div className="text-xs text-slate-500">{filteredClubs.length} shown</div>
-          </div>
+        <section className="space-y-3">
+          {renderSectionHeader(
+            'Forums & Discussion Spaces',
+            'Online Communities',
+            'Open the strongest community forums and discussion spaces when you want live conversation, archives, and peer input.',
+            sectionOpen.online,
+            () => toggleSection('online'),
+            `${filteredOnlineCommunities.length} shown • Links open in a new tab`
+          )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredClubs.map(club => renderCommunityCard(club, { visitLabel: club.category === 'Organizations' ? 'Visit organization' : 'Visit club' }))}
-          </div>
+          {sectionOpen.online && (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {filteredOnlineCommunities.map(item => renderCommunityCard(item, { visitLabel: 'Visit community' }))}
+              </div>
 
-          {(query || activeFilter !== 'All') && filteredClubs.length === 0 && (
-            <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/35 p-5 text-center text-sm text-slate-500">
-              No clubs or organizations match the current search or filter.
-            </div>
+              {(query || activeFilter !== 'All') && filteredOnlineCommunities.length === 0 && (
+                <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/35 p-5 text-center text-sm text-slate-500">
+                  No online communities match the current search or filter.
+                </div>
+              )}
+            </>
           )}
         </section>
 
-        <section className="space-y-4">
-          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Events and destination gatherings</div>
-              <h3 className="mt-1 text-2xl font-bold text-slate-200 font-cinzel">Popular Magic Conventions</h3>
-            </div>
-            <div className="text-xs text-slate-500">{filteredConventions.length} shown</div>
-          </div>
+        <section className="space-y-3">
+          {renderSectionHeader(
+            'Membership, Networking, and Official Groups',
+            'Major Magic Clubs & Organizations',
+            'Open this section when you want official groups, chapters, and stronger long-term community infrastructure.',
+            sectionOpen.clubs,
+            () => toggleSection('clubs'),
+            `${filteredClubs.length} shown`
+          )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredConventions.map(convention => renderCommunityCard(convention, { visitLabel: 'Visit event', showDateBadge: true }))}
-          </div>
+          {sectionOpen.clubs && (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {filteredClubs.map(club => renderCommunityCard(club, { visitLabel: club.category === 'Organizations' ? 'Visit organization' : 'Visit club' }))}
+              </div>
 
-          {(query || activeFilter !== 'All') && filteredConventions.length === 0 && (
-            <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/35 p-5 text-center text-sm text-slate-500">
-              No conventions match the current search or filter.
-            </div>
+              {(query || activeFilter !== 'All') && filteredClubs.length === 0 && (
+                <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/35 p-5 text-center text-sm text-slate-500">
+                  No clubs or organizations match the current search or filter.
+                </div>
+              )}
+            </>
+          )}
+        </section>
+
+        <section className="space-y-3">
+          {renderSectionHeader(
+            'Events and Destination Gatherings',
+            'Popular Magic Conventions',
+            'Open the event layer when you want destination gatherings, convention research, and travel-worthy opportunities.',
+            sectionOpen.conventions,
+            () => toggleSection('conventions'),
+            `${filteredConventions.length} shown`
+          )}
+
+          {sectionOpen.conventions && (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {filteredConventions.map(convention => renderCommunityCard(convention, { visitLabel: 'Visit event', showDateBadge: true }))}
+              </div>
+
+              {(query || activeFilter !== 'All') && filteredConventions.length === 0 && (
+                <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/35 p-5 text-center text-sm text-slate-500">
+                  No conventions match the current search or filter.
+                </div>
+              )}
+            </>
           )}
         </section>
 
