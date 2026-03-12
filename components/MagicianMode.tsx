@@ -59,7 +59,6 @@ import MagicTheoryTutor from './MagicTheoryTutor';
 import MagicDictionary from './MagicDictionary';
 import AdminPanel from './AdminPanel';
 import AppSuggestionModal from './AppSuggestionModal';
-import FirstWinGate from './FirstWinGate';
 
 interface AngleRiskFormProps {
     trickName: string;
@@ -2660,7 +2659,7 @@ const createChatMessage = (role: 'user' | 'model', text: string): ChatMessage =>
 
 
 const MagicianMode: React.FC<MagicianModeProps> = ({ onBack, user, onUpgrade, onLogout }) => {
-  const { shows, clients, feedback, ideas, isLoaded } = useAppState();
+  const { shows, clients, feedback, ideas } = useAppState();
   const dispatch = useAppDispatch();
   const { showToast } = useToast();
 
@@ -4060,19 +4059,6 @@ ${action.payload.content}`;
   const renderContent = () => {
     switch(activeView) {
         case 'dashboard': {
-          // Wait until persisted data has loaded so the First Win gate does not flash briefly
-          // for returning users before shows/ideas hydrate from storage.
-          if (!isLoaded) {
-            return null;
-          }
-
-          // Phase 2 (Activation Optimization): First Win Under 90 Seconds
-          // If the user has no ideas and no shows yet, guide them into a single-click flow.
-          const showFirstWinGate = !user?.isAdmin && (ideas?.length ?? 0) === 0 && (shows?.length ?? 0) === 0;
-          if (showFirstWinGate) {
-            return <FirstWinGate user={user} onNavigate={handleNavigate} />;
-          }
-
           return (
             <>
             <div className="px-4 md:px-6 pt-6">

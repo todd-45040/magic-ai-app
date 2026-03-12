@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { User } from '../types';
 import { generateResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
@@ -39,8 +39,6 @@ function buildFirstRoutinePrompt() {
   ].join('\n');
 }
 
-const FIRST_WIN_DISMISSED_KEY = 'maw_first_win_gate_dismissed';
-
 export default function FirstWinGate({ user, onNavigate }: Props) {
   const dispatch = useAppDispatch();
   const { ideas, shows } = useAppState();
@@ -48,21 +46,8 @@ export default function FirstWinGate({ user, onNavigate }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdIdeaId, setCreatedIdeaId] = useState<string | null>(null);
-  const [dismissed, setDismissed] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    setDismissed(window.localStorage.getItem(FIRST_WIN_DISMISSED_KEY) === 'true');
-  }, []);
 
   const hasActivated = useMemo(() => (ideas?.length ?? 0) > 0 || (shows?.length ?? 0) > 0, [ideas, shows]);
-
-  const dismissGate = () => {
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(FIRST_WIN_DISMISSED_KEY, 'true');
-    }
-    setDismissed(true);
-  };
 
   const runFirstRoutine = async () => {
     setError(null);
@@ -94,7 +79,7 @@ export default function FirstWinGate({ user, onNavigate }: Props) {
 
   // Once the user has activated, we should let them see the normal dashboard.
   // MagicianMode will naturally re-render out of this gate once store updates.
-  if (dismissed || (hasActivated && !busy && !createdIdeaId)) {
+  if (hasActivated && !busy && !createdIdeaId) {
     return null;
   }
 
@@ -105,19 +90,10 @@ export default function FirstWinGate({ user, onNavigate }: Props) {
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-purple-500/10 via-transparent to-yellow-500/5" />
           <div className="relative">
             <div className="flex flex-col gap-3">
-              <div className="flex items-start justify-between gap-3">
-                <p className="inline-flex w-fit items-center gap-2 rounded-full border border-yellow-400/20 bg-yellow-500/10 px-3 py-1 text-xs font-semibold text-yellow-100">
-                  ✨ First Win
-                  <span className="text-yellow-100/70">under 90 seconds</span>
-                </p>
-                <button
-                  type="button"
-                  onClick={dismissGate}
-                  className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs font-semibold text-white/70 transition hover:bg-white/[0.06] hover:text-white"
-                >
-                  Dismiss
-                </button>
-              </div>
+              <p className="inline-flex w-fit items-center gap-2 rounded-full border border-yellow-400/20 bg-yellow-500/10 px-3 py-1 text-xs font-semibold text-yellow-100">
+                ✨ First Win
+                <span className="text-yellow-100/70">under 90 seconds</span>
+              </p>
               <h1 className="text-2xl md:text-3xl font-semibold text-white">What are you working on today?</h1>
               <p className="text-sm md:text-base text-white/65 max-w-2xl">
                 Pick one. We’ll generate something real and save it to your workspace — so you leave with momentum, not tabs.
