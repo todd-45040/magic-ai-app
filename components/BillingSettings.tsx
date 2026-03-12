@@ -12,7 +12,7 @@ import { ShieldIcon, WandIcon, ClockIcon, CalendarIcon, DollarSignIcon, LockIcon
 
 interface BillingSettingsProps {
   user: User;
-  onUpgrade: (tier: 'amateur' | 'professional') => Promise<void> | void;
+  onUpgrade: (membershipTier: 'amateur' | 'professional') => Promise<void> | void;
 }
 
 const statusTone: Record<string, string> = {

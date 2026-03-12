@@ -28,19 +28,19 @@ export default async function handler(request: any, response: any) {
     }
 
     const billingStatus = await resolveBillingStatusForUser(auth.admin, auth.userId);
-    const target = getBillingPlanPlaceholder(lookupKey);
-    const allowedTarget = billingStatus.upgradeTargets.includes(target.internalPlanKey);
+    const checkoutTarget = getBillingPlanPlaceholder(lookupKey);
+    const allowedTarget = billingStatus.upgradeTargets.includes(checkoutTarget.membershipTier);
 
     if (!allowedTarget) {
       return response.status(403).json({
         error: 'Requested upgrade path is not allowed for this account.',
         currentMembershipTier: billingStatus.membershipTier,
         allowedTargets: billingStatus.upgradeTargets,
-        requestedPlan: target.internalPlanKey,
+        requestedMembershipTier: checkoutTarget.membershipTier,
       });
     }
 
-    if (target.founderOnly && !billingStatus.founderProtected) {
+    if (checkoutTarget.founderOnly && !billingStatus.founderProtected) {
       return response.status(403).json({
         error: 'Founder pricing is protected and is not available for this account.',
       });
@@ -54,8 +54,8 @@ export default async function handler(request: any, response: any) {
         mode: 'placeholder',
         stripeConfigured: false,
         message: 'Stripe not configured yet',
-        membershipTier: target.internalPlanKey,
-        lookupKey: target.internalLookupKey,
+        membershipTier: checkoutTarget.membershipTier,
+        lookupKey: checkoutTarget.lookupKey,
         successUrl: config.successUrl,
         cancelUrl: config.cancelUrl,
       });
@@ -63,8 +63,8 @@ export default async function handler(request: any, response: any) {
 
     return response.status(501).json({
       error: 'Stripe checkout session creation is not connected yet.',
-      membershipTier: target.internalPlanKey,
-      lookupKey: target.internalLookupKey,
+      membershipTier: checkoutTarget.membershipTier,
+      lookupKey: checkoutTarget.lookupKey,
     });
   } catch (err: any) {
     console.error('billing/create-checkout-session error:', err);

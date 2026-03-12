@@ -89,8 +89,8 @@ async function authorizedFetch<T>(input: string, init?: RequestInit): Promise<T>
   return payload as T;
 }
 
-export function resolveCheckoutLookupKey(targetTier: 'amateur' | 'professional', user?: User | null): BillingCheckoutLookupKey {
-  if (targetTier === 'amateur') return 'amateur_monthly';
+export function resolveCheckoutLookupKey(targetMembershipTier: 'amateur' | 'professional', user?: User | null): BillingCheckoutLookupKey {
+  if (targetMembershipTier === 'amateur') return 'amateur_monthly';
   return isFounderProtected(user) ? 'founder_professional_monthly' : 'professional_monthly';
 }
 

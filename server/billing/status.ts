@@ -98,29 +98,29 @@ export async function resolveBillingStatusForUser(admin: any, userId: string): P
     founderOverride: founderOverride || undefined,
   });
 
-  const fallbackPlan = founderProtection.lockedPlan || normalizeProfileMembership(profile?.membership);
+  const fallbackMembershipTier = founderProtection.lockedPlan || normalizeProfileMembership(profile?.membership);
   const resolved = resolveBillingPlan({
-    planKey: (subscription?.plan_key as BillingPlanKey | null) || fallbackPlan,
-    billingStatus: subscription?.billing_status || (fallbackPlan === 'free' ? 'unknown' : 'active'),
+    membershipTier: (subscription?.plan_key as BillingPlanKey | null) || fallbackMembershipTier,
+    subscriptionStatus: subscription?.billing_status || (fallbackMembershipTier === 'free' ? 'unknown' : 'active'),
     cancelAtPeriodEnd: Boolean(subscription?.cancel_at_period_end),
     currentPeriodEnd: subscription?.current_period_end || null,
     founderLockedPlan: founderProtection.lockedPlan,
   });
 
-  const effectivePlanKey = resolved.keepAccess
-    ? resolved.planKey
+  const effectiveMembershipTier = resolved.keepAccess
+    ? resolved.membershipTier
     : (founderProtection.lockedPlan || 'free');
 
-  const planDef = BILLING_PLAN_CATALOG[effectivePlanKey] || BILLING_PLAN_CATALOG.free;
-  const upgradeTargets = (planDef.allowedUpgrades || []).filter((planKey) => {
-    if (planKey === 'founder_professional') return founderProtection.founderProtected;
+  const membershipDefinition = BILLING_PLAN_CATALOG[effectiveMembershipTier] || BILLING_PLAN_CATALOG.free;
+  const upgradeTargets = (membershipDefinition.allowedUpgrades || []).filter((membershipTier) => {
+    if (membershipTier === 'founder_professional') return founderProtection.founderProtected;
     return true;
   });
 
   return {
     ok: true,
-    membershipTier: effectivePlanKey,
-    subscriptionStatus: resolved.billingStatus,
+    membershipTier: effectiveMembershipTier,
+    subscriptionStatus: resolved.subscriptionStatus,
     accessState: resolved.accessState,
     renewalDate: asIso(subscription?.current_period_end),
     cancelAtPeriodEnd: Boolean(subscription?.cancel_at_period_end),

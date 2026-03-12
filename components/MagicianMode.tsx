@@ -4044,8 +4044,8 @@ ${action.payload.content}`;
     setActiveView('performance-analytics');
   };
 
-  const handleUpgrade = (tier: 'amateur' | 'professional') => {
-    onUpgrade(tier as any);
+  const handleUpgrade = (membershipTier: 'amateur' | 'professional') => {
+    onUpgrade(membershipTier as any);
     setIsUpgradeModalOpen(false);
   }
   

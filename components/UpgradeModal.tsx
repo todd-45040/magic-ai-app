@@ -4,7 +4,7 @@ import { getFounderLockLabel, getUpgradeUxCopy, isFounderProtected } from '../se
 
 interface UpgradeModalProps {
   onClose: () => void;
-  onUpgrade: (tier: 'amateur' | 'professional') => void;
+  onUpgrade: (membershipTier: 'amateur' | 'professional') => void;
   variant?: 'locked-tool' | 'trial-expired' | 'generic';
   user?: any;
 }

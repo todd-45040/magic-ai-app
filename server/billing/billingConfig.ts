@@ -8,11 +8,11 @@ export type BillingCheckoutLookupKey =
   | 'founder_professional_monthly';
 
 export type StripePlaceholderPlanConfig = {
-  internalLookupKey: BillingCheckoutLookupKey;
-  internalPlanKey: BillingPlanKey;
+  lookupKey: BillingCheckoutLookupKey;
+  membershipTier: BillingPlanKey;
   displayName: string;
   productLookupKey: string;
-  priceLookupKey: string;
+  checkoutPriceLookupKey: string;
   founderOnly: boolean;
   founderPricePlaceholderCents: number | null;
   stripeProductEnvKey: string;
@@ -26,38 +26,38 @@ export type BillingRuntimeConfig = {
   cancelUrl: string;
   portalReturnUrl: string;
   environmentName: string;
-  priceLookup: Record<BillingCheckoutLookupKey, StripePlaceholderPlanConfig>;
+  checkoutTargets: Record<BillingCheckoutLookupKey, StripePlaceholderPlanConfig>;
 };
 
-const PRICE_LOOKUP: Record<BillingCheckoutLookupKey, StripePlaceholderPlanConfig> = {
+const CHECKOUT_TARGETS: Record<BillingCheckoutLookupKey, StripePlaceholderPlanConfig> = {
   amateur_monthly: {
-    internalLookupKey: 'amateur_monthly',
-    internalPlanKey: 'amateur',
+    lookupKey: 'amateur_monthly',
+    membershipTier: 'amateur',
     displayName: BILLING_PLAN_CATALOG.amateur.displayName,
     productLookupKey: 'product_amateur',
-    priceLookupKey: 'price_amateur_monthly',
+    checkoutPriceLookupKey: 'price_amateur_monthly',
     founderOnly: false,
     founderPricePlaceholderCents: null,
     stripeProductEnvKey: 'STRIPE_PRODUCT_AMATEUR',
     stripePriceEnvKey: 'STRIPE_PRICE_AMATEUR_MONTHLY',
   },
   professional_monthly: {
-    internalLookupKey: 'professional_monthly',
-    internalPlanKey: 'professional',
+    lookupKey: 'professional_monthly',
+    membershipTier: 'professional',
     displayName: BILLING_PLAN_CATALOG.professional.displayName,
     productLookupKey: 'product_professional',
-    priceLookupKey: 'price_professional_monthly',
+    checkoutPriceLookupKey: 'price_professional_monthly',
     founderOnly: false,
     founderPricePlaceholderCents: null,
     stripeProductEnvKey: 'STRIPE_PRODUCT_PRO',
     stripePriceEnvKey: 'STRIPE_PRICE_PRO_MONTHLY',
   },
   founder_professional_monthly: {
-    internalLookupKey: 'founder_professional_monthly',
-    internalPlanKey: 'founder_professional',
+    lookupKey: 'founder_professional_monthly',
+    membershipTier: 'founder_professional',
     displayName: BILLING_PLAN_CATALOG.founder_professional.displayName,
     productLookupKey: 'product_founder_professional',
-    priceLookupKey: 'price_founder_professional_monthly',
+    checkoutPriceLookupKey: 'price_founder_professional_monthly',
     founderOnly: true,
     founderPricePlaceholderCents: BILLING_PLAN_CATALOG.founder_professional.monthlyPriceCents,
     stripeProductEnvKey: 'STRIPE_PRODUCT_PRO_FOUNDER',
@@ -92,22 +92,22 @@ export function getBillingConfig(env: NodeJS.ProcessEnv = process.env): BillingR
     cancelUrl: `${appBaseUrl}/account/billing?checkout=cancel`,
     portalReturnUrl: `${appBaseUrl}/account/billing`,
     environmentName: stripeEnv.environmentName,
-    priceLookup: PRICE_LOOKUP,
+    checkoutTargets: CHECKOUT_TARGETS,
   };
 }
 
 export function isBillingCheckoutLookupKey(value: unknown): value is BillingCheckoutLookupKey {
-  return typeof value === 'string' && value in PRICE_LOOKUP;
+  return typeof value === 'string' && value in CHECKOUT_TARGETS;
 }
 
 export function getBillingPlanPlaceholder(value: BillingCheckoutLookupKey, env: NodeJS.ProcessEnv = process.env): StripePlaceholderPlanConfig & {
   configuredStripePriceId: string | null;
   configuredStripeProductId: string | null;
 } {
-  const plan = PRICE_LOOKUP[value];
+  const target = CHECKOUT_TARGETS[value];
   return {
-    ...plan,
-    configuredStripePriceId: getOptionalEnv(plan.stripePriceEnvKey, env),
-    configuredStripeProductId: getOptionalEnv(plan.stripeProductEnvKey, env),
+    ...target,
+    configuredStripePriceId: getOptionalEnv(target.stripePriceEnvKey, env),
+    configuredStripeProductId: getOptionalEnv(target.stripeProductEnvKey, env),
   };
 }

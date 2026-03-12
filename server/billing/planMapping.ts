@@ -17,7 +17,7 @@ export type UsagePlanAlias = 'free' | 'trial' | 'amateur' | 'professional' | 'ad
 export type BillingAccessState = 'active' | 'grace' | 'scheduled_cancel' | 'restricted' | 'inactive';
 
 export type StripePlanBinding = {
-  planKey: BillingPlanKey;
+  membershipTier: BillingPlanKey;
   displayName: string;
   stripeLookupKeys: string[];
   stripePriceEnvKeys: string[];
@@ -25,9 +25,9 @@ export type StripePlanBinding = {
 };
 
 export type BillingPlanResolution = {
-  planKey: BillingPlanKey;
+  membershipTier: BillingPlanKey;
   accessState: BillingAccessState;
-  billingStatus: StripeSubscriptionStatus;
+  subscriptionStatus: StripeSubscriptionStatus;
   keepAccess: boolean;
   downgradeTo: BillingPlanKey | null;
   notes: string[];
@@ -50,28 +50,28 @@ export type UsageQuotaConfig = {
 
 export const STRIPE_PLAN_BINDINGS: Record<BillingPlanKey, StripePlanBinding> = {
   free: {
-    planKey: 'free',
+    membershipTier: 'free',
     displayName: 'Free',
     stripeLookupKeys: [],
     stripePriceEnvKeys: [],
     stripeProductEnvKeys: [],
   },
   amateur: {
-    planKey: 'amateur',
+    membershipTier: 'amateur',
     displayName: 'Amateur',
     stripeLookupKeys: ['amateur_monthly', 'amateur_annual'],
     stripePriceEnvKeys: ['STRIPE_PRICE_AMATEUR_MONTHLY', 'STRIPE_PRICE_AMATEUR_ANNUAL'],
     stripeProductEnvKeys: ['STRIPE_PRODUCT_AMATEUR'],
   },
   professional: {
-    planKey: 'professional',
+    membershipTier: 'professional',
     displayName: 'Professional',
     stripeLookupKeys: ['professional_monthly', 'professional_annual'],
     stripePriceEnvKeys: ['STRIPE_PRICE_PRO_MONTHLY', 'STRIPE_PRICE_PRO_ANNUAL'],
     stripeProductEnvKeys: ['STRIPE_PRODUCT_PRO'],
   },
   founder_professional: {
-    planKey: 'founder_professional',
+    membershipTier: 'founder_professional',
     displayName: 'Founder Professional',
     stripeLookupKeys: ['founder_professional_monthly', 'founder_professional_annual'],
     stripePriceEnvKeys: ['STRIPE_PRICE_PRO_FOUNDER_MONTHLY', 'STRIPE_PRICE_PRO_FOUNDER_ANNUAL'],
@@ -79,7 +79,7 @@ export const STRIPE_PLAN_BINDINGS: Record<BillingPlanKey, StripePlanBinding> = {
   },
 };
 
-export function resolvePlanKeyFromStripeRefs(input?: {
+export function resolveMembershipTierFromStripeRefs(input?: {
   lookupKey?: string | null;
   priceId?: string | null;
   productId?: string | null;
@@ -91,69 +91,71 @@ export function resolvePlanKeyFromStripeRefs(input?: {
   const env = input?.env ?? process.env;
 
   for (const binding of Object.values(STRIPE_PLAN_BINDINGS)) {
-    if (lookupKey && binding.stripeLookupKeys.includes(lookupKey)) return binding.planKey;
-    if (priceId && binding.stripePriceEnvKeys.some((envKey) => String(env?.[envKey] || '').trim() === priceId)) return binding.planKey;
-    if (productId && binding.stripeProductEnvKeys.some((envKey) => String(env?.[envKey] || '').trim() === productId)) return binding.planKey;
+    if (lookupKey && binding.stripeLookupKeys.includes(lookupKey)) return binding.membershipTier;
+    if (priceId && binding.stripePriceEnvKeys.some((envKey) => String(env?.[envKey] || '').trim() === priceId)) return binding.membershipTier;
+    if (productId && binding.stripeProductEnvKeys.some((envKey) => String(env?.[envKey] || '').trim() === productId)) return binding.membershipTier;
   }
 
   return null;
 }
 
 export function resolveBillingPlan(input?: {
+  membershipTier?: BillingPlanKey | null;
+  subscriptionStatus?: string | null;
   planKey?: BillingPlanKey | null;
   billingStatus?: string | null;
   cancelAtPeriodEnd?: boolean | null;
   currentPeriodEnd?: string | number | Date | null;
   founderLockedPlan?: BillingPlanKey | null;
 }): BillingPlanResolution {
-  const requestedPlan = input?.planKey ?? input?.founderLockedPlan ?? 'free';
-  const billingStatus = normalizeStripeStatus(input?.billingStatus);
+  const requestedMembershipTier = input?.membershipTier ?? input?.planKey ?? input?.founderLockedPlan ?? 'free';
+  const subscriptionStatus = normalizeStripeStatus(input?.subscriptionStatus ?? input?.billingStatus);
   const founderLockedPlan = input?.founderLockedPlan ?? null;
   const currentPeriodEndMs = input?.currentPeriodEnd ? new Date(input.currentPeriodEnd as any).getTime() : NaN;
   const stillInPaidWindow = Number.isFinite(currentPeriodEndMs) ? currentPeriodEndMs > Date.now() : false;
   const notes: string[] = [];
 
-  if (billingStatus === 'active') {
+  if (subscriptionStatus === 'active') {
     if (input?.cancelAtPeriodEnd && stillInPaidWindow) {
       notes.push('Subscription is active and scheduled to cancel at period end.');
-      return { planKey: requestedPlan, accessState: 'scheduled_cancel', billingStatus, keepAccess: true, downgradeTo: 'free', notes };
+      return { membershipTier: requestedMembershipTier, accessState: 'scheduled_cancel', subscriptionStatus, keepAccess: true, downgradeTo: 'free', notes };
     }
     notes.push('Subscription is active.');
-    return { planKey: requestedPlan, accessState: 'active', billingStatus, keepAccess: true, downgradeTo: null, notes };
+    return { membershipTier: requestedMembershipTier, accessState: 'active', subscriptionStatus, keepAccess: true, downgradeTo: null, notes };
   }
 
-  if (billingStatus === 'trialing') {
+  if (subscriptionStatus === 'trialing') {
     notes.push('Subscription is trialing; entitlements remain active.');
-    return { planKey: requestedPlan, accessState: 'active', billingStatus, keepAccess: true, downgradeTo: null, notes };
+    return { membershipTier: requestedMembershipTier, accessState: 'active', subscriptionStatus, keepAccess: true, downgradeTo: null, notes };
   }
 
-  if (billingStatus === 'past_due') {
+  if (subscriptionStatus === 'past_due') {
     notes.push('Subscription is past_due; keep access during grace handling until webhook policy changes it.');
-    return { planKey: requestedPlan, accessState: 'grace', billingStatus, keepAccess: true, downgradeTo: null, notes };
+    return { membershipTier: requestedMembershipTier, accessState: 'grace', subscriptionStatus, keepAccess: true, downgradeTo: null, notes };
   }
 
-  if (billingStatus === 'canceled' && stillInPaidWindow) {
+  if (subscriptionStatus === 'canceled' && stillInPaidWindow) {
     notes.push('Subscription was canceled but the current paid period has not ended yet.');
-    return { planKey: requestedPlan, accessState: 'scheduled_cancel', billingStatus, keepAccess: true, downgradeTo: 'free', notes };
+    return { membershipTier: requestedMembershipTier, accessState: 'scheduled_cancel', subscriptionStatus, keepAccess: true, downgradeTo: 'free', notes };
   }
 
-  if (billingStatus === 'canceled') {
+  if (subscriptionStatus === 'canceled') {
     notes.push('Subscription is canceled and no paid access remains.');
-    return { planKey: founderLockedPlan ?? 'free', accessState: 'inactive', billingStatus, keepAccess: false, downgradeTo: 'free', notes };
+    return { membershipTier: founderLockedPlan ?? 'free', accessState: 'inactive', subscriptionStatus, keepAccess: false, downgradeTo: 'free', notes };
   }
 
-  if (billingStatus === 'incomplete') {
+  if (subscriptionStatus === 'incomplete') {
     notes.push('Initial payment is incomplete; do not grant paid entitlements yet.');
-    return { planKey: founderLockedPlan ?? 'free', accessState: 'restricted', billingStatus, keepAccess: false, downgradeTo: 'free', notes };
+    return { membershipTier: founderLockedPlan ?? 'free', accessState: 'restricted', subscriptionStatus, keepAccess: false, downgradeTo: 'free', notes };
   }
 
-  if (billingStatus === 'unpaid' || billingStatus === 'incomplete_expired' || billingStatus === 'paused') {
+  if (subscriptionStatus === 'unpaid' || subscriptionStatus === 'incomplete_expired' || subscriptionStatus === 'paused') {
     notes.push('Billing is not in a collectible state; fall back to free access until restored.');
-    return { planKey: founderLockedPlan ?? 'free', accessState: 'inactive', billingStatus, keepAccess: false, downgradeTo: 'free', notes };
+    return { membershipTier: founderLockedPlan ?? 'free', accessState: 'inactive', subscriptionStatus, keepAccess: false, downgradeTo: 'free', notes };
   }
 
   notes.push('Billing status is unknown; safest fallback is free access.');
-  return { planKey: founderLockedPlan ?? 'free', accessState: 'inactive', billingStatus, keepAccess: false, downgradeTo: 'free', notes };
+  return { membershipTier: founderLockedPlan ?? 'free', accessState: 'inactive', subscriptionStatus, keepAccess: false, downgradeTo: 'free', notes };
 }
 
 export function resolveUsagePlanAlias(membership?: string | null): UsagePlanAlias {
@@ -254,6 +256,9 @@ export function nextMonthlyResetAtISO(from?: string | number | Date | null): str
   const utcMonth = base.getUTCMonth();
   return new Date(Date.UTC(utcYear, utcMonth + 1, 1, 0, 0, 0, 0)).toISOString();
 }
+
+
+export const resolvePlanKeyFromStripeRefs = resolveMembershipTierFromStripeRefs;
 
 function normalizeStripeStatus(status?: string | null): StripeSubscriptionStatus {
   switch (String(status || '').trim()) {

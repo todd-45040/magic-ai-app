@@ -47,9 +47,9 @@ function App() {
   // - all user-facing upgrades must flow through the billing endpoint layer
   // - checkout return must not grant access
   // - future live entitlement changes reconcile through webhook processing
-  const handleUpgrade = async (tier: 'amateur' | 'professional') => {
+  const handleUpgrade = async (membershipTier: 'amateur' | 'professional') => {
     try {
-      const lookupKey = resolveCheckoutLookupKey(tier, user);
+      const lookupKey = resolveCheckoutLookupKey(membershipTier, user);
       const result = await createCheckoutSession(lookupKey);
 
       if (result?.url) {
