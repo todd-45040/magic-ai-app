@@ -1070,11 +1070,23 @@ const IdentifyTab: React.FC<{
 
 
 
+
 const PublicationsTab: React.FC = () => {
+  const STORAGE_KEY = 'magic-publications-saved-research';
+
   const [filter, setFilter] = useState<'all' | 'print' | 'digital' | 'video' | 'research' | 'archive'>('all');
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<'alphabetical' | 'newest' | 'popular'>('alphabetical');
-  const [savedPublications, setSavedPublications] = useState<string[]>([]);
+  const [savedPublications, setSavedPublications] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
+    } catch {
+      return [];
+    }
+  });
 
   const featuredPublication = publications.find(pub => pub.name === 'Genii Magazine') ?? publications[0];
 
@@ -1108,6 +1120,21 @@ const PublicationsTab: React.FC = () => {
     'Gibecière',
     'MAGIC Magazine',
   ];
+
+  const wireMentions: Record<string, { count: number; trending: boolean }> = {
+    'Genii Magazine': { count: 3, trending: true },
+    'Magicseen': { count: 2, trending: true },
+    'VANISH Magazine': { count: 2, trending: false },
+    'The Linking Ring': { count: 1, trending: false },
+  };
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(savedPublications));
+    } catch {
+      // Ignore localStorage write failures.
+    }
+  }, [savedPublications]);
 
   const getPublicationTypeTokens = (type?: string) =>
     (type ?? 'Publication')
@@ -1171,6 +1198,10 @@ const PublicationsTab: React.FC = () => {
     });
 
   const editorPicks = editorPickNames
+    .map(name => publications.find(pub => pub.name === name))
+    .filter((pub): pub is typeof publications[number] => Boolean(pub));
+
+  const savedResearchShelf = savedPublications
     .map(name => publications.find(pub => pub.name === name))
     .filter((pub): pub is typeof publications[number] => Boolean(pub));
 
@@ -1346,6 +1377,55 @@ const PublicationsTab: React.FC = () => {
           </div>
         </div>
 
+        {savedResearchShelf.length > 0 ? (
+          <div className="rounded-2xl border border-yellow-500/15 bg-gradient-to-br from-yellow-500/5 via-slate-900/50 to-slate-950/50 p-4 md:p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-yellow-100">Saved for Research</h3>
+                <p className="mt-1 text-sm text-slate-400">Your bookmarked publications are ready for deeper study and AI discussion.</p>
+              </div>
+              <div className="text-xs uppercase tracking-[0.16em] text-slate-500">
+                {savedResearchShelf.length} saved
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-3">
+              {savedResearchShelf.map(pub => {
+                const mention = wireMentions[pub.name];
+                return (
+                  <div
+                    key={`saved-${pub.name}`}
+                    className="min-w-[220px] rounded-xl border border-slate-700/80 bg-slate-900/50 px-4 py-3"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-yellow-100">{pub.name}</div>
+                        <div className="mt-1 text-xs text-slate-400">{getPublicationPublisher(pub)}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => toggleSavePublication(pub.name)}
+                        className="text-xs text-slate-400 transition hover:text-yellow-200"
+                        title="Remove from research"
+                      >
+                        Remove
+                      </button>
+                    </div>
+
+                    {mention ? (
+                      <div className="mt-3 text-[11px] text-purple-200">
+                        {mention.trending ? 'Trending in Magic Wire' : `Mentioned in ${mention.count} recent Magic Wire stor${mention.count === 1 ? 'y' : 'ies'}`}
+                      </div>
+                    ) : (
+                      <div className="mt-3 text-[11px] text-slate-500">Saved for future research workflows</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
         <div className="rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900/50 via-slate-900/30 to-slate-950/50 p-4 md:p-5">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -1409,29 +1489,38 @@ const PublicationsTab: React.FC = () => {
               const badgeTokens = getPublicationTypeTokens(pub.type);
               const thumbnail = getPublicationThumbnail(pub.type);
               const isSaved = savedPublications.includes(pub.name);
+              const mention = wireMentions[pub.name];
 
               return (
                 <div
                   key={pub.name}
                   className="group overflow-hidden rounded-xl border border-slate-700 bg-slate-800/50 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-purple-400 hover:bg-purple-500/5 hover:shadow-[0_12px_40px_rgba(76,29,149,0.18)]"
                 >
-                  <div className="flex items-start gap-4">
-                    <div className={`flex h-20 w-16 shrink-0 flex-col items-center justify-center rounded-xl border border-slate-600/80 bg-gradient-to-br ${thumbnail.accent} text-slate-100 shadow-inner shadow-slate-950/40`}>
-                      <span className="text-2xl leading-none">{thumbnail.icon}</span>
-                      <span className="mt-2 px-2 text-center text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-300/90">
-                        {thumbnail.label}
-                      </span>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-4">
+                      <div className={`flex h-20 w-16 shrink-0 flex-col items-center justify-center rounded-xl border border-slate-600/80 bg-gradient-to-br ${thumbnail.accent} text-slate-100 shadow-inner shadow-slate-950/40`}>
+                        <span className="text-2xl leading-none">{thumbnail.icon}</span>
+                        <span className="mt-2 px-2 text-center text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-300/90">
+                          {thumbnail.label}
+                        </span>
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-bold text-lg bg-gradient-to-r from-yellow-200 via-amber-300 to-yellow-200 bg-clip-text text-transparent">
+                          {pub.name}
+                        </h3>
+                        <p className="mt-1 text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                          {getPublicationPublisher(pub)}
+                        </p>
+                        <p className="mt-2 text-sm text-slate-400 line-clamp-3">{pub.description}</p>
+                      </div>
                     </div>
 
-                    <div className="min-w-0 flex-1">
-                      <h3 className="font-bold text-lg bg-gradient-to-r from-yellow-200 via-amber-300 to-yellow-200 bg-clip-text text-transparent">
-                        {pub.name}
-                      </h3>
-                      <p className="mt-1 text-[11px] uppercase tracking-[0.16em] text-slate-500">
-                        {getPublicationPublisher(pub)}
-                      </p>
-                      <p className="mt-2 text-sm text-slate-400 line-clamp-3">{pub.description}</p>
-                    </div>
+                    {mention?.trending ? (
+                      <div className="shrink-0 rounded-full border border-purple-500/30 bg-purple-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-purple-200">
+                        Trending in Magic Wire
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -1444,6 +1533,18 @@ const PublicationsTab: React.FC = () => {
                       </span>
                     ))}
                   </div>
+
+                  {mention ? (
+                    <div className="mt-3 text-xs text-slate-400">
+                      {mention.trending
+                        ? `Mentioned in ${mention.count} recent Magic Wire stories`
+                        : `Mentioned in ${mention.count} recent Magic Wire stor${mention.count === 1 ? 'y' : 'ies'}`}
+                    </div>
+                  ) : (
+                    <div className="mt-3 text-xs text-slate-500">
+                      No recent Magic Wire mentions yet
+                    </div>
+                  )}
 
                   <div className="mt-4 flex items-center justify-between gap-3">
                     <button
@@ -1498,6 +1599,7 @@ const PublicationsTab: React.FC = () => {
     </div>
   );
 };
+
 
 
 
