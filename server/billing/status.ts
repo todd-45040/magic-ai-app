@@ -1,17 +1,27 @@
-/**
- * Billing status is the server source of truth for current access.
- * Checkout return URLs are informational only and must never grant entitlements.
- * Future live billing changes reconcile through webhook processing.
- */
-
 import type { BillingPlanKey } from '../../services/planCatalog.js';
-import type { BillingStatusContract, SubscriptionStatus } from '../../services/billingTypes.js';
 import { BILLING_PLAN_CATALOG } from '../../services/planCatalog.js';
 import { deriveFounderProtection } from './founderProtection.js';
 import { resolveBillingPlan } from './planMapping.js';
 import { getBillingConfig } from './billingConfig.js';
 
-export type BillingStatusResponse = BillingStatusContract;
+export type BillingStatusResponse = {
+  ok: true;
+  planKey: BillingPlanKey;
+  billingStatus: string;
+  accessState: string;
+  renewalDate: string | null;
+  cancelAtPeriodEnd: boolean;
+  founderProtected: boolean;
+  founderLockedPlan: BillingPlanKey | null;
+  founderLockedPriceCents: number | null;
+  usagePeriodStart: string | null;
+  usagePeriodEnd: string | null;
+  upgradeTargets: BillingPlanKey[];
+  stripeConfigured: boolean;
+  billingCustomerExists: boolean;
+  stripeCustomerIdPresent: boolean;
+  source: 'database' | 'fallback';
+};
 
 function asIso(value: unknown): string | null {
   if (!value) return null;
@@ -82,29 +92,29 @@ export async function resolveBillingStatusForUser(admin: any, userId: string): P
     founderOverride: founderOverride || undefined,
   });
 
-  const fallbackMembershipTier = founderProtection.lockedPlan || normalizeProfileMembership(profile?.membership);
+  const fallbackPlan = founderProtection.lockedPlan || normalizeProfileMembership(profile?.membership);
   const resolved = resolveBillingPlan({
-    membershipTier: (subscription?.plan_key as BillingPlanKey | null) || fallbackMembershipTier,
-    subscriptionStatus: (subscription?.billing_status || (fallbackMembershipTier === 'free' ? 'unknown' : 'active')) as SubscriptionStatus,
+    planKey: (subscription?.plan_key as BillingPlanKey | null) || fallbackPlan,
+    billingStatus: subscription?.billing_status || (fallbackPlan === 'free' ? 'unknown' : 'active'),
     cancelAtPeriodEnd: Boolean(subscription?.cancel_at_period_end),
     currentPeriodEnd: subscription?.current_period_end || null,
     founderLockedPlan: founderProtection.lockedPlan,
   });
 
-  const effectiveMembershipTier = resolved.keepAccess
-    ? resolved.membershipTier
+  const effectivePlanKey = resolved.keepAccess
+    ? resolved.planKey
     : (founderProtection.lockedPlan || 'free');
 
-  const membershipDefinition = BILLING_PLAN_CATALOG[effectiveMembershipTier] || BILLING_PLAN_CATALOG.free;
-  const upgradeTargets = (membershipDefinition.allowedUpgrades || []).filter((membershipTier) => {
-    if (membershipTier === 'founder_professional') return founderProtection.founderProtected;
+  const planDef = BILLING_PLAN_CATALOG[effectivePlanKey] || BILLING_PLAN_CATALOG.free;
+  const upgradeTargets = (planDef.allowedUpgrades || []).filter((planKey) => {
+    if (planKey === 'founder_professional') return founderProtection.founderProtected;
     return true;
   });
 
   return {
     ok: true,
-    membershipTier: effectiveMembershipTier,
-    subscriptionStatus: resolved.subscriptionStatus,
+    planKey: effectivePlanKey,
+    billingStatus: resolved.billingStatus,
     accessState: resolved.accessState,
     renewalDate: asIso(subscription?.current_period_end),
     cancelAtPeriodEnd: Boolean(subscription?.cancel_at_period_end),

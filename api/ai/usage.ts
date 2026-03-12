@@ -1,9 +1,46 @@
 import { getAiUsageStatus } from './_lib/usage.js';
+import { getAiUsageStatus as getLegacyAiUsageStatus } from '../_usage.js';
 import { isPreviewEnv } from './_lib/hardening.js';
 
 function json(res: any, status: number, body: any) {
   res.status(status).setHeader('Content-Type', 'application/json; charset=utf-8');
   res.end(JSON.stringify(body));
+}
+
+function buildFallbackUsageResponse(status: any) {
+  const membership = status?.membership === 'free' ? 'trial' : (status?.membership ?? 'trial');
+  const limit = Number(status?.limit ?? 0);
+  const used = Number(status?.used ?? 0);
+  const remaining = Number(status?.remaining ?? Math.max(0, limit - used));
+  const burstLimit = Number(status?.burstLimit ?? 0);
+  const burstRemaining = Number(status?.burstRemaining ?? Math.max(0, burstLimit));
+
+  return {
+    ok: true,
+    plan: membership,
+    limit,
+    used,
+    remaining,
+    quota: {
+      live_audio_minutes: { remaining: null },
+      image_gen: { remaining: null },
+      identify: { remaining: null },
+      video_uploads: { remaining: null },
+      resetAt: null,
+    },
+    nearLimit: limit > 0 ? remaining <= Math.ceil(limit * 0.15) : false,
+    upgradeRecommended: membership === 'trial' && limit > 0 ? remaining <= Math.ceil(limit * 0.15) : false,
+    warnings: [],
+    sessionsToday: 0,
+    toolsUsedToday: [],
+    distinctToolsToday: 0,
+    resetAt: null,
+    resetTz: null,
+    resetHourLocal: null,
+    burstLimit,
+    burstRemaining,
+    usage: status ?? null,
+  };
 }
 
 export default async function handler(req: any, res: any) {
@@ -13,9 +50,28 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const status = await getAiUsageStatus(req);
+    let status: any;
+
+    try {
+      status = await getAiUsageStatus(req);
+    } catch (primaryErr: any) {
+      console.error('Primary /api/ai/usage resolver failed:', primaryErr);
+      status = { ok: false, status: 500, error: primaryErr?.message || 'Primary usage resolver failed.' };
+    }
 
     if (!status?.ok) {
+      const primaryHttpStatus = Number(status?.status) || 503;
+      if (primaryHttpStatus >= 500) {
+        try {
+          const legacyStatus = await getLegacyAiUsageStatus(req);
+          if (legacyStatus?.ok) {
+            res.setHeader('X-AI-Usage-Source', 'legacy-fallback');
+            return json(res, 200, buildFallbackUsageResponse(legacyStatus));
+          }
+        } catch (legacyErr: any) {
+          console.error('Legacy /api/_usage fallback failed:', legacyErr);
+        }
+      }
       const httpStatus = Number(status?.status) || 503;
       const message = String(status?.error || 'Usage status unavailable.');
       const retryable = httpStatus >= 500 || httpStatus === 429;

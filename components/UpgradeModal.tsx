@@ -1,11 +1,10 @@
 import React from 'react';
 import { CheckIcon, WandIcon, ShieldIcon } from './icons';
 import { getFounderLockLabel, getUpgradeUxCopy, isFounderProtected } from '../services/upgradeUx';
-import { BILLING_UI_COPY } from '../services/billingCopy';
 
 interface UpgradeModalProps {
   onClose: () => void;
-  onUpgrade: (membershipTier: 'amateur' | 'professional') => void;
+  onUpgrade: (tier: 'amateur' | 'professional') => void;
   variant?: 'locked-tool' | 'trial-expired' | 'generic';
   user?: any;
 }
@@ -64,7 +63,7 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
           {founderProtected && (
             <div className="mb-6 rounded-2xl border border-amber-300/35 bg-amber-500/10 px-5 py-4">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[11px] uppercase tracking-wider text-amber-200/90 font-semibold">{BILLING_UI_COPY.founderProtected}</span>
+                <span className="text-[11px] uppercase tracking-wider text-amber-200/90 font-semibold">Founder Protected</span>
                 <span className="text-[11px] rounded-full border border-amber-300/30 px-2 py-0.5 text-amber-100">Rate locked for life</span>
               </div>
               <div className="mt-2 text-sm text-amber-100">
@@ -98,7 +97,7 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
                 onClick={onClose}
                 className="w-full py-3 px-4 bg-slate-800 hover:bg-slate-700 rounded-xl text-white font-bold transition-colors"
               >
-                {variant === 'trial-expired' ? 'Close' : BILLING_UI_COPY.continueOnCurrentPlan}
+                {variant === 'trial-expired' ? 'Close' : 'Continue on current plan'}
               </button>
             </div>
 
@@ -106,7 +105,7 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
               <div className="flex items-center justify-between">
                 <h3 className="text-2xl font-bold text-purple-200 font-cinzel">Amateur</h3>
                 <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-purple-500/15 border border-purple-400/30 text-purple-200">
-                  {BILLING_UI_COPY.upgradeAvailable}
+                  Upgrade Available
                 </span>
               </div>
               <p className="text-slate-400 mt-2">For consistent rehearsal and show-building work.</p>
@@ -134,7 +133,7 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
                   <p className="text-slate-400 mt-2">Full performance and business operating system access.</p>
                 </div>
                 <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-400/40 text-amber-200 whitespace-nowrap">
-                  {founderProtected ? BILLING_UI_COPY.founderProtected : 'Best for Professionals'}
+                  {founderProtected ? 'Founder Protected' : 'Best for Pros'}
                 </span>
               </div>
               <div className="mt-4">
@@ -185,7 +184,7 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
                   onClick={onClose}
                   className="order-3 sm:order-1 w-full sm:w-auto py-2.5 px-4 bg-slate-800 hover:bg-slate-700 rounded-xl text-white font-bold transition-colors"
                 >
-                  {BILLING_UI_COPY.continueOnCurrentPlan}
+                  Continue on current plan
                 </button>
               )}
             </div>

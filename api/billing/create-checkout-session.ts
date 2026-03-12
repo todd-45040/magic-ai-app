@@ -1,12 +1,4 @@
-/**
- * Billing flow guardrail:
- * - entitlements are resolved from server-side billing state
- * - checkout return must not grant access
- * - future live access changes reconcile through verified webhook processing
- */
-
 import { requireSupabaseAuth } from '../_auth.js';
-import type { CheckoutLookupKey } from '../../services/billingTypes.js';
 import { getBillingConfig, getBillingPlanPlaceholder, isBillingCheckoutLookupKey } from '../../server/billing/billingConfig.js';
 import { resolveBillingStatusForUser } from '../../server/billing/status.js';
 
@@ -21,27 +13,27 @@ export default async function handler(request: any, response: any) {
       return response.status(auth.status).json({ error: auth.error || 'Unauthorized' });
     }
 
-    const lookupKey = request?.body?.lookupKey as CheckoutLookupKey | undefined;
-    if (!isBillingCheckoutLookupKey(lookupKey)) {
+    const planKey = request?.body?.planKey;
+    if (!isBillingCheckoutLookupKey(planKey)) {
       return response.status(400).json({
         error: 'Invalid plan key. Client must send an internal billing lookup key only.',
       });
     }
 
     const billingStatus = await resolveBillingStatusForUser(auth.admin, auth.userId);
-    const checkoutTarget = getBillingPlanPlaceholder(lookupKey);
-    const allowedTarget = billingStatus.upgradeTargets.includes(checkoutTarget.membershipTier);
+    const target = getBillingPlanPlaceholder(planKey);
+    const allowedTarget = billingStatus.upgradeTargets.includes(target.internalPlanKey);
 
     if (!allowedTarget) {
       return response.status(403).json({
         error: 'Requested upgrade path is not allowed for this account.',
-        currentMembershipTier: billingStatus.membershipTier,
+        currentPlan: billingStatus.planKey,
         allowedTargets: billingStatus.upgradeTargets,
-        requestedMembershipTier: checkoutTarget.membershipTier,
+        requestedPlan: target.internalPlanKey,
       });
     }
 
-    if (checkoutTarget.founderOnly && !billingStatus.founderProtected) {
+    if (target.founderOnly && !billingStatus.founderProtected) {
       return response.status(403).json({
         error: 'Founder pricing is protected and is not available for this account.',
       });
@@ -55,8 +47,8 @@ export default async function handler(request: any, response: any) {
         mode: 'placeholder',
         stripeConfigured: false,
         message: 'Stripe not configured yet',
-        membershipTier: checkoutTarget.membershipTier,
-        lookupKey: checkoutTarget.lookupKey,
+        targetPlanKey: target.internalPlanKey,
+        targetLookupKey: target.internalLookupKey,
         successUrl: config.successUrl,
         cancelUrl: config.cancelUrl,
       });
@@ -64,8 +56,8 @@ export default async function handler(request: any, response: any) {
 
     return response.status(501).json({
       error: 'Stripe checkout session creation is not connected yet.',
-      membershipTier: checkoutTarget.membershipTier,
-      lookupKey: checkoutTarget.lookupKey,
+      targetPlanKey: target.internalPlanKey,
+      targetLookupKey: target.internalLookupKey,
     });
   } catch (err: any) {
     console.error('billing/create-checkout-session error:', err);

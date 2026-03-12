@@ -5,11 +5,6 @@ import { getUsers, updateUserMembership, deleteUser, addUser } from '../services
 import { TrashIcon, UsersCogIcon } from './icons';
 
 const MemberManagement: React.FC = () => {
-  // Admin-only membership editing surface.
-  // This component is intentionally separate from the normal billing flow.
-  // User-facing upgrades must never mutate membership locally from the UI;
-  // live entitlements are resolved server-side through billing + webhook sync.
-
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -28,7 +23,7 @@ const MemberManagement: React.FC = () => {
     fetchUsers();
   }, []);
 
-  // Admin/manual action only — not part of the user checkout flow.
+  // FIX: Make async to await updateUserMembership
   const handleMembershipChange = async (email: string, newMembership: Membership) => {
     const updatedUsers = await updateUserMembership(email, newMembership);
     setUsers(updatedUsers);

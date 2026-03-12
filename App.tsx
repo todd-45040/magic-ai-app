@@ -43,13 +43,9 @@ function App() {
   const dispatch = useAppDispatch();
   const loggingOutRef = useRef(false);
 
-  // Billing guardrail:
-  // - all user-facing upgrades must flow through the billing endpoint layer
-  // - checkout return must not grant access
-  // - future live entitlement changes reconcile through webhook processing
-  const handleUpgrade = async (membershipTier: 'amateur' | 'professional') => {
+  const handleUpgrade = async (tier: 'amateur' | 'professional') => {
     try {
-      const lookupKey = resolveCheckoutLookupKey(membershipTier, user);
+      const lookupKey = resolveCheckoutLookupKey(tier, user);
       const result = await createCheckoutSession(lookupKey);
 
       if (result?.url) {

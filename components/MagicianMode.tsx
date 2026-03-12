@@ -2926,31 +2926,19 @@ useEffect(() => {
         headers.Accept = 'application/json';
 
         const r = await fetch('/api/ai/usage', { method: 'GET', headers });
-        const contentType = r.headers.get('content-type') || '';
+        const contentType = String(r.headers.get('content-type') || '').toLowerCase();
         const txt = await r.text();
-
-        let parsed: any = null;
-        if (txt) {
-          if (contentType.includes('application/json')) {
-            try {
-              parsed = JSON.parse(txt);
-            } catch {
-              parsed = null;
-            }
-          } else {
-            const firstLine = txt
-              .replace(/<[^>]*>/g, ' ')
-              .replace(/\s+/g, ' ')
-              .trim()
-              .slice(0, 160);
-            throw new Error(firstLine || 'Usage service returned a non-JSON response.');
-          }
-        }
+        const parsed = contentType.includes('application/json') && txt
+          ? JSON.parse(txt)
+          : null;
 
         if (!cancelled) {
           if (!r.ok || !parsed?.ok) {
             setUsageSnapshot(null);
-            setUsageSnapshotError(parsed?.message || `Usage unavailable (${r.status})`);
+            const fallbackMessage = !contentType.includes('application/json')
+              ? `Usage endpoint returned a non-JSON response (${r.status})`
+              : null;
+            setUsageSnapshotError(parsed?.message || fallbackMessage || `Usage unavailable (${r.status})`);
           } else {
             setUsageSnapshot(parsed);
           }
@@ -4064,8 +4052,8 @@ ${action.payload.content}`;
     setActiveView('performance-analytics');
   };
 
-  const handleUpgrade = (membershipTier: 'amateur' | 'professional') => {
-    onUpgrade(membershipTier as any);
+  const handleUpgrade = (tier: 'amateur' | 'professional') => {
+    onUpgrade(tier as any);
     setIsUpgradeModalOpen(false);
   }
   

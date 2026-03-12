@@ -1,14 +1,7 @@
-/**
- * Stripe webhook processing is the only future live path that should reconcile
- * checkout completion into durable subscription state and entitlements.
- * Client-side checkout return handling must remain non-authoritative.
- */
-
 import crypto from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import type { BillingPlanKey } from '../../services/planCatalog.js';
-import type { SubscriptionStatus } from '../../services/billingTypes.js';
-import { resolveMembershipTierFromStripeRefs, resolveBillingPlan } from './planMapping.js';
+import { resolvePlanKeyFromStripeRefs, resolveBillingPlan } from './planMapping.js';
 import { getOptionalEnv, getStripeWebhookSecrets, sanitizeStripeLogValue } from './stripeConfig.js';
 
 export type WebhookVerificationResult =
@@ -93,30 +86,30 @@ function normalizeBool(value: unknown): boolean {
   return raw === 'true' || raw === '1' || raw === 'yes';
 }
 
-function normalizeMembershipTierFromObject(object: any): BillingPlanKey {
+function normalizePlanFromObject(object: any): BillingPlanKey {
   const metadata = object?.metadata || {};
-  const explicitMembershipTier = String(metadata?.plan_key || metadata?.internal_plan_key || '').trim();
-  if (explicitMembershipTier === 'free' || explicitMembershipTier === 'amateur' || explicitMembershipTier === 'professional' || explicitMembershipTier === 'founder_professional') {
-    return explicitMembershipTier;
+  const explicitPlan = String(metadata?.plan_key || metadata?.internal_plan_key || '').trim();
+  if (explicitPlan === 'free' || explicitPlan === 'amateur' || explicitPlan === 'professional' || explicitPlan === 'founder_professional') {
+    return explicitPlan;
   }
 
   const founderLike = normalizeBool(metadata?.founding_member) || Boolean(String(metadata?.pricing_lock || '').trim()) || Boolean(String(metadata?.founder_offer || '').trim());
-  const requestedMembershipTier = String(metadata?.tier_requested || metadata?.tier || '').trim().toLowerCase();
-  if (founderLike && requestedMembershipTier === 'professional') return 'founder_professional';
-  if (requestedMembershipTier === 'professional') return 'professional';
-  if (requestedMembershipTier === 'amateur') return 'amateur';
+  const requestedTier = String(metadata?.tier_requested || metadata?.tier || '').trim().toLowerCase();
+  if (founderLike && requestedTier === 'professional') return 'founder_professional';
+  if (requestedTier === 'professional') return 'professional';
+  if (requestedTier === 'amateur') return 'amateur';
 
   const firstPrice = object?.items?.data?.[0]?.price || object?.lines?.data?.[0]?.price || object?.plan || null;
-  const resolvedMembershipTier = resolveMembershipTierFromStripeRefs({
+  const resolved = resolvePlanKeyFromStripeRefs({
     lookupKey: firstPrice?.lookup_key || object?.lookup_key || null,
     priceId: firstPrice?.id || object?.price?.id || null,
     productId: firstPrice?.product || object?.price?.product || object?.product || null,
   });
 
-  return resolvedMembershipTier || (founderLike ? 'founder_professional' : 'free');
+  return resolved || (founderLike ? 'founder_professional' : 'free');
 }
 
-function normalizeStatusFromEvent(eventType: string, object: any): SubscriptionStatus {
+function normalizeStatusFromEvent(eventType: string, object: any): string {
   if (eventType === 'customer.subscription.deleted') return 'canceled';
   if (eventType === 'invoice.payment_failed') return 'past_due';
   if (eventType === 'invoice.paid') return 'active';
@@ -254,8 +247,8 @@ async function getFounderOverride(admin: any, userId: string | null) {
   return data || null;
 }
 
-async function upsertFounderOverride(admin: any, params: { userId: string | null; membershipTier: BillingPlanKey; metadata: any; existingOverride?: any }) {
-  if (!params.userId || params.membershipTier !== 'founder_professional') return;
+async function upsertFounderOverride(admin: any, params: { userId: string | null; planKey: BillingPlanKey; metadata: any; existingOverride?: any }) {
+  if (!params.userId || params.planKey !== 'founder_professional') return;
   const founderState = deriveFounderProtection({ metadata: params.metadata, founderOverride: params.existingOverride || null });
 
   await admin.from('founder_overrides').upsert([
@@ -279,8 +272,8 @@ async function upsertSubscription(admin: any, params: {
   stripeCustomerId: string | null;
   stripeSubscriptionId: string | null;
   checkoutSessionId?: string | null;
-  membershipTier: BillingPlanKey;
-  subscriptionStatus: SubscriptionStatus;
+  planKey: BillingPlanKey;
+  billingStatus: string;
   currentPeriodStart?: string | null;
   currentPeriodEnd?: string | null;
   cancelAtPeriodEnd?: boolean;
@@ -306,8 +299,8 @@ async function upsertSubscription(admin: any, params: {
   }
 
   const resolution = resolveBillingPlan({
-    membershipTier: params.membershipTier,
-    subscriptionStatus: params.subscriptionStatus,
+    planKey: params.planKey,
+    billingStatus: params.billingStatus,
     cancelAtPeriodEnd: params.cancelAtPeriodEnd,
     currentPeriodEnd: params.currentPeriodEnd,
     founderLockedPlan: params.founderLockedPlan,
@@ -319,8 +312,8 @@ async function upsertSubscription(admin: any, params: {
     billing_customer_id: params.billingCustomerId,
     stripe_customer_id: params.stripeCustomerId,
     stripe_subscription_id: params.stripeSubscriptionId,
-    plan_key: resolution.membershipTier,
-    billing_status: resolution.subscriptionStatus,
+    plan_key: resolution.planKey,
+    billing_status: resolution.billingStatus,
     current_period_start: params.currentPeriodStart || null,
     current_period_end: params.currentPeriodEnd || null,
     cancel_at_period_end: Boolean(params.cancelAtPeriodEnd),
@@ -347,15 +340,15 @@ async function syncFromEvent(admin: any, event: any) {
   const userId = String(metadata?.user_id || object?.client_reference_id || '').trim() || null;
   const existingFounderOverride = await getFounderOverride(admin, userId);
   const founderState = deriveFounderProtection({ metadata, founderOverride: existingFounderOverride });
-  const normalizedMembershipTier = normalizeMembershipTierFromObject(object);
-  const membershipTier = founderState.founderProtected && founderState.lockedPlan ? founderState.lockedPlan : normalizedMembershipTier;
-  const subscriptionStatus = normalizeStatusFromEvent(eventType, object);
+  const normalizedPlanKey = normalizePlanFromObject(object);
+  const planKey = founderState.founderProtected && founderState.lockedPlan ? founderState.lockedPlan : normalizedPlanKey;
+  const billingStatus = normalizeStatusFromEvent(eventType, object);
   const stripeCustomerId = String(object?.customer || '').trim() || null;
   const stripeSubscriptionId = String(object?.subscription || (object?.object === 'subscription' ? object?.id : '') || '').trim() || null;
   const checkoutSessionId = object?.object === 'checkout.session' ? String(object?.id || '').trim() || null : null;
   const currentPeriodStart = safeIsoFromUnixSeconds(object?.current_period_start || object?.period_start) || null;
   const currentPeriodEnd = safeIsoFromUnixSeconds(object?.current_period_end || object?.period_end) || null;
-  const founderLockedPlan = founderState.founderProtected && founderState.lockedPlan ? founderState.lockedPlan : (membershipTier === 'founder_professional' ? 'founder_professional' : null);
+  const founderLockedPlan = founderState.founderProtected && founderState.lockedPlan ? founderState.lockedPlan : (planKey === 'founder_professional' ? 'founder_professional' : null);
   const founderLockedPrice = founderState.founderProtected ? (founderState.lockedPriceCents || 2995) : null;
 
   const billingCustomerId = await upsertBillingCustomer(admin, {
@@ -366,7 +359,7 @@ async function syncFromEvent(admin: any, event: any) {
   });
 
   if (founderLockedPlan) {
-    await upsertFounderOverride(admin, { userId, membershipTier, metadata, existingOverride: existingFounderOverride });
+    await upsertFounderOverride(admin, { userId, planKey, metadata, existingOverride: existingFounderOverride });
   }
 
   const subscriptionId = await upsertSubscription(admin, {
@@ -375,8 +368,8 @@ async function syncFromEvent(admin: any, event: any) {
     stripeCustomerId,
     stripeSubscriptionId,
     checkoutSessionId,
-    membershipTier,
-    subscriptionStatus,
+    planKey,
+    billingStatus,
     currentPeriodStart,
     currentPeriodEnd,
     cancelAtPeriodEnd: Boolean(object?.cancel_at_period_end),
@@ -392,8 +385,8 @@ async function syncFromEvent(admin: any, event: any) {
     subscriptionId,
     stripeCustomerId,
     stripeSubscriptionId,
-    membershipTier,
-    subscriptionStatus,
+    planKey,
+    billingStatus,
   };
 }
 

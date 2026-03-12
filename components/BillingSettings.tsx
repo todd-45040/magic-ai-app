@@ -8,24 +8,19 @@ import {
   type BillingPortalPayload,
   type BillingStatusPayload,
 } from '../services/billingClient';
-import type { SubscriptionStatus } from '../services/billingTypes';
 import { ShieldIcon, WandIcon, ClockIcon, CalendarIcon, DollarSignIcon, LockIcon } from './icons';
-import { BILLING_UI_COPY, getSubscriptionStatusLabel } from '../services/billingCopy';
 
 interface BillingSettingsProps {
   user: User;
-  onUpgrade: (membershipTier: 'amateur' | 'professional') => Promise<void> | void;
+  onUpgrade: (tier: 'amateur' | 'professional') => Promise<void> | void;
 }
 
-const statusTone: Record<SubscriptionStatus, string> = {
+const statusTone: Record<string, string> = {
   active: 'text-emerald-300 border-emerald-400/25 bg-emerald-500/10',
   trialing: 'text-sky-300 border-sky-400/25 bg-sky-500/10',
   past_due: 'text-amber-200 border-amber-400/25 bg-amber-500/10',
   canceled: 'text-slate-200 border-slate-500/25 bg-slate-500/10',
   unpaid: 'text-rose-200 border-rose-400/25 bg-rose-500/10',
-  incomplete: 'text-amber-200 border-amber-400/25 bg-amber-500/10',
-  incomplete_expired: 'text-rose-200 border-rose-400/25 bg-rose-500/10',
-  paused: 'text-slate-200 border-slate-500/25 bg-slate-500/10',
   unknown: 'text-slate-200 border-slate-500/25 bg-slate-500/10',
 };
 
@@ -95,7 +90,7 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
     void loadStatus();
   }, [loadStatus]);
 
-  const currentPlanKey = status?.membershipTier || (user?.membership === 'professional' ? 'professional' : user?.membership === 'amateur' ? 'amateur' : 'free');
+  const currentPlanKey = status?.planKey || (user?.membership === 'professional' ? 'professional' : user?.membership === 'amateur' ? 'amateur' : 'free');
   const currentPlanLabel = useMemo(() => humanizePlan(currentPlanKey), [currentPlanKey]);
 
   const founderNotice = useMemo(() => {
@@ -168,7 +163,7 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
             <ShieldIcon className="mt-0.5 h-5 w-5 text-yellow-200" />
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <p className="font-semibold">{BILLING_UI_COPY.founderProtected}</p>
+                <p className="font-semibold">Founder protected</p>
                 <span className="rounded-full border border-yellow-300/30 bg-yellow-400/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-yellow-100">
                   Locked pricing preserved
                 </span>
@@ -188,7 +183,7 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <InfoTile
           icon={WandIcon}
-          label={BILLING_UI_COPY.currentPlan}
+          label="Current plan"
           value={loading ? 'Loading…' : currentPlanLabel}
           hint={status ? `Current plan state: ${status.accessState}` : 'Resolved from billing status when available.'}
           accentClassName={isCurrentProfessional ? 'border-amber-400/20 bg-amber-500/5' : isCurrentAmateur ? 'border-purple-400/20 bg-purple-500/5' : ''}
@@ -196,14 +191,14 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
         <InfoTile
           icon={ShieldIcon}
           label="Founder protection"
-          value={status?.founderProtected ? BILLING_UI_COPY.founderProtected : 'Standard pricing'}
+          value={status?.founderProtected ? 'Founder protected' : 'Standard pricing'}
           hint={loading ? 'Loading founder protection…' : founderNotice}
           accentClassName={status?.founderProtected ? 'border-yellow-300/20 bg-yellow-500/5' : ''}
         />
         <InfoTile
           icon={ClockIcon}
           label="Billing state"
-          value={loading ? 'Loading…' : getSubscriptionStatusLabel(status?.subscriptionStatus)}
+          value={loading ? 'Loading…' : (status?.billingStatus || 'Unknown')}
           hint={status?.cancelAtPeriodEnd ? 'Cancellation scheduled at period end.' : 'No end-of-period cancellation is scheduled.'}
         />
       </div>
@@ -220,12 +215,12 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
           <div className="mt-4 space-y-4">
             <div className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-black/20 px-4 py-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/45">{BILLING_UI_COPY.renewsOn}</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/45">Renewal</p>
                 <p className="mt-1 text-sm text-white">{loading ? 'Loading…' : formatDate(status?.renewalDate || null)}</p>
                 <p className="mt-1 text-xs text-white/50">{status?.cancelAtPeriodEnd ? 'Cancellation scheduled at period end.' : 'Renews normally when billing is active.'}</p>
               </div>
-              <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusTone[status?.subscriptionStatus || 'unknown'] || statusTone.unknown}`}>
-                {loading ? 'Loading…' : getSubscriptionStatusLabel(status?.subscriptionStatus)}
+              <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusTone[status?.billingStatus || 'unknown'] || statusTone.unknown}`}>
+                {status?.billingStatus || 'unknown'}
               </span>
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -234,7 +229,7 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
                 <p className="mt-1 text-sm text-white">{loading ? 'Loading…' : formatDate(status?.usagePeriodStart || null)}</p>
               </div>
               <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/45">{BILLING_UI_COPY.accessUntil}</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/45">Usage window end</p>
                 <p className="mt-1 text-sm text-white">{loading ? 'Loading…' : formatDate(status?.usagePeriodEnd || null)}</p>
               </div>
             </div>
@@ -266,7 +261,7 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
               disabled={portalBusy}
               className="inline-flex w-full items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {portalBusy ? 'Checking billing portal…' : status?.stripeConfigured ? 'Open billing portal' : BILLING_UI_COPY.billingPortalComingSoon}
+              {portalBusy ? 'Checking billing portal…' : status?.stripeConfigured ? 'Open billing portal' : 'Billing portal coming soon'}
             </button>
             {portalMessage ? (
               <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/75">
@@ -298,11 +293,11 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
                   <p className="text-sm font-semibold text-purple-100">Amateur</p>
                   {isCurrentAmateur ? (
                     <span className="rounded-full border border-purple-300/30 bg-purple-300/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-purple-100">
-                      {BILLING_UI_COPY.currentPlan}
+                      Current plan
                     </span>
                   ) : amateurUpgradeAvailable ? (
                     <span className="rounded-full border border-purple-300/25 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-purple-100">
-                      {BILLING_UI_COPY.upgradeAvailable}
+                      Upgrade available
                     </span>
                   ) : null}
                 </div>
@@ -315,7 +310,7 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
               disabled={loading || !amateurUpgradeAvailable || isCurrentAmateur}
               className="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-purple-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isCurrentAmateur ? BILLING_UI_COPY.currentPlan : amateurUpgradeAvailable ? 'Upgrade to Amateur' : 'Locked by plan'}
+              {isCurrentAmateur ? 'Current plan' : amateurUpgradeAvailable ? 'Upgrade to Amateur' : 'Locked by plan'}
             </button>
           </div>
 
@@ -326,15 +321,15 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
                   <p className="text-sm font-semibold text-amber-100">Professional</p>
                   {isCurrentProfessional ? (
                     <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-100">
-                      {BILLING_UI_COPY.currentPlan}
+                      Current plan
                     </span>
                   ) : status?.founderProtected ? (
                     <span className="rounded-full border border-yellow-300/30 bg-yellow-400/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-yellow-100">
-                      {BILLING_UI_COPY.founderProtected}
+                      Founder protected
                     </span>
                   ) : professionalUpgradeAvailable ? (
                     <span className="rounded-full border border-amber-300/25 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-100">
-                      {BILLING_UI_COPY.upgradeAvailable}
+                      Upgrade available
                     </span>
                   ) : null}
                 </div>
@@ -350,7 +345,7 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
               className="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-amber-500 px-4 py-3 text-sm font-extrabold text-slate-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isCurrentProfessional
-                ? BILLING_UI_COPY.currentPlan
+                ? 'Current plan'
                 : status?.founderProtected
                   ? 'Continue with founder pricing'
                   : professionalUpgradeAvailable

@@ -1,22 +1,53 @@
-/**
- * Billing client guardrail:
- * - entitlements are server truth
- * - checkout return does not grant access
- * - webhook reconciliation is the future live sync path
- */
-
 import { supabase } from '../supabase';
 import type { BillingPlanKey } from './planCatalog';
-import type { BillingStatusContract, BillingAccessState, CheckoutLookupKey, CheckoutSessionContract, PortalSessionContract, SubscriptionStatus } from './billingTypes';
 import type { User } from '../types';
 import { isFounderProtected } from './upgradeUx';
 
-export type BillingCheckoutLookupKey = CheckoutLookupKey;
-export type BillingStatusPayload = BillingStatusContract;
-export type BillingCheckoutPayload = CheckoutSessionContract;
-export type BillingPortalPayload = PortalSessionContract;
+export type BillingCheckoutLookupKey =
+  | 'amateur_monthly'
+  | 'professional_monthly'
+  | 'founder_professional_monthly';
 
-export type { BillingAccessState, SubscriptionStatus };
+export type BillingStatusPayload = {
+  ok: true;
+  planKey: BillingPlanKey;
+  billingStatus: string;
+  accessState: string;
+  renewalDate: string | null;
+  cancelAtPeriodEnd: boolean;
+  founderProtected: boolean;
+  founderLockedPlan: BillingPlanKey | null;
+  founderLockedPriceCents: number | null;
+  usagePeriodStart: string | null;
+  usagePeriodEnd: string | null;
+  upgradeTargets: BillingPlanKey[];
+  stripeConfigured: boolean;
+  billingCustomerExists: boolean;
+  stripeCustomerIdPresent: boolean;
+  source: 'database' | 'fallback';
+};
+
+export type BillingCheckoutPayload = {
+  ok: boolean;
+  mode?: 'placeholder';
+  stripeConfigured: boolean;
+  message?: string;
+  targetPlanKey?: BillingPlanKey;
+  targetLookupKey?: BillingCheckoutLookupKey;
+  successUrl?: string;
+  cancelUrl?: string;
+  url?: string;
+};
+
+export type BillingPortalPayload = {
+  ok: boolean;
+  mode?: 'placeholder';
+  stripeConfigured: boolean;
+  billingCustomerExists?: boolean;
+  message?: string;
+  returnUrl?: string;
+  url?: string;
+};
 
 async function getAccessToken(): Promise<string> {
   const { data } = await supabase.auth.getSession();
@@ -51,8 +82,8 @@ async function authorizedFetch<T>(input: string, init?: RequestInit): Promise<T>
   return payload as T;
 }
 
-export function resolveCheckoutLookupKey(targetMembershipTier: 'amateur' | 'professional', user?: User | null): BillingCheckoutLookupKey {
-  if (targetMembershipTier === 'amateur') return 'amateur_monthly';
+export function resolveCheckoutLookupKey(targetTier: 'amateur' | 'professional', user?: User | null): BillingCheckoutLookupKey {
+  if (targetTier === 'amateur') return 'amateur_monthly';
   return isFounderProtected(user) ? 'founder_professional_monthly' : 'professional_monthly';
 }
 
@@ -62,12 +93,10 @@ export async function fetchBillingStatus(): Promise<BillingStatusPayload> {
   });
 }
 
-// Starts checkout only. Access is not granted from the client or from the return URL.
-// Live entitlements must be reconciled server-side.
-export async function createCheckoutSession(lookupKey: BillingCheckoutLookupKey): Promise<BillingCheckoutPayload> {
+export async function createCheckoutSession(planKey: BillingCheckoutLookupKey): Promise<BillingCheckoutPayload> {
   return authorizedFetch<BillingCheckoutPayload>('/api/billing/create-checkout-session', {
     method: 'POST',
-    body: JSON.stringify({ lookupKey }),
+    body: JSON.stringify({ planKey }),
   });
 }
 

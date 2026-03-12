@@ -1,16 +1,18 @@
 import type { BillingPlanKey } from '../../services/planCatalog.js';
-import type { CheckoutLookupKey } from '../../services/billingTypes.js';
 import { BILLING_PLAN_CATALOG } from '../../services/planCatalog.js';
 import { getOptionalEnv, getStripeEnvironmentReport } from './stripeConfig.js';
 
-export type BillingCheckoutLookupKey = CheckoutLookupKey;
+export type BillingCheckoutLookupKey =
+  | 'amateur_monthly'
+  | 'professional_monthly'
+  | 'founder_professional_monthly';
 
 export type StripePlaceholderPlanConfig = {
-  lookupKey: BillingCheckoutLookupKey;
-  membershipTier: BillingPlanKey;
+  internalLookupKey: BillingCheckoutLookupKey;
+  internalPlanKey: BillingPlanKey;
   displayName: string;
   productLookupKey: string;
-  checkoutPriceLookupKey: string;
+  priceLookupKey: string;
   founderOnly: boolean;
   founderPricePlaceholderCents: number | null;
   stripeProductEnvKey: string;
@@ -24,38 +26,38 @@ export type BillingRuntimeConfig = {
   cancelUrl: string;
   portalReturnUrl: string;
   environmentName: string;
-  checkoutTargets: Record<BillingCheckoutLookupKey, StripePlaceholderPlanConfig>;
+  priceLookup: Record<BillingCheckoutLookupKey, StripePlaceholderPlanConfig>;
 };
 
-const CHECKOUT_TARGETS: Record<BillingCheckoutLookupKey, StripePlaceholderPlanConfig> = {
+const PRICE_LOOKUP: Record<BillingCheckoutLookupKey, StripePlaceholderPlanConfig> = {
   amateur_monthly: {
-    lookupKey: 'amateur_monthly',
-    membershipTier: 'amateur',
+    internalLookupKey: 'amateur_monthly',
+    internalPlanKey: 'amateur',
     displayName: BILLING_PLAN_CATALOG.amateur.displayName,
     productLookupKey: 'product_amateur',
-    checkoutPriceLookupKey: 'price_amateur_monthly',
+    priceLookupKey: 'price_amateur_monthly',
     founderOnly: false,
     founderPricePlaceholderCents: null,
     stripeProductEnvKey: 'STRIPE_PRODUCT_AMATEUR',
     stripePriceEnvKey: 'STRIPE_PRICE_AMATEUR_MONTHLY',
   },
   professional_monthly: {
-    lookupKey: 'professional_monthly',
-    membershipTier: 'professional',
+    internalLookupKey: 'professional_monthly',
+    internalPlanKey: 'professional',
     displayName: BILLING_PLAN_CATALOG.professional.displayName,
     productLookupKey: 'product_professional',
-    checkoutPriceLookupKey: 'price_professional_monthly',
+    priceLookupKey: 'price_professional_monthly',
     founderOnly: false,
     founderPricePlaceholderCents: null,
     stripeProductEnvKey: 'STRIPE_PRODUCT_PRO',
     stripePriceEnvKey: 'STRIPE_PRICE_PRO_MONTHLY',
   },
   founder_professional_monthly: {
-    lookupKey: 'founder_professional_monthly',
-    membershipTier: 'founder_professional',
+    internalLookupKey: 'founder_professional_monthly',
+    internalPlanKey: 'founder_professional',
     displayName: BILLING_PLAN_CATALOG.founder_professional.displayName,
     productLookupKey: 'product_founder_professional',
-    checkoutPriceLookupKey: 'price_founder_professional_monthly',
+    priceLookupKey: 'price_founder_professional_monthly',
     founderOnly: true,
     founderPricePlaceholderCents: BILLING_PLAN_CATALOG.founder_professional.monthlyPriceCents,
     stripeProductEnvKey: 'STRIPE_PRODUCT_PRO_FOUNDER',
@@ -90,22 +92,22 @@ export function getBillingConfig(env: NodeJS.ProcessEnv = process.env): BillingR
     cancelUrl: `${appBaseUrl}/account/billing?checkout=cancel`,
     portalReturnUrl: `${appBaseUrl}/account/billing`,
     environmentName: stripeEnv.environmentName,
-    checkoutTargets: CHECKOUT_TARGETS,
+    priceLookup: PRICE_LOOKUP,
   };
 }
 
 export function isBillingCheckoutLookupKey(value: unknown): value is BillingCheckoutLookupKey {
-  return typeof value === 'string' && value in CHECKOUT_TARGETS;
+  return typeof value === 'string' && value in PRICE_LOOKUP;
 }
 
 export function getBillingPlanPlaceholder(value: BillingCheckoutLookupKey, env: NodeJS.ProcessEnv = process.env): StripePlaceholderPlanConfig & {
   configuredStripePriceId: string | null;
   configuredStripeProductId: string | null;
 } {
-  const target = CHECKOUT_TARGETS[value];
+  const plan = PRICE_LOOKUP[value];
   return {
-    ...target,
-    configuredStripePriceId: getOptionalEnv(target.stripePriceEnvKey, env),
-    configuredStripeProductId: getOptionalEnv(target.stripeProductEnvKey, env),
+    ...plan,
+    configuredStripePriceId: getOptionalEnv(plan.stripePriceEnvKey, env),
+    configuredStripeProductId: getOptionalEnv(plan.stripeProductEnvKey, env),
   };
 }
