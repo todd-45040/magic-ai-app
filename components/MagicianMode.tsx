@@ -1068,8 +1068,11 @@ const IdentifyTab: React.FC<{
     </div>
 );
 
+
 const PublicationsTab: React.FC = () => {
   const [filter, setFilter] = useState<'all' | 'print' | 'digital' | 'video' | 'research' | 'archive'>('all');
+  const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState<'alphabetical' | 'newest' | 'popular'>('alphabetical');
 
   const featuredPublication = publications.find(pub => pub.name === 'Genii Magazine') ?? publications[0];
 
@@ -1082,69 +1085,36 @@ const PublicationsTab: React.FC = () => {
     { id: 'archive', label: 'Archive' },
   ] as const;
 
-  const getPublicationTypeTokens = (type?: string) =>
-    (type ?? 'Publication')
-      .split('/')
-      .map(token => token.trim())
-      .filter(Boolean);
+  const editorPickNames = ['Genii Magazine', 'Magicseen', 'VANISH Magazine'] as const;
 
-  const filteredPublications = publications.filter(pub => {
-    if (filter === 'all') return true;
-    return getPublicationTypeTokens(pub.type).some(token => token.toLowerCase() === filter);
-  });
+  const q = search.trim().toLowerCase();
 
-  const getPublicationBadgeClass = (label: string) => {
-    switch (label.toLowerCase()) {
-      case 'video':
-        return 'border-purple-500/30 bg-purple-500/10 text-purple-200';
-      case 'research':
-        return 'border-cyan-500/30 bg-cyan-500/10 text-cyan-200';
-      case 'archive':
-        return 'border-slate-500/40 bg-slate-500/10 text-slate-200';
-      default:
-        return 'border-yellow-500/30 bg-yellow-500/10 text-yellow-200';
-    }
-  };
+  const filteredPublications = [...publications]
+    .filter(pub => {
+      const matchesFilter =
+        filter === 'all' ||
+        (pub.type ?? '').toLowerCase().includes(filter);
 
-  const getPublicationThumbnail = (type?: string) => {
-    const lowerType = (type ?? '').toLowerCase();
+      if (!matchesFilter) return false;
+      if (!q) return true;
 
-    if (lowerType.includes('video')) {
-      return {
-        icon: '▶',
-        label: 'Video magazine',
-        accent: 'from-purple-500/25 via-fuchsia-500/10 to-slate-900/40',
-      };
-    }
+      const haystack = [pub.name, pub.description].join(' ').toLowerCase();
+      return haystack.includes(q);
+    })
+    .sort((a, b) => {
+      if (sortBy === 'alphabetical') return a.name.localeCompare(b.name);
+      if (sortBy === 'popular') return b.name.localeCompare(a.name);
+      return a.name.localeCompare(b.name);
+    });
 
-    if (lowerType.includes('research')) {
-      return {
-        icon: '✦',
-        label: 'Research journal',
-        accent: 'from-cyan-500/25 via-sky-500/10 to-slate-900/40',
-      };
-    }
-
-    if (lowerType.includes('archive')) {
-      return {
-        icon: '⌘',
-        label: 'Archive collection',
-        accent: 'from-slate-500/25 via-slate-400/10 to-slate-900/40',
-      };
-    }
-
-    return {
-      icon: '🎩',
-      label: 'Magic publication',
-      accent: 'from-yellow-500/20 via-amber-500/10 to-slate-900/40',
-    };
-  };
-
-  const featuredTypeTokens = getPublicationTypeTokens(featuredPublication?.type);
+  const editorPicks = editorPickNames
+    .map(name => publications.find(pub => pub.name === name))
+    .filter(Boolean);
 
   return (
     <div className="flex-1 overflow-y-auto p-4 md:p-5">
       <div className="animate-fade-in space-y-6">
+
         <div className="space-y-2">
           <h2 className="text-2xl font-bold text-slate-200 font-cinzel">Magic Publications</h2>
           <p className="text-slate-400 max-w-3xl">
@@ -1152,67 +1122,30 @@ const PublicationsTab: React.FC = () => {
           </p>
         </div>
 
-        {featuredPublication ? (
-          <div className="relative overflow-hidden rounded-2xl border border-yellow-500/20 bg-gradient-to-br from-slate-800/95 via-slate-900/95 to-slate-950/95 p-5 md:p-6 shadow-[0_0_30px_rgba(15,23,42,0.35)]">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(234,179,8,0.18),transparent_35%)] pointer-events-none" />
-            <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex items-start gap-4">
-                <div className="h-20 w-16 shrink-0 rounded-xl border border-yellow-500/20 bg-gradient-to-br from-yellow-500/20 via-amber-500/10 to-slate-900/60 flex items-center justify-center text-3xl shadow-inner shadow-yellow-500/10">
-                  🎩
-                </div>
-                <div className="space-y-3">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-yellow-500/25 bg-yellow-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-yellow-200/90">
-                    Featured Publication
-                  </div>
-                  <div>
-                    <h3 className="text-2xl font-semibold bg-gradient-to-r from-yellow-100 via-amber-300 to-yellow-100 bg-clip-text text-transparent">
-                      {featuredPublication.name}
-                    </h3>
-                    <p className="mt-2 max-w-2xl text-sm md:text-base text-slate-300">
-                      {featuredPublication.name === 'Genii Magazine'
-                        ? 'The longest running magazine in magic and a cornerstone resource for performers, historians, and creators.'
-                        : featuredPublication.description}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {featuredTypeTokens.map(label => (
-                      <span
-                        key={label}
-                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium border ${getPublicationBadgeClass(label)}`}
-                      >
-                        {label}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
+        {/* Search + Sort */}
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/35 p-4 md:p-5 space-y-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
 
-              <div className="flex flex-wrap items-center gap-3 lg:justify-end">
-                <a
-                  href={featuredPublication.url ?? "#"}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-900/50 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-500 hover:bg-slate-800/80"
-                >
-                  Read More
-                </a>
-                {featuredPublication.url ? (
-                  <a
-                    href={featuredPublication.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-2 text-sm font-medium text-yellow-100 transition hover:border-yellow-400/50 hover:bg-yellow-500/15"
-                    title="Open in a new tab"
-                  >
-                    Visit Site <span aria-hidden="true">↗</span>
-                  </a>
-                ) : null}
-              </div>
-            </div>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search publications..."
+              className="w-full lg:max-w-md rounded-xl border border-slate-700 bg-slate-950/60 py-2.5 px-3 text-sm text-slate-200"
+            />
+
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              className="rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2 text-sm text-slate-200"
+            >
+              <option value="alphabetical">Alphabetical</option>
+              <option value="newest">Newest</option>
+              <option value="popular">Most Popular</option>
+            </select>
+
           </div>
-        ) : null}
 
-        <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
             {publicationFilters.map(option => {
               const isActive = filter === option.id;
@@ -1223,8 +1156,8 @@ const PublicationsTab: React.FC = () => {
                   onClick={() => setFilter(option.id)}
                   className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
                     isActive
-                      ? 'border-yellow-400/40 bg-yellow-500/15 text-yellow-100 shadow-[0_0_16px_rgba(234,179,8,0.14)]'
-                      : 'border-slate-700 bg-slate-900/40 text-slate-300 hover:border-slate-500 hover:bg-slate-800/80'
+                      ? 'border-yellow-400/40 bg-yellow-500/15 text-yellow-100'
+                      : 'border-slate-700 bg-slate-900/40 text-slate-300'
                   }`}
                 >
                   {option.label}
@@ -1232,66 +1165,60 @@ const PublicationsTab: React.FC = () => {
               );
             })}
           </div>
+        </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredPublications.map(pub => {
-              const badgeTokens = getPublicationTypeTokens(pub.type);
-              const thumbnail = getPublicationThumbnail(pub.type);
+        {/* Editor Picks */}
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 md:p-5">
+          <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-300">
+            Editor's Picks
+          </h3>
 
-              return (
-                <div
-                  key={pub.name}
-                  className="group overflow-hidden rounded-xl border border-slate-700 bg-slate-800/50 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-purple-400 hover:bg-purple-500/5 hover:shadow-[0_12px_40px_rgba(76,29,149,0.18)]"
-                >
-                  <div className="flex items-start gap-4">
-                    <div className={`flex h-20 w-16 shrink-0 flex-col items-center justify-center rounded-xl border border-slate-600/80 bg-gradient-to-br ${thumbnail.accent} text-slate-100 shadow-inner shadow-slate-950/40`}>
-                      <span className="text-2xl leading-none">{thumbnail.icon}</span>
-                      <span className="mt-2 px-2 text-center text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-300/90">
-                        {thumbnail.label}
-                      </span>
-                    </div>
-
-                    <div className="min-w-0 flex-1">
-                      <h3 className="font-bold text-lg bg-gradient-to-r from-yellow-200 via-amber-300 to-yellow-200 bg-clip-text text-transparent">
-                        {pub.name}
-                      </h3>
-                      <p className="mt-2 text-sm text-slate-400 line-clamp-3">{pub.description}</p>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 flex flex-wrap items-center gap-2">
-                    {badgeTokens.map(label => (
-                      <span
-                        key={`${pub.name}-${label}`}
-                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium border ${getPublicationBadgeClass(label)}`}
-                      >
-                        {label}
-                      </span>
-                    ))}
-                  </div>
-
-                  <div className="mt-4 flex items-center justify-end gap-3">
-                    {pub.url ? (
-                      <a
-                        href={pub.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 rounded-lg border border-yellow-500/25 bg-slate-900/40 px-3 py-1.5 text-xs text-yellow-200 transition hover:border-yellow-400/40 hover:bg-slate-900/70 hover:text-yellow-100"
-                        title="Open in a new tab"
-                      >
-                        Visit site <span aria-hidden="true">↗</span>
-                      </a>
-                    ) : null}
-                  </div>
-                </div>
-              );
-            })}
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+            {editorPicks.map((pub: any) => (
+              <div key={pub.name} className="rounded-xl border border-slate-700 bg-slate-800/40 p-3">
+                <div className="text-sm font-semibold text-yellow-100">{pub.name}</div>
+                <div className="mt-1 text-xs text-slate-400">{pub.description}</div>
+              </div>
+            ))}
           </div>
         </div>
+
+        {/* Publication Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {filteredPublications.map(pub => (
+            <div
+              key={pub.name}
+              className="group overflow-hidden rounded-xl border border-slate-700 bg-slate-800/50 p-4"
+            >
+              <h3 className="font-bold text-lg text-yellow-200">
+                {pub.name}
+              </h3>
+
+              <p className="mt-2 text-sm text-slate-400">
+                {pub.description}
+              </p>
+
+              {pub.url && (
+                <div className="mt-4 flex justify-end">
+                  <a
+                    href={pub.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 rounded-lg border border-yellow-500/25 px-3 py-1.5 text-xs text-yellow-200"
+                  >
+                    Visit site ↗
+                  </a>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
       </div>
     </div>
   );
 };
+
 
 const CommunityTab: React.FC = () => {
   const [query, setQuery] = useState('');
