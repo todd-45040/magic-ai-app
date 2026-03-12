@@ -10,6 +10,7 @@
 //   POST /api/ai/identify  { imageBase64, prompt? }             -> { ok:true, data:{ result } }
 
 import { supabase } from '../supabase';
+import { buildAiRequestFingerprint, getClientCooldownMs, runManagedAiRequest } from './aiRequestManager';
 
 export type AiErrorCode =
   | "BAD_REQUEST"
@@ -81,7 +82,11 @@ async function safeFetchJson<T>(
     ...init,
     headers: await withAuthHeaders((init.headers as Record<string, string>) || {}),
   };
-  const r = await fetch(url, initWithAuth);
+  const bodyForKey = (() => { try { return JSON.parse(String(init.body || '{}')); } catch { return String(init.body || ''); } })();
+  const fingerprint = buildAiRequestFingerprint(url, bodyForKey);
+  const cooldownMs = getClientCooldownMs(url);
+  const response = await runManagedAiRequest(fingerprint, async () => fetch(url, initWithAuth), cooldownMs);
+  const r = response as Response;
   const text = await r.text();
 
   let parsed: any = null;

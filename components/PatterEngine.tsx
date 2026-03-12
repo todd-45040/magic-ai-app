@@ -138,7 +138,7 @@ Tones: ${tones}`;
 
       let res: Response;
       try {
-        res = await fetch(`/api/generatePatter?ts=${Date.now()}`, {
+        res = await fetch(`/api/ai/generate-patter?ts=${Date.now()}`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
