@@ -2,7 +2,6 @@ import { Type } from "@google/genai";
 import { supabase } from '../supabase';
 import type { ChatMessage, TrickIdentificationResult, User } from '../types';
 import { getAiProvider } from './aiProviderService';
-import { buildAiRequestFingerprint, getClientCooldownMs, runManagedAiRequest } from './aiRequestManager';
 
 // Keep this type export for components that reference live sessions.
 // NOTE: Live sessions are intentionally disabled in the production baseline because
@@ -231,13 +230,9 @@ async function postJson<T>(
     body: JSON.stringify(body),
   };
 
-  const fingerprint = buildAiRequestFingerprint(url, body);
-  const cooldownMs = getClientCooldownMs(url);
-
   let lastErr: any = null;
 
-  const execute = async () => {
-    for (let attempt = 0; attempt <= retries; attempt++) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const res = await fetchWithTimeout(url, init, timeoutMs);
 
@@ -309,10 +304,7 @@ async function postJson<T>(
     ? `Request timed out (${Math.round((options?.timeoutMs ?? 90000) / 1000)}s)`
     : (lastErr?.message || 'Request failed');
 
-    throw new Error(msg);
-  };
-
-  return runManagedAiRequest(fingerprint, execute, cooldownMs);
+  throw new Error(msg);
 }
 
 
@@ -354,8 +346,8 @@ export const generateResponse = async (
   };
 
   try {
-    const result = await postJson<any>('/api/ai/chat', { messages: [{ role: 'system', content: systemInstruction }, { role: 'user', content: prompt }] }, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 2 });
-    return extractText(result?.data ?? result);
+    const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 2 });
+    return extractText(result);
   } catch (error: any) {
     console.error('AI Error:', error);
     return `Error: ${error?.message || 'Failed to connect to AI wizard.'}`;
@@ -410,8 +402,8 @@ export const generateStructuredResponse = async (
     },
   };
 
-  const result = await postJson<any>('/api/ai/json', { messages: [{ role: 'system', content: systemInstruction }, { role: 'user', content: prompt }], config: { responseSchema, maxOutputTokens: typeof options?.maxOutputTokens === 'number' ? options.maxOutputTokens : undefined }, model }, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 2 });
-  const text = JSON.stringify(result?.data?.json ?? {});
+  const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 2 });
+  const text = extractText(result);
 
   const looksTruncated = (raw: string, errMsg: string) => {
     const t = (raw || '').trim();

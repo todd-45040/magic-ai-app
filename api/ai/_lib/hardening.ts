@@ -121,53 +121,44 @@ export function mapProviderError(err: any): {
   details?: any;
 } {
   const msg = String(err?.message || err || 'Request failed');
-  const code = String(err?.code || err?.status || err?.statusCode || '');
+  const code = String(err?.code || err?.status || err?.statusCode || '').toUpperCase();
 
-  // Timeout
-  if (code === 'TIMEOUT' || /timed out/i.test(msg)) {
-    return { status: 504, error_code: 'TIMEOUT', message: 'The request timed out. Please try again.', retryable: true };
+  if (code === 'AI_AUTH_REQUIRED' || code === 'UNAUTHORIZED' || /unauthorized|forbidden/i.test(msg)) {
+    return { status: 401, error_code: 'AI_AUTH_REQUIRED', message: 'Please sign in to use this AI feature.', retryable: false };
   }
 
-  // Quota / rate / overload signals
-  if (/quota|resource[_\s-]?exhausted|rate limit|too many requests/i.test(msg)) {
-    // If it *looks* like provider quota, call it QUOTA_EXCEEDED
-    const isQuota = /quota|resource[_\s-]?exhausted/i.test(msg);
-    return {
-      status: 429,
-      error_code: isQuota ? 'QUOTA_EXCEEDED' : 'PROVIDER_RATE_LIMIT',
-      message: isQuota
-        ? 'AI quota has been temporarily exceeded. Please try again later.'
-        : 'AI provider is rate limiting requests. Please try again shortly.',
-      retryable: true,
-    };
+  if (code === 'AI_DUPLICATE_REQUEST' || /already being processed|duplicate request/i.test(msg)) {
+    return { status: 409, error_code: 'AI_DUPLICATE_REQUEST', message: 'That request is already being processed.', retryable: true };
   }
 
-  // Safety blocks
+  if (code === 'AI_LIMIT_REACHED' || code === 'QUOTA_EXCEEDED' || /quota|resource[_\s-]?exhausted/i.test(msg)) {
+    return { status: 429, error_code: 'AI_LIMIT_REACHED', message: 'You have reached the limit for this AI feature. Please upgrade or wait for reset.', retryable: true };
+  }
+
+  if (code === 'AI_INVALID_INPUT' || code === 'BAD_REQUEST' || code === 'PAYLOAD_TOO_LARGE' || /missing required input|invalid input|payload too large|too large|empty instances/i.test(msg)) {
+    return { status: code === 'PAYLOAD_TOO_LARGE' || code.includes('TOO_LARGE') ? 413 : 400, error_code: 'AI_INVALID_INPUT', message: 'That request is too large or invalid. Please shorten your input and try again.', retryable: false };
+  }
+
+  if (code === 'TIMEOUT' || code === 'AI_TIMEOUT' || /timed out/i.test(msg)) {
+    return { status: 504, error_code: 'AI_TIMEOUT', message: 'AI is temporarily unavailable. Please try again in a moment.', retryable: true };
+  }
+
+  if (/rate limit|too many requests/i.test(msg)) {
+    return { status: 429, error_code: 'AI_LIMIT_REACHED', message: 'Too many requests. Please wait a moment and try again.', retryable: true };
+  }
+
   if (/safety|blocked by safety|finishreason:\s*safety/i.test(msg)) {
-    return {
-      status: 400,
-      error_code: 'SAFETY_BLOCK',
-      message: 'This request was blocked by safety filters. Please rephrase and try again.',
-      retryable: false,
-    };
+    return { status: 400, error_code: 'AI_INVALID_INPUT', message: 'This request was blocked by safety filters. Please rephrase and try again.', retryable: false };
   }
 
-  // Auth / config
-  if (/api key|not configured|unauthorized|forbidden/i.test(msg)) {
-    const isAuth = /unauthorized/i.test(msg);
-    return {
-      status: isAuth ? 401 : 500,
-      error_code: isAuth ? 'UNAUTHORIZED' : 'CONFIG_ERROR',
-      message: isAuth ? 'Unauthorized.' : 'Server configuration error.',
-      retryable: false,
-    };
+  if (/api key|not configured|server misconfig/i.test(msg)) {
+    return { status: 503, error_code: 'AI_PROVIDER_UNAVAILABLE', message: 'AI is temporarily unavailable. Please try again in a moment.', retryable: true };
   }
 
-  // Default
   return {
-    status: 500,
-    error_code: 'INTERNAL_ERROR',
-    message: 'An unexpected error occurred. Please try again.',
+    status: 503,
+    error_code: 'AI_PROVIDER_UNAVAILABLE',
+    message: 'AI is temporarily unavailable. Please try again in a moment.',
     retryable: true,
     details: undefined,
   };
