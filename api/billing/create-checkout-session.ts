@@ -1,0 +1,66 @@
+import { requireSupabaseAuth } from '../_auth.js';
+import { getBillingConfig, getBillingPlanPlaceholder, isBillingCheckoutLookupKey } from '../../server/billing/billingConfig.js';
+import { resolveBillingStatusForUser } from '../../server/billing/status.js';
+
+export default async function handler(request: any, response: any) {
+  try {
+    if (request.method !== 'POST') {
+      return response.status(405).json({ error: 'Method not allowed' });
+    }
+
+    const auth = await requireSupabaseAuth(request);
+    if (!auth.ok) {
+      return response.status(auth.status).json({ error: auth.error || 'Unauthorized' });
+    }
+
+    const planKey = request?.body?.planKey;
+    if (!isBillingCheckoutLookupKey(planKey)) {
+      return response.status(400).json({
+        error: 'Invalid plan key. Client must send an internal billing lookup key only.',
+      });
+    }
+
+    const billingStatus = await resolveBillingStatusForUser(auth.admin, auth.userId);
+    const target = getBillingPlanPlaceholder(planKey);
+    const allowedTarget = billingStatus.upgradeTargets.includes(target.internalPlanKey);
+
+    if (!allowedTarget) {
+      return response.status(403).json({
+        error: 'Requested upgrade path is not allowed for this account.',
+        currentPlan: billingStatus.planKey,
+        allowedTargets: billingStatus.upgradeTargets,
+        requestedPlan: target.internalPlanKey,
+      });
+    }
+
+    if (target.founderOnly && !billingStatus.founderProtected) {
+      return response.status(403).json({
+        error: 'Founder pricing is protected and is not available for this account.',
+      });
+    }
+
+    const config = getBillingConfig();
+
+    if (!config.stripeConfigured) {
+      return response.status(200).json({
+        ok: true,
+        mode: 'placeholder',
+        stripeConfigured: false,
+        message: 'Stripe not configured yet',
+        targetPlanKey: target.internalPlanKey,
+        targetLookupKey: target.internalLookupKey,
+        successUrl: config.successUrl,
+        cancelUrl: config.cancelUrl,
+      });
+    }
+
+    return response.status(501).json({
+      error: 'Stripe checkout session creation is not connected yet.',
+      targetPlanKey: target.internalPlanKey,
+      targetLookupKey: target.internalLookupKey,
+    });
+  } catch (err: any) {
+    console.error('billing/create-checkout-session error:', err);
+    return response.status(500).json({ error: err?.message || 'checkout scaffold failed' });
+  }
+}
