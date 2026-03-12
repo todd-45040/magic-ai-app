@@ -1606,6 +1606,25 @@ const PublicationsTab: React.FC = () => {
 const CommunityTab: React.FC = () => {
   const [query, setQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<'All' | 'Forums' | 'Clubs' | 'Conventions' | 'Organizations'>('All');
+  const COMMUNITY_FOLLOW_STORAGE_KEY = 'magic-community-following';
+  const [followedCommunities, setFollowedCommunities] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = window.localStorage.getItem(COMMUNITY_FOLLOW_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(COMMUNITY_FOLLOW_STORAGE_KEY, JSON.stringify(followedCommunities));
+    } catch {
+      // no-op
+    }
+  }, [followedCommunities]);
 
   const onlineCommunities = [
     {
@@ -1733,6 +1752,52 @@ const CommunityTab: React.FC = () => {
     | (typeof clubDirectory)[number]
     | (typeof conventionDirectory)[number];
 
+  const toggleFollowCommunity = (name: string) => {
+    setFollowedCommunities(prev =>
+      prev.includes(name) ? prev.filter(item => item !== name) : [...prev, name]
+    );
+  };
+
+  const discussCommunityWithAI = (item: CommunityDirectoryItem) => {
+    const prompt = `Help me evaluate ${item.name} for my magic networking strategy. Explain who it is best for, what kind of value it offers, whether it connects more strongly to Magic Wire news, Publications research, or ongoing networking, and give me one practical next step.`;
+    alert(`AI Assistant Prompt:
+
+${prompt}`);
+  };
+
+  const getCommunitySignal = (item: CommunityDirectoryItem) => {
+    if (item.name === 'Blackpool Magic Convention' || item.name === 'FISM') {
+      return 'Community Spotlight';
+    }
+    if (item.name === 'The Magic Café' || item.name === 'Genii Forum') {
+      return 'Trending in Magic Wire';
+    }
+    if (item.isOfficial) {
+      return 'Trusted Network';
+    }
+    return 'Good Place to Start';
+  };
+
+  const getCommunityWhyItMattersSummary = (item: CommunityDirectoryItem) => {
+    if (item.category === 'Conventions') {
+      return 'Useful for tracking event momentum, networking opportunities, and where the broader magic conversation is gathering in person.';
+    }
+    if (item.category === 'Organizations') {
+      return 'Useful for building long-term credibility, structure, and a stronger professional network inside the magic ecosystem.';
+    }
+    if (item.category === 'Clubs') {
+      return 'Useful for staying connected to peers, local meetups, and real-world performer relationships beyond the app.';
+    }
+    return 'Useful for questions, discovery, peer feedback, and seeing which ideas and topics the community is paying attention to.';
+  };
+
+  const getCommunityWorkflowLinks = (item: CommunityDirectoryItem) => {
+    if (item.category === 'Conventions') return ['Magic Wire', 'Research', 'Networking'];
+    if (item.category === 'Organizations') return ['Publications', 'Research', 'Networking'];
+    if (item.category === 'Clubs') return ['Research', 'Networking'];
+    return ['Magic Wire', 'Publications', 'Research'];
+  };
+
   const visibleCommunityItems: CommunityDirectoryItem[] = [
     ...filteredOnlineCommunities,
     ...filteredClubs,
@@ -1798,17 +1863,22 @@ const CommunityTab: React.FC = () => {
     </div>
   );
 
-  const renderCuratedCard = (item: CommunityDirectoryItem, tone: 'featured' | 'standard' = 'standard') => {
+  const renderCommunityCard = (
+    item: CommunityDirectoryItem,
+    options: { tone?: 'featured' | 'standard'; visitLabel?: string; showDateBadge?: boolean } = {}
+  ) => {
+    const { tone = 'standard', visitLabel, showDateBadge = false } = options;
     const Icon = item.Icon;
     const isFeatured = tone === 'featured';
+    const signal = getCommunitySignal(item);
+    const workflowLinks = getCommunityWorkflowLinks(item);
+    const isFollowing = followedCommunities.includes(item.name);
+    const resolvedVisitLabel = visitLabel ?? (item.category === 'Conventions' ? 'Visit event' : item.category === 'Forums' ? 'Visit community' : 'Visit organization');
 
     return (
-      <a
+      <div
         key={`${tone}-${item.name}`}
-        href={(item as any).url}
-        target="_blank"
-        rel="noreferrer"
-        className={`group block rounded-2xl border p-4 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-purple-500/40 ${
+        className={`group rounded-2xl border p-4 transition-all duration-200 ${
           isFeatured
             ? 'border-purple-500/30 bg-gradient-to-br from-purple-500/18 via-slate-900/92 to-slate-950/95 shadow-[0_18px_60px_rgba(88,28,135,0.22)] hover:-translate-y-1 hover:border-purple-400/50'
             : 'border-slate-700/60 bg-slate-900/40 shadow-sm hover:-translate-y-1 hover:border-purple-500/35 hover:bg-slate-900/55 hover:shadow-[0_18px_50px_rgba(15,23,42,0.35)]'
@@ -1824,13 +1894,17 @@ const CommunityTab: React.FC = () => {
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center rounded-full border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-[11px] text-amber-200">{signal}</span>
               <span className="inline-flex items-center rounded-full border border-slate-700/60 bg-slate-950/25 px-2.5 py-1 text-[11px] text-purple-200">{item.badge}</span>
               <span className="inline-flex items-center rounded-full border border-slate-700/60 bg-slate-950/25 px-2.5 py-1 text-[11px] text-slate-300">{item.category}</span>
               {item.isOfficial && (
                 <span className="inline-flex items-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-300">Official</span>
               )}
+              {showDateBadge && 'date' in item && item.date && (
+                <span className="inline-flex items-center rounded-full border border-slate-700/60 bg-slate-950/25 px-2.5 py-1 text-[11px] text-slate-300">{item.date}</span>
+              )}
             </div>
-            <h4 className={`mt-3 font-bold text-slate-100 transition-colors group-hover:text-white ${isFeatured ? 'text-2xl font-cinzel' : 'text-base'}`}>
+            <h4 className={`mt-3 font-bold text-slate-100 transition-colors group-hover:text-white ${isFeatured ? 'text-2xl font-cinzel' : 'text-base md:text-lg'}`}>
               {item.name}
             </h4>
             <p className={`mt-2 text-sm leading-6 ${isFeatured ? 'text-slate-300' : 'text-slate-400 line-clamp-3'}`}>
@@ -1848,20 +1922,57 @@ const CommunityTab: React.FC = () => {
         <div className={`mt-4 rounded-xl border px-3.5 py-3 ${
           isFeatured ? 'border-purple-500/25 bg-slate-950/35' : 'border-slate-700/60 bg-slate-950/25'
         }`}>
-          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-purple-300/80">Why this is worth joining</div>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-purple-300/80">Why it matters</div>
+            <div className="flex flex-wrap gap-1.5">
+              {workflowLinks.map(link => (
+                <span key={`${item.name}-${link}`} className="inline-flex items-center rounded-full border border-slate-700/60 bg-slate-900/65 px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] text-slate-300">
+                  {link}
+                </span>
+              ))}
+            </div>
+          </div>
           <p className="mt-2 text-sm leading-6 text-slate-300">{getCommunityWhyItMatters(item)}</p>
+          <p className="mt-2 text-xs leading-5 text-slate-400">{getCommunityWhyItMattersSummary(item)}</p>
         </div>
 
-        <div className={`mt-4 inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 text-xs font-semibold transition ${
-          isFeatured
-            ? 'border-purple-400/45 bg-purple-500/18 text-purple-100 group-hover:border-purple-300/60 group-hover:bg-purple-500/24'
-            : 'border-purple-500/30 bg-purple-500/12 text-purple-100 group-hover:border-purple-400/50 group-hover:bg-purple-500/18'
-        }`}>
-          Visit {item.category === 'Conventions' ? 'event' : item.category === 'Forums' ? 'community' : 'organization'} <span aria-hidden="true">↗</span>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => discussCommunityWithAI(item)}
+            className="inline-flex items-center gap-1 rounded-xl border border-purple-500/30 bg-purple-500/12 px-3.5 py-2 text-xs font-semibold text-purple-100 transition hover:border-purple-400/50 hover:bg-purple-500/18"
+          >
+            Discuss with AI
+          </button>
+          <button
+            type="button"
+            onClick={() => toggleFollowCommunity(item.name)}
+            className={`inline-flex items-center gap-1 rounded-xl border px-3.5 py-2 text-xs font-semibold transition ${
+              isFollowing
+                ? 'border-yellow-500/35 bg-yellow-500/10 text-yellow-200'
+                : 'border-slate-600 bg-slate-900/35 text-slate-300 hover:border-yellow-500/30 hover:text-yellow-200'
+            }`}
+          >
+            <span aria-hidden="true">{isFollowing ? '★' : '☆'}</span>
+            {isFollowing ? 'Following' : 'Follow'}
+          </button>
+          <a
+            href={(item as any).url}
+            target="_blank"
+            rel="noreferrer"
+            className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 text-xs font-semibold transition ${
+              isFeatured
+                ? 'border-purple-400/45 bg-purple-500/18 text-purple-100 hover:border-purple-300/60 hover:bg-purple-500/24'
+                : 'border-purple-500/30 bg-purple-500/12 text-purple-100 hover:border-purple-400/50 hover:bg-purple-500/18'
+            }`}
+          >
+            {resolvedVisitLabel} <span aria-hidden="true">↗</span>
+          </a>
         </div>
-      </a>
+      </div>
     );
   };
+
 
   return (
     <div className="flex-1 overflow-y-auto p-4 md:p-5">
@@ -1882,7 +1993,7 @@ const CommunityTab: React.FC = () => {
                   <div className="mt-1 text-lg font-semibold text-slate-100">Search the full magic community in one place</div>
                   <div className="mt-1 text-sm text-slate-500">Browse forums, clubs, organizations, and conventions without leaving the page.</div>
                 </div>
-                <div className="text-xs text-slate-500">{totalMatches} result{totalMatches === 1 ? '' : 's'} shown</div>
+                <div className="text-xs text-slate-500">{totalMatches} result{totalMatches === 1 ? '' : 's'} shown{followedCommunities.length > 0 ? ` • ${followedCommunities.length} following` : ''}</div>
               </div>
 
               <div className="relative">
@@ -1947,7 +2058,7 @@ const CommunityTab: React.FC = () => {
                   </div>
                   <div className="text-xs text-slate-500">Editorial pick</div>
                 </div>
-                {renderCuratedCard(featuredCommunity, 'featured')}
+                {renderCommunityCard(featuredCommunity, { tone: 'featured', visitLabel: 'Visit community' })}
               </div>
             )}
 
@@ -1960,7 +2071,7 @@ const CommunityTab: React.FC = () => {
                       <h4 className="mt-1 text-xl font-bold text-slate-100">Recommended places to join or watch closely</h4>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {editorPicks.map(item => renderCuratedCard(item))}
+                      {editorPicks.map(item => renderCommunityCard(item, { visitLabel: item.category === 'Conventions' ? 'Visit event' : item.category === 'Forums' ? 'Visit community' : 'Visit organization', showDateBadge: item.category === 'Conventions' }))}
                     </div>
                   </div>
                 )}
@@ -1972,7 +2083,7 @@ const CommunityTab: React.FC = () => {
                       <h4 className="mt-1 text-xl font-bold text-slate-100">High-value communities for serious networking</h4>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {professionalNetworkPicks.map(item => renderCuratedCard(item))}
+                      {professionalNetworkPicks.map(item => renderCommunityCard(item, { visitLabel: item.category === 'Conventions' ? 'Visit event' : item.category === 'Forums' ? 'Visit community' : 'Visit organization', showDateBadge: item.category === 'Conventions' }))}
                     </div>
                   </div>
                 )}
@@ -1986,7 +2097,7 @@ const CommunityTab: React.FC = () => {
                       <h4 className="mt-1 text-xl font-bold text-slate-100">Easy entry points into the community</h4>
                     </div>
                     <div className="space-y-4">
-                      {beginnerFriendlyPicks.map(item => renderCuratedCard(item))}
+                      {beginnerFriendlyPicks.map(item => renderCommunityCard(item, { visitLabel: item.category === 'Conventions' ? 'Visit event' : item.category === 'Forums' ? 'Visit community' : 'Visit organization', showDateBadge: item.category === 'Conventions' }))}
                     </div>
                   </div>
                 )}
@@ -2001,7 +2112,7 @@ const CommunityTab: React.FC = () => {
                       <span className="inline-flex items-center rounded-full border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-[11px] text-amber-200">Spotlight</span>
                     </div>
                     <div className="mt-4">
-                      {renderCuratedCard(conventionSpotlight)}
+                      {renderCommunityCard(conventionSpotlight, { visitLabel: 'Visit event', showDateBadge: true })}
                     </div>
                   </div>
                 )}
@@ -2020,50 +2131,7 @@ const CommunityTab: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {filteredOnlineCommunities.map(item => {
-              const Icon = item.Icon;
-              return (
-                <a
-                  key={item.name}
-                  href={item.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="group rounded-2xl border border-slate-700/60 bg-slate-900/40 p-4 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-purple-500/40 hover:bg-slate-900/55 hover:shadow-[0_18px_50px_rgba(15,23,42,0.35)] focus:outline-none focus:ring-2 focus:ring-purple-500/40"
-                  title={`Open ${item.name}`}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-purple-500/20 bg-gradient-to-br from-purple-500/20 via-slate-900/90 to-slate-950 text-purple-200 shadow-inner">
-                      <Icon className="h-5 w-5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <h4 className="font-bold text-lg text-slate-100 transition-colors group-hover:text-white">{item.name}</h4>
-                          <div className="mt-1 flex flex-wrap items-center gap-2">
-                            <span className="inline-flex items-center rounded-full border border-slate-700/60 bg-slate-950/25 px-2.5 py-1 text-[11px] text-purple-200">{item.badge}</span>
-                            {item.isOfficial && (
-                              <span className="inline-flex items-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-300">Official connection</span>
-                            )}
-                          </div>
-                        </div>
-                        <span className="text-slate-500 transition group-hover:text-slate-300" aria-hidden="true">↗</span>
-                      </div>
-                      <p className="mt-3 text-sm leading-6 text-slate-400 line-clamp-3">{item.description}</p>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 grid grid-cols-3 gap-2">
-                    {renderMetaPill('Type', item.typeLabel)}
-                    {renderMetaPill('Region', item.region)}
-                    {renderMetaPill('Audience', item.audience)}
-                  </div>
-
-                  <div className="mt-4 inline-flex items-center gap-2 rounded-xl border border-purple-500/30 bg-purple-500/12 px-3.5 py-2 text-xs font-semibold text-purple-100 transition group-hover:border-purple-400/50 group-hover:bg-purple-500/18">
-                    Visit community <span aria-hidden="true">↗</span>
-                  </div>
-                </a>
-              );
-            })}
+            {filteredOnlineCommunities.map(item => renderCommunityCard(item, { visitLabel: 'Visit community' }))}
           </div>
 
           {(query || activeFilter !== 'All') && filteredOnlineCommunities.length === 0 && (
@@ -2083,50 +2151,7 @@ const CommunityTab: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredClubs.map(club => {
-              const Icon = club.Icon;
-              return (
-                <a
-                  key={club.name}
-                  href={(club as any).url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="group rounded-2xl border border-slate-700/60 bg-slate-900/40 p-4 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-purple-500/40 hover:bg-slate-900/55 hover:shadow-[0_18px_50px_rgba(15,23,42,0.35)] focus:outline-none focus:ring-2 focus:ring-purple-500/40"
-                  title={`Open ${club.name} website`}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-purple-500/20 bg-gradient-to-br from-purple-500/20 via-slate-900/90 to-slate-950 text-purple-200 shadow-inner">
-                      <Icon className="h-5 w-5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <h4 className="font-bold text-lg text-slate-100 transition-colors group-hover:text-white">{club.name}</h4>
-                          <div className="mt-1 flex flex-wrap items-center gap-2">
-                            <span className="inline-flex items-center rounded-full border border-slate-700/60 bg-slate-950/25 px-2.5 py-1 text-[11px] text-purple-200">{club.badge}</span>
-                            {club.isOfficial && (
-                              <span className="inline-flex items-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-300">Official group</span>
-                            )}
-                          </div>
-                        </div>
-                        <span className="text-slate-500 transition group-hover:text-slate-300" aria-hidden="true">↗</span>
-                      </div>
-                      <p className="mt-3 text-sm leading-6 text-slate-400 line-clamp-3">{club.description}</p>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 grid grid-cols-3 gap-2">
-                    {renderMetaPill('Type', club.typeLabel)}
-                    {renderMetaPill('Region', club.region)}
-                    {renderMetaPill('Audience', club.audience)}
-                  </div>
-
-                  <div className="mt-4 inline-flex items-center gap-2 rounded-xl border border-purple-500/30 bg-purple-500/12 px-3.5 py-2 text-xs font-semibold text-purple-100 transition group-hover:border-purple-400/50 group-hover:bg-purple-500/18">
-                    Visit organization <span aria-hidden="true">↗</span>
-                  </div>
-                </a>
-              );
-            })}
+            {filteredClubs.map(club => renderCommunityCard(club, { visitLabel: club.category === 'Organizations' ? 'Visit organization' : 'Visit club' }))}
           </div>
 
           {(query || activeFilter !== 'All') && filteredClubs.length === 0 && (
@@ -2146,50 +2171,7 @@ const CommunityTab: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredConventions.map(convention => {
-              const Icon = convention.Icon;
-              return (
-                <a
-                  key={convention.name}
-                  href={(convention as any).url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="group rounded-2xl border border-slate-700/60 bg-slate-900/40 p-4 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-purple-500/40 hover:bg-slate-900/55 hover:shadow-[0_18px_50px_rgba(15,23,42,0.35)] focus:outline-none focus:ring-2 focus:ring-purple-500/40"
-                  title={`Open ${convention.name} website`}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-purple-500/20 bg-gradient-to-br from-purple-500/20 via-slate-900/90 to-slate-950 text-purple-200 shadow-inner">
-                      <Icon className="h-5 w-5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <h4 className="font-bold text-lg text-slate-100 transition-colors group-hover:text-white">{convention.name}</h4>
-                          <div className="mt-1 flex flex-wrap items-center gap-2">
-                            <span className="inline-flex items-center rounded-full border border-slate-700/60 bg-slate-950/25 px-2.5 py-1 text-[11px] text-purple-200">{convention.badge}</span>
-                            {convention.date && (
-                              <span className="inline-flex items-center rounded-full border border-slate-700/60 bg-slate-950/25 px-2.5 py-1 text-[11px] text-slate-300">{convention.date}</span>
-                            )}
-                          </div>
-                        </div>
-                        <span className="text-slate-500 transition group-hover:text-slate-300" aria-hidden="true">↗</span>
-                      </div>
-                      <p className="mt-3 text-sm leading-6 text-slate-400 line-clamp-3">{convention.description}</p>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 grid grid-cols-3 gap-2">
-                    {renderMetaPill('Type', convention.typeLabel)}
-                    {renderMetaPill('Region', convention.region)}
-                    {renderMetaPill('Audience', convention.audience)}
-                  </div>
-
-                  <div className="mt-4 inline-flex items-center gap-2 rounded-xl border border-purple-500/30 bg-purple-500/12 px-3.5 py-2 text-xs font-semibold text-purple-100 transition group-hover:border-purple-400/50 group-hover:bg-purple-500/18">
-                    Visit event <span aria-hidden="true">↗</span>
-                  </div>
-                </a>
-              );
-            })}
+            {filteredConventions.map(convention => renderCommunityCard(convention, { visitLabel: 'Visit event', showDateBadge: true }))}
           </div>
 
           {(query || activeFilter !== 'All') && filteredConventions.length === 0 && (
