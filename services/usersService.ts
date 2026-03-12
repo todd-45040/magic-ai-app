@@ -163,6 +163,9 @@ export const registerOrUpdateUser = async (user: User, uid: string): Promise<voi
 };
 
 
+// Admin/manual membership override only.
+// Do not call this from normal upgrade CTAs or checkout return handling.
+// Billing entitlements must remain server-truth and webhook-driven.
 export const updateUserMembership = async (email: string, membership: Membership): Promise<User[]> => {
   try {
     const lower = email.toLowerCase();

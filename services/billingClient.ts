@@ -93,6 +93,8 @@ export async function fetchBillingStatus(): Promise<BillingStatusPayload> {
   });
 }
 
+// Starts checkout only. Access is not granted from the client or from the return URL.
+// Live entitlements must be reconciled server-side.
 export async function createCheckoutSession(planKey: BillingCheckoutLookupKey): Promise<BillingCheckoutPayload> {
   return authorizedFetch<BillingCheckoutPayload>('/api/billing/create-checkout-session', {
     method: 'POST',
