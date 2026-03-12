@@ -1615,9 +1615,10 @@ const CommunityTab: React.FC = () => {
       category: 'Forums' as const,
       typeLabel: 'Forum',
       region: 'Global',
-      audience: 'All skill levels',
-      officialLabel: 'Independent community',
-      badgeTone: 'community' as const,
+      audience: 'All magicians',
+      badge: 'Community forum',
+      isOfficial: false,
+      Icon: ChatBubbleIcon,
     },
     {
       name: 'r/Magic (Reddit)',
@@ -1626,9 +1627,10 @@ const CommunityTab: React.FC = () => {
       category: 'Forums' as const,
       typeLabel: 'Forum',
       region: 'Global',
-      audience: 'Beginners to hobbyists',
-      officialLabel: 'Community forum',
-      badgeTone: 'community' as const,
+      audience: 'Beginners to pros',
+      badge: 'Open community',
+      isOfficial: false,
+      Icon: UsersIcon,
     },
     {
       name: 'Genii Forum',
@@ -1637,66 +1639,66 @@ const CommunityTab: React.FC = () => {
       category: 'Forums' as const,
       typeLabel: 'Forum',
       region: 'Global',
-      audience: 'Enthusiasts and working pros',
-      officialLabel: 'Publisher-backed forum',
-      badgeTone: 'official' as const,
+      audience: 'Serious students',
+      badge: 'Publisher community',
+      isOfficial: true,
+      Icon: BookIcon,
     }
   ];
 
   const clubDirectory = clubs.map(club => {
-    const category =
-      club.name.includes('Society') || club.name.includes('Brotherhood') || club.description.toLowerCase().includes('organization')
-        ? ('Organizations' as const)
-        : ('Clubs' as const);
-
-    const lowerName = club.name.toLowerCase();
-    const lowerDescription = club.description.toLowerCase();
-
-    let region = 'Global';
-    if (lowerName.includes('london') || lowerDescription.includes('london')) region = 'United Kingdom';
-    else if (lowerDescription.includes('new york') || lowerDescription.includes('hollywood') || lowerDescription.includes('california')) region = 'United States';
-
-    let audience = 'Members and enthusiasts';
-    if (lowerName.includes('magic castle') || lowerDescription.includes('private club')) audience = 'Serious enthusiasts and pros';
-    else if (lowerName.includes('society') || lowerName.includes('brotherhood')) audience = 'Members, chapters, and working magicians';
-    else if (lowerName.includes('magic circle')) audience = 'Committed performers and historians';
-
-    const officialLabel = category === 'Organizations' ? 'Official organization' : 'Private club';
+    const isOrganization =
+      club.name.includes('Society') ||
+      club.name.includes('Brotherhood') ||
+      club.description.toLowerCase().includes('organization');
+    const isPrivateClub = club.name.includes('Magic Castle') || club.description.toLowerCase().includes('private club');
+    const region =
+      club.name.includes('London')
+        ? 'United Kingdom'
+        : club.description.includes('New York City')
+          ? 'North America'
+          : club.description.includes('Hollywood, California')
+            ? 'United States'
+            : club.description.toLowerCase().includes('across the globe') || club.description.toLowerCase().includes('worldwide')
+              ? 'Global'
+              : 'International';
 
     return {
       ...club,
-      category,
-      typeLabel: category === 'Organizations' ? 'Organization' : 'Club',
+      category: isOrganization ? ('Organizations' as const) : ('Clubs' as const),
+      typeLabel: isOrganization ? 'Organization' : 'Club',
       region,
-      audience,
-      officialLabel,
-      badgeTone: category === 'Organizations' ? ('official' as const) : ('curated' as const),
+      audience: isPrivateClub ? 'Working magicians' : isOrganization ? 'Members & chapters' : 'Members & guests',
+      badge: isPrivateClub ? 'Private club' : isOrganization ? 'Official organization' : 'Member network',
+      isOfficial: isOrganization,
+      Icon: isOrganization ? UsersCogIcon : UsersIcon,
     };
   });
 
   const conventionDirectory = conventions.map(convention => {
-    const lowerName = convention.name.toLowerCase();
-    const lowerDescription = convention.description.toLowerCase();
-
-    let region = 'North America';
-    if (lowerName.includes('blackpool') || lowerDescription.includes('england')) region = 'United Kingdom';
-    else if (lowerName.includes('magi-fest') || lowerDescription.includes('ohio')) region = 'Midwest U.S.';
-    else if (lowerName.includes('magic live') || lowerDescription.includes('las vegas')) region = 'Western U.S.';
-    else if (lowerName.includes("abbott")) region = 'Midwest U.S.';
-
-    let audience = 'All magician types';
-    if (lowerName.includes('magic live')) audience = 'Working pros and serious students';
-    else if (lowerName.includes('another darn magic convention')) audience = 'Community-minded hobbyists and families';
-    else if (lowerName.includes('blackpool')) audience = 'International performers and dealers';
+    const lower = `${convention.name} ${convention.description}`.toLowerCase();
+    const region =
+      lower.includes('ohio')
+        ? 'Midwest U.S.'
+        : lower.includes('england') || lower.includes('blackpool')
+          ? 'United Kingdom'
+          : lower.includes('las vegas')
+            ? 'West U.S.'
+            : lower.includes('michigan')
+              ? 'Midwest U.S.'
+              : lower.includes('north american')
+                ? 'North America'
+                : 'International';
 
     return {
       ...convention,
       category: 'Conventions' as const,
       typeLabel: 'Convention',
       region,
-      audience,
-      officialLabel: 'Official event',
-      badgeTone: 'event' as const,
+      audience: lower.includes('friendly atmosphere') || lower.includes('fun, fellowship') ? 'Beginners to pros' : 'Performers & enthusiasts',
+      badge: lower.includes('largest') || lower.includes('star-studded') ? 'Premier event' : 'Annual gathering',
+      isOfficial: true,
+      Icon: StageCurtainsIcon,
     };
   });
 
@@ -1710,32 +1712,28 @@ const CommunityTab: React.FC = () => {
 
   const filteredOnlineCommunities = onlineCommunities.filter(item =>
     matchesFilter(item.category) &&
-    matchesQuery(`${item.name} ${item.description} ${item.category} ${item.typeLabel} ${item.region} ${item.audience} ${item.officialLabel}`)
+    matchesQuery(`${item.name} ${item.description} ${item.category} ${item.typeLabel} ${item.region} ${item.audience} ${item.badge}`)
   );
 
   const filteredClubs = clubDirectory.filter(club =>
     matchesFilter(club.category) &&
-    matchesQuery(`${club.name} ${club.description} ${club.category} ${club.typeLabel} ${club.region} ${club.audience} ${club.officialLabel}`)
+    matchesQuery(`${club.name} ${club.description} ${club.category} ${club.typeLabel} ${club.region} ${club.audience} ${club.badge}`)
   );
 
   const filteredConventions = conventionDirectory.filter(convention =>
     matchesFilter(convention.category) &&
-    matchesQuery(`${convention.name} ${convention.description} ${convention.date ?? ''} ${convention.category} ${convention.typeLabel} ${convention.region} ${convention.audience} ${convention.officialLabel}`)
+    matchesQuery(`${convention.name} ${convention.description} ${convention.date ?? ''} ${convention.category} ${convention.typeLabel} ${convention.region} ${convention.audience} ${convention.badge}`)
   );
 
   const totalMatches = filteredOnlineCommunities.length + filteredClubs.length + filteredConventions.length;
   const filterChips: Array<'All' | 'Forums' | 'Clubs' | 'Conventions' | 'Organizations'> = ['All', 'Forums', 'Clubs', 'Conventions', 'Organizations'];
 
-  const badgeStyles = {
-    community: 'border-sky-400/25 bg-sky-500/10 text-sky-200',
-    official: 'border-purple-400/30 bg-purple-500/12 text-purple-100',
-    curated: 'border-amber-300/25 bg-amber-400/10 text-amber-100',
-    event: 'border-emerald-400/25 bg-emerald-500/10 text-emerald-100',
-  } as const;
-
-  const metadataLabelClass = 'text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500';
-  const metadataValueClass = 'mt-1 text-sm font-medium text-slate-200';
-  const ctaClass = 'inline-flex items-center gap-2 rounded-lg border border-purple-400/35 bg-gradient-to-r from-purple-500/18 to-fuchsia-500/12 px-3.5 py-2 text-xs font-semibold text-purple-100 transition group-hover:border-purple-300/55 group-hover:from-purple-500/28 group-hover:to-fuchsia-500/22 group-hover:text-white';
+  const renderMetaPill = (label: string, value: string) => (
+    <div className="rounded-lg border border-slate-700/60 bg-slate-950/35 px-2.5 py-2">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</div>
+      <div className="mt-1 text-xs text-slate-200">{value}</div>
+    </div>
+  );
 
   return (
     <div className="flex-1 overflow-y-auto p-4 md:p-5">
@@ -1804,7 +1802,6 @@ const CommunityTab: React.FC = () => {
           </div>
         </section>
 
-        {/* Online communities */}
         <section className="space-y-4">
           <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
             <div>
@@ -1815,55 +1812,50 @@ const CommunityTab: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {filteredOnlineCommunities.map(item => (
-              <a
-                key={item.name}
-                href={item.url}
-                target="_blank"
-                rel="noreferrer"
-                className="group rounded-2xl border border-slate-700/60 bg-gradient-to-b from-slate-900/55 to-slate-950/40 p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-purple-500/45 hover:shadow-[0_20px_40px_rgba(15,23,42,0.35)] focus:outline-none focus:ring-2 focus:ring-purple-500/40"
-                title={`Open ${item.name}`}
-              >
-                <div className="flex items-start gap-3">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-sky-400/20 bg-sky-500/10 text-sky-200 shadow-inner shadow-sky-500/5">
-                    <ChatBubbleIcon className="h-5 w-5" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-medium ${badgeStyles[item.badgeTone]}`}>
-                      {item.officialLabel}
+            {filteredOnlineCommunities.map(item => {
+              const Icon = item.Icon;
+              return (
+                <a
+                  key={item.name}
+                  href={item.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="group rounded-2xl border border-slate-700/60 bg-slate-900/40 p-4 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-purple-500/40 hover:bg-slate-900/55 hover:shadow-[0_18px_50px_rgba(15,23,42,0.35)] focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                  title={`Open ${item.name}`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-purple-500/20 bg-gradient-to-br from-purple-500/20 via-slate-900/90 to-slate-950 text-purple-200 shadow-inner">
+                      <Icon className="h-5 w-5" />
                     </div>
-                    <h4 className="mt-3 font-bold text-lg text-slate-100">{item.name}</h4>
-                    <p className="mt-1 text-sm text-slate-400 line-clamp-3">{item.description}</p>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h4 className="font-bold text-lg text-slate-100 transition-colors group-hover:text-white">{item.name}</h4>
+                          <div className="mt-1 flex flex-wrap items-center gap-2">
+                            <span className="inline-flex items-center rounded-full border border-slate-700/60 bg-slate-950/25 px-2.5 py-1 text-[11px] text-purple-200">{item.badge}</span>
+                            {item.isOfficial && (
+                              <span className="inline-flex items-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-300">Official connection</span>
+                            )}
+                          </div>
+                        </div>
+                        <span className="text-slate-500 transition group-hover:text-slate-300" aria-hidden="true">↗</span>
+                      </div>
+                      <p className="mt-3 text-sm leading-6 text-slate-400 line-clamp-3">{item.description}</p>
+                    </div>
                   </div>
-                  <span className="text-slate-500 group-hover:text-slate-300 transition" aria-hidden="true">↗</span>
-                </div>
 
-                <div className="mt-4 grid grid-cols-3 gap-3 rounded-xl border border-slate-800/80 bg-slate-950/30 p-3">
-                  <div>
-                    <div className={metadataLabelClass}>Type</div>
-                    <div className={metadataValueClass}>{item.typeLabel}</div>
+                  <div className="mt-4 grid grid-cols-3 gap-2">
+                    {renderMetaPill('Type', item.typeLabel)}
+                    {renderMetaPill('Region', item.region)}
+                    {renderMetaPill('Audience', item.audience)}
                   </div>
-                  <div>
-                    <div className={metadataLabelClass}>Region</div>
-                    <div className={metadataValueClass}>{item.region}</div>
-                  </div>
-                  <div>
-                    <div className={metadataLabelClass}>Audience</div>
-                    <div className={metadataValueClass}>{item.audience}</div>
-                  </div>
-                </div>
 
-                <div className="mt-4 flex items-center justify-between gap-3">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-slate-700/60 bg-slate-950/30 px-2.5 py-1 text-[11px] text-slate-300">
-                    <UsersIcon className="h-3.5 w-3.5 text-slate-400" />
-                    {item.category}
+                  <div className="mt-4 inline-flex items-center gap-2 rounded-xl border border-purple-500/30 bg-purple-500/12 px-3.5 py-2 text-xs font-semibold text-purple-100 transition group-hover:border-purple-400/50 group-hover:bg-purple-500/18">
+                    Visit community <span aria-hidden="true">↗</span>
                   </div>
-                  <div className={ctaClass}>
-                    Visit Community <span aria-hidden="true">↗</span>
-                  </div>
-                </div>
-              </a>
-            ))}
+                </a>
+              );
+            })}
           </div>
 
           {(query || activeFilter !== 'All') && filteredOnlineCommunities.length === 0 && (
@@ -1873,7 +1865,6 @@ const CommunityTab: React.FC = () => {
           )}
         </section>
 
-        {/* Clubs */}
         <section className="space-y-4">
           <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
             <div>
@@ -1884,55 +1875,50 @@ const CommunityTab: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredClubs.map(club => (
-              <a
-                key={club.name}
-                href={(club as any).url}
-                target="_blank"
-                rel="noreferrer"
-                className="group rounded-2xl border border-slate-700/60 bg-gradient-to-b from-slate-900/55 to-slate-950/40 p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-purple-500/45 hover:shadow-[0_20px_40px_rgba(15,23,42,0.35)] focus:outline-none focus:ring-2 focus:ring-purple-500/40"
-                title={`Open ${club.name} website`}
-              >
-                <div className="flex items-start gap-3">
-                  <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border ${club.category === 'Organizations' ? 'border-purple-400/20 bg-purple-500/10 text-purple-100' : 'border-amber-300/20 bg-amber-400/10 text-amber-100'}`}>
-                    {club.category === 'Organizations' ? <UsersCogIcon className="h-5 w-5" /> : <UsersIcon className="h-5 w-5" />}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-medium ${badgeStyles[club.badgeTone]}`}>
-                      {club.officialLabel}
+            {filteredClubs.map(club => {
+              const Icon = club.Icon;
+              return (
+                <a
+                  key={club.name}
+                  href={(club as any).url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="group rounded-2xl border border-slate-700/60 bg-slate-900/40 p-4 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-purple-500/40 hover:bg-slate-900/55 hover:shadow-[0_18px_50px_rgba(15,23,42,0.35)] focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                  title={`Open ${club.name} website`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-purple-500/20 bg-gradient-to-br from-purple-500/20 via-slate-900/90 to-slate-950 text-purple-200 shadow-inner">
+                      <Icon className="h-5 w-5" />
                     </div>
-                    <h4 className="mt-3 font-bold text-lg text-slate-100">{club.name}</h4>
-                    <p className="mt-1 text-sm text-slate-400 line-clamp-3">{club.description}</p>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h4 className="font-bold text-lg text-slate-100 transition-colors group-hover:text-white">{club.name}</h4>
+                          <div className="mt-1 flex flex-wrap items-center gap-2">
+                            <span className="inline-flex items-center rounded-full border border-slate-700/60 bg-slate-950/25 px-2.5 py-1 text-[11px] text-purple-200">{club.badge}</span>
+                            {club.isOfficial && (
+                              <span className="inline-flex items-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-300">Official group</span>
+                            )}
+                          </div>
+                        </div>
+                        <span className="text-slate-500 transition group-hover:text-slate-300" aria-hidden="true">↗</span>
+                      </div>
+                      <p className="mt-3 text-sm leading-6 text-slate-400 line-clamp-3">{club.description}</p>
+                    </div>
                   </div>
-                  <span className="text-slate-500 group-hover:text-slate-300 transition" aria-hidden="true">↗</span>
-                </div>
 
-                <div className="mt-4 grid grid-cols-3 gap-3 rounded-xl border border-slate-800/80 bg-slate-950/30 p-3">
-                  <div>
-                    <div className={metadataLabelClass}>Type</div>
-                    <div className={metadataValueClass}>{club.typeLabel}</div>
+                  <div className="mt-4 grid grid-cols-3 gap-2">
+                    {renderMetaPill('Type', club.typeLabel)}
+                    {renderMetaPill('Region', club.region)}
+                    {renderMetaPill('Audience', club.audience)}
                   </div>
-                  <div>
-                    <div className={metadataLabelClass}>Region</div>
-                    <div className={metadataValueClass}>{club.region}</div>
-                  </div>
-                  <div>
-                    <div className={metadataLabelClass}>Audience</div>
-                    <div className={metadataValueClass}>{club.audience}</div>
-                  </div>
-                </div>
 
-                <div className="mt-4 flex items-center justify-between gap-3">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-slate-700/60 bg-slate-950/30 px-2.5 py-1 text-[11px] text-slate-300">
-                    <StarIcon className="h-3.5 w-3.5 text-slate-400" />
-                    {club.category === 'Organizations' ? 'Official group' : 'Membership club'}
+                  <div className="mt-4 inline-flex items-center gap-2 rounded-xl border border-purple-500/30 bg-purple-500/12 px-3.5 py-2 text-xs font-semibold text-purple-100 transition group-hover:border-purple-400/50 group-hover:bg-purple-500/18">
+                    Visit organization <span aria-hidden="true">↗</span>
                   </div>
-                  <div className={ctaClass}>
-                    Visit Organization <span aria-hidden="true">↗</span>
-                  </div>
-                </div>
-              </a>
-            ))}
+                </a>
+              );
+            })}
           </div>
 
           {(query || activeFilter !== 'All') && filteredClubs.length === 0 && (
@@ -1942,7 +1928,6 @@ const CommunityTab: React.FC = () => {
           )}
         </section>
 
-        {/* Conventions */}
         <section className="space-y-4">
           <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
             <div>
@@ -1953,58 +1938,50 @@ const CommunityTab: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredConventions.map(convention => (
-              <a
-                key={convention.name}
-                href={(convention as any).url}
-                target="_blank"
-                rel="noreferrer"
-                className="group rounded-2xl border border-slate-700/60 bg-gradient-to-b from-slate-900/55 to-slate-950/40 p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-purple-500/45 hover:shadow-[0_20px_40px_rgba(15,23,42,0.35)] focus:outline-none focus:ring-2 focus:ring-purple-500/40"
-                title={`Open ${convention.name} website`}
-              >
-                <div className="flex items-start gap-3">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-emerald-400/20 bg-emerald-500/10 text-emerald-100">
-                    <StageCurtainsIcon className="h-5 w-5" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-medium ${badgeStyles[convention.badgeTone]}`}>
-                      {convention.officialLabel}
+            {filteredConventions.map(convention => {
+              const Icon = convention.Icon;
+              return (
+                <a
+                  key={convention.name}
+                  href={(convention as any).url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="group rounded-2xl border border-slate-700/60 bg-slate-900/40 p-4 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-purple-500/40 hover:bg-slate-900/55 hover:shadow-[0_18px_50px_rgba(15,23,42,0.35)] focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                  title={`Open ${convention.name} website`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-purple-500/20 bg-gradient-to-br from-purple-500/20 via-slate-900/90 to-slate-950 text-purple-200 shadow-inner">
+                      <Icon className="h-5 w-5" />
                     </div>
-                    <h4 className="mt-3 font-bold text-lg text-slate-100">{convention.name}</h4>
-                    {convention.date && (
-                      <div className="mt-1 text-xs font-semibold text-slate-400">{convention.date}</div>
-                    )}
-                    <p className="mt-2 text-sm text-slate-400 line-clamp-3">{convention.description}</p>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h4 className="font-bold text-lg text-slate-100 transition-colors group-hover:text-white">{convention.name}</h4>
+                          <div className="mt-1 flex flex-wrap items-center gap-2">
+                            <span className="inline-flex items-center rounded-full border border-slate-700/60 bg-slate-950/25 px-2.5 py-1 text-[11px] text-purple-200">{convention.badge}</span>
+                            {convention.date && (
+                              <span className="inline-flex items-center rounded-full border border-slate-700/60 bg-slate-950/25 px-2.5 py-1 text-[11px] text-slate-300">{convention.date}</span>
+                            )}
+                          </div>
+                        </div>
+                        <span className="text-slate-500 transition group-hover:text-slate-300" aria-hidden="true">↗</span>
+                      </div>
+                      <p className="mt-3 text-sm leading-6 text-slate-400 line-clamp-3">{convention.description}</p>
+                    </div>
                   </div>
-                  <span className="text-slate-500 group-hover:text-slate-300 transition" aria-hidden="true">↗</span>
-                </div>
 
-                <div className="mt-4 grid grid-cols-3 gap-3 rounded-xl border border-slate-800/80 bg-slate-950/30 p-3">
-                  <div>
-                    <div className={metadataLabelClass}>Type</div>
-                    <div className={metadataValueClass}>{convention.typeLabel}</div>
+                  <div className="mt-4 grid grid-cols-3 gap-2">
+                    {renderMetaPill('Type', convention.typeLabel)}
+                    {renderMetaPill('Region', convention.region)}
+                    {renderMetaPill('Audience', convention.audience)}
                   </div>
-                  <div>
-                    <div className={metadataLabelClass}>Region</div>
-                    <div className={metadataValueClass}>{convention.region}</div>
-                  </div>
-                  <div>
-                    <div className={metadataLabelClass}>Audience</div>
-                    <div className={metadataValueClass}>{convention.audience}</div>
-                  </div>
-                </div>
 
-                <div className="mt-4 flex items-center justify-between gap-3">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-slate-700/60 bg-slate-950/30 px-2.5 py-1 text-[11px] text-slate-300">
-                    <ClockIcon className="h-3.5 w-3.5 text-slate-400" />
-                    {convention.date}
+                  <div className="mt-4 inline-flex items-center gap-2 rounded-xl border border-purple-500/30 bg-purple-500/12 px-3.5 py-2 text-xs font-semibold text-purple-100 transition group-hover:border-purple-400/50 group-hover:bg-purple-500/18">
+                    Visit event <span aria-hidden="true">↗</span>
                   </div>
-                  <div className={ctaClass}>
-                    Visit Convention <span aria-hidden="true">↗</span>
-                  </div>
-                </div>
-              </a>
-            ))}
+                </a>
+              );
+            })}
           </div>
 
           {(query || activeFilter !== 'All') && filteredConventions.length === 0 && (
@@ -2018,7 +1995,7 @@ const CommunityTab: React.FC = () => {
           <section>
             <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/30 p-8 text-center">
               <div className="text-sm font-medium text-slate-300">No community results matched your current filters.</div>
-              <div className="mt-1 text-sm text-slate-500">Try another keyword or switch back to a broader category.</div>
+              <div className="mt-1 text-sm text-slate-500">Try a broader search term or switch back to All.</div>
             </div>
           </section>
         )}
@@ -2026,1611 +2003,6 @@ const CommunityTab: React.FC = () => {
     </div>
   );
 };
-
-import React, { useState, useRef, useEffect } from 'react';
-import type { ChatMessage, PredefinedPrompt, TrickIdentificationResult, User, Transcription, MagicianView, MagicianTab, Client, Show, Feedback, SavedIdea, TaskPriority, AiSparkAction } from '../types';
-import { generateResponse } from '../services/geminiService';
-import { identifyTrickFromImageServer, refineIdentifyResult } from '../services/identifyService';
-import { trackClientEvent } from '../services/telemetryClient';
-import { supabase } from '../supabase';
-import { saveIdea, updateIdea } from '../services/ideasService';
-import { exportData } from '../services/dataService';
-import { findShowByTitle, createShow, addTaskToShow, addTasksToShow } from '../services/showsService';
-import { clearDemoData, seedDemoData } from '../services/demoSeedService';
-import { MAGICIAN_SYSTEM_INSTRUCTION, MAGICIAN_PROMPTS, publications, clubs, conventions, AMATEUR_FEATURES, SEMI_PRO_FEATURES, PROFESSIONAL_FEATURES, MAGICIAN_CHAT_TOOLS } from '../constants';
-// FIX: Added missing ShareIcon to the icon imports list.
-import { BackIcon, SendIcon, MagicHatIcon, RabbitIcon, WandIcon, SaveIcon, ClockIcon, AIMagicianIcon, BookIcon, MicrophoneIcon, LightbulbIcon, ShieldIcon, ImageIcon, SearchIcon, CheckIcon, BookmarkIcon, NewspaperIcon, UsersIcon, CameraIcon, VideoIcon, ChecklistIcon, LockIcon, UsersCogIcon, ThumbUpIcon, ThumbDownIcon, StarIcon, ChatBubbleIcon, QuestionMarkIcon, StageCurtainsIcon, TutorIcon, ShareIcon, DownloadIcon } from './icons';
-import { useAppState, useAppDispatch, refreshShows, refreshIdeas, refreshClients, refreshFeedback } from '../store';
-import { useToast } from './ToastProvider';
-import LiveRehearsal from './LiveRehearsal';
-import VisualBrainstorm from './VisualBrainstorm';
-import SavedIdeas from './SavedIdeas';
-import PropChecklists from './PropChecklists';
-import PropGenerator from './PropGenerator';
-import EffectGenerator from './EffectGenerator';
-import DemoTourBar from './DemoTourBar';
-import { getCurrentDemoView, isViewLocked } from '../services/demoTourService';
-import MagicArchives from './MagicArchives';
-import GospelMagicAssistant from './GospelMagicAssistant';
-import MentalismAssistant from './MentalismAssistant';
-import ShareButton from './ShareButton';
-import SaveActionBar from './shared/SaveActionBar';
-import FormattedText from './FormattedText';
-import AccountMenu from './AccountMenu';
-import UsageMeter from './UsageMeter';
-import UsageLimitsCard from './UsageLimitsCard';
-import BlockedPanel from './BlockedPanel';
-import { normalizeBlockedUx, type BlockedUx } from '../services/blockedUx';
-import { normalizeTier, getMembershipDaysRemaining, formatTierLabel } from '../services/membershipService';
-import UpgradeModal from './UpgradeModal';
-import MemberManagement from './MemberManagement';
-import ShowPlanner from './ShowPlanner';
-import ShowFeedback from './ShowFeedback';
-import HelpModal from './HelpModal';
-import PatterEngine from './PatterEngine';
-import MagicWire from './MagicWire';
-import MarketingCampaign from './MarketingCampaign';
-import ClientProposals from './ClientProposals';
-import BookingPitches from './BookingPitches';
-import ContractGenerator from './ContractGenerator';
-import AssistantStudio from './AssistantStudio';
-import DirectorMode from './DirectorMode';
-import PersonaSimulator from './PersonaSimulator';
-import VideoRehearsal from './VideoRehearsal';
-import AngleRiskAnalysis from './AngleRiskAnalysis';
-import ClientManagement from './ClientManagement';
-import Dashboard from './Dashboard';
-import GlobalSearch from './GlobalSearch';
-import PerformanceAnalytics from './PerformanceAnalytics';
-import IllusionBlueprint from './IllusionBlueprint';
-import MagicTheoryTutor from './MagicTheoryTutor';
-import MagicDictionary from './MagicDictionary';
-import AdminPanel from './AdminPanel';
-import AppSuggestionModal from './AppSuggestionModal';
-import FirstWinGate from './FirstWinGate';
-
-interface AngleRiskFormProps {
-    trickName: string;
-    setTrickName: (value: string) => void;
-    audienceType: 'Close-up' | 'Stage' | 'Surrounded' | null;
-    setAudienceType: (value: 'Close-up' | 'Stage' | 'Surrounded' | null) => void;
-    onCancel: () => void;
-    onSubmit: () => void;
-}
-
-const AngleRiskForm: React.FC<AngleRiskFormProps> = ({
-    trickName, setTrickName, audienceType, setAudienceType, onCancel, onSubmit
-}) => (
-    <div className="flex-1 flex flex-col justify-center items-center text-center animate-fade-in">
-        <MagicHatIcon className="w-16 h-16 text-slate-500 mb-4"/>
-        <h2 className="text-xl font-bold text-slate-300 mb-2">Angle & Risk Analysis</h2>
-        <p className="text-slate-400 max-w-md mb-6">Let's break down the effect for a specific performance environment.</p>
-        <div className="w-full max-w-md space-y-4">
-            <div>
-                <label htmlFor="trickName" className="block text-sm font-medium text-slate-300 text-left mb-1">Name of the Effect</label>
-                <input
-                    id="trickName" type="text" value={trickName}
-                    onChange={(e) => setTrickName(e.target.value)}
-                    placeholder="e.g., Ambitious Card"
-                    className="w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500 transition-colors"
-                    autoFocus
-                />
-            </div>
-            <div>
-                <label className="block text-sm font-medium text-slate-300 text-left mb-2">Audience Type</label>
-                <div className="grid grid-cols-3 gap-2">
-                    {(['Close-up', 'Stage', 'Surrounded'] as const).map(type => (
-                        <button key={type} onClick={() => setAudienceType(type)}
-                            className={`py-2 px-3 rounded-md transition-colors text-sm font-semibold ${ audienceType === type ? 'bg-purple-600 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-300' }`}
-                        >{type}</button>
-                    ))}
-                </div>
-            </div>
-            <div className="flex gap-3 pt-2">
-                <button onClick={onCancel}
-                    className="w-full py-2 px-4 bg-slate-600/50 hover:bg-slate-700 rounded-md text-slate-300 font-bold transition-colors"
-                >Cancel</button>
-                <button onClick={onSubmit} disabled={!trickName.trim() || !audienceType}
-                    className="w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
-                >Get Analysis</button>
-            </div>
-        </div>
-    </div>
-);
-  
-interface RehearsalCoachingFormProps {
-    routineDescription: string;
-    setRoutineDescription: (value: string) => void;
-    targetDuration: string;
-    setTargetDuration: (value: string) => void;
-    onCancel: () => void;
-    onSubmit: () => void;
-    onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-}
-
-const RehearsalCoachingForm: React.FC<RehearsalCoachingFormProps> = ({
-    routineDescription, setRoutineDescription, targetDuration, setTargetDuration, onCancel, onSubmit, onFileChange
-}) => {
-    const fileInputRef = React.useRef<HTMLInputElement>(null);
-
-    return (
-        <div className="flex-1 flex flex-col justify-center items-center text-center animate-fade-in">
-            <ClockIcon className="w-16 h-16 text-slate-500 mb-4"/>
-            <h2 className="text-xl font-bold text-slate-300 mb-2">Rehearsal Coaching</h2>
-            <p className="text-slate-400 max-w-md mb-6">Let's refine the timing and pacing of your routine.</p>
-            <div className="w-full max-w-md space-y-4">
-                <div>
-                    <div className="flex justify-between items-baseline mb-1">
-                        <label htmlFor="routineDescription" className="block text-sm font-medium text-slate-300 text-left">Routine Script/Description</label>
-                        <button type="button" onClick={() => fileInputRef.current?.click()} className="text-sm text-purple-400 hover:text-purple-300 font-semibold transition-colors">
-                            Upload Script...
-                        </button>
-                        <input type="file" ref={fileInputRef} onChange={onFileChange} className="hidden" accept=".txt,.md" />
-                    </div>
-                    <textarea id="routineDescription" rows={4} value={routineDescription} onChange={(e) => setRoutineDescription(e.target.value)} placeholder="Describe your routine, paste your script, or upload a file..."
-                        className="w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500 transition-colors" autoFocus />
-                </div>
-                <div>
-                    <label htmlFor="targetDuration" className="block text-sm font-medium text-slate-300 text-left mb-1">Target Duration (minutes)</label>
-                    <input id="targetDuration" type="number" value={targetDuration} onChange={(e) => setTargetDuration(e.target.value)} placeholder="e.g., 3"
-                        className="w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500 transition-colors" />
-                </div>
-                <div className="flex gap-3 pt-2">
-                    <button onClick={onCancel}
-                        className="w-full py-2 px-4 bg-slate-600/50 hover:bg-slate-700 rounded-md text-slate-300 font-bold transition-colors">Cancel</button>
-                    <button onClick={onSubmit} disabled={!routineDescription.trim() || !targetDuration.trim()}
-                        className="w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed">Get Feedback</button>
-                </div>
-            </div>
-        </div>
-    );
-};
-  
-interface InnovationEngineFormProps {
-    effectToInnovate: string;
-    setEffectToInnovate: (value: string) => void;
-    onCancel: () => void;
-    onSubmit: () => void;
-}
-
-const InnovationEngineForm: React.FC<InnovationEngineFormProps> = ({
-    effectToInnovate, setEffectToInnovate, onCancel, onSubmit
-}) => (
-    <div className="flex-1 flex flex-col justify-center items-center text-center animate-fade-in">
-        <LightbulbIcon className="w-16 h-16 text-slate-500 mb-4"/>
-        <h2 className="text-xl font-bold text-slate-300 mb-2">Innovation Engine</h2>
-        <p className="text-slate-400 max-w-md mb-6">Describe an effect to brainstorm new, creative presentations.</p>
-        <div className="w-full max-w-md space-y-4">
-            <div>
-                <label htmlFor="effectToInnovate" className="block text-sm font-medium text-slate-300 text-left mb-1">Effect Description</label>
-                <textarea id="effectToInnovate" rows={4} value={effectToInnovate} onChange={(e) => setEffectToInnovate(e.target.value)} placeholder="e.g., A signed card is found inside a lemon."
-                    className="w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500 transition-colors" autoFocus />
-            </div>
-            <div className="flex gap-3 pt-2">
-                <button onClick={onCancel}
-                    className="w-full py-2 px-4 bg-slate-600/50 hover:bg-slate-700 rounded-md text-slate-300 font-bold transition-colors">Cancel</button>
-                <button onClick={onSubmit} disabled={!effectToInnovate.trim()}
-                    className="w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed">Generate Ideas</button>
-            </div>
-        </div>
-    </div>
-);
-
-const PromptGrid: React.FC<{
-  prompts: PredefinedPrompt[];
-  user: User;
-  hasAmateurAccess: boolean;
-  hasSemiProAccess: boolean;
-  hasProfessionalAccess: boolean;
-  usageQuota?: any;
-  onPromptClick: (prompt: PredefinedPrompt) => void;
-}> = ({ prompts, user, hasAmateurAccess, hasSemiProAccess, hasProfessionalAccess, usageQuota, onPromptClick }) => {
-  // --- Organization: Sections (no features added, just layout/UX) ---
-  const PRIMARY_TITLES = new Set<string>([
-    'Effect Generator',
-    'Patter Engine',
-  ]);
-
-
-  // Card copy shown in the AI Assistant grid (keeps tool prompts intact for functionality).
-  // Tone standard: short title + single-sentence description + one-line tooltip.
-  const CARD_COPY: Record<string, { desc: string; tip: string }> = {
-    'Effect Generator': {
-      desc: 'Generate original magic effects using everyday objects and creative constraints.',
-      tip: 'Generate effect ideas from the objects you name.',
-    },
-    'Patter Engine': {
-      desc: 'Write performance-ready scripts in comedic, mysterious, or dramatic styles.',
-      tip: 'Write a script for an effect in your chosen tone.',
-    },
-    'Innovation Engine': {
-      desc: 'Refresh classic effects with modern presentations and creative twists.',
-      tip: 'Reframe a classic effect with new themes and premises.',
-    },
-    'Visual Brainstorm Studio': {
-      desc: 'Create visual concepts for props, stage design, and promotional ideas.',
-      tip: 'Generate concept art for props, sets, or posters.',
-    },
-    'Illusion Blueprint Generator': {
-      desc: 'Outline large-scale illusion concepts with staging and theatrical considerations.',
-      tip: 'Draft a stage-ready illusion concept and staging notes.',
-    },
-
-    'Live Patter Rehearsal': {
-      desc: 'Practice your spoken patter and receive real-time feedback on delivery and pacing.',
-      tip: 'Start a live session for real-time vocal coaching.',
-    },
-    'Video Rehearsal Studio': {
-      desc: 'Upload rehearsal footage to analyze movement, timing, and stage presence.',
-      tip: 'Upload a rehearsal video for feedback on staging and presence.',
-    },
-    'Persona Simulator': {
-      desc: 'Test your material against simulated audience personalities and reactions.',
-      tip: 'Rehearse against a heckler, child, or corporate guest persona.',
-    },
-    'Angle/Risk Analysis': {
-      desc: 'Identify sightline issues, reset risks, and performance vulnerabilities.',
-      tip: 'Spot angle, reset, and handling risks before you perform.',
-    },
-    'Rehearsal Coaching': {
-      desc: 'Refine pacing and structure with coaching based on your script and target duration.',
-      tip: 'Get pacing and timing coaching from your script and goal length.',
-    },
-
-    'Director Mode': {
-      desc: 'Structure a full show with segments, pacing, and a strong narrative arc.',
-      tip: 'Build a complete show outline from your theme and audience.',
-    },
-    'Show Planner': {
-      desc: 'Organize routines, props, and preparation tasks for each performance.',
-      tip: 'Plan a show with tasks, notes, and run-of-show details.',
-    },
-    'Prop Checklist Generator': {
-      desc: 'Generate a clear prop checklist for rehearsals, travel, and show day.',
-      tip: 'Create a packing checklist for a specific routine or show.',
-    },
-    'Client Management': {
-      desc: 'Store client details and link them to shows and bookings.',
-      tip: 'Keep client notes and reuse details across tools.',
-    },
-    'Contract Generator': {
-      desc: 'Create professional performance contracts tailored to your engagements.',
-      tip: 'Generate a performance agreement you can copy or download.',
-    },
-    'Marketing Campaign': {
-      desc: 'Generate promotional copy for shows, events, and social media.',
-      tip: 'Create a quick marketing kit for a show or gig.',
-    },
-
-    'Magic Archives': {
-      desc: 'Research magic history, creators, and classic effects.',
-      tip: 'Look up creators, effects, and historical references.',
-    },
-    'Magic Theory Tutor': {
-      desc: 'Learn foundational magic principles through guided explanations.',
-      tip: 'Study theory topics like misdirection, timing, and structure.',
-    },
-    'Magic Dictionary': {
-      desc: 'Look up core terms and concepts used in magic and performance.',
-      tip: 'Quickly define a term mentioned in lessons or feedback.',
-    },
-    'Mentalism Assistant': {
-      desc: 'Develop mind-reading routines and structured mentalism effects.',
-      tip: 'Draft a mentalism routine outline or premise.',
-    },
-    'Gospel Magic Assistant': {
-      desc: 'Connect magic effects with meaningful biblical messages.',
-      tip: 'Pair effects with themes, verses, and message beats.',
-    },
-    "Assistant's Studio": {
-      desc: 'Plan assistant choreography and strengthen your on-stage partnership.',
-      tip: 'Improve assistant blocking, cues, and collaboration.',
-    },
-
-    'My Saved Ideas': {
-      desc: 'Browse and refine your saved scripts, plans, and notes.',
-      tip: 'Open your saved work and keep building.',
-    },
-    'Global Search': {
-      desc: 'Search across your saved ideas, shows, and notes.',
-      tip: 'Find anything fast across your library.',
-    },
-
-    'Show Feedback': {
-      desc: 'Review audience feedback and ratings from live performances.',
-      tip: 'See what audiences loved (and where they got confused).',
-    },
-    'Member Management': {
-      desc: 'Manage user access and membership settings (admin only).',
-      tip: 'Admin-only membership controls.',
-    },
-  };
-
-  const SECTION_DEFS: Array<{
-    key: string;
-    icon: string;
-    title: string;
-    description: string;
-    titles: string[];
-  }> = [
-    {
-      key: 'create',
-      icon: '🎨',
-      title: 'Create',
-      description: 'Generate effects, write scripts, and develop visual concepts.',
-      titles: [
-        'Effect Generator',
-        'Patter Engine',
-        'Innovation Engine',
-        'Visual Brainstorm Studio',
-        'Illusion Blueprint Generator',
-      ],
-    },
-    {
-      key: 'rehearse',
-      icon: '🎙️',
-      title: 'Rehearse',
-      description: 'Practice delivery, timing, and audience management before you step on stage.',
-      titles: [
-        'Rehearsal Coaching',
-        'Live Patter Rehearsal',
-        'Video Rehearsal Studio',
-        'Angle/Risk Analysis',
-        'Persona Simulator',
-        'Director Mode',
-      ],
-    },
-    {
-      key: 'perform_manage',
-      icon: '🎭',
-      title: 'Perform & Manage',
-      description: 'Plan shows, stay organized, and handle the business side of performing.',
-      titles: [
-        'Show Planner',
-        'Show Feedback',
-        'Client Management',
-        'Contract Generator',
-        'Prop Checklist Generator',
-        'Marketing Campaign',
-      ],
-    },
-
-    {
-      key: 'specialty',
-      icon: '✨',
-      title: 'Specialty Assistants',
-      description: 'Get focused guidance for specialized performance styles.',
-      titles: [
-        "Assistant's Studio",
-        'Mentalism Assistant',
-        'Gospel Magic Assistant',
-      ],
-    },
-
-    // --- Everything below stays accessible, but is “secondary” to the main flow above. ---
-    {
-      key: 'library',
-      icon: '🗂️',
-      title: 'Your Library',
-      description: 'Search and revisit your saved work.',
-      titles: [
-        'Global Search',
-        'My Saved Ideas',
-      ],
-    },
-    {
-      key: 'learning',
-      icon: '📚',
-      title: 'Learn & Reference',
-      description: 'Study fundamentals and look up terms, history, and theory.',
-      titles: [
-        'Magic Theory Tutor',
-        'Magic Dictionary',
-        'Magic Archives',
-      ],
-    },
-  ];
-
-  const promptMap = new Map<string, PredefinedPrompt>(
-    prompts.map((p) => [p.title, p])
-  );
-
-  const isLockedFor = (title: string) => {
-    const isAmateurFeature = AMATEUR_FEATURES.includes(title);
-    const isSemiProFeature = SEMI_PRO_FEATURES.includes(title);
-    const isProfessionalFeature = PROFESSIONAL_FEATURES.includes(title);
-
-    return (
-      (isAmateurFeature && !hasAmateurAccess) ||
-      (isSemiProFeature && !hasSemiProAccess) ||
-      (isProfessionalFeature && !hasProfessionalAccess)
-    );
-  };
-
-  // Standardized action labels (aligns with "Generate / Start / Open / View" language).
-  const getActionLabel = (title: string) => {
-    // Generate
-    if (
-      [
-        'Effect Generator',
-        'Patter Engine',
-        'Innovation Engine',
-        'Visual Brainstorm Studio',
-        'Illusion Blueprint Generator',
-        'Prop Checklist Generator',
-        'Contract Generator',
-        'Marketing Campaign',
-        'Director Mode',
-        'Assistant\'s Studio',
-        'Mentalism Assistant',
-        'Gospel Magic Assistant',
-      ].includes(title)
-    ) {
-      return 'Generate';
-    }
-
-    // Start
-    if (
-      [
-        'Live Patter Rehearsal',
-        'Video Rehearsal Studio',
-        'Persona Simulator',
-        'Rehearsal Coaching',
-        'Angle/Risk Analysis',
-      ].includes(title)
-    ) {
-      return 'Start';
-    }
-
-    // Open
-    if (
-      ['Show Planner', 'Client Management', 'Magic Archives', 'Magic Theory Tutor', 'Magic Dictionary', 'Global Search', 'My Saved Ideas'].includes(title)
-    ) {
-      return 'Open';
-    }
-
-    // View
-    if (['Show Feedback'].includes(title)) {
-      return 'View';
-    }
-
-    // Fallback
-    return 'Open';
-  };
-
-  const renderCard = (p: PredefinedPrompt) => {
-    const isLocked = isLockedFor(p.title);
-    const isPrimary = PRIMARY_TITLES.has(p.title);
-    const copy = CARD_COPY[p.title];
-    const desc = copy?.desc ?? p.prompt;
-    const tip = copy?.tip ?? desc;
-    const action = getActionLabel(p.title);
-
-    const remainingForTitle = (() => {
-      if (!usageQuota) return null as null | number;
-      if (p.title === 'Live Patter Rehearsal') return usageQuota?.live_audio_minutes?.remaining ?? null;
-      if (p.title === 'Visual Brainstorm Studio') return usageQuota?.image_gen?.remaining ?? null;
-      if (p.title === 'Identify a Trick') return usageQuota?.identify?.remaining ?? null;
-      if (p.title === 'Video Rehearsal Studio') return usageQuota?.video_uploads?.remaining ?? null;
-      return null;
-    })();
-
-    return (
-      <button
-        key={p.title}
-        onClick={() => onPromptClick(p)}
-        className={[
-          'relative p-4 rounded-lg text-left transition-colors h-full flex flex-col disabled:opacity-60 disabled:hover:bg-slate-800/50 disabled:cursor-not-allowed group',
-          // Base card styling
-          'bg-slate-800/50 hover:bg-purple-900/50 border border-slate-700',
-          // Primary highlight (subtle)
-          isPrimary ? 'border-amber-300/60 shadow-[0_0_14px_rgba(212,175,55,0.22)]' : '',
-          // Locked state (still clickable to open upgrade)
-          isLocked ? 'hover:bg-slate-800/50' : '',
-        ].join(' ')}
-      >
-        {isPrimary && (
-          <span className="absolute top-2 right-2 text-[10px] px-2 py-0.5 rounded-full bg-amber-300/15 text-amber-200 border border-amber-300/20">
-            ★ Recommended
-          </span>
-        )}
-
-        {p.icon && (
-          <p.icon
-            className={[
-              'w-7 h-7 mb-3 transition-colors',
-              isPrimary ? 'text-amber-300 group-hover:text-amber-200' : 'text-purple-400 group-hover:text-purple-300',
-            ].join(' ')}
-          />
-        )}
-
-        <p className="font-bold text-slate-200">{p.title}</p>
-        <p className="text-sm text-slate-400 mt-1 line-clamp-2 flex-grow">{desc}</p>
-
-        {/* Hover microcopy (1-line tooltip). No new features—just UX copy. */}
-        <span
-          className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-2 py-1 rounded-md text-[11px] whitespace-nowrap bg-slate-950/95 text-slate-200 border border-slate-700 shadow-lg opacity-0 scale-95 transition-all duration-150 group-hover:opacity-100 group-hover:scale-100"
-        >
-          {isLocked ? 'Unlock with Professional to use this tool' : tip}
-        </span>
-
-        {/* Action label (aligns with button language: Generate / Start / Open / View) */}
-        <div className="mt-3 flex items-center justify-between">
-          <span className="text-[11px] text-slate-500">
-            {isLocked ? '🔒 Pro Only' : 'Available'}
-            {typeof remainingForTitle === 'number' ? (
-              <span className="ml-2 text-slate-400">Remaining: {remainingForTitle}</span>
-            ) : null}
-          </span>
-          <span
-            className={[
-              'inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold border transition-colors',
-              isLocked
-                ? 'bg-slate-900/40 text-amber-200 border-amber-300/30'
-                : 'bg-purple-900/20 text-purple-200 border-purple-500/30 group-hover:bg-purple-900/35',
-            ].join(' ')}
-          >
-            {isLocked ? (
-              <>
-                <LockIcon className="w-3 h-3 text-amber-300/80" />
-                <span>{action} (Pro)</span>
-              </>
-            ) : (
-              <span>{action}</span>
-            )}
-          </span>
-        </div>
-      </button>
-    );
-  };
-
-  return (
-    <div className="flex-1 flex flex-col items-center text-center animate-fade-in p-4">
-      <RabbitIcon className="w-16 h-16 text-slate-500 mb-4" />
-      <h2 className="text-2xl font-bold text-slate-300 mb-2 font-cinzel">Home</h2>
-      <p className="text-slate-400 max-w-2xl mb-8">
-        Choose a tool to start, or ask me anything. Recommended tools are highlighted.
-      </p>
-
-      <div id="maw-tool-grid" className="w-full max-w-5xl space-y-10">
-        {SECTION_DEFS.map((section) => {
-          const sectionPrompts = section.titles
-            .map((t) => promptMap.get(t))
-            .filter(Boolean) as PredefinedPrompt[];
-
-          // Hide empty sections gracefully (in case titles change)
-          if (sectionPrompts.length === 0) return null;
-
-          return (
-            <section key={section.key} className="text-left">
-              <div className="mb-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-lg" aria-hidden="true">{section.icon}</span>
-                  <h3 className="text-xl font-bold text-slate-200">{section.title}</h3>
-                </div>
-                <p className="text-sm text-slate-400 mt-1 max-w-3xl">{section.description}</p>
-              </div>
-
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {sectionPrompts
-                  .filter((p) => user.isAdmin || p.title !== 'Member Management')
-                  .map(renderCard)}
-              </div>
-            </section>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
-const LoadingIndicator: React.FC = () => (
-    <div className="flex items-center space-x-1">
-        <div className="w-2 h-2 bg-purple-300 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-        <div className="w-2 h-2 bg-purple-300 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-        <div className="w-2 h-2 bg-purple-300 rounded-full animate-bounce"></div>
-    </div>
-);
-
-const ChatMessages: React.FC<{
-  messages: ChatMessage[];
-  isLoading: boolean;
-  recentlySaved: Set<number>;
-  handleSaveIdea: (text: string, index: number) => void;
-  handleFeedback: (messageId: string, feedback: 'good' | 'bad') => void;
-  messagesEndRef: React.RefObject<HTMLDivElement>;
-}> = ({ messages, isLoading, recentlySaved, handleSaveIdea, handleFeedback, messagesEndRef }) => (
-  <div className="space-y-4">
-    {messages.map((msg, index) => (
-      <div key={msg.id} className={`flex items-start gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-        {msg.role === 'model' && (
-          <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center flex-shrink-0">
-            <AIMagicianIcon className="w-5 h-5 text-purple-400" />
-          </div>
-        )}
-        {msg.role === 'user' ? (
-          <div className="max-w-2xl px-4 py-2 rounded-xl bg-purple-800 text-white">
-            <p className="whitespace-pre-wrap break-words">{msg.text}</p>
-          </div>
-        ) : (
-          <div className="max-w-2xl">
-            <div className="px-4 py-2 rounded-xl bg-slate-700 text-slate-200">
-              <FormattedText text={msg.text} />
-            </div>
-            <div className="mt-1.5 flex justify-end items-center gap-2">
-              <ShareButton
-                title="Shared from Magicians' AI Wizard"
-                text={msg.text}
-                className="flex items-center gap-1.5 px-2.5 py-1 text-xs bg-slate-800/70 hover:bg-slate-600 rounded-full text-slate-300 transition-colors"
-                aria-label="Share this response"
-              >
-                <ShareIcon className="w-3 h-3" />
-                <span>Share</span>
-              </ShareButton>
-              <button onClick={() => handleSaveIdea(msg.text, index)}
-                className="flex items-center gap-1.5 px-2.5 py-1 text-xs bg-slate-800/70 hover:bg-slate-600 rounded-full text-slate-300 transition-colors"
-                aria-label={recentlySaved.has(index) ? 'Saved' : 'Save this idea'} title={recentlySaved.has(index) ? 'Saved' : 'Save this idea'}>
-                {recentlySaved.has(index) ? (
-                  <>
-                    <CheckIcon className="w-3 h-3 text-green-400" />
-                    <span>Saved</span>
-                  </>
-                ) : (
-                  <>
-                    <SaveIcon className="w-3 h-3" />
-                    <span>Save</span>
-                  </>
-                )}
-              </button>
-              <div className="flex gap-1 border-l border-slate-600 pl-2">
-                <button
-                  onClick={() => handleFeedback(msg.id, 'good')}
-                  className={`p-1 rounded-full transition-colors ${msg.feedback === 'good' ? 'bg-green-500/20 text-green-400' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-600'}`}
-                  aria-label="Good response"
-                  title="Good response"
-                >
-                  <ThumbUpIcon className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => handleFeedback(msg.id, 'bad')}
-                  className={`p-1 rounded-full transition-colors ${msg.feedback === 'bad' ? 'bg-red-500/20 text-red-400' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-600'}`}
-                  aria-label="Bad response"
-                  title="Bad response"
-                >
-                  <ThumbDownIcon className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    ))}
-    {isLoading && (
-      <div className="flex items-start gap-3 justify-start">
-        <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center flex-shrink-0">
-          <AIMagicianIcon className="w-5 h-5 text-purple-400" />
-        </div>
-        <div className="max-w-lg px-4 py-2 rounded-xl bg-slate-700 text-slate-200">
-          <LoadingIndicator />
-        </div>
-      </div>
-    )}
-    <div ref={messagesEndRef} />
-  </div>
-);
-
-const ChatView: React.FC<{
-  messages: ChatMessage[];
-  isLoading: boolean;
-  recentlySaved: Set<number>;
-  handleSaveIdea: (text: string, index: number) => void;
-  handleFeedback: (messageId: string, feedback: 'good' | 'bad') => void;
-  messagesEndRef: React.RefObject<HTMLDivElement>;
-  showAngleRiskForm: boolean;
-  trickName: string;
-  setTrickName: (val: string) => void;
-  audienceType: 'Close-up' | 'Stage' | 'Surrounded' | null;
-  setAudienceType: (val: 'Close-up' | 'Stage' | 'Surrounded' | null) => void;
-  handleAngleRiskSubmit: () => void;
-  onCancelAngleRisk: () => void;
-  showRehearsalForm: boolean;
-  routineDescription: string;
-  setRoutineDescription: (val: string) => void;
-  targetDuration: string;
-  setTargetDuration: (val: string) => void;
-  handleRehearsalSubmit: () => void;
-  onCancelRehearsal: () => void;
-  onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  showInnovationEngineForm: boolean;
-  effectToInnovate: string;
-  setEffectToInnovate: (val: string) => void;
-  handleInnovationEngineSubmit: () => void;
-  onCancelInnovationEngine: () => void;
-  prompts: PredefinedPrompt[];
-  user: User;
-  hasAmateurAccess: boolean;
-  hasSemiProAccess: boolean;
-  hasProfessionalAccess: boolean;
-  usageQuota?: any;
-  onPromptClick: (prompt: PredefinedPrompt) => void;
-}> = (props) => {
-  let content;
-  if (props.messages.length > 0) {
-    content = <ChatMessages {...props} />;
-  } else if (props.showAngleRiskForm) {
-    content = <AngleRiskForm
-      trickName={props.trickName} setTrickName={props.setTrickName}
-      audienceType={props.audienceType} setAudienceType={props.setAudienceType}
-      onCancel={props.onCancelAngleRisk} onSubmit={props.handleAngleRiskSubmit}
-    />;
-  } else if (props.showRehearsalForm) {
-    content = <RehearsalCoachingForm
-      routineDescription={props.routineDescription} setRoutineDescription={props.setRoutineDescription}
-      targetDuration={props.targetDuration} setTargetDuration={props.setTargetDuration}
-      onCancel={props.onCancelRehearsal} onSubmit={props.handleRehearsalSubmit}
-      onFileChange={props.onFileChange}
-    />;
-  } else if (props.showInnovationEngineForm) {
-    content = <InnovationEngineForm
-      effectToInnovate={props.effectToInnovate} setEffectToInnovate={props.setEffectToInnovate}
-      onCancel={props.onCancelInnovationEngine} onSubmit={props.handleInnovationEngineSubmit}
-    />;
-  } else {
-    content = <PromptGrid 
-      prompts={props.prompts}
-      user={props.user}
-      hasAmateurAccess={props.hasAmateurAccess}
-      hasSemiProAccess={props.hasSemiProAccess}
-      hasProfessionalAccess={props.hasProfessionalAccess}
-      usageQuota={props.usageQuota}
-      onPromptClick={props.onPromptClick}
-    />;
-  }
-  return (
-    <div className={`flex-1 p-4 md:p-5 ${props.messages.length > 0 ? 'overflow-y-auto' : 'flex flex-col'}`}>
-      {content}
-    </div>
-  );
-};
-
-const ExpandableText: React.FC<{ text: string; limit?: number; className?: string }> = ({
-  text,
-  limit = 280,
-  className = '',
-}) => {
-  const [expanded, setExpanded] = useState(false);
-  const t = (text || '').trim();
-  if (!t) return null;
-  const isLong = t.length > limit;
-  const visible = !isLong || expanded ? t : t.slice(0, limit).trimEnd() + '…';
-
-  return (
-    <div className={className}>
-      <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-200">{visible}</div>
-      {isLong ? (
-        <button
-          type="button"
-          className="mt-2 text-xs font-semibold text-purple-300 hover:text-purple-200 transition"
-          onClick={() => setExpanded((v) => !v)}
-        >
-          {expanded ? 'Show less' : 'Show more'}
-        </button>
-      ) : null}
-    </div>
-  );
-};
-
-const IdentifyTab: React.FC<{
-    imageFile: File | null;
-    imagePreview: string | null;
-    identificationResult: TrickIdentificationResult | null;
-    isIdentifying: boolean;
-    identificationError: string | null;
-    identificationBlocked: BlockedUx | null;
-    identifySaved: boolean;
-    identifySaving: boolean;
-    identifyIsStrong: boolean;
-    fileInputRef: React.RefObject<HTMLInputElement>;
-    handleImageUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
-    handleIdentifyClick: () => void;
-    onSave: () => void;
-    onAddToShow: () => void;
-    onConvertToTask: () => void;
-    onCopy: () => void;
-    onShare: () => void;
-    onToggleStrong: () => void;
-    onRefine: (intent: 'clarify' | 'visual' | 'comedy' | 'mentalism' | 'practical' | 'safer_angles') => void;
-    refining: boolean;
-    lastRefine: string | null;
-    onRequestUpgrade: () => void;
-}> = ({ imagePreview, identificationResult, isIdentifying, identificationError, identificationBlocked, identifySaved, identifySaving, identifyIsStrong, fileInputRef, handleImageUpload, handleIdentifyClick, onSave, onAddToShow, onConvertToTask, onCopy, onShare, onToggleStrong, onRefine, refining, lastRefine, onRequestUpgrade }) => (
-    <div className="flex-1 overflow-y-auto p-4 md:p-5">
-        <div className="animate-fade-in space-y-4 max-w-2xl mx-auto">
-            <h2 className="text-2xl font-bold text-slate-200 font-cinzel">Identify a Trick</h2>
-            <p className="text-slate-400">Research an effect you've seen. Upload a picture, and the AI will try to identify it and find performance examples.</p>
-            <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" />
-            {!imagePreview ? (
-                 <button onClick={() => fileInputRef.current?.click()} className="w-full flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-600 rounded-lg hover:bg-slate-800/50 hover:border-purple-500 transition-colors">
-                    <ImageIcon className="w-12 h-12 text-slate-500 mb-2"/>
-                    <span className="font-semibold text-slate-300">Click to upload an image</span>
-                    <span className="text-sm text-slate-400">PNG, JPG, or WEBP</span>
-                </button>
-            ) : (
-                <div className="space-y-4">
-                    <div className="w-full h-64 bg-slate-800 rounded-lg flex items-center justify-center overflow-hidden">
-                        <img src={imagePreview} alt="Magic trick preview" className="max-w-full max-h-full object-contain" />
-                    </div>
-                    <div className="flex gap-4">
-                        <button onClick={() => fileInputRef.current?.click()} className="flex-1 w-full py-2 px-4 bg-slate-600/50 hover:bg-slate-700 rounded-md text-slate-300 font-bold transition-colors">
-                            Change Image
-                        </button>
-                        <button onClick={handleIdentifyClick} disabled={isIdentifying} className="flex-1 w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed">
-                            {isIdentifying ? 'Analyzing...' : 'Identify Trick'}
-                        </button>
-                    </div>
-                </div>
-            )}
-            {isIdentifying && (
-                <div className="flex items-center justify-center p-5 bg-slate-800/50 rounded-lg">
-                   <div className="flex items-center space-x-2 text-slate-300">
-                        <WandIcon className="w-5 h-5 animate-pulse text-purple-400" />
-                        <span>Consulting magical archives...</span>
-                    </div>
-                </div>
-            )}
-            {identificationBlocked && (
-                <BlockedPanel
-                    blocked={identificationBlocked}
-                    onUpgrade={identificationBlocked.showUpgrade ? onRequestUpgrade : undefined}
-                    onRetry={identificationBlocked.retryable ? handleIdentifyClick : undefined}
-                />
-            )}
-            {identificationError && <p className="text-red-400 text-center bg-red-900/20 p-3 rounded-lg">{identificationError}</p>}
-            {identificationResult && (
-                <div className="animate-fade-in bg-slate-800/50 border border-slate-700 rounded-2xl p-5 space-y-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-xs uppercase tracking-wider text-slate-400">Most likely trick</div>
-                        <div className="mt-1 text-2xl font-bold text-white">{identificationResult.trickName}</div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`text-xs px-2.5 py-1 rounded-full border ${
-                            (identificationResult.confidence || 'Medium') === 'High'
-                              ? 'bg-green-500/10 text-green-200 border-green-500/30'
-                              : (identificationResult.confidence || 'Medium') === 'Low'
-                              ? 'bg-amber-500/10 text-amber-200 border-amber-500/30'
-                              : 'bg-sky-500/10 text-sky-200 border-sky-500/30'
-                          }`}
-                        >
-                          Confidence: {identificationResult.confidence || 'Medium'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {identificationResult.summary ? (
-                      <div className="text-slate-200">
-                        <div className="text-xs uppercase tracking-wider text-slate-400">Quick summary</div>
-                        <ExpandableText text={identificationResult.summary} limit={260} className="mt-1" />
-                      </div>
-                    ) : null}
-
-                    {identificationResult.observations?.length ? (
-                      <div>
-                        <div className="text-xs uppercase tracking-wider text-slate-400">What I'm seeing</div>
-                        <ul className="mt-2 list-disc list-inside space-y-1 text-sm text-slate-200">
-                          {identificationResult.observations.slice(0, 8).map((o, idx) => (
-                            <li key={idx} className="text-slate-200">{o}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    ) : null}
-
-                    {/* Phase 2 — Expandable sections (accordion style) */}
-                    {(identificationResult.likelyEffectPlot ||
-                      identificationResult.performanceStructure?.length ||
-                      identificationResult.presentationIdeas?.length ||
-                      identificationResult.angleRiskNotes?.length ||
-                      identificationResult.variations?.length) && (
-                      <div className="space-y-2">
-                        {identificationResult.likelyEffectPlot && (
-                          <details className="rounded-lg border border-slate-700/60 bg-slate-900/20 p-3">
-                            <summary className="cursor-pointer select-none text-xs font-semibold tracking-wide text-slate-200">
-                              Likely Effect / Plot
-                              <span className="ml-2 text-[11px] font-normal text-slate-400">tap to expand</span>
-                            </summary>
-                            <div className="mt-2">
-                              <ExpandableText text={identificationResult.likelyEffectPlot} limit={420} />
-                            </div>
-                          </details>
-                        )}
-
-                        {!!identificationResult.performanceStructure?.length && (
-                          <details className="rounded-lg border border-slate-700/60 bg-slate-900/20 p-3">
-                            <summary className="cursor-pointer select-none text-xs font-semibold tracking-wide text-slate-200">
-                              Performance Structure
-                              <span className="ml-2 text-[11px] font-normal text-slate-400">tap to expand</span>
-                            </summary>
-                            <ul className="mt-2 list-disc list-inside space-y-1 text-sm text-slate-200">
-                              {identificationResult.performanceStructure.slice(0, 10).map((x, i) => (
-                                <li key={i}>{x}</li>
-                              ))}
-                            </ul>
-                          </details>
-                        )}
-
-                        {!!identificationResult.presentationIdeas?.length && (
-                          <details className="rounded-lg border border-slate-700/60 bg-slate-900/20 p-3">
-                            <summary className="cursor-pointer select-none text-xs font-semibold tracking-wide text-slate-200">
-                              Presentation Ideas
-                              <span className="ml-2 text-[11px] font-normal text-slate-400">tap to expand</span>
-                            </summary>
-                            <ul className="mt-2 list-disc list-inside space-y-1 text-sm text-slate-200">
-                              {identificationResult.presentationIdeas.slice(0, 12).map((x, i) => (
-                                <li key={i}>{x}</li>
-                              ))}
-                            </ul>
-                          </details>
-                        )}
-
-                        {!!identificationResult.angleRiskNotes?.length && (
-                          <details className="rounded-lg border border-slate-700/60 bg-slate-900/20 p-3">
-                            <summary className="cursor-pointer select-none text-xs font-semibold tracking-wide text-slate-200">
-                              Angle / Risk Notes
-                              <span className="ml-2 text-[11px] font-normal text-slate-400">non-exposure</span>
-                            </summary>
-                            <ul className="mt-2 list-disc list-inside space-y-1 text-sm text-slate-200">
-                              {identificationResult.angleRiskNotes.slice(0, 12).map((x, i) => (
-                                <li key={i}>{x}</li>
-                              ))}
-                            </ul>
-                          </details>
-                        )}
-
-                        {!!identificationResult.variations?.length && (
-                          <details className="rounded-lg border border-slate-700/60 bg-slate-900/20 p-3">
-                            <summary className="cursor-pointer select-none text-xs font-semibold tracking-wide text-slate-200">
-                              Variations / Alternatives
-                              <span className="ml-2 text-[11px] font-normal text-slate-400">tap to expand</span>
-                            </summary>
-                            <ul className="mt-2 list-disc list-inside space-y-1 text-sm text-slate-200">
-                              {identificationResult.variations.slice(0, 12).map((x, i) => (
-                                <li key={i}>{x}</li>
-                              ))}
-                            </ul>
-                          </details>
-                        )}
-                      </div>
-                    )}
-
-                   {identificationResult.videoExamples?.length > 0 && (
-                     <div>
-                        <div className="text-xs uppercase tracking-wider text-slate-400 mb-2">Example performances</div>
-                        <div className="space-y-2">
-                            {identificationResult.videoExamples.map((video, index) => (
-                                <a key={index} href={video.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-2 bg-slate-700/50 hover:bg-purple-900/50 rounded-md transition-colors">
-                                    <VideoIcon className="w-6 h-6 text-purple-400 flex-shrink-0"/>
-                                    <span className="text-slate-200 text-sm truncate">{video.title}</span>
-                                </a>
-                            ))}
-                        </div>
-                     </div>
-                   )}
-
-                   <SaveActionBar
-                      title="Next step:"
-                      subtitle="Save this research, then move it into a Show or Task."
-                      onSave={onSave}
-                      saving={identifySaving}
-                      saved={identifySaved}
-                      onAddToShow={onAddToShow}
-                      onConvertToTask={onConvertToTask}
-                      onCopy={onCopy}
-                      onShare={onShare}
-                      isStrong={identifyIsStrong}
-                      onToggleStrong={onToggleStrong}
-                      refineNode={
-                        <div>
-                          <div className="flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              onClick={() => onRefine('clarify')}
-                              disabled={!identificationResult || isIdentifying || refining}
-                              className="h-9 px-3 text-xs border border-slate-600 rounded-md bg-slate-900/40 text-slate-200 hover:bg-slate-800/50 disabled:opacity-50"
-                            >
-                              ✨ Clarify
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => onRefine('visual')}
-                              disabled={!identificationResult || isIdentifying || refining}
-                              className="h-9 px-3 text-xs border border-slate-600 rounded-md bg-slate-900/40 text-slate-200 hover:bg-slate-800/50 disabled:opacity-50"
-                            >
-                              🎬 More Visual
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => onRefine('comedy')}
-                              disabled={!identificationResult || isIdentifying || refining}
-                              className="h-9 px-3 text-xs border border-slate-600 rounded-md bg-slate-900/40 text-slate-200 hover:bg-slate-800/50 disabled:opacity-50"
-                            >
-                              🎭 Comedy
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => onRefine('mentalism')}
-                              disabled={!identificationResult || isIdentifying || refining}
-                              className="h-9 px-3 text-xs border border-slate-600 rounded-md bg-slate-900/40 text-slate-200 hover:bg-slate-800/50 disabled:opacity-50"
-                            >
-                              🧠 Mentalism
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => onRefine('practical')}
-                              disabled={!identificationResult || isIdentifying || refining}
-                              className="h-9 px-3 text-xs border border-slate-600 rounded-md bg-slate-900/40 text-slate-200 hover:bg-slate-800/50 disabled:opacity-50"
-                            >
-                              🧰 Practical
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => onRefine('safer_angles')}
-                              disabled={!identificationResult || isIdentifying || refining}
-                              className="h-9 px-3 text-xs border border-slate-600 rounded-md bg-slate-900/40 text-slate-200 hover:bg-slate-800/50 disabled:opacity-50"
-                            >
-                              🛡️ Safer Angles
-                            </button>
-                          </div>
-
-                          {refining ? (
-                            <div className="mt-2 text-xs text-slate-400 flex items-center gap-2">
-                              <span className="inline-block h-2 w-2 rounded-full bg-purple-400 animate-pulse" />
-                              Refining{lastRefine ? `: ${lastRefine}` : ''}…
-                            </div>
-                          ) : null}
-                        </div>
-                      }
-                    />
-                </div>
-            )}
-        </div>
-    </div>
-);
-
-
-
-
-const PublicationsTab: React.FC = () => {
-  const STORAGE_KEY = 'magic-publications-saved-research';
-
-  const [filter, setFilter] = useState<'all' | 'print' | 'digital' | 'video' | 'research' | 'archive'>('all');
-  const [search, setSearch] = useState('');
-  const [sortBy, setSortBy] = useState<'alphabetical' | 'newest' | 'popular'>('alphabetical');
-  const [savedPublications, setSavedPublications] = useState<string[]>(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
-    } catch {
-      return [];
-    }
-  });
-
-  const featuredPublication = publications.find(pub => pub.name === 'Genii Magazine') ?? publications[0];
-
-  const publicationFilters = [
-    { id: 'all', label: 'All' },
-    { id: 'print', label: 'Print' },
-    { id: 'digital', label: 'Digital' },
-    { id: 'video', label: 'Video' },
-    { id: 'research', label: 'Research' },
-    { id: 'archive', label: 'Archive' },
-  ] as const;
-
-  const editorPickNames = ['Genii Magazine', 'Magicseen', 'VANISH Magazine'] as const;
-  const mostPopularOrder = [
-    'Genii Magazine',
-    'The Linking Ring',
-    'Magicseen',
-    'VANISH Magazine',
-    'Reel Magic Magazine',
-    'M-U-M Magazine',
-    'Gibecière',
-    'MAGIC Magazine',
-  ];
-  const newestOrder = [
-    'VANISH Magazine',
-    'Reel Magic Magazine',
-    'Magicseen',
-    'Genii Magazine',
-    'The Linking Ring',
-    'M-U-M Magazine',
-    'Gibecière',
-    'MAGIC Magazine',
-  ];
-
-  const wireMentions: Record<string, { count: number; trending: boolean }> = {
-    'Genii Magazine': { count: 3, trending: true },
-    'Magicseen': { count: 2, trending: true },
-    'VANISH Magazine': { count: 2, trending: false },
-    'The Linking Ring': { count: 1, trending: false },
-  };
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(savedPublications));
-    } catch {
-      // Ignore localStorage write failures.
-    }
-  }, [savedPublications]);
-
-  const getPublicationTypeTokens = (type?: string) =>
-    (type ?? 'Publication')
-      .split('/')
-      .map(token => token.trim())
-      .filter(Boolean);
-
-  const getPublicationPublisher = (pub: typeof publications[number]) => {
-    const description = pub.description.toLowerCase();
-
-    if (pub.name === 'Genii Magazine') return 'Genii Corporation';
-    if (description.includes('international brotherhood of magicians')) return 'International Brotherhood of Magicians';
-    if (description.includes('society of american magicians')) return 'Society of American Magicians';
-    if (description.includes('conjuring arts research center')) return 'Conjuring Arts Research Center';
-    if (pub.name === 'Reel Magic Magazine') return 'Reel Magic';
-    if (pub.name === 'VANISH Magazine') return 'VANISH Magazine';
-    if (pub.name === 'Magicseen') return 'Magicseen';
-    if (pub.name === 'MAGIC Magazine') return 'Stan Allen / MAGIC Magazine';
-    return 'Magic Publication';
-  };
-
-  const getSortRank = (name: string, order: string[]) => {
-    const index = order.indexOf(name);
-    return index === -1 ? Number.MAX_SAFE_INTEGER : index;
-  };
-
-  const toggleSavePublication = (name: string) => {
-    setSavedPublications(prev =>
-      prev.includes(name) ? prev.filter(p => p !== name) : [...prev, name]
-    );
-  };
-
-  const discussWithAI = (publicationName: string) => {
-    const prompt = `Tell me about the history and influence of ${publicationName} in the magic community.`;
-    alert(`AI Assistant Prompt:\n\n${prompt}`);
-  };
-
-  const q = search.trim().toLowerCase();
-
-  const filteredPublications = [...publications]
-    .filter(pub => {
-      const matchesFilter =
-        filter === 'all' || getPublicationTypeTokens(pub.type).some(token => token.toLowerCase() === filter);
-
-      if (!matchesFilter) return false;
-      if (!q) return true;
-
-      const haystack = [pub.name, pub.description, getPublicationPublisher(pub)].join(' ').toLowerCase();
-      return haystack.includes(q);
-    })
-    .sort((a, b) => {
-      if (sortBy === 'newest') {
-        return getSortRank(a.name, newestOrder) - getSortRank(b.name, newestOrder) || a.name.localeCompare(b.name);
-      }
-
-      if (sortBy === 'popular') {
-        return getSortRank(a.name, mostPopularOrder) - getSortRank(b.name, mostPopularOrder) || a.name.localeCompare(b.name);
-      }
-
-      return a.name.localeCompare(b.name);
-    });
-
-  const editorPicks = editorPickNames
-    .map(name => publications.find(pub => pub.name === name))
-    .filter((pub): pub is typeof publications[number] => Boolean(pub));
-
-  const savedResearchShelf = savedPublications
-    .map(name => publications.find(pub => pub.name === name))
-    .filter((pub): pub is typeof publications[number] => Boolean(pub));
-
-  const getPublicationBadgeClass = (label: string) => {
-    switch (label.toLowerCase()) {
-      case 'video':
-        return 'border-purple-500/30 bg-purple-500/10 text-purple-200';
-      case 'research':
-        return 'border-cyan-500/30 bg-cyan-500/10 text-cyan-200';
-      case 'archive':
-        return 'border-slate-500/40 bg-slate-500/10 text-slate-200';
-      default:
-        return 'border-yellow-500/30 bg-yellow-500/10 text-yellow-200';
-    }
-  };
-
-  const getPublicationThumbnail = (type?: string) => {
-    const lowerType = (type ?? '').toLowerCase();
-
-    if (lowerType.includes('video')) {
-      return {
-        icon: '▶',
-        label: 'Video magazine',
-        accent: 'from-purple-500/25 via-fuchsia-500/10 to-slate-900/40',
-      };
-    }
-
-    if (lowerType.includes('research')) {
-      return {
-        icon: '✦',
-        label: 'Research journal',
-        accent: 'from-cyan-500/25 via-sky-500/10 to-slate-900/40',
-      };
-    }
-
-    if (lowerType.includes('archive')) {
-      return {
-        icon: '⌘',
-        label: 'Archive collection',
-        accent: 'from-slate-500/25 via-slate-400/10 to-slate-900/40',
-      };
-    }
-
-    return {
-      icon: '🎩',
-      label: 'Magic publication',
-      accent: 'from-yellow-500/20 via-amber-500/10 to-slate-900/40',
-    };
-  };
-
-  const featuredTypeTokens = getPublicationTypeTokens(featuredPublication?.type);
-
-  return (
-    <div className="flex-1 overflow-y-auto p-4 md:p-5">
-      <div className="animate-fade-in space-y-6">
-        <div className="space-y-2">
-          <h2 className="text-2xl font-bold text-slate-200 font-cinzel">Magic Publications</h2>
-          <p className="text-slate-400 max-w-3xl">
-            Essential reading for the modern magician. Stay informed on new effects, theory, and community news.
-          </p>
-        </div>
-
-        {featuredPublication ? (
-          <div className="relative overflow-hidden rounded-2xl border border-yellow-500/20 bg-gradient-to-br from-slate-800/95 via-slate-900/95 to-slate-950/95 p-5 md:p-6 shadow-[0_0_30px_rgba(15,23,42,0.35)]">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(234,179,8,0.18),transparent_35%)] pointer-events-none" />
-            <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex items-start gap-4">
-                <div className="h-20 w-16 shrink-0 rounded-xl border border-yellow-500/20 bg-gradient-to-br from-yellow-500/20 via-amber-500/10 to-slate-900/60 flex items-center justify-center text-3xl shadow-inner shadow-yellow-500/10">
-                  🎩
-                </div>
-                <div className="space-y-3">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-yellow-500/25 bg-yellow-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-yellow-200/90">
-                    Featured Publication
-                  </div>
-                  <div>
-                    <h3 className="text-2xl font-semibold bg-gradient-to-r from-yellow-100 via-amber-300 to-yellow-100 bg-clip-text text-transparent">
-                      {featuredPublication.name}
-                    </h3>
-                    <p className="mt-2 max-w-2xl text-sm md:text-base text-slate-300">
-                      {featuredPublication.name === 'Genii Magazine'
-                        ? 'The longest running magazine in magic and a cornerstone resource for performers, historians, and creators.'
-                        : featuredPublication.description}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {featuredTypeTokens.map(label => (
-                      <span
-                        key={label}
-                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium border ${getPublicationBadgeClass(label)}`}
-                      >
-                        {label}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3 lg:justify-end">
-                <a
-                  href={featuredPublication.url ?? "#"}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-900/50 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-500 hover:bg-slate-800/80"
-                >
-                  Read More
-                </a>
-                {featuredPublication.url ? (
-                  <a
-                    href={featuredPublication.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-2 text-sm font-medium text-yellow-100 transition hover:border-yellow-400/50 hover:bg-yellow-500/15"
-                    title="Open in a new tab"
-                  >
-                    Visit Site <span aria-hidden="true">↗</span>
-                  </a>
-                ) : null}
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/35 p-4 md:p-5 space-y-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="relative w-full lg:max-w-md">
-              <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500">
-                <SearchIcon className="h-4 w-4" />
-              </span>
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search publications..."
-                className="w-full rounded-xl border border-slate-700 bg-slate-950/60 py-2.5 pl-10 pr-3 text-sm text-slate-200 outline-none transition placeholder:text-slate-500 focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20"
-              />
-            </div>
-
-            <div className="flex items-center gap-2 self-start lg:self-auto">
-              <label htmlFor="publication-sort" className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">
-                Sort By
-              </label>
-              <select
-                id="publication-sort"
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as 'alphabetical' | 'newest' | 'popular')}
-                className="rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2 text-sm text-slate-200 outline-none transition focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20"
-              >
-                <option value="alphabetical">Alphabetical</option>
-                <option value="newest">Newest</option>
-                <option value="popular">Most Popular</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            {publicationFilters.map(option => {
-              const isActive = filter === option.id;
-              return (
-                <button
-                  key={option.id}
-                  type="button"
-                  onClick={() => setFilter(option.id)}
-                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
-                    isActive
-                      ? 'border-yellow-400/40 bg-yellow-500/15 text-yellow-100 shadow-[0_0_16px_rgba(234,179,8,0.14)]'
-                      : 'border-slate-700 bg-slate-900/40 text-slate-300 hover:border-slate-500 hover:bg-slate-800/80'
-                  }`}
-                >
-                  {option.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {savedResearchShelf.length > 0 ? (
-          <div className="rounded-2xl border border-yellow-500/15 bg-gradient-to-br from-yellow-500/5 via-slate-900/50 to-slate-950/50 p-4 md:p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-yellow-100">Saved for Research</h3>
-                <p className="mt-1 text-sm text-slate-400">Your bookmarked publications are ready for deeper study and AI discussion.</p>
-              </div>
-              <div className="text-xs uppercase tracking-[0.16em] text-slate-500">
-                {savedResearchShelf.length} saved
-              </div>
-            </div>
-
-            <div className="mt-4 flex flex-wrap gap-3">
-              {savedResearchShelf.map(pub => {
-                const mention = wireMentions[pub.name];
-                return (
-                  <div
-                    key={`saved-${pub.name}`}
-                    className="min-w-[220px] rounded-xl border border-slate-700/80 bg-slate-900/50 px-4 py-3"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-semibold text-yellow-100">{pub.name}</div>
-                        <div className="mt-1 text-xs text-slate-400">{getPublicationPublisher(pub)}</div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => toggleSavePublication(pub.name)}
-                        className="text-xs text-slate-400 transition hover:text-yellow-200"
-                        title="Remove from research"
-                      >
-                        Remove
-                      </button>
-                    </div>
-
-                    {mention ? (
-                      <div className="mt-3 text-[11px] text-purple-200">
-                        {mention.trending ? 'Trending in Magic Wire' : `Mentioned in ${mention.count} recent Magic Wire stor${mention.count === 1 ? 'y' : 'ies'}`}
-                      </div>
-                    ) : (
-                      <div className="mt-3 text-[11px] text-slate-500">Saved for future research workflows</div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ) : null}
-
-        <div className="rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900/50 via-slate-900/30 to-slate-950/50 p-4 md:p-5">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-300">Editor&apos;s Picks</h3>
-              <p className="mt-1 text-sm text-slate-400">A curated starting shelf for modern magic reading and viewing.</p>
-            </div>
-          </div>
-
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-            {editorPicks.map(pub => {
-              const badgeTokens = getPublicationTypeTokens(pub.type);
-              const thumbnail = getPublicationThumbnail(pub.type);
-              return (
-                <div
-                  key={`editor-pick-${pub.name}`}
-                  className="rounded-xl border border-slate-700/80 bg-slate-800/40 p-3 transition hover:border-purple-400/60 hover:bg-purple-500/5"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className={`flex h-14 w-12 shrink-0 flex-col items-center justify-center rounded-lg border border-slate-600/80 bg-gradient-to-br ${thumbnail.accent} text-slate-100 shadow-inner shadow-slate-950/40`}>
-                      <span className="text-lg leading-none">{thumbnail.icon}</span>
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-yellow-100 truncate">{pub.name}</div>
-                      <div className="mt-1 text-xs text-slate-400 line-clamp-2">{pub.description}</div>
-                    </div>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {badgeTokens.slice(0, 2).map(label => (
-                      <span
-                        key={`${pub.name}-pick-${label}`}
-                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium border ${getPublicationBadgeClass(label)}`}
-                      >
-                        {label}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-xs uppercase tracking-[0.18em] text-slate-500">
-              {filteredPublications.length} publication{filteredPublications.length === 1 ? '' : 's'} shown
-            </div>
-            {q ? (
-              <button
-                type="button"
-                onClick={() => setSearch('')}
-                className="text-xs text-slate-400 transition hover:text-slate-200"
-              >
-                Clear search
-              </button>
-            ) : null}
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredPublications.map(pub => {
-              const badgeTokens = getPublicationTypeTokens(pub.type);
-              const thumbnail = getPublicationThumbnail(pub.type);
-              const isSaved = savedPublications.includes(pub.name);
-              const mention = wireMentions[pub.name];
-
-              return (
-                <div
-                  key={pub.name}
-                  className="group overflow-hidden rounded-xl border border-slate-700 bg-slate-800/50 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-purple-400 hover:bg-purple-500/5 hover:shadow-[0_12px_40px_rgba(76,29,149,0.18)]"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-4">
-                      <div className={`flex h-20 w-16 shrink-0 flex-col items-center justify-center rounded-xl border border-slate-600/80 bg-gradient-to-br ${thumbnail.accent} text-slate-100 shadow-inner shadow-slate-950/40`}>
-                        <span className="text-2xl leading-none">{thumbnail.icon}</span>
-                        <span className="mt-2 px-2 text-center text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-300/90">
-                          {thumbnail.label}
-                        </span>
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-                        <h3 className="font-bold text-lg bg-gradient-to-r from-yellow-200 via-amber-300 to-yellow-200 bg-clip-text text-transparent">
-                          {pub.name}
-                        </h3>
-                        <p className="mt-1 text-[11px] uppercase tracking-[0.16em] text-slate-500">
-                          {getPublicationPublisher(pub)}
-                        </p>
-                        <p className="mt-2 text-sm text-slate-400 line-clamp-3">{pub.description}</p>
-                      </div>
-                    </div>
-
-                    {mention?.trending ? (
-                      <div className="shrink-0 rounded-full border border-purple-500/30 bg-purple-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-purple-200">
-                        Trending in Magic Wire
-                      </div>
-                    ) : null}
-                  </div>
-
-                  <div className="mt-4 flex flex-wrap items-center gap-2">
-                    {badgeTokens.map(label => (
-                      <span
-                        key={`${pub.name}-${label}`}
-                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium border ${getPublicationBadgeClass(label)}`}
-                      >
-                        {label}
-                      </span>
-                    ))}
-                  </div>
-
-                  {mention ? (
-                    <div className="mt-3 text-xs text-slate-400">
-                      {mention.trending
-                        ? `Mentioned in ${mention.count} recent Magic Wire stories`
-                        : `Mentioned in ${mention.count} recent Magic Wire stor${mention.count === 1 ? 'y' : 'ies'}`}
-                    </div>
-                  ) : (
-                    <div className="mt-3 text-xs text-slate-500">
-                      No recent Magic Wire mentions yet
-                    </div>
-                  )}
-
-                  <div className="mt-4 flex items-center justify-between gap-3">
-                    <button
-                      type="button"
-                      onClick={() => toggleSavePublication(pub.name)}
-                      className={`inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs transition ${
-                        isSaved
-                          ? 'border-yellow-500/35 bg-yellow-500/10 text-yellow-200'
-                          : 'border-slate-600 bg-slate-900/35 text-slate-300 hover:border-yellow-500/30 hover:text-yellow-200'
-                      }`}
-                      title="Save for research"
-                    >
-                      <span aria-hidden="true">{isSaved ? '★' : '☆'}</span>
-                      Save for Research
-                    </button>
-
-                    <div className="flex items-center justify-end gap-3">
-                      <button
-                        type="button"
-                        onClick={() => discussWithAI(pub.name)}
-                        className="inline-flex items-center gap-1 rounded-lg border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 text-xs text-purple-200 transition hover:border-purple-400/40 hover:bg-purple-500/20"
-                      >
-                        Discuss with AI
-                      </button>
-
-                      {pub.url ? (
-                        <a
-                          href={pub.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-1 rounded-lg border border-yellow-500/25 bg-slate-900/40 px-3 py-1.5 text-xs text-yellow-200 transition hover:border-yellow-400/40 hover:bg-slate-900/70 hover:text-yellow-100"
-                          title="Open in a new tab"
-                        >
-                          Visit site <span aria-hidden="true">↗</span>
-                        </a>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {filteredPublications.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/35 p-6 text-center">
-              <div className="text-sm font-medium text-slate-300">No publications matched your search.</div>
-              <div className="mt-1 text-sm text-slate-500">Try a different keyword, category, or sort option.</div>
-            </div>
-          ) : null}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-
-
-
 
 const VIEW_TO_TAB_MAP: Record<MagicianView, MagicianTab> = {
     'dashboard': 'chat',
