@@ -1645,7 +1645,7 @@ const CommunityTab: React.FC = () => {
     utility: false,
     online: false,
     clubs: false,
-    conventions: false,
+    conventions: true,
   });
   const [curatedOpen, setCuratedOpen] = useState<Record<CuratedSectionKey, boolean>>({
     featured: true,
@@ -2170,6 +2170,32 @@ ${prompt}`);
           </button>
         </div>
 
+        <section className="space-y-3">
+          {renderSectionHeader(
+            'Events and Destination Gatherings',
+            'Popular Magic Conventions',
+            'Open the event layer when you want destination gatherings, convention research, and travel-worthy opportunities.',
+            sectionOpen.conventions,
+            () => toggleSection('conventions'),
+            `${filteredConventions.length} shown`
+          )}
+
+          {sectionOpen.conventions && (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {filteredConventions.map(convention => renderCommunityCard(convention, { visitLabel: 'Visit event', showDateBadge: true }))}
+              </div>
+
+              {(query || activeFilter !== 'All') && filteredConventions.length === 0 && (
+                <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/35 p-5 text-center text-sm text-slate-500">
+                  No conventions match the current search or filter.
+                </div>
+              )}
+            </>
+          )}
+        </section>
+
+
         <section className="max-w-5xl mx-auto space-y-3">
           {renderSectionHeader(
             'Community Directory',
@@ -2566,31 +2592,6 @@ ${prompt}`);
               {(query || activeFilter !== 'All') && filteredClubs.length === 0 && (
                 <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/35 p-5 text-center text-sm text-slate-500">
                   No clubs or organizations match the current search or filter.
-                </div>
-              )}
-            </>
-          )}
-        </section>
-
-        <section className="space-y-3">
-          {renderSectionHeader(
-            'Events and Destination Gatherings',
-            'Popular Magic Conventions',
-            'Open the event layer when you want destination gatherings, convention research, and travel-worthy opportunities.',
-            sectionOpen.conventions,
-            () => toggleSection('conventions'),
-            `${filteredConventions.length} shown`
-          )}
-
-          {sectionOpen.conventions && (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {filteredConventions.map(convention => renderCommunityCard(convention, { visitLabel: 'Visit event', showDateBadge: true }))}
-              </div>
-
-              {(query || activeFilter !== 'All') && filteredConventions.length === 0 && (
-                <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/35 p-5 text-center text-sm text-slate-500">
-                  No conventions match the current search or filter.
                 </div>
               )}
             </>
