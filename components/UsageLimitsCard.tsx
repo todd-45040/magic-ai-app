@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { getUpgradeUxCopy } from '../services/upgradeUx';
+import { BILLING_UI_COPY } from '../services/billingCopy';
 
 type UsageSnapshot = any;
 
@@ -35,7 +36,7 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
 
   const planLabel = useMemo(() => {
     if (plan === 'admin') return 'Admin';
-    if (plan === 'professional') return 'Pro';
+    if (plan === 'professional') return 'Professional';
     if (plan === 'amateur') return 'Amateur';
     if (plan === 'trial') return 'Trial';
     return String(plan).slice(0, 1).toUpperCase() + String(plan).slice(1);
@@ -116,14 +117,14 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
           </span>
           {(nearLimit || upgradeRecommended) && (
             <span className="text-[11px] px-2 py-0.5 rounded-full border border-[#E6C77A]/25 bg-[#E6C77A]/10 text-[#E6C77A]">
-              Upgrade available
+              {BILLING_UI_COPY.upgradeAvailable}
             </span>
           )}
         </div>
 
         <div className="flex items-center gap-2">
           {onRequestUpgrade && (nearLimit || upgradeRecommended) && (
-            <span className="hidden sm:inline text-xs text-slate-200/80">Upgrade available →</span>
+            <span className="hidden sm:inline text-xs text-slate-200/80">{BILLING_UI_COPY.upgradeAvailable} →</span>
           )}
           <span className="text-xs text-slate-300/80">{open ? 'Hide' : 'Show'}</span>
           <svg

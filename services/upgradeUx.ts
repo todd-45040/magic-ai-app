@@ -36,7 +36,7 @@ export function getUpgradeUxCopy(kind: UpgradeUxKind, opts?: {
   if (kind === 'founder_protected') {
     return {
       kind,
-      badge: 'Founder Protected',
+      badge: 'Founder protected',
       title: 'Your founder pricing is protected',
       message: 'Your Founder Professional rate stays locked across subscription changes and reactivation. You will not be moved onto the public Professional price by mistake.',
       primaryCta: 'Continue with founder pricing',
@@ -47,7 +47,7 @@ export function getUpgradeUxCopy(kind: UpgradeUxKind, opts?: {
   if (kind === 'trial_exhausted') {
     return {
       kind,
-      badge: 'Trial Exhausted',
+      badge: 'Trial exhausted',
       title: 'Your trial access has ended',
       message: founderProtected
         ? 'Your founder protection remains intact. Choose a paid plan when you are ready and your locked founder pricing will still be honored.'
@@ -60,7 +60,7 @@ export function getUpgradeUxCopy(kind: UpgradeUxKind, opts?: {
   if (kind === 'limit_reached') {
     return {
       kind,
-      badge: 'Limit Reached',
+      badge: 'Limit reached',
       title: 'You have reached your current limit',
       message: founderProtected
         ? `You have reached the current allowance for ${toolName}. Upgrade when ready and your founder pricing will remain protected.`
@@ -73,7 +73,7 @@ export function getUpgradeUxCopy(kind: UpgradeUxKind, opts?: {
   if (kind === 'upgrade_available') {
     return {
       kind,
-      badge: 'Upgrade Available',
+      badge: 'Upgrade available',
       title: 'More capacity is available',
       message: founderProtected
         ? 'You can move up without losing your founder protection. Your locked pricing remains attached to your account.'
@@ -85,7 +85,7 @@ export function getUpgradeUxCopy(kind: UpgradeUxKind, opts?: {
 
   return {
     kind: 'locked_by_plan',
-    badge: 'Locked by Plan',
+    badge: 'Locked by plan',
     title: `${toolName} is not included in your current plan`,
     message: founderProtected
       ? `This feature requires ${targetPlan}. Your founder pricing stays protected if you upgrade.`
