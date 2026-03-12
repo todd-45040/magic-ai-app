@@ -28,6 +28,7 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
   const quota = usageSnapshot?.quota ?? {};
   const resetHourLocal = usageSnapshot?.resetHourLocal;
   const resetTz = usageSnapshot?.resetTz;
+  const monthlyResetAt = usageSnapshot?.quota?.nextResetAt ?? usageSnapshot?.quota?.resetAt ?? null;
 
   const planLabel = useMemo(() => {
     if (plan === 'admin') return 'Admin';
@@ -170,11 +171,10 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
               <div className="mt-4">
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-xs font-semibold text-slate-300">Monthly tool quotas</div>
-                  {(resetHourLocal != null && resetTz) && (
-                    <div className="text-[11px] text-slate-300/70">
-                      Resets daily at {resetHourLocal}:00 ({resetTz})
-                    </div>
-                  )}
+                  <div className="text-[11px] text-slate-300/70 text-right">
+                    {(resetHourLocal != null && resetTz) ? `Daily AI resets at ${resetHourLocal}:00 (${resetTz})` : 'Daily AI resets each day'}
+                    {monthlyResetAt ? <span className="block">Monthly quotas reset {new Date(monthlyResetAt).toLocaleDateString()}</span> : <span className="block">Monthly quotas follow the billing reset window</span>}
+                  </div>
                 </div>
 
                 <div className="mt-2 divide-y divide-white/10">

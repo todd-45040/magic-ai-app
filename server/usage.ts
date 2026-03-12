@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import type { GoTrueClient } from '@supabase/auth-js';
 import { getIpFromReq, hashIp, logUsageEvent, } from './telemetry.js';
+import { getUsageQuotaConfigForMembership, nextMonthlyResetAtISO } from './billing/planMapping.js';
 
 // Canonical membership tiers used for usage enforcement.
 // Legacy tiers are accepted and normalized server-side.
@@ -60,31 +61,6 @@ function normalizeTier(m?: string | null): 'trial' | 'amateur' | 'professional' 
   }
 }
 
-const TIER_LIMITS: Record<string, number> = {
-  // free behaves like trial
-  trial: 20,
-  amateur: 200,
-  professional: 10000,
-  admin: 10000,
-  expired: 0,
-  // legacy
-  performer: 200,
-  'semi-pro': 200,
-};
-
-// Per-minute burst limits (requests per minute), even if daily remaining is high.
-const BURST_LIMITS: Record<string, number> = {
-  // free behaves like trial
-  trial: 20,
-  amateur: 60,
-  professional: 120,
-  admin: 120,
-  expired: 0,
-  // legacy
-  performer: 60,
-  'semi-pro': 60,
-};
-
 
 // Phase 2C-B: Tool tier + quota enforcement (monthly buckets).
 // Quota columns in public.users are treated as "remaining" balances for the current month.
@@ -122,50 +98,25 @@ function tierRank(tier: string): number {
   }
 }
 
-function defaultMonthlyQuotas(tier: string): {
-  quota_live_audio_minutes: number;
-  quota_image_gen: number;
-  quota_identify: number;
-  quota_video_uploads: number;
-} {
-  if (tierRank(tier) >= tierRank('admin')) {
-    return { quota_live_audio_minutes: 9999, quota_image_gen: 9999, quota_identify: 9999, quota_video_uploads: 9999 };
-  }
-  const t = normalizeTier(tier as any);
-  switch (t) {
-    case 'professional':
-      return { quota_live_audio_minutes: 240, quota_image_gen: 100, quota_identify: 100, quota_video_uploads: 30 };
-    case 'amateur':
-      // legacy "performer" and "semi-pro" normalize here
-      return { quota_live_audio_minutes: 120, quota_image_gen: 25, quota_identify: 50, quota_video_uploads: 10 };
-    case 'trial':
-      return { quota_live_audio_minutes: 10, quota_image_gen: 2, quota_identify: 10, quota_video_uploads: 1 };
-    case 'expired':
-    default:
-      return { quota_live_audio_minutes: 0, quota_image_gen: 0, quota_identify: 0, quota_video_uploads: 0 };
-  }
+function defaultMonthlyQuotas(tier: string) {
+  return getUsageQuotaConfigForMembership(tier).monthlyToolQuotas;
 }
 
-// Phase 6 — Daily safeguards for high-cost usage (pre-Pro launch)
-// These protect margins before Stripe and before you know real usage behavior.
-// Tune later based on real telemetry.
-const DAILY_LIVE_AUDIO_LIMITS_MIN: Record<string, number> = {
-  admin: 9999,
-  professional: 180,
-  amateur: 45,
-  trial: 10,
-  free: 10,
-  expired: 0,
-};
+function getDailyLiveAudioLimit(tier: string): number {
+  return getUsageQuotaConfigForMembership(tier).dailyToolLimits.live_audio_minutes;
+}
 
-const DAILY_VIDEO_UPLOAD_LIMITS: Record<string, number> = {
-  admin: 9999,
-  professional: 6,
-  amateur: 0,
-  trial: 0,
-  free: 0,
-  expired: 0,
-};
+function getDailyVideoUploadLimit(tier: string): number {
+  return getUsageQuotaConfigForMembership(tier).dailyToolLimits.video_uploads;
+}
+
+function getDailyAiLimit(tier: string): number {
+  return getUsageQuotaConfigForMembership(tier).dailyAiLimit;
+}
+
+function getBurstLimit(tier: string): number {
+  return getUsageQuotaConfigForMembership(tier).burstLimit;
+}
 
 function clampInt(n: any): number {
   const v = Number(n);
@@ -551,7 +502,7 @@ export async function getAiUsageStatus(req: any): Promise<{
   if (!userId) {
     // Anonymous users behave like trial.
     const membership: Membership = 'trial';
-    const limit = TIER_LIMITS.trial;
+    const limit = getDailyAiLimit('trial');
     const used = 0;
     const remaining = limit;
     const burstLimit = 8;
@@ -639,10 +590,10 @@ if (profile) {
   }
 
   const tier = normalizeTier(membership as any);
-  const limit = TIER_LIMITS[tier] ?? TIER_LIMITS.trial;
+  const limit = getDailyAiLimit(tier);
   const remaining = Math.max(0, limit - generationCount);
 
-  const burstLimit = BURST_LIMITS[tier] ?? BURST_LIMITS.trial;
+  const burstLimit = getBurstLimit(tier);
   const minuteKey = getMinuteKeyUTC();
   const key = `AI_BURST:${minuteKey}:${userId}`;
   const map = getRateMap();
@@ -657,13 +608,13 @@ if (profile) {
   let dailyLiveUsed = clampInt(profile?.daily_live_audio_minutes_used);
   const dailyLiveResetISO = profile?.daily_live_audio_reset_date ? new Date(profile.daily_live_audio_reset_date).toISOString() : null;
   if (isNewUsageDay(dailyLiveResetISO)) dailyLiveUsed = 0;
-  const dailyLiveLimit = clampInt(DAILY_LIVE_AUDIO_LIMITS_MIN[tier] ?? DAILY_LIVE_AUDIO_LIMITS_MIN.trial);
+  const dailyLiveLimit = clampInt(getDailyLiveAudioLimit(tier));
   const dailyLiveRemaining = Math.max(0, dailyLiveLimit - dailyLiveUsed);
 
   let dailyVideoUsed = clampInt(profile?.daily_video_uploads_used);
   const dailyVideoResetISO = profile?.daily_video_uploads_reset_date ? new Date(profile.daily_video_uploads_reset_date).toISOString() : null;
   if (isNewUsageDay(dailyVideoResetISO)) dailyVideoUsed = 0;
-  const dailyVideoLimit = clampInt(DAILY_VIDEO_UPLOAD_LIMITS[tier] ?? 0);
+  const dailyVideoLimit = clampInt(getDailyVideoUploadLimit(tier));
   const dailyVideoRemaining = Math.max(0, dailyVideoLimit - dailyVideoUsed);
 
   return {
@@ -695,6 +646,7 @@ if (profile) {
         daily: { used: dailyVideoUsed, limit: dailyVideoLimit, remaining: dailyVideoRemaining },
       },
       resetAt: profile?.quota_reset_date ? new Date(profile.quota_reset_date).toISOString() : null,
+      nextResetAt: nextMonthlyResetAtISO(profile?.quota_reset_date),
     },
 burstLimit,
     burstRemaining,
@@ -1075,7 +1027,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
   }
 
   const tier = normalizeTier(membership as any);
-  const burstLimit = BURST_LIMITS[tier] ?? BURST_LIMITS.trial;
+  const burstLimit = getBurstLimit(tier);
   const burst = enforceBurst(userId, burstLimit);
   if (!burst.ok) {
     await logUsageEvent({
@@ -1110,7 +1062,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
     };
   }
 
-  const limit = TIER_LIMITS[tier] ?? TIER_LIMITS.trial;
+  const limit = getDailyAiLimit(tier);
   const remaining = Math.max(0, limit - generationCount);
 
   if (remaining < costUnits) {
@@ -1287,7 +1239,7 @@ export async function enforceLiveMinutes(
     if (resetErr) console.error('daily live reset error:', resetErr);
   }
 
-  const liveLimit = clampInt(DAILY_LIVE_AUDIO_LIMITS_MIN[tier] ?? DAILY_LIVE_AUDIO_LIMITS_MIN.trial);
+  const liveLimit = clampInt(getDailyLiveAudioLimit(tier));
   const liveRemaining = Math.max(0, liveLimit - dailyUsed);
   if (units > 0 && liveRemaining < units) {
     await logUsageEvent({

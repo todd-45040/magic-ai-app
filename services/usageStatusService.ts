@@ -9,6 +9,14 @@ export type UsageStatus = {
   remaining?: number;
   burstLimit?: number;
   burstRemaining?: number;
+  quota?: {
+    live_audio_minutes?: { remaining?: number | null; limit?: number; daily?: { used?: number; limit?: number; remaining?: number } };
+    image_gen?: { remaining?: number | null; limit?: number };
+    identify?: { remaining?: number | null; limit?: number };
+    video_uploads?: { remaining?: number | null; limit?: number; daily?: { used?: number; limit?: number; remaining?: number } };
+    resetAt?: string | null;
+    nextResetAt?: string | null;
+  };
   liveUsed?: number;
   liveLimit?: number;
   liveRemaining?: number;
