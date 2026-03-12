@@ -4069,11 +4069,11 @@ ${action.payload.content}`;
               <h1 className="mt-2 text-2xl md:text-3xl font-semibold text-white leading-tight">
                 Your Home Base for Creating, Rehearsing, and Running <span className="text-yellow-200">Better Magic Shows</span>
               </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-white/70">
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-white/70">
                 Everything you need to create effects, rehearse performances, and manage your shows.
               </p>
-              <p className="mt-4 mb-6 text-sm text-white/55">
-                Welcome back, <span className="font-medium text-white">{user.name || (user.email ? user.email.split('@')[0] : 'magician')}</span>.
+              <p className="mt-4 text-sm text-white/55">
+                Welcome back, {user.name || (user.email ? user.email.split('@')[0] : 'magician')}.
               </p>
             </div>
 

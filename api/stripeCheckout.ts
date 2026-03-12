@@ -45,15 +45,7 @@ function isWithinFounderPaidWindow(nowMs: number): boolean {
 
 type Tier = 'amateur' | 'professional';
 type Billing = 'monthly' | 'annual';
-type EffectiveCheckoutTier = Tier | 'founder_professional';
 
-function resolveEffectiveCheckoutTier(input: { requestedTier: Tier; founderLocked: boolean }): EffectiveCheckoutTier {
-  if (input.requestedTier === 'professional' && input.founderLocked) {
-    return 'founder_professional';
-  }
-
-  return input.requestedTier;
-}
 
 function inferBucketFromProfile(profile: any): 'admc_2026' | 'reserve_2026' {
   const explicit = String(profile?.founding_bucket || '').trim();
@@ -135,8 +127,6 @@ export default async function handler(req: any, res: any) {
   const pricingLockKey = profile?.pricing_lock ? String(profile.pricing_lock) : '';
 
   const founderLocked = Boolean(pricingLockKey || foundingMember);
-  const effectiveCheckoutTier = resolveEffectiveCheckoutTier({ requestedTier: tier, founderLocked });
-  const founderPathCoerced = effectiveCheckoutTier === 'founder_professional';
 
 const nowMs = Date.now();
 const withinFounderWindow = isWithinFounderPaidWindow(nowMs);
@@ -214,7 +204,7 @@ if (founderOfferEligible) {
 }
 
 
-  const { priceId, couponId } = pickPriceId(tier, billing, founderPathCoerced);
+  const { priceId, couponId } = pickPriceId(tier, billing, founderLocked);
   if (!priceId) {
     return res.status(503).json({ ok: false, error: 'Stripe price IDs are not configured yet.' });
   }
@@ -222,7 +212,7 @@ if (founderOfferEligible) {
   const origin = getOrigin(req);
   // Post-checkout: if this is a Founder-locked Professional checkout, route to the
   // guided Founder Success Page (activation-first). Otherwise, use the generic return.
-  const successUrl = founderPathCoerced
+  const successUrl = (tier === 'professional' && founderLocked)
     ? `${origin}/app/founder-success?session_id={CHECKOUT_SESSION_ID}`
     : `${origin}/app/?stripe=success&tier=${encodeURIComponent(tier)}`;
   const cancelUrl = `${origin}/app/?stripe=cancel`;
@@ -245,8 +235,6 @@ if (founderOfferEligible) {
   // Metadata strategy (persists into Stripe objects if you copy it in webhook later)
   params.set('metadata[app]', 'magic_ai_wizard');
   params.set('metadata[tier_requested]', tier);
-  params.set('metadata[tier_resolved]', effectiveCheckoutTier);
-  params.set('metadata[founder_path_coerced]', founderPathCoerced ? 'true' : 'false');
   params.set('metadata[billing]', billing);
   params.set('metadata[user_id]', auth.userId);
 
@@ -269,7 +257,7 @@ if (founderOfferEligible) {
     params.set('metadata[pricing_lock]', '29.95');
     params.set('metadata[pricing_lock_key]', pricingLockKey);
   } else {
-    params.set('metadata[pricing_lock]', founderPathCoerced ? '29.95' : 'false');
+    params.set('metadata[pricing_lock]', founderLocked ? '29.95' : 'false');
     if (founderLocked) params.set('metadata[pricing_lock_key]', 'founding_pro_admc_2026');
   }
 
