@@ -4072,7 +4072,7 @@ ${action.payload.content}`;
               <p className="mt-2 max-w-2xl text-sm leading-6 text-white/70">
                 Everything you need to create effects, rehearse performances, and manage your shows.
               </p>
-              <p className="mt-4 text-sm text-white/55">
+              <p className="mt-4 mb-6 text-sm text-white/55">
                 Welcome back, {user.name || (user.email ? user.email.split('@')[0] : 'magician')}.
               </p>
             </div>
