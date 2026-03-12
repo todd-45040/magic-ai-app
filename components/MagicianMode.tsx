@@ -60,6 +60,7 @@ import MagicDictionary from './MagicDictionary';
 import AdminPanel from './AdminPanel';
 import AppSuggestionModal from './AppSuggestionModal';
 import BillingSettings from './BillingSettings';
+import { fetchUsageStatus, type UsageStatus } from '../services/usageStatusService';
 
 interface AngleRiskFormProps {
     trickName: string;
@@ -2913,56 +2914,44 @@ useEffect(() => {
   useEffect(() => {
     let cancelled = false;
 
+    const normalizeUsageSnapshot = (status: UsageStatus) => ({
+      ok: true,
+      plan: status?.membership ?? 'trial',
+      used: Number(status?.used ?? 0),
+      limit: Number(status?.limit ?? 0),
+      remaining: Number(status?.remaining ?? Math.max(0, Number(status?.limit ?? 0) - Number(status?.used ?? 0))),
+      burstLimit: status?.burstLimit ?? null,
+      burstRemaining: status?.burstRemaining ?? null,
+      quota: status?.quota ?? {
+        live_audio_minutes: { remaining: null },
+        image_gen: { remaining: null },
+        identify: { remaining: null },
+        video_uploads: { remaining: null },
+        resetAt: null,
+        nextResetAt: null,
+      },
+      resetAt: status?.quota?.nextResetAt ?? status?.quota?.resetAt ?? null,
+      resetTz: null,
+      resetHourLocal: null,
+      warnings: [],
+      nearLimit: false,
+      upgradeRecommended: false,
+    });
+
     const fetchUsage = async () => {
       try {
         setUsageSnapshotError(null);
-        const { data } = await supabase.auth.getSession();
-        const token = data?.session?.access_token;
-        const headers: Record<string, string> = {
-          Authorization: token ? `Bearer ${token}` : 'Bearer guest',
-          Accept: 'application/json',
-        };
+        const status = await fetchUsageStatus();
 
-        const r = await fetch('/api/usageStatus', { method: 'GET', headers });
-        const contentType = String(r.headers.get('content-type') || '').toLowerCase();
-        const txt = await r.text();
-        const parsed = contentType.includes('application/json') && txt
-          ? JSON.parse(txt)
-          : null;
+        if (cancelled) return;
 
-        if (!cancelled) {
-          if (!r.ok) {
-            setUsageSnapshot(null);
-            const fallbackMessage = !contentType.includes('application/json')
-              ? `Usage endpoint returned a non-JSON response (${r.status})`
-              : null;
-            setUsageSnapshotError(parsed?.message || parsed?.error || fallbackMessage || `Usage unavailable (${r.status})`);
-          } else {
-            const normalized = parsed && typeof parsed === 'object'
-              ? {
-                  ...parsed,
-                  plan: parsed.plan ?? parsed.membership ?? 'trial',
-                  quota: parsed.quota ?? {
-                    live_audio_minutes: { remaining: null },
-                    image_gen: { remaining: null },
-                    identify: { remaining: null },
-                    video_uploads: { remaining: null },
-                    resetAt: null,
-                  },
-                  warnings: Array.isArray(parsed.warnings) ? parsed.warnings : [],
-                  nearLimit: Boolean(parsed.nearLimit),
-                  upgradeRecommended: Boolean(parsed.upgradeRecommended),
-                }
-              : null;
-
-            if (!normalized?.plan) {
-              setUsageSnapshot(null);
-              setUsageSnapshotError('Usage status response was missing plan data.');
-            } else {
-              setUsageSnapshot(normalized);
-            }
-          }
+        if (!status?.ok) {
+          setUsageSnapshot(null);
+          setUsageSnapshotError('Usage status unavailable.');
+          return;
         }
+
+        setUsageSnapshot(normalizeUsageSnapshot(status));
       } catch (e: any) {
         if (!cancelled) {
           setUsageSnapshot(null);
@@ -2972,8 +2961,7 @@ useEffect(() => {
     };
 
     void fetchUsage();
-    // IMPORTANT: Supabase session hydration can lag behind the first render.
-    // Re-fetch usage immediately when we receive a real session.
+    // Use the same usage source as the header meter and refresh after auth hydration.
     const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
         void fetchUsage();
