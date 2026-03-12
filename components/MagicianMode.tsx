@@ -2918,14 +2918,12 @@ useEffect(() => {
         setUsageSnapshotError(null);
         const { data } = await supabase.auth.getSession();
         const token = data?.session?.access_token;
-        const headers: Record<string, string> = {};
-        // If the session hasn't hydrated yet, do NOT force a "guest" token.
-        // We'll re-fetch immediately when auth state changes.
-        if (token) headers.Authorization = `Bearer ${token}`;
+        const headers: Record<string, string> = {
+          Authorization: token ? `Bearer ${token}` : 'Bearer guest',
+          Accept: 'application/json',
+        };
 
-        headers.Accept = 'application/json';
-
-        const r = await fetch('/api/ai/usage', { method: 'GET', headers });
+        const r = await fetch('/api/usageStatus', { method: 'GET', headers });
         const contentType = String(r.headers.get('content-type') || '').toLowerCase();
         const txt = await r.text();
         const parsed = contentType.includes('application/json') && txt
@@ -2933,14 +2931,36 @@ useEffect(() => {
           : null;
 
         if (!cancelled) {
-          if (!r.ok || !parsed?.ok) {
+          if (!r.ok) {
             setUsageSnapshot(null);
             const fallbackMessage = !contentType.includes('application/json')
               ? `Usage endpoint returned a non-JSON response (${r.status})`
               : null;
-            setUsageSnapshotError(parsed?.message || fallbackMessage || `Usage unavailable (${r.status})`);
+            setUsageSnapshotError(parsed?.message || parsed?.error || fallbackMessage || `Usage unavailable (${r.status})`);
           } else {
-            setUsageSnapshot(parsed);
+            const normalized = parsed && typeof parsed === 'object'
+              ? {
+                  ...parsed,
+                  plan: parsed.plan ?? parsed.membership ?? 'trial',
+                  quota: parsed.quota ?? {
+                    live_audio_minutes: { remaining: null },
+                    image_gen: { remaining: null },
+                    identify: { remaining: null },
+                    video_uploads: { remaining: null },
+                    resetAt: null,
+                  },
+                  warnings: Array.isArray(parsed.warnings) ? parsed.warnings : [],
+                  nearLimit: Boolean(parsed.nearLimit),
+                  upgradeRecommended: Boolean(parsed.upgradeRecommended),
+                }
+              : null;
+
+            if (!normalized?.plan) {
+              setUsageSnapshot(null);
+              setUsageSnapshotError('Usage status response was missing plan data.');
+            } else {
+              setUsageSnapshot(normalized);
+            }
           }
         }
       } catch (e: any) {
