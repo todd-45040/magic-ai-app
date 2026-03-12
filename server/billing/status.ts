@@ -5,29 +5,13 @@
  */
 
 import type { BillingPlanKey } from '../../services/planCatalog.js';
+import type { BillingStatusContract, SubscriptionStatus } from '../../services/billingTypes.js';
 import { BILLING_PLAN_CATALOG } from '../../services/planCatalog.js';
 import { deriveFounderProtection } from './founderProtection.js';
 import { resolveBillingPlan } from './planMapping.js';
 import { getBillingConfig } from './billingConfig.js';
 
-export type BillingStatusResponse = {
-  ok: true;
-  membershipTier: BillingPlanKey;
-  subscriptionStatus: string;
-  accessState: string;
-  renewalDate: string | null;
-  cancelAtPeriodEnd: boolean;
-  founderProtected: boolean;
-  founderLockedPlan: BillingPlanKey | null;
-  founderLockedPriceCents: number | null;
-  usagePeriodStart: string | null;
-  usagePeriodEnd: string | null;
-  upgradeTargets: BillingPlanKey[];
-  stripeConfigured: boolean;
-  billingCustomerExists: boolean;
-  stripeCustomerIdPresent: boolean;
-  source: 'database' | 'fallback';
-};
+export type BillingStatusResponse = BillingStatusContract;
 
 function asIso(value: unknown): string | null {
   if (!value) return null;
@@ -101,7 +85,7 @@ export async function resolveBillingStatusForUser(admin: any, userId: string): P
   const fallbackMembershipTier = founderProtection.lockedPlan || normalizeProfileMembership(profile?.membership);
   const resolved = resolveBillingPlan({
     membershipTier: (subscription?.plan_key as BillingPlanKey | null) || fallbackMembershipTier,
-    subscriptionStatus: subscription?.billing_status || (fallbackMembershipTier === 'free' ? 'unknown' : 'active'),
+    subscriptionStatus: (subscription?.billing_status || (fallbackMembershipTier === 'free' ? 'unknown' : 'active')) as SubscriptionStatus,
     cancelAtPeriodEnd: Boolean(subscription?.cancel_at_period_end),
     currentPeriodEnd: subscription?.current_period_end || null,
     founderLockedPlan: founderProtection.lockedPlan,

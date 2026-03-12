@@ -8,6 +8,7 @@ import {
   type BillingPortalPayload,
   type BillingStatusPayload,
 } from '../services/billingClient';
+import type { SubscriptionStatus } from '../services/billingTypes';
 import { ShieldIcon, WandIcon, ClockIcon, CalendarIcon, DollarSignIcon, LockIcon } from './icons';
 import { BILLING_UI_COPY, getSubscriptionStatusLabel } from '../services/billingCopy';
 
@@ -16,12 +17,15 @@ interface BillingSettingsProps {
   onUpgrade: (membershipTier: 'amateur' | 'professional') => Promise<void> | void;
 }
 
-const statusTone: Record<string, string> = {
+const statusTone: Record<SubscriptionStatus, string> = {
   active: 'text-emerald-300 border-emerald-400/25 bg-emerald-500/10',
   trialing: 'text-sky-300 border-sky-400/25 bg-sky-500/10',
   past_due: 'text-amber-200 border-amber-400/25 bg-amber-500/10',
   canceled: 'text-slate-200 border-slate-500/25 bg-slate-500/10',
   unpaid: 'text-rose-200 border-rose-400/25 bg-rose-500/10',
+  incomplete: 'text-amber-200 border-amber-400/25 bg-amber-500/10',
+  incomplete_expired: 'text-rose-200 border-rose-400/25 bg-rose-500/10',
+  paused: 'text-slate-200 border-slate-500/25 bg-slate-500/10',
   unknown: 'text-slate-200 border-slate-500/25 bg-slate-500/10',
 };
 

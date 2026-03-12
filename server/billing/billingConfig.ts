@@ -1,11 +1,9 @@
 import type { BillingPlanKey } from '../../services/planCatalog.js';
+import type { CheckoutLookupKey } from '../../services/billingTypes.js';
 import { BILLING_PLAN_CATALOG } from '../../services/planCatalog.js';
 import { getOptionalEnv, getStripeEnvironmentReport } from './stripeConfig.js';
 
-export type BillingCheckoutLookupKey =
-  | 'amateur_monthly'
-  | 'professional_monthly'
-  | 'founder_professional_monthly';
+export type BillingCheckoutLookupKey = CheckoutLookupKey;
 
 export type StripePlaceholderPlanConfig = {
   lookupKey: BillingCheckoutLookupKey;

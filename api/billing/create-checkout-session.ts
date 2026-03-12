@@ -6,6 +6,7 @@
  */
 
 import { requireSupabaseAuth } from '../_auth.js';
+import type { CheckoutLookupKey } from '../../services/billingTypes.js';
 import { getBillingConfig, getBillingPlanPlaceholder, isBillingCheckoutLookupKey } from '../../server/billing/billingConfig.js';
 import { resolveBillingStatusForUser } from '../../server/billing/status.js';
 
@@ -20,7 +21,7 @@ export default async function handler(request: any, response: any) {
       return response.status(auth.status).json({ error: auth.error || 'Unauthorized' });
     }
 
-    const lookupKey = request?.body?.lookupKey;
+    const lookupKey = request?.body?.lookupKey as CheckoutLookupKey | undefined;
     if (!isBillingCheckoutLookupKey(lookupKey)) {
       return response.status(400).json({
         error: 'Invalid plan key. Client must send an internal billing lookup key only.',

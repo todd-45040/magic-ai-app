@@ -1,20 +1,10 @@
 import type { BillingPlanKey } from '../../services/planCatalog.js';
+import type { BillingAccessState, SubscriptionStatus } from '../../services/billingTypes.js';
 import { BILLING_PLAN_CATALOG } from '../../services/planCatalog.js';
 
-export type StripeSubscriptionStatus =
-  | 'trialing'
-  | 'active'
-  | 'past_due'
-  | 'canceled'
-  | 'unpaid'
-  | 'incomplete'
-  | 'incomplete_expired'
-  | 'paused'
-  | 'unknown';
+export type StripeSubscriptionStatus = SubscriptionStatus;
 
 export type UsagePlanAlias = 'free' | 'trial' | 'amateur' | 'professional' | 'admin' | 'expired';
-
-export type BillingAccessState = 'active' | 'grace' | 'scheduled_cancel' | 'restricted' | 'inactive';
 
 export type StripePlanBinding = {
   membershipTier: BillingPlanKey;
@@ -101,7 +91,7 @@ export function resolveMembershipTierFromStripeRefs(input?: {
 
 export function resolveBillingPlan(input?: {
   membershipTier?: BillingPlanKey | null;
-  subscriptionStatus?: string | null;
+  subscriptionStatus?: SubscriptionStatus | string | null;
   planKey?: BillingPlanKey | null;
   billingStatus?: string | null;
   cancelAtPeriodEnd?: boolean | null;

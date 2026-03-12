@@ -7,6 +7,7 @@
 import crypto from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import type { BillingPlanKey } from '../../services/planCatalog.js';
+import type { SubscriptionStatus } from '../../services/billingTypes.js';
 import { resolveMembershipTierFromStripeRefs, resolveBillingPlan } from './planMapping.js';
 import { getOptionalEnv, getStripeWebhookSecrets, sanitizeStripeLogValue } from './stripeConfig.js';
 
@@ -115,7 +116,7 @@ function normalizeMembershipTierFromObject(object: any): BillingPlanKey {
   return resolvedMembershipTier || (founderLike ? 'founder_professional' : 'free');
 }
 
-function normalizeStatusFromEvent(eventType: string, object: any): string {
+function normalizeStatusFromEvent(eventType: string, object: any): SubscriptionStatus {
   if (eventType === 'customer.subscription.deleted') return 'canceled';
   if (eventType === 'invoice.payment_failed') return 'past_due';
   if (eventType === 'invoice.paid') return 'active';
@@ -279,7 +280,7 @@ async function upsertSubscription(admin: any, params: {
   stripeSubscriptionId: string | null;
   checkoutSessionId?: string | null;
   membershipTier: BillingPlanKey;
-  subscriptionStatus: string;
+  subscriptionStatus: SubscriptionStatus;
   currentPeriodStart?: string | null;
   currentPeriodEnd?: string | null;
   cancelAtPeriodEnd?: boolean;

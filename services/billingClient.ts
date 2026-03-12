@@ -7,54 +7,16 @@
 
 import { supabase } from '../supabase';
 import type { BillingPlanKey } from './planCatalog';
+import type { BillingStatusContract, BillingAccessState, CheckoutLookupKey, CheckoutSessionContract, PortalSessionContract, SubscriptionStatus } from './billingTypes';
 import type { User } from '../types';
 import { isFounderProtected } from './upgradeUx';
 
-export type BillingCheckoutLookupKey =
-  | 'amateur_monthly'
-  | 'professional_monthly'
-  | 'founder_professional_monthly';
+export type BillingCheckoutLookupKey = CheckoutLookupKey;
+export type BillingStatusPayload = BillingStatusContract;
+export type BillingCheckoutPayload = CheckoutSessionContract;
+export type BillingPortalPayload = PortalSessionContract;
 
-export type BillingStatusPayload = {
-  ok: true;
-  membershipTier: BillingPlanKey;
-  subscriptionStatus: string;
-  accessState: string;
-  renewalDate: string | null;
-  cancelAtPeriodEnd: boolean;
-  founderProtected: boolean;
-  founderLockedPlan: BillingPlanKey | null;
-  founderLockedPriceCents: number | null;
-  usagePeriodStart: string | null;
-  usagePeriodEnd: string | null;
-  upgradeTargets: BillingPlanKey[];
-  stripeConfigured: boolean;
-  billingCustomerExists: boolean;
-  stripeCustomerIdPresent: boolean;
-  source: 'database' | 'fallback';
-};
-
-export type BillingCheckoutPayload = {
-  ok: boolean;
-  mode?: 'placeholder';
-  stripeConfigured: boolean;
-  message?: string;
-  membershipTier?: BillingPlanKey;
-  lookupKey?: BillingCheckoutLookupKey;
-  successUrl?: string;
-  cancelUrl?: string;
-  url?: string;
-};
-
-export type BillingPortalPayload = {
-  ok: boolean;
-  mode?: 'placeholder';
-  stripeConfigured: boolean;
-  billingCustomerExists?: boolean;
-  message?: string;
-  returnUrl?: string;
-  url?: string;
-};
+export type { BillingAccessState, SubscriptionStatus };
 
 async function getAccessToken(): Promise<string> {
   const { data } = await supabase.auth.getSession();
