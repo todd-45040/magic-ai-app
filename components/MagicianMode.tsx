@@ -4070,28 +4070,32 @@ ${action.payload.content}`;
           return (
             <>
             <div className="px-4 md:px-6 pt-6">
-              <p className="text-sm uppercase tracking-wider text-yellow-300/80">
+              <p className="text-sm uppercase tracking-[0.08em] font-semibold text-yellow-300/80">
                 Home
               </p>
               <h1 className="mt-2 text-2xl md:text-3xl font-semibold text-white leading-tight">
                 Your Home Base for Creating, Rehearsing, and Running <span className="text-yellow-200">Better Magic Shows</span>
               </h1>
-              <p className="mt-2 text-sm text-white/60">
+              <p className="mt-2 max-w-2xl text-sm text-white/70">
+                Everything you need to create effects, rehearse performances, and manage your shows.
+              </p>
+              <p className="mt-2 text-sm text-white/55">
                 Welcome back, {user.name || (user.email ? user.email.split('@')[0] : 'magician')}.
               </p>
             </div>
 
             {/* Primary Action */}
             <div className="px-4 md:px-6 mb-6">
-              <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] p-5 md:p-5">
-                <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-purple-500/10 via-transparent to-yellow-500/10" />
+              <div className="relative overflow-hidden rounded-2xl border border-purple-500/40 bg-gradient-to-b from-purple-500/10 via-white/[0.03] to-transparent p-5 shadow-[0_0_24px_rgba(168,85,247,0.12)] md:p-5">
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-purple-500/12 via-transparent to-yellow-500/10" />
                 <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                   <div className="flex items-start gap-4">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-purple-400/20 bg-purple-500/15 text-purple-200">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-purple-400/30 bg-purple-500/20 text-purple-100 shadow-[0_0_16px_rgba(168,85,247,0.12)]">
                       <MagicHatIcon className="h-5 w-5" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-purple-200/90">{todaysFocus.label}</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-purple-200/90">Active Project</p>
+                      <p className="mt-1 text-sm font-medium text-purple-100/90">{todaysFocus.label}</p>
                       <h2 className="mt-1 text-lg font-semibold text-white md:text-xl">{todaysFocus.title}</h2>
                       <p className="mt-1 text-sm text-white/65">{todaysFocus.subtitle}</p>
                     </div>

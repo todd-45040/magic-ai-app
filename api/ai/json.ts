@@ -22,7 +22,6 @@ import {
   withTimeout,
 } from './_lib/hardening.js';
 import { applyUsageHeaders, bestEffortIncrementAiUsage, guardAiUsage } from './_lib/usageGuard.js';
-import { normalizedError, normalizedSuccess } from './_lib/response.js';
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024; // ~2MB
 const TIMEOUT_MS = 25_000;
@@ -344,14 +343,7 @@ export default async function handler(req: any, res: any) {
     applyUsageHeaders(res, guard.usage);
     res.setHeader('X-AI-Provider-Used', provider);
 
-    return res.status(200).json(
-      normalizedSuccess({
-        tool: 'json',
-        content: parsed,
-        data: { json: parsed, text: rawText },
-        usage: guard.usage,
-      }),
-    );
+    return res.status(200).json({ ok: true, json: parsed });
   } catch (err: any) {
     console.error('AI JSON Error:', err);
 
@@ -365,15 +357,12 @@ export default async function handler(req: any, res: any) {
         }
       : undefined;
 
-    return jsonError(
-      res,
-      mapped.status,
-      normalizedError({
-        error_code: mapped.error_code,
-        message: mapped.message,
-        retryable: mapped.retryable,
-        ...(details ? { details } : {}),
-      }),
-    );
+    return jsonError(res, mapped.status, {
+      ok: false,
+      error_code: mapped.error_code,
+      message: mapped.message,
+      retryable: mapped.retryable,
+      ...(details ? { details } : {}),
+    });
   }
 }

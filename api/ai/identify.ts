@@ -10,7 +10,6 @@ import { getGoogleAiApiKey } from "../../server/gemini.js";
 // NOTE: This file lives in api/ai/, so _lib is a sibling folder.
 // Vercel/TS expects the correct relative path (and extensionless imports).
 import { rateLimit } from "./_lib/rateLimit.js";
-import { normalizedError, normalizedSuccess } from './_lib/response.js';
 
 type Body = {
   imageBase64?: string; // base64 only OR full data URL
@@ -55,20 +54,12 @@ function getApiKey(): string | null {
   return getGoogleAiApiKey();
 }
 
-function ok(res: any, data: any, requestId?: string, usage?: any) {
-  return res.status(200).json(normalizedSuccess({ requestId, tool: 'identify', content: data?.result ?? data, data, usage }));
+function ok(res: any, data: any, requestId?: string) {
+  return res.status(200).json({ ok: true, data, ...(requestId ? { requestId } : {}) });
 }
 
 function err(res: any, status: number, error_code: string, message: string, retryable = false, extra?: any) {
-  const payload = normalizedError({
-    requestId: extra?.requestId,
-    error_code,
-    message,
-    retryable,
-    ...(extra?.details !== undefined ? { details: extra.details } : {}),
-  });
-  const merged = { ...payload, ...(extra && typeof extra === 'object' ? Object.fromEntries(Object.entries(extra).filter(([k]) => k !== 'requestId' && k !== 'details')) : {}) };
-  return res.status(status).json(merged);
+  return res.status(status).json({ ok: false, error_code, message, retryable, ...(extra || {}) });
 }
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
@@ -207,7 +198,7 @@ export default async function handler(req: any, res: any) {
       return err(res, 502, "AI_ERROR", "Empty response from vision model.", true, { requestId });
     }
 
-    return ok(res, { result: { text } }, requestId, usage);
+    return ok(res, { result: { text } }, requestId);
   } catch (e: any) {
     const msg = String(e?.message || e || "");
     const name = String(e?.name || "");
