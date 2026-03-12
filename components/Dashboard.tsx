@@ -24,18 +24,18 @@ const COLLAPSED_WIDGETS_KEY = 'magician_dashboard_collapsed_widgets';
 const QuickActionsWidget: React.FC<{ onNavigate: (view: MagicianView) => void }> = ({ onNavigate }) => (
     <>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <button onClick={() => onNavigate('effect-generator')} className="p-3 rounded-xl border border-white/10 bg-white/[0.02] text-left h-full group transition-colors hover:bg-white/[0.05] hover:border-purple-400/40">
-                <WandIcon className="w-8 h-8 mb-2 text-purple-400 group-hover:text-purple-300" />
+            <button onClick={() => onNavigate('effect-generator')} className="p-3 rounded-xl border border-white/10 bg-white/[0.02] text-left h-full group transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/[0.05] hover:border-purple-400/40 hover:shadow-[0_6px_18px_rgba(0,0,0,0.35)] focus:outline-none focus:ring-2 focus:ring-purple-500/30">
+                <WandIcon className="w-8 h-8 mb-2 text-purple-400 group-hover:text-purple-300 transition-colors" />
                 <p className="font-bold text-yellow-200 group-hover:text-yellow-100 transition-colors">Create</p>
                 <p className="text-sm text-slate-400">Generate effects, patter, and creative directions</p>
             </button>
-            <button onClick={() => onNavigate('angle-risk')} className="p-3 rounded-xl border border-white/10 bg-white/[0.02] text-left h-full group transition-colors hover:bg-white/[0.05] hover:border-purple-400/40">
-                <MicrophoneIcon className="w-8 h-8 mb-2 text-purple-400 group-hover:text-purple-300" />
+            <button onClick={() => onNavigate('angle-risk')} className="p-3 rounded-xl border border-white/10 bg-white/[0.02] text-left h-full group transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/[0.05] hover:border-purple-400/40 hover:shadow-[0_6px_18px_rgba(0,0,0,0.35)] focus:outline-none focus:ring-2 focus:ring-purple-500/30">
+                <MicrophoneIcon className="w-8 h-8 mb-2 text-purple-400 group-hover:text-purple-300 transition-colors" />
                 <p className="font-bold text-yellow-200 group-hover:text-yellow-100 transition-colors">Rehearse</p>
                 <p className="text-sm text-slate-400">Run angle/risk checks and rehearsal tools</p>
             </button>
-            <button onClick={() => onNavigate('show-planner')} className="p-3 rounded-xl border border-white/10 bg-white/[0.02] text-left h-full group transition-colors hover:bg-white/[0.05] hover:border-purple-400/40">
-                <ChecklistIcon className="w-8 h-8 mb-2 text-purple-400 group-hover:text-purple-300" />
+            <button onClick={() => onNavigate('show-planner')} className="p-3 rounded-xl border border-white/10 bg-white/[0.02] text-left h-full group transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/[0.05] hover:border-purple-400/40 hover:shadow-[0_6px_18px_rgba(0,0,0,0.35)] focus:outline-none focus:ring-2 focus:ring-purple-500/30">
+                <ChecklistIcon className="w-8 h-8 mb-2 text-purple-400 group-hover:text-purple-300 transition-colors" />
                 <p className="font-bold text-yellow-200 group-hover:text-yellow-100 transition-colors">Show Planner</p>
                 <p className="text-sm text-slate-400">Plan routines and tasks</p>
             </button>
@@ -77,10 +77,10 @@ const UpcomingTasksWidget: React.FC<{ shows: Show[], onNavigate: (view: Magician
         <>
             {upcomingTasks.length > 0 ? (
                 <div className="space-y-3">
-                    {upcomingTasks.map(task => {
+                    {upcomingTasks.map((task, index) => {
                         const isCompleted = completedTasks.has(task.id);
                         return (
-                            <div key={task.id} className={`p-3 bg-white/[0.03] rounded-md border-l-4 border-purple-500 transition-all duration-300 ${isCompleted ? 'opacity-30' : 'opacity-100'}`}>
+                            <div key={task.id} className={`p-3 rounded-md border-l-4 border-purple-500 border-b border-white/5 transition-all duration-300 ${isCompleted ? 'opacity-30' : 'opacity-100'} ${index % 2 === 0 ? 'bg-white/[0.03]' : 'bg-white/[0.05]'}`}>
                                 <div className="flex justify-between items-start gap-2">
                                     <div className="flex items-start gap-3">
                                         <input type="checkbox" checked={isCompleted} onChange={() => handleTaskToggle(task)} className="mt-1 w-5 h-5 accent-purple-500 bg-slate-900 flex-shrink-0" />
