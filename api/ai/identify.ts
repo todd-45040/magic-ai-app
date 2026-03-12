@@ -7,9 +7,10 @@
 import { GoogleGenAI } from "@google/genai";
 import { enforceAiUsage } from "../../server/usage.js";
 import { getGoogleAiApiKey } from "../../server/gemini.js";
-import { bestEffortLog, completeProtectedRequest, failProtectedRequest, startProtectedRequest } from './_lib/requestSafety.js';
 // NOTE: This file lives in api/ai/, so _lib is a sibling folder.
 // Vercel/TS expects the correct relative path (and extensionless imports).
+import { rateLimit } from "./_lib/rateLimit.js";
+import { enforceBurstProtection } from './_lib/burstProtection.js';
 
 type Body = {
   imageBase64?: string; // base64 only OR full data URL
@@ -84,8 +85,6 @@ function estimateBytesFromBase64(base64: string): number {
 
 export default async function handler(req: any, res: any) {
   const requestId = (typeof crypto !== "undefined" && "randomUUID" in crypto) ? (crypto as any).randomUUID() : `${Date.now()}-${Math.random()}`;
-  let safety: any;
-  const startedAt = Date.now();
 
   // Vercel will return a generic non-JSON 500 if this function throws before
   // writing a response. Wrap the entire handler to guarantee structured JSON.
@@ -136,8 +135,26 @@ export default async function handler(req: any, res: any) {
     );
   }
 
-  safety = await startProtectedRequest({ req, res, tool: 'identify', payloadForFingerprint: { imageBase64: data.slice(0, 512), mimeType, prompt: body.prompt || '' }, endpoint: '/api/ai/identify', model: body.model || process.env.GEMINI_VISION_MODEL || 'gemini-2.5-flash' });
-  if (!safety?.ok) return safety;
+  // Rate limiting (Phase 1 best-effort)
+  const ip = getClientIpFromRequest(req as any);
+  const userKey = String(body.userId || "").trim();
+  const key = userKey ? `identify:user:${userKey}` : `identify:ip:${ip}`;
+
+  const limit = Number(process.env.IDENTIFY_RATE_LIMIT || 8); // 8 requests / minute default
+  const windowMs = Number(process.env.IDENTIFY_RATE_WINDOW_MS || 60_000);
+
+  const rl = rateLimit(key, { max: limit, windowMs });
+  if (!rl.ok) {
+    res.setHeader("Retry-After", String(rl.retryAfterSeconds));
+    return err(
+      res,
+      429,
+      "RATE_LIMITED",
+      `Too many requests. Please wait ${rl.retryAfterSeconds}s and try again.`,
+      true,
+      { requestId, retryAfterSeconds: rl.retryAfterSeconds }
+    );
+  }
 
   // Phase 2C-B: tool quota enforcement (monthly)
   const usage = await enforceAiUsage(req, 1, { tool: 'identify_trick' });
@@ -150,6 +167,12 @@ export default async function handler(req: any, res: any) {
       burstRemaining: usage.burstRemaining,
       burstLimit: usage.burstLimit,
     });
+  }
+
+  const burst = enforceBurstProtection(key, usage.membership, 'identify_trick');
+  if (!burst.ok) {
+    res.setHeader('Retry-After', String(burst.retryAfterSeconds));
+    return err(res, 429, 'RATE_LIMITED', 'Too many requests for this feature. Please wait a moment and try again.', true, { requestId, burstRemaining: burst.remaining, burstLimit: burst.limit, resetAt: burst.resetAt });
   }
 
   const prompt =
@@ -182,10 +205,7 @@ export default async function handler(req: any, res: any) {
       return err(res, 502, "AI_ERROR", "Empty response from vision model.", true, { requestId });
     }
 
-    const payload = { ok: true, data: { result: { text } }, requestId };
-    completeProtectedRequest(safety.fingerprint, payload, 'identify');
-    await bestEffortLog({ req, tool: 'identify_trick', endpoint: '/api/ai/identify', provider: 'gemini', model, success: true, charged_units: 1, input_size: bytes, output_size: text.length, latency_ms: Date.now() - startedAt });
-    return res.status(200).json(payload);
+    return ok(res, { result: { text } }, requestId);
   } catch (e: any) {
     const msg = String(e?.message || e || "");
     const name = String(e?.name || "");
@@ -201,26 +221,18 @@ export default async function handler(req: any, res: any) {
       : undefined;
 
     if (msg === "TIMEOUT") {
-      failProtectedRequest(safety?.fingerprint);
-      await bestEffortLog({ req, tool: 'identify_trick', endpoint: '/api/ai/identify', success: false, error_code: 'AI_TIMEOUT', http_status: 504, charged_units: 0 });
-      return err(res, 504, "AI_TIMEOUT", "AI is temporarily unavailable. Please try again in a moment.", true, { requestId, ...(details ? { details } : {}) });
+      return err(res, 504, "TIMEOUT", "Vision request timed out. Please retry.", true, { requestId, ...(details ? { details } : {}) });
     }
     if (/quota|resource|429/i.test(msg)) {
-      failProtectedRequest(safety?.fingerprint);
-      await bestEffortLog({ req, tool: 'identify_trick', endpoint: '/api/ai/identify', success: false, error_code: 'AI_LIMIT_REACHED', http_status: 429, charged_units: 0 });
-      return err(res, 429, "AI_LIMIT_REACHED", "You’ve reached your limit for this feature this month.", false, { requestId, ...(details ? { details } : {}) });
+      return err(res, 429, "QUOTA_EXCEEDED", "AI quota reached. Try again later.", false, { requestId, ...(details ? { details } : {}) });
     }
 
-    failProtectedRequest(safety?.fingerprint);
-    await bestEffortLog({ req, tool: 'identify_trick', endpoint: '/api/ai/identify', success: false, error_code: 'AI_PROVIDER_UNAVAILABLE', http_status: 500, charged_units: 0 });
-    return err(res, 503, "AI_PROVIDER_UNAVAILABLE", "AI is temporarily unavailable. Please try again in a moment.", true, { requestId, ...(details ? { details } : {}) });
+    return err(res, 500, "AI_ERROR", "Vision request failed. Please retry.", true, { requestId, ...(details ? { details } : {}) });
   }
 
   } catch (e: any) {
     console.error('identify fatal (outer):', e);
-    failProtectedRequest(safety?.fingerprint);
-    await bestEffortLog({ req, tool: 'identify_trick', endpoint: '/api/ai/identify', success: false, error_code: 'AI_PROVIDER_UNAVAILABLE', http_status: 500, charged_units: 0 });
-    return err(res, 500, 'AI_PROVIDER_UNAVAILABLE', 'AI is temporarily unavailable. Please try again in a moment.', true, {
+    return err(res, 500, 'SERVER_ERROR', 'A server error has occurred', false, {
       requestId,
       details:
         process.env.VERCEL_ENV !== 'production'

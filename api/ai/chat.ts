@@ -7,20 +7,36 @@
 // - Supabase-backed usage enforcement + best-effort incrementing
 
 import { resolveProvider, callOpenAI, callAnthropic } from '../../lib/server/providers/index.js';
+import { rateLimit } from './_lib/rateLimit.js';
 import {
-    isPreviewEnv,
+  getApproxBodySizeBytes,
+  getRateLimitKey,
+  isPreviewEnv,
   jsonError,
   mapProviderError,
   withTimeout,
 } from './_lib/hardening.js';
 import { applyUsageHeaders, bestEffortIncrementAiUsage, guardAiUsage } from './_lib/usageGuard.js';
-import { bestEffortLog, completeProtectedRequest, failProtectedRequest, startProtectedRequest } from './_lib/requestSafety.js';
+import { enforceBurstProtection } from './_lib/burstProtection.js';
 import { getGoogleAiApiKey } from '../../server/gemini.js';
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024; // ~2MB
 const TIMEOUT_MS = 25_000;
 
 
+
+function getClientIp(req: any): string | null {
+  const xf = req?.headers?.['x-forwarded-for'] || req?.headers?.['X-Forwarded-For'];
+  if (typeof xf === 'string' && xf.trim()) {
+    // may be a comma-separated list; take first
+    return xf.split(',')[0].trim();
+  }
+  const realIp = req?.headers?.['x-real-ip'] || req?.headers?.['X-Real-IP'];
+  if (typeof realIp === 'string' && realIp.trim()) return realIp.trim();
+  const sock = req?.socket || req?.connection;
+  const addr = sock?.remoteAddress;
+  return typeof addr === 'string' && addr.trim() ? addr.trim() : null;
+}
 
 // Accept OpenAI-style messages as canonical input and adapt for Gemini when needed.
 function messagesToGeminiContents(messages: any[]): any[] {
@@ -41,8 +57,6 @@ function messagesToGeminiContents(messages: any[]): any[] {
 }
 
 export default async function handler(req: any, res: any) {
-  let safety: any;
-  let start = Date.now();
   try {
     if (req.method !== 'POST') {
       return jsonError(res, 405, {
@@ -53,14 +67,54 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    start = Date.now();
-    safety = await startProtectedRequest({ req, res, tool: 'chat', payloadForFingerprint: req.body || {}, endpoint: '/api/ai/chat' });
-    if (!safety?.ok) return safety;
+    // Size guard (prevents accidental megabyte prompts / base64 dumps)
+    const bodySize = getApproxBodySizeBytes(req);
+    if (bodySize > MAX_BODY_BYTES) {
+      return jsonError(res, 413, {
+        ok: false,
+        error_code: 'PAYLOAD_TOO_LARGE',
+        message: 'Request payload too large. Please keep requests under ~2MB.',
+        retryable: false,
+        ...(isPreviewEnv() ? { details: { bodySize, limit: MAX_BODY_BYTES } } : {}),
+      });
+    }
+
+    // Rate limiting (per-user if authenticated, otherwise per-IP guest)
+    let rlKey = await getRateLimitKey(req);
+    // Guests may not have auth context; fall back to IP-based rate limit key.
+    if (!rlKey) {
+      const ip = getClientIp(req) || 'unknown';
+      rlKey = { key: 'ai:chat:guest:' + ip, kind: 'guest', ip } as any;
+    }
+
+    const rl = rateLimit(rlKey.key, { windowMs: 60_000, max: 30 });
+    if (!rl.ok) {
+      try { res.setHeader('Retry-After', String(rl.retryAfterSeconds)); } catch {}
+      return jsonError(res, 429, {
+          ok: false,
+          error_code: 'RATE_LIMITED',
+          message: 'Too many requests. Please wait and try again.',
+          retryable: true,
+          ...(isPreviewEnv() ? { details: { key: rlKey.key, resetAt: rl.resetAt } } : {}),
+        });
+    }
 
     // Supabase usage guard (single source of truth)
     const guard = await guardAiUsage(req, 1);
     if (!guard.ok) {
       return jsonError(res, guard.status, guard.error);
+    }
+
+    const burst = enforceBurstProtection(String(rlKey.key || 'anon'), guard.usage?.membership, 'chat');
+    if (!burst.ok) {
+      try { res.setHeader('Retry-After', String(burst.retryAfterSeconds)); } catch {}
+      return jsonError(res, 429, {
+        ok: false,
+        error_code: 'RATE_LIMITED',
+        message: 'Too many requests for this feature. Please wait a moment and try again.',
+        retryable: true,
+        ...(isPreviewEnv() ? { details: { burstRemaining: burst.remaining, burstLimit: burst.limit, resetAt: burst.resetAt } } : {}),
+      });
     }
 
     const provider = await resolveProvider(req);
@@ -114,19 +168,18 @@ export default async function handler(req: any, res: any) {
 
     const result = await withTimeout(run(), TIMEOUT_MS, 'TIMEOUT');
 
+    // Best-effort increment AFTER success (do not fail the request if this fails)
+    // IMPORTANT: await so metering reliably persists in serverless runtimes
     await bestEffortIncrementAiUsage(req, 1);
 
+    // Usage headers for the Usage Meter UI (best-effort)
     applyUsageHeaders(res, guard.usage);
     res.setHeader('X-AI-Provider-Used', provider);
 
-    const payload = { ok: true, data: result };
-    completeProtectedRequest(safety.fingerprint, payload, 'chat');
-    await bestEffortLog({ req, tool: 'chat', endpoint: '/api/ai/chat', provider, model: model || 'gemini-3-pro-preview', success: true, charged_units: 1, input_size: safety.bodySize, output_size: JSON.stringify(payload).length, latency_ms: Date.now() - start });
-    return res.status(200).json(payload);
+    return res.status(200).json({ ok: true, data: result });
   } catch (err: any) {
     console.error('AI Chat Error:', err);
 
-    failProtectedRequest((typeof safety !== 'undefined' && safety && safety.fingerprint) ? safety.fingerprint : undefined);
     const mapped = mapProviderError(err);
     const details = isPreviewEnv()
       ? {
@@ -137,7 +190,6 @@ export default async function handler(req: any, res: any) {
         }
       : undefined;
 
-    await bestEffortLog({ req, tool: 'chat', endpoint: '/api/ai/chat', success: false, error_code: mapped.error_code, http_status: mapped.status, charged_units: 0 });
     return jsonError(res, mapped.status, {
       ok: false,
       error_code: mapped.error_code,
