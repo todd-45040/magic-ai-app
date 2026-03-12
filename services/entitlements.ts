@@ -1,5 +1,6 @@
 import type { Show, User } from '../types';
 import { normalizeTier, type CanonicalTier } from './membershipService';
+import { getPlanLimits, getEffectiveEntitlementTier } from './planCatalog';
 import { getTierLimit } from './usageService';
 
 export type ToolName =
@@ -61,42 +62,22 @@ const INFINITE_LIMIT = Number.MAX_SAFE_INTEGER;
 
 export const PLAN_USAGE_MATRIX: Record<CanonicalTier, TierConfig> = {
   free: {
-    text_generations: 20,
-    image_generations: 5,
-    live_rehearsal_minutes: 0,
-    video_analysis_clips: 0,
-    saved_shows: 3,
-    saved_ideas: 10,
+    ...getPlanLimits({ membership: 'free' } as User),
     warningThresholds: [0.7, 0.9, 1],
     enforcement: 'hard_stop',
   },
   trial: {
-    text_generations: 20,
-    image_generations: 5,
-    live_rehearsal_minutes: 0,
-    video_analysis_clips: 0,
-    saved_shows: 3,
-    saved_ideas: 10,
+    ...getPlanLimits({ membership: 'trial' } as User),
     warningThresholds: [0.7, 0.9, 1],
     enforcement: 'hard_stop',
   },
   amateur: {
-    text_generations: 200,
-    image_generations: 40,
-    live_rehearsal_minutes: 60,
-    video_analysis_clips: 10,
-    saved_shows: 25,
-    saved_ideas: 100,
+    ...getPlanLimits({ membership: 'amateur' } as User),
     warningThresholds: [0.8, 1],
     enforcement: 'warning_hard_stop',
   },
   professional: {
-    text_generations: 1000,
-    image_generations: 200,
-    live_rehearsal_minutes: 300,
-    video_analysis_clips: 50,
-    saved_shows: INFINITE_LIMIT,
-    saved_ideas: INFINITE_LIMIT,
+    ...getPlanLimits({ membership: 'professional' } as User),
     warningThresholds: [0.9, 1],
     enforcement: 'soft_cap_review',
   },
@@ -169,7 +150,7 @@ function tierRank(tier: CanonicalTier): number {
 }
 
 export function getTierConfig(user?: User | null): TierConfig {
-  const tier = normalizeTier(user?.membership);
+  const tier = getEffectiveEntitlementTier(user);
   return PLAN_USAGE_MATRIX[tier] ?? PLAN_USAGE_MATRIX.trial;
 }
 
@@ -202,7 +183,7 @@ export function getWarningLevel(user: User | null | undefined, resourceType: Res
 
 export function canUseTool(user: User | null | undefined, toolName: ToolName): boolean {
   const policy = TOOL_POLICIES[toolName];
-  const tier = normalizeTier(user?.membership);
+  const tier = getEffectiveEntitlementTier(user);
   return tierRank(tier) >= tierRank(policy.minTier);
 }
 
@@ -213,7 +194,7 @@ export function getToolAccess(user: User | null | undefined, toolName: ToolName)
   tier: CanonicalTier;
 } {
   const policy = TOOL_POLICIES[toolName];
-  const tier = normalizeTier(user?.membership);
+  const tier = getEffectiveEntitlementTier(user);
   if (!policy) return { state: 'locked', upgradeLabel: 'Professional', tier };
   if (!canUseTool(user, toolName)) {
     return {
@@ -257,7 +238,7 @@ export function getShowPlannerUsage(user: User | null | undefined, shows: Show[]
 }
 
 export function getLimitReachedMessage(user: User | null | undefined, resourceType: ResourceType): string {
-  const tier = normalizeTier(user?.membership);
+  const tier = getEffectiveEntitlementTier(user);
   const readable = resourceType.replace(/_/g, ' ');
   if (resourceType === 'saved_shows') {
     return tier === 'professional' || tier === 'admin'
