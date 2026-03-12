@@ -34,6 +34,7 @@ import UsageLimitsCard from './UsageLimitsCard';
 import BlockedPanel from './BlockedPanel';
 import { normalizeBlockedUx, type BlockedUx } from '../services/blockedUx';
 import { normalizeTier, getMembershipDaysRemaining, formatTierLabel } from '../services/membershipService';
+import { getUsage } from '../services/usageTracker';
 import UpgradeModal from './UpgradeModal';
 import MemberManagement from './MemberManagement';
 import ShowPlanner from './ShowPlanner';
@@ -60,7 +61,6 @@ import MagicDictionary from './MagicDictionary';
 import AdminPanel from './AdminPanel';
 import AppSuggestionModal from './AppSuggestionModal';
 import BillingSettings from './BillingSettings';
-import { fetchUsageStatus, type UsageStatus } from '../services/usageStatusService';
 
 interface AngleRiskFormProps {
     trickName: string;
@@ -2911,57 +2911,107 @@ useEffect(() => {
   const [usageSnapshot, setUsageSnapshot] = useState<any>(null);
   const [usageSnapshotError, setUsageSnapshotError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
+  const buildLocalUsageFallback = () => {
+    const normalizedTier = normalizeTier(user.membership as any);
+    const plan = normalizedTier === 'admin' ? 'professional' : normalizedTier;
 
-    const normalizeUsageSnapshot = (status: UsageStatus) => ({
+    const dailyAiLimit = plan === 'professional' ? 1000 : plan === 'amateur' ? 200 : 20;
+    const burstLimit = plan === 'professional' ? 120 : plan === 'amateur' ? 60 : 20;
+
+    const liveDaily = getUsage(user, 'live_minutes');
+    const videoDaily = getUsage(user, 'video_upload');
+
+    const monthlyLive = plan === 'professional' ? 300 : plan === 'amateur' ? 60 : 0;
+    const monthlyImage = plan === 'professional' ? 200 : plan === 'amateur' ? 40 : 5;
+    const monthlyIdentify = plan === 'professional' ? 100 : plan === 'amateur' ? 50 : 10;
+    const monthlyVideo = plan === 'professional' ? 50 : plan === 'amateur' ? 10 : 0;
+
+    const used = Math.max(0, Number(user.generationCount ?? 0));
+    const remaining = Math.max(0, dailyAiLimit - used);
+
+    return {
       ok: true,
-      plan: status?.membership ?? 'trial',
-      used: Number(status?.used ?? 0),
-      limit: Number(status?.limit ?? 0),
-      remaining: Number(status?.remaining ?? Math.max(0, Number(status?.limit ?? 0) - Number(status?.used ?? 0))),
-      burstLimit: status?.burstLimit ?? null,
-      burstRemaining: status?.burstRemaining ?? null,
-      quota: status?.quota ?? {
-        live_audio_minutes: { remaining: null },
-        image_gen: { remaining: null },
-        identify: { remaining: null },
-        video_uploads: { remaining: null },
+      plan,
+      used,
+      limit: dailyAiLimit,
+      remaining,
+      burstLimit,
+      burstRemaining: Math.max(0, burstLimit),
+      quota: {
+        live_audio_minutes: {
+          remaining: null,
+          limit: monthlyLive,
+          daily: {
+            used: Number(liveDaily.used ?? 0),
+            limit: Number(liveDaily.limit ?? 0),
+            remaining: Number(liveDaily.remaining ?? 0),
+          },
+        },
+        image_gen: { remaining: null, limit: monthlyImage },
+        identify: { remaining: null, limit: monthlyIdentify },
+        video_uploads: {
+          remaining: null,
+          limit: monthlyVideo,
+          daily: {
+            used: Number(videoDaily.used ?? 0),
+            limit: Number(videoDaily.limit ?? 0),
+            remaining: Number(videoDaily.remaining ?? 0),
+          },
+        },
         resetAt: null,
         nextResetAt: null,
       },
-      resetAt: status?.quota?.nextResetAt ?? status?.quota?.resetAt ?? null,
+      nearLimit: dailyAiLimit > 0 ? remaining <= Math.ceil(dailyAiLimit * 0.15) : false,
+      upgradeRecommended: plan === 'trial' ? remaining <= Math.ceil(dailyAiLimit * 0.15) : false,
+      warnings: [],
+      resetAt: null,
       resetTz: null,
       resetHourLocal: null,
-      warnings: [],
-      nearLimit: false,
-      upgradeRecommended: false,
-    });
+      fallbackLocal: true,
+    };
+  };
+
+  useEffect(() => {
+    let cancelled = false;
 
     const fetchUsage = async () => {
       try {
         setUsageSnapshotError(null);
-        const status = await fetchUsageStatus();
+        const { data } = await supabase.auth.getSession();
+        const token = data?.session?.access_token;
+        const headers: Record<string, string> = {};
+        // If the session hasn't hydrated yet, do NOT force a "guest" token.
+        // We'll re-fetch immediately when auth state changes.
+        if (token) headers.Authorization = `Bearer ${token}`;
 
-        if (cancelled) return;
+        headers.Accept = 'application/json';
 
-        if (!status?.ok) {
-          setUsageSnapshot(null);
-          setUsageSnapshotError('Usage status unavailable.');
-          return;
+        const r = await fetch('/api/ai/usage', { method: 'GET', headers });
+        const contentType = String(r.headers.get('content-type') || '').toLowerCase();
+        const txt = await r.text();
+        const parsed = contentType.includes('application/json') && txt
+          ? JSON.parse(txt)
+          : null;
+
+        if (!cancelled) {
+          if (!r.ok || !parsed?.ok) {
+            setUsageSnapshot(buildLocalUsageFallback());
+            setUsageSnapshotError(null);
+          } else {
+            setUsageSnapshot(parsed);
+          }
         }
-
-        setUsageSnapshot(normalizeUsageSnapshot(status));
       } catch (e: any) {
         if (!cancelled) {
-          setUsageSnapshot(null);
-          setUsageSnapshotError(e?.message || 'Usage unavailable');
+          setUsageSnapshot(buildLocalUsageFallback());
+          setUsageSnapshotError(null);
         }
       }
     };
 
     void fetchUsage();
-    // Use the same usage source as the header meter and refresh after auth hydration.
+    // IMPORTANT: Supabase session hydration can lag behind the first render.
+    // Re-fetch usage immediately when we receive a real session.
     const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
         void fetchUsage();
