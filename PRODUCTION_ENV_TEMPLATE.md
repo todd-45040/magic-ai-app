@@ -63,3 +63,24 @@ Provider override (break-glass only):
 - Any `VITE_ANTHROPIC_*` keys
 - `API_KEY` *(legacy Google key name — supported as fallback, but should be removed after reconciliation)*
 - `GOOGLE_API_KEY` *(legacy — supported as fallback, but should be removed after reconciliation)*
+
+## Stripe Webhook Rotation / Hygiene
+
+Add these server-only variables before live billing:
+
+- `STRIPE_SECRET_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+- `STRIPE_WEBHOOK_SECRET_NEXT` *(optional, for secret rotation)*
+- `STRIPE_PRICE_AMATEUR_MONTHLY`
+- `STRIPE_PRICE_AMATEUR_ANNUAL`
+- `STRIPE_PRICE_PRO_MONTHLY`
+- `STRIPE_PRICE_PRO_ANNUAL`
+- `STRIPE_PRICE_PRO_FOUNDER_MONTHLY`
+- `STRIPE_PRICE_PRO_FOUNDER_ANNUAL`
+- `STRIPE_COUPON_FOUNDER_PRO`
+
+Rules:
+- Never expose secret-like Stripe values through `VITE_`, `NEXT_PUBLIC_`, `PUBLIC_`, or other client-prefixed env vars.
+- Production must use `sk_live_...`; preview/dev should stay on `sk_test_...`.
+- Keep `STRIPE_WEBHOOK_SECRET_NEXT` empty unless you are rotating webhook secrets.
+- Do not enable any bypass env var that skips webhook signature verification in production.

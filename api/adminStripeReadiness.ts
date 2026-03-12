@@ -1,4 +1,5 @@
 import { requireSupabaseAuth } from './_auth';
+import { getStripeEnvironmentReport } from '../server/billing/stripeConfig.js';
 
 function hasEnv(name: string): boolean {
   const v = process.env[name];
@@ -71,6 +72,7 @@ export default async function handler(req: any, res: any) {
   };
 
   const backupPaymentLinkUrl = getEnv('STRIPE_FOUNDER_PAYMENT_LINK_URL');
+  const stripeEnvironment = getStripeEnvironmentReport();
 
   // Founder lock stats
   const [{ count: foundersTotal }, { count: foundersLocked }] = await Promise.all([
@@ -152,5 +154,14 @@ export default async function handler(req: any, res: any) {
       founders_lock_pct: lockedPct,
     },
     dryRun,
+    hygiene: {
+      stripe_key_mode: stripeEnvironment.stripeKeyMode,
+      environment_name: stripeEnvironment.environmentName,
+      production_like: stripeEnvironment.isProductionLike,
+      webhook_secret_rotation_supported: stripeEnvironment.webhookSecretRotationSupported,
+      webhook_secret_next_configured: stripeEnvironment.webhookSecretNextConfigured,
+      has_client_exposed_secret_like_key: stripeEnvironment.hasClientExposedSecretLikeKey,
+      warnings: [...stripeEnvironment.warnings, ...stripeEnvironment.clientExposureWarnings],
+    },
   });
 }
