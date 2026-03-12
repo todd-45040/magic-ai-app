@@ -12,6 +12,8 @@ export default async function handler(request: any, response: any) {
       return response.status(auth.status).json({ error: auth.error || 'Unauthorized' });
     }
 
+    const config = getBillingConfig();
+
     const { data: billingCustomer, error } = await auth.admin
       .from('billing_customers')
       .select('id, stripe_customer_id')
@@ -22,28 +24,32 @@ export default async function handler(request: any, response: any) {
       throw new Error(error.message || 'Unable to inspect billing customer record.');
     }
 
-    if (!billingCustomer?.id) {
-      return response.status(404).json({
-        error: 'No billing customer exists for this account yet.',
-        stripeConfigured: false,
-      });
-    }
+    const billingCustomerExists = Boolean(billingCustomer?.id);
 
-    const config = getBillingConfig();
     if (!config.stripeConfigured) {
       return response.status(200).json({
         ok: true,
         mode: 'placeholder',
         stripeConfigured: false,
-        billingCustomerExists: true,
-        message: 'Stripe customer portal is not configured yet',
+        billingCustomerExists,
+        message: billingCustomerExists
+          ? 'Billing portal will become available after Stripe is connected.'
+          : 'Billing portal will become available after Stripe is connected and a billing customer record exists.',
         returnUrl: config.portalReturnUrl,
+      });
+    }
+
+    if (!billingCustomerExists) {
+      return response.status(404).json({
+        error: 'No billing customer exists for this account yet.',
+        stripeConfigured: true,
       });
     }
 
     return response.status(501).json({
       error: 'Stripe customer portal is not connected yet.',
       billingCustomerExists: true,
+      stripeConfigured: true,
     });
   } catch (err: any) {
     console.error('billing/create-portal-session error:', err);
