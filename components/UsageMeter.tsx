@@ -1,46 +1,85 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { fetchUsageStatus, type UsageStatus } from '../services/usageStatusService';
-import { buildNormalizedUsageSnapshot } from '../services/usagePresentation';
+import { getUsage } from '../services/usageTracker';
 import type { User } from '../types';
 
 type UsageDetail = UsageStatus & { ts?: number };
 
+function formatMembership(m?: string) {
+  if (!m) return '';
+  if (m === 'semi-pro') return 'Semi‑Pro';
+  return m.charAt(0).toUpperCase() + m.slice(1);
+}
+
 export default function UsageMeter({ user }: { user?: User | null }) {
   const [status, setStatus] = useState<UsageDetail>({ ok: true });
-
-  const normalized = useMemo(() => buildNormalizedUsageSnapshot(user, status?.ok ? status : null), [user, status]);
+  const [live, setLive] = useState<{ used: number; limit: number; remaining: number } | null>(null);
 
   const percentUsed = useMemo(() => {
-    const used = normalized.used;
-    const limit = normalized.limit;
+    const used = status.used ?? (status.limit != null && status.remaining != null ? status.limit - status.remaining : undefined);
+    const limit = status.limit;
     if (used == null || !limit || limit <= 0) return 0;
     return Math.min(100, Math.max(0, Math.round((used / limit) * 100)));
-  }, [normalized.used, normalized.limit]);
+  }, [status.used, status.limit, status.remaining]);
 
   const label = useMemo(() => {
-    if (normalized.limit === 10000 && normalized.remaining != null) {
-      return `${normalized.planLabel}: ${normalized.remaining}+`;
+    const remaining = status.remaining;
+    const limit = status.limit;
+    const used = status.used ?? (limit != null && remaining != null ? limit - remaining : undefined);
+    const mem = formatMembership(status.membership);
+
+    if (limit === 10000 && remaining != null) {
+      return `${mem}: ${remaining}+`;
     }
-    if (normalized.remaining == null || normalized.limit == null) {
-      return normalized.planLabel ? `${normalized.planLabel}` : 'AI Usage';
+    if (remaining == null || limit == null) {
+      return mem ? `${mem}` : 'AI Usage';
     }
-    return `${normalized.planLabel}: ${normalized.used}/${normalized.limit}`;
-  }, [normalized]);
+    // Show USED/LIMIT to avoid confusion (e.g., "11/20" can read like used when it's actually remaining).
+    return used == null ? `${mem}: ${remaining}/${limit}` : `${mem}: ${used}/${limit}`;
+  }, [status.used, status.remaining, status.limit, status.membership]);
 
   const liveLabel = useMemo(() => {
-    if (!normalized.liveHeader || !normalized.liveHeader.limit) return null;
-    return `Live Rehearsal (Audio): ${normalized.liveHeader.used}/${normalized.liveHeader.limit} min`;
-  }, [normalized.liveHeader]);
+    if (!live || !live.limit) return null;
+    // Show USED/LIMIT for consistency with AI label.
+    return `Live Rehearsal (Audio): ${live.used}/${live.limit} min`;
+  }, [live]);
 
   useEffect(() => {
     let mounted = true;
+
+    const loadServer = async () => {
+      try {
+        const s = await fetchUsageStatus();
+        if (mounted && s?.ok) setStatus(s);
+      } catch {
+        // ignore
+      }
+    };
+
+    const loadLive = (s?: UsageStatus) => {
+      // Prefer server-backed live usage. Fall back to local only if server doesn't provide live fields.
+      if (s?.liveLimit != null && s.liveRemaining != null && s.liveUsed != null) {
+        setLive({ used: Number(s.liveUsed || 0), limit: Number(s.liveLimit || 0), remaining: Number(s.liveRemaining || 0) });
+        return;
+      }
+      if (!user) {
+        setLive(null);
+        return;
+      }
+      try {
+        setLive(getUsage(user, 'live_minutes'));
+      } catch {
+        setLive(null);
+      }
+    };
 
     (async () => {
       const s = await fetchUsageStatus().catch(() => null as any);
       if (mounted && s?.ok) {
         setStatus(s);
-      } else if (mounted) {
-        setStatus({ ok: false } as UsageDetail);
+        loadLive(s);
+      } else {
+        loadLive();
       }
     })();
 
@@ -48,6 +87,7 @@ export default function UsageMeter({ user }: { user?: User | null }) {
       const s = await fetchUsageStatus().catch(() => null as any);
       if (mounted && s?.ok) {
         setStatus(s);
+        loadLive(s);
       }
     }, 60000);
 
@@ -63,14 +103,28 @@ export default function UsageMeter({ user }: { user?: User | null }) {
       }));
     };
 
-    const onLocalUsageUpdate = () => {
+    const onLocalUsageUpdate = (e: Event) => {
+      const ce = e as CustomEvent;
+      const detail = (ce.detail || {}) as any;
+      if (detail.metric !== 'live_minutes') return;
       if (!mounted) return;
-      setStatus((prev) => ({ ...(prev || { ok: false }), ts: Date.now() } as UsageDetail));
+      setLive({
+        used: Number(detail.used ?? 0),
+        limit: Number(detail.limit ?? 0),
+        remaining: Number(detail.remaining ?? 0),
+      });
     };
 
-    const onLiveUsageUpdate = () => {
+    const onLiveUsageUpdate = (e: Event) => {
+      const ce = e as CustomEvent;
+      const detail = (ce.detail || {}) as any;
       if (!mounted) return;
-      setStatus((prev) => ({ ...(prev || { ok: false }), ts: Date.now() } as UsageDetail));
+      if (detail.liveLimit == null && detail.liveRemaining == null && detail.liveUsed == null) return;
+      setLive({
+        used: Number(detail.liveUsed ?? 0),
+        limit: Number(detail.liveLimit ?? 0),
+        remaining: Number(detail.liveRemaining ?? 0),
+      });
     };
 
     window.addEventListener('ai-usage-update', onServerUsageUpdate);

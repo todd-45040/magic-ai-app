@@ -11,8 +11,10 @@ type Props = {
 
 /**
  * Option 1 UI: Polished "Usage & Limits" collapsible card.
- * Uses a normalized usage snapshot built from the working usageStatus source
- * plus local usage tracking fallbacks for Home page consistency.
+ * Uses /api/ai/usage snapshot shape:
+ *  - plan, used, limit, remaining
+ *  - quota: { live_audio_minutes, image_gen, identify, video_uploads, resetAt }
+ *  - resetHourLocal, resetTz
  */
 export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade }: Props) {
   const [open, setOpen] = useState(false);
@@ -28,7 +30,6 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
   const resetHourLocal = usageSnapshot?.resetHourLocal;
   const resetTz = usageSnapshot?.resetTz;
   const monthlyResetAt = usageSnapshot?.quota?.nextResetAt ?? usageSnapshot?.quota?.resetAt ?? null;
-  const toolRows = Array.isArray(usageSnapshot?.toolRows) ? usageSnapshot.toolRows : null;
 
   const shouldShowUpgrade = Boolean(onRequestUpgrade) && plan !== 'professional' && plan !== 'admin' && (nearLimit || upgradeRecommended);
   const upgradeCopy = useMemo(() => getUpgradeUxCopy(nearLimit || upgradeRecommended ? 'upgrade_available' : 'limit_reached', { targetPlan: plan === 'free' || plan === 'trial' ? 'Amateur' : 'Professional' }), [nearLimit, upgradeRecommended, plan]);
@@ -55,7 +56,7 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
     return v;
   }, [dailyUsed, dailyLimit]);
 
-  const legacyQuotaRow = (label: string, key: string, opts?: { proOnly?: boolean; unit?: string }) => {
+  const quotaRow = (label: string, key: string, opts?: { proOnly?: boolean; unit?: string }) => {
     const node = quota?.[key];
     const remaining = node?.remaining;
     const limit = node?.limit;
@@ -63,52 +64,76 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
 
     const isProOnly = Boolean(opts?.proOnly);
     const locked = isProOnly && plan !== 'professional';
+    const secondaryTextClasses = 'text-[12px] text-slate-400';
 
-    const display = (() => {
-      if (locked) return 'Locked';
-      if (typeof remaining === 'number' && typeof limit === 'number') return `${Math.max(0, limit - remaining)} / ${limit}${opts?.unit ? ` ${opts.unit}` : ''}`;
+    const rightDisplay = (() => {
+      if (locked) return '🔒 Professional';
+      if (typeof remaining === 'number' && typeof limit === 'number') return `${remaining} / ${limit}${opts?.unit ? ` ${opts.unit}` : ''}`;
       if (typeof remaining === 'number') return `${remaining}${opts?.unit ? ` ${opts.unit}` : ''}`;
       return 'Not tracked yet';
     })();
 
     const exhausted = !locked && typeof remaining === 'number' && remaining <= 0;
+    const progressLimit = typeof daily?.limit === 'number' && daily.limit > 0
+      ? daily.limit
+      : (typeof limit === 'number' && limit > 0 ? limit : 0);
+    const progressRemaining = typeof daily?.remaining === 'number'
+      ? daily.remaining
+      : (typeof remaining === 'number' ? remaining : null);
+    const usedAmount = progressLimit > 0 && typeof progressRemaining === 'number'
+      ? Math.max(0, Math.min(progressLimit, progressLimit - progressRemaining))
+      : 0;
+    const progressPct = progressLimit > 0 ? Math.min(100, Math.max(0, (usedAmount / progressLimit) * 100)) : 0;
+    const showProgressBar = ['live_audio_minutes', 'image_gen'].includes(key) && progressLimit > 0 && !locked;
+
+    let secondaryLine: React.ReactNode = null;
+    if (daily && typeof daily?.limit === 'number' && daily.limit > 0) {
+      secondaryLine = (
+        <div className={secondaryTextClasses}>
+          Daily: <span className="tabular-nums text-slate-300">{daily.remaining}</span> / <span className="tabular-nums">{daily.limit}</span>{opts?.unit ? ` ${opts.unit}` : ''}
+        </div>
+      );
+    } else if (locked) {
+      secondaryLine = <div className={secondaryTextClasses}>Available on Professional</div>;
+    } else if (key === 'video_uploads') {
+      secondaryLine = <div className={secondaryTextClasses}>Unlimited</div>;
+    } else {
+      secondaryLine = <div className="text-[12px] text-slate-400/70">Usage tracking coming soon</div>;
+    }
 
     return (
-      <div className="flex items-start justify-between gap-3 py-2">
-        <div className="flex flex-col gap-1 min-w-0">
+      <div className="flex items-start justify-between gap-3 py-3">
+        <div className="flex flex-col gap-1 min-w-0 flex-1">
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-sm text-slate-200 truncate">{label}</span>
             {exhausted && (
               <span className="text-[11px] px-2 py-0.5 rounded-full border border-rose-400/25 bg-rose-500/10 text-rose-200">
-                Limit reached
+                0 remaining
               </span>
             )}
             {locked && (
               <span className="text-[11px] px-2 py-0.5 rounded-full border border-amber-400/20 bg-amber-500/10 text-amber-200">
-                Professional only
+                Professional-only
               </span>
             )}
           </div>
-          {daily && typeof daily?.limit === 'number' && daily.limit > 0 && (
-            <div className="text-[12px] text-slate-400">
-              Daily: <span className="tabular-nums text-slate-300">{daily.limit - daily.remaining}</span> / <span className="tabular-nums">{daily.limit}</span>{opts?.unit ? ` ${opts.unit}` : ''}
+
+          {secondaryLine}
+
+          {showProgressBar && (
+            <div className="mt-1 h-1.5 max-w-xs rounded-full bg-black/20 overflow-hidden border border-white/5">
+              <div
+                className="h-full bg-white/20"
+                style={{ width: `${progressPct}%` }}
+                aria-label={`${label} usage progress`}
+              />
             </div>
           )}
         </div>
-        <div className="text-sm font-semibold text-slate-100 tabular-nums">{display}</div>
+        <div className="text-sm font-semibold text-slate-100 tabular-nums text-right">{rightDisplay}</div>
       </div>
     );
   };
-
-  const normalizedToolRow = (row: any) => (
-    <div key={row.key} className="flex items-start justify-between gap-3 py-2">
-      <div className="flex flex-col gap-1 min-w-0">
-        <div className="text-sm text-slate-200 truncate">{row.label}</div>
-        <div className="text-[12px] text-slate-400">{row.detail}</div>
-      </div>
-      <div className="text-sm font-semibold text-slate-100 tabular-nums">{row.summary}</div>
-    </div>
-  );
 
   return (
     <section className={`rounded-2xl border border-white/10 bg-white/5 shadow-sm transition-all duration-300 ${open ? 'ring-1 ring-white/10' : 'hover:bg-white/[0.06]'}`}>
@@ -182,20 +207,18 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
 
               <div className="mt-4">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="text-xs font-semibold text-slate-300">Tool usage limits</div>
+                  <div className="text-xs font-semibold text-slate-300">Tool usage</div>
                   <div className="text-[11px] text-slate-300/70 text-right">
-                    {usageSnapshot?.resetLabel ?? ((resetHourLocal != null && resetTz) ? `Daily AI resets at ${resetHourLocal}:00 (${resetTz})` : 'Daily AI resets each day')}
-                    {monthlyResetAt ? <span className="block">Monthly quotas reset {new Date(monthlyResetAt).toLocaleDateString()}</span> : <span className="block">Rows below show daily, monthly, or unlimited states.</span>}
+                    {(resetHourLocal != null && resetTz) ? `Daily AI resets at ${resetHourLocal}:00 (${resetTz})` : 'Daily usage resets each day'}
+                    <span className="block">Usage limits may reset daily or monthly depending on the tool.</span>
                   </div>
                 </div>
 
                 <div className="mt-2 divide-y divide-white/10">
-                  {toolRows ? toolRows.map((row: any) => normalizedToolRow(row)) : <>
-                  {legacyQuotaRow('Live Rehearsal (Audio)', 'live_audio_minutes', { unit: 'min' })}
-                  {legacyQuotaRow('Image Generation', 'image_gen')}
-                  {legacyQuotaRow('Identify a Trick', 'identify')}
-                  {legacyQuotaRow('Video Rehearsal Uploads', 'video_uploads', { proOnly: true })}
-                  </>} 
+                  {quotaRow('Live Rehearsal (Audio)', 'live_audio_minutes', { unit: 'min' })}
+                  {quotaRow('Image Generation', 'image_gen')}
+                  {quotaRow('Identify a Trick', 'identify')}
+                  {quotaRow('Video Rehearsal Uploads', 'video_uploads', { proOnly: true })}
                 </div>
 
                 {shouldShowUpgrade && (

@@ -61,7 +61,6 @@ import AdminPanel from './AdminPanel';
 import AppSuggestionModal from './AppSuggestionModal';
 import BillingSettings from './BillingSettings';
 import { fetchUsageStatus, type UsageStatus } from '../services/usageStatusService';
-import { buildNormalizedUsageSnapshot } from '../services/usagePresentation';
 import { getUsage } from '../services/usageTracker';
 
 interface AngleRiskFormProps {
@@ -2916,18 +2915,160 @@ useEffect(() => {
   useEffect(() => {
     let cancelled = false;
 
+    const normalizePlan = (membership?: string | null) => {
+      const tier = normalizeTier(membership || user?.membership || 'free');
+      if (tier === 'admin') return 'admin';
+      if (tier === 'professional') return 'professional';
+      if (tier === 'amateur') return 'amateur';
+      if (tier === 'expired') return 'expired';
+      return 'trial';
+    };
+
+    const getDailyAiLimitForPlan = (plan: string) => {
+      if (plan === 'admin') return 10000;
+      if (plan === 'professional') return 1000;
+      if (plan === 'amateur') return 200;
+      if (plan === 'expired') return 0;
+      return 20;
+    };
+
+    const getBurstLimitForPlan = (plan: string) => {
+      if (plan === 'admin') return 120;
+      if (plan === 'professional') return 120;
+      if (plan === 'amateur') return 60;
+      if (plan === 'expired') return 0;
+      return 20;
+    };
+
+    const getQuotaDefaultsForPlan = (plan: string) => {
+      if (plan === 'admin') {
+        return {
+          live_audio_minutes: { limit: 9999, remaining: 9999, dailyLimit: 9999 },
+          image_gen: { limit: 9999, remaining: 9999 },
+          identify: { limit: 9999, remaining: 9999 },
+          video_uploads: { limit: 9999, remaining: 9999, dailyLimit: 9999 },
+        };
+      }
+      if (plan === 'professional') {
+        return {
+          live_audio_minutes: { limit: 180, remaining: 180, dailyLimit: 180 },
+          image_gen: { limit: 100, remaining: 100 },
+          identify: { limit: 100, remaining: 100 },
+          video_uploads: { limit: 9999, remaining: 9999, dailyLimit: 6 },
+        };
+      }
+      if (plan === 'amateur') {
+        return {
+          live_audio_minutes: { limit: 60, remaining: 60, dailyLimit: 45 },
+          image_gen: { limit: 40, remaining: 40 },
+          identify: { limit: 50, remaining: 50 },
+          video_uploads: { limit: 10, remaining: 10, dailyLimit: 0 },
+        };
+      }
+      if (plan === 'expired') {
+        return {
+          live_audio_minutes: { limit: 0, remaining: 0, dailyLimit: 0 },
+          image_gen: { limit: 0, remaining: 0 },
+          identify: { limit: 0, remaining: 0 },
+          video_uploads: { limit: 0, remaining: 0, dailyLimit: 0 },
+        };
+      }
+      return {
+        live_audio_minutes: { limit: 10, remaining: 10, dailyLimit: 10 },
+        image_gen: { limit: 5, remaining: 5 },
+        identify: { limit: 10, remaining: 10 },
+        video_uploads: { limit: 0, remaining: 0, dailyLimit: 0 },
+      };
+    };
+
+    const buildUsageSnapshot = (serverStatus?: UsageStatus | null) => {
+      const plan = normalizePlan(serverStatus?.membership);
+      const dailyAiLimit = Number(serverStatus?.limit ?? getDailyAiLimitForPlan(plan));
+      const dailyAiUsed = Number(serverStatus?.used ?? user?.generationCount ?? 0);
+      const dailyAiRemaining = Number(serverStatus?.remaining ?? Math.max(0, dailyAiLimit - dailyAiUsed));
+      const burstLimit = Number(serverStatus?.burstLimit ?? getBurstLimitForPlan(plan));
+      const burstRemaining = Number(serverStatus?.burstRemaining ?? burstLimit);
+      const defaults = getQuotaDefaultsForPlan(plan);
+
+      const liveUsage = user ? getUsage(user, 'live_minutes') : { used: 0, limit: defaults.live_audio_minutes.dailyLimit, remaining: defaults.live_audio_minutes.dailyLimit };
+      const imageUsage = user ? getUsage(user, 'image') : { used: 0, limit: defaults.image_gen.limit, remaining: defaults.image_gen.limit };
+      const videoUsage = user ? getUsage(user, 'video_upload') : { used: 0, limit: defaults.video_uploads.dailyLimit, remaining: defaults.video_uploads.dailyLimit };
+
+      const serverQuota = serverStatus?.quota ?? {};
+      const liveQuota = serverQuota.live_audio_minutes ?? {};
+      const imageQuota = serverQuota.image_gen ?? {};
+      const identifyQuota = serverQuota.identify ?? {};
+      const videoQuota = serverQuota.video_uploads ?? {};
+
+      return {
+        ok: true,
+        plan,
+        used: dailyAiUsed,
+        limit: dailyAiLimit,
+        remaining: dailyAiRemaining,
+        burstLimit,
+        burstRemaining,
+        quota: {
+          live_audio_minutes: {
+            remaining: Number(liveQuota.remaining ?? defaults.live_audio_minutes.remaining),
+            limit: Number(liveQuota.limit ?? defaults.live_audio_minutes.limit),
+            daily: {
+              used: Number(liveQuota?.daily?.used ?? serverStatus?.liveUsed ?? liveUsage.used),
+              limit: Number(liveQuota?.daily?.limit ?? serverStatus?.liveLimit ?? liveUsage.limit),
+              remaining: Number(liveQuota?.daily?.remaining ?? serverStatus?.liveRemaining ?? liveUsage.remaining),
+            },
+          },
+          image_gen: {
+            remaining: Number(imageQuota.remaining ?? imageUsage.remaining),
+            limit: Number(imageQuota.limit ?? imageUsage.limit),
+            daily: {
+              used: imageUsage.used,
+              limit: imageUsage.limit,
+              remaining: imageUsage.remaining,
+            },
+          },
+          identify: {
+            remaining: Number(identifyQuota.remaining ?? defaults.identify.remaining),
+            limit: Number(identifyQuota.limit ?? defaults.identify.limit),
+          },
+          video_uploads: {
+            remaining: Number(videoQuota.remaining ?? defaults.video_uploads.remaining),
+            limit: Number(videoQuota.limit ?? defaults.video_uploads.limit),
+            daily: {
+              used: Number(videoQuota?.daily?.used ?? videoUsage.used),
+              limit: Number(videoQuota?.daily?.limit ?? videoUsage.limit),
+              remaining: Number(videoQuota?.daily?.remaining ?? videoUsage.remaining),
+            },
+          },
+          resetAt: serverQuota.resetAt ?? null,
+          nextResetAt: serverQuota.nextResetAt ?? null,
+        },
+        nearLimit: dailyAiLimit > 0 ? dailyAiRemaining <= Math.ceil(dailyAiLimit * 0.15) : false,
+        upgradeRecommended: plan === 'trial' && dailyAiLimit > 0 ? dailyAiRemaining <= Math.ceil(dailyAiLimit * 0.15) : false,
+        warnings: [],
+        sessionsToday: 0,
+        toolsUsedToday: [],
+        distinctToolsToday: 0,
+        resetAt: null,
+        resetTz: serverStatus?.quota?.resetAt ? null : null,
+        resetHourLocal: null,
+      };
+    };
+
     const fetchUsage = async () => {
       try {
         setUsageSnapshotError(null);
 
         const serverStatus = await fetchUsageStatus().catch(() => ({ ok: false } as UsageStatus));
         if (!cancelled) {
-          setUsageSnapshot(buildNormalizedUsageSnapshot(user, serverStatus?.ok ? serverStatus : null));
-          setUsageSnapshotError(null);
+          setUsageSnapshot(buildUsageSnapshot(serverStatus?.ok ? serverStatus : null));
+          if (!serverStatus?.ok) {
+            setUsageSnapshotError(null);
+          }
         }
       } catch (e: any) {
         if (!cancelled) {
-          setUsageSnapshot(buildNormalizedUsageSnapshot(user, null));
+          setUsageSnapshot(buildUsageSnapshot(null));
           setUsageSnapshotError(null);
         }
       }
