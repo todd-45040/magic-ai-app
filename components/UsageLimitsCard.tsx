@@ -58,14 +58,15 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
 
   const quotaRow = (label: string, key: string, opts?: { proOnly?: boolean; unit?: string }) => {
     const node = quota?.[key];
+    if (node?.hidden) return null;
     const remaining = node?.remaining;
     const limit = node?.limit;
     const daily = node?.daily;
 
     const isProOnly = Boolean(opts?.proOnly);
     const locked = isProOnly && plan !== 'professional';
-    const isUnlimited = key === 'video_uploads' && !locked && ((typeof limit === 'number' && limit >= 9999) || (typeof remaining === 'number' && remaining >= 9999));
-    const isNotTrackedYet = key === 'identify';
+    const isUnlimited = !locked && ((typeof limit === 'number' && limit >= 9999) || (typeof remaining === 'number' && remaining >= 9999));
+    const isNotTrackedYet = Boolean(node?.tracked === false);
 
     const display = (() => {
       if (locked) return '🔒 Pro';

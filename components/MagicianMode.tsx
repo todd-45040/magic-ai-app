@@ -33,7 +33,7 @@ import UsageMeter from './UsageMeter';
 import UsageLimitsCard from './UsageLimitsCard';
 import BlockedPanel from './BlockedPanel';
 import { normalizeBlockedUx, type BlockedUx } from '../services/blockedUx';
-import { getPromptAccess } from '../services/entitlements';
+import { getPromptAccess, getToolAccess } from '../services/entitlements';
 import { getUpgradeUxCopy, isFounderProtected } from '../services/upgradeUx';
 import { normalizeTier, getMembershipDaysRemaining, formatTierLabel } from '../services/membershipService';
 import UpgradeModal from './UpgradeModal';
@@ -486,11 +486,11 @@ const PromptGrid: React.FC<{
       : null;
 
     const remainingForTitle = (() => {
-      if (!usageQuota) return null as null | number;
-      if (p.title === 'Live Patter Rehearsal') return usageQuota?.live_audio_minutes?.remaining ?? null;
-      if (p.title === 'Visual Brainstorm Studio') return usageQuota?.image_gen?.remaining ?? null;
-      if (p.title === 'Identify a Trick') return usageQuota?.identify?.remaining ?? null;
-      if (p.title === 'Video Rehearsal Studio') return usageQuota?.video_uploads?.remaining ?? null;
+      if (!usageQuota || promptAccess.state === 'locked') return null as null | number;
+      if (p.title === 'Live Patter Rehearsal') return usageQuota?.live_audio_minutes?.hidden ? null : usageQuota?.live_audio_minutes?.remaining ?? null;
+      if (p.title === 'Visual Brainstorm Studio') return usageQuota?.image_gen?.hidden ? null : usageQuota?.image_gen?.remaining ?? null;
+      if (p.title === 'Identify a Trick') return usageQuota?.identify?.hidden ? null : usageQuota?.identify?.remaining ?? null;
+      if (p.title === 'Video Rehearsal Studio') return usageQuota?.video_uploads?.hidden ? null : usageQuota?.video_uploads?.remaining ?? null;
       return null;
     })();
 
@@ -2947,6 +2947,7 @@ useEffect(() => {
       if (tier === 'professional') return 'professional';
       if (tier === 'amateur') return 'amateur';
       if (tier === 'expired') return 'expired';
+      if (tier === 'free') return 'free';
       return 'trial';
     };
 
@@ -2969,41 +2970,49 @@ useEffect(() => {
     const getQuotaDefaultsForPlan = (plan: string) => {
       if (plan === 'admin') {
         return {
-          live_audio_minutes: { limit: 9999, remaining: 9999, dailyLimit: 9999 },
-          image_gen: { limit: 9999, remaining: 9999 },
-          identify: { limit: 9999, remaining: 9999 },
-          video_uploads: { limit: 9999, remaining: 9999, dailyLimit: 9999 },
+          live_audio_minutes: { limit: 9999, remaining: 9999, dailyLimit: 9999, hidden: false },
+          image_gen: { limit: 9999, remaining: 9999, hidden: false },
+          identify: { limit: 9999, remaining: 9999, hidden: false },
+          video_uploads: { limit: 9999, remaining: 9999, dailyLimit: 9999, hidden: false },
         };
       }
       if (plan === 'professional') {
         return {
-          live_audio_minutes: { limit: 180, remaining: 180, dailyLimit: 180 },
-          image_gen: { limit: 100, remaining: 100 },
-          identify: { limit: 100, remaining: 100 },
-          video_uploads: { limit: 9999, remaining: 9999, dailyLimit: 6 },
+          live_audio_minutes: { limit: 180, remaining: 180, dailyLimit: 180, hidden: false },
+          image_gen: { limit: 100, remaining: 100, hidden: false },
+          identify: { limit: 100, remaining: 100, hidden: false },
+          video_uploads: { limit: 6, remaining: 6, dailyLimit: 6, hidden: false },
         };
       }
       if (plan === 'amateur') {
         return {
-          live_audio_minutes: { limit: 60, remaining: 60, dailyLimit: 45 },
-          image_gen: { limit: 40, remaining: 40 },
-          identify: { limit: 50, remaining: 50 },
-          video_uploads: { limit: 10, remaining: 10, dailyLimit: 0 },
+          live_audio_minutes: { limit: 0, remaining: 0, dailyLimit: 0, hidden: true },
+          image_gen: { limit: 0, remaining: 0, hidden: true },
+          identify: { limit: 50, remaining: 50, hidden: false },
+          video_uploads: { limit: 0, remaining: 0, dailyLimit: 0, hidden: true },
+        };
+      }
+      if (plan === 'free' || plan === 'trial') {
+        return {
+          live_audio_minutes: { limit: 0, remaining: 0, dailyLimit: 0, hidden: true },
+          image_gen: { limit: 0, remaining: 0, hidden: true },
+          identify: { limit: 10, remaining: 10, hidden: false },
+          video_uploads: { limit: 0, remaining: 0, dailyLimit: 0, hidden: true },
         };
       }
       if (plan === 'expired') {
         return {
-          live_audio_minutes: { limit: 0, remaining: 0, dailyLimit: 0 },
-          image_gen: { limit: 0, remaining: 0 },
-          identify: { limit: 0, remaining: 0 },
-          video_uploads: { limit: 0, remaining: 0, dailyLimit: 0 },
+          live_audio_minutes: { limit: 0, remaining: 0, dailyLimit: 0, hidden: true },
+          image_gen: { limit: 0, remaining: 0, hidden: true },
+          identify: { limit: 0, remaining: 0, hidden: true },
+          video_uploads: { limit: 0, remaining: 0, dailyLimit: 0, hidden: true },
         };
       }
       return {
-        live_audio_minutes: { limit: 10, remaining: 10, dailyLimit: 10 },
-        image_gen: { limit: 5, remaining: 5 },
-        identify: { limit: 10, remaining: 10 },
-        video_uploads: { limit: 0, remaining: 0, dailyLimit: 0 },
+        live_audio_minutes: { limit: 0, remaining: 0, dailyLimit: 0, hidden: true },
+        image_gen: { limit: 0, remaining: 0, hidden: true },
+        identify: { limit: 10, remaining: 10, hidden: false },
+        video_uploads: { limit: 0, remaining: 0, dailyLimit: 0, hidden: true },
       };
     };
 
@@ -3026,6 +3035,10 @@ useEffect(() => {
       const imageQuota = serverQuota.image_gen ?? {};
       const identifyQuota = serverQuota.identify ?? {};
       const videoQuota = serverQuota.video_uploads ?? {};
+      const liveAccess = getToolAccess(user, 'LiveRehearsal');
+      const imageAccess = getToolAccess(user, 'VisualBrainstorm');
+      const identifyAccess = getToolAccess(user, 'IdentifyTrick');
+      const videoAccess = getToolAccess(user, 'VideoAnalysis');
 
       return {
         ok: true,
@@ -3039,6 +3052,7 @@ useEffect(() => {
           live_audio_minutes: {
             remaining: Number(liveQuota.remaining ?? defaults.live_audio_minutes.remaining),
             limit: Number(liveQuota.limit ?? defaults.live_audio_minutes.limit),
+            hidden: defaults.live_audio_minutes.hidden || liveAccess.state === 'locked',
             daily: {
               used: Number(liveQuota?.daily?.used ?? serverStatus?.liveUsed ?? liveUsage.used),
               limit: Number(liveQuota?.daily?.limit ?? serverStatus?.liveLimit ?? liveUsage.limit),
@@ -3048,6 +3062,7 @@ useEffect(() => {
           image_gen: {
             remaining: Number(imageQuota.remaining ?? imageUsage.remaining),
             limit: Number(imageQuota.limit ?? imageUsage.limit),
+            hidden: defaults.image_gen.hidden || imageAccess.state === 'locked',
             daily: {
               used: imageUsage.used,
               limit: imageUsage.limit,
@@ -3057,6 +3072,7 @@ useEffect(() => {
           identify: {
             remaining: Number(identifyQuota.remaining ?? identifyUsage.remaining),
             limit: Number(identifyQuota.limit ?? identifyUsage.limit),
+            hidden: defaults.identify.hidden || identifyAccess.state === 'locked',
             daily: {
               used: Number((identifyQuota as any)?.daily?.used ?? identifyUsage.used),
               limit: Number((identifyQuota as any)?.daily?.limit ?? identifyUsage.limit),
@@ -3066,6 +3082,7 @@ useEffect(() => {
           video_uploads: {
             remaining: Number(videoQuota.remaining ?? defaults.video_uploads.remaining),
             limit: Number(videoQuota.limit ?? defaults.video_uploads.limit),
+            hidden: defaults.video_uploads.hidden || videoAccess.state === 'locked',
             daily: {
               used: Number(videoQuota?.daily?.used ?? videoUsage.used),
               limit: Number(videoQuota?.daily?.limit ?? videoUsage.limit),

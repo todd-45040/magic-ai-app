@@ -11,11 +11,11 @@ type Limits = {
 };
 
 const DAILY_LIMITS: Record<CanonicalTier, Limits> = {
-  free: { image: 0, video_upload: 0, live_minutes: 0, identify: 0 },
+  free: { image: 0, video_upload: 0, live_minutes: 0, identify: 10 },
   expired: { image: 0, video_upload: 0, live_minutes: 0, identify: 0 },
-  trial: { image: 5, video_upload: 5, live_minutes: 10, identify: 10 },
-  amateur: { image: 25, video_upload: 20, live_minutes: 120, identify: 50 },
-  professional: { image: 100, video_upload: 9999, live_minutes: 120, identify: 100 },
+  trial: { image: 0, video_upload: 0, live_minutes: 0, identify: 10 },
+  amateur: { image: 0, video_upload: 0, live_minutes: 0, identify: 50 },
+  professional: { image: 100, video_upload: 6, live_minutes: 180, identify: 100 },
 };
 
 function getTodayKeyUTC(d = new Date()): string {
