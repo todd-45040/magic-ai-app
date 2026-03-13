@@ -1,20 +1,21 @@
 import type { User } from '../types';
 import { normalizeTier, type CanonicalTier } from './membershipService';
 
-export type UsageMetric = 'image' | 'video_upload' | 'live_minutes';
+export type UsageMetric = 'image' | 'video_upload' | 'live_minutes' | 'identify';
 
 type Limits = {
   image: number; // images per day
   video_upload: number; // video analyses per day
   live_minutes: number; // live rehearsal minutes per day
+  identify: number; // identify-a-trick analyses per day
 };
 
 const DAILY_LIMITS: Record<CanonicalTier, Limits> = {
-  free: { image: 0, video_upload: 0, live_minutes: 0 },
-  expired: { image: 0, video_upload: 0, live_minutes: 0 },
-  trial: { image: 5, video_upload: 5, live_minutes: 10 },
-  amateur: { image: 25, video_upload: 20, live_minutes: 120 },
-  professional: { image: 100, video_upload: 9999, live_minutes: 120 },
+  free: { image: 0, video_upload: 0, live_minutes: 0, identify: 0 },
+  expired: { image: 0, video_upload: 0, live_minutes: 0, identify: 0 },
+  trial: { image: 5, video_upload: 5, live_minutes: 10, identify: 10 },
+  amateur: { image: 25, video_upload: 20, live_minutes: 120, identify: 50 },
+  professional: { image: 100, video_upload: 9999, live_minutes: 120, identify: 100 },
 };
 
 function getTodayKeyUTC(d = new Date()): string {
@@ -34,6 +35,7 @@ type Stored = {
   image?: number;
   video_upload?: number;
   live_minutes?: number; // integer minutes used
+  identify?: number; // integer identify analyses used
 };
 
 function load(user: User | null): Stored {
