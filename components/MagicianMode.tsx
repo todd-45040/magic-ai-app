@@ -34,6 +34,7 @@ import UsageLimitsCard from './UsageLimitsCard';
 import BlockedPanel from './BlockedPanel';
 import { normalizeBlockedUx, type BlockedUx } from '../services/blockedUx';
 import { getPromptAccess } from '../services/entitlements';
+import { getUpgradeUxCopy, isFounderProtected } from '../services/upgradeUx';
 import { normalizeTier, getMembershipDaysRemaining, formatTierLabel } from '../services/membershipService';
 import UpgradeModal from './UpgradeModal';
 import MemberManagement from './MemberManagement';
@@ -467,12 +468,22 @@ const PromptGrid: React.FC<{
   };
 
   const renderCard = (p: PredefinedPrompt) => {
-    const isLocked = isLockedFor(p.title);
+    const promptAccess = getPromptAccess(user, p.title);
+    const isLocked = promptAccess.state === 'locked';
     const isPrimary = PRIMARY_TITLES.has(p.title);
     const copy = CARD_COPY[p.title];
     const desc = copy?.desc ?? p.prompt;
     const tip = copy?.tip ?? desc;
     const action = getActionLabel(p.title);
+    const targetPlan = promptAccess.upgradeLabel ?? 'Professional';
+    const currentPlanLabel = formatTierLabel(normalizeTier(user?.membership || 'free'));
+    const founderProtected = isFounderProtected(user);
+    const lockedCopy = isLocked
+      ? getUpgradeUxCopy('locked_by_plan', { toolName: p.title, targetPlan, user })
+      : null;
+    const limitedCopy = !isLocked && promptAccess.state === 'limited'
+      ? getUpgradeUxCopy('upgrade_available', { toolName: p.title, targetPlan, user })
+      : null;
 
     const remainingForTitle = (() => {
       if (!usageQuota) return null as null | number;
@@ -515,17 +526,38 @@ const PromptGrid: React.FC<{
         <p className="font-bold text-slate-200">{p.title}</p>
         <p className="text-sm text-slate-400 mt-1 line-clamp-2 flex-grow">{desc}</p>
 
+        <div className="mt-3 flex flex-wrap gap-2">
+          {isLocked && lockedCopy?.badge ? (
+            <span className="inline-flex items-center rounded-full border border-amber-300/25 bg-amber-400/10 px-2.5 py-0.5 text-[11px] font-semibold text-amber-200">
+              {lockedCopy.badge}
+            </span>
+          ) : null}
+          {!isLocked && limitedCopy?.badge ? (
+            <span className="inline-flex items-center rounded-full border border-purple-400/20 bg-purple-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-purple-200">
+              {limitedCopy.badge}
+            </span>
+          ) : null}
+          <span className="inline-flex items-center rounded-full border border-slate-600 bg-slate-800/80 px-2.5 py-0.5 text-[11px] font-semibold text-slate-200">
+            Current plan: {currentPlanLabel}
+          </span>
+          {founderProtected ? (
+            <span className="inline-flex items-center rounded-full border border-amber-300/25 bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-amber-100">
+              Founder protected
+            </span>
+          ) : null}
+        </div>
+
         {/* Hover microcopy (1-line tooltip). No new features—just UX copy. */}
         <span
           className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-2 py-1 rounded-md text-[11px] whitespace-nowrap bg-slate-950/95 text-slate-200 border border-slate-700 shadow-lg opacity-0 scale-95 transition-all duration-150 group-hover:opacity-100 group-hover:scale-100"
         >
-          {isLocked ? 'Unlock with Professional to use this tool' : tip}
+          {isLocked ? lockedCopy?.message || `Upgrade to ${targetPlan} to unlock this tool.` : (limitedCopy?.message || tip)}
         </span>
 
         {/* Action label (aligns with button language: Generate / Start / Open / View) */}
         <div className="mt-3 flex items-center justify-between">
           <span className="text-[11px] text-slate-500">
-            {isLocked ? '🔒 Pro Only' : 'Available'}
+            {isLocked ? `Locked by plan • Upgrade available` : limitedCopy ? `Current plan: ${currentPlanLabel} • Upgrade available` : founderProtected ? 'Current plan • Founder protected' : `Current plan: ${currentPlanLabel}`}
             {typeof remainingForTitle === 'number' ? (
               <span className="ml-2 text-slate-400">Remaining: {remainingForTitle}</span>
             ) : null}
@@ -541,7 +573,7 @@ const PromptGrid: React.FC<{
             {isLocked ? (
               <>
                 <LockIcon className="w-3 h-3 text-amber-300/80" />
-                <span>{action} (Pro)</span>
+                <span>{lockedCopy?.primaryCta || `Upgrade to ${targetPlan}`}</span>
               </>
             ) : (
               <span>{action}</span>
@@ -3941,7 +3973,7 @@ useEffect(() => {
         setIdentifySavedIdeaId(null);
         setIdentifyIsStrong(false);
     } catch (err) {
-        const blocked = normalizeBlockedUx(err, { toolName: 'Identify a Trick' });
+        const blocked = normalizeBlockedUx(err, { toolName: 'Identify a Trick', user, targetPlan: 'Amateur' });
         if (blocked.showUpgrade || blocked.retryable) {
           setIdentificationBlocked(blocked);
         } else {
@@ -3983,7 +4015,7 @@ useEffect(() => {
 
       showToast('Refined.');
     } catch (err) {
-      const blocked = normalizeBlockedUx(err, { toolName: 'Identify a Trick' });
+      const blocked = normalizeBlockedUx(err, { toolName: 'Identify a Trick', user, targetPlan: 'Amateur' });
       if (blocked.showUpgrade || blocked.retryable) {
         setIdentificationBlocked(blocked);
       } else {

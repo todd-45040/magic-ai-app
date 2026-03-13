@@ -27,7 +27,14 @@ export type BlockedUx = {
   showUpgrade: boolean;
   showTryAgain: boolean;
   upgradeLabel?: string;
+  badge?: string;
+  currentPlanLabel?: string;
+  founderProtected?: boolean;
 };
+
+import type { User } from '../types';
+import { getUpgradeUxCopy, isFounderProtected } from './upgradeUx';
+import { formatTierLabel, normalizeTier } from './membershipService';
 
 type AnyErr = any;
 
@@ -55,9 +62,11 @@ function pullCode(err: AnyErr): string {
   );
 }
 
-export function normalizeBlockedUx(err: unknown, opts?: { toolName?: string; plan?: string }): BlockedUx {
+export function normalizeBlockedUx(err: unknown, opts?: { toolName?: string; plan?: string; user?: User | null; targetPlan?: 'Amateur' | 'Professional' }): BlockedUx {
   const toolName = opts?.toolName || 'this tool';
-  const plan = (opts?.plan || '').toLowerCase();
+  const plan = (opts?.plan || opts?.user?.membership || '').toLowerCase();
+  const founderProtected = isFounderProtected(opts?.user);
+  const currentPlanLabel = formatTierLabel(normalizeTier(plan || 'free'));
 
   const rawMsg = pullMessage(err);
   const msg = lower(rawMsg);
@@ -122,15 +131,21 @@ export function normalizeBlockedUx(err: unknown, opts?: { toolName?: string; pla
 
   const showTryAgain = retryable || inferred === 'UNAUTHORIZED';
 
+  const targetPlan = opts?.targetPlan ?? (plan === 'amateur' ? 'Professional' : 'Amateur');
+  const upgradeCopy =
+    inferred === 'PRO_ONLY' || inferred === 'TIER_RESTRICTED'
+      ? getUpgradeUxCopy('locked_by_plan', { toolName, targetPlan, user: opts?.user ?? null })
+      : inferred === 'QUOTA_EXCEEDED' || inferred === 'USAGE_LIMIT_REACHED'
+        ? getUpgradeUxCopy('limit_reached', { toolName, targetPlan, user: opts?.user ?? null })
+        : null;
+
   const title =
     inferred === 'RATE_LIMITED' ? 'Please wait a moment' :
     inferred === 'TIMEOUT' ? 'The request timed out' :
     inferred === 'SERVICE_UNAVAILABLE' ? 'AI service temporarily unavailable' :
     inferred === 'UNAUTHORIZED' ? 'Please sign in' :
-    inferred === 'PRO_ONLY' ? 'Locked by plan' :
-    inferred === 'TIER_RESTRICTED' ? 'Locked by plan' :
-    inferred === 'QUOTA_EXCEEDED' ? 'Limit reached' :
-    inferred === 'USAGE_LIMIT_REACHED' ? 'Limit reached' :
+    upgradeCopy?.badge === 'Locked by Plan' ? 'Locked by plan' :
+    upgradeCopy?.badge === 'Limit Reached' ? 'Limit reached' :
     'Blocked';
 
   const message =
@@ -142,15 +157,7 @@ export function normalizeBlockedUx(err: unknown, opts?: { toolName?: string; pla
           ? `The request took too long. Please try again.`
           : inferred === 'SERVICE_UNAVAILABLE'
             ? `The AI service is temporarily unavailable. Please try again shortly.`
-            : inferred === 'PRO_ONLY'
-              ? `${toolName} requires a Professional plan. Upgrade to unlock it.`
-              : inferred === 'TIER_RESTRICTED'
-                ? `${toolName} is not included in your current plan. Upgrade to unlock it.`
-                : inferred === 'QUOTA_EXCEEDED'
-                  ? `You have reached the monthly limit for ${toolName}. Upgrade for more capacity or wait for your quota reset.`
-                  : inferred === 'USAGE_LIMIT_REACHED'
-                    ? `You have reached the current limit for ${toolName}. Try again after the reset or upgrade for more capacity.`
-                    : (rawMsg || `Blocked from using ${toolName}.`);
+            : (upgradeCopy?.message || rawMsg || `Blocked from using ${toolName}.`);
 
   return {
     blocked: true,
@@ -160,6 +167,9 @@ export function normalizeBlockedUx(err: unknown, opts?: { toolName?: string; pla
     retryable,
     showUpgrade,
     showTryAgain,
-    upgradeLabel: inferred === 'PRO_ONLY' || inferred === 'TIER_RESTRICTED' ? 'Upgrade plan' : showUpgrade ? 'Upgrade for more capacity' : undefined,
+    upgradeLabel: upgradeCopy?.primaryCta || (showUpgrade ? 'Upgrade' : undefined),
+    badge: upgradeCopy?.badge,
+    currentPlanLabel,
+    founderProtected,
   };
 }
