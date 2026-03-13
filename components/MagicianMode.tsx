@@ -61,7 +61,7 @@ import AdminPanel from './AdminPanel';
 import AppSuggestionModal from './AppSuggestionModal';
 import BillingSettings from './BillingSettings';
 import { fetchUsageStatus, type UsageStatus } from '../services/usageStatusService';
-import { getUsage } from '../services/usageTracker';
+import { consume, getUsage } from '../services/usageTracker';
 
 interface AngleRiskFormProps {
     trickName: string;
@@ -2992,8 +2992,8 @@ useEffect(() => {
 
       const liveUsage = user ? getUsage(user, 'live_minutes') : { used: 0, limit: defaults.live_audio_minutes.dailyLimit, remaining: defaults.live_audio_minutes.dailyLimit };
       const imageUsage = user ? getUsage(user, 'image') : { used: 0, limit: defaults.image_gen.limit, remaining: defaults.image_gen.limit };
-      const videoUsage = user ? getUsage(user, 'video_upload') : { used: 0, limit: defaults.video_uploads.dailyLimit, remaining: defaults.video_uploads.dailyLimit };
       const identifyUsage = user ? getUsage(user, 'identify') : { used: 0, limit: defaults.identify.limit, remaining: defaults.identify.limit };
+      const videoUsage = user ? getUsage(user, 'video_upload') : { used: 0, limit: defaults.video_uploads.dailyLimit, remaining: defaults.video_uploads.dailyLimit };
 
       const serverQuota = serverStatus?.quota ?? {};
       const liveQuota = serverQuota.live_audio_minutes ?? {};
@@ -3029,12 +3029,12 @@ useEffect(() => {
             },
           },
           identify: {
-            remaining: Number(identifyQuota.remaining ?? identifyUsage.remaining ?? defaults.identify.remaining),
-            limit: Number(identifyQuota.limit ?? identifyUsage.limit ?? defaults.identify.limit),
+            remaining: Number(identifyQuota.remaining ?? identifyUsage.remaining),
+            limit: Number(identifyQuota.limit ?? identifyUsage.limit),
             daily: {
-              used: Number(identifyUsage.used ?? 0),
-              limit: Number(identifyUsage.limit ?? defaults.identify.limit),
-              remaining: Number(identifyUsage.remaining ?? defaults.identify.remaining),
+              used: Number((identifyQuota as any)?.daily?.used ?? identifyUsage.used),
+              limit: Number((identifyQuota as any)?.daily?.limit ?? identifyUsage.limit),
+              remaining: Number((identifyQuota as any)?.daily?.remaining ?? identifyUsage.remaining),
             },
           },
           video_uploads: {
@@ -3947,10 +3947,7 @@ useEffect(() => {
     try {
         const result = await identifyTrickFromImageServer(base64Data, mimeType, user);
         setIdentificationResult(result);
-        if (user) {
-          // Keep the Home usage panel in sync by locally tracking successful Identify requests.
-          consume(user, 'identify', 1);
-        }
+        if (user) consume(user, 'identify', 1);
         void trackClientEvent({ tool: 'IdentifyTrick', action: 'identify_request_success', outcome: 'SUCCESS_NOT_CHARGED' });
         setIdentifySavedIdeaId(null);
         setIdentifyIsStrong(false);

@@ -1,12 +1,12 @@
-Identify a Trick usage patch
+Identify a Trick usage patch v2
 
-Changed files:
-- services/usageTracker.ts
-- components/MagicianMode.tsx
+This corrected patch finishes the wiring in three places:
+1. Adds `identify` as a tracked local usage metric in `services/usageTracker.ts`.
+2. Consumes 1 identify unit after a successful Identify a Trick result in `components/MagicianMode.tsx`.
+3. Feeds Identify daily used/limit/remaining into the Home Usage snapshot so the panel can stop showing "Not tracked yet" once the tool is used.
 
-What this patch does:
-- adds a new local usage metric: identify
-- records one Identify usage unit after a successful Identify a Trick result
-- exposes Identify daily used/limit/remaining data to the Home Usage & Limits snapshot
+Expected behavior after applying:
+- Before any identify call: the row may still show a not-tracked/empty state, depending on the current card UI logic.
+- After a successful identify call: the row should move to a real usage state like `Daily: 1 / 100`.
 
-This is packaged as a focused patch bundle so you can apply it on top of your current working repo without overwriting newer Home panel polish work.
+If your current `UsageLimitsCard` uses a custom normalized row format, make sure it reads `quota.identify.daily` the same way it already reads `live_audio_minutes.daily` and `image_gen.daily`.
