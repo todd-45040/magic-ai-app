@@ -151,10 +151,13 @@ Tones: ${tones}`;
         window.clearTimeout(abortTimer);
       }
 
-      const payload = await res.json().catch(async () => {
-        const t = await res.text();
-        throw new Error(t || `Request failed (${res.status})`);
-      });
+      const raw = await res.text();
+      let payload: any;
+      try {
+        payload = raw ? JSON.parse(raw) : {};
+      } catch {
+        throw new Error(raw || `Request failed (${res.status})`);
+      }
 
       const text = extractGeminiText(payload);
 

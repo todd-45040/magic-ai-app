@@ -1,5 +1,5 @@
 import type { User } from '../types';
-import { normalizeTier, type CanonicalTier } from './membershipService';
+import { normalizeTier, type CanonicalTier } from './membershipService.js';
 
 export type UsageMetric = 'image' | 'video_upload' | 'live_minutes' | 'identify';
 
