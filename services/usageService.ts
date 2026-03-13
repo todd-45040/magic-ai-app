@@ -1,5 +1,5 @@
 import type { User, Membership } from '../types';
-import { normalizeTier } from './membershipService';
+import { normalizeTier } from './membershipService.js';
 
 // Text-generation ("AI requests") daily limits.
 // NOTE: Other tool-type caps (video/image/live minutes) are tracked client-side
