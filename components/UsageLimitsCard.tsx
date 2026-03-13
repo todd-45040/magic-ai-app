@@ -197,7 +197,7 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-xs font-semibold text-slate-300">Tool usage</div>
                   <div className="text-[11px] text-slate-300/70 text-right">
-                    {(resetHourLocal != null && resetTz) ? `Daily AI resets at ${resetHourLocal}:00 (${resetTz})` : 'Daily AI resets each day'}
+                    {(resetHourLocal != null && resetTz) ? `Daily AI resets at ${resetHourLocal}:00 (${resetTz})` : 'Daily AI usage resets each day'}
                     {monthlyResetAt ? <span className="block">Monthly limits reset {new Date(monthlyResetAt).toLocaleDateString()}</span> : null}
                   </div>
                 </div>
