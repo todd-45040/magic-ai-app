@@ -11,10 +11,8 @@ type Props = {
 
 /**
  * Option 1 UI: Polished "Usage & Limits" collapsible card.
- * Uses /api/ai/usage snapshot shape:
- *  - plan, used, limit, remaining
- *  - quota: { live_audio_minutes, image_gen, identify, video_uploads, resetAt }
- *  - resetHourLocal, resetTz
+ * Uses a normalized usage snapshot built from the working usageStatus source
+ * plus local usage tracking fallbacks for Home page consistency.
  */
 export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade }: Props) {
   const [open, setOpen] = useState(false);
@@ -30,13 +28,14 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
   const resetHourLocal = usageSnapshot?.resetHourLocal;
   const resetTz = usageSnapshot?.resetTz;
   const monthlyResetAt = usageSnapshot?.quota?.nextResetAt ?? usageSnapshot?.quota?.resetAt ?? null;
+  const toolRows = Array.isArray(usageSnapshot?.toolRows) ? usageSnapshot.toolRows : null;
 
   const shouldShowUpgrade = Boolean(onRequestUpgrade) && plan !== 'professional' && plan !== 'admin' && (nearLimit || upgradeRecommended);
   const upgradeCopy = useMemo(() => getUpgradeUxCopy(nearLimit || upgradeRecommended ? 'upgrade_available' : 'limit_reached', { targetPlan: plan === 'free' || plan === 'trial' ? 'Amateur' : 'Professional' }), [nearLimit, upgradeRecommended, plan]);
 
   const planLabel = useMemo(() => {
     if (plan === 'admin') return 'Admin';
-    if (plan === 'professional') return 'Pro';
+    if (plan === 'professional') return 'Professional';
     if (plan === 'amateur') return 'Amateur';
     if (plan === 'trial') return 'Trial';
     return String(plan).slice(0, 1).toUpperCase() + String(plan).slice(1);
@@ -56,7 +55,7 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
     return v;
   }, [dailyUsed, dailyLimit]);
 
-  const quotaRow = (label: string, key: string, opts?: { proOnly?: boolean; unit?: string }) => {
+  const legacyQuotaRow = (label: string, key: string, opts?: { proOnly?: boolean; unit?: string }) => {
     const node = quota?.[key];
     const remaining = node?.remaining;
     const limit = node?.limit;
@@ -66,10 +65,10 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
     const locked = isProOnly && plan !== 'professional';
 
     const display = (() => {
-      if (locked) return '🔒 Pro';
-      if (typeof remaining === 'number' && typeof limit === 'number') return `${remaining} / ${limit}${opts?.unit ? ` ${opts.unit}` : ''}`;
+      if (locked) return 'Locked';
+      if (typeof remaining === 'number' && typeof limit === 'number') return `${Math.max(0, limit - remaining)} / ${limit}${opts?.unit ? ` ${opts.unit}` : ''}`;
       if (typeof remaining === 'number') return `${remaining}${opts?.unit ? ` ${opts.unit}` : ''}`;
-      return '—';
+      return 'Not tracked yet';
     })();
 
     const exhausted = !locked && typeof remaining === 'number' && remaining <= 0;
@@ -79,21 +78,20 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
         <div className="flex flex-col gap-1 min-w-0">
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-sm text-slate-200 truncate">{label}</span>
-          {exhausted && (
-            <span className="text-[11px] px-2 py-0.5 rounded-full border border-rose-400/25 bg-rose-500/10 text-rose-200">
-              0 remaining
-            </span>
-          )}
-          {locked && (
-            <span className="text-[11px] px-2 py-0.5 rounded-full border border-amber-400/20 bg-amber-500/10 text-amber-200">
-              Pro-only
-            </span>
-          )}
+            {exhausted && (
+              <span className="text-[11px] px-2 py-0.5 rounded-full border border-rose-400/25 bg-rose-500/10 text-rose-200">
+                Limit reached
+              </span>
+            )}
+            {locked && (
+              <span className="text-[11px] px-2 py-0.5 rounded-full border border-amber-400/20 bg-amber-500/10 text-amber-200">
+                Professional only
+              </span>
+            )}
           </div>
-
           {daily && typeof daily?.limit === 'number' && daily.limit > 0 && (
             <div className="text-[12px] text-slate-400">
-              Daily: <span className="tabular-nums text-slate-300">{daily.remaining}</span> / <span className="tabular-nums">{daily.limit}</span>{opts?.unit ? ` ${opts.unit}` : ''}
+              Daily: <span className="tabular-nums text-slate-300">{daily.limit - daily.remaining}</span> / <span className="tabular-nums">{daily.limit}</span>{opts?.unit ? ` ${opts.unit}` : ''}
             </div>
           )}
         </div>
@@ -101,6 +99,16 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
       </div>
     );
   };
+
+  const normalizedToolRow = (row: any) => (
+    <div key={row.key} className="flex items-start justify-between gap-3 py-2">
+      <div className="flex flex-col gap-1 min-w-0">
+        <div className="text-sm text-slate-200 truncate">{row.label}</div>
+        <div className="text-[12px] text-slate-400">{row.detail}</div>
+      </div>
+      <div className="text-sm font-semibold text-slate-100 tabular-nums">{row.summary}</div>
+    </div>
+  );
 
   return (
     <section className={`rounded-2xl border border-white/10 bg-white/5 shadow-sm transition-all duration-300 ${open ? 'ring-1 ring-white/10' : 'hover:bg-white/[0.06]'}`}>
@@ -174,18 +182,20 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
 
               <div className="mt-4">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="text-xs font-semibold text-slate-300">Monthly tool quotas</div>
+                  <div className="text-xs font-semibold text-slate-300">Tool usage limits</div>
                   <div className="text-[11px] text-slate-300/70 text-right">
-                    {(resetHourLocal != null && resetTz) ? `Daily AI resets at ${resetHourLocal}:00 (${resetTz})` : 'Daily AI resets each day'}
-                    {monthlyResetAt ? <span className="block">Monthly quotas reset {new Date(monthlyResetAt).toLocaleDateString()}</span> : <span className="block">Monthly quotas follow the billing reset window</span>}
+                    {usageSnapshot?.resetLabel ?? ((resetHourLocal != null && resetTz) ? `Daily AI resets at ${resetHourLocal}:00 (${resetTz})` : 'Daily AI resets each day')}
+                    {monthlyResetAt ? <span className="block">Monthly quotas reset {new Date(monthlyResetAt).toLocaleDateString()}</span> : <span className="block">Rows below show daily, monthly, or unlimited states.</span>}
                   </div>
                 </div>
 
                 <div className="mt-2 divide-y divide-white/10">
-                  {quotaRow('Live Rehearsal (Audio)', 'live_audio_minutes', { unit: 'min' })}
-                  {quotaRow('Image Generation', 'image_gen')}
-                  {quotaRow('Identify a Trick', 'identify')}
-                  {quotaRow('Video Rehearsal Uploads', 'video_uploads', { proOnly: true })}
+                  {toolRows ? toolRows.map((row: any) => normalizedToolRow(row)) : <>
+                  {legacyQuotaRow('Live Rehearsal (Audio)', 'live_audio_minutes', { unit: 'min' })}
+                  {legacyQuotaRow('Image Generation', 'image_gen')}
+                  {legacyQuotaRow('Identify a Trick', 'identify')}
+                  {legacyQuotaRow('Video Rehearsal Uploads', 'video_uploads', { proOnly: true })}
+                  </>} 
                 </div>
 
                 {shouldShowUpgrade && (
