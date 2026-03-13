@@ -1,7 +1,7 @@
 import { supabase } from '../supabase';
-import type { BillingPlanKey } from './planCatalog.js';
+import type { BillingPlanKey } from './planCatalog';
 import type { User } from '../types';
-import { isFounderProtected } from './upgradeUx.js';
+import { isFounderProtected } from './upgradeUx';
 
 export type BillingCheckoutLookupKey =
   | 'amateur_monthly'

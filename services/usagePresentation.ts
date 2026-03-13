@@ -104,21 +104,28 @@ function buildIdentifyRow(serverStatus?: UsageStatus | null): ToolUsageRow {
   return {
     key: 'identify',
     label: 'Identify a Trick',
-    period: 'untracked',
-    summary: 'Not tracked yet',
-    detail: 'Usage tracking coming soon',
+    period: 'monthly',
+    used: 0,
+    limit: 0,
+    remaining: 0,
+    summary: '0 / 0',
+    detail: 'Monthly: 0 / 0',
   };
 }
 
 function buildVideoRow(plan: string, user?: User | null, serverStatus?: UsageStatus | null): ToolUsageRow {
   const quota = serverStatus?.quota?.video_uploads;
-  if (plan === 'professional' || plan === 'admin' || isLargePlaceholder(quota?.limit)) {
+  if (quota && typeof quota.limit === 'number' && typeof quota.remaining === 'number' && !isLargePlaceholder(quota.limit)) {
+    const used = Math.max(0, Number(quota.limit) - Number(quota.remaining));
     return {
       key: 'video_uploads',
       label: 'Video Rehearsal Uploads',
-      period: 'unlimited',
-      summary: 'Unlimited',
-      detail: 'Unlimited',
+      period: 'monthly',
+      used,
+      limit: Number(quota.limit),
+      remaining: Number(quota.remaining),
+      summary: `${used} / ${Number(quota.limit)}`,
+      detail: `Monthly: ${used} / ${Number(quota.limit)}`,
     };
   }
 

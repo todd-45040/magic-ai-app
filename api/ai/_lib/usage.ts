@@ -630,9 +630,9 @@ if (profile) {
     sessionsToday: engagement.sessionsToday,
     toolsUsedToday: engagement.toolsUsedToday,
     distinctToolsToday: engagement.distinctToolsToday,
-    liveUsed: generationCount,
-    liveLimit: limit,
-    liveRemaining: remaining,
+    liveUsed: dailyLiveUsed,
+    liveLimit: dailyLiveLimit,
+    liveRemaining: dailyLiveRemaining,
     quota: {
       live_audio_minutes: {
         remaining: profile?.quota_live_audio_minutes ?? null,
