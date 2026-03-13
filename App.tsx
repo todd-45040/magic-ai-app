@@ -23,7 +23,7 @@ import DemoBanner from './components/DemoBanner';
 import FoundingCirclePage from './components/FoundingCirclePage';
 import FounderSuccessPage from './components/FounderSuccessPage';
 import { isDemoEnabled, enableDemo, seedDemoData } from './services/demoSeedService';
-import { createCheckoutSession, resolveCheckoutLookupKey } from './services/billingClient';
+import { createCheckoutSession, fetchBillingStatus, resolveCheckoutLookupKey } from './services/billingClient';
 
 const DISCLAIMER_ACKNOWLEDGED_KEY = 'magician_ai_disclaimer_acknowledged';
 
@@ -45,7 +45,8 @@ function App() {
 
   const handleUpgrade = async (tier: 'amateur' | 'professional') => {
     try {
-      const lookupKey = resolveCheckoutLookupKey(tier, user);
+      const billingStatus = await fetchBillingStatus();
+      const lookupKey = resolveCheckoutLookupKey(tier, billingStatus);
       const result = await createCheckoutSession(lookupKey);
 
       if (result?.url) {

@@ -1,7 +1,5 @@
 import { supabase } from '../supabase';
 import type { BillingPlanKey } from './planCatalog.js';
-import type { User } from '../types';
-import { isFounderProtected } from './upgradeUx.js';
 
 export type BillingCheckoutLookupKey =
   | 'amateur_monthly'
@@ -82,9 +80,21 @@ async function authorizedFetch<T>(input: string, init?: RequestInit): Promise<T>
   return payload as T;
 }
 
-export function resolveCheckoutLookupKey(targetTier: 'amateur' | 'professional', user?: User | null): BillingCheckoutLookupKey {
+export function resolveCheckoutLookupKey(
+  targetTier: 'amateur' | 'professional',
+  billingStatus: Pick<BillingStatusPayload, 'founderProtected' | 'founderLockedPlan' | 'planKey' | 'upgradeTargets'>,
+): BillingCheckoutLookupKey {
   if (targetTier === 'amateur') return 'amateur_monthly';
-  return isFounderProtected(user) ? 'founder_professional_monthly' : 'professional_monthly';
+
+  const founderCheckoutEligible = Boolean(
+    billingStatus.founderProtected && (
+      billingStatus.founderLockedPlan === 'founder_professional'
+      || billingStatus.planKey === 'founder_professional'
+      || billingStatus.upgradeTargets.includes('founder_professional')
+    ),
+  );
+
+  return founderCheckoutEligible ? 'founder_professional_monthly' : 'professional_monthly';
 }
 
 export async function fetchBillingStatus(): Promise<BillingStatusPayload> {
