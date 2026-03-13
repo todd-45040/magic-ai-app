@@ -1,7 +1,7 @@
 import type { Show, User } from '../types';
-import { normalizeTier, type CanonicalTier } from './membershipService.js';
-import { getPlanLimits, getEffectiveEntitlementTier } from './planCatalog.js';
-import { getTierLimit } from './usageService.js';
+import { normalizeTier, type CanonicalTier } from './membershipService';
+import { getPlanLimits, getEffectiveEntitlementTier } from './planCatalog';
+import { getTierLimit } from './usageService';
 
 export type ToolName =
   | 'EffectGenerator'

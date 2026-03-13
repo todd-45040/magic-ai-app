@@ -57,7 +57,16 @@ export default function UsageMeter({ user }: { user?: User | null }) {
     };
 
     const loadLive = (s?: UsageStatus) => {
-      // Prefer server-backed live usage. Fall back to local only if server doesn't provide live fields.
+      // Prefer quota-backed live daily usage. Fall back to top-level live fields, then local cache.
+      const liveDaily = s?.quota?.live_audio_minutes?.daily;
+      if (liveDaily && typeof liveDaily.limit === 'number') {
+        setLive({
+          used: Number(liveDaily.used || 0),
+          limit: Number(liveDaily.limit || 0),
+          remaining: Number(liveDaily.remaining ?? Math.max(0, Number(liveDaily.limit || 0) - Number(liveDaily.used || 0))),
+        });
+        return;
+      }
       if (s?.liveLimit != null && s.liveRemaining != null && s.liveUsed != null) {
         setLive({ used: Number(s.liveUsed || 0), limit: Number(s.liveLimit || 0), remaining: Number(s.liveRemaining || 0) });
         return;
@@ -119,6 +128,15 @@ export default function UsageMeter({ user }: { user?: User | null }) {
       const ce = e as CustomEvent;
       const detail = (ce.detail || {}) as any;
       if (!mounted) return;
+      const liveDaily = detail?.quota?.live_audio_minutes?.daily;
+      if (liveDaily && typeof liveDaily.limit === 'number') {
+        setLive({
+          used: Number(liveDaily.used ?? 0),
+          limit: Number(liveDaily.limit ?? 0),
+          remaining: Number(liveDaily.remaining ?? Math.max(0, Number(liveDaily.limit ?? 0) - Number(liveDaily.used ?? 0))),
+        });
+        return;
+      }
       if (detail.liveLimit == null && detail.liveRemaining == null && detail.liveUsed == null) return;
       setLive({
         used: Number(detail.liveUsed ?? 0),
