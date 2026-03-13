@@ -10,12 +10,8 @@ export default async function handler(req: any, res: any) {
   if (!auth.ok) return jsonError(res, auth.status, { ok: false, error_code: 'AI_AUTH_REQUIRED', message: 'Please sign in to end Live Rehearsal.', retryable: false });
   const safeUserId: string = auth.userId;
   const sessionIdRaw = String(req.body?.sessionId || '').trim();
-  const sessionId: string | null = sessionIdRaw.length > 0 ? sessionIdRaw : null;
-  const result = endLiveSession(safeUserId, sessionId ?? undefined);
-  if (!result.ok) {
-    const errorCode = result.error_code ?? 'AI_INVALID_INPUT';
-    const message = result.message ?? 'Unable to end Live Rehearsal.';
-    return jsonError(res, result.status || 400, { ok: false, error_code: errorCode, message, retryable: false });
-  }
+  const sessionId = sessionIdRaw.length > 0 ? sessionIdRaw : undefined;
+  const result = endLiveSession(safeUserId, sessionId);
+  if (!result.ok) return jsonError(res, result.status || 400, { ok: false, error_code: result.error_code, message: result.message, retryable: false });
   return res.status(200).json({ ok: true });
 }
