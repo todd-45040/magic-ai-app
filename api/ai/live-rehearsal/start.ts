@@ -8,7 +8,6 @@ export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     return jsonError(res, 405, { ok: false, error_code: 'METHOD_NOT_ALLOWED', message: 'Method not allowed', retryable: false });
   }
-
   const auth = await requireSupabaseAuth(req);
   if (!auth.ok) {
     return jsonError(res, auth.status, { ok: false, error_code: 'AI_AUTH_REQUIRED', message: 'Please sign in to start Live Rehearsal.', retryable: false });
@@ -29,7 +28,7 @@ export default async function handler(req: any, res: any) {
   const daily = status?.quota?.live_audio_minutes?.daily;
   const monthlyRemaining = Number(status?.quota?.live_audio_minutes?.remaining ?? 0);
   if (Number(daily?.remaining ?? 0) <= 0 || monthlyRemaining <= 0) {
-    return jsonError(res, 429, { ok: false, error_code: 'AI_LIMIT_REACHED', message: 'Your Live Rehearsal limit has been reached for this plan period.', retryable: true, ...(isPreviewEnv() ? { details: { daily, monthlyRemaining } } : {}) });
+    return jsonError(res, 429, { ok: false, error_code: 'AI_LIMIT_REACHED', message: 'Your Live Rehearsal limit has been reached for this plan period.', retryable: true, ...(isPreviewEnv()?{details:{daily, monthlyRemaining}}:{}) });
   }
 
   const started = startLiveSession(safeUserId, status.membership);
