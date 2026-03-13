@@ -33,6 +33,7 @@ import UsageMeter from './UsageMeter';
 import UsageLimitsCard from './UsageLimitsCard';
 import BlockedPanel from './BlockedPanel';
 import { normalizeBlockedUx, type BlockedUx } from '../services/blockedUx';
+import { getPromptAccess } from '../services/entitlements';
 import { normalizeTier, getMembershipDaysRemaining, formatTierLabel } from '../services/membershipService';
 import UpgradeModal from './UpgradeModal';
 import MemberManagement from './MemberManagement';
@@ -62,8 +63,6 @@ import AppSuggestionModal from './AppSuggestionModal';
 import BillingSettings from './BillingSettings';
 import { fetchUsageStatus, type UsageStatus } from '../services/usageStatusService';
 import { consume, getUsage } from '../services/usageTracker';
-import { getPromptAccess, getToolAccess } from '../services/entitlements';
-import type { ToolName } from '../services/entitlements';
 
 interface AngleRiskFormProps {
     trickName: string;
@@ -2898,10 +2897,10 @@ useEffect(() => {
   const daysRemaining = getMembershipDaysRemaining(user);
   const tierLabel = formatTierLabel(tier);
 
-  // Access mapping (canonical client source of truth: services/entitlements.ts)
-  const hasAmateurAccess = getToolAccess(user, 'ShowPlanner').state !== 'locked';
-  const hasSemiProAccess = getToolAccess(user, 'CRM').state !== 'locked';
-  const hasProfessionalAccess = getToolAccess(user, 'LiveRehearsal').state !== 'locked';
+  // Access mapping
+  const hasAmateurAccess = (['trial', 'amateur', 'professional', 'admin'].includes(tier) && !isExpired) as boolean;
+  const hasSemiProAccess = ((tier === 'professional' || tier === 'admin') && !isExpired) as boolean; // business tier (CRM/marketing/contracts/finance)
+  const hasProfessionalAccess = ((tier === 'professional' || tier === 'admin' || user.isAdmin) && !isExpired) as boolean;
 
   // Usage & Limits card snapshot
   const [usageSnapshot, setUsageSnapshot] = useState<any>(null);
@@ -4025,49 +4024,39 @@ useEffect(() => {
       setIsUpgradeModalOpen(true);
       return;
     }
+    // Centralized permission gating (Free vs Pro) for navigation shortcuts.
+    // Note: detailed tier gating for tool *cards* happens in handlePromptClick.
+    const amateurViews = new Set<MagicianView>([
+      'show-planner',
+      'effect-generator',
+      'saved-ideas',
+      'magic-archives',
+      'global-search',
+      'show-feedback',
+    ]);
 
-    const viewAccessToolMap: Partial<Record<MagicianView, ToolName>> = {
-      'effect-generator': 'EffectGenerator',
-      'identify': 'IdentifyTrick',
-      'patter-engine': 'PatterEngine',
-      'magic-wire': 'MagicWire',
-      'publications': 'Publications',
-      'community': 'Community',
-      'show-planner': 'ShowPlanner',
-      'saved-ideas': 'SavedIdeas',
-      'global-search': 'Search',
-      'live-rehearsal': 'LiveRehearsal',
-      'video-rehearsal': 'VideoAnalysis',
-      'visual-brainstorm': 'VisualBrainstorm',
-      'director-mode': 'DirectorMode',
-      'persona-simulator': 'PersonaSimulator',
-      'assistant-studio': 'AssistantStudio',
-      'client-management': 'CRM',
-      'contract-generator': 'Contracts',
-      'marketing-campaign': 'MarketingGenerator',
-      'prop-checklists': 'PropChecklists',
-      'show-feedback': 'ShowFeedback',
-      'illusion-blueprint': 'IllusionBlueprint',
-      'mentalism-assistant': 'MentalismAssistant',
-      'gospel-magic-assistant': 'GospelMagic',
-    };
-
-    const gatedTool = viewAccessToolMap[view];
-    if (gatedTool) {
-      const access = getToolAccess(user, gatedTool);
-      if (access.state === 'locked') {
-        setIsUpgradeModalOpen(true);
-        return;
-      }
-    }
-
-    const professionalFallbackViews = new Set<MagicianView>([
+    const professionalViews = new Set<MagicianView>([
+      'live-rehearsal',
+      'video-rehearsal',
+      'visual-brainstorm',
+      'director-mode',
+      'persona-simulator',
+      'assistant-studio',
+      'client-management',
+      'illusion-blueprint',
       'magic-theory-tutor',
+      'mentalism-assistant',
+      'gospel-magic-assistant',
       'magic-dictionary',
       'performance-analytics',
     ]);
 
-    if (professionalFallbackViews.has(view) && !hasProfessionalAccess) {
+    if (amateurViews.has(view) && !hasAmateurAccess) {
+      setIsUpgradeModalOpen(true);
+      return;
+    }
+
+    if (professionalViews.has(view) && !hasProfessionalAccess) {
       setIsUpgradeModalOpen(true);
       return;
     }

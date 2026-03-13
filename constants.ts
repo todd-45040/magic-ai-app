@@ -327,26 +327,24 @@ export const PERSONAS: Persona[] = [
     },
 ];
 
-// Display-only marketing lists. Actual access decisions must come from services/entitlements.ts.
 export const AMATEUR_FEATURES = [
     'Effect Generator',
     'Patter Engine',
-    'Identify a Trick',
+    'Innovation Engine',
+    'Angle/Risk Analysis',
+    'Rehearsal Coaching',
     'Show Planner',
     'My Saved Ideas',
+    'Magic Archives',
     'Global Search',
-    'Magic Wire',
-    'Publications',
-    'Community',
 ];
 
+// Display-only marketing labels for the mid-tier / business layer.
 export const SEMI_PRO_FEATURES = [
-    'Client Management (CRM)',
-    'Contracts + performance riders',
-    'Marketing Campaign Generator',
-    'Show Finance Tracker',
-    'Audience feedback collection',
-    'Performance analytics timeline',
+    'Client Management',
+    'Contract Generator',
+    'Marketing Campaign',
+    'Show Feedback',
 ];
 
 export const PROFESSIONAL_FEATURES = [
@@ -358,17 +356,14 @@ export const PROFESSIONAL_FEATURES = [
     'Persona Simulator',
     "Assistant's Studio",
     'Prop Checklist Generator',
-    'Show Feedback',
-    'Client Management (CRM)',
-    'Contracts + performance riders',
-    'Marketing Campaign Generator',
-    'Show Finance Tracker',
-    'Mentalism Assistant',
-    'Gospel Magic Assistant',
     'Magic Dictionary',
     'Magic Theory Tutor',
-    'Priority feature access',
-    'Founding Member perks (where available)',
+    'Mentalism Assistant',
+    'Gospel Magic Assistant',
+    'Client Management',
+    'Contract Generator',
+    'Marketing Campaign',
+    'Show Feedback',
 ];
 
 export const AUDIENCE_PROMPTS: PredefinedPrompt[] = [
