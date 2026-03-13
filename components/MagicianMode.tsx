@@ -2906,6 +2906,7 @@ useEffect(() => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const mainScrollRef = useRef<HTMLDivElement>(null);
   const [navElevated, setNavElevated] = useState(false);
+  const [intentWorkspaceOverride, setIntentWorkspaceOverride] = useState<null | 'rehearse' | 'manage'>(null);
 
   const [viewingPerformanceId, setViewingPerformanceId] = useState<string | null>(null);
 
@@ -4140,6 +4141,7 @@ useEffect(() => {
       return;
     }
 
+    setIntentWorkspaceOverride(null);
     setActiveView(view);
   };
 
@@ -4247,13 +4249,79 @@ ${action.payload.content}`;
     refreshClients(dispatch);
   };
 
-  const handleShowsUpdate = () => {
-    refreshShows(dispatch);
+  const renderLockedIntentWorkspace = (intent: 'rehearse' | 'manage') => {
+    const isManage = intent === 'manage';
+    const title = isManage ? 'Management tools are available on Amateur and Professional plans' : 'Advanced rehearsal tools are available on Professional plans';
+    const description = isManage
+      ? 'Browse the workspace and see what unlocks next. Upgrade to Amateur to use Show Planner, Saved Ideas, and Search.'
+      : 'Browse the rehearsal workspace and see what unlocks next. Upgrade to Professional to use Live Rehearsal, Video Rehearsal, and Persona Simulator.';
+    const primaryLabel = isManage ? 'Upgrade to Amateur' : 'Upgrade to Professional';
+    const primaryTier = isManage ? 'amateur' : 'professional';
+
+    const cards = isManage
+      ? [
+          { label: 'Show Planner', view: 'show-planner' as MagicianView, note: 'Plan and organize your routines.' },
+          { label: 'Saved Ideas', view: 'saved-ideas' as MagicianView, note: 'Keep and revisit your best concepts.' },
+          { label: 'Search', view: 'global-search' as MagicianView, note: 'Find ideas, shows, and notes fast.' },
+        ]
+      : [
+          { label: 'Live Rehearsal', view: 'live-rehearsal' as MagicianView, note: 'Practice in real time with coaching prompts.' },
+          { label: 'Video Rehearsal', view: 'video-rehearsal' as MagicianView, note: 'Upload clips for performance feedback.' },
+          { label: 'Persona Simulator', view: 'persona-simulator' as MagicianView, note: 'Test your material against audience personas.' },
+        ];
+
+    return (
+      <div className="px-4 md:px-6 pt-6">
+        <div className="relative overflow-hidden rounded-2xl border border-amber-400/25 bg-gradient-to-b from-amber-500/10 via-white/[0.03] to-transparent p-5 shadow-[0_0_24px_rgba(245,158,11,0.08)]">
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-amber-500/8 via-transparent to-purple-500/8" />
+          <div className="relative">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-200/90">Locked by plan</p>
+            <h1 className="mt-2 text-2xl md:text-3xl font-semibold text-white leading-tight">{title}</h1>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-white/70">{description}</p>
+
+            <div className="mt-5 flex flex-wrap gap-3">
+              <button
+                onClick={() => onUpgrade(primaryTier as any)}
+                className="inline-flex items-center justify-center rounded-xl border border-amber-300/40 bg-amber-400/15 px-4 py-2 text-sm font-medium text-amber-100 transition hover:bg-amber-400/25 hover:text-white"
+              >
+                {primaryLabel}
+              </button>
+              <button
+                onClick={() => { setIntentWorkspaceOverride(null); setActiveView('effect-generator'); }}
+                className="inline-flex items-center justify-center rounded-xl border border-slate-700 bg-slate-900/60 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-600 hover:bg-slate-800/70 hover:text-white"
+              >
+                Return to available tools
+              </button>
+            </div>
+
+            <div className="mt-6 grid gap-3 md:grid-cols-3">
+              {cards.map((card) => (
+                <button
+                  key={card.view}
+                  onClick={() => handleNavigate(card.view)}
+                  className="rounded-xl border border-slate-800 bg-slate-950/50 p-4 text-left transition hover:border-slate-700 hover:bg-slate-900/70"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-white">{card.label}</p>
+                    <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-200">Locked</span>
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-white/60">{card.note}</p>
+                  <p className="mt-3 text-xs font-medium text-amber-200/85">Upgrade available</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   const renderContent = () => {
     switch(activeView) {
         case 'dashboard': {
+          if (intentWorkspaceOverride === 'rehearse' || intentWorkspaceOverride === 'manage') {
+            return renderLockedIntentWorkspace(intentWorkspaceOverride);
+          }
           return (
             <>
             <div className="px-4 md:px-6 pt-6">
@@ -4520,6 +4588,7 @@ ${action.payload.content}`;
 
   const activeTab = VIEW_TO_TAB_MAP[activeView];
   const activeIntent = (() => {
+    if (intentWorkspaceOverride) return intentWorkspaceOverride;
     if (activeTab === 'admin') return 'admin' as const;
 
     // Create
@@ -4579,29 +4648,46 @@ ${action.payload.content}`;
     if (intent === 'home') {
       try { localStorage.removeItem('magician_active_view'); } catch {}
       resetInlineForms();
+      setIntentWorkspaceOverride(null);
       setActiveView('dashboard');
       return;
     }
     if (intent === 'create') {
+      setIntentWorkspaceOverride(null);
       handleNavigate('effect-generator');
       return;
     }
     if (intent === 'rehearse') {
-      // Default: angle/risk is safe to access for all tiers; pro users can jump into Live Rehearsal.
+      if (userPlan === 'free' || userPlan === 'trial') {
+        resetInlineForms();
+        setIntentWorkspaceOverride('rehearse');
+        setActiveView('dashboard');
+        return;
+      }
+      setIntentWorkspaceOverride(null);
       handleNavigate(hasProfessionalAccess ? 'live-rehearsal' : 'angle-risk');
       return;
     }
     if (intent === 'manage') {
+      if (userPlan === 'free' || userPlan === 'trial') {
+        resetInlineForms();
+        setIntentWorkspaceOverride('manage');
+        setActiveView('dashboard');
+        return;
+      }
+      setIntentWorkspaceOverride(null);
       handleNavigate('show-planner');
       return;
     }
     if (intent === 'social') {
+      setIntentWorkspaceOverride(null);
       handleNavigate('magic-wire');
       return;
     }
     if (intent === 'admin') {
       if (!user?.isAdmin) return;
       resetInlineForms();
+      setIntentWorkspaceOverride(null);
       setActiveView('admin');
       return;
     }
