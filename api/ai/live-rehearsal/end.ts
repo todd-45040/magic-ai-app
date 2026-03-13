@@ -12,6 +12,6 @@ export default async function handler(req: any, res: any) {
   const sessionIdRaw = String(req.body?.sessionId || '').trim();
   const sessionId = sessionIdRaw.length > 0 ? sessionIdRaw : undefined;
   const result = endLiveSession(safeUserId, sessionId);
-  if (!result.ok) return jsonError(res, result.status || 400, { ok: false, error_code: result.error_code ?? 'AI_INVALID_INPUT', message: result.message ?? 'Unable to end Live Rehearsal session.', retryable: false });
+  if (!result.ok) return jsonError(res, result.status || 400, { ok: false, error_code: result.error_code, message: result.message, retryable: false });
   return res.status(200).json({ ok: true });
 }

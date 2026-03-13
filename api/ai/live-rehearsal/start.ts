@@ -33,7 +33,7 @@ export default async function handler(req: any, res: any) {
 
   const started = startLiveSession(safeUserId, status.membership);
   if (!started.ok) {
-    return jsonError(res, started.status || 429, { ok: false, error_code: started.error_code ?? 'AI_LIMIT_REACHED', message: started.message ?? 'Unable to start Live Rehearsal.', retryable: started.status === 429 });
+    return jsonError(res, started.status || 429, { ok: false, error_code: started.error_code, message: started.message, retryable: started.status === 429 });
   }
 
   return res.status(200).json({ ok: true, data: started });

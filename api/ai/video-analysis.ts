@@ -27,11 +27,11 @@ export default async function handler(req: any, res: any) {
   const clipsUsedThisMonth = Number(status?.quota?.video_uploads?.limit ?? 0) - Number(status?.quota?.video_uploads?.remaining ?? 0);
   const validation = validateVideoRequest({ plan: status.membership, mimeType, fileSizeBytes, durationSeconds, clipsUsedThisMonth });
   if (!validation.ok) {
-    return jsonError(res, validation.status || 400, { ok: false, error_code: validation.error_code ?? 'AI_INVALID_INPUT', message: validation.message ?? 'Video Analysis request is invalid.', retryable: validation.status === 429, ...(isPreviewEnv()?{details:{mimeType,fileSizeBytes,durationSeconds, clipsUsedThisMonth}}:{}) });
+    return jsonError(res, validation.status || 400, { ok: false, error_code: validation.error_code, message: validation.message, retryable: validation.status === 429, ...(isPreviewEnv()?{details:{mimeType,fileSizeBytes,durationSeconds, clipsUsedThisMonth}}:{}) });
   }
 
   const queue = acquireVideoQueue(safeUserId);
-  if (!queue.ok) return jsonError(res, queue.status || 409, { ok: false, error_code: queue.error_code ?? 'AI_DUPLICATE_REQUEST', message: queue.message ?? 'A video analysis job is already in progress for this account.', retryable: true });
+  if (!queue.ok) return jsonError(res, queue.status || 409, { ok: false, error_code: queue.error_code, message: queue.message, retryable: true });
 
   try {
     const usage = await enforceAiUsage(req, 1, { tool: 'video_rehearsal' });
