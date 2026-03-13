@@ -1,7 +1,7 @@
 import type { User } from '../types';
-import type { CanonicalTier } from './membershipService';
-import { normalizeTier } from './membershipService';
-import type { ResourceType, ToolName } from './entitlements';
+import type { CanonicalTier } from './membershipService.js';
+import { normalizeTier } from './membershipService.js';
+import type { ResourceType, ToolName } from './entitlements.js';
 
 export type BillingPlanKey = 'free' | 'amateur' | 'professional' | 'founder_professional';
 export type InternalPlanState = BillingPlanKey | 'admin' | 'expired' | 'trial';
