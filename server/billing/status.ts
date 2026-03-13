@@ -36,6 +36,14 @@ function normalizeProfileMembership(value: unknown): BillingPlanKey {
   return 'free';
 }
 
+function normalizeBillingPlanKey(value: unknown): BillingPlanKey | null {
+  const raw = String(value || '').trim();
+  if (raw === 'free' || raw === 'amateur' || raw === 'professional' || raw === 'founder_professional') {
+    return raw;
+  }
+  return null;
+}
+
 async function maybeSelectSingle(query: Promise<any>) {
   try {
     const { data, error } = await query;
@@ -92,18 +100,28 @@ export async function resolveBillingStatusForUser(admin: any, userId: string): P
     founderOverride: founderOverride || undefined,
   });
 
-  const fallbackPlan = founderProtection.lockedPlan || normalizeProfileMembership(profile?.membership);
+  const profilePlan = normalizeProfileMembership(profile?.membership);
+  const subscriptionPlan = normalizeBillingPlanKey(subscription?.plan_key);
+  const hasSubscriptionSignal = Boolean(
+    subscriptionPlan ||
+    String(subscription?.stripe_subscription_id || '').trim() ||
+    String(subscription?.billing_status || '').trim() ||
+    subscription?.id
+  );
+
   const resolved = resolveBillingPlan({
-    planKey: (subscription?.plan_key as BillingPlanKey | null) || fallbackPlan,
-    billingStatus: subscription?.billing_status || (fallbackPlan === 'free' ? 'unknown' : 'active'),
+    planKey: subscriptionPlan || (!hasSubscriptionSignal ? profilePlan : 'free'),
+    billingStatus: subscription?.billing_status || (!hasSubscriptionSignal && profilePlan !== 'free' ? 'active' : 'unknown'),
     cancelAtPeriodEnd: Boolean(subscription?.cancel_at_period_end),
     currentPeriodEnd: subscription?.current_period_end || null,
-    founderLockedPlan: founderProtection.lockedPlan,
+    // Founder protection must not be treated as an active paid entitlement fallback.
+    // It remains an eligibility/pricing overlay that survives independently of subscription state.
+    founderLockedPlan: null,
   });
 
   const effectivePlanKey = resolved.keepAccess
     ? resolved.planKey
-    : (founderProtection.lockedPlan || 'free');
+    : 'free';
 
   const planDef = BILLING_PLAN_CATALOG[effectivePlanKey] || BILLING_PLAN_CATALOG.free;
   const upgradeTargets = (planDef.allowedUpgrades || []).filter((planKey) => {
