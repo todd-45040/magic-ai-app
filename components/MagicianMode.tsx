@@ -9,7 +9,7 @@ import { saveIdea, updateIdea } from '../services/ideasService';
 import { exportData } from '../services/dataService';
 import { findShowByTitle, createShow, addTaskToShow, addTasksToShow } from '../services/showsService';
 import { clearDemoData, seedDemoData } from '../services/demoSeedService';
-import { MAGICIAN_SYSTEM_INSTRUCTION, MAGICIAN_PROMPTS, publications, clubs, conventions, AMATEUR_FEATURES, SEMI_PRO_FEATURES, PROFESSIONAL_FEATURES, MAGICIAN_CHAT_TOOLS } from '../constants';
+import { MAGICIAN_SYSTEM_INSTRUCTION, MAGICIAN_PROMPTS, publications, clubs, conventions, MAGICIAN_CHAT_TOOLS } from '../constants';
 // FIX: Added missing ShareIcon to the icon imports list.
 import { BackIcon, SendIcon, MagicHatIcon, RabbitIcon, WandIcon, SaveIcon, ClockIcon, AIMagicianIcon, BookIcon, MicrophoneIcon, LightbulbIcon, ShieldIcon, ImageIcon, SearchIcon, CheckIcon, BookmarkIcon, NewspaperIcon, UsersIcon, CameraIcon, VideoIcon, ChecklistIcon, LockIcon, UsersCogIcon, ThumbUpIcon, ThumbDownIcon, StarIcon, ChatBubbleIcon, QuestionMarkIcon, StageCurtainsIcon, TutorIcon, ShareIcon, DownloadIcon } from './icons';
 import { useAppState, useAppDispatch, refreshShows, refreshIdeas, refreshClients, refreshFeedback } from '../store';
@@ -62,6 +62,7 @@ import AppSuggestionModal from './AppSuggestionModal';
 import BillingSettings from './BillingSettings';
 import { fetchUsageStatus, type UsageStatus } from '../services/usageStatusService';
 import { consume, getUsage } from '../services/usageTracker';
+import { getPromptAccess, getToolAccess } from '../services/entitlements';
 
 interface AngleRiskFormProps {
     trickName: string;
@@ -410,15 +411,8 @@ const PromptGrid: React.FC<{
   );
 
   const isLockedFor = (title: string) => {
-    const isAmateurFeature = AMATEUR_FEATURES.includes(title);
-    const isSemiProFeature = SEMI_PRO_FEATURES.includes(title);
-    const isProfessionalFeature = PROFESSIONAL_FEATURES.includes(title);
-
-    return (
-      (isAmateurFeature && !hasAmateurAccess) ||
-      (isSemiProFeature && !hasSemiProAccess) ||
-      (isProfessionalFeature && !hasProfessionalAccess)
-    );
+    const access = getPromptAccess(user, title);
+    return access.state === 'locked';
   };
 
   // Standardized action labels (aligns with "Generate / Start / Open / View" language).
@@ -2903,10 +2897,10 @@ useEffect(() => {
   const daysRemaining = getMembershipDaysRemaining(user);
   const tierLabel = formatTierLabel(tier);
 
-  // Access mapping
-  const hasAmateurAccess = (['trial', 'amateur', 'professional', 'admin'].includes(tier) && !isExpired) as boolean;
-  const hasSemiProAccess = ((tier === 'professional' || tier === 'admin') && !isExpired) as boolean; // business tier (CRM/marketing/contracts/finance)
-  const hasProfessionalAccess = ((tier === 'professional' || tier === 'admin' || user.isAdmin) && !isExpired) as boolean;
+  // Access mapping (canonical client source of truth: services/entitlements.ts)
+  const hasAmateurAccess = getToolAccess(user, 'ShowPlanner').state !== 'locked';
+  const hasSemiProAccess = getToolAccess(user, 'CRM').state !== 'locked';
+  const hasProfessionalAccess = getToolAccess(user, 'LiveRehearsal').state !== 'locked';
 
   // Usage & Limits card snapshot
   const [usageSnapshot, setUsageSnapshot] = useState<any>(null);
@@ -3545,13 +3539,8 @@ useEffect(() => {
     }
     resetInlineForms();
     
-    const isAmateurFeature = AMATEUR_FEATURES.includes(prompt.title);
-    const isSemiProFeature = SEMI_PRO_FEATURES.includes(prompt.title);
-    const isProfessionalFeature = PROFESSIONAL_FEATURES.includes(prompt.title);
-
-    if ((isAmateurFeature && !hasAmateurAccess) || 
-        (isSemiProFeature && !hasSemiProAccess) ||
-        (isProfessionalFeature && !hasProfessionalAccess)) {
+    const promptAccess = getPromptAccess(user, prompt.title);
+    if (promptAccess.state === 'locked') {
         setIsUpgradeModalOpen(true);
         return;
     }

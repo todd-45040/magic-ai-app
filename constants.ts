@@ -327,29 +327,19 @@ export const PERSONAS: Persona[] = [
     },
 ];
 
+// Display-only marketing lists. Actual access decisions must come from services/entitlements.ts.
 export const AMATEUR_FEATURES = [
-    'Unlimited saved ideas & drafts',
-    'Unlimited live rehearsal coaching',
-    'Video Rehearsal Studio',
     'Effect Generator',
     'Patter Engine',
-    'Innovation Engine',
-    'Visual Brainstorm Studio',
-    'Illusion Blueprint Generator',
-    'Director Mode',
-    'Persona Simulator',
-    "Assistant's Studio",
-    'Angle & Risk Analysis',
+    'Identify a Trick',
     'Show Planner',
-    'Magic Dictionary',
-    'Magic Theory Tutor',
-    'Mentalism Assistant',
-    'Gospel Magic Assistant',
-    'Magic Archives',
+    'My Saved Ideas',
     'Global Search',
+    'Magic Wire',
+    'Publications',
+    'Community',
 ];
 
-// Define missing SEMI_PRO_FEATURES
 export const SEMI_PRO_FEATURES = [
     'Client Management (CRM)',
     'Contracts + performance riders',
@@ -360,13 +350,23 @@ export const SEMI_PRO_FEATURES = [
 ];
 
 export const PROFESSIONAL_FEATURES = [
+    'Live Patter Rehearsal',
+    'Video Rehearsal Studio',
+    'Visual Brainstorm Studio',
+    'Illusion Blueprint Generator',
+    'Director Mode',
+    'Persona Simulator',
+    "Assistant's Studio",
+    'Prop Checklist Generator',
+    'Show Feedback',
     'Client Management (CRM)',
     'Contracts + performance riders',
     'Marketing Campaign Generator',
     'Show Finance Tracker',
-    'Audience feedback collection',
-    'Performance analytics timeline',
-    'Advanced analytics dashboard',
+    'Mentalism Assistant',
+    'Gospel Magic Assistant',
+    'Magic Dictionary',
+    'Magic Theory Tutor',
     'Priority feature access',
     'Founding Member perks (where available)',
 ];

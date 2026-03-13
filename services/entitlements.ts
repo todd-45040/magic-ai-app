@@ -131,6 +131,54 @@ const TOOL_POLICIES: Record<ToolName, ToolPolicy> = {
   IllusionBlueprint: { minTier: 'professional', usageResource: 'image_generations', upgradeLabel: 'Professional' },
 };
 
+
+
+export const PROMPT_TITLE_TO_TOOL: Partial<Record<string, ToolName>> = {
+  'Effect Generator': 'EffectGenerator',
+  'Patter Engine': 'PatterEngine',
+  'Live Patter Rehearsal': 'LiveRehearsal',
+  'Video Rehearsal Studio': 'VideoAnalysis',
+  'Director Mode': 'DirectorMode',
+  'Illusion Blueprint Generator': 'IllusionBlueprint',
+  'Persona Simulator': 'PersonaSimulator',
+  'Visual Brainstorm Studio': 'VisualBrainstorm',
+  'Prop Checklist Generator': 'PropChecklists',
+  'Marketing Campaign': 'MarketingGenerator',
+  'Contract Generator': 'Contracts',
+  "Assistant's Studio": 'AssistantStudio',
+  'Client Management': 'CRM',
+  'Global Search': 'Search',
+  'My Saved Ideas': 'SavedIdeas',
+  'Gospel Magic Assistant': 'GospelMagic',
+  'Mentalism Assistant': 'MentalismAssistant',
+  'Show Planner': 'ShowPlanner',
+  'Show Feedback': 'ShowFeedback',
+  'Magic Archives': 'Publications',
+  'Magic Dictionary': 'Publications',
+  'Innovation Engine': 'EffectGenerator',
+};
+
+export function getToolNameForPromptTitle(title: string): ToolName | null {
+  return PROMPT_TITLE_TO_TOOL[title] ?? null;
+}
+
+export function getPromptAccess(user: User | null | undefined, title: string) {
+  const toolName = getToolNameForPromptTitle(title);
+  if (!toolName) {
+    return {
+      toolName: null,
+      state: 'unlocked' as AccessState,
+      upgradeLabel: null as 'Amateur' | 'Professional' | null,
+      tier: getEffectiveEntitlementTier(user),
+    };
+  }
+
+  return {
+    toolName,
+    ...getToolAccess(user, toolName),
+  };
+}
+
 function tierRank(tier: CanonicalTier): number {
   switch (tier) {
     case 'expired':
