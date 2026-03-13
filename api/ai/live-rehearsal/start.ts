@@ -8,18 +8,19 @@ export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     return jsonError(res, 405, { ok: false, error_code: 'METHOD_NOT_ALLOWED', message: 'Method not allowed', retryable: false });
   }
+
   const auth = await requireSupabaseAuth(req);
   if (!auth.ok) {
     return jsonError(res, auth.status, { ok: false, error_code: 'AI_AUTH_REQUIRED', message: 'Please sign in to start Live Rehearsal.', retryable: false });
   }
-  const userId = auth.userId;
+  const safeUserId: string = auth.userId;
 
   const status: any = await getAiUsageStatus(req);
   if (!status?.ok) {
     return jsonError(res, 503, { ok: false, error_code: 'AI_PROVIDER_UNAVAILABLE', message: 'Usage status unavailable. Please try again in a moment.', retryable: true });
   }
 
-  const burst = enforceBurstProtection(userId, status.membership, 'live_rehearsal_audio');
+  const burst = enforceBurstProtection(safeUserId, status.membership, 'live_rehearsal_audio');
   if (!burst.ok) {
     try { res.setHeader('Retry-After', String(burst.retryAfterSeconds)); } catch {}
     return jsonError(res, 429, { ok: false, error_code: 'AI_LIMIT_REACHED', message: 'Too many Live Rehearsal session starts. Please wait before trying again.', retryable: true });
@@ -28,10 +29,10 @@ export default async function handler(req: any, res: any) {
   const daily = status?.quota?.live_audio_minutes?.daily;
   const monthlyRemaining = Number(status?.quota?.live_audio_minutes?.remaining ?? 0);
   if (Number(daily?.remaining ?? 0) <= 0 || monthlyRemaining <= 0) {
-    return jsonError(res, 429, { ok: false, error_code: 'AI_LIMIT_REACHED', message: 'Your Live Rehearsal limit has been reached for this plan period.', retryable: true, ...(isPreviewEnv()?{details:{daily, monthlyRemaining}}:{}) });
+    return jsonError(res, 429, { ok: false, error_code: 'AI_LIMIT_REACHED', message: 'Your Live Rehearsal limit has been reached for this plan period.', retryable: true, ...(isPreviewEnv() ? { details: { daily, monthlyRemaining } } : {}) });
   }
 
-  const started = startLiveSession(userId, status.membership);
+  const started = startLiveSession(safeUserId, status.membership);
   if (!started.ok) {
     return jsonError(res, started.status || 429, { ok: false, error_code: started.error_code, message: started.message, retryable: started.status === 429 });
   }

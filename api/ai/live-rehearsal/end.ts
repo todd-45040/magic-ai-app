@@ -6,15 +6,20 @@ export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     return jsonError(res, 405, { ok: false, error_code: 'METHOD_NOT_ALLOWED', message: 'Method not allowed', retryable: false });
   }
+
   const auth = await requireSupabaseAuth(req);
   if (!auth.ok) {
     return jsonError(res, auth.status, { ok: false, error_code: 'AI_AUTH_REQUIRED', message: 'Please sign in to end Live Rehearsal.', retryable: false });
   }
+  const safeUserId: string = auth.userId;
 
-  const userId = auth.userId;
-  const rawSessionId = String(req.body?.sessionId || '').trim();
-  const sessionId = rawSessionId.length > 0 ? rawSessionId : undefined;
-  const result = endLiveSession(userId, sessionId);
-  if (!result.ok) return jsonError(res, result.status || 400, { ok: false, error_code: result.error_code, message: result.message, retryable: false });
+  const sessionIdRaw = String(req.body?.sessionId || '').trim();
+  const safeSessionId: string | undefined = sessionIdRaw || undefined;
+
+  const result = endLiveSession(safeUserId, safeSessionId);
+  if (!result.ok) {
+    return jsonError(res, result.status || 400, { ok: false, error_code: result.error_code, message: result.message, retryable: false });
+  }
+
   return res.status(200).json({ ok: true });
 }
