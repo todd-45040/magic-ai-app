@@ -63,6 +63,7 @@ import BillingSettings from './BillingSettings';
 import { fetchUsageStatus, type UsageStatus } from '../services/usageStatusService';
 import { consume, getUsage } from '../services/usageTracker';
 import { getPromptAccess, getToolAccess } from '../services/entitlements';
+import type { ToolName } from '../services/entitlements';
 
 interface AngleRiskFormProps {
     trickName: string;
@@ -4024,39 +4025,49 @@ useEffect(() => {
       setIsUpgradeModalOpen(true);
       return;
     }
-    // Centralized permission gating (Free vs Pro) for navigation shortcuts.
-    // Note: detailed tier gating for tool *cards* happens in handlePromptClick.
-    const amateurViews = new Set<MagicianView>([
-      'show-planner',
-      'effect-generator',
-      'saved-ideas',
-      'magic-archives',
-      'global-search',
-      'show-feedback',
-    ]);
 
-    const professionalViews = new Set<MagicianView>([
-      'live-rehearsal',
-      'video-rehearsal',
-      'visual-brainstorm',
-      'director-mode',
-      'persona-simulator',
-      'assistant-studio',
-      'client-management',
-      'illusion-blueprint',
+    const viewAccessToolMap: Partial<Record<MagicianView, ToolName>> = {
+      'effect-generator': 'EffectGenerator',
+      'identify': 'IdentifyTrick',
+      'patter-engine': 'PatterEngine',
+      'magic-wire': 'MagicWire',
+      'publications': 'Publications',
+      'community': 'Community',
+      'show-planner': 'ShowPlanner',
+      'saved-ideas': 'SavedIdeas',
+      'global-search': 'Search',
+      'live-rehearsal': 'LiveRehearsal',
+      'video-rehearsal': 'VideoAnalysis',
+      'visual-brainstorm': 'VisualBrainstorm',
+      'director-mode': 'DirectorMode',
+      'persona-simulator': 'PersonaSimulator',
+      'assistant-studio': 'AssistantStudio',
+      'client-management': 'CRM',
+      'contract-generator': 'Contracts',
+      'marketing-campaign': 'MarketingGenerator',
+      'prop-checklists': 'PropChecklists',
+      'show-feedback': 'ShowFeedback',
+      'illusion-blueprint': 'IllusionBlueprint',
+      'mentalism-assistant': 'MentalismAssistant',
+      'gospel-magic-assistant': 'GospelMagic',
+    };
+
+    const gatedTool = viewAccessToolMap[view];
+    if (gatedTool) {
+      const access = getToolAccess(user, gatedTool);
+      if (access.state === 'locked') {
+        setIsUpgradeModalOpen(true);
+        return;
+      }
+    }
+
+    const professionalFallbackViews = new Set<MagicianView>([
       'magic-theory-tutor',
-      'mentalism-assistant',
-      'gospel-magic-assistant',
       'magic-dictionary',
       'performance-analytics',
     ]);
 
-    if (amateurViews.has(view) && !hasAmateurAccess) {
-      setIsUpgradeModalOpen(true);
-      return;
-    }
-
-    if (professionalViews.has(view) && !hasProfessionalAccess) {
+    if (professionalFallbackViews.has(view) && !hasProfessionalAccess) {
       setIsUpgradeModalOpen(true);
       return;
     }
