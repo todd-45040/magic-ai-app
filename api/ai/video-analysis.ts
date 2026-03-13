@@ -9,12 +9,15 @@ export default async function handler(req: any, res: any) {
     return jsonError(res, 405, { ok: false, error_code: 'METHOD_NOT_ALLOWED', message: 'Method not allowed', retryable: false });
   }
   const auth = await requireSupabaseAuth(req);
-  if (!auth.ok) return jsonError(res, auth.status, { ok: false, error_code: 'AI_AUTH_REQUIRED', message: 'Please sign in to use Video Analysis.', retryable: false });
+  if (!auth.ok) {
+    return jsonError(res, auth.status, { ok: false, error_code: 'AI_AUTH_REQUIRED', message: 'Please sign in to use Video Analysis.', retryable: false });
+  }
+  const userId = auth.userId;
 
   const status: any = await getAiUsageStatus(req);
   if (!status?.ok) return jsonError(res, 503, { ok: false, error_code: 'AI_PROVIDER_UNAVAILABLE', message: 'Usage status unavailable. Please try again in a moment.', retryable: true });
 
-  const burst = enforceBurstProtection(auth.userId, status.membership, 'video_analysis');
+  const burst = enforceBurstProtection(userId, status.membership, 'video_analysis');
   if (!burst.ok) {
     try { res.setHeader('Retry-After', String(burst.retryAfterSeconds)); } catch {}
     return jsonError(res, 429, { ok: false, error_code: 'AI_LIMIT_REACHED', message: 'Too many Video Analysis requests. Please wait before trying again.', retryable: true });
@@ -29,7 +32,7 @@ export default async function handler(req: any, res: any) {
     return jsonError(res, validation.status || 400, { ok: false, error_code: validation.error_code, message: validation.message, retryable: validation.status === 429, ...(isPreviewEnv()?{details:{mimeType,fileSizeBytes,durationSeconds, clipsUsedThisMonth}}:{}) });
   }
 
-  const queue = acquireVideoQueue(auth.userId);
+  const queue = acquireVideoQueue(userId);
   if (!queue.ok) return jsonError(res, queue.status || 409, { ok: false, error_code: queue.error_code, message: queue.message, retryable: true });
 
   try {
@@ -40,6 +43,6 @@ export default async function handler(req: any, res: any) {
 
     return res.status(202).json({ ok: true, data: { status: 'queued', message: 'Video Analysis request accepted and queued.', limits: { monthlyLimit: validation.monthlyLimit, maxClipDurationSeconds: 180, maxFileBytes: 50 * 1024 * 1024 } } });
   } finally {
-    releaseVideoQueue(auth.userId);
+    releaseVideoQueue(userId);
   }
 }

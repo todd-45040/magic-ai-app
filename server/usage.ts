@@ -462,6 +462,7 @@ export async function getAiUsageStatus(req: any): Promise<{
       daily?: { used: number; limit: number; remaining: number };
     };
     resetAt: string | null;
+    nextResetAt?: string | null;
   };
   // Back-compat aliases for older endpoints/UI
   liveUsed?: number;

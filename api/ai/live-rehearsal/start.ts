@@ -12,13 +12,14 @@ export default async function handler(req: any, res: any) {
   if (!auth.ok) {
     return jsonError(res, auth.status, { ok: false, error_code: 'AI_AUTH_REQUIRED', message: 'Please sign in to start Live Rehearsal.', retryable: false });
   }
+  const userId = auth.userId;
 
   const status: any = await getAiUsageStatus(req);
   if (!status?.ok) {
     return jsonError(res, 503, { ok: false, error_code: 'AI_PROVIDER_UNAVAILABLE', message: 'Usage status unavailable. Please try again in a moment.', retryable: true });
   }
 
-  const burst = enforceBurstProtection(auth.userId, status.membership, 'live_rehearsal_audio');
+  const burst = enforceBurstProtection(userId, status.membership, 'live_rehearsal_audio');
   if (!burst.ok) {
     try { res.setHeader('Retry-After', String(burst.retryAfterSeconds)); } catch {}
     return jsonError(res, 429, { ok: false, error_code: 'AI_LIMIT_REACHED', message: 'Too many Live Rehearsal session starts. Please wait before trying again.', retryable: true });
@@ -30,7 +31,7 @@ export default async function handler(req: any, res: any) {
     return jsonError(res, 429, { ok: false, error_code: 'AI_LIMIT_REACHED', message: 'Your Live Rehearsal limit has been reached for this plan period.', retryable: true, ...(isPreviewEnv()?{details:{daily, monthlyRemaining}}:{}) });
   }
 
-  const started = startLiveSession(auth.userId, status.membership);
+  const started = startLiveSession(userId, status.membership);
   if (!started.ok) {
     return jsonError(res, started.status || 429, { ok: false, error_code: started.error_code, message: started.message, retryable: started.status === 429 });
   }

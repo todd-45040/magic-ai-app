@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import type { BillingPlanKey } from '../../services/planCatalog.js';
 import { resolvePlanKeyFromStripeRefs, resolveBillingPlan } from './planMapping.js';
 import { getOptionalEnv, getStripeWebhookSecrets, sanitizeStripeLogValue } from './stripeConfig.js';
+import { deriveFounderProtection } from './founderProtection.js';
 
 export type WebhookVerificationResult =
   | { ok: true; secretIndex: number }
