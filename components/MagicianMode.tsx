@@ -4046,11 +4046,11 @@ useEffect(() => {
   };
 
   const handleTabClick = (tab: MagicianTab) => {
-    if (tab === 'show-planner' && !hasAmateurAccess) {
+    if (tab === 'show-planner' && isAccessLocked('show-planner')) {
         setIsUpgradeModalOpen(true);
         return;
     }
-     if (tab === 'magic-dictionary' && !hasProfessionalAccess) {
+     if (tab === 'magic-dictionary' && isAccessLocked('magic-dictionary')) {
         setIsUpgradeModalOpen(true);
         return;
     }
@@ -4068,44 +4068,52 @@ useEffect(() => {
     demoGuardSetActiveView(tab);
   };
   
+  const viewAccessToolMap: Partial<Record<MagicianView, import('../services/entitlements').ToolName>> = {
+    'effect-generator': 'EffectGenerator',
+    'identify': 'IdentifyTrick',
+    'show-planner': 'ShowPlanner',
+    'saved-ideas': 'SavedIdeas',
+    'global-search': 'Search',
+    'magic-archives': 'MagicArchives',
+    'show-feedback': 'ShowFeedback',
+    'live-rehearsal': 'LiveRehearsal',
+    'video-rehearsal': 'VideoAnalysis',
+    'visual-brainstorm': 'VisualBrainstorm',
+    'director-mode': 'DirectorMode',
+    'persona-simulator': 'PersonaSimulator',
+    'assistant-studio': 'AssistantStudio',
+    'client-management': 'CRM',
+    'contract-generator': 'Contracts',
+    'marketing-campaign': 'MarketingGenerator',
+    'prop-checklists': 'PropChecklists',
+    'illusion-blueprint': 'IllusionBlueprint',
+    'magic-theory-tutor': 'MagicTheoryTutor',
+    'mentalism-assistant': 'MentalismAssistant',
+    'gospel-magic-assistant': 'GospelMagic',
+    'magic-dictionary': 'MagicDictionary',
+    'performance-analytics': 'ShowFeedback',
+    'angle-risk': 'AngleRiskAnalysis',
+    'patter-engine': 'PatterEngine',
+    'magic-wire': 'MagicWire',
+    'publications': 'Publications',
+    'community': 'Community',
+  };
+
+  const getViewAccess = (view: MagicianView) => {
+    const toolName = viewAccessToolMap[view];
+    return toolName ? getToolAccess(user, toolName) : null;
+  };
+
+  const isAccessLocked = (view: MagicianView) => getViewAccess(view)?.state === 'locked';
+
   const handleNavigate = (view: MagicianView) => {
     if (isExpired) {
       setIsUpgradeModalOpen(true);
       return;
     }
-    // Centralized permission gating (Free vs Pro) for navigation shortcuts.
-    // Note: detailed tier gating for tool *cards* happens in handlePromptClick.
-    const amateurViews = new Set<MagicianView>([
-      'show-planner',
-      'effect-generator',
-      'saved-ideas',
-      'magic-archives',
-      'global-search',
-      'show-feedback',
-    ]);
 
-    const professionalViews = new Set<MagicianView>([
-      'live-rehearsal',
-      'video-rehearsal',
-      'visual-brainstorm',
-      'director-mode',
-      'persona-simulator',
-      'assistant-studio',
-      'client-management',
-      'illusion-blueprint',
-      'magic-theory-tutor',
-      'mentalism-assistant',
-      'gospel-magic-assistant',
-      'magic-dictionary',
-      'performance-analytics',
-    ]);
-
-    if (amateurViews.has(view) && !hasAmateurAccess) {
-      setIsUpgradeModalOpen(true);
-      return;
-    }
-
-    if (professionalViews.has(view) && !hasProfessionalAccess) {
+    const access = getViewAccess(view);
+    if (access?.state === 'locked') {
       setIsUpgradeModalOpen(true);
       return;
     }
@@ -4148,7 +4156,7 @@ useEffect(() => {
     } else if (view === 'saved-ideas') {
         setInitialIdeaId(primaryId);
     }
-    setActiveView(view);
+    handleNavigate(view);
   };
 
   const handleAiSpark = (action: AiSparkAction) => {
@@ -4191,7 +4199,7 @@ ${action.payload.content}`;
       setInitialTaskId(null);
       setInitialIdeaId(null);
 
-      setActiveView(view);
+      handleNavigate(view);
 
       // Support deep-link navigation payloads (used by Effect Engine -> Show Planner imports)
       try {
@@ -4227,7 +4235,7 @@ ${action.payload.content}`;
 
   const handleNavigateToAnalytics = (performanceId: string) => {
     setViewingPerformanceId(performanceId);
-    setActiveView('performance-analytics');
+    handleNavigate('performance-analytics');
   };
 
   const handleUpgrade = (tier: 'amateur' | 'professional') => {
@@ -4637,13 +4645,13 @@ const renderIntentSubnav = () => {
         <div className="flex flex-wrap items-center gap-2 px-2 md:px-4 py-2 border-b border-slate-800/70">
           {subBtn('Effect Generator', () => handleNavigate('effect-generator'), activeTab === 'effect-generator')}
           {subBtn('Identify Trick', () => handleNavigate('identify'), activeTab === 'identify')}
-          {subBtn('Visual Brainstorm', () => handleNavigate('visual-brainstorm'), activeView === 'visual-brainstorm', !hasProfessionalAccess)}
-          {subBtn('Director Mode', () => handleNavigate('director-mode'), activeView === 'director-mode', !hasProfessionalAccess)}
+          {subBtn('Visual Brainstorm', () => handleNavigate('visual-brainstorm'), activeView === 'visual-brainstorm', isAccessLocked('visual-brainstorm'))}
+          {subBtn('Director Mode', () => handleNavigate('director-mode'), activeView === 'director-mode', isAccessLocked('director-mode'))}
           {subBtn('Patter Engine', () => handleNavigate('patter-engine'), activeView === 'patter-engine')}
-          {subBtn('Illusion Blueprint', () => handleNavigate('illusion-blueprint'), activeView === 'illusion-blueprint', !hasProfessionalAccess)}
-          {subBtn('Gospel Magic', () => handleNavigate('gospel-magic-assistant'), activeView === 'gospel-magic-assistant', !hasProfessionalAccess)}
-          {subBtn('Mentalism', () => handleNavigate('mentalism-assistant'), activeView === 'mentalism-assistant', !hasProfessionalAccess)}
-          {subBtn("Assistant's Studio", () => handleNavigate('assistant-studio'), activeView === 'assistant-studio', !hasProfessionalAccess)}
+          {subBtn('Illusion Blueprint', () => handleNavigate('illusion-blueprint'), activeView === 'illusion-blueprint', isAccessLocked('illusion-blueprint'))}
+          {subBtn('Gospel Magic', () => handleNavigate('gospel-magic-assistant'), activeView === 'gospel-magic-assistant', isAccessLocked('gospel-magic-assistant'))}
+          {subBtn('Mentalism', () => handleNavigate('mentalism-assistant'), activeView === 'mentalism-assistant', isAccessLocked('mentalism-assistant'))}
+          {subBtn("Assistant's Studio", () => handleNavigate('assistant-studio'), activeView === 'assistant-studio', isAccessLocked('assistant-studio'))}
         </div>
       );
     }
@@ -4652,9 +4660,9 @@ const renderIntentSubnav = () => {
       return (
         <div className="flex flex-wrap items-center gap-2 px-2 md:px-4 py-2 border-b border-slate-800/70">
           {subBtn('Angle & Risk', () => handleNavigate('angle-risk'), activeView === 'angle-risk')}
-          {subBtn('Live Rehearsal', () => handleNavigate('live-rehearsal'), activeView === 'live-rehearsal', !hasProfessionalAccess)}
-          {subBtn('Video Rehearsal', () => handleNavigate('video-rehearsal'), activeView === 'video-rehearsal', !hasProfessionalAccess)}
-          {subBtn('Persona Simulator', () => handleNavigate('persona-simulator'), activeView === 'persona-simulator', !hasProfessionalAccess)}
+          {subBtn('Live Rehearsal', () => handleNavigate('live-rehearsal'), activeView === 'live-rehearsal', isAccessLocked('live-rehearsal'))}
+          {subBtn('Video Rehearsal', () => handleNavigate('video-rehearsal'), activeView === 'video-rehearsal', isAccessLocked('video-rehearsal'))}
+          {subBtn('Persona Simulator', () => handleNavigate('persona-simulator'), activeView === 'persona-simulator', isAccessLocked('persona-simulator'))}
         </div>
       );
     }
@@ -4672,14 +4680,14 @@ const renderIntentSubnav = () => {
     // manage
     return (
       <div className="flex flex-wrap items-center gap-2 px-2 md:px-4 py-2 border-b border-slate-800/70">
-        {subBtn('Show Planner', () => handleNavigate('show-planner'), activeTab === 'show-planner', !hasAmateurAccess)}
-        {subBtn('Saved Ideas', () => handleNavigate('saved-ideas'), activeView === 'saved-ideas', !hasAmateurAccess)}
-        {subBtn('Show Feedback', () => handleNavigate('show-feedback'), activeView === 'show-feedback', !hasProfessionalAccess)}
-        {subBtn('Clients', () => handleNavigate('client-management'), activeView === 'client-management', !hasProfessionalAccess)}
-        {subBtn('Contracts', () => handleNavigate('contract-generator'), activeView === 'contract-generator', !hasProfessionalAccess)}
-        {subBtn('Prop Checklist', () => handleNavigate('prop-checklists'), activeView === 'prop-checklists', !hasProfessionalAccess)}
-        {subBtn('Marketing', () => handleNavigate('marketing-campaign'), activeView === 'marketing-campaign', !hasProfessionalAccess)}
-        {subBtn('Search', () => handleNavigate('global-search'), activeView === 'global-search', !hasAmateurAccess)}
+        {subBtn('Show Planner', () => handleNavigate('show-planner'), activeTab === 'show-planner', isAccessLocked('show-planner'))}
+        {subBtn('Saved Ideas', () => handleNavigate('saved-ideas'), activeView === 'saved-ideas', isAccessLocked('saved-ideas'))}
+        {subBtn('Show Feedback', () => handleNavigate('show-feedback'), activeView === 'show-feedback', isAccessLocked('show-feedback'))}
+        {subBtn('Clients', () => handleNavigate('client-management'), activeView === 'client-management', isAccessLocked('client-management'))}
+        {subBtn('Contracts', () => handleNavigate('contract-generator'), activeView === 'contract-generator', isAccessLocked('contract-generator'))}
+        {subBtn('Prop Checklist', () => handleNavigate('prop-checklists'), activeView === 'prop-checklists', isAccessLocked('prop-checklists'))}
+        {subBtn('Marketing', () => handleNavigate('marketing-campaign'), activeView === 'marketing-campaign', isAccessLocked('marketing-campaign'))}
+        {subBtn('Search', () => handleNavigate('global-search'), activeView === 'global-search', isAccessLocked('global-search'))}
       </div>
     );
   };
