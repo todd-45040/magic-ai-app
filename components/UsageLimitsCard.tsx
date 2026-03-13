@@ -64,73 +64,61 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
 
     const isProOnly = Boolean(opts?.proOnly);
     const locked = isProOnly && plan !== 'professional';
-    const secondaryTextClasses = 'text-[12px] text-slate-400';
+    const isUnlimited = key === 'video_uploads' && !locked && ((typeof limit === 'number' && limit >= 9999) || (typeof remaining === 'number' && remaining >= 9999));
+    const isNotTrackedYet = key === 'identify';
 
-    const rightDisplay = (() => {
-      if (locked) return '🔒 Professional';
+    const display = (() => {
+      if (locked) return '🔒 Pro';
+      if (isUnlimited) return 'Unlimited';
+      if (isNotTrackedYet) return 'Not tracked yet';
+      if (daily && typeof daily?.used === 'number' && typeof daily?.limit === 'number') {
+        return `${daily.used} / ${daily.limit}${opts?.unit ? ` ${opts.unit}` : ''}`;
+      }
       if (typeof remaining === 'number' && typeof limit === 'number') return `${remaining} / ${limit}${opts?.unit ? ` ${opts.unit}` : ''}`;
       if (typeof remaining === 'number') return `${remaining}${opts?.unit ? ` ${opts.unit}` : ''}`;
-      return 'Not tracked yet';
+      return '—';
     })();
 
-    const exhausted = !locked && typeof remaining === 'number' && remaining <= 0;
-    const progressLimit = typeof daily?.limit === 'number' && daily.limit > 0
-      ? daily.limit
-      : (typeof limit === 'number' && limit > 0 ? limit : 0);
-    const progressRemaining = typeof daily?.remaining === 'number'
-      ? daily.remaining
-      : (typeof remaining === 'number' ? remaining : null);
-    const usedAmount = progressLimit > 0 && typeof progressRemaining === 'number'
-      ? Math.max(0, Math.min(progressLimit, progressLimit - progressRemaining))
-      : 0;
-    const progressPct = progressLimit > 0 ? Math.min(100, Math.max(0, (usedAmount / progressLimit) * 100)) : 0;
-    const showProgressBar = ['live_audio_minutes', 'image_gen'].includes(key) && progressLimit > 0 && !locked;
-
-    let secondaryLine: React.ReactNode = null;
-    if (daily && typeof daily?.limit === 'number' && daily.limit > 0) {
-      secondaryLine = (
-        <div className={secondaryTextClasses}>
-          Daily: <span className="tabular-nums text-slate-300">{daily.remaining}</span> / <span className="tabular-nums">{daily.limit}</span>{opts?.unit ? ` ${opts.unit}` : ''}
-        </div>
-      );
-    } else if (locked) {
-      secondaryLine = <div className={secondaryTextClasses}>Available on Professional</div>;
-    } else if (key === 'video_uploads') {
-      secondaryLine = <div className={secondaryTextClasses}>Unlimited</div>;
-    } else {
-      secondaryLine = <div className="text-[12px] text-slate-400/70">Usage tracking coming soon</div>;
-    }
+    const exhausted = !locked && !isUnlimited && !isNotTrackedYet && typeof remaining === 'number' && remaining <= 0;
+    const progressPct = daily && typeof daily?.limit === 'number' && daily.limit > 0 && typeof daily?.used === 'number'
+      ? Math.min(100, Math.max(0, (daily.used / daily.limit) * 100))
+      : null;
 
     return (
-      <div className="flex items-start justify-between gap-3 py-3">
-        <div className="flex flex-col gap-1 min-w-0 flex-1">
+      <div className="flex items-start justify-between gap-3 py-2.5">
+        <div className="flex flex-col gap-1.5 min-w-0 flex-1">
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-sm text-slate-200 truncate">{label}</span>
-            {exhausted && (
-              <span className="text-[11px] px-2 py-0.5 rounded-full border border-rose-400/25 bg-rose-500/10 text-rose-200">
-                0 remaining
-              </span>
-            )}
-            {locked && (
-              <span className="text-[11px] px-2 py-0.5 rounded-full border border-amber-400/20 bg-amber-500/10 text-amber-200">
-                Professional-only
-              </span>
-            )}
+          {exhausted && (
+            <span className="text-[11px] px-2 py-0.5 rounded-full border border-rose-400/25 bg-rose-500/10 text-rose-200">
+              0 remaining
+            </span>
+          )}
+          {locked && (
+            <span className="text-[11px] px-2 py-0.5 rounded-full border border-amber-400/20 bg-amber-500/10 text-amber-200">
+              Pro-only
+            </span>
+          )}
           </div>
 
-          {secondaryLine}
-
-          {showProgressBar && (
-            <div className="mt-1 h-1.5 max-w-xs rounded-full bg-black/20 overflow-hidden border border-white/5">
-              <div
-                className="h-full bg-white/20"
-                style={{ width: `${progressPct}%` }}
-                aria-label={`${label} usage progress`}
-              />
-            </div>
-          )}
+          {isUnlimited ? (
+            <div className="text-[12px] text-slate-400">Unlimited</div>
+          ) : isNotTrackedYet ? (
+            <div className="text-[12px] text-slate-400/70">Usage tracking coming soon</div>
+          ) : daily && typeof daily?.limit === 'number' && daily.limit > 0 ? (
+            <>
+              <div className="text-[12px] text-slate-400">
+                Daily: <span className="tabular-nums text-slate-300">{daily.used}</span> / <span className="tabular-nums">{daily.limit}</span>{opts?.unit ? ` ${opts.unit}` : ''}
+              </div>
+              {(key === 'live_audio_minutes' || key === 'image_gen') && progressPct !== null && (
+                <div className="h-1.5 max-w-[400px] rounded-full bg-black/20 overflow-hidden border border-white/5">
+                  <div className="h-full bg-white/20" style={{ width: `${progressPct}%` }} aria-hidden="true" />
+                </div>
+              )}
+            </>
+          ) : null}
         </div>
-        <div className="text-sm font-semibold text-slate-100 tabular-nums text-right">{rightDisplay}</div>
+        <div className={`text-[15px] font-semibold tabular-nums ${isNotTrackedYet ? 'text-slate-50/95' : 'text-slate-50'}`}>{display}</div>
       </div>
     );
   };
@@ -209,8 +197,8 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-xs font-semibold text-slate-300">Tool usage</div>
                   <div className="text-[11px] text-slate-300/70 text-right">
-                    {(resetHourLocal != null && resetTz) ? `Daily AI resets at ${resetHourLocal}:00 (${resetTz})` : 'Daily usage resets each day'}
-                    <span className="block">Usage limits may reset daily or monthly depending on the tool.</span>
+                    {(resetHourLocal != null && resetTz) ? `Daily AI resets at ${resetHourLocal}:00 (${resetTz})` : 'Daily AI resets each day'}
+                    {monthlyResetAt ? <span className="block">Monthly limits reset {new Date(monthlyResetAt).toLocaleDateString()}</span> : null}
                   </div>
                 </div>
 
