@@ -34,7 +34,6 @@ import UsageLimitsCard from './UsageLimitsCard';
 import BlockedPanel from './BlockedPanel';
 import { normalizeBlockedUx, type BlockedUx } from '../services/blockedUx';
 import { normalizeTier, getMembershipDaysRemaining, formatTierLabel } from '../services/membershipService';
-import { getUsage } from '../services/usageTracker';
 import UpgradeModal from './UpgradeModal';
 import MemberManagement from './MemberManagement';
 import ShowPlanner from './ShowPlanner';
@@ -61,6 +60,8 @@ import MagicDictionary from './MagicDictionary';
 import AdminPanel from './AdminPanel';
 import AppSuggestionModal from './AppSuggestionModal';
 import BillingSettings from './BillingSettings';
+import { fetchUsageStatus, type UsageStatus } from '../services/usageStatusService';
+import { getUsage } from '../services/usageTracker';
 
 interface AngleRiskFormProps {
     trickName: string;
@@ -2907,123 +2908,197 @@ useEffect(() => {
   const hasSemiProAccess = ((tier === 'professional' || tier === 'admin') && !isExpired) as boolean; // business tier (CRM/marketing/contracts/finance)
   const hasProfessionalAccess = ((tier === 'professional' || tier === 'admin' || user.isAdmin) && !isExpired) as boolean;
 
-  // Option 1: surface monthly tool quotas in the UI
+  // Usage & Limits card snapshot
   const [usageSnapshot, setUsageSnapshot] = useState<any>(null);
   const [usageSnapshotError, setUsageSnapshotError] = useState<string | null>(null);
-
-  const buildLocalUsageFallback = () => {
-    const normalizedTier = normalizeTier(user.membership as any);
-    const plan = normalizedTier === 'admin' ? 'professional' : normalizedTier;
-
-    const dailyAiLimit = plan === 'professional' ? 1000 : plan === 'amateur' ? 200 : 20;
-    const burstLimit = plan === 'professional' ? 120 : plan === 'amateur' ? 60 : 20;
-
-    const liveDaily = getUsage(user, 'live_minutes');
-    const videoDaily = getUsage(user, 'video_upload');
-
-    const monthlyLive = plan === 'professional' ? 300 : plan === 'amateur' ? 60 : 0;
-    const monthlyImage = plan === 'professional' ? 200 : plan === 'amateur' ? 40 : 5;
-    const monthlyIdentify = plan === 'professional' ? 100 : plan === 'amateur' ? 50 : 10;
-    const monthlyVideo = plan === 'professional' ? 50 : plan === 'amateur' ? 10 : 0;
-
-    const used = Math.max(0, Number(user.generationCount ?? 0));
-    const remaining = Math.max(0, dailyAiLimit - used);
-
-    return {
-      ok: true,
-      plan,
-      used,
-      limit: dailyAiLimit,
-      remaining,
-      burstLimit,
-      burstRemaining: Math.max(0, burstLimit),
-      quota: {
-        live_audio_minutes: {
-          remaining: null,
-          limit: monthlyLive,
-          daily: {
-            used: Number(liveDaily.used ?? 0),
-            limit: Number(liveDaily.limit ?? 0),
-            remaining: Number(liveDaily.remaining ?? 0),
-          },
-        },
-        image_gen: { remaining: null, limit: monthlyImage },
-        identify: { remaining: null, limit: monthlyIdentify },
-        video_uploads: {
-          remaining: null,
-          limit: monthlyVideo,
-          daily: {
-            used: Number(videoDaily.used ?? 0),
-            limit: Number(videoDaily.limit ?? 0),
-            remaining: Number(videoDaily.remaining ?? 0),
-          },
-        },
-        resetAt: null,
-        nextResetAt: null,
-      },
-      nearLimit: dailyAiLimit > 0 ? remaining <= Math.ceil(dailyAiLimit * 0.15) : false,
-      upgradeRecommended: plan === 'trial' ? remaining <= Math.ceil(dailyAiLimit * 0.15) : false,
-      warnings: [],
-      resetAt: null,
-      resetTz: null,
-      resetHourLocal: null,
-      fallbackLocal: true,
-    };
-  };
 
   useEffect(() => {
     let cancelled = false;
 
+    const normalizePlan = (membership?: string | null) => {
+      const tier = normalizeTier(membership || user?.membership || 'free');
+      if (tier === 'admin') return 'admin';
+      if (tier === 'professional') return 'professional';
+      if (tier === 'amateur') return 'amateur';
+      if (tier === 'expired') return 'expired';
+      return 'trial';
+    };
+
+    const getDailyAiLimitForPlan = (plan: string) => {
+      if (plan === 'admin') return 10000;
+      if (plan === 'professional') return 1000;
+      if (plan === 'amateur') return 200;
+      if (plan === 'expired') return 0;
+      return 20;
+    };
+
+    const getBurstLimitForPlan = (plan: string) => {
+      if (plan === 'admin') return 120;
+      if (plan === 'professional') return 120;
+      if (plan === 'amateur') return 60;
+      if (plan === 'expired') return 0;
+      return 20;
+    };
+
+    const getQuotaDefaultsForPlan = (plan: string) => {
+      if (plan === 'admin') {
+        return {
+          live_audio_minutes: { limit: 9999, remaining: 9999, dailyLimit: 9999 },
+          image_gen: { limit: 9999, remaining: 9999 },
+          identify: { limit: 9999, remaining: 9999 },
+          video_uploads: { limit: 9999, remaining: 9999, dailyLimit: 9999 },
+        };
+      }
+      if (plan === 'professional') {
+        return {
+          live_audio_minutes: { limit: 180, remaining: 180, dailyLimit: 180 },
+          image_gen: { limit: 100, remaining: 100 },
+          identify: { limit: 100, remaining: 100 },
+          video_uploads: { limit: 9999, remaining: 9999, dailyLimit: 6 },
+        };
+      }
+      if (plan === 'amateur') {
+        return {
+          live_audio_minutes: { limit: 60, remaining: 60, dailyLimit: 45 },
+          image_gen: { limit: 40, remaining: 40 },
+          identify: { limit: 50, remaining: 50 },
+          video_uploads: { limit: 10, remaining: 10, dailyLimit: 0 },
+        };
+      }
+      if (plan === 'expired') {
+        return {
+          live_audio_minutes: { limit: 0, remaining: 0, dailyLimit: 0 },
+          image_gen: { limit: 0, remaining: 0 },
+          identify: { limit: 0, remaining: 0 },
+          video_uploads: { limit: 0, remaining: 0, dailyLimit: 0 },
+        };
+      }
+      return {
+        live_audio_minutes: { limit: 10, remaining: 10, dailyLimit: 10 },
+        image_gen: { limit: 5, remaining: 5 },
+        identify: { limit: 10, remaining: 10 },
+        video_uploads: { limit: 0, remaining: 0, dailyLimit: 0 },
+      };
+    };
+
+    const buildUsageSnapshot = (serverStatus?: UsageStatus | null) => {
+      const plan = normalizePlan(serverStatus?.membership);
+      const dailyAiLimit = Number(serverStatus?.limit ?? getDailyAiLimitForPlan(plan));
+      const dailyAiUsed = Number(serverStatus?.used ?? user?.generationCount ?? 0);
+      const dailyAiRemaining = Number(serverStatus?.remaining ?? Math.max(0, dailyAiLimit - dailyAiUsed));
+      const burstLimit = Number(serverStatus?.burstLimit ?? getBurstLimitForPlan(plan));
+      const burstRemaining = Number(serverStatus?.burstRemaining ?? burstLimit);
+      const defaults = getQuotaDefaultsForPlan(plan);
+
+      const liveUsage = user ? getUsage(user, 'live_minutes') : { used: 0, limit: defaults.live_audio_minutes.dailyLimit, remaining: defaults.live_audio_minutes.dailyLimit };
+      const imageUsage = user ? getUsage(user, 'image') : { used: 0, limit: defaults.image_gen.limit, remaining: defaults.image_gen.limit };
+      const videoUsage = user ? getUsage(user, 'video_upload') : { used: 0, limit: defaults.video_uploads.dailyLimit, remaining: defaults.video_uploads.dailyLimit };
+
+      const serverQuota = serverStatus?.quota ?? {};
+      const liveQuota = serverQuota.live_audio_minutes ?? {};
+      const imageQuota = serverQuota.image_gen ?? {};
+      const identifyQuota = serverQuota.identify ?? {};
+      const videoQuota = serverQuota.video_uploads ?? {};
+
+      return {
+        ok: true,
+        plan,
+        used: dailyAiUsed,
+        limit: dailyAiLimit,
+        remaining: dailyAiRemaining,
+        burstLimit,
+        burstRemaining,
+        quota: {
+          live_audio_minutes: {
+            remaining: Number(liveQuota.remaining ?? defaults.live_audio_minutes.remaining),
+            limit: Number(liveQuota.limit ?? defaults.live_audio_minutes.limit),
+            daily: {
+              used: Number(liveQuota?.daily?.used ?? serverStatus?.liveUsed ?? liveUsage.used),
+              limit: Number(liveQuota?.daily?.limit ?? serverStatus?.liveLimit ?? liveUsage.limit),
+              remaining: Number(liveQuota?.daily?.remaining ?? serverStatus?.liveRemaining ?? liveUsage.remaining),
+            },
+          },
+          image_gen: {
+            remaining: Number(imageQuota.remaining ?? imageUsage.remaining),
+            limit: Number(imageQuota.limit ?? imageUsage.limit),
+            daily: {
+              used: imageUsage.used,
+              limit: imageUsage.limit,
+              remaining: imageUsage.remaining,
+            },
+          },
+          identify: {
+            remaining: Number(identifyQuota.remaining ?? defaults.identify.remaining),
+            limit: Number(identifyQuota.limit ?? defaults.identify.limit),
+          },
+          video_uploads: {
+            remaining: Number(videoQuota.remaining ?? defaults.video_uploads.remaining),
+            limit: Number(videoQuota.limit ?? defaults.video_uploads.limit),
+            daily: {
+              used: Number(videoQuota?.daily?.used ?? videoUsage.used),
+              limit: Number(videoQuota?.daily?.limit ?? videoUsage.limit),
+              remaining: Number(videoQuota?.daily?.remaining ?? videoUsage.remaining),
+            },
+          },
+          resetAt: serverQuota.resetAt ?? null,
+          nextResetAt: serverQuota.nextResetAt ?? null,
+        },
+        nearLimit: dailyAiLimit > 0 ? dailyAiRemaining <= Math.ceil(dailyAiLimit * 0.15) : false,
+        upgradeRecommended: plan === 'trial' && dailyAiLimit > 0 ? dailyAiRemaining <= Math.ceil(dailyAiLimit * 0.15) : false,
+        warnings: [],
+        sessionsToday: 0,
+        toolsUsedToday: [],
+        distinctToolsToday: 0,
+        resetAt: null,
+        resetTz: serverStatus?.quota?.resetAt ? null : null,
+        resetHourLocal: null,
+      };
+    };
+
     const fetchUsage = async () => {
       try {
         setUsageSnapshotError(null);
-        const { data } = await supabase.auth.getSession();
-        const token = data?.session?.access_token;
-        const headers: Record<string, string> = {};
-        // If the session hasn't hydrated yet, do NOT force a "guest" token.
-        // We'll re-fetch immediately when auth state changes.
-        if (token) headers.Authorization = `Bearer ${token}`;
 
-        headers.Accept = 'application/json';
-
-        const r = await fetch('/api/ai/usage', { method: 'GET', headers });
-        const contentType = String(r.headers.get('content-type') || '').toLowerCase();
-        const txt = await r.text();
-        const parsed = contentType.includes('application/json') && txt
-          ? JSON.parse(txt)
-          : null;
-
+        const serverStatus = await fetchUsageStatus().catch(() => ({ ok: false } as UsageStatus));
         if (!cancelled) {
-          if (!r.ok || !parsed?.ok) {
-            setUsageSnapshot(buildLocalUsageFallback());
+          setUsageSnapshot(buildUsageSnapshot(serverStatus?.ok ? serverStatus : null));
+          if (!serverStatus?.ok) {
             setUsageSnapshotError(null);
-          } else {
-            setUsageSnapshot(parsed);
           }
         }
       } catch (e: any) {
         if (!cancelled) {
-          setUsageSnapshot(buildLocalUsageFallback());
+          setUsageSnapshot(buildUsageSnapshot(null));
           setUsageSnapshotError(null);
         }
       }
     };
 
     void fetchUsage();
-    // IMPORTANT: Supabase session hydration can lag behind the first render.
-    // Re-fetch usage immediately when we receive a real session.
     const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
         void fetchUsage();
       }
     });
+
+    const onLocalUsageUpdate = () => {
+      void fetchUsage();
+    };
+
+    window.addEventListener('maw-usage-local-update', onLocalUsageUpdate);
+    window.addEventListener('ai-usage-update', onLocalUsageUpdate);
+    window.addEventListener('live-usage-update', onLocalUsageUpdate);
+
     const t = window.setInterval(fetchUsage, 60_000);
     return () => {
       cancelled = true;
       window.clearInterval(t);
       authListener?.subscription?.unsubscribe();
+      window.removeEventListener('maw-usage-local-update', onLocalUsageUpdate);
+      window.removeEventListener('ai-usage-update', onLocalUsageUpdate);
+      window.removeEventListener('live-usage-update', onLocalUsageUpdate);
     };
-  }, [user?.email]);
+  }, [user?.email, user?.membership, user?.generationCount]);
 
 
   // Dashboard: Primary Action ("Today's Focus")

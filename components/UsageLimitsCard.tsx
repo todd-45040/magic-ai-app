@@ -31,6 +31,7 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
   const resetTz = usageSnapshot?.resetTz;
   const monthlyResetAt = usageSnapshot?.quota?.nextResetAt ?? usageSnapshot?.quota?.resetAt ?? null;
 
+  const shouldShowUpgrade = Boolean(onRequestUpgrade) && plan !== 'professional' && plan !== 'admin' && (nearLimit || upgradeRecommended);
   const upgradeCopy = useMemo(() => getUpgradeUxCopy(nearLimit || upgradeRecommended ? 'upgrade_available' : 'limit_reached', { targetPlan: plan === 'free' || plan === 'trial' ? 'Amateur' : 'Professional' }), [nearLimit, upgradeRecommended, plan]);
 
   const planLabel = useMemo(() => {
@@ -122,7 +123,7 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
         </div>
 
         <div className="flex items-center gap-2">
-          {onRequestUpgrade && (nearLimit || upgradeRecommended) && (
+          {shouldShowUpgrade && (
             <span className="hidden sm:inline text-xs text-slate-200/80">Upgrade available →</span>
           )}
           <span className="text-xs text-slate-300/80">{open ? 'Hide' : 'Show'}</span>
@@ -187,7 +188,7 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
                   {quotaRow('Video Rehearsal Uploads', 'video_uploads', { proOnly: true })}
                 </div>
 
-                {onRequestUpgrade && (
+                {shouldShowUpgrade && (
                   <div className="mt-4 flex items-center justify-end">
                     <button
                       type="button"
