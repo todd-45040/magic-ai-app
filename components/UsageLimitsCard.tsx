@@ -57,31 +57,33 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
   }, [dailyUsed, dailyLimit]);
 
   const quotaRow = (label: string, key: string, opts?: { proOnly?: boolean; unit?: string }) => {
-    const node = quota?.[key];
-    const remaining = node?.remaining;
-    const limit = node?.limit;
+    const node = quota?.[key] ?? {};
+    const remaining = typeof node?.remaining === 'number' ? Number(node.remaining) : null;
+    const limit = typeof node?.limit === 'number' ? Number(node.limit) : null;
     const daily = node?.daily;
+    const dailyUsed = typeof daily?.used === 'number' ? Number(daily.used) : null;
+    const dailyLimit = typeof daily?.limit === 'number' ? Number(daily.limit) : null;
+    const dailyRemaining = typeof daily?.remaining === 'number' ? Number(daily.remaining) : (dailyUsed != null && dailyLimit != null ? Math.max(0, dailyLimit - dailyUsed) : null);
 
     const isProOnly = Boolean(opts?.proOnly);
-    const locked = isProOnly && plan !== 'professional';
-    const isUnlimited = key === 'video_uploads' && !locked && ((typeof limit === 'number' && limit >= 9999) || (typeof remaining === 'number' && remaining >= 9999));
-    const isNotTrackedYet = key === 'identify';
+    const locked = isProOnly && plan !== 'professional' && plan !== 'admin';
+    const hasDaily = dailyUsed != null && dailyLimit != null;
+    const used = limit != null && remaining != null ? Math.max(0, limit - remaining) : null;
+    const isUnlimited = !locked && !hasDaily && ((limit != null && limit >= 9999) || (remaining != null && remaining >= 9999));
 
     const display = (() => {
       if (locked) return '🔒 Pro';
       if (isUnlimited) return 'Unlimited';
-      if (isNotTrackedYet) return 'Not tracked yet';
-      if (daily && typeof daily?.used === 'number' && typeof daily?.limit === 'number') {
-        return `${daily.used} / ${daily.limit}${opts?.unit ? ` ${opts.unit}` : ''}`;
-      }
-      if (typeof remaining === 'number' && typeof limit === 'number') return `${remaining} / ${limit}${opts?.unit ? ` ${opts.unit}` : ''}`;
-      if (typeof remaining === 'number') return `${remaining}${opts?.unit ? ` ${opts.unit}` : ''}`;
+      if (hasDaily) return `${dailyUsed} / ${dailyLimit}${opts?.unit ? ` ${opts.unit}` : ''}`;
+      if (used != null && limit != null) return `${used} / ${limit}${opts?.unit ? ` ${opts.unit}` : ''}`;
+      if (remaining != null && limit != null) return `${remaining} / ${limit}${opts?.unit ? ` ${opts.unit}` : ''}`;
+      if (remaining != null) return `${remaining}${opts?.unit ? ` ${opts.unit}` : ''}`;
       return '—';
     })();
 
-    const exhausted = !locked && !isUnlimited && !isNotTrackedYet && typeof remaining === 'number' && remaining <= 0;
-    const progressPct = daily && typeof daily?.limit === 'number' && daily.limit > 0 && typeof daily?.used === 'number'
-      ? Math.min(100, Math.max(0, (daily.used / daily.limit) * 100))
+    const exhausted = !locked && !isUnlimited && ((hasDaily && dailyRemaining != null && dailyRemaining <= 0) || (!hasDaily && remaining != null && remaining <= 0));
+    const progressPct = hasDaily && dailyLimit && dailyLimit > 0 && dailyUsed != null
+      ? Math.min(100, Math.max(0, (dailyUsed / dailyLimit) * 100))
       : null;
 
     return (
@@ -103,22 +105,24 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
 
           {isUnlimited ? (
             <div className="text-[12px] text-slate-400">Unlimited</div>
-          ) : isNotTrackedYet ? (
-            <div className="text-[12px] text-slate-400/70">Usage tracking coming soon</div>
-          ) : daily && typeof daily?.limit === 'number' && daily.limit > 0 ? (
+          ) : hasDaily ? (
             <>
               <div className="text-[12px] text-slate-400">
-                Daily: <span className="tabular-nums text-slate-300">{daily.used}</span> / <span className="tabular-nums">{daily.limit}</span>{opts?.unit ? ` ${opts.unit}` : ''}
+                Daily: <span className="tabular-nums text-slate-300">{dailyUsed}</span> / <span className="tabular-nums">{dailyLimit}</span>{opts?.unit ? ` ${opts.unit}` : ''}
               </div>
-              {(key === 'live_audio_minutes' || key === 'image_gen') && progressPct !== null && (
+              {(key === 'live_audio_minutes' || key === 'image_gen' || key === 'video_uploads') && progressPct !== null && (
                 <div className="h-1.5 max-w-[400px] rounded-full bg-black/20 overflow-hidden border border-white/5">
                   <div className="h-full bg-white/20" style={{ width: `${progressPct}%` }} aria-hidden="true" />
                 </div>
               )}
             </>
+          ) : (used != null && limit != null) ? (
+            <div className="text-[12px] text-slate-400/70">
+              Monthly: <span className="tabular-nums text-slate-300">{used}</span> / <span className="tabular-nums">{limit}</span>{opts?.unit ? ` ${opts.unit}` : ''}
+            </div>
           ) : null}
         </div>
-        <div className={`text-[15px] font-semibold tabular-nums ${isNotTrackedYet ? 'text-slate-50/95' : 'text-slate-50'}`}>{display}</div>
+        <div className="text-[15px] font-semibold tabular-nums text-slate-50">{display}</div>
       </div>
     );
   };

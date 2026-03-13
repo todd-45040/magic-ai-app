@@ -57,7 +57,16 @@ export default function UsageMeter({ user }: { user?: User | null }) {
     };
 
     const loadLive = (s?: UsageStatus) => {
-      // Prefer server-backed live usage. Fall back to local only if server doesn't provide live fields.
+      // Prefer quota-backed daily live usage when present. Fall back to top-level live fields, then local usage.
+      const quotaDaily = s?.quota?.live_audio_minutes?.daily;
+      if (quotaDaily?.limit != null && quotaDaily?.used != null) {
+        setLive({
+          used: Number(quotaDaily.used || 0),
+          limit: Number(quotaDaily.limit || 0),
+          remaining: Number(quotaDaily.remaining ?? Math.max(0, Number(quotaDaily.limit || 0) - Number(quotaDaily.used || 0))),
+        });
+        return;
+      }
       if (s?.liveLimit != null && s.liveRemaining != null && s.liveUsed != null) {
         setLive({ used: Number(s.liveUsed || 0), limit: Number(s.liveLimit || 0), remaining: Number(s.liveRemaining || 0) });
         return;

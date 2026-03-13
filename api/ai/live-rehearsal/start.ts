@@ -33,7 +33,7 @@ export default async function handler(req: any, res: any) {
 
   const started = startLiveSession(safeUserId, status.membership);
   if (!started.ok) {
-    return jsonError(res, started.status || 429, { ok: false, error_code: started.error_code ?? 'LIVE_REHEARSAL_START_FAILED', message: started.message ?? 'Unable to start live rehearsal.', retryable: started.status === 429 });
+    return jsonError(res, started.status || 429, { ok: false, error_code: started.error_code, message: started.message, retryable: started.status === 429 });
   }
 
   return res.status(200).json({ ok: true, data: started });

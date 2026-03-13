@@ -1,4 +1,4 @@
-import type { BillingPlanKey } from './planCatalog.js';
+import type { BillingPlanKey } from './planCatalog';
 
 export type MembershipTier = BillingPlanKey;
 
