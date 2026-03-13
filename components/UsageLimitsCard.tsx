@@ -65,8 +65,7 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
     const isProOnly = Boolean(opts?.proOnly);
     const locked = isProOnly && plan !== 'professional';
     const isUnlimited = key === 'video_uploads' && !locked && ((typeof limit === 'number' && limit >= 9999) || (typeof remaining === 'number' && remaining >= 9999));
-    const hasTrackedShape = (daily && typeof daily?.used === 'number' && typeof daily?.limit === 'number') || (typeof remaining === 'number' && typeof limit === 'number');
-    const isNotTrackedYet = key === 'identify' && !hasTrackedShape;
+    const isNotTrackedYet = key === 'identify';
 
     const display = (() => {
       if (locked) return '🔒 Pro';
@@ -105,7 +104,7 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
           {isUnlimited ? (
             <div className="text-[12px] text-slate-400">Unlimited</div>
           ) : isNotTrackedYet ? (
-            <div className="text-[12px] text-slate-400/70">Tracked in daily AI total</div>
+            <div className="text-[12px] text-slate-400/70">Usage tracking coming soon</div>
           ) : daily && typeof daily?.limit === 'number' && daily.limit > 0 ? (
             <>
               <div className="text-[12px] text-slate-400">

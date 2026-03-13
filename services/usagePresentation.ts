@@ -87,8 +87,6 @@ function buildRowFromUsage(key: string, label: string, usage: { used: number; li
 
 function buildIdentifyRow(serverStatus?: UsageStatus | null): ToolUsageRow {
   const identify = serverStatus?.quota?.identify;
-  const dailyAiUsed = Number(serverStatus?.used ?? 0);
-
   if (identify && typeof identify.limit === 'number' && typeof identify.remaining === 'number' && !isLargePlaceholder(identify.limit)) {
     const used = Math.max(0, Number(identify.limit) - Number(identify.remaining));
     return {
@@ -106,40 +104,21 @@ function buildIdentifyRow(serverStatus?: UsageStatus | null): ToolUsageRow {
   return {
     key: 'identify',
     label: 'Identify a Trick',
-    period: 'info',
-    summary: 'Tracked in daily AI total',
-    detail: dailyAiUsed > 0 ? `Daily AI total currently ${dailyAiUsed}` : 'Tracked in daily AI total',
+    period: 'untracked',
+    summary: 'Not tracked yet',
+    detail: 'Usage tracking coming soon',
   };
 }
 
 function buildVideoRow(plan: string, user?: User | null, serverStatus?: UsageStatus | null): ToolUsageRow {
   const quota = serverStatus?.quota?.video_uploads;
-  const daily = quota?.daily;
-
-  if (daily && typeof daily.used === 'number' && typeof daily.limit === 'number') {
+  if (plan === 'professional' || plan === 'admin' || isLargePlaceholder(quota?.limit)) {
     return {
       key: 'video_uploads',
       label: 'Video Rehearsal Uploads',
-      period: 'daily',
-      used: Number(daily.used),
-      limit: Number(daily.limit),
-      remaining: Number(daily.remaining ?? Math.max(0, Number(daily.limit) - Number(daily.used))),
-      summary: `${Number(daily.used)} / ${Number(daily.limit)}`,
-      detail: `Daily: ${Number(daily.used)} / ${Number(daily.limit)}`,
-    };
-  }
-
-  if (quota && typeof quota.limit === 'number' && typeof quota.remaining === 'number' && !isLargePlaceholder(quota.limit)) {
-    const used = Math.max(0, Number(quota.limit) - Number(quota.remaining));
-    return {
-      key: 'video_uploads',
-      label: 'Video Rehearsal Uploads',
-      period: 'monthly',
-      used,
-      limit: Number(quota.limit),
-      remaining: Number(quota.remaining),
-      summary: `${used} / ${Number(quota.limit)}`,
-      detail: `Monthly: ${used} / ${Number(quota.limit)}`,
+      period: 'unlimited',
+      summary: 'Unlimited',
+      detail: 'Unlimited',
     };
   }
 
@@ -161,9 +140,9 @@ export function buildNormalizedUsageSnapshot(user?: User | null, serverStatus?: 
   const imageUsage = user ? getUsage(user, 'image') : { used: 0, limit: 0, remaining: 0 };
 
   const liveHeader = {
-    used: Number(serverStatus?.quota?.live_audio_minutes?.daily?.used ?? serverStatus?.liveUsed ?? liveUsage.used),
-    limit: Number(serverStatus?.quota?.live_audio_minutes?.daily?.limit ?? serverStatus?.liveLimit ?? liveUsage.limit),
-    remaining: Number(serverStatus?.quota?.live_audio_minutes?.daily?.remaining ?? serverStatus?.liveRemaining ?? liveUsage.remaining),
+    used: Number(serverStatus?.liveUsed ?? serverStatus?.quota?.live_audio_minutes?.daily?.used ?? liveUsage.used),
+    limit: Number(serverStatus?.liveLimit ?? serverStatus?.quota?.live_audio_minutes?.daily?.limit ?? liveUsage.limit),
+    remaining: Number(serverStatus?.liveRemaining ?? serverStatus?.quota?.live_audio_minutes?.daily?.remaining ?? liveUsage.remaining),
   };
 
   const toolRows: ToolUsageRow[] = [
