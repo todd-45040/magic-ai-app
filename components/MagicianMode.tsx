@@ -4609,16 +4609,9 @@ ${action.payload.content}`;
   const TabButton: React.FC<{ label: string; icon: React.FC<{ className?: string }>; isActive: boolean; onClick: () => void; isLocked?: boolean; }> = ({ label, icon: Icon, isActive, onClick, isLocked }) => (
     <button
       type="button"
-      onClick={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        onClick();
-      }}
-      onMouseDown={(event) => {
-        event.preventDefault();
-      }}
+      onClick={onClick}
       title={isLocked ? 'Upgrade to access this feature' : ''}
-      className={`relative z-[95] shrink-0 cursor-pointer pointer-events-auto inline-flex items-center gap-2 whitespace-nowrap px-3 py-2 text-sm font-medium transition-colors touch-manipulation select-none ${isActive ? 'border-b-2 border-purple-400 text-purple-300' : 'border-b-2 border-transparent text-slate-400 hover:text-white'} ${isLocked ? 'text-slate-600 hover:text-slate-600' : ''}`}
+      className={`relative inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors select-none ${isActive ? 'bg-slate-900/70 text-purple-300 ring-1 ring-purple-400/60' : 'text-slate-300 hover:bg-slate-900/50 hover:text-white'} ${isLocked ? 'text-slate-600 hover:bg-transparent hover:text-slate-600' : ''}`}
     >
       <Icon className="w-4 h-4" />
       <span className="hidden sm:inline">{label === "Assistant's Studio" ? (<><span>Assistant's Studio</span><span className="ml-2 text-[9px] px-1.5 py-0.5 rounded bg-indigo-500 text-white uppercase">Beta</span></>) : label}</span>
@@ -4769,7 +4762,7 @@ const renderIntentSubnav = () => {
 
     if (activeIntent === 'create') {
       return (
-        <div className="flex flex-wrap items-center gap-2 px-2 md:px-4 py-2 border-b border-slate-800/70">
+        <div className="relative z-[110] flex flex-wrap items-center gap-2 px-2 md:px-4 py-2 border-b border-slate-800/70 bg-slate-950/60">
           {subBtn('Effect Generator', () => handleNavigate('effect-generator'), activeTab === 'effect-generator')}
           {subBtn('Identify Trick', () => handleNavigate('identify'), activeTab === 'identify')}
           {subBtn('Visual Brainstorm', () => handleNavigate('visual-brainstorm'), activeView === 'visual-brainstorm', isAccessLocked('visual-brainstorm'))}
@@ -4785,7 +4778,7 @@ const renderIntentSubnav = () => {
 
     if (activeIntent === 'rehearse') {
       return (
-        <div className="flex flex-wrap items-center gap-2 px-2 md:px-4 py-2 border-b border-slate-800/70">
+        <div className="relative z-[110] flex flex-wrap items-center gap-2 px-2 md:px-4 py-2 border-b border-slate-800/70 bg-slate-950/60">
           {subBtn('Angle & Risk', () => handleNavigate('angle-risk'), activeView === 'angle-risk')}
           {subBtn('Live Rehearsal', () => handleNavigate('live-rehearsal'), activeView === 'live-rehearsal', isAccessLocked('live-rehearsal'))}
           {subBtn('Video Rehearsal', () => handleNavigate('video-rehearsal'), activeView === 'video-rehearsal', isAccessLocked('video-rehearsal'))}
@@ -4796,7 +4789,7 @@ const renderIntentSubnav = () => {
 
     if (activeIntent === 'social') {
       return (
-        <div className="flex flex-wrap items-center gap-2 px-2 md:px-4 py-2 border-b border-slate-800/70">
+        <div className="relative z-[110] flex flex-wrap items-center gap-2 px-2 md:px-4 py-2 border-b border-slate-800/70 bg-slate-950/60">
           {subBtn('Magic Wire', () => handleNavigate('magic-wire'), activeTab === 'magic-wire')}
           {subBtn('Publications', () => handleNavigate('publications'), activeTab === 'publications')}
           {subBtn('Community', () => handleNavigate('community'), activeTab === 'community')}
@@ -4806,7 +4799,7 @@ const renderIntentSubnav = () => {
 
     // manage
     return (
-      <div className="flex flex-wrap items-center gap-2 px-2 md:px-4 py-2 border-b border-slate-800/70">
+      <div className="relative z-[110] flex flex-wrap items-center gap-2 px-2 md:px-4 py-2 border-b border-slate-800/70 bg-slate-950/60">
         {subBtn('Show Planner', () => handleNavigate('show-planner'), activeTab === 'show-planner', isAccessLocked('show-planner'))}
         {subBtn('Saved Ideas', () => handleNavigate('saved-ideas'), activeView === 'saved-ideas', isAccessLocked('saved-ideas'))}
         {subBtn('Show Feedback', () => handleNavigate('show-feedback'), activeView === 'show-feedback', isAccessLocked('show-feedback'))}
@@ -4950,7 +4943,7 @@ const renderIntentSubnav = () => {
       )}
 
 
-      <nav className={`sticky top-0 isolate z-[90] flex items-center gap-1 border-b border-slate-800/80 bg-slate-950/75 backdrop-blur px-2 md:px-4 overflow-x-auto md:overflow-x-visible md:flex-wrap [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden ${navElevated ? 'shadow-lg shadow-black/20' : ''}`}>
+      <nav className={`relative z-[120] flex flex-wrap items-center gap-1 border-b border-slate-800/80 bg-slate-950/80 px-2 md:px-4 py-2 ${navElevated ? 'shadow-lg shadow-black/20' : ''}`}>
         {/* Phase 2 (Navigation Tightening): Intent-based primary navigation */}
         <TabButton
           label="Home"
@@ -4996,6 +4989,7 @@ const renderIntentSubnav = () => {
 
         {/* Premium polish: always-visible jump to the full tool grid */}
         <button
+          type="button"
           onClick={jumpToAllTools}
           className="whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium border border-slate-700/80 bg-slate-900/40 text-slate-300 hover:bg-slate-800/50 hover:text-white transition-colors"
           title="Jump to the full tool list"
@@ -5012,7 +5006,7 @@ const renderIntentSubnav = () => {
         />
       </nav>
 
-      <div className="relative isolate z-[85] overflow-x-auto md:overflow-x-visible [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">{renderIntentSubnav()}</div>
+      <div className="relative isolate z-[85]">{renderIntentSubnav()}</div>
 
       <main ref={mainScrollRef} onScroll={handleMainScroll} className="flex-1 flex flex-col overflow-y-auto">
         <div className="flex-1 flex flex-col animate-fade-in">
