@@ -4608,9 +4608,14 @@ ${action.payload.content}`;
 
   const TabButton: React.FC<{ label: string; icon: React.FC<{ className?: string }>; isActive: boolean; onClick: () => void; isLocked?: boolean; }> = ({ label, icon: Icon, isActive, onClick, isLocked }) => (
     <button
-      onClick={onClick}
+      type="button"
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onClick();
+      }}
       title={isLocked ? 'Upgrade to access this feature' : ''}
-      className={`relative flex items-center gap-2 whitespace-nowrap px-3 py-2 text-sm font-medium transition-colors ${isActive ? 'border-b-2 border-purple-400 text-purple-300' : 'border-b-2 border-transparent text-slate-400 hover:text-white'} ${isLocked ? 'text-slate-600 hover:text-slate-600' : ''}`}
+      className={`relative z-10 shrink-0 pointer-events-auto flex items-center gap-2 whitespace-nowrap px-3 py-2 text-sm font-medium transition-colors ${isActive ? 'border-b-2 border-purple-400 text-purple-300' : 'border-b-2 border-transparent text-slate-400 hover:text-white'} ${isLocked ? 'text-slate-600 hover:text-slate-600' : ''}`}
     >
       <Icon className="w-4 h-4" />
       <span className="hidden sm:inline">{label === "Assistant's Studio" ? (<><span>Assistant's Studio</span><span className="ml-2 text-[9px] px-1.5 py-0.5 rounded bg-indigo-500 text-white uppercase">Beta</span></>) : label}</span>
