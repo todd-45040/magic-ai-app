@@ -842,7 +842,8 @@ const IdentifyTab: React.FC<{
     refining: boolean;
     lastRefine: string | null;
     onRequestUpgrade: () => void;
-}> = ({ imagePreview, identificationResult, isIdentifying, identificationError, identificationBlocked, identifySaved, identifySaving, identifyIsStrong, fileInputRef, handleImageUpload, handleIdentifyClick, onSave, onAddToShow, onConvertToTask, onCopy, onShare, onToggleStrong, onRefine, refining, lastRefine, onRequestUpgrade }) => (
+    onReset: () => void;
+}> = ({ imagePreview, identificationResult, isIdentifying, identificationError, identificationBlocked, identifySaved, identifySaving, identifyIsStrong, fileInputRef, handleImageUpload, handleIdentifyClick, onSave, onAddToShow, onConvertToTask, onCopy, onShare, onToggleStrong, onRefine, refining, lastRefine, onRequestUpgrade, onReset }) => (
     <div className="flex-1 overflow-y-auto p-4 md:p-5">
         <div className="animate-fade-in space-y-4 max-w-2xl mx-auto">
             <h2 className="text-2xl font-bold text-slate-200 font-cinzel">Identify a Trick</h2>
@@ -859,13 +860,22 @@ const IdentifyTab: React.FC<{
                     <div className="w-full h-64 bg-slate-800 rounded-lg flex items-center justify-center overflow-hidden">
                         <img src={imagePreview} alt="Magic trick preview" className="max-w-full max-h-full object-contain" />
                     </div>
-                    <div className="flex gap-4">
-                        <button onClick={() => fileInputRef.current?.click()} className="flex-1 w-full py-2 px-4 bg-slate-600/50 hover:bg-slate-700 rounded-md text-slate-300 font-bold transition-colors">
+                    <div className="flex flex-wrap gap-4">
+                        <button onClick={() => fileInputRef.current?.click()} className="flex-1 min-w-[180px] w-full py-2 px-4 bg-slate-600/50 hover:bg-slate-700 rounded-md text-slate-300 font-bold transition-colors">
                             Change Image
                         </button>
-                        <button onClick={handleIdentifyClick} disabled={isIdentifying} className="flex-1 w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed">
+                        <button onClick={handleIdentifyClick} disabled={isIdentifying} className="flex-1 min-w-[180px] w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed">
                             {isIdentifying ? 'Analyzing...' : 'Identify Trick'}
                         </button>
+                        {(identificationResult || identificationError || identificationBlocked) ? (
+                          <button
+                            onClick={onReset}
+                            disabled={isIdentifying || refining}
+                            className="w-full py-2 px-4 border border-slate-600 bg-slate-900/40 hover:bg-slate-800/50 rounded-md text-slate-200 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Analyze Another Trick
+                          </button>
+                        ) : null}
                     </div>
                 </div>
             )}
@@ -3714,6 +3724,24 @@ useEffect(() => {
     }, 2000);
   }
 
+  const handleResetIdentifyTrick = () => {
+    setImageFile(null);
+    setImagePreview(null);
+    setIdentificationResult(null);
+    setIdentificationError(null);
+    setIdentificationBlocked(null);
+    setIdentifySavedIdeaId(null);
+    setIdentifyIsStrong(false);
+    setIsIdentifying(false);
+    setIdentifySaving(false);
+    setIdentifyRefining(false);
+    setIdentifyLastRefine(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    void trackClientEvent({ tool: 'IdentifyTrick', action: 'identify_reset' });
+  };
+
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -4442,6 +4470,7 @@ ${action.payload.content}`;
               onOpenPatterEngine={() => setActiveView('patter-engine')}
               onOpenDirectorMode={() => setActiveView('director-mode')}
               onRequestUpgrade={() => setIsUpgradeModalOpen(true)}
+              onReset={handleResetIdentifyTrick}
             />
           );
         case 'video-rehearsal': return <VideoRehearsal onIdeaSaved={() => handleIdeaSaved('Video analysis saved!')} user={user} />;
