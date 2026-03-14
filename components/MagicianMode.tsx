@@ -869,14 +869,9 @@ const IdentifyTab: React.FC<{
                         </button>
                         {(identificationResult || identificationError || identificationBlocked) ? (
                           <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              onReset();
-                            }}
+                            onClick={onReset}
                             disabled={isIdentifying || refining}
-                            className="relative z-10 pointer-events-auto w-full py-2 px-4 border border-slate-600 bg-slate-900/40 hover:bg-slate-800/50 rounded-md text-slate-200 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="w-full py-2 px-4 border border-slate-600 bg-slate-900/40 hover:bg-slate-800/50 rounded-md text-slate-200 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             Analyze Another Trick
                           </button>
@@ -908,18 +903,6 @@ const IdentifyTab: React.FC<{
                         <div className="mt-1 text-2xl font-bold text-white">{identificationResult.trickName}</div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            onReset();
-                          }}
-                          disabled={isIdentifying || refining}
-                          className="relative z-10 pointer-events-auto text-xs px-3 py-1.5 rounded-md border border-slate-600 bg-slate-900/50 hover:bg-slate-800/60 text-slate-200 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          Start Over
-                        </button>
                         <span
                           className={`text-xs px-2.5 py-1 rounded-full border ${
                             (identificationResult.confidence || 'Medium') === 'High'
@@ -4615,7 +4598,6 @@ ${action.payload.content}`;
               refining={identifyRefining}
               lastRefine={identifyLastRefine}
               onRequestUpgrade={() => setIsUpgradeModalOpen(true)}
-              onReset={handleResetIdentifyTrick}
             />
           );
         case 'publications': return <PublicationsTab />;
@@ -4783,8 +4765,8 @@ const renderIntentSubnav = () => {
           {subBtn('Effect Generator', () => handleNavigate('effect-generator'), activeTab === 'effect-generator')}
           {subBtn('Identify Trick', () => handleNavigate('identify'), activeTab === 'identify')}
           {subBtn('Visual Brainstorm', () => handleNavigate('visual-brainstorm'), activeView === 'visual-brainstorm', isAccessLocked('visual-brainstorm'))}
-          {subBtn('Director Mode', () => handleNavigate('director-mode'), activeView === 'director-mode', isAccessLocked('director-mode'))}
           {subBtn('Patter Engine', () => handleNavigate('patter-engine'), activeView === 'patter-engine')}
+          {subBtn('Director Mode', () => handleNavigate('director-mode'), activeView === 'director-mode', isAccessLocked('director-mode'))}
           {subBtn('Illusion Blueprint', () => handleNavigate('illusion-blueprint'), activeView === 'illusion-blueprint', isAccessLocked('illusion-blueprint'))}
           {subBtn('Gospel Magic', () => handleNavigate('gospel-magic-assistant'), activeView === 'gospel-magic-assistant', isAccessLocked('gospel-magic-assistant'))}
           {subBtn('Mentalism', () => handleNavigate('mentalism-assistant'), activeView === 'mentalism-assistant', isAccessLocked('mentalism-assistant'))}
