@@ -702,14 +702,14 @@ const addToHistory = (
         if (action.kind === 'edit') {
           imageUrl = await editImageWithPrompt(action.base64, action.mimeType, action.prompt, user);
         } else if (action.kind === 'generate') {
-          const imgs = await generateImages(action.prompt, action.aspectRatio, sessionVariationLimit, user);
+          const imgs = await generateImages(action.prompt, action.aspectRatio, sessionVariationLimit, user, 'visual_brainstorm');
           batchImages = imgs;
           setVariationImages(imgs);
           setLastGeneratePrompt(action.prompt);
           setLastGenerateAspect(action.aspectRatio ?? aspectRatio);
           imageUrl = imgs[0];
         } else {
-          const imgs = await generateImages(action.prompt, action.aspectRatio, 1, user);
+          const imgs = await generateImages(action.prompt, action.aspectRatio, 1, user, 'visual_brainstorm');
           batchImages = imgs;
           imageUrl = imgs[0];
         }

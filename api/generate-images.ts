@@ -13,12 +13,13 @@ export default async function handler(request: any, response: any) {
     return response.status(401).json({ error: 'Unauthorized.' });
   }
 
-  const { count: rawCount } = (request.body || {}) as any;
+  const { count: rawCount, tool: rawTool } = (request.body || {}) as any;
   const requestedCount = Math.max(1, Math.min(4, Math.floor(Number(rawCount) || 1)));
+  const requestedTool = rawTool === 'visual_brainstorm' ? 'visual_brainstorm' : 'image_generation';
 
   // AI cost protection (daily caps + per-minute burst limits)
   // Charge 1 unit per generated image.
-  const usage = await enforceAiUsage(request, requestedCount, { tool: 'image_generation' });
+  const usage = await enforceAiUsage(request, requestedCount, { tool: requestedTool });
   if (!usage.ok) {
     return response
       .status(usage.status || 429)

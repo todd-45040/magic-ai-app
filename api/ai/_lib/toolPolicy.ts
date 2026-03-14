@@ -32,6 +32,12 @@ export const TOOL_POLICIES: Record<string, ToolPolicy> = {
     maxBodyBytes: 2 * 1024 * 1024, maxPromptChars: 4000, maxContextChars: 6000, maxFileBytes: 10 * 1024 * 1024,
     allowedMimePrefixes: ['image/'],
   },
+  visual_brainstorm: {
+    tool: 'visual_brainstorm', costTier: 'HIGH', burstWindowMs: FIVE_MIN,
+    burstMaxByPlan: { trial: 0, amateur: 6, professional: 12, admin: 25, expired: 0 },
+    maxBodyBytes: 2 * 1024 * 1024, maxPromptChars: 4000, maxContextChars: 6000, maxFileBytes: 10 * 1024 * 1024,
+    allowedMimePrefixes: ['image/'],
+  },
   identify_trick: {
     tool: 'identify_trick', costTier: 'MEDIUM', burstWindowMs: FIVE_MIN,
     burstMaxByPlan: { trial: 5, amateur: 20, professional: 50, admin: 100, expired: 0 },

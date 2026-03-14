@@ -785,13 +785,14 @@ export const generateImages = async (
   prompt: string,
   aspectRatio: "1:1" | "3:4" | "4:3" | "9:16" | "16:9" = "1:1",
   count: number = 4,
-  currentUser?: User
+  currentUser?: User,
+  tool: 'image_generation' | 'visual_brainstorm' = 'image_generation'
 ): Promise<string[]> => {
   const safeCount = Math.max(1, Math.min(4, Math.floor(Number(count) || 1)));
 
   const result = await postJson<any>(
     '/api/generate-images',
-    { prompt, aspectRatio, count: safeCount },
+    { prompt, aspectRatio, count: safeCount, tool },
     currentUser
   );
 

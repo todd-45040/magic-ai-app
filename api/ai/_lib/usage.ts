@@ -64,7 +64,7 @@ function normalizeTier(m?: string | null): 'trial' | 'amateur' | 'professional' 
 
 // Phase 2C-B: Tool tier + quota enforcement (monthly buckets).
 // Quota columns in public.users are treated as "remaining" balances for the current month.
-type ToolKey = 'live_rehearsal_audio' | 'image_generation' | 'identify_trick' | 'video_rehearsal';
+type ToolKey = 'live_rehearsal_audio' | 'image_generation' | 'visual_brainstorm' | 'identify_trick' | 'video_rehearsal';
 
 type ToolPolicy = {
   key: ToolKey;
@@ -77,6 +77,7 @@ type ToolPolicy = {
 const TOOL_POLICIES: Record<ToolKey, ToolPolicy> = {
   live_rehearsal_audio: { key: 'live_rehearsal_audio', minTier: 'trial', quotaColumn: 'quota_live_audio_minutes' },
   image_generation: { key: 'image_generation', minTier: 'trial', quotaColumn: 'quota_image_gen' },
+  visual_brainstorm: { key: 'visual_brainstorm', minTier: 'amateur', quotaColumn: 'quota_image_gen' },
   identify_trick: { key: 'identify_trick', minTier: 'trial', quotaColumn: 'quota_identify' },
   video_rehearsal: { key: 'video_rehearsal', minTier: 'trial', quotaColumn: 'quota_video_uploads' },
 };
@@ -143,12 +144,48 @@ function needsMonthlyReset(resetDateISO?: string | null, now = new Date()): bool
   return d.getUTCFullYear() !== now.getUTCFullYear() || d.getUTCMonth() !== now.getUTCMonth();
 }
 
+function shouldUpliftLegacyFreeQuotas(membership: string, profile: any): boolean {
+  const target = defaultMonthlyQuotas(membership);
+  const freeDefaults = defaultMonthlyQuotas('free');
+  if ((target?.quota_image_gen ?? 0) <= (freeDefaults?.quota_image_gen ?? 0)) return false;
+
+  return (
+    clampInt(profile?.quota_live_audio_minutes) === clampInt(freeDefaults.quota_live_audio_minutes) &&
+    clampInt(profile?.quota_image_gen) === clampInt(freeDefaults.quota_image_gen) &&
+    clampInt(profile?.quota_identify) === clampInt(freeDefaults.quota_identify) &&
+    clampInt(profile?.quota_video_uploads) === clampInt(freeDefaults.quota_video_uploads)
+  );
+}
+
 async function ensureMonthlyQuotas(admin: any, userId: string, membership: string, profile: any): Promise<any> {
   const now = new Date();
   const resetDateISO = profile?.quota_reset_date ? new Date(profile.quota_reset_date).toISOString() : null;
-  if (!needsMonthlyReset(resetDateISO, now)) return profile;
-
   const defaults = defaultMonthlyQuotas(membership);
+
+  if (!needsMonthlyReset(resetDateISO, now)) {
+    if (!shouldUpliftLegacyFreeQuotas(membership, profile)) return profile;
+
+    const uplift = {
+      quota_live_audio_minutes: defaults.quota_live_audio_minutes,
+      quota_image_gen: defaults.quota_image_gen,
+      quota_identify: defaults.quota_identify,
+      quota_video_uploads: defaults.quota_video_uploads,
+    };
+
+    const { data, error } = await admin
+      .from('users')
+      .update(uplift)
+      .eq('id', userId)
+      .select('id, email, membership, is_admin, generation_count, last_reset_date, trial_end_date, quota_live_audio_minutes, quota_image_gen, quota_identify, quota_video_uploads, quota_reset_date, daily_live_audio_minutes_used, daily_live_audio_reset_date, daily_video_uploads_used, daily_video_uploads_reset_date')
+      .maybeSingle();
+
+    if (error) {
+      console.error('Monthly quota uplift error:', error);
+      return profile;
+    }
+    return data || { ...profile, ...uplift };
+  }
+
   const next = {
     quota_live_audio_minutes: defaults.quota_live_audio_minutes,
     quota_image_gen: defaults.quota_image_gen,
