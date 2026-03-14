@@ -876,7 +876,7 @@ const IdentifyTab: React.FC<{
                               onReset();
                             }}
                             disabled={isIdentifying || refining}
-                            className="relative z-10 w-full py-2 px-4 border border-slate-600 bg-slate-900/40 hover:bg-slate-800/50 rounded-md text-slate-200 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
+                            className="relative z-10 pointer-events-auto w-full py-2 px-4 border border-slate-600 bg-slate-900/40 hover:bg-slate-800/50 rounded-md text-slate-200 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             Analyze Another Trick
                           </button>
@@ -916,7 +916,7 @@ const IdentifyTab: React.FC<{
                             onReset();
                           }}
                           disabled={isIdentifying || refining}
-                          className="relative z-10 whitespace-nowrap rounded-full border border-slate-600 bg-slate-900/50 px-3 py-1.5 text-xs font-semibold text-slate-200 transition-colors hover:bg-slate-800/60 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
+                          className="relative z-10 pointer-events-auto text-xs px-3 py-1.5 rounded-md border border-slate-600 bg-slate-900/50 hover:bg-slate-800/60 text-slate-200 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           Start Over
                         </button>
@@ -4615,6 +4615,7 @@ ${action.payload.content}`;
               refining={identifyRefining}
               lastRefine={identifyLastRefine}
               onRequestUpgrade={() => setIsUpgradeModalOpen(true)}
+              onReset={handleResetIdentifyTrick}
             />
           );
         case 'publications': return <PublicationsTab />;
