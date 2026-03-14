@@ -4682,53 +4682,45 @@ ${action.payload.content}`;
     return 'home' as const;
   })();
 
+  const resolvePrimaryIntentView = (intent: typeof activeIntent): MagicianView => {
+    switch (intent) {
+      case 'home':
+        return 'dashboard';
+      case 'create':
+        return 'effect-generator';
+      case 'rehearse':
+        return (userPlan === 'free' || userPlan === 'trial')
+          ? 'dashboard'
+          : (hasProfessionalAccess ? 'live-rehearsal' : 'angle-risk');
+      case 'manage':
+        return (userPlan === 'free' || userPlan === 'trial') ? 'dashboard' : 'show-planner';
+      case 'social':
+        return 'magic-wire';
+      case 'admin':
+        return 'admin';
+      default:
+        return 'dashboard';
+    }
+  };
+
   const handlePrimaryIntentClick = (intent: typeof activeIntent) => {
+    if (intent === 'admin' && !user?.isAdmin) return;
+
+    const targetView = resolvePrimaryIntentView(intent);
+
     if (intent === 'home') {
       try { localStorage.removeItem('magician_active_view'); } catch {}
+    }
+
+    if (targetView === 'dashboard') {
       resetInlineForms();
-      setIntentWorkspaceOverride(null);
+      setIntentWorkspaceOverride(intent === 'rehearse' || intent === 'manage' ? intent : null);
       setActiveView('dashboard');
       return;
     }
-    if (intent === 'create') {
-      setIntentWorkspaceOverride(null);
-      handleNavigate('effect-generator');
-      return;
-    }
-    if (intent === 'rehearse') {
-      if (userPlan === 'free' || userPlan === 'trial') {
-        resetInlineForms();
-        setIntentWorkspaceOverride('rehearse');
-        setActiveView('dashboard');
-        return;
-      }
-      setIntentWorkspaceOverride(null);
-      handleNavigate(hasProfessionalAccess ? 'live-rehearsal' : 'angle-risk');
-      return;
-    }
-    if (intent === 'manage') {
-      if (userPlan === 'free' || userPlan === 'trial') {
-        resetInlineForms();
-        setIntentWorkspaceOverride('manage');
-        setActiveView('dashboard');
-        return;
-      }
-      setIntentWorkspaceOverride(null);
-      handleNavigate('show-planner');
-      return;
-    }
-    if (intent === 'social') {
-      setIntentWorkspaceOverride(null);
-      handleNavigate('magic-wire');
-      return;
-    }
-    if (intent === 'admin') {
-      if (!user?.isAdmin) return;
-      resetInlineForms();
-      setIntentWorkspaceOverride(null);
-      setActiveView('admin');
-      return;
-    }
+
+    setIntentWorkspaceOverride(null);
+    handleNavigate(targetView);
   };
 
   
