@@ -869,9 +869,14 @@ const IdentifyTab: React.FC<{
                         </button>
                         {(identificationResult || identificationError || identificationBlocked) ? (
                           <button
-                            onClick={onReset}
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              onReset();
+                            }}
                             disabled={isIdentifying || refining}
-                            className="w-full py-2 px-4 border border-slate-600 bg-slate-900/40 hover:bg-slate-800/50 rounded-md text-slate-200 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="relative z-10 w-full py-2 px-4 border border-slate-600 bg-slate-900/40 hover:bg-slate-800/50 rounded-md text-slate-200 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                           >
                             Analyze Another Trick
                           </button>
@@ -903,6 +908,18 @@ const IdentifyTab: React.FC<{
                         <div className="mt-1 text-2xl font-bold text-white">{identificationResult.trickName}</div>
                       </div>
                       <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            onReset();
+                          }}
+                          disabled={isIdentifying || refining}
+                          className="relative z-10 whitespace-nowrap rounded-full border border-slate-600 bg-slate-900/50 px-3 py-1.5 text-xs font-semibold text-slate-200 transition-colors hover:bg-slate-800/60 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
+                        >
+                          Start Over
+                        </button>
                         <span
                           className={`text-xs px-2.5 py-1 rounded-full border ${
                             (identificationResult.confidence || 'Medium') === 'High'
