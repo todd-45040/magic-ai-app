@@ -63,16 +63,24 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
     const limit = node?.limit;
     const daily = node?.daily;
 
+    const resolvedLabel = key === 'image_gen' && plan === 'amateur' ? 'Visual Brainstorm' : label;
     const isProOnly = Boolean(opts?.proOnly);
     const locked = isProOnly && plan !== 'professional';
     const isUnlimited = !locked && ((typeof limit === 'number' && limit >= 9999) || (typeof remaining === 'number' && remaining >= 9999));
     const isNotTrackedYet = Boolean(node?.tracked === false);
+    const hasDaily = daily && typeof daily?.used === 'number' && typeof daily?.limit === 'number';
+    const dailyRemaining = hasDaily && typeof daily?.remaining === 'number'
+      ? Number(daily.remaining)
+      : hasDaily
+        ? Math.max(0, Number(daily.limit) - Number(daily.used))
+        : null;
+    const monthlyRemaining = typeof remaining === 'number' ? Number(remaining) : null;
 
     const display = (() => {
       if (locked) return '🔒 Pro';
       if (isUnlimited) return 'Unlimited';
       if (isNotTrackedYet) return 'Not tracked yet';
-      if (daily && typeof daily?.used === 'number' && typeof daily?.limit === 'number') {
+      if (hasDaily) {
         return `${daily.used} / ${daily.limit}${opts?.unit ? ` ${opts.unit}` : ''}`;
       }
       if (typeof remaining === 'number' && typeof limit === 'number') return `${remaining} / ${limit}${opts?.unit ? ` ${opts.unit}` : ''}`;
@@ -80,19 +88,29 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
       return '—';
     })();
 
-    const exhausted = !locked && !isUnlimited && !isNotTrackedYet && typeof remaining === 'number' && remaining <= 0;
-    const progressPct = daily && typeof daily?.limit === 'number' && daily.limit > 0 && typeof daily?.used === 'number'
+    const exhausted = !locked && !isUnlimited && !isNotTrackedYet && (
+      hasDaily
+        ? (dailyRemaining ?? 0) <= 0
+        : (typeof remaining === 'number' && remaining <= 0)
+    );
+    const exhaustedLabel = hasDaily ? 'Daily remaining: 0' : 'Monthly remaining: 0';
+    const progressPct = hasDaily && typeof daily?.limit === 'number' && daily.limit > 0 && typeof daily?.used === 'number'
       ? Math.min(100, Math.max(0, (daily.used / daily.limit) * 100))
       : null;
 
     return (
       <div className="flex items-start justify-between gap-3 py-2.5">
         <div className="flex flex-col gap-1.5 min-w-0 flex-1">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="text-sm text-slate-200 truncate">{label}</span>
+          <div className="flex items-center gap-2 min-w-0 flex-wrap">
+            <span className="text-sm text-slate-200 truncate">{resolvedLabel}</span>
           {exhausted && (
             <span className="text-[11px] px-2 py-0.5 rounded-full border border-rose-400/25 bg-rose-500/10 text-rose-200">
-              0 remaining
+              {exhaustedLabel}
+            </span>
+          )}
+          {!hasDaily && monthlyRemaining !== null && monthlyRemaining <= 0 && !exhausted && (
+            <span className="text-[11px] px-2 py-0.5 rounded-full border border-slate-400/20 bg-slate-500/10 text-slate-200">
+              Monthly remaining: 0
             </span>
           )}
           {locked && (
@@ -106,10 +124,13 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
             <div className="text-[12px] text-slate-400">Unlimited</div>
           ) : isNotTrackedYet ? (
             <div className="text-[12px] text-slate-400/70">Usage tracking coming soon</div>
-          ) : daily && typeof daily?.limit === 'number' && daily.limit > 0 ? (
+          ) : hasDaily ? (
             <>
               <div className="text-[12px] text-slate-400">
                 Daily: <span className="tabular-nums text-slate-300">{daily.used}</span> / <span className="tabular-nums">{daily.limit}</span>{opts?.unit ? ` ${opts.unit}` : ''}
+                {key === 'image_gen' && monthlyRemaining !== null && typeof limit === 'number' ? (
+                  <span className="ml-2 text-slate-500">• Monthly remaining: <span className="tabular-nums text-slate-300">{monthlyRemaining}</span> / <span className="tabular-nums">{limit}</span></span>
+                ) : null}
               </div>
               {(key === 'live_audio_minutes' || key === 'image_gen') && progressPct !== null && (
                 <div className="h-1.5 max-w-[400px] rounded-full bg-black/20 overflow-hidden border border-white/5">
@@ -205,7 +226,7 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
 
                 <div className="mt-2 divide-y divide-white/10">
                   {quotaRow('Live Rehearsal (Audio)', 'live_audio_minutes', { unit: 'min' })}
-                  {quotaRow('Image Generation', 'image_gen')}
+                  {quotaRow(plan === 'amateur' ? 'Visual Brainstorm' : 'Image Generation', 'image_gen')}
                   {quotaRow('Identify a Trick', 'identify')}
                   {quotaRow('Video Rehearsal Uploads', 'video_uploads', { proOnly: true })}
                 </div>
