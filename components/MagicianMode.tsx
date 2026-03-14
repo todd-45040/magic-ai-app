@@ -2988,7 +2988,7 @@ useEffect(() => {
       if (plan === 'amateur') {
         return {
           live_audio_minutes: { limit: 0, remaining: 0, dailyLimit: 0, hidden: true },
-          image_gen: { limit: 0, remaining: 0, hidden: true },
+          image_gen: { limit: 20, remaining: 20, hidden: false },
           identify: { limit: 50, remaining: 50, hidden: false },
           video_uploads: { limit: 0, remaining: 0, dailyLimit: 0, hidden: true },
         };
@@ -4446,7 +4446,7 @@ ${action.payload.content}`;
           );
         case 'video-rehearsal': return <VideoRehearsal onIdeaSaved={() => handleIdeaSaved('Video analysis saved!')} user={user} />;
         case 'angle-risk': return <AngleRiskAnalysis user={user} onIdeaSaved={() => handleIdeaSaved('Angle/Risk analysis saved!')} />;
-        case 'visual-brainstorm': return <VisualBrainstorm onIdeaSaved={() => handleIdeaSaved('Image idea saved!')} user={user} />;
+        case 'visual-brainstorm': return <VisualBrainstorm onIdeaSaved={() => handleIdeaSaved('Image idea saved!')} user={user} onRequestUpgrade={() => setIsUpgradeModalOpen(true)} />;
         case 'saved-ideas': return <SavedIdeas onAiSpark={handleAiSpark} initialIdeaId={initialIdeaId || undefined} />;
         case 'prop-checklists': return <PropGenerator user={user} onIdeaSaved={() => handleIdeaSaved('Prop concept saved!')} onNavigateShowPlanner={() => setActiveView('show-planner')} onNavigateDirectorMode={() => setActiveView('director-mode')} />;
         case 'show-planner': return <ShowPlanner user={user} clients={clients} onNavigateToAnalytics={handleNavigateToAnalytics} initialShowId={initialShowId} initialTaskId={initialTaskId} />;

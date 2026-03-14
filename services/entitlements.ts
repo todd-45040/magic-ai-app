@@ -118,7 +118,7 @@ const TOOL_POLICIES: Record<ToolName, ToolPolicy> = {
   LiveRehearsal: { minTier: 'professional', usageResource: 'live_rehearsal_minutes', upgradeLabel: 'Professional' },
   VideoAnalysis: { minTier: 'professional', usageResource: 'video_analysis_clips', upgradeLabel: 'Professional' },
   PersonaSimulator: { minTier: 'professional', usageResource: 'text_generations', upgradeLabel: 'Professional' },
-  VisualBrainstorm: { minTier: 'professional', usageResource: 'image_generations', upgradeLabel: 'Professional' },
+  VisualBrainstorm: { minTier: 'amateur', limitedTiers: ['amateur'], usageResource: 'image_generations', upgradeLabel: 'Professional' },
   DirectorMode: { minTier: 'professional', usageResource: 'text_generations', upgradeLabel: 'Professional' },
   ImageGeneration: { minTier: 'professional', usageResource: 'image_generations', upgradeLabel: 'Professional' },
   CRM: { minTier: 'professional', upgradeLabel: 'Professional' },

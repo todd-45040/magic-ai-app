@@ -10,6 +10,7 @@ import SaveActionBar from './shared/SaveActionBar';
 import { BackIcon, ImageIcon, WandIcon, TrashIcon, CameraIcon } from './icons';
 import type { User } from '../types';
 import { canConsume, consume } from '../services/usageTracker';
+import { normalizeTier } from '../services/membershipService';
 import { trackClientEvent } from "../services/telemetryClient";
 
 interface VisualBrainstormProps {
@@ -61,6 +62,11 @@ const ImageLoadingIndicator: React.FC<{ label?: string }> = ({ label }) => {
 const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, onRequestUpgrade }) => {
   const { shows } = useAppState();
   const dispatch = useAppDispatch();
+  const normalizedTier = normalizeTier(user?.membership);
+  const sessionVariationLimit = normalizedTier === 'amateur' ? 2 : 4;
+  const sessionLimitCopy = normalizedTier === 'amateur'
+    ? 'Amateur includes up to 2 images per brainstorm session. Upgrade to Professional for 4-image variation sets.'
+    : null;
 
   const [editPrompt, setEditPrompt] = useState('');
   // Phase 1: Structured inputs for text-to-image
@@ -298,7 +304,7 @@ useEffect(() => {
       context: p.context,
     }).trim();
     if (!prompt) return;
-    await runAction({ kind: 'generate', prompt, aspectRatio, units: 4 } as any);
+    await runAction({ kind: 'generate', prompt, aspectRatio, units: sessionVariationLimit } as any);
   };
 
   const resetDemoSession = () => {
@@ -651,7 +657,7 @@ const addToHistory = (
       metadata: {
         mode: action.kind,
         aspectRatio: (action as any).aspectRatio ?? aspectRatio,
-        variations: action.kind === 'generate' ? 4 : 1,
+        variations: action.kind === 'generate' ? sessionVariationLimit : 1,
         label: (action as any).label,
       },
       units,
@@ -683,7 +689,7 @@ const addToHistory = (
         // Small delay so it still feels like “generation” at the booth.
         await new Promise((r) => setTimeout(r, 350));
         const baseTitle = (conceptTitle?.trim() ? conceptTitle.trim() : buildConceptTitle());
-        const count = action.kind === 'generate' ? 4 : 1;
+        const count = action.kind === 'generate' ? sessionVariationLimit : 1;
         const imgs = generateDemoImages(baseTitle, action.prompt, count);
         batchImages = imgs;
         if (action.kind === 'generate') {
@@ -696,7 +702,7 @@ const addToHistory = (
         if (action.kind === 'edit') {
           imageUrl = await editImageWithPrompt(action.base64, action.mimeType, action.prompt, user);
         } else if (action.kind === 'generate') {
-          const imgs = await generateImages(action.prompt, action.aspectRatio, 4, user);
+          const imgs = await generateImages(action.prompt, action.aspectRatio, sessionVariationLimit, user);
           batchImages = imgs;
           setVariationImages(imgs);
           setLastGeneratePrompt(action.prompt);
@@ -719,7 +725,7 @@ const addToHistory = (
         // New session for each edit workflow
         addToHistory({ imageUrl, promptUsed: action.prompt, title: resolvedTitle, kind: 'edit', refineLabel: undefined }, { createNewSession: true, coverImageUrl: imageUrl, batchImages: [imageUrl] });
       } else if (action.kind === 'generate') {
-        const imgs = (batchImages?.length ? batchImages : [imageUrl]).slice(0, 4);
+        const imgs = (batchImages?.length ? batchImages : [imageUrl]).slice(0, sessionVariationLimit);
 
         // Phase 10: start a new session for each fresh generation request (groups variations)
         const sid = ensureSession(action.prompt, imgs[0], imgs);
@@ -762,7 +768,7 @@ const addToHistory = (
           mode: action.kind,
           aspectRatio: (action as any).aspectRatio ?? aspectRatio,
           imagesGenerated: action.kind === 'generate' ? 4 : 1,
-          variations: action.kind === 'generate' ? 4 : 1,
+          variations: action.kind === 'generate' ? sessionVariationLimit : 1,
           label: (action as any).label,
           retry: Boolean(opts?.isRetry),
           demoMode: demoMode,
@@ -790,7 +796,7 @@ const addToHistory = (
         metadata: {
           mode: action.kind,
           aspectRatio: (action as any).aspectRatio ?? aspectRatio,
-          variations: action.kind === 'generate' ? 4 : 1,
+          variations: action.kind === 'generate' ? sessionVariationLimit : 1,
           label: (action as any).label,
           message: raw,
           timeout: isTimeout,
@@ -830,7 +836,7 @@ const addToHistory = (
         kind: 'generate',
         prompt: promptToUse,
         aspectRatio,
-        units: 4,
+        units: sessionVariationLimit,
       };
       await runAction(action);
     }
@@ -846,7 +852,7 @@ const addToHistory = (
       kind: 'generate',
       prompt: p,
       aspectRatio: lastGenerateAspect || aspectRatio,
-      units: 4,
+      units: sessionVariationLimit,
     };
     await runAction(action);
   };
@@ -1230,9 +1236,14 @@ const activeSession = useMemo(() => {
 <div className="space-y-4">
                 <div>
                     <div className="flex justify-between items-baseline mb-1">
-                        <label className="block text-sm font-medium text-slate-300">
-                          {isEditing ? 'Editing Instructions' : 'Visual Prompt Builder'}
-                        </label>
+                        <div>
+                          <label className="block text-sm font-medium text-slate-300">
+                            {isEditing ? 'Editing Instructions' : 'Visual Prompt Builder'}
+                          </label>
+                          {!isEditing && sessionLimitCopy && (
+                            <div className="mt-1 text-[11px] text-sky-200/85">{sessionLimitCopy}</div>
+                          )}
+                        </div>
                         {(isEditing ? editPrompt : (objectProp || sceneSetting || style || context || promptOverride)) && (
                              <button
                                 type="button"

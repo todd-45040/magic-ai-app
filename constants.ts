@@ -337,6 +337,7 @@ export const AMATEUR_FEATURES = [
     'My Saved Ideas',
     'Magic Archives',
     'Global Search',
+    'Visual Brainstorm Studio (limited)',
 ];
 
 // Display-only marketing labels for the mid-tier / business layer.

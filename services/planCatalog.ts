@@ -68,7 +68,7 @@ export type BillingPlanDefinition = {
 const INFINITE_LIMIT = Number.MAX_SAFE_INTEGER;
 
 const FREE_FEATURES: ToolName[] = ['EffectGenerator', 'PatterEngine', 'MagicWire', 'Publications', 'Community', 'IdentifyTrick'];
-const AMATEUR_FEATURES: ToolName[] = [...FREE_FEATURES, 'ShowPlanner', 'SavedIdeas', 'Search'];
+const AMATEUR_FEATURES: ToolName[] = [...FREE_FEATURES, 'ShowPlanner', 'SavedIdeas', 'Search', 'VisualBrainstorm'];
 const PROFESSIONAL_FEATURES: ToolName[] = [
   ...AMATEUR_FEATURES,
   'LiveRehearsal',
@@ -184,14 +184,14 @@ export const BILLING_PLAN_CATALOG: Record<BillingPlanKey, BillingPlanDefinition>
     entitlementTier: 'amateur',
     monthlyLimits: {
       text_generations: 200,
-      image_generations: 0,
+      image_generations: 20,
       live_rehearsal_minutes: 0,
       video_analysis_clips: 0,
       saved_shows: 25,
       saved_ideas: 100,
     },
     heavyToolLimits: {
-      imageGenerationsMonthly: 0,
+      imageGenerationsMonthly: 20,
       videoAnalysisClipsMonthly: 0,
       liveRehearsalMinutesMonthly: 0,
       maxConcurrentLiveSessions: 0,
