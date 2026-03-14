@@ -2934,14 +2934,10 @@ useEffect(() => {
   const [initialIdeaId, setInitialIdeaId] = useState<string | null>(null);
 
   const tier = normalizeTier(user.membership as any);
-  const userPlan: 'free' | 'trial' | 'amateur' | 'professional' | 'admin' | 'expired' = (() => {
-    if (tier === 'admin') return 'admin';
-    if (tier === 'professional') return 'professional';
-    if (tier === 'amateur') return 'amateur';
-    if (tier === 'expired') return 'expired';
-    if (tier === 'free') return 'free';
-    return 'trial';
-  })();
+  const userPlan = tier ?? 'free';
+  if (!tier) {
+    console.warn('tier missing in MagicianMode');
+  }
   const isTrialActive = tier === 'trial' && user.trialEndDate ? user.trialEndDate > Date.now() : false;
   const isTrialExpired = tier === 'trial' && user.trialEndDate ? user.trialEndDate <= Date.now() : false;
   const isExpired = tier === 'expired' || isTrialExpired;
