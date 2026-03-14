@@ -4245,7 +4245,11 @@ ${action.payload.content}`;
     setIsUpgradeModalOpen(false);
   }
   
-  const handleClientsUpdate = (updatedClients: Client[]) => {
+  const handleShowsUpdate = async (_updatedShows?: Show[]) => {
+    await refreshShows(dispatch);
+  };
+
+  const handleClientsUpdate = (_updatedClients: Client[]) => {
     refreshClients(dispatch);
   };
 
