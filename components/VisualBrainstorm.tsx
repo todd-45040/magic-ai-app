@@ -647,7 +647,6 @@ const addToHistory = (
         setError(`Daily image limit reached (${chk.used}/${chk.limit}). Upgrade to continue.`);
         return;
       }
-      consume(user, 'image', units);
     }
 
     // Telemetry (Phase 7)
@@ -715,6 +714,33 @@ const addToHistory = (
         }
       }
 
+      if (!imageUrl || (batchImages && batchImages.length === 0)) {
+        throw new Error('No images were returned. Please try again.');
+      }
+
+      const successfulImages = action.kind === 'generate'
+        ? Math.max(1, Math.min(sessionVariationLimit, batchImages?.length ?? 0))
+        : 1;
+
+      if (!skipConsume) {
+        consume(user, 'image', successfulImages);
+      }
+
+      try {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('ai-usage-update', {
+            detail: {
+              tool: 'visual_brainstorm',
+              units: successfulImages,
+              kind: action.kind,
+              ts: Date.now(),
+            },
+          }));
+        }
+      } catch {
+        // ignore
+      }
+
       setGeneratedImage(imageUrl);
       setPromptUsed(action.prompt);
 
@@ -767,14 +793,14 @@ const addToHistory = (
         metadata: {
           mode: action.kind,
           aspectRatio: (action as any).aspectRatio ?? aspectRatio,
-          imagesGenerated: action.kind === 'generate' ? 4 : 1,
-          variations: action.kind === 'generate' ? sessionVariationLimit : 1,
+          imagesGenerated: action.kind === 'generate' ? Math.max(1, Math.min(sessionVariationLimit, batchImages?.length ?? 0)) : 1,
+          variations: action.kind === 'generate' ? successfulImages : 1,
           label: (action as any).label,
           retry: Boolean(opts?.isRetry),
           demoMode: demoMode,
         },
         outcome: skipConsume ? 'SUCCESS_NOT_CHARGED' : 'SUCCESS_CHARGED',
-        units,
+        units: skipConsume ? 0 : (action.kind === 'generate' ? Math.max(1, Math.min(sessionVariationLimit, batchImages?.length ?? 0)) : 1),
       });
     } catch (err) {
       const raw = err instanceof Error ? err.message : 'An unknown error occurred.';
