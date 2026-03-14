@@ -4614,8 +4614,11 @@ ${action.payload.content}`;
         event.stopPropagation();
         onClick();
       }}
+      onMouseDown={(event) => {
+        event.preventDefault();
+      }}
       title={isLocked ? 'Upgrade to access this feature' : ''}
-      className={`relative z-[10000] shrink-0 cursor-pointer pointer-events-auto inline-flex items-center gap-2 whitespace-nowrap px-3 py-2 text-sm font-medium transition-colors select-none ${isActive ? 'border-b-2 border-purple-400 text-purple-300' : 'border-b-2 border-transparent text-slate-400 hover:text-white'} ${isLocked ? 'text-slate-600 hover:text-slate-600' : ''}`}
+      className={`relative z-[95] shrink-0 cursor-pointer pointer-events-auto inline-flex items-center gap-2 whitespace-nowrap px-3 py-2 text-sm font-medium transition-colors touch-manipulation select-none ${isActive ? 'border-b-2 border-purple-400 text-purple-300' : 'border-b-2 border-transparent text-slate-400 hover:text-white'} ${isLocked ? 'text-slate-600 hover:text-slate-600' : ''}`}
     >
       <Icon className="w-4 h-4" />
       <span className="hidden sm:inline">{label === "Assistant's Studio" ? (<><span>Assistant's Studio</span><span className="ml-2 text-[9px] px-1.5 py-0.5 rounded bg-indigo-500 text-white uppercase">Beta</span></>) : label}</span>
@@ -4947,7 +4950,7 @@ const renderIntentSubnav = () => {
       )}
 
 
-      <nav className={`sticky top-0 isolate z-[9999] flex w-full items-center gap-1 border-b border-slate-800/80 bg-slate-950/90 backdrop-blur px-2 md:px-4 overflow-x-auto md:overflow-x-visible md:flex-wrap [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden ${navElevated ? 'shadow-lg shadow-black/20' : ''}`}>
+      <nav className={`sticky top-0 isolate z-[90] flex items-center gap-1 border-b border-slate-800/80 bg-slate-950/75 backdrop-blur px-2 md:px-4 overflow-x-auto md:overflow-x-visible md:flex-wrap [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden ${navElevated ? 'shadow-lg shadow-black/20' : ''}`}>
         {/* Phase 2 (Navigation Tightening): Intent-based primary navigation */}
         <TabButton
           label="Home"
@@ -5009,7 +5012,7 @@ const renderIntentSubnav = () => {
         />
       </nav>
 
-      <div className="relative isolate z-[9998]">{renderIntentSubnav()}</div>
+      <div className="relative isolate z-[85] overflow-x-auto md:overflow-x-visible [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">{renderIntentSubnav()}</div>
 
       <main ref={mainScrollRef} onScroll={handleMainScroll} className="flex-1 flex flex-col overflow-y-auto">
         <div className="flex-1 flex flex-col animate-fade-in">
