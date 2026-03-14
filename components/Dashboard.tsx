@@ -4,6 +4,7 @@ import { getLayout, saveLayout, WIDGETS, getDefaultLayout } from '../services/da
 import { updateTaskInShow } from '../services/showsService';
 import { getPerformancesByShowId } from '../services/performanceService';
 import { supabase } from '../supabase';
+import { normalizeTier } from '../services/membershipService';
 import { RabbitIcon, ClockIcon, BookmarkIcon, WandIcon, MicrophoneIcon, StageCurtainsIcon, LightbulbIcon, UsersCogIcon, ChecklistIcon, FileTextIcon, ImageIcon, BookIcon, CustomizeIcon, DragHandleIcon, EyeIcon, EyeOffIcon, ChevronDownIcon } from './icons';
 
 interface DashboardProps {
@@ -21,7 +22,13 @@ const COLLAPSED_WIDGETS_KEY = 'magician_dashboard_collapsed_widgets';
 
 // --- Individual Widget Components ---
 
-const QuickActionsWidget: React.FC<{ onNavigate: (view: MagicianView) => void }> = ({ onNavigate }) => (
+const QuickActionsWidget: React.FC<{ user: User; onNavigate: (view: MagicianView) => void }> = ({ user, onNavigate }) => {
+    const tier = normalizeTier(user.membership as any);
+    const rehearseView: MagicianView = tier === 'professional' || tier === 'admin' ? 'live-rehearsal' : tier === 'amateur' ? 'video-rehearsal' : 'video-rehearsal';
+    const rehearseDescription = tier === 'professional' || tier === 'admin'
+        ? 'Run live coaching and review rehearsal tools'
+        : 'Upload a clip for guided rehearsal feedback';
+    return (
     <>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <button onClick={() => onNavigate('effect-generator')} className="p-3 rounded-xl border border-white/10 bg-white/[0.02] text-left h-full group transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/[0.05] hover:border-purple-400/40 hover:shadow-[0_6px_18px_rgba(0,0,0,0.35)] focus:outline-none focus:ring-2 focus:ring-purple-500/30">
@@ -29,10 +36,10 @@ const QuickActionsWidget: React.FC<{ onNavigate: (view: MagicianView) => void }>
                 <p className="font-bold text-yellow-200 group-hover:text-yellow-100 transition-colors">Create</p>
                 <p className="text-sm text-slate-400">Generate effects, patter, and creative directions</p>
             </button>
-            <button onClick={() => onNavigate('angle-risk')} className="p-3 rounded-xl border border-white/10 bg-white/[0.02] text-left h-full group transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/[0.05] hover:border-purple-400/40 hover:shadow-[0_6px_18px_rgba(0,0,0,0.35)] focus:outline-none focus:ring-2 focus:ring-purple-500/30">
+            <button onClick={() => onNavigate(rehearseView)} className="p-3 rounded-xl border border-white/10 bg-white/[0.02] text-left h-full group transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/[0.05] hover:border-purple-400/40 hover:shadow-[0_6px_18px_rgba(0,0,0,0.35)] focus:outline-none focus:ring-2 focus:ring-purple-500/30">
                 <MicrophoneIcon className="w-8 h-8 mb-2 text-purple-400 group-hover:text-purple-300 transition-colors" />
                 <p className="font-bold text-yellow-200 group-hover:text-yellow-100 transition-colors">Rehearse</p>
-                <p className="text-sm text-slate-400">Run angle/risk checks and rehearsal tools</p>
+                <p className="text-sm text-slate-400">{rehearseDescription}</p>
             </button>
             <button onClick={() => onNavigate('show-planner')} className="p-3 rounded-xl border border-white/10 bg-white/[0.02] text-left h-full group transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/[0.05] hover:border-purple-400/40 hover:shadow-[0_6px_18px_rgba(0,0,0,0.35)] focus:outline-none focus:ring-2 focus:ring-purple-500/30">
                 <ChecklistIcon className="w-8 h-8 mb-2 text-purple-400 group-hover:text-purple-300 transition-colors" />
@@ -42,6 +49,7 @@ const QuickActionsWidget: React.FC<{ onNavigate: (view: MagicianView) => void }>
         </div>
     </>
 );
+}
 
 const UpcomingTasksWidget: React.FC<{ shows: Show[], onNavigate: (view: MagicianView) => void, onShowsUpdate: () => void }> = ({ shows, onNavigate, onShowsUpdate }) => {
     const [completedTasks, setCompletedTasks] = useState<Set<string>>(new Set());
@@ -516,7 +524,7 @@ const Dashboard: React.FC<DashboardProps> = ({ variant = 'full', user, shows, fe
                 <div>
                     <h2 className="text-xs uppercase tracking-[0.08em] font-semibold text-slate-400/85">Quick Paths</h2>
                     <div className="mt-3">
-                        <QuickActionsWidget onNavigate={onNavigate} />
+                        <QuickActionsWidget user={user} onNavigate={onNavigate} />
                     </div>
                 </div>
 
@@ -620,7 +628,7 @@ const Dashboard: React.FC<DashboardProps> = ({ variant = 'full', user, shows, fe
     };
     
     const widgetComponents: Record<WidgetId, React.ReactNode> = {
-        'quick-actions': <QuickActionsWidget onNavigate={onNavigate} />,
+        'quick-actions': <QuickActionsWidget user={user} onNavigate={onNavigate} />,
         'business-metrics': <BusinessMetricsWidget shows={shows} feedback={feedback} />,
         'contract-pipeline': <ContractPipelineWidget />,
         'upcoming-tasks': <UpcomingTasksWidget shows={shows} onNavigate={onNavigate} onShowsUpdate={onShowsUpdate} />,

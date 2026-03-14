@@ -228,7 +228,7 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
                   {quotaRow('Live Rehearsal (Audio)', 'live_audio_minutes', { unit: 'min' })}
                   {quotaRow(plan === 'amateur' ? 'Visual Brainstorm' : 'Image Generation', 'image_gen')}
                   {quotaRow('Identify a Trick', 'identify')}
-                  {quotaRow('Video Rehearsal Uploads', 'video_uploads', { proOnly: true })}
+                  {quotaRow('Video Rehearsal Uploads', 'video_uploads')}
                 </div>
 
                 {shouldShowUpgrade && (

@@ -68,12 +68,14 @@ export type BillingPlanDefinition = {
 const INFINITE_LIMIT = Number.MAX_SAFE_INTEGER;
 
 const FREE_FEATURES: ToolName[] = ['EffectGenerator', 'PatterEngine', 'MagicWire', 'Publications', 'Community', 'IdentifyTrick'];
-const AMATEUR_FEATURES: ToolName[] = [...FREE_FEATURES, 'ShowPlanner', 'SavedIdeas', 'Search', 'VisualBrainstorm'];
+const AMATEUR_FEATURES: ToolName[] = [...FREE_FEATURES, 'ShowPlanner', 'SavedIdeas', 'Search', 'VisualBrainstorm', 'VideoAnalysis'];
 const PROFESSIONAL_FEATURES: ToolName[] = [
   ...AMATEUR_FEATURES,
   'LiveRehearsal',
   'VideoAnalysis',
   'PersonaSimulator',
+  'AngleRiskAnalysis',
+  'RehearsalCoaching',
   'VisualBrainstorm',
   'DirectorMode',
   'ImageGeneration',
@@ -98,6 +100,8 @@ const ALL_TOOLS: ToolName[] = [
   'LiveRehearsal',
   'VideoAnalysis',
   'PersonaSimulator',
+  'AngleRiskAnalysis',
+  'RehearsalCoaching',
   'VisualBrainstorm',
   'DirectorMode',
   'ImageGeneration',
@@ -138,17 +142,17 @@ export const BILLING_PLAN_CATALOG: Record<BillingPlanKey, BillingPlanDefinition>
       text_generations: 20,
       image_generations: 0,
       live_rehearsal_minutes: 0,
-      video_analysis_clips: 0,
+      video_analysis_clips: 2,
       saved_shows: 3,
       saved_ideas: 10,
     },
     heavyToolLimits: {
       imageGenerationsMonthly: 0,
-      videoAnalysisClipsMonthly: 0,
+      videoAnalysisClipsMonthly: 2,
       liveRehearsalMinutesMonthly: 0,
       maxConcurrentLiveSessions: 0,
       maxReconnectAttemptsPerSession: 0,
-      maxVideoUploadMb: 0,
+      maxVideoUploadMb: 25,
       maxImageUploadMb: 10,
     },
     storageLimits: {
@@ -186,17 +190,17 @@ export const BILLING_PLAN_CATALOG: Record<BillingPlanKey, BillingPlanDefinition>
       text_generations: 200,
       image_generations: 20,
       live_rehearsal_minutes: 0,
-      video_analysis_clips: 0,
+      video_analysis_clips: 2,
       saved_shows: 25,
       saved_ideas: 100,
     },
     heavyToolLimits: {
       imageGenerationsMonthly: 20,
-      videoAnalysisClipsMonthly: 0,
+      videoAnalysisClipsMonthly: 2,
       liveRehearsalMinutesMonthly: 0,
       maxConcurrentLiveSessions: 0,
       maxReconnectAttemptsPerSession: 0,
-      maxVideoUploadMb: 0,
+      maxVideoUploadMb: 25,
       maxImageUploadMb: 10,
     },
     storageLimits: {

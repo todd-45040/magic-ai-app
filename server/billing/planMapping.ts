@@ -243,6 +243,7 @@ export function getUsageQuotaConfigForMembership(membership?: string | null): Us
         : 10,
       video_uploads:
         billingPlanKey === 'professional' ? 6
+        : billingPlanKey === 'amateur' ? 1
         : 0,
     },
   };

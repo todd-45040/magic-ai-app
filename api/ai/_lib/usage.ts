@@ -79,7 +79,7 @@ const TOOL_POLICIES: Record<ToolKey, ToolPolicy> = {
   image_generation: { key: 'image_generation', minTier: 'trial', quotaColumn: 'quota_image_gen' },
   visual_brainstorm: { key: 'visual_brainstorm', minTier: 'amateur', quotaColumn: 'quota_image_gen' },
   identify_trick: { key: 'identify_trick', minTier: 'trial', quotaColumn: 'quota_identify' },
-  video_rehearsal: { key: 'video_rehearsal', minTier: 'trial', quotaColumn: 'quota_video_uploads' },
+  video_rehearsal: { key: 'video_rehearsal', minTier: 'amateur', quotaColumn: 'quota_video_uploads' },
 };
 
 function tierRank(tier: string): number {

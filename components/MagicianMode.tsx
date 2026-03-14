@@ -4287,12 +4287,12 @@ ${action.payload.content}`;
 
   const renderLockedIntentWorkspace = (intent: 'rehearse' | 'manage') => {
     const isManage = intent === 'manage';
-    const title = isManage ? 'Management tools are available on Amateur and Professional plans' : 'Advanced rehearsal tools are available on Professional plans';
+    const title = isManage ? 'Management tools are available on Amateur and Professional plans' : 'Rehearsal tools open in stages as you move up the plans';
     const description = isManage
       ? 'Browse the workspace and see what unlocks next. Upgrade to Amateur to use Show Planner, Saved Ideas, and Search.'
-      : 'Browse the rehearsal workspace and see what unlocks next. Upgrade to Professional to use Live Rehearsal, Video Rehearsal, and Persona Simulator.';
-    const primaryLabel = isManage ? 'Upgrade to Amateur' : 'Upgrade to Professional';
-    const primaryTier = isManage ? 'amateur' : 'professional';
+      : 'Upgrade to Amateur to unlock Video Rehearsal. Professional adds Live Rehearsal, Angle & Risk, and Persona Simulator.';
+    const primaryLabel = isManage ? 'Upgrade to Amateur' : 'Upgrade to Amateur';
+    const primaryTier = isManage ? 'amateur' : 'amateur';
 
     const cards = isManage
       ? [
@@ -4301,9 +4301,9 @@ ${action.payload.content}`;
           { label: 'Search', view: 'global-search' as MagicianView, note: 'Find ideas, shows, and notes fast.' },
         ]
       : [
-          { label: 'Live Rehearsal', view: 'live-rehearsal' as MagicianView, note: 'Practice in real time with coaching prompts.' },
           { label: 'Video Rehearsal', view: 'video-rehearsal' as MagicianView, note: 'Upload clips for performance feedback.' },
-          { label: 'Persona Simulator', view: 'persona-simulator' as MagicianView, note: 'Test your material against audience personas.' },
+          { label: 'Live Rehearsal', view: 'live-rehearsal' as MagicianView, note: 'Professional unlocks real-time coaching prompts.' },
+          { label: 'Angle & Risk', view: 'angle-risk' as MagicianView, note: 'Professional unlocks detailed sightline analysis.' },
         ];
 
     return (
@@ -4691,7 +4691,7 @@ ${action.payload.content}`;
       case 'rehearse':
         return (userPlan === 'free' || userPlan === 'trial')
           ? 'dashboard'
-          : (hasProfessionalAccess ? 'live-rehearsal' : 'angle-risk');
+          : (hasProfessionalAccess ? 'live-rehearsal' : 'video-rehearsal');
       case 'manage':
         return (userPlan === 'free' || userPlan === 'trial') ? 'dashboard' : 'show-planner';
       case 'social':
@@ -4775,9 +4775,9 @@ const renderIntentSubnav = () => {
     if (activeIntent === 'rehearse') {
       return (
         <div className="relative z-[110] flex flex-wrap items-center gap-2 px-2 md:px-4 py-2 border-b border-slate-800/70 bg-slate-950/60">
-          {subBtn('Angle & Risk', () => handleNavigate('angle-risk'), activeView === 'angle-risk')}
-          {subBtn('Live Rehearsal', () => handleNavigate('live-rehearsal'), activeView === 'live-rehearsal', isAccessLocked('live-rehearsal'))}
           {subBtn('Video Rehearsal', () => handleNavigate('video-rehearsal'), activeView === 'video-rehearsal', isAccessLocked('video-rehearsal'))}
+          {subBtn('Angle & Risk', () => handleNavigate('angle-risk'), activeView === 'angle-risk', isAccessLocked('angle-risk'))}
+          {subBtn('Live Rehearsal', () => handleNavigate('live-rehearsal'), activeView === 'live-rehearsal', isAccessLocked('live-rehearsal'))}
           {subBtn('Persona Simulator', () => handleNavigate('persona-simulator'), activeView === 'persona-simulator', isAccessLocked('persona-simulator'))}
         </div>
       );

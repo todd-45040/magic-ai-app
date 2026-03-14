@@ -116,7 +116,7 @@ const TOOL_POLICIES: Record<ToolName, ToolPolicy> = {
   SavedIdeas: { minTier: 'amateur', limitedTiers: ['amateur'], usageResource: 'saved_ideas', upgradeLabel: 'Amateur' },
   Search: { minTier: 'amateur', limitedTiers: ['amateur'], upgradeLabel: 'Amateur' },
   LiveRehearsal: { minTier: 'professional', usageResource: 'live_rehearsal_minutes', upgradeLabel: 'Professional' },
-  VideoAnalysis: { minTier: 'professional', usageResource: 'video_analysis_clips', upgradeLabel: 'Professional' },
+  VideoAnalysis: { minTier: 'amateur', limitedTiers: ['amateur'], usageResource: 'video_analysis_clips', upgradeLabel: 'Professional' },
   PersonaSimulator: { minTier: 'professional', usageResource: 'text_generations', upgradeLabel: 'Professional' },
   VisualBrainstorm: { minTier: 'amateur', limitedTiers: ['amateur'], usageResource: 'image_generations', upgradeLabel: 'Professional' },
   DirectorMode: { minTier: 'professional', usageResource: 'text_generations', upgradeLabel: 'Professional' },
@@ -139,8 +139,8 @@ const TOOL_POLICIES: Record<ToolName, ToolPolicy> = {
   MagicTheoryTutor: { minTier: 'professional', upgradeLabel: 'Professional' },
   MagicArchives: { minTier: 'amateur', upgradeLabel: 'Amateur' },
   InnovationEngine: { minTier: 'amateur', usageResource: 'text_generations', upgradeLabel: 'Amateur' },
-  AngleRiskAnalysis: { minTier: 'amateur', usageResource: 'text_generations', upgradeLabel: 'Amateur' },
-  RehearsalCoaching: { minTier: 'amateur', usageResource: 'text_generations', upgradeLabel: 'Amateur' },
+  AngleRiskAnalysis: { minTier: 'professional', usageResource: 'text_generations', upgradeLabel: 'Professional' },
+  RehearsalCoaching: { minTier: 'professional', usageResource: 'text_generations', upgradeLabel: 'Professional' },
 };
 
 function tierRank(tier: CanonicalTier): number {

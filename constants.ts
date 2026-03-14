@@ -331,13 +331,12 @@ export const AMATEUR_FEATURES = [
     'Effect Generator',
     'Patter Engine',
     'Innovation Engine',
-    'Angle/Risk Analysis',
-    'Rehearsal Coaching',
     'Show Planner',
     'My Saved Ideas',
     'Magic Archives',
     'Global Search',
     'Visual Brainstorm Studio (limited)',
+    'Video Rehearsal Studio (limited)',
 ];
 
 // Display-only marketing labels for the mid-tier / business layer.
@@ -351,6 +350,8 @@ export const SEMI_PRO_FEATURES = [
 export const PROFESSIONAL_FEATURES = [
     'Live Patter Rehearsal',
     'Video Rehearsal Studio',
+    'Angle/Risk Analysis',
+    'Rehearsal Coaching',
     'Visual Brainstorm Studio',
     'Illusion Blueprint Generator',
     'Director Mode',
