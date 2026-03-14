@@ -4606,16 +4606,24 @@ ${action.payload.content}`;
     }
   }
 
-  const TabButton: React.FC<{ label: string; icon: React.FC<{ className?: string }>; isActive: boolean; onClick: () => void; isLocked?: boolean; }> = ({ label, icon: Icon, isActive, onClick, isLocked }) => (
+  const TabButton: React.FC<{ label: string; icon: React.FC<{ className?: string }>; isActive: boolean; onClick: () => void; isLocked?: boolean; }> = ({ label, icon: Icon, isActive, onClick, isLocked }) => {
+    const handlePress = (event: React.MouseEvent<HTMLButtonElement> | React.KeyboardEvent<HTMLButtonElement>) => {
+      if (isLocked) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onClick();
+    };
+
+    return (
     <button
       type="button"
-      onClick={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        onClick();
+      onMouseDown={handlePress}
+      onClick={handlePress}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') handlePress(event);
       }}
       title={isLocked ? 'Upgrade to access this feature' : ''}
-      className={`relative z-[95] shrink-0 cursor-pointer pointer-events-auto flex items-center gap-2 whitespace-nowrap px-3 py-2 text-sm font-medium transition-colors ${isActive ? 'border-b-2 border-purple-400 text-purple-300' : 'border-b-2 border-transparent text-slate-400 hover:text-white'} ${isLocked ? 'text-slate-600 hover:text-slate-600' : ''}`}
+      className={`relative z-[120] inline-flex shrink-0 select-none cursor-pointer pointer-events-auto items-center gap-2 whitespace-nowrap px-3 py-2 text-sm font-medium transition-colors ${isActive ? 'border-b-2 border-purple-400 text-purple-300' : 'border-b-2 border-transparent text-slate-400 hover:text-white'} ${isLocked ? 'text-slate-600 hover:text-slate-600' : ''}`}
     >
       <Icon className="w-4 h-4" />
       <span className="hidden sm:inline">{label === "Assistant's Studio" ? (<><span>Assistant's Studio</span><span className="ml-2 text-[9px] px-1.5 py-0.5 rounded bg-indigo-500 text-white uppercase">Beta</span></>) : label}</span>
@@ -4623,6 +4631,7 @@ ${action.payload.content}`;
       {isLocked && <LockIcon className="absolute top-1 right-1 w-3 h-3 text-amber-400/80" />}
     </button>
   );
+  };
 
   const activeTab = VIEW_TO_TAB_MAP[activeView];
   const activeIntent = (() => {
@@ -4751,10 +4760,22 @@ const renderIntentSubnav = () => {
 
     const subBtn = (label: string, onClick: () => void, isActive?: boolean, locked?: boolean) => (
       <button
+        type="button"
         key={label === "Assistant's Studio" ? (<><span>Assistant's Studio</span><span className="ml-2 text-[9px] px-1.5 py-0.5 rounded bg-indigo-500 text-white uppercase">Beta</span></>) : label}
-        onClick={onClick}
+        onMouseDown={(event) => {
+          if (locked) return;
+          event.preventDefault();
+          event.stopPropagation();
+          onClick();
+        }}
+        onClick={(event) => {
+          if (locked) return;
+          event.preventDefault();
+          event.stopPropagation();
+          onClick();
+        }}
         className={[
-          'relative z-[85] whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold border transition-colors cursor-pointer pointer-events-auto',
+          'relative z-[115] inline-flex select-none whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold border transition-colors cursor-pointer pointer-events-auto',
           locked ? 'opacity-60 cursor-not-allowed' : 'hover:bg-slate-800/60',
           isActive ? 'bg-indigo-600/30 text-white border-indigo-400 shadow-[0_0_10px_rgba(99,102,241,0.6)]' : 'bg-transparent text-slate-300 border-slate-800',
         ].join(' ')}
@@ -4947,7 +4968,7 @@ const renderIntentSubnav = () => {
       )}
 
 
-      <nav className={`sticky top-0 isolate z-[90] flex items-center gap-1 border-b border-slate-800/80 bg-slate-950/75 backdrop-blur px-2 md:px-4 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden ${navElevated ? 'shadow-lg shadow-black/20' : ''}`}>
+      <nav className={`sticky top-0 isolate z-[110] flex items-center gap-1 border-b border-slate-800/80 bg-slate-950/75 backdrop-blur px-2 md:px-4 overflow-x-auto md:overflow-x-visible [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden ${navElevated ? 'shadow-lg shadow-black/20' : ''}`}>
         {/* Phase 2 (Navigation Tightening): Intent-based primary navigation */}
         <TabButton
           label="Home"
