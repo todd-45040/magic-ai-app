@@ -640,16 +640,12 @@
         </p>
 
         <div class="admc-actions">
-          <a class="btn" href="#join">Join the Founders Circle</a>
+          <a class="btn" href="#join">Unlock Founding Access</a>
           <a class="btn-secondary" href="/app/?demo=1">Try Demo Mode</a>
         </div>
 
-        <div class="admc-note" style="max-width:760px; margin-left:auto; margin-right:auto; line-height:1.55;">
-          <strong>Founders Circle enrollment window:</strong> Opens <strong>April 2 at 6:00 PM</strong> and closes <strong>Wednesday, April 8 at 11:59 PM</strong>.<br>
-          Lock in your <strong>lifetime Founder rate</strong> during the official ADMC launch window.
-        </div>
-        <div id="founderCountdown" class="admc-note" style="margin-top:10px; color:#ffd978; font-weight:700;">
-          Founder window closes in: calculating...
+        <div class="admc-note">
+          ADMC Founding Rate ends <strong>Sunday night</strong>. Lock it in while you’re here.
         </div>
       </section>
 
@@ -683,14 +679,10 @@
         </div>
 
         <div class="card" id="join">
-          <div class="section-title section-title--white">Join the Founders Circle</div>
-          <p style="margin-bottom: 10px; line-height:1.6;">
-            Join during the official ADMC enrollment window to lock in <strong>ADMC-only Founder pricing</strong>, receive early access updates, and get the first invite when new tools ship.
+          <div class="section-title section-title--white">Join the Founding Circle</div>
+          <p style="margin-bottom: 10px;">
+            Get early access updates, ADMC-only pricing, and the first invite when new tools ship.
           </p>
-          <div class="callout admc-tight" role="note" style="margin-bottom:14px;">
-            <strong>Enrollment window:</strong> April 2 at 6:00 PM through Wednesday, April 8 at 11:59 PM.<br>
-            <strong>Founder benefit:</strong> Lock in your lifetime Founder rate during this limited sign-up period.
-          </div>
 
           <!--
             Hook this up to your existing waitlist endpoint if you want.
@@ -713,7 +705,7 @@
               <option>Other</option>
             </select>
 
-            <button class="btn" type="submit" style="width:100%;">Join the Founders Circle</button>
+            <button class="btn" type="submit" style="width:100%;">Unlock My Founding Access</button>
           </form>
 
           <div class="admc-success" id="admcSuccess">
@@ -724,8 +716,8 @@
             Could not save your email. Please try again (or ask at the booth).
           </div>
 
-          <div class="admc-note" style="line-height:1.55;">
-            We respect privacy. No spam — just product updates, early access, and your Founders Circle details during the April 2–8 enrollment window.
+          <div class="admc-note">
+            We respect privacy. No spam — just product updates and early access.
           </div>
         </div>
       </section>
@@ -739,26 +731,7 @@
       // Optional: lightweight demo submit handler.
       // Replace fetch URL with your real endpoint (e.g., /api/waitlist or Supabase edge function).
       (function() {
-  
-      const founderCountdown = document.getElementById('founderCountdown');
-      const founderClose = new Date('2026-04-08T23:59:00');
-      function updateFounderCountdown() {
-        if (!founderCountdown) return;
-        const now = new Date();
-        const diff = founderClose - now;
-        if (diff <= 0) {
-          founderCountdown.textContent = 'The Founders Circle enrollment window has now closed.';
-          return;
-        }
-        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-        const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
-        const minutes = Math.floor((diff / (1000 * 60)) % 60);
-        founderCountdown.textContent = `Founder window closes in: ${days}d ${hours}h ${minutes}m`;
-      }
-      updateFounderCountdown();
-      setInterval(updateFounderCountdown, 60000);
-
-      const form = document.getElementById('admcForm');
+        const form = document.getElementById('admcForm');
         const ok = document.getElementById('admcSuccess');
         const err = document.getElementById('admcError');
 
