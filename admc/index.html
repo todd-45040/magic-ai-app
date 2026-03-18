@@ -627,6 +627,33 @@
       .admc-tight {
         margin-top: 10px;
       }
+
+      .hero-logo-wrap{
+        display:flex;
+        justify-content:center;
+        margin: 8px 0 16px;
+      }
+      .hero-logo{
+        width: min(100%, 500px);
+        height: auto;
+        display:block;
+        filter: drop-shadow(0 10px 24px rgba(139,92,246,0.18));
+      }
+      .release-note{
+        max-width: 640px;
+        margin: 16px auto 0;
+        padding: 12px 14px;
+        border-radius: 14px;
+        border: 1px solid rgba(246,195,67,0.30);
+        background: rgba(246,195,67,0.06);
+        color: rgba(255,255,255,0.84);
+        font-size: 14px;
+        line-height: 1.55;
+      }
+      .release-note strong{
+        color: var(--yellow);
+      }
+
     </style>
   </head>
 
@@ -647,6 +674,10 @@
       <section class="card admc-hero">
         <div class="admc-badge"><span class="star"></span> ADMC Exclusive Access</div>
 
+        <div class="hero-logo-wrap">
+          <img class="hero-logo" src="./Wizard_Head_wText.png" alt="Magicians' AI Wizard logo">
+        </div>
+
         <h1 class="font-cinzel" style="margin-top:14px;">
           Welcome <span class="text-gold">ADMC</span> Magicians.
         </h1>
@@ -656,13 +687,18 @@
           with tools designed specifically for performers (not generic AI).
         </p>
 
+        <div class="release-note">
+          Full platform officially launches <strong>April 1st, 2026</strong> — Founders Circle members get early access updates and can lock in lifetime Founder pricing during the official ADMC enrollment window.
+        </div>
+
         <div class="admc-actions">
-          <a class="btn" href="#join">Unlock Founding Access</a>
+          <a class="btn" href="#join">Join the Founders Circle</a>
           <a class="btn-secondary" href="/app/?demo=1">Try Demo Mode</a>
         </div>
 
         <div class="admc-note">
-          ADMC Founding Rate ends <strong>Sunday night</strong>. Lock it in while you’re here.
+          Founders Circle enrollment window: Opens April 2 at 6:00 PM and closes Wednesday, April 8 at 11:59 PM.
+          Lock in your lifetime Founder rate during the official ADMC launch window.
         </div>
 
         <div class="admc-counter" aria-live="polite">
@@ -701,10 +737,14 @@
         </div>
 
         <div class="card" id="join">
-          <div class="section-title section-title--white">Join the Founding Circle</div>
+          <div class="section-title section-title--white">Join the Founders Circle</div>
           <p style="margin-bottom: 10px;">
-            Get early access updates, ADMC-only pricing, and the first invite when new tools ship.
+            Join during the official ADMC enrollment window to lock in ADMC-only Founder pricing, receive early access updates, and get the first invite when new tools ship.
           </p>
+
+          <div class="callout admc-tight" role="note" style="margin-bottom: 12px;">
+            Enrollment window: April 2 at 6:00 PM through Wednesday, April 8 at 11:59 PM. Founder benefit: Lock in your lifetime Founder rate during this limited sign-up period.
+          </div>
 
           <!--
             Hook this up to your existing waitlist endpoint if you want.
@@ -727,11 +767,11 @@
               <option>Other</option>
             </select>
 
-            <button class="btn" type="submit" style="width:100%;">Unlock My Founding Access</button>
+            <button class="btn" type="submit" style="width:100%;">Join the Founders Circle</button>
           </form>
 
           <div class="admc-success" id="admcSuccess">
-            You’re in! Watch your inbox tonight — we’ll send your ADMC founding access details.
+            You’re in! Watch your inbox — we’ll send your ADMC Founders Circle details.
           </div>
 
           <div class="admc-error" id="admcError">
@@ -739,7 +779,7 @@
           </div>
 
           <div class="admc-note">
-            We respect privacy. No spam — just product updates and early access.
+            We respect privacy. No spam — just product updates, early access, and your Founders Circle details during the April 2–8 enrollment window.
           </div>
         </div>
       </section>
