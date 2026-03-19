@@ -13,6 +13,9 @@ import { canConsume, consume } from '../services/usageTracker';
 import { normalizeTier } from '../services/membershipService';
 import { trackClientEvent } from "../services/telemetryClient";
 
+const PRACTICAL_VISUAL_BRAINSTORM_HINT = 'practical magic prop or stage concept, real materials, believable construction, professional theatrical realism, buildable design, no fantasy physics';
+const PRACTICAL_VISUAL_BRAINSTORM_LABEL = 'Practical mode: outputs are biased toward believable stage/build designs.';
+
 interface VisualBrainstormProps {
     onIdeaSaved: () => void;
     user: User;
@@ -267,8 +270,8 @@ useEffect(() => {
     },
     {
       title: 'Stage Set Mood Board: Galaxy Backdrop',
-      objectProp: 'starry backdrop and floating props',
-      sceneSetting: 'large theater stage with galaxy gradient lighting',
+      objectProp: 'premium backdrop, modular props, and scenic elements',
+      sceneSetting: 'large theater stage with premium theatrical lighting',
       style: 'dreamy, cosmic, vibrant',
       context: 'purple/blue galaxy haze, soft volumetric beams, magical sparkles',
     },
@@ -474,7 +477,7 @@ useEffect(() => {
     if (objectProp.trim()) parts.push(`magic concept using ${objectProp.trim()}`);
     if (context.trim()) parts.push(context.trim());
 
-    // A gentle anchor so outputs stay “magic concept art” rather than generic product shots.
+    parts.push(PRACTICAL_VISUAL_BRAINSTORM_HINT);
     parts.push('professional magic performance concept art');
 
     return parts.join(', ');
@@ -490,6 +493,7 @@ useEffect(() => {
     if (sc) parts.push(sc);
     if (o) parts.push(`magic concept using ${o}`);
     if (c) parts.push(c);
+    parts.push(PRACTICAL_VISUAL_BRAINSTORM_HINT);
     parts.push('professional magic performance concept art');
     return parts.join(', ');
   };
@@ -1320,7 +1324,7 @@ const activeSession = useMemo(() => {
                           <input
                             value={style}
                             onChange={(e) => { setStyle(e.target.value); setError(null); }}
-                            placeholder="mysterious, steampunk, dark magic, comedy..."
+                            placeholder="mysterious, theatrical, elegant, comedy..."
                             className="w-full px-2.5 py-1.5 text-xs bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
                           />
                         </div>
@@ -1340,7 +1344,10 @@ const activeSession = useMemo(() => {
                         {/* Prompt preview + advanced override */}
                         <div className="rounded-md border border-slate-700 bg-slate-900/40 p-3">
                           <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs font-semibold text-slate-400">Assembled Prompt</span>
+                            <div>
+                              <span className="text-xs font-semibold text-slate-400">Assembled Prompt</span>
+                              <div className="mt-1 text-[11px] text-emerald-200/85">{PRACTICAL_VISUAL_BRAINSTORM_LABEL}</div>
+                            </div>
                             <button
                               type="button"
                               onClick={() => setAdvancedPrompt(v => !v)}

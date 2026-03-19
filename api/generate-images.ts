@@ -2,6 +2,7 @@ import { GoogleGenAI } from '@google/genai';
 import { enforceAiUsage } from '../server/usage.js';
 import { resolveProvider } from '../lib/server/providers/index.js';
 import { getGoogleAiApiKey } from '../server/gemini.js';
+import { applyImagePromptPolicy } from './_lib/imagePromptPolicy';
 
 export default async function handler(request: any, response: any) {
   if (request.method !== 'POST') {
@@ -35,6 +36,7 @@ export default async function handler(request: any, response: any) {
   try {
     const provider = await resolveProvider(request);
     const { prompt, aspectRatio = '1:1' } = request.body || {};
+    const safePrompt = applyImagePromptPolicy(prompt, 'practical');
 
     let result: any;
 
@@ -52,7 +54,7 @@ export default async function handler(request: any, response: any) {
         },
         body: JSON.stringify({
           model,
-          prompt: String(prompt || ''),
+          prompt: safePrompt,
           // size mapping: OpenAI uses fixed sizes; keep default
           size: '1024x1024',
           response_format: 'b64_json',
@@ -78,7 +80,7 @@ export default async function handler(request: any, response: any) {
       const ai = new GoogleGenAI({ apiKey });
       result = await ai.models.generateImages({
         model: 'imagen-4.0-generate-001',
-        prompt,
+        prompt: safePrompt,
         config: {
           numberOfImages: requestedCount,
           outputMimeType: 'image/jpeg',

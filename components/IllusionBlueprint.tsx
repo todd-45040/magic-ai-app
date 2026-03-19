@@ -178,9 +178,9 @@ Rules:
 
 - Build complexity must be a number from 1 to 5.`;
 
-const IMAGE_STYLE_GUIDE = `Create theatrical but practical illusion concept imagery. Show the prop or illusion unit clearly. Prioritize believable materials, clean stage presentation, and builder-oriented visibility. No text overlays. No exploded diagrams. No impossible sci-fi visuals.`;
+const IMAGE_STYLE_GUIDE = `Create theatrical but practical illusion concept imagery. Show the prop or illusion unit clearly. Prioritize believable materials, clean stage presentation, builder-oriented visibility, fabrication realism, and touring-feasible scale. No text overlays. No exploded diagrams. No impossible sci-fi visuals, floating structures, fantasy physics, or magical energy effects.`;
 
-const BLUEPRINT_STYLE_GUIDE = `Create technical blueprint-style drawings for a stage illusion prop. Show practical construction-oriented diagram views with clean white or light blue linework on a dark blueprint background. Include front elevation, side elevation, and cutaway or mechanism-style layout where helpful. Emphasize labeled structural sections, dimensional feel, fabrication logic, and workshop realism. No text paragraphs. No poster art. No glossy rendering. Make it look like an illusion builder's technical concept sheet.`;
+const BLUEPRINT_STYLE_GUIDE = `Create technical blueprint-style drawings for a stage illusion prop. Show practical construction-oriented diagram views with clean white or light blue linework on a dark blueprint background. Include front elevation, side elevation, and cutaway or mechanism-style layout where helpful. Emphasize labeled structural sections, dimensional feel, fabrication logic, workshop realism, and believable real-world construction. No text paragraphs. No poster art. No glossy rendering. Make it look like an illusion builder's technical concept sheet.`;
 
 const LoadingIndicator: React.FC<{ stage: string }> = ({ stage }) => (
   <div className="flex flex-col items-center justify-center text-center p-8 h-full">

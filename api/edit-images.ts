@@ -11,6 +11,7 @@
 import { enforceAiUsage } from '../server/usage.js';
 import { resolveProvider } from '../lib/server/providers/index.js';
 import { getGoogleAiApiKey } from '../server/gemini.js';
+import { applyImagePromptPolicy } from './_lib/imagePromptPolicy';
 
 function extractGeminiText(result: any): string {
   if (typeof result?.text === 'string' && result.text.trim()) return result.text.trim();
@@ -53,6 +54,7 @@ export default async function handler(request: any, response: any) {
 
     const provider = await resolveProvider(request);
     const { imageBase64, mimeType, prompt, aspectRatio = '1:1' } = request.body || {};
+    const safeEditPrompt = applyImagePromptPolicy(prompt, 'edit');
 
     if (!imageBase64 || !mimeType || !prompt) {
       return response.status(400).json({ error: 'Missing required fields: imageBase64, mimeType, prompt.' });
@@ -72,7 +74,7 @@ export default async function handler(request: any, response: any) {
 
       const form = new FormData();
       form.append('model', model);
-      form.append('prompt', String(prompt));
+      form.append('prompt', safeEditPrompt);
       form.append('image', blob, 'input-image');
       form.append('size', '1024x1024');
       form.append('response_format', 'b64_json');
@@ -139,7 +141,7 @@ export default async function handler(request: any, response: any) {
         caption,
         '',
         'EDIT INSTRUCTIONS (apply these changes):',
-        String(prompt),
+        safeEditPrompt,
         '',
         'Output: one high-quality image. Keep composition similar unless instructed otherwise.',
       ].join('\n');
