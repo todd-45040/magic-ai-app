@@ -136,6 +136,17 @@ ${String(systemInstruction || '')}`.toLowerCase();
   );
 }
 
+function isIllusionBlueprintStructuredRequest(prompt: string, systemInstruction: string): boolean {
+  const haystack = `${String(prompt || '')}
+${String(systemInstruction || '')}`.toLowerCase();
+  return (
+    haystack.includes('illusion builder') ||
+    haystack.includes('illusion blueprint') ||
+    haystack.includes('builder plan') ||
+    haystack.includes('builder/fabricator')
+  );
+}
+
 function buildSchemaFallback(responseSchema: any, rawText: string): any {
   const props = responseSchema?.properties && typeof responseSchema.properties === 'object'
     ? responseSchema.properties
@@ -466,6 +477,7 @@ export const generateStructuredResponse = async (
       return safeJsonParse(retryText || '{}');
     } catch (err2: any) {
       const isAssistantStudio = isAssistantStudioStructuredRequest(prompt, systemInstruction);
+      const isIllusionBlueprint = isIllusionBlueprintStructuredRequest(prompt, systemInstruction);
 
       // Assistant's Studio Fast mode should not silently fake success with thin fallback stubs.
       // Give it one shorter-string recovery attempt and then surface a real error.
@@ -519,7 +531,7 @@ export const generateStructuredResponse = async (
 
       // Assistant Studio must not silently fake success with fallback stubs.
       // For other fast tools, keep the lightweight schema fallback.
-      if (speedMode === 'fast' && !isAssistantStudio) {
+      if (speedMode === 'fast' && !isAssistantStudio && !isIllusionBlueprint) {
         return buildSchemaFallback(responseSchema, retryText || text || '');
       }
       // Final fallback: force a SHORTER JSON re-emit. This is specifically for truncation
@@ -556,6 +568,9 @@ export const generateStructuredResponse = async (
       } catch (err3: any) {
         if (isAssistantStudioStructuredRequest(prompt, systemInstruction)) {
           throw new Error(`Assistant Studio JSON parse failed after final repair attempt: ${String(err3?.message || err3 || 'Invalid JSON')}`);
+        }
+        if (isIllusionBlueprintStructuredRequest(prompt, systemInstruction)) {
+          throw new Error(`Illusion Blueprint JSON parse failed after final repair attempt: ${String(err3?.message || err3 || 'Invalid JSON')}`);
         }
         return buildSchemaFallback(responseSchema, fallbackText || retryText || text || '');
       }
