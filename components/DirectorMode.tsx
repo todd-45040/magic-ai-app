@@ -175,7 +175,7 @@ const normalizeDirectorBlueprint = (raw: any): DirectorModeBlueprint => {
     };
 };
 
-const validateDirectorBlueprint = (blueprint: DirectorModeBlueprint, speedMode: 'fast' | 'full') => {
+const validateDirectorBlueprint = (blueprint: DirectorModeBlueprint, speedMode: 'full') => {
     if (!blueprint.show_title.trim()) throw new Error('Director Mode returned no show title. Please try again.');
     if (!Array.isArray(blueprint.segments) || blueprint.segments.length < 3) {
         throw new Error('Director Mode returned an incomplete show outline. Please try again.');
@@ -285,17 +285,10 @@ const DirectorMode: React.FC<DirectorModeProps> = ({ onIdeaSaved }) => {
     const [showTitle, setShowTitle] = useState('');
     const [showLength, setShowLength] = useState('');
 
-    // Speed / Reliability
-    const [speedMode, setSpeedMode] = useState<'fast' | 'full'>('fast');
-    const [genTimingMs, setGenTimingMs] = useState<{ fast?: number; full?: number }>({});
+    // Reliability
+    const [genTimingMs, setGenTimingMs] = useState<{ full?: number }>({});
     const [timelineReady, setTimelineReady] = useState(false);
-    // Show Outline detail (FULL mode only)
-    const [outlineFullDetail, setOutlineFullDetail] = useState<boolean>(false);
-
-    useEffect(() => {
-        // Default: ON for Full, OFF for Fast
-        setOutlineFullDetail(speedMode === 'full');
-    }, [speedMode]);
+    const [outlineFullDetail, setOutlineFullDetail] = useState<boolean>(true);
 
 
     useEffect(() => {
@@ -797,7 +790,6 @@ const dictionaryLinks = useMemo(() => {
         required: ['show_title', 'show_length_minutes', 'audience_type', 'venue_type', 'tone', 'performer_persona', 'constraints', 'segments'],
     };
 
-    const directorResponseSchemaFast = baseBlueprintSchema;
     const directorResponseSchemaFull = {
         ...(baseBlueprintSchema as any),
         properties: {
@@ -827,7 +819,7 @@ const dictionaryLinks = useMemo(() => {
         trackClientEvent({
             tool: 'director_mode',
             action: 'director_refine_click',
-            metadata: { speed_mode: speedMode },
+            metadata: { speed_mode: 'full' },
         });
         setCreatedShowId(null);
         setCreateShowNotice(null);
@@ -838,7 +830,7 @@ const dictionaryLinks = useMemo(() => {
         trackClientEvent({
             tool: 'director_mode',
             action: 'director_request_start',
-            metadata: { speed_mode: speedMode },
+            metadata: { speed_mode: 'full' },
             // Use units to store requested show length for KPI averages
             units: Number.isFinite(Number(showLength)) ? Number(showLength) : undefined,
         });
@@ -861,9 +853,7 @@ const dictionaryLinks = useMemo(() => {
               ? 5
               : 6;
 
-        const speedConstraints = speedMode === 'fast'
-          ? `\nSpeed mode: FAST (demo-optimized)\n- Return EXACTLY 3 segments total: opener, middle, closer (one each).\n- transition_notes: MAX 1 sentence per segment.\n- props_required: MAX 3 items per segment.\n- Keep titles short (<= 6 words).\n- Keep text tight and punchy.\n- IMPORTANT: Do NOT include any extra fields beyond the FAST schema (no beats, patter_hook, blocking_notes, volunteer_management, music_lighting).`
-          : `\nSpeed mode: FULL (richer)\n- Return EXACTLY ${fullSegmentsTarget} segments total (not fewer).\n- Must include exactly 1 opener and 1 closer.\n- All remaining segments must be purpose: middle.\n- Each segment MUST include these FULL-only fields (schema-required):\n  - beats: array of 2–4 short "moments" (strings)\n  - patter_hook: 1–2 sentences\n  - blocking_notes: 1–2 sentences (stage movement / handling)\n  - volunteer_management: short line (or empty string if not needed)\n  - music_lighting: short line (or empty string if not needed)\n- Make purpose STRONGER and more specific (an actionable intent, not generic).\n- transition_notes: 2 sentences (when possible), practical and non-exposure.\n- props_required: keep practical (up to ~6 items when needed).`;
+        const speedConstraints = `\nGeneration mode: FULL (reliability-first)\n- Return EXACTLY ${fullSegmentsTarget} segments total (not fewer).\n- Must include exactly 1 opener and 1 closer.\n- All remaining segments must be purpose: middle.\n- Each segment MUST include these full-detail fields (schema-required):\n  - beats: array of 2–4 short "moments" (strings)\n  - patter_hook: 1–2 sentences\n  - blocking_notes: 1–2 sentences (stage movement / handling)\n  - volunteer_management: short line (or empty string if not needed)\n  - music_lighting: short line (or empty string if not needed)\n- Make purpose STRONGER and more specific (an actionable intent, not generic).\n- transition_notes: 2 sentences (when possible), practical and non-exposure.\n- props_required: keep practical (up to ~6 items when needed).`;
 
         const prompt = `
 Please generate a show blueprint in STRICT JSON matching the provided schema.
@@ -901,16 +891,16 @@ try {
           const resultJson = await generateStructuredResponse(
             prompt,
             DIRECTOR_MODE_SYSTEM_INSTRUCTION,
-            speedMode === 'fast' ? directorResponseSchemaFast : directorResponseSchemaFull,
+            directorResponseSchemaFull,
             undefined,
-            { maxOutputTokens: speedMode === 'fast' ? 900 : 4096, speedMode }
+            { maxOutputTokens: 4096, speedMode: 'full' }
           );
           const endedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
           const elapsedMs = Math.max(0, Math.round((endedAt as number) - (startedAt as number)));
-          setGenTimingMs(prev => ({ ...prev, [speedMode]: elapsedMs } as any));
+          setGenTimingMs({ full: elapsedMs });
 
             const blueprint = normalizeDirectorBlueprint(resultJson);
-            validateDirectorBlueprint(blueprint, speedMode);
+            validateDirectorBlueprint(blueprint, 'full');
           const vId = makeId();
           setShowPlan(blueprint);
           setBlueprintVersions([{ id: vId, createdAt: Date.now(), blueprint, diffHint: 'Initial blueprint' }]);
@@ -921,7 +911,7 @@ try {
           trackClientEvent({
             tool: 'director_mode',
             action: 'director_request_success',
-            metadata: { speed_mode: speedMode },
+            metadata: { speed_mode: 'full' },
             units: Array.isArray(blueprint?.segments) ? blueprint.segments.length : undefined,
           });
           // Persist blueprint JSON (non-fatal if table not installed yet)
@@ -949,7 +939,7 @@ try {
           trackClientEvent({
             tool: 'director_mode',
             action: 'director_request_error',
-            metadata: { speed_mode: speedMode },
+            metadata: { speed_mode: 'full' },
             outcome: 'ERROR_UPSTREAM',
             error_code: err instanceof Error ? err.name : 'UNKNOWN',
           });
@@ -1063,7 +1053,7 @@ try {
             ok = await copyToClipboard(payload);
             setRefineNotice(ok ? 'Copied JSON to clipboard.' : 'Copy failed — your browser blocked clipboard access.');
         } else if (blueprintView === 'outline') {
-            payload = blueprintToOutline(active, { fullDetail: speedMode === 'full' && outlineFullDetail });
+            payload = blueprintToOutline(active, { fullDetail: outlineFullDetail });
             ok = await copyToClipboard(payload);
             setRefineNotice(ok ? 'Copied outline to clipboard.' : 'Copy failed — your browser blocked clipboard access.');
         } else {
@@ -1091,7 +1081,7 @@ try {
                 return 'Feature';
             };
 
-            const fullDetail = speedMode === 'full' && outlineFullDetail;
+            const fullDetail = outlineFullDetail;
 
             payload = segs.map((seg, idx) => {
                 const role = getTimelineRole(idx, total, seg);
@@ -1122,7 +1112,7 @@ try {
     const handleCopyShowOutline = async () => {
         const active = getActiveBlueprint() ?? showPlan;
         if (!active) return;
-        const ok = await copyToClipboard(blueprintToOutline(active, { fullDetail: speedMode === 'full' && outlineFullDetail }));
+        const ok = await copyToClipboard(blueprintToOutline(active, { fullDetail: outlineFullDetail }));
         setRefineNotice(ok ? 'Copied show outline to clipboard.' : 'Copy failed — your browser blocked clipboard access.');
         window.setTimeout(() => setRefineNotice(null), 2500);
     };
@@ -1228,9 +1218,7 @@ try {
               ? 5
               : 6;
 
-        const speedConstraints = speedMode === 'fast'
-          ? `\nSpeed mode: FAST (demo-optimized)\n- Return EXACTLY 3 segments total: opener, middle, closer (one each).\n- transition_notes: MAX 1 sentence per segment.\n- props_required: MAX 3 items per segment.\n- Keep titles short (<= 6 words).\n- Keep text tight and punchy.\n- IMPORTANT: Do NOT include any extra fields beyond the FAST schema (no beats, patter_hook, blocking_notes, volunteer_management, music_lighting).`
-          : `\nSpeed mode: FULL (richer)\n- Return EXACTLY ${fullSegmentsTarget} segments total (not fewer).\n- Must include exactly 1 opener and 1 closer.\n- All remaining segments must be purpose: middle.\n- Each segment MUST include these FULL-only fields (schema-required):\n  - beats: array of 2–4 short "moments" (strings)\n  - patter_hook: 1–2 sentences\n  - blocking_notes: 1–2 sentences (stage movement / handling)\n  - volunteer_management: short line (or empty string if not needed)\n  - music_lighting: short line (or empty string if not needed)\n- Make purpose STRONGER and more specific (an actionable intent, not generic).\n- transition_notes: 2 sentences (when possible), practical and non-exposure.\n- props_required: keep practical (up to ~6 items when needed).`;
+        const speedConstraints = `\nGeneration mode: FULL (reliability-first)\n- Return EXACTLY ${fullSegmentsTarget} segments total (not fewer).\n- Must include exactly 1 opener and 1 closer.\n- All remaining segments must be purpose: middle.\n- Each segment MUST include these full-detail fields (schema-required):\n  - beats: array of 2–4 short "moments" (strings)\n  - patter_hook: 1–2 sentences\n  - blocking_notes: 1–2 sentences (stage movement / handling)\n  - volunteer_management: short line (or empty string if not needed)\n  - music_lighting: short line (or empty string if not needed)\n- Make purpose STRONGER and more specific (an actionable intent, not generic).\n- transition_notes: 2 sentences (when possible), practical and non-exposure.\n- props_required: keep practical (up to ~6 items when needed).`;
 
         const refinePrompt = `
 You are refining an EXISTING show blueprint.
@@ -1255,12 +1243,12 @@ ${speedConstraints}
             const resultJson = await generateStructuredResponse(
                 refinePrompt,
                 DIRECTOR_MODE_SYSTEM_INSTRUCTION,
-                speedMode === 'fast' ? directorResponseSchemaFast : directorResponseSchemaFull,
+                directorResponseSchemaFull,
                 undefined,
-                { maxOutputTokens: speedMode === 'fast' ? 900 : 4096, speedMode }
+                { maxOutputTokens: 4096, speedMode: 'full' }
             );
             const next = normalizeDirectorBlueprint(resultJson);
-            validateDirectorBlueprint(next, speedMode);
+            validateDirectorBlueprint(next, 'full');
             const vId = makeId();
             const diffHint = computeDiffHint(active, next, instruction);
 
@@ -1285,7 +1273,7 @@ ${speedConstraints}
             trackClientEvent({
                 tool: 'director_mode',
                 action: 'director_refine_click',
-                metadata: { speed_mode: speedMode },
+                metadata: { speed_mode: 'full' },
                 units: Array.isArray(next?.segments) ? next.segments.length : undefined,
             });
         } catch (e: any) {
@@ -1748,7 +1736,7 @@ ${speedConstraints}
                                                 <p className="text-slate-300">{opener.title} • {opener.duration_estimate_minutes} min{opener.audience_interaction_level ? ` • ${opener.audience_interaction_level}` : ''}</p>
                                                 <p className="text-slate-400 mt-1">Props: {(opener.props_required || []).join(', ') || '—'}</p>
                                                 {opener.transition_notes ? <p className="text-slate-400 mt-1">Transition: {opener.transition_notes}</p> : null}
-                                                {speedMode === 'full' && outlineFullDetail ? (
+                                                {outlineFullDetail ? (
                                                     <div className="text-slate-400 mt-2 space-y-1">
                                                         {Array.isArray((opener as any).beats) && (opener as any).beats.length ? (
                                                             <p>Beats: {(opener as any).beats.join(' • ')}</p>
@@ -1768,7 +1756,7 @@ ${speedConstraints}
                                                 <p className="text-slate-300">{mSeg.title} • {mSeg.duration_estimate_minutes} min{mSeg.audience_interaction_level ? ` • ${mSeg.audience_interaction_level}` : ''}</p>
                                                 <p className="text-slate-400 mt-1">Props: {(mSeg.props_required || []).join(', ') || '—'}</p>
                                                 {mSeg.transition_notes ? <p className="text-slate-400 mt-1">Transition: {mSeg.transition_notes}</p> : null}
-                                                {speedMode === 'full' && outlineFullDetail ? (
+                                                {outlineFullDetail ? (
                                                     <div className="text-slate-400 mt-2 space-y-1">
                                                         {Array.isArray((mSeg as any).beats) && (mSeg as any).beats.length ? (
                                                             <p>Beats: {(mSeg as any).beats.join(' • ')}</p>
@@ -1788,7 +1776,7 @@ ${speedConstraints}
                                                 <p className="text-slate-300">{closer.title} • {closer.duration_estimate_minutes} min{closer.audience_interaction_level ? ` • ${closer.audience_interaction_level}` : ''}</p>
                                                 <p className="text-slate-400 mt-1">Props: {(closer.props_required || []).join(', ') || '—'}</p>
                                                 {closer.transition_notes ? <p className="text-slate-400 mt-1">Transition: {closer.transition_notes}</p> : null}
-                                                {speedMode === 'full' && outlineFullDetail ? (
+                                                {outlineFullDetail ? (
                                                     <div className="text-slate-400 mt-2 space-y-1">
                                                         {Array.isArray((closer as any).beats) && (closer as any).beats.length ? (
                                                             <p>Beats: {(closer as any).beats.join(' • ')}</p>
@@ -1811,20 +1799,17 @@ ${speedConstraints}
                                                 <button
                                                     type="button"
                                                     onClick={() => setOutlineFullDetail((v) => !v)}
-                                                    disabled={speedMode !== 'full'}
                                                     className={
-                                                        (speedMode === 'full'
-                                                            ? outlineFullDetail
-                                                                ? 'bg-purple-600/30 border-purple-400 text-purple-100'
-                                                                : 'bg-slate-900/40 border-slate-700 text-slate-200 hover:bg-slate-900/60'
-                                                            : 'opacity-50 cursor-not-allowed bg-slate-900/30 border-slate-800 text-slate-400') +
+                                                        (outlineFullDetail
+                                                            ? 'bg-purple-600/30 border-purple-400 text-purple-100'
+                                                            : 'bg-slate-900/40 border-slate-700 text-slate-200 hover:bg-slate-900/60') +
                                                         ' px-3 py-1.5 rounded-full border text-xs transition-colors'
                                                     }
-                                                    title={speedMode === 'full' ? 'Toggle full-detail outline formatting' : 'Full Detail is available in Full mode'}
+                                                    title='Toggle full-detail outline formatting'
                                                 >
                                                     {outlineFullDetail ? 'Full Detail: On' : 'Full Detail: Off'}
                                                 </button>
-                                                {speedMode === 'full' ? (
+                                                {
                                                     <div className="flex items-center gap-1">
                                                         <button
                                                             type="button"
@@ -1855,16 +1840,12 @@ ${speedConstraints}
                                                             Collapse all
                                                         </button>
                                                     </div>
-                                                ) : null}
-
-
+                                                }
 
                                                 <span className="text-xs text-slate-400 hidden sm:inline">
-                                                    {speedMode === 'fast'
-                                                        ? 'Fast mode uses a simplified outline. Switch to Full for director notes.'
-                                                        : outlineFullDetail
-                                                          ? 'Director notes enabled.'
-                                                          : 'Enable Full Detail to view director notes.'}
+                                                    {outlineFullDetail
+                                                      ? 'Director notes enabled.'
+                                                      : 'Enable Full Detail to view director notes.'}
                                                 </span>
                                             </div>
 
@@ -1879,7 +1860,7 @@ ${speedConstraints}
                                         <div className="space-y-3">
                                             {(segments || []).map((seg: any, idx: number) => {
                                                 const role = getTimelineRole(idx, (segments || []).length, seg);
-                                                const isFullDetail = speedMode === 'full' && outlineFullDetail;
+                                                const isFullDetail = outlineFullDetail;
 
                                                 return (
                                                     <div key={idx} className="bg-slate-900/40 rounded-md p-3 border border-slate-700/60">
@@ -2202,44 +2183,18 @@ ${speedConstraints}
                                 )}
                             </div>
                         </div>
-
                         <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
                             <div className="flex items-center justify-between gap-3 mb-3">
                                 <div>
-                                    <div className="text-xs font-semibold text-slate-200">Speed</div>
-                                    <div className="text-[11px] text-slate-400">Fast is optimized for demos; Full is richer.</div>
+                                    <div className="text-xs font-semibold text-slate-200">Generation Mode</div>
+                                    <div className="text-[11px] text-slate-400">Director Mode now always uses Full mode for consistent results.</div>
                                 </div>
-                                <div className="inline-flex rounded-md border border-slate-600 bg-slate-900/60 overflow-hidden">
-                                    <button
-                                        type="button"
-                                        onClick={() => setSpeedMode('fast')}
-                                        className={`px-3 py-1.5 text-xs font-semibold transition-colors ${speedMode === 'fast' ? 'bg-purple-600 text-white' : 'text-slate-200 hover:bg-slate-800'}`}
-                                    >
-                                        Fast
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setSpeedMode('full')}
-                                        className={`px-3 py-1.5 text-xs font-semibold transition-colors ${speedMode === 'full' ? 'bg-purple-600 text-white' : 'text-slate-200 hover:bg-slate-800'}`}
-                                    >
-                                        Full
-                                    </button>
-                                </div>
+                                {genTimingMs.full ? (
+                                    <span className="inline-flex items-center gap-1 rounded-full border border-slate-600 bg-slate-900/60 px-2 py-0.5 text-[11px] text-slate-200">
+                                        <span className="text-slate-400">Last generation:</span> {(genTimingMs.full / 1000).toFixed(1)}s
+                                    </span>
+                                ) : null}
                             </div>
-                            {(genTimingMs.fast || genTimingMs.full) ? (
-                                <div className="mt-2 flex flex-wrap gap-2">
-                                    {genTimingMs.fast ? (
-                                        <span className="inline-flex items-center gap-1 rounded-full border border-slate-600 bg-slate-900/60 px-2 py-0.5 text-[11px] text-slate-200">
-                                            <span className="text-slate-400">Fast:</span> {(genTimingMs.fast / 1000).toFixed(1)}s
-                                        </span>
-                                    ) : null}
-                                    {genTimingMs.full ? (
-                                        <span className="inline-flex items-center gap-1 rounded-full border border-slate-600 bg-slate-900/60 px-2 py-0.5 text-[11px] text-slate-200">
-                                            <span className="text-slate-400">Full:</span> {(genTimingMs.full / 1000).toFixed(1)}s
-                                        </span>
-                                    ) : null}
-                                </div>
-                            ) : null}
                             <div className="flex gap-2">
                             <button
                                 onClick={handleGenerate}
@@ -2260,7 +2215,7 @@ ${speedConstraints}
                                 Reset
                             </button>
                         </div>
-                            <p className="text-center text-xs text-slate-400 mt-2">Fast is usually quicker and more reliable for booth demos.</p>
+                            <p className="text-center text-xs text-slate-400 mt-2">Director Mode now uses the full blueprint engine for more consistent results.</p>
 
                             {error && <p className="text-red-400 mt-2 text-sm text-center">{error}</p>}
                         </div>
