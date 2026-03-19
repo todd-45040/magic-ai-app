@@ -350,6 +350,50 @@ const inferEffectCategory = (effectInput: string): string => {
   return match ?? 'Custom Illusion';
 };
 
+
+const asString = (value: unknown, fallback = ''): string =>
+  typeof value === 'string' ? value : fallback;
+
+const asStringArray = (value: unknown): string[] =>
+  Array.isArray(value) ? value.map((item) => String(item ?? '').trim()).filter(Boolean) : [];
+
+const asNumber = (value: unknown, fallback = 0): number =>
+  typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+
+const normalizeBuilderPlan = (raw: any): BuilderPlan => ({
+  project_title: asString(raw?.project_title, 'Illusion Builder Plan'),
+  audience_effect: asString(raw?.audience_effect, 'Builder plan generated.'),
+  build_concept: asString(raw?.build_concept, 'Concept needs regeneration.'),
+  recommended_construction: {
+    main_structure: asStringArray(raw?.recommended_construction?.main_structure),
+    materials: asStringArray(raw?.recommended_construction?.materials),
+    hardware: asStringArray(raw?.recommended_construction?.hardware),
+    mobility_modularity: asString(raw?.recommended_construction?.mobility_modularity, 'Not specified'),
+  },
+  dimensions_footprint: asString(raw?.dimensions_footprint, 'Not specified'),
+  mechanism_approach: {
+    primary: asString(raw?.mechanism_approach?.primary, 'Not specified'),
+    alternate: asString(raw?.mechanism_approach?.alternate, 'Not specified'),
+  },
+  assembly_overview: asStringArray(raw?.assembly_overview),
+  safety_stability_notes: asStringArray(raw?.safety_stability_notes),
+  reset_transport_crew: asStringArray(raw?.reset_transport_crew),
+  build_complexity: {
+    rating_1_to_5: Math.min(5, Math.max(1, asNumber(raw?.build_complexity?.rating_1_to_5, 3))),
+    rationale: asString(raw?.build_complexity?.rationale, 'Not specified'),
+  },
+});
+
+const isUsableBuilderPlan = (plan: BuilderPlan): boolean =>
+  Boolean(
+    plan.project_title.trim() &&
+    plan.build_concept.trim() &&
+    plan.recommended_construction.main_structure.length &&
+    plan.recommended_construction.materials.length &&
+    plan.mechanism_approach.primary.trim() &&
+    plan.assembly_overview.length
+  );
+
 const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved }) => {
   const [effectInput, setEffectInput] = useState('');
   const [venueScale, setVenueScale] = useState<VenueScale>('Stage');
@@ -683,13 +727,18 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
 
     try {
       setLoadingStage('Generating builder plan…');
-      const plan = (await generateStructuredResponse(
+      const rawPlan = await generateStructuredResponse(
         planPrompt,
         PLAN_SYSTEM_INSTRUCTION,
         planSchema,
         user,
-        { maxOutputTokens: 1800, speedMode: 'fast' }
-      )) as BuilderPlan;
+        { maxOutputTokens: 2400, speedMode: 'full' }
+      );
+      const plan = normalizeBuilderPlan(rawPlan);
+
+      if (!isUsableBuilderPlan(plan)) {
+        throw new Error('Illusion Blueprint returned an incomplete builder plan. Please try again.');
+      }
 
       setBuilderPlan(plan);
       void trackClientEvent({ tool: 'illusion_blueprint', action: 'illusion_blueprint_success', outcome: 'SUCCESS_NOT_CHARGED', metadata: { project_title: plan?.project_title || '', venueScale, performerStyle } });

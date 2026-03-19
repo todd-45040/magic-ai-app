@@ -123,57 +123,62 @@ function safeJsonParse(text: string): any {
   throw lastErr || new Error('Invalid JSON');
 }
 
-function isAssistantStudioStructuredRequest(prompt: string, systemInstruction: string): boolean {
-  const haystack = `${String(prompt || '')}
-${String(systemInstruction || '')}`.toLowerCase();
-  return (
-    haystack.includes("assistant studio") ||
-    haystack.includes("assistant-operations") ||
-    haystack.includes("assistant operations") ||
-    haystack.includes("assistant choreography") ||
-    haystack.includes("stage director") ||
-    haystack.includes("rehearsal notes")
-  );
-}
-
-
-function isDirectorModeStructuredRequest(prompt: string, systemInstruction: string): boolean {
-  const haystack = `${String(prompt || '')}
-${String(systemInstruction || '')}`.toLowerCase();
-  return (
-    haystack.includes('director mode') ||
-    haystack.includes('show blueprint') ||
-    haystack.includes('show outline') ||
-    haystack.includes('segments must include exactly 1 opener') ||
-    haystack.includes('you are refining an existing show blueprint')
-  );
+function getStructuredRequestType(prompt: string, systemInstruction: string): 'assistant_studio' | 'director_mode' | 'illusion_blueprint' | 'generic' {
+  const haystack = `${String(prompt || '')}\n${String(systemInstruction || '')}`.toLowerCase();
+  if (
+    haystack.includes('assistant studio') ||
+    haystack.includes('assistant-operations') ||
+    haystack.includes('assistant operations') ||
+    haystack.includes('assistant choreography') ||
+    haystack.includes('stage director') ||
+    haystack.includes('rehearsal notes')
+  ) {
+    return 'assistant_studio';
+  }
+  if (haystack.includes('show outline') || haystack.includes('director mode') || haystack.includes('show blueprint')) {
+    return 'director_mode';
+  }
+  if (haystack.includes('illusion blueprint') || haystack.includes('builder plan') || haystack.includes('builder/fabricator')) {
+    return 'illusion_blueprint';
+  }
+  return 'generic';
 }
 
 function buildSchemaFallback(responseSchema: any, rawText: string): any {
-  const props = responseSchema?.properties && typeof responseSchema.properties === 'object'
-    ? responseSchema.properties
-    : {};
-
   const lines = String(rawText || '')
     .split(/\r?\n+/)
     .map((line) => line.trim())
     .filter(Boolean)
-    .filter((line) => !/^```/.test(line))
-    .slice(0, 8);
+    .filter((line) => !/^```/.test(line));
 
-  const shortText = lines.length
-    ? lines.join('\n')
-    : 'Plan generated, but structured formatting failed. Please regenerate for a cleaner layout.';
+  const shortText = lines.slice(0, 8).join('\n') || 'Plan generated, but structured formatting failed. Please regenerate for a cleaner layout.';
 
-  const out: Record<string, any> = {};
-  Object.keys(props).forEach((key, idx) => {
-    const propType = String(props[key]?.type || '').toLowerCase();
-    if (propType === 'array') out[key] = lines.length ? lines.slice(idx, idx + 3) : [];
-    else if (propType === 'number' || propType === 'integer') out[key] = 0;
-    else if (propType === 'boolean') out[key] = false;
-    else out[key] = shortText;
-  });
-  return out;
+  const buildNode = (schema: any, indexSeed = 0): any => {
+    const schemaType = String(schema?.type || '').toLowerCase();
+
+    if (schemaType === 'object') {
+      const props = schema?.properties && typeof schema.properties === 'object' ? schema.properties : {};
+      const out: Record<string, any> = {};
+      Object.keys(props).forEach((key, idx) => {
+        out[key] = buildNode(props[key], indexSeed + idx);
+      });
+      return out;
+    }
+
+    if (schemaType === 'array') {
+      const itemsSchema = schema?.items || {};
+      const itemType = String(itemsSchema?.type || '').toLowerCase();
+      if (itemType === 'object') return [];
+      const slice = lines.slice(indexSeed, indexSeed + 3).filter(Boolean);
+      return slice.length ? slice : [];
+    }
+
+    if (schemaType === 'number' || schemaType === 'integer') return 0;
+    if (schemaType === 'boolean') return false;
+    return shortText;
+  };
+
+  return buildNode(responseSchema);
 }
 
 /**
@@ -478,12 +483,12 @@ export const generateStructuredResponse = async (
     try {
       return safeJsonParse(retryText || '{}');
     } catch (err2: any) {
-      const isAssistantStudio = isAssistantStudioStructuredRequest(prompt, systemInstruction);
-      const isDirectorMode = isDirectorModeStructuredRequest(prompt, systemInstruction);
+      const requestType = getStructuredRequestType(prompt, systemInstruction);
+      const isAssistantStudio = requestType === 'assistant_studio';
 
       // Assistant's Studio Fast mode should not silently fake success with thin fallback stubs.
       // Give it one shorter-string recovery attempt and then surface a real error.
-      if (speedMode === 'fast' && (isAssistantStudio || isDirectorMode)) {
+      if (speedMode === 'fast' && isAssistantStudio) {
         const msg2 = String(err2?.message || err2 || 'Invalid JSON');
         const shorterPrompt =
           `The JSON is still invalid after a repair attempt (error: ${msg2}).
@@ -527,14 +532,17 @@ export const generateStructuredResponse = async (
         try {
           return safeJsonParse(shorterText || '{}');
         } catch (err3: any) {
-          throw new Error(`${isDirectorMode ? 'Director Mode' : 'Assistant Studio'} JSON parse failed after repair retry: ${String(err3?.message || err3 || 'Invalid JSON')}`);
+          throw new Error(`Assistant Studio JSON parse failed after repair retry: ${String(err3?.message || err3 || 'Invalid JSON')}`);
         }
       }
 
       // Assistant Studio must not silently fake success with fallback stubs.
       // For other fast tools, keep the lightweight schema fallback.
-      if (speedMode === 'fast' && !isAssistantStudio && !isDirectorMode) {
+      if (speedMode === 'fast' && requestType === 'generic') {
         return buildSchemaFallback(responseSchema, retryText || text || '');
+      }
+      if (speedMode === 'fast') {
+        throw new Error(`Structured response parse failed after repair retry: ${String(err2?.message || err2 || 'Invalid JSON')}`);
       }
       // Final fallback: force a SHORTER JSON re-emit. This is specifically for truncation
       // where even the first re-emit attempt was cut off.
@@ -568,8 +576,8 @@ export const generateStructuredResponse = async (
       try {
         return safeJsonParse(fallbackText || '{}');
       } catch (err3: any) {
-        if (isAssistantStudio || isDirectorMode) {
-          throw new Error(`${isDirectorMode ? 'Director Mode' : 'Assistant Studio'} JSON parse failed after final repair attempt: ${String(err3?.message || err3 || 'Invalid JSON')}`);
+        if (requestType === 'assistant_studio' || requestType === 'director_mode' || requestType === 'illusion_blueprint') {
+          throw new Error(`Assistant Studio JSON parse failed after final repair attempt: ${String(err3?.message || err3 || 'Invalid JSON')}`);
         }
         return buildSchemaFallback(responseSchema, fallbackText || retryText || text || '');
       }
