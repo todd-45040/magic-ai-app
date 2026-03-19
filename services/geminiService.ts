@@ -136,14 +136,16 @@ ${String(systemInstruction || '')}`.toLowerCase();
   );
 }
 
-function isIllusionBlueprintStructuredRequest(prompt: string, systemInstruction: string): boolean {
+
+function isDirectorModeStructuredRequest(prompt: string, systemInstruction: string): boolean {
   const haystack = `${String(prompt || '')}
 ${String(systemInstruction || '')}`.toLowerCase();
   return (
-    haystack.includes('illusion builder') ||
-    haystack.includes('illusion blueprint') ||
-    haystack.includes('builder plan') ||
-    haystack.includes('builder/fabricator')
+    haystack.includes('director mode') ||
+    haystack.includes('show blueprint') ||
+    haystack.includes('show outline') ||
+    haystack.includes('segments must include exactly 1 opener') ||
+    haystack.includes('you are refining an existing show blueprint')
   );
 }
 
@@ -477,11 +479,11 @@ export const generateStructuredResponse = async (
       return safeJsonParse(retryText || '{}');
     } catch (err2: any) {
       const isAssistantStudio = isAssistantStudioStructuredRequest(prompt, systemInstruction);
-      const isIllusionBlueprint = isIllusionBlueprintStructuredRequest(prompt, systemInstruction);
+      const isDirectorMode = isDirectorModeStructuredRequest(prompt, systemInstruction);
 
       // Assistant's Studio Fast mode should not silently fake success with thin fallback stubs.
       // Give it one shorter-string recovery attempt and then surface a real error.
-      if (speedMode === 'fast' && isAssistantStudio) {
+      if (speedMode === 'fast' && (isAssistantStudio || isDirectorMode)) {
         const msg2 = String(err2?.message || err2 || 'Invalid JSON');
         const shorterPrompt =
           `The JSON is still invalid after a repair attempt (error: ${msg2}).
@@ -525,13 +527,13 @@ export const generateStructuredResponse = async (
         try {
           return safeJsonParse(shorterText || '{}');
         } catch (err3: any) {
-          throw new Error(`Assistant Studio JSON parse failed after repair retry: ${String(err3?.message || err3 || 'Invalid JSON')}`);
+          throw new Error(`${isDirectorMode ? 'Director Mode' : 'Assistant Studio'} JSON parse failed after repair retry: ${String(err3?.message || err3 || 'Invalid JSON')}`);
         }
       }
 
       // Assistant Studio must not silently fake success with fallback stubs.
       // For other fast tools, keep the lightweight schema fallback.
-      if (speedMode === 'fast' && !isAssistantStudio && !isIllusionBlueprint) {
+      if (speedMode === 'fast' && !isAssistantStudio && !isDirectorMode) {
         return buildSchemaFallback(responseSchema, retryText || text || '');
       }
       // Final fallback: force a SHORTER JSON re-emit. This is specifically for truncation
@@ -566,11 +568,8 @@ export const generateStructuredResponse = async (
       try {
         return safeJsonParse(fallbackText || '{}');
       } catch (err3: any) {
-        if (isAssistantStudioStructuredRequest(prompt, systemInstruction)) {
-          throw new Error(`Assistant Studio JSON parse failed after final repair attempt: ${String(err3?.message || err3 || 'Invalid JSON')}`);
-        }
-        if (isIllusionBlueprintStructuredRequest(prompt, systemInstruction)) {
-          throw new Error(`Illusion Blueprint JSON parse failed after final repair attempt: ${String(err3?.message || err3 || 'Invalid JSON')}`);
+        if (isAssistantStudio || isDirectorMode) {
+          throw new Error(`${isDirectorMode ? 'Director Mode' : 'Assistant Studio'} JSON parse failed after final repair attempt: ${String(err3?.message || err3 || 'Invalid JSON')}`);
         }
         return buildSchemaFallback(responseSchema, fallbackText || retryText || text || '');
       }

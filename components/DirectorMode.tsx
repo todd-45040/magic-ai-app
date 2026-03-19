@@ -113,6 +113,99 @@ const parseTransitionExtras = (raw: string) => {
     return { base: base || '—', beats, volunteer, patter, audienceMoment };
 };
 
+
+const asNonEmptyString = (value: any, fallback = ''): string => {
+    const str = typeof value === 'string' ? value.trim() : '';
+    return str || fallback;
+};
+
+const asStringArray = (value: any): string[] =>
+    Array.isArray(value)
+        ? value.map((item) => String(item ?? '').trim()).filter(Boolean)
+        : [];
+
+const asPositiveInt = (value: any, fallback = 0): number => {
+    const n = Number(value);
+    return Number.isFinite(n) && n > 0 ? Math.round(n) : fallback;
+};
+
+const normalizeDirectorSegment = (raw: any, index: number, purposeFallback: 'opener' | 'middle' | 'closer'): any => ({
+    title: asNonEmptyString(raw?.title, `Segment ${index + 1}`),
+    purpose: (['opener', 'middle', 'closer'].includes(String(raw?.purpose || '').toLowerCase())
+        ? String(raw?.purpose).toLowerCase()
+        : purposeFallback) as 'opener' | 'middle' | 'closer',
+    duration_estimate_minutes: asPositiveInt(raw?.duration_estimate_minutes, 1),
+    audience_interaction_level: (['low', 'medium', 'high'].includes(String(raw?.audience_interaction_level || '').toLowerCase())
+        ? String(raw?.audience_interaction_level).toLowerCase()
+        : 'medium') as 'low' | 'medium' | 'high',
+    props_required: asStringArray(raw?.props_required),
+    transition_notes: asNonEmptyString(raw?.transition_notes, 'Clean transition into the next effect.'),
+    beats: asStringArray(raw?.beats),
+    patter_hook: asNonEmptyString(raw?.patter_hook),
+    blocking_notes: asNonEmptyString(raw?.blocking_notes),
+    volunteer_management: asNonEmptyString(raw?.volunteer_management),
+    music_lighting: asNonEmptyString(raw?.music_lighting),
+});
+
+const normalizeDirectorBlueprint = (raw: any): DirectorModeBlueprint => {
+    const rawSegments = Array.isArray(raw?.segments) ? raw.segments : [];
+    const normalizedSegments = rawSegments
+        .map((segment, index) => normalizeDirectorSegment(
+            segment,
+            index,
+            index === 0 ? 'opener' : index === rawSegments.length - 1 ? 'closer' : 'middle'
+        ))
+        .filter((segment) => segment.title);
+
+    return {
+        show_title: asNonEmptyString(raw?.show_title, 'Untitled Show'),
+        show_length_minutes: asPositiveInt(raw?.show_length_minutes, normalizedSegments.reduce((sum, seg) => sum + (Number(seg.duration_estimate_minutes) || 0), 0)),
+        audience_type: asNonEmptyString(raw?.audience_type, 'General Audience'),
+        venue_type: asNonEmptyString(raw?.venue_type, 'Stage'),
+        tone: asNonEmptyString(raw?.tone, 'Balanced'),
+        performer_persona: asNonEmptyString(raw?.performer_persona, 'Magician'),
+        constraints: {
+            skill_level: asNonEmptyString(raw?.constraints?.skill_level, 'Intermediate'),
+            reset_time: asNonEmptyString(raw?.constraints?.reset_time, 'Moderate'),
+            props_owned: asStringArray(raw?.constraints?.props_owned),
+            notes: asNonEmptyString(raw?.constraints?.notes),
+        },
+        segments: normalizedSegments,
+        created_at: asNonEmptyString(raw?.created_at),
+    };
+};
+
+const validateDirectorBlueprint = (blueprint: DirectorModeBlueprint, speedMode: 'fast' | 'full') => {
+    if (!blueprint.show_title.trim()) throw new Error('Director Mode returned no show title. Please try again.');
+    if (!Array.isArray(blueprint.segments) || blueprint.segments.length < 3) {
+        throw new Error('Director Mode returned an incomplete show outline. Please try again.');
+    }
+
+    const openerCount = blueprint.segments.filter((seg) => seg.purpose === 'opener').length;
+    const middleCount = blueprint.segments.filter((seg) => seg.purpose === 'middle').length;
+    const closerCount = blueprint.segments.filter((seg) => seg.purpose === 'closer').length;
+
+    if (openerCount !== 1 || closerCount !== 1 || middleCount < 1) {
+        throw new Error('Director Mode returned an invalid segment structure. Please try again.');
+    }
+
+    const totalMinutes = blueprint.segments.reduce((sum, seg) => sum + (Number(seg.duration_estimate_minutes) || 0), 0);
+    if (!Number.isFinite(totalMinutes) || totalMinutes <= 0) {
+        throw new Error('Director Mode returned invalid segment timing. Please try again.');
+    }
+
+    if (Number.isFinite(blueprint.show_length_minutes) && blueprint.show_length_minutes > 0 && totalMinutes !== blueprint.show_length_minutes) {
+        throw new Error('Director Mode returned a timing mismatch. Please try again.');
+    }
+
+    if (speedMode === 'full') {
+        const missingFullFields = blueprint.segments.some((seg) => !Array.isArray(seg.beats) || !seg.beats.length || !seg.patter_hook || !seg.blocking_notes);
+        if (missingFullFields) {
+            throw new Error('Director Mode returned incomplete full-detail notes. Please try again.');
+        }
+    }
+};
+
 const blueprintToOutline = (bp: DirectorModeBlueprint, opts?: { fullDetail?: boolean }): string => {
     if (!bp) return '';
     const fullDetail = Boolean(opts?.fullDetail);
@@ -816,7 +909,8 @@ try {
           const elapsedMs = Math.max(0, Math.round((endedAt as number) - (startedAt as number)));
           setGenTimingMs(prev => ({ ...prev, [speedMode]: elapsedMs } as any));
 
-            const blueprint = resultJson as DirectorModeBlueprint;
+            const blueprint = normalizeDirectorBlueprint(resultJson);
+            validateDirectorBlueprint(blueprint, speedMode);
           const vId = makeId();
           setShowPlan(blueprint);
           setBlueprintVersions([{ id: vId, createdAt: Date.now(), blueprint, diffHint: 'Initial blueprint' }]);
@@ -1165,7 +1259,8 @@ ${speedConstraints}
                 undefined,
                 { maxOutputTokens: speedMode === 'fast' ? 900 : 4096, speedMode }
             );
-            const next = resultJson as DirectorModeBlueprint;
+            const next = normalizeDirectorBlueprint(resultJson);
+            validateDirectorBlueprint(next, speedMode);
             const vId = makeId();
             const diffHint = computeDiffHint(active, next, instruction);
 
