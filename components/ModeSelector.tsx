@@ -10,11 +10,14 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({ onSelectMode }) => {
   return (
     <div className="flex flex-col items-center justify-center h-full">
       <div className="mb-4 flex flex-col items-center justify-center">
-        <img
-          src="/assets/logo/Wizard_Head.png"
-          alt="Magic AI Wizard logo"
-          className="w-52 sm:w-60 md:w-72 h-auto object-contain mb-4 drop-shadow-[0_10px_30px_rgba(0,0,0,0.4)]"
-        />
+        <div className="relative mb-5 rounded-3xl border border-amber-300/20 bg-gradient-to-b from-purple-900/35 via-slate-950/20 to-transparent px-5 py-4 shadow-[0_0_40px_rgba(168,85,247,0.18)]">
+          <div className="pointer-events-none absolute inset-0 rounded-3xl bg-[radial-gradient(circle_at_center,rgba(251,191,36,0.18),transparent_55%)]" />
+          <img
+            src="/assets/logo/Wizard_Head.png"
+            alt="Magic AI Wizard logo"
+            className="relative z-10 w-52 sm:w-60 md:w-72 h-auto object-contain drop-shadow-[0_0_18px_rgba(251,191,36,0.28)]"
+          />
+        </div>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-2">
           <RabbitIcon className="w-12 h-12 md:w-16 md:h-16 text-purple-400" />
           <h1 className="font-cinzel text-4xl md:text-6xl font-bold text-amber-300 tracking-widest text-center">
