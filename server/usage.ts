@@ -147,13 +147,20 @@ function needsMonthlyReset(resetDateISO?: string | null, now = new Date()): bool
 function shouldUpliftLegacyFreeQuotas(membership: string, profile: any): boolean {
   const target = defaultMonthlyQuotas(membership);
   const freeDefaults = defaultMonthlyQuotas('free');
-  if ((target?.quota_image_gen ?? 0) <= (freeDefaults?.quota_image_gen ?? 0)) return false;
 
+  // uplift if ANY quota is still at free level but should be higher
   return (
-    clampInt(profile?.quota_live_audio_minutes) === clampInt(freeDefaults.quota_live_audio_minutes) &&
-    clampInt(profile?.quota_image_gen) === clampInt(freeDefaults.quota_image_gen) &&
-    clampInt(profile?.quota_identify) === clampInt(freeDefaults.quota_identify) &&
-    clampInt(profile?.quota_video_uploads) === clampInt(freeDefaults.quota_video_uploads)
+    (clampInt(profile?.quota_live_audio_minutes) === clampInt(freeDefaults.quota_live_audio_minutes) &&
+     clampInt(target?.quota_live_audio_minutes) > clampInt(freeDefaults.quota_live_audio_minutes)) ||
+
+    (clampInt(profile?.quota_image_gen) === clampInt(freeDefaults.quota_image_gen) &&
+     clampInt(target?.quota_image_gen) > clampInt(freeDefaults.quota_image_gen)) ||
+
+    (clampInt(profile?.quota_identify) === clampInt(freeDefaults.quota_identify) &&
+     clampInt(target?.quota_identify) > clampInt(freeDefaults.quota_identify)) ||
+
+    (clampInt(profile?.quota_video_uploads) === clampInt(freeDefaults.quota_video_uploads) &&
+     clampInt(target?.quota_video_uploads) > clampInt(freeDefaults.quota_video_uploads))
   );
 }
 
@@ -165,12 +172,19 @@ async function ensureMonthlyQuotas(admin: any, userId: string, membership: strin
   if (!needsMonthlyReset(resetDateISO, now)) {
     if (!shouldUpliftLegacyFreeQuotas(membership, profile)) return profile;
 
-    const uplift = {
-      quota_live_audio_minutes: defaults.quota_live_audio_minutes,
-      quota_image_gen: defaults.quota_image_gen,
-      quota_identify: defaults.quota_identify,
-      quota_video_uploads: defaults.quota_video_uploads,
-    };
+    const uplift: any = {};
+    if (clampInt(profile?.quota_live_audio_minutes) === clampInt(defaultMonthlyQuotas('free').quota_live_audio_minutes)) {
+      uplift.quota_live_audio_minutes = defaults.quota_live_audio_minutes;
+    }
+    if (clampInt(profile?.quota_image_gen) === clampInt(defaultMonthlyQuotas('free').quota_image_gen)) {
+      uplift.quota_image_gen = defaults.quota_image_gen;
+    }
+    if (clampInt(profile?.quota_identify) === clampInt(defaultMonthlyQuotas('free').quota_identify)) {
+      uplift.quota_identify = defaults.quota_identify;
+    }
+    if (clampInt(profile?.quota_video_uploads) === clampInt(defaultMonthlyQuotas('free').quota_video_uploads)) {
+      uplift.quota_video_uploads = defaults.quota_video_uploads;
+    }
 
     const { data, error } = await admin
       .from('users')
