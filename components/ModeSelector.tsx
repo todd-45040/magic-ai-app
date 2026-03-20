@@ -13,7 +13,7 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({ onSelectMode }) => {
         <img
           src="/assets/logo/Wizard_Head.png"
           alt="Magic AI Wizard logo"
-          className="w-80 sm:w-96 md:w-[28rem] h-auto object-contain mb-5 drop-shadow-[0_10px_30px_rgba(0,0,0,0.4)]"
+          className="w-52 sm:w-60 md:w-72 h-auto object-contain mb-4 drop-shadow-[0_10px_30px_rgba(0,0,0,0.4)]"
         />
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-2">
           <RabbitIcon className="w-12 h-12 md:w-16 md:h-16 text-purple-400" />
