@@ -4845,13 +4845,11 @@ const renderIntentSubnav = () => {
         <button onClick={handleReturnToStudioHome} className="p-1.5 mr-2 rounded-full hover:bg-slate-700 transition-colors" aria-label="Back">
           <BackIcon className="w-5 h-5 text-slate-300" />
         </button>
-        <div
-          className="mr-2 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-purple-400/20 bg-slate-900/70 text-purple-200"
-          aria-label="Rabbit ears icon"
-          title="Magic AI Wizard"
-        >
-          <RabbitIcon className="h-5 w-5" />
-        </div>
+        <picture className="mr-2 flex-shrink-0">
+          <source media="(prefers-contrast: more)" srcSet="/images/nav-wand.png" />
+          <source media="(forced-colors: active)" srcSet="/images/nav-wand.png" />
+          <img src="/images/nav-wand.png" alt="Magic wand" className="h-8 w-auto wizard-nav-icon" />
+        </picture>
         <div className="ml-auto flex items-center gap-2">
             {Boolean((user as any)?.foundingCircleMember) && (
               <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full border border-amber-400/25 bg-amber-500/10">

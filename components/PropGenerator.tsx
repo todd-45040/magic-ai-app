@@ -25,30 +25,38 @@ type ResultSection = {
 
 const defaultOpen = new Set<SectionKey>(["concept"]);
 
-const demoInputs = {
-  propType: "Prediction Chest",
-  materials: "Wood + brass",
-  skillLevel: "Intermediate",
-  audience: "Corporate banquet",
-  venue: "Hotel ballroom stage",
-  budget: "$150",
-  transport: "Carry-on suitcase",
-  reset: "Instant",
-};
-
-const demoResult: PropConcept = {
-  propName: "Locked Prediction Chest",
-  conceptSummary: "A polished wooden prediction chest with engraved brass plates and a velvet-lined interior, designed to deliver a premium corporate reveal on stage.",
-  performanceUse: "Used as a centerpiece prediction prop for a corporate banquet finale, allowing a visible sealed prediction to be opened in a dramatic, elegant moment.",
-  constructionIdea: "Build a compact hardwood chest with decorative brass hardware, a hidden interior load chamber, and a soft velvet insert that frames the final reveal.",
-  materials: ["Hardwood box blank", "Brass corner hardware", "Decorative brass name plate", "Velvet lining", "Small lock and key", "Interior divider stock"],
-  estimatedCost: "Approximately $120–$150 depending on hardware finish and custom engraving.",
-  transportNotes: "Sized to travel inside a padded carry-on case with the prediction load secured separately until setup.",
-  resetSpeed: "Fast reset between sets once the interior load is prepped.",
-  safetyNotes: ["Round over exposed brass edges to avoid snags.", "Use secure interior fittings so nothing shifts during transport."],
-  angleNotes: ["Best presented front-facing on a banquet platform or stage.", "Keep interior handling shielded from extreme side seating during the reveal phase."],
-  buildInstructions: null,
-};
+const demoInputsList = [
+  {
+    propType: "Prediction Chest",
+    materials: "Wood + brass",
+    skillLevel: "Intermediate",
+    audience: "Corporate banquet",
+    venue: "Hotel ballroom stage",
+    budget: "$150",
+    transport: "Carry-on suitcase",
+    reset: "Instant",
+  },
+  {
+    propType: "Comedy Breakaway Wand",
+    materials: "Lightweight plastic + magnets",
+    skillLevel: "Beginner",
+    audience: "Family audience",
+    venue: "Library or school stage",
+    budget: "$40",
+    transport: "Small prop case",
+    reset: "Under 30 seconds",
+  },
+  {
+    propType: "Spirit Slate Set",
+    materials: "Wood frames + chalkboard panels",
+    skillLevel: "Advanced",
+    audience: "Parlor mystery show",
+    venue: "Small theater",
+    budget: "$90",
+    transport: "Briefcase",
+    reset: "1 to 2 minutes",
+  },
+] as const;
 
 function sanitizeConcept(raw: any): PropConcept {
   const list = (value: any) => Array.isArray(value) ? value.map((item) => String(item).trim()).filter(Boolean) : [];
@@ -113,6 +121,7 @@ export default function PropGenerator({ onIdeaSaved, onNavigateShowPlanner, onNa
     transport: "",
     reset: ""
   });
+  const [demoIndex, setDemoIndex] = useState(0);
 
   function updateInput<K extends keyof typeof inputs>(key: K, value: (typeof inputs)[K]) {
     setInputs((prev) => ({ ...prev, [key]: value }));
@@ -165,21 +174,22 @@ export default function PropGenerator({ onIdeaSaved, onNavigateShowPlanner, onNa
   }
 
   function loadDemoProp() {
-    setInputs(demoInputs);
-    setResult(demoResult);
+    const nextDemo = demoInputsList[demoIndex];
+    setInputs({ ...nextDemo });
+    setResult(null);
     setError(null);
     setOpenSections(new Set(defaultOpen));
+    setDemoIndex((prev) => (prev + 1) % demoInputsList.length);
     void trackClientEvent({
       tool: 'prop_generator',
       action: 'demo_prop_loaded',
       metadata: {
-        prop_type: demoInputs.propType,
-        skill_level: demoInputs.skillLevel,
-        budget: demoInputs.budget,
-        audience_type: demoInputs.audience,
-        venue_type: demoInputs.venue,
+        prop_type: nextDemo.propType,
+        skill_level: nextDemo.skillLevel,
+        budget: nextDemo.budget,
+        audience_type: nextDemo.audience,
+        venue_type: nextDemo.venue,
         transportable: true,
-        prop_name: demoResult.propName,
       },
       outcome: 'ALLOWED',
     });
