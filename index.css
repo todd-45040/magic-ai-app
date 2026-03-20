@@ -103,26 +103,27 @@ html.maw-record body {
 }
 
 
-/* --- Nav wand: subtle glow pulse on hover (respects reduced motion) --- */
-@keyframes wand-glow{
+/* --- Nav logo: subtle glow pulse on hover (respects reduced motion) --- */
+@keyframes nav-logo-glow{
   0%   { filter: drop-shadow(0 0 6px rgba(245, 158, 11, 0.18)) drop-shadow(0 0 10px rgba(168, 85, 247, 0.12)); }
   50%  { filter: drop-shadow(0 0 10px rgba(245, 158, 11, 0.30)) drop-shadow(0 0 16px rgba(168, 85, 247, 0.22)); }
   100% { filter: drop-shadow(0 0 6px rgba(245, 158, 11, 0.18)) drop-shadow(0 0 10px rgba(168, 85, 247, 0.12)); }
 }
 
 .wizard-nav-icon{
-  transition: transform 200ms ease, opacity 200ms ease;
+  transition: transform 200ms ease, opacity 200ms ease, filter 200ms ease;
   will-change: transform, filter;
+  filter: drop-shadow(0 0 4px rgba(245, 158, 11, 0.18)) drop-shadow(0 0 8px rgba(168, 85, 247, 0.12));
 }
 .wizard-nav-icon:hover{
   transform: translateY(-1px);
-  animation: wand-glow 900ms ease-in-out infinite;
+  animation: nav-logo-glow 900ms ease-in-out infinite;
 }
 @media (prefers-reduced-motion: reduce){
   .wizard-nav-icon:hover{ animation: none; }
 }
 
-/* --- Brand motif: subtle wand watermark used in key surfaces --- */
+/* --- Brand motif: subtle watermark used in key surfaces --- */
 .brand-motif{
   position: relative;
   overflow: hidden;
@@ -132,7 +133,7 @@ html.maw-record body {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background-image: url("/images/nav-wand.png");
+  background-image: url("/assets/logo/Wizard_Head.png");
   background-repeat: no-repeat;
   background-position: right -60px center;
   background-size: 220px auto;
