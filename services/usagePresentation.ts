@@ -5,7 +5,7 @@ import { getUsage } from './usageTracker';
 export type ToolUsageRow = {
   key: string;
   label: string;
-  period: 'daily' | 'monthly' | 'unlimited' | 'untracked';
+  period: 'daily' | 'trial' | 'active' | 'monthly' | 'unlimited' | 'untracked';
   unit?: string;
   used?: number;
   limit?: number;
@@ -48,7 +48,7 @@ export function formatPlanLabel(plan: string) {
   if (plan === 'professional') return 'Professional';
   if (plan === 'amateur') return 'Amateur';
   if (plan === 'expired') return 'Expired';
-  return 'Trial';
+  return '14-Day Trial';
 }
 
 function getDailyAiLimitForPlan(plan: string) {
@@ -85,19 +85,19 @@ function buildRowFromUsage(key: string, label: string, usage: { used: number; li
   };
 }
 
-function buildIdentifyRow(serverStatus?: UsageStatus | null): ToolUsageRow {
+function buildIdentifyRow(plan: string, serverStatus?: UsageStatus | null): ToolUsageRow {
   const identify = serverStatus?.quota?.identify;
   if (identify && typeof identify.limit === 'number' && typeof identify.remaining === 'number' && !isLargePlaceholder(identify.limit)) {
     const used = Math.max(0, Number(identify.limit) - Number(identify.remaining));
     return {
       key: 'identify',
       label: 'Identify a Trick',
-      period: 'monthly',
+      period: plan === 'trial' ? 'trial' : 'monthly',
       used,
       limit: Number(identify.limit),
       remaining: Number(identify.remaining),
       summary: `${used} / ${Number(identify.limit)}`,
-      detail: `Monthly: ${used} / ${Number(identify.limit)}`,
+      detail: `${plan === 'trial' ? 'During 14-day trial' : 'Monthly'}: ${used} / ${Number(identify.limit)}`,
     };
   }
 
@@ -123,7 +123,15 @@ function buildVideoRow(plan: string, user?: User | null, serverStatus?: UsageSta
   }
 
   const usage = user ? getUsage(user, 'video_upload') : { used: 0, limit: 0, remaining: 0 };
-  return buildRowFromUsage('video_uploads', 'Video Rehearsal Uploads', usage);
+  const row = buildRowFromUsage('video_uploads', 'Video Rehearsal Uploads', usage);
+  if (plan === 'trial') {
+    return {
+      ...row,
+      period: 'trial',
+      detail: `During 14-day trial: ${usage.used} / ${usage.limit}`,
+    };
+  }
+  return row;
 }
 
 export function buildNormalizedUsageSnapshot(user?: User | null, serverStatus?: UsageStatus | null): NormalizedUsageSnapshot {
@@ -147,8 +155,8 @@ export function buildNormalizedUsageSnapshot(user?: User | null, serverStatus?: 
 
   const toolRows: ToolUsageRow[] = [
     buildRowFromUsage('live_audio_minutes', 'Live Rehearsal (Audio)', liveHeader, 'min'),
-    buildRowFromUsage('image_gen', 'Image Generation', imageUsage),
-    buildIdentifyRow(serverStatus),
+    plan === 'trial' ? { ...buildRowFromUsage('image_gen', 'Image Generation', imageUsage), period: 'trial', detail: `During 14-day trial: ${imageUsage.used} / ${imageUsage.limit}` } : buildRowFromUsage('image_gen', 'Image Generation', imageUsage),
+    buildIdentifyRow(plan, serverStatus),
     buildVideoRow(plan, user, serverStatus),
   ];
 
@@ -164,7 +172,7 @@ export function buildNormalizedUsageSnapshot(user?: User | null, serverStatus?: 
     nearLimit: dailyAiLimit > 0 ? dailyAiRemaining <= Math.ceil(dailyAiLimit * 0.15) : false,
     upgradeRecommended: plan === 'trial' && dailyAiLimit > 0 ? dailyAiRemaining <= Math.ceil(dailyAiLimit * 0.15) : false,
     warnings: [],
-    resetLabel: plan === 'trial' ? 'Daily usage resets each day during your 14-day trial' : 'Daily usage resets each day',
+    resetLabel: 'Daily usage resets each day',
     toolRows,
     liveHeader,
   };
