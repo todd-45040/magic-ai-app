@@ -23,7 +23,7 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
 
   return (
     <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 md:px-8 animate-fade-in">
-        <button onClick={onBack} className="flex items-center gap-2 mb-6 text-slate-300 hover:text-white transition-colors">
+        <button onClick={onBack} className="maw-btn-ghost mb-6 gap-2 self-start maw-focus-ring text-slate-300 hover:text-white">
             <BackIcon className="w-5 h-5" />
             <span>Back to Main Screen</span>
         </button>
@@ -31,10 +31,10 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
         <div className="text-center mb-10">
             <WandIcon className="w-16 h-16 mx-auto mb-4 text-amber-300" />
             <h1 className="font-cinzel text-4xl md:text-5xl font-bold text-white mb-2">About Our Memberships</h1>
-            <p className="text-slate-400 text-lg">Find the perfect plan to elevate your craft.</p>
+            <p className="maw-helper mx-auto max-w-2xl text-base sm:text-lg">Find the perfect plan to elevate your craft.</p>
         </div>
 
-        <div className="max-w-2xl mx-auto mb-10 p-4 rounded-lg bg-purple-900/30 border border-purple-500/50 text-center">
+        <div className="max-w-2xl mx-auto mb-10 p-5 maw-card-soft text-center border-purple-500/40 bg-purple-900/20">
             <h2 className="font-cinzel font-bold text-xl text-amber-300 mb-1">Limited-Time Introductory Pricing</h2>
             <p className="text-slate-300 text-sm">Lock in these special rates now! Prices will increase after the beta period.</p>
         </div>

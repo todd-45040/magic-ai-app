@@ -21,6 +21,32 @@
   .maw-section-tight {
     @apply mt-4;
   }
+
+  .maw-btn-primary {
+    @apply inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition-all duration-200 shadow-sm shadow-purple-950/25;
+  }
+  .maw-btn-secondary {
+    @apply inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-semibold text-white transition-all duration-200 hover:bg-white/[0.06];
+  }
+  .maw-btn-ghost {
+    @apply inline-flex items-center justify-center rounded-xl px-3 py-2 text-sm font-semibold text-slate-200 transition-all duration-200 hover:bg-white/[0.04] hover:text-white;
+  }
+  .maw-pill {
+    @apply inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold leading-none tracking-wide;
+  }
+  .maw-section-kicker {
+    @apply text-xs font-semibold uppercase tracking-[0.14em] text-white/45;
+  }
+  .maw-helper {
+    @apply text-sm leading-6 text-white/65;
+  }
+  .maw-interactive-row {
+    @apply transition-all duration-200 hover:bg-white/[0.06] hover:shadow-lg hover:shadow-black/20;
+  }
+  .maw-footer-shell {
+    @apply rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur;
+  }
+
 }
 
 
@@ -150,3 +176,10 @@ html.maw-record body {
 /* Hide scrollbars for horizontal metric strips */
 .no-scrollbar::-webkit-scrollbar{ display:none; }
 .no-scrollbar{ -ms-overflow-style:none; scrollbar-width:none; }
+
+
+/* Tier 1 polish helpers */
+.maw-focus-ring:focus-visible{
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.35);
+}

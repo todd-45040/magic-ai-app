@@ -52,15 +52,15 @@ const InfoTile: React.FC<{
   hint?: string;
   accentClassName?: string;
 }> = ({ icon: Icon, label, value, hint, accentClassName }) => (
-  <div className={`rounded-2xl border border-white/10 bg-white/[0.03] p-4 ${accentClassName || ''}`}>
+  <div className={`maw-card-soft p-4 ${accentClassName || ''}`}>
     <div className="flex items-start gap-3">
       <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-purple-400/20 bg-purple-500/10 text-purple-200">
         <Icon className="h-5 w-5" />
       </div>
       <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/45">{label}</p>
+        <p className="maw-section-kicker">{label}</p>
         <p className="mt-1 text-base font-semibold text-white">{value}</p>
-        {hint ? <p className="mt-1 text-sm text-white/60">{hint}</p> : null}
+        {hint ? <p className="mt-1 maw-helper text-white/60">{hint}</p> : null}
       </div>
     </div>
   </div>
@@ -127,17 +127,17 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
     <div className="px-4 py-6 space-y-6 md:px-6 animate-fade-in">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.08em] text-yellow-300/80">Billing & Account</p>
+          <p className="maw-section-kicker text-yellow-300/80">Billing &amp; Account</p>
           <h1 className="mt-2 text-2xl font-semibold leading-tight text-white md:text-3xl">
             Billing settings and upgrade controls
           </h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-white/70">
+          <p className="maw-helper mt-2 max-w-3xl">
             This page reads the billing status endpoint directly, so current plan state, upgrade availability, and founder protection stay aligned with entitlement truth.
           </p>
         </div>
         <button
           onClick={() => void loadStatus()}
-          className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/[0.06]"
+          className="maw-btn-secondary maw-focus-ring"
         >
           Refresh billing status
         </button>
