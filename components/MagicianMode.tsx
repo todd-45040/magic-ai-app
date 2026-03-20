@@ -1,5 +1,3 @@
-import { Users } from "lucide-react";
-
 import React, { useState, useRef, useEffect } from 'react';
 import type { ChatMessage, PredefinedPrompt, TrickIdentificationResult, User, Transcription, MagicianView, MagicianTab, Client, Show, Feedback, SavedIdea, TaskPriority, AiSparkAction } from '../types';
 import { generateResponse } from '../services/geminiService';
@@ -4849,7 +4847,7 @@ const renderIntentSubnav = () => {
         <picture className="mr-2 flex-shrink-0">
           <source media="(prefers-contrast: more)" srcSet="/assets/logo/Wizard_Head.png" />
           <source media="(forced-colors: active)" srcSet="/assets/logo/Wizard_Head.png" />
-          <Users className="h-6 w-6 ml-2 text-purple-300 drop-shadow-[0_0_6px_rgba(168,85,247,0.6)]" />
+          <UsersIcon className="h-6 w-6 ml-2 text-purple-300 drop-shadow-[0_0_6px_rgba(168,85,247,0.6)]" />
         </picture>
         <div className="ml-auto flex items-center gap-2">
             {Boolean((user as any)?.foundingCircleMember) && (
