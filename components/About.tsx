@@ -46,14 +46,14 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
                 <div className="w-full max-w-sm p-6 bg-slate-800/50 border border-green-500/50 rounded-lg flex flex-col">
                     <h3 className="text-2xl font-bold text-green-300 font-cinzel mb-4">14-Day Free Trial</h3>
                     <div className="min-h-[10rem] flex flex-col">
-                        <p className="text-slate-400 mb-4">Start here. Broad-access trial for 14 days — most creative and rehearsal tools are available, with transparent trial limits.</p>
+                        <p className="text-slate-400 mb-4">Start here. Full creative access for 14 days (with smart usage limits).</p>
                         <div className="text-center">
                             <p className="text-3xl font-bold text-green-300">Free</p>
                             <p className="text-sm text-slate-400">for 14 days</p>
                         </div>
                     </div>
                     <hr className="border-slate-700 my-4" />
-                    <FeatureList features={['Broad 14-day access to roughly 75% of the platform', 'Creative + rehearsal tools included during trial', 'Up to 10 saved ideas', '1 active show in Show Planner', 'Includes 2 image generations, 1 video rehearsal analysis, and 10 live rehearsal minutes', 'Selected advanced business / pro workflow tools remain visible but locked during trial']} />
+                    <FeatureList features={['14-day trial access (most tools)', 'Up to 10 saved ideas', '10 minutes of rehearsal coaching', '1 active show in Show Planner', 'Includes Image Generation (2) + Video Rehearsal (1) during trial', 'Demo Mode access']} />
                     <div className="flex-grow" />
                 </div>
 
@@ -66,7 +66,7 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
   </span>
 </h3>
                     <div className="min-h-[10rem] flex flex-col">
-                        <p className="text-slate-400 mb-4">The creator tier for ongoing use — more capacity, more saves, and fewer trial constraints.</p>
+                        <p className="text-slate-400 mb-4">The Creative Tier — built to level up your material and rehearsal.</p>
                         <div className="text-center">
                             <p className="text-3xl font-bold text-sky-300">$15.95<span className="text-base font-normal text-slate-400">/month</span></p>
                             <p className="text-sm text-slate-400">$159.00 one-time annual billing</p>
@@ -82,7 +82,7 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
                 <div className="w-full max-w-sm p-6 bg-slate-800/50 border border-amber-400/50 rounded-lg flex flex-col">
                     <h3 className="text-2xl font-bold text-amber-300 font-cinzel mb-4">Professional</h3>
                     <div className="min-h-[10rem] flex flex-col">
-                        <p className="text-slate-400 mb-4">The full platform tier — unlocks advanced business, planning, and pro workflow tools.</p>
+                        <p className="text-slate-400 mb-4">The Business Tier — client, contracts, finance, and analytics.</p>
                         <div className="text-center">
                             <p className="text-3xl font-bold text-amber-300">$29.95<span className="text-base font-normal text-slate-400">/month</span></p>
                             <p className="text-sm text-slate-400">$299.00 one-time annual billing</p>

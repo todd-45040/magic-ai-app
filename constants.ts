@@ -337,6 +337,10 @@ export const AMATEUR_FEATURES = [
     'Global Search',
     'Visual Brainstorm Studio (limited)',
     'Video Rehearsal Studio (limited)',
+    'Magic Dictionary (limited)',
+    'Magic Theory Tutor (limited)',
+    'Mentalism Assistant (limited)',
+    'Gospel Magic Assistant (limited)',
 ];
 
 // Display-only marketing labels for the mid-tier / business layer.
@@ -358,10 +362,6 @@ export const PROFESSIONAL_FEATURES = [
     'Persona Simulator',
     "Assistant's Studio",
     'Prop Checklist Generator',
-    'Magic Dictionary',
-    'Magic Theory Tutor',
-    'Mentalism Assistant',
-    'Gospel Magic Assistant',
     'Client Management',
     'Contract Generator',
     'Marketing Campaign',

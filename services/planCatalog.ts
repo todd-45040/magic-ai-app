@@ -68,7 +68,7 @@ export type BillingPlanDefinition = {
 const INFINITE_LIMIT = Number.MAX_SAFE_INTEGER;
 
 const FREE_FEATURES: ToolName[] = ['EffectGenerator', 'PatterEngine', 'MagicWire', 'Publications', 'Community', 'IdentifyTrick'];
-const AMATEUR_FEATURES: ToolName[] = [...FREE_FEATURES, 'ShowPlanner', 'SavedIdeas', 'Search', 'VisualBrainstorm', 'VideoAnalysis'];
+const AMATEUR_FEATURES: ToolName[] = [...FREE_FEATURES, 'ShowPlanner', 'SavedIdeas', 'Search', 'VisualBrainstorm', 'VideoAnalysis', 'MagicDictionary', 'MagicTheoryTutor', 'MentalismAssistant', 'GospelMagic'];
 const PROFESSIONAL_FEATURES: ToolName[] = [
   ...AMATEUR_FEATURES,
   'LiveRehearsal',
@@ -86,9 +86,11 @@ const PROFESSIONAL_FEATURES: ToolName[] = [
   'AssistantStudio',
   'PropChecklists',
   'ShowFeedback',
-  'GospelMagic',
-  'MentalismAssistant',
   'IllusionBlueprint',
+  'MagicDictionary',
+  'MagicTheoryTutor',
+  'MentalismAssistant',
+  'GospelMagic',
 ];
 
 const ALL_TOOLS: ToolName[] = [
@@ -116,9 +118,11 @@ const ALL_TOOLS: ToolName[] = [
   'AssistantStudio',
   'PropChecklists',
   'ShowFeedback',
-  'GospelMagic',
-  'MentalismAssistant',
   'IllusionBlueprint',
+  'MagicDictionary',
+  'MagicTheoryTutor',
+  'MentalismAssistant',
+  'GospelMagic',
 ];
 
 function buildFeatureMatrix(enabledTools: ToolName[]): Record<ToolName, boolean> {

@@ -7,7 +7,7 @@ interface DisclaimerModalProps {
 
 type UsageRow = {
     label: string;
-    trial: string;
+    free: string;
     amateur: string;
     professional: string;
     note?: string;
@@ -16,59 +16,45 @@ type UsageRow = {
 const usageRows: UsageRow[] = [
     {
         label: 'General AI requests',
-        trial: '20 / day',
+        free: '20 / day',
         amateur: '200 / day',
         professional: '1,000 / day',
         note: 'Covers normal AI text generations across supported tools.',
     },
     {
         label: 'Burst rate protection',
-        trial: '20 / minute',
+        free: '20 / minute',
         amateur: '60 / minute',
         professional: '120 / minute',
         note: 'Protects platform stability during rapid repeated requests.',
     },
     {
-        label: 'Saved ideas',
-        trial: '10 total',
-        amateur: '100 total',
-        professional: 'Unlimited',
-        note: 'How many idea records you can keep saved inside the app at one time.',
-    },
-    {
-        label: 'Saved shows',
-        trial: '1 total',
-        amateur: '25 total',
-        professional: 'Unlimited',
-        note: 'How many show-planning records you can keep active in the app.',
-    },
-    {
         label: 'Image generations',
-        trial: '2 / month',
+        free: '5 / month',
         amateur: '40 / month',
         professional: '200 / month',
         note: 'Used by image-heavy tools such as Visual Brainstorm and related generation workflows.',
     },
     {
         label: 'Identify a Trick',
-        trial: '10 / month',
+        free: '10 / month',
         amateur: '50 / month',
         professional: '100 / month',
         note: 'For trick-identification style AI analysis requests.',
     },
     {
         label: 'Live Rehearsal audio',
-        trial: '10 min total during trial',
+        free: '10 min/day, 0 monthly access',
         amateur: '45 min/day, 60 min/month',
         professional: '180 min/day, 300 min/month',
-        note: 'Trial includes limited live rehearsal time so new members can test the experience before upgrading.',
+        note: 'Live rehearsal is also controlled by plan access and feature availability.',
     },
     {
         label: 'Video Rehearsal uploads',
-        trial: '1 total during trial',
+        free: '0 / day, 0 / month',
         amateur: '1 / day, 10 / month',
         professional: '6 / day, 50 / month',
-        note: 'Trial includes one video rehearsal analysis so new members can sample the workflow before upgrading.',
+        note: 'Upload-based rehearsal analysis is capped separately because of higher processing cost.',
     },
 ];
 
@@ -94,7 +80,7 @@ const DisclaimerModal: React.FC<DisclaimerModalProps> = ({ onClose }) => {
                                     Privacy &amp; Legal
                                 </h2>
                                 <p className="mt-1 text-sm text-slate-300/90">
-                                    Full-disclosure terms for magicians. Your material stays yours, your trial access is explained, and your limits are visible.
+                                    Full-disclosure terms for magicians. Your material stays yours, and your limits are visible.
                                 </p>
                                 <div className="mt-3 flex flex-wrap gap-2">
                                     <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-slate-800/60 border border-slate-700/70 text-slate-200">
@@ -104,7 +90,7 @@ const DisclaimerModal: React.FC<DisclaimerModalProps> = ({ onClose }) => {
                                         Your scripts stay private
                                     </span>
                                     <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-slate-800/60 border border-slate-700/70 text-slate-200">
-                                        Trial access disclosed
+                                        Usage limits disclosed
                                     </span>
                                     <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-slate-800/60 border border-slate-700/70 text-slate-200">
                                         Secure payments (Stripe)
@@ -132,50 +118,9 @@ const DisclaimerModal: React.FC<DisclaimerModalProps> = ({ onClose }) => {
                         <p className="mt-2 text-slate-300 leading-relaxed">
                             At <span className="font-semibold text-white">Magicians&apos; AI Wizard, LLC</span>, we believe customers should understand not only
                             how their data is treated, but also how the platform works, where limits exist, and what the service is designed to do.
-                            This panel is meant to make the platform more transparent in practical language, including what trial members can use during the 14-day evaluation period.
+                            This panel is meant to make the platform more transparent in practical language.
                         </p>
                     </div>
-
-                    <section className="rounded-2xl bg-slate-800/35 border border-slate-700/70 p-4 md:p-5">
-                        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3">
-                            <div>
-                                <h3 className="font-cinzel text-lg font-bold text-white">Membership Access Summary</h3>
-                                <p className="mt-1 text-sm text-slate-400">The platform currently uses three customer-facing access levels: Trial, Amateur, and Professional.</p>
-                            </div>
-                            <div className="text-xs text-slate-400 rounded-full border border-slate-700/70 bg-slate-900/30 px-3 py-1 w-fit">
-                                Trial is intentionally broad, but not full access
-                            </div>
-                        </div>
-
-                        <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-3 text-sm">
-                            <div className="rounded-xl bg-slate-900/30 border border-green-500/30 p-4">
-                                <h4 className="font-semibold text-green-300">14-Day Trial</h4>
-                                <p className="mt-2 text-slate-300">Trial members can evaluate roughly 75% of the app, especially the core creative and rehearsal experience.</p>
-                                <ul className="mt-3 space-y-2 text-slate-300">
-                                    <li><span className="text-amber-300 font-semibold">•</span> Included: Effect Generator, Patter Engine, Show Planner, Saved Ideas, Search, Live Rehearsal, Video Rehearsal, Persona Simulator, Angle &amp; Risk, Visual Brainstorm, Identify a Trick, Prop Checklists, Innovation Engine, Magic Archives, Gospel Magic, Mentalism Assistant, Magic Dictionary, Magic Theory Tutor, Magic Wire, Publications, and Community.</li>
-                                    <li><span className="text-amber-300 font-semibold">•</span> Visible but locked during trial: Director Mode, Clients / CRM, Contracts, Finance Tracker, Marketing, Assistant&apos;s Studio, Show Feedback, and Illusion Blueprint.</li>
-                                </ul>
-                            </div>
-
-                            <div className="rounded-xl bg-slate-900/30 border border-sky-500/30 p-4">
-                                <h4 className="font-semibold text-sky-300">Amateur</h4>
-                                <p className="mt-2 text-slate-300">Amateur is the ongoing creator tier for users who want regular access without stepping up to the full professional business stack.</p>
-                                <ul className="mt-3 space-y-2 text-slate-300">
-                                    <li><span className="text-amber-300 font-semibold">•</span> Designed for writing, ideation, selective rehearsal workflows, saves, and research.</li>
-                                    <li><span className="text-amber-300 font-semibold">•</span> Some advanced live-performance, business, and pro workflow tools may remain reserved for Professional.</li>
-                                </ul>
-                            </div>
-
-                            <div className="rounded-xl bg-slate-900/30 border border-amber-400/30 p-4">
-                                <h4 className="font-semibold text-amber-300">Professional</h4>
-                                <p className="mt-2 text-slate-300">Professional unlocks the full operating system, including advanced rehearsal, business, analytics, and premium workflow tools.</p>
-                                <ul className="mt-3 space-y-2 text-slate-300">
-                                    <li><span className="text-amber-300 font-semibold">•</span> Includes the platform&apos;s full pro workflow set.</li>
-                                    <li><span className="text-amber-300 font-semibold">•</span> Highest limits and broadest operational access.</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </section>
 
                     <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
                         <section className="rounded-2xl bg-slate-800/45 border border-slate-700/70 p-4 xl:col-span-2">
@@ -186,7 +131,7 @@ const DisclaimerModal: React.FC<DisclaimerModalProps> = ({ onClose }) => {
                                     rehearsal workflows, show planning, and selected business tasks.
                                 </div>
                                 <div className="rounded-xl bg-slate-900/30 border border-slate-700/70 p-3">
-                                    Some tools generate text, some analyze media, and some create images. Availability and quota levels vary by membership plan, and trial members do not receive full access to every advanced module.
+                                    Some tools generate text, some analyze media, and some create images. Availability and quota levels vary by membership plan.
                                 </div>
                                 <div className="rounded-xl bg-slate-900/30 border border-slate-700/70 p-3">
                                     The app may evolve over time. Features, UI, workflows, and limits may be refined as the platform matures.
@@ -224,7 +169,7 @@ const DisclaimerModal: React.FC<DisclaimerModalProps> = ({ onClose }) => {
                                 <li><span className="text-amber-300 font-semibold">•</span> Limits help manage AI cost, performance, and fair access across the platform.</li>
                                 <li><span className="text-amber-300 font-semibold">•</span> Some limits reset daily, while others reset monthly.</li>
                                 <li><span className="text-amber-300 font-semibold">•</span> Higher-cost tools such as image generation, live audio, and video analysis are tracked separately.</li>
-                                <li><span className="text-amber-300 font-semibold">•</span> Trial access is broad but selective. Some advanced modules stay visible yet locked until upgrade.</li>
+                                <li><span className="text-amber-300 font-semibold">•</span> Actual access also depends on your plan. A limit row does not override a locked feature.</li>
                             </ul>
                         </section>
                     </div>
@@ -234,7 +179,7 @@ const DisclaimerModal: React.FC<DisclaimerModalProps> = ({ onClose }) => {
                             <div>
                                 <h3 className="font-cinzel text-lg font-bold text-white">Current Usage Limits</h3>
                                 <p className="mt-1 text-sm text-slate-400">
-                                    These values communicate the current customer-facing limits. Trial limits are shown separately so new users can understand the 14-day experience before upgrading.
+                                    These values communicate the present platform limits for customer visibility. They may be refined as the app evolves.
                                 </p>
                             </div>
                             <div className="text-xs text-slate-400 rounded-full border border-slate-700/70 bg-slate-900/30 px-3 py-1 w-fit">
@@ -247,7 +192,7 @@ const DisclaimerModal: React.FC<DisclaimerModalProps> = ({ onClose }) => {
                                 <thead className="bg-slate-800/60 text-slate-200">
                                     <tr>
                                         <th className="text-left px-4 py-3 font-semibold">Usage Type</th>
-                                        <th className="text-left px-4 py-3 font-semibold">Trial</th>
+                                        <th className="text-left px-4 py-3 font-semibold">Free</th>
                                         <th className="text-left px-4 py-3 font-semibold">Amateur</th>
                                         <th className="text-left px-4 py-3 font-semibold">Professional</th>
                                     </tr>
@@ -259,7 +204,7 @@ const DisclaimerModal: React.FC<DisclaimerModalProps> = ({ onClose }) => {
                                                 <div className="font-semibold text-white">{row.label}</div>
                                                 {row.note ? <div className="mt-1 text-xs text-slate-400 max-w-md">{row.note}</div> : null}
                                             </td>
-                                            <td className="px-4 py-3 text-slate-300 whitespace-nowrap">{row.trial}</td>
+                                            <td className="px-4 py-3 text-slate-300 whitespace-nowrap">{row.free}</td>
                                             <td className="px-4 py-3 text-slate-300 whitespace-nowrap">{row.amateur}</td>
                                             <td className="px-4 py-3 text-slate-300 whitespace-nowrap">{row.professional}</td>
                                         </tr>
@@ -299,7 +244,8 @@ const DisclaimerModal: React.FC<DisclaimerModalProps> = ({ onClose }) => {
                             <h3 className="font-cinzel text-lg font-bold text-white">Payments, Billing &amp; Access</h3>
                             <p className="mt-2 text-sm text-slate-300 leading-relaxed">
                                 Subscription billing, when active, is processed through Stripe. We do not store full payment card numbers on our own servers.
-                                Plan access, feature availability, and quotas differ by membership tier. Trial members receive a broad evaluation window, Amateur members receive the ongoing creator tier, and Professional members receive the full platform.
+                                Plan access, feature availability, and quotas may differ by membership tier and may change if a subscription changes, expires,
+                                or is canceled according to the applicable billing state.
                             </p>
                         </section>
 
@@ -315,7 +261,7 @@ const DisclaimerModal: React.FC<DisclaimerModalProps> = ({ onClose }) => {
                     <div className="rounded-2xl bg-gradient-to-r from-slate-900/30 via-slate-800/30 to-purple-900/20 border border-slate-700/70 p-4">
                         <p className="text-sm text-slate-300 leading-relaxed">
                             <span className="font-semibold text-white">Transparency statement:</span> This panel is meant to make the app easier to trust.
-                            It explains what the platform is, how your information is treated, what trial members can and cannot do, where plan limits exist, and what responsibilities remain with the user.
+                            It explains what the platform is, how your information is treated, where plan limits exist, and what responsibilities remain with the user.
                         </p>
                     </div>
                 </main>
