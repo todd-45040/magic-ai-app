@@ -497,8 +497,22 @@ Requirements:
           </div>
 
           {!hasResult ? (
-            <div className="flex-1 rounded-2xl border border-dashed border-slate-700/70 bg-slate-900/20 flex items-center justify-center text-center text-slate-500 p-8">
-              Generated prop concept will appear here.
+            <div className="flex-1 rounded-2xl border border-dashed border-slate-700/70 bg-slate-900/20 flex items-center justify-center text-center p-8">
+              {loading ? (
+                <div className="flex flex-col items-center gap-4 max-w-sm">
+                  <div className="relative flex h-20 w-20 items-center justify-center">
+                    <div className="absolute inset-0 rounded-full border-4 border-purple-500/20" />
+                    <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-purple-400 border-r-fuchsia-400 animate-spin" />
+                    <div className="rounded-full border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-2xl shadow-lg shadow-purple-900/30 animate-pulse">🎩</div>
+                  </div>
+                  <div>
+                    <div className="text-base font-semibold text-slate-100">AI is designing your prop...</div>
+                    <div className="mt-1 text-sm text-slate-400">Analyzing your inputs and building a practical performance concept.</div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-slate-500">Generated prop concept will appear here.</div>
+              )}
             </div>
           ) : (
             <>
