@@ -2,7 +2,7 @@ import { GoogleGenAI } from '@google/genai';
 import { enforceAiUsage } from '../server/usage.js';
 import { resolveProvider } from '../lib/server/providers/index.js';
 import { getGoogleAiApiKey } from '../server/gemini.js';
-import { applyImagePromptPolicy } from './_lib/imagePromptPolicy';
+import { applyImagePromptPolicy } from './_lib/imagePromptPolicy.js';
 
 export default async function handler(request: any, response: any) {
   if (request.method !== 'POST') {
