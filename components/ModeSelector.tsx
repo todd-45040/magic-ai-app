@@ -9,8 +9,15 @@ interface ModeSelectorProps {
 const ModeSelector: React.FC<ModeSelectorProps> = ({ onSelectMode }) => {
   return (
     <div className="flex flex-col items-center justify-center h-full">
+      <div className="mb-4 flex justify-center">
+        <img
+          src="/assets/logo/Wizard_Head_wText.png"
+          alt="Magicians' AI Wizard logo"
+          className="w-[280px] sm:w-[360px] md:w-[520px] h-auto select-none drop-shadow-[0_0_24px_rgba(251,191,36,0.12)]"
+        />
+      </div>
       <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-2">
-        <RabbitIcon className="w-12 h-12 md:w-16 md:h-16 text-purple-400" />
+        <RabbitIcon className="w-10 h-10 md:w-12 md:h-12 text-purple-400" />
         <h1 className="font-cinzel text-4xl md:text-6xl font-bold text-amber-300 tracking-widest text-center">
           Magicians' AI Wizard
         </h1>
