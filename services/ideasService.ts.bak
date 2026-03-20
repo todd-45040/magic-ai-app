@@ -56,18 +56,6 @@ function sanitizeIdeaContent(content: string): string {
 
   try {
     const parsed: any = JSON.parse(text);
-
-    // Preserve structured MAW payloads verbatim so richer tool output can be
-    // stored and rendered later instead of being flattened into plain text.
-    if (
-      parsed &&
-      typeof parsed === 'object' &&
-      parsed.format === 'maw.idea.v2' &&
-      typeof parsed.tool === 'string'
-    ) {
-      return text;
-    }
-
     const direct = [parsed?.display, parsed?.content, parsed?.text, parsed?.body, parsed?.result, parsed?.response, parsed?.markdown]
       .find((value) => typeof value === 'string' && value.trim());
     if (typeof direct === 'string' && direct.trim()) return direct.trim();
@@ -171,48 +159,19 @@ export async function saveIdea(
       ? ({ type: a, content: b ?? '', title: c, tags: d } as const)
       : a;
 
-  const baseInsert = {
-    user_id: uid,
-    type: payload.type,
-    content: sanitizeIdeaContent(payload.content),
-    title: payload.title ?? null,
-    // DB constraint: tags is NOT NULL. Always send an array.
-    tags: Array.isArray(payload.tags) ? payload.tags : [],
-  };
-
-  const insertWithCategory = async (includeCategory: boolean) => {
-    const insertPayload = includeCategory
-      ? { ...baseInsert, category: payload.category ?? null }
-      : baseInsert;
-
-    return supabase
-      .from('ideas')
-      .insert(insertPayload)
-      .select('*')
-      .single();
-  };
-
-  let { data, error } = await insertWithCategory(true);
-
-  // Backward-compatible retry for deployments where the DB schema has not yet
-  // picked up the optional `category` column.
-  if (error) {
-    const msg = String(error.message || '').toLowerCase();
-    const details = String((error as any).details || '').toLowerCase();
-    const hint = String((error as any).hint || '').toLowerCase();
-    const categorySchemaIssue = [msg, details, hint].some((part) =>
-      part.includes('category') && (
-        part.includes('column') ||
-        part.includes('schema cache') ||
-        part.includes('could not find') ||
-        part.includes('does not exist')
-      )
-    );
-
-    if (categorySchemaIssue) {
-      ({ data, error } = await insertWithCategory(false));
-    }
-  }
+  const { data, error } = await supabase
+    .from('ideas')
+    .insert({
+      user_id: uid,
+      type: payload.type,
+      content: sanitizeIdeaContent(payload.content),
+      title: payload.title ?? null,
+      // DB constraint: tags is NOT NULL. Always send an array.
+      tags: Array.isArray(payload.tags) ? payload.tags : [],
+      category: payload.category ?? null,
+    })
+    .select('*')
+    .single();
 
   if (error) throw error;
   return mapRowToIdea(data as DbIdeaRow);
