@@ -1,5 +1,15 @@
 /**
  * YouTube Search proxy
+ *
+ * Why this exists:
+ * - AI models frequently hallucinate video URLs.
+ * - We instead ask the model for search queries, then look up real videos via the YouTube Data API.
+ *
+ * Auth:
+ * - Requires the same Bearer auth header as other endpoints.
+ *
+ * Env:
+ * - YOUTUBE_API_KEY (Google Cloud Console → APIs & Services → Credentials)
  */
 
 type VideoResult = {
@@ -7,49 +17,7 @@ type VideoResult = {
   url: string;
   videoId: string;
   channelTitle?: string;
-  sourceQuery?: string;
-  sourceQueryIndex?: number;
-  score?: number;
 };
-
-function tokenize(value: string): string[] {
-  return String(value || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .split(/\s+/)
-    .map(t => t.trim())
-    .filter(Boolean);
-}
-
-function scoreVideoTitle(title: string, query: string, channelTitle?: string): number {
-  const titleLower = String(title || '').toLowerCase();
-  const channelLower = String(channelTitle || '').toLowerCase();
-  const queryTokens = tokenize(query).filter(t => t.length > 2);
-  let score = 0;
-
-  for (const token of queryTokens) {
-    if (titleLower.includes(token)) score += 3;
-    if (channelLower.includes(token)) score += 1;
-  }
-
-  if (titleLower.includes('performance')) score += 4;
-  if (titleLower.includes('live')) score += 2;
-  if (titleLower.includes('stage')) score += 2;
-  if (titleLower.includes('routine')) score += 2;
-  if (titleLower.includes('act')) score += 1;
-  if (titleLower.includes('show')) score += 1;
-
-  if (titleLower.includes('explained')) score -= 8;
-  if (titleLower.includes('exposed')) score -= 8;
-  if (titleLower.includes('reveal')) score -= 6;
-  if (titleLower.includes('secret')) score -= 8;
-  if (titleLower.includes('tutorial')) score -= 7;
-  if (titleLower.includes('how to')) score -= 7;
-  if (titleLower.includes('method')) score -= 8;
-  if (titleLower.includes('behind the scenes')) score -= 4;
-
-  return score;
-}
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -67,16 +35,17 @@ export default async function handler(req: any, res: any) {
   try {
     const body = req.body || {};
     const queries: string[] = Array.isArray(body.queries) ? body.queries : [];
-    const maxResultsPerQuery = Math.min(Math.max(Number(body.maxResultsPerQuery || 5), 1), 10);
+    const maxResultsPerQuery = Math.min(Math.max(Number(body.maxResultsPerQuery || 3), 1), 5);
     const safeSearch = body.safeSearch === 'none' ? 'none' : 'strict';
 
     if (queries.length === 0) {
       return res.status(400).json({ error: 'Missing queries[]' });
     }
 
+    // Fetch results for each query and flatten, then de-duplicate by videoId.
     const all: VideoResult[] = [];
 
-    for (const [index, q] of queries.slice(0, 3).entries()) {
+    for (const q of queries.slice(0, 3)) {
       const url = new URL('https://www.googleapis.com/youtube/v3/search');
       url.searchParams.set('part', 'snippet');
       url.searchParams.set('type', 'video');
@@ -98,16 +67,11 @@ export default async function handler(req: any, res: any) {
       for (const item of items) {
         const videoId = item?.id?.videoId;
         const title = item?.snippet?.title;
-        const channelTitle = item?.snippet?.channelTitle;
         if (!videoId || !title) continue;
-
         all.push({
           videoId,
           title,
-          channelTitle,
-          sourceQuery: q,
-          sourceQueryIndex: index,
-          score: scoreVideoTitle(title, q, channelTitle),
+          channelTitle: item?.snippet?.channelTitle,
           url: `https://www.youtube.com/watch?v=${videoId}`,
         });
       }
@@ -120,13 +84,8 @@ export default async function handler(req: any, res: any) {
       return true;
     });
 
-    deduped.sort((a, b) => {
-      const scoreDelta = Number(b.score || 0) - Number(a.score || 0);
-      if (scoreDelta !== 0) return scoreDelta;
-      return Number(a.sourceQueryIndex || 0) - Number(b.sourceQueryIndex || 0);
-    });
-
-    return res.status(200).json({ videos: deduped.slice(0, 12) });
+    // Return at most 3 final videos.
+    return res.status(200).json({ videos: deduped.slice(0, 3) });
   } catch (err: any) {
     console.error('videoSearch error:', err);
     return res.status(500).json({ error: err?.message || 'Request failed.' });

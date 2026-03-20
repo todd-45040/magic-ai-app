@@ -4,29 +4,15 @@
 // Keeps ALL provider keys server-side.
 // UI components should call this (or still call geminiService.identifyTrickFromImage if you prefer).
 
-import type { User, TrickIdentificationResult, TrickPerformanceReference } from "../types";
+import type { User, TrickIdentificationResult } from "../types";
 import { aiIdentify, aiJson } from "./aiProxy";
-import { supabase } from "../supabase";
 
-type Video = TrickPerformanceReference & { sourceQuery?: string; sourceQueryIndex?: number; score?: number };
-
-async function getBearerToken(): Promise<string> {
-  try {
-    const { data } = await supabase.auth.getSession();
-    const token = data?.session?.access_token;
-    return token ? `Bearer ${token}` : 'Bearer guest';
-  } catch {
-    return 'Bearer guest';
-  }
-}
+type Video = { title: string; url: string };
 
 async function postJson<T>(url: string, body: any): Promise<T> {
   const r = await fetch(url, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": await getBearerToken(),
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
 
@@ -64,7 +50,7 @@ export async function identifyTrickFromImageServer(
     "- presentationIdeas (array of 3-6 bullets; performance-safe)\n" +
     "- angleRiskNotes (array of 3-6 bullets; sightlines/reset/handling cautions; NO exposure)\n" +
     "- variations (array of 3-6 bullets; alternate plots/presentations; performance-safe)\n" +
-    "- videoQueries (array of exactly 3 concise YouTube search queries, NO URLs: first 2 should aim to find specific performances/videos, 3rd can be broader).";
+    "- videoQueries (array of 3 concise YouTube search queries, NO URLs).";
 
   // Optional: pass user id for rate limiting (best effort)
   const result = await aiIdentify<{ text: string }>(dataUrl, prompt);
@@ -133,93 +119,31 @@ export async function identifyTrickFromImageServer(
     : [];
 
   const fallbackQueries = [
-    `${trickName} magician live performance`,
-    `${trickName} magic routine performance`,
-    `${trickName} magic performance`,
+    `${trickName} magic trick performance`,
+    `${trickName} illusion performance`,
+    `${trickName} magic trick live show`,
   ];
 
-  const queriesToUse = [
-    queries[0] || fallbackQueries[0],
-    queries[1] || fallbackQueries[1],
-    queries[2] || fallbackQueries[2],
-  ].filter(Boolean).slice(0, 3);
+  const queriesToUse = queries.length ? queries : fallbackQueries;
 
   let videos: Video[] = [];
   try {
     const yt = await postJson<any>("/api/videoSearch", {
       queries: queriesToUse,
-      maxResultsPerQuery: 5,
+      maxResultsPerQuery: 3,
       safeSearch: "strict",
     });
 
     const ytVideos = Array.isArray(yt?.videos) ? yt.videos : [];
-    const normalized: Video[] = ytVideos
-      .map((v: any) => ({
-        title: String(v?.title || "").trim(),
-        url: String(v?.url || "").trim(),
-        videoId: String(v?.videoId || "").trim() || undefined,
-        channelTitle: String(v?.channelTitle || "").trim() || undefined,
-        sourceQuery: String(v?.sourceQuery || "").trim() || undefined,
-        sourceQueryIndex: Number.isFinite(Number(v?.sourceQueryIndex)) ? Number(v.sourceQueryIndex) : undefined,
-        score: Number.isFinite(Number(v?.score)) ? Number(v.score) : undefined,
-        kind: 'specific' as const,
-        platform: 'youtube' as const,
-      }))
-      .filter((v: Video) => v.title && v.url && /youtube\.com\/watch|youtu\.be\//i.test(v.url));
-
-    const used = new Set<string>();
-    const specificRefs: TrickPerformanceReference[] = [];
-
-    const preferred = [
-      normalized.find((v: Video) => v.sourceQueryIndex === 0),
-      normalized.find((v: Video) => v.sourceQueryIndex === 1 && v.url !== normalized.find((x: Video) => x.sourceQueryIndex === 0)?.url),
-      ...normalized,
-    ].filter(Boolean) as Video[];
-
-    for (const candidate of preferred) {
-      if (!candidate?.url || used.has(candidate.url)) continue;
-      used.add(candidate.url);
-      specificRefs.push({
-        title: candidate.title,
-        url: candidate.url,
-        kind: 'specific',
-        platform: 'youtube',
-        channelTitle: candidate.channelTitle,
-        videoId: candidate.videoId,
-      });
-      if (specificRefs.length >= 2) break;
-    }
-
-    const broadQuery = queriesToUse[2] || queriesToUse[0] || `${trickName} magic performance`;
-    const searchRef: TrickPerformanceReference = {
-      title: `Explore on YouTube: ${broadQuery}`,
-      url: `https://www.youtube.com/results?search_query=${encodeURIComponent(broadQuery)}`,
-      kind: 'search',
-      platform: 'youtube',
-    };
-
-    videos = [...specificRefs, searchRef];
+    videos = ytVideos
+      .map((v: any) => ({ title: String(v?.title || "").trim(), url: String(v?.url || "").trim() }))
+      .filter((v: any) => v.title && v.url)
+      .slice(0, 3);
   } catch {
-    videos = [
-      {
-        title: `Watch performances on YouTube: ${queriesToUse[0] || `${trickName} magician live performance`}`,
-        url: `https://www.youtube.com/results?search_query=${encodeURIComponent(queriesToUse[0] || `${trickName} magician live performance`)}`,
-        kind: 'search',
-        platform: 'youtube',
-      },
-      {
-        title: `Watch alternate performances on YouTube: ${queriesToUse[1] || `${trickName} magic routine performance`}`,
-        url: `https://www.youtube.com/results?search_query=${encodeURIComponent(queriesToUse[1] || `${trickName} magic routine performance`)}`,
-        kind: 'search',
-        platform: 'youtube',
-      },
-      {
-        title: `Explore on YouTube: ${queriesToUse[2] || `${trickName} magic performance`}`,
-        url: `https://www.youtube.com/results?search_query=${encodeURIComponent(queriesToUse[2] || `${trickName} magic performance`)}`,
-        kind: 'search',
-        platform: 'youtube',
-      },
-    ];
+    videos = queriesToUse.slice(0, 3).map((q) => ({
+      title: `Search YouTube: ${q}`,
+      url: `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
+    }));
   }
 
   return {
