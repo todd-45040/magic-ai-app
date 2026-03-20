@@ -1,6 +1,6 @@
 import React from 'react';
 import { AMATEUR_FEATURES, PROFESSIONAL_FEATURES } from '../constants';
-import { BackIcon, CheckIcon } from './icons';
+import { BackIcon, CheckIcon, WandIcon } from './icons';
 
 interface AboutProps {
   onBack: () => void;
@@ -29,18 +29,14 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
         </button>
 
         <div className="text-center mb-10">
-            <img
-              src="/assets/logo/Wizard_Head_wText.png"
-              alt="Magic AI Wizard logo"
-              className="mx-auto mb-4 h-auto w-44 max-w-full sm:w-52 md:w-60"
-            />
+            <WandIcon className="w-16 h-16 mx-auto mb-4 text-amber-300" />
             <h1 className="font-cinzel text-4xl md:text-5xl font-bold text-white mb-2">About Our Memberships</h1>
             <p className="text-slate-400 text-lg">Find the perfect plan to elevate your craft.</p>
         </div>
 
         <div className="max-w-2xl mx-auto mb-10 p-4 rounded-lg bg-purple-900/30 border border-purple-500/50 text-center">
             <h2 className="font-cinzel font-bold text-xl text-amber-300 mb-1">Limited-Time Introductory Pricing</h2>
-            <p className="text-slate-300 text-sm">Beta introductory pricing is shown here for launch planning. Founder pricing, when offered, is a separate locked-rate path and future public pricing may change after launch.</p>
+            <p className="text-slate-300 text-sm">Lock in these special rates now! Prices will increase after the beta period.</p>
         </div>
 
         {/* Centered 3-up layout (Trial / Amateur / Professional) */}
@@ -57,7 +53,7 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
                         </div>
                     </div>
                     <hr className="border-slate-700 my-4" />
-                    <FeatureList features={['14-day trial access (most tools)', 'Save up to 10 ideas during trial', 'Rehearsal coaching: 10 minutes per day', '1 active show in Show Planner', 'Image Generation: 2 during 14-day trial', 'Video Rehearsal uploads: 1 during 14-day trial', 'Demo Mode access']} />
+                    <FeatureList features={['14-day trial access (most tools)', 'Save up to 10 ideas during trial', 'Rehearsal coaching: 10 minutes per day', '1 active show in Show Planner', 'Image Generation: 2 during trial', 'Video Rehearsal: 1 upload during trial', 'Demo Mode access']} />
                     <div className="flex-grow" />
                 </div>
 
@@ -86,7 +82,7 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
                 <div className="w-full max-w-sm p-6 bg-slate-800/50 border border-amber-400/50 rounded-lg flex flex-col">
                     <h3 className="text-2xl font-bold text-amber-300 font-cinzel mb-4">Professional</h3>
                     <div className="min-h-[10rem] flex flex-col">
-                        <p className="text-slate-400 mb-4">The Business Tier — full creative, rehearsal, client, contracts, finance, and analytics access.</p>
+                        <p className="text-slate-400 mb-4">The Business Tier — client, contracts, finance, and analytics.</p>
                         <div className="text-center">
                             <p className="text-3xl font-bold text-amber-300">$29.95<span className="text-base font-normal text-slate-400">/month</span></p>
                             <p className="text-sm text-slate-400">$299.00 one-time annual billing</p>

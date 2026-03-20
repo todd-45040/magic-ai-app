@@ -9,18 +9,18 @@ interface ModeSelectorProps {
 const ModeSelector: React.FC<ModeSelectorProps> = ({ onSelectMode }) => {
   return (
     <div className="flex flex-col items-center justify-center h-full">
-      <div className="mb-4 flex justify-center">
+      <div className="mb-4 flex flex-col items-center justify-center">
         <img
-          src="/assets/logo/Wizard_Head_wText.png"
-          alt="Magicians' AI Wizard logo"
-          className="w-[280px] sm:w-[360px] md:w-[520px] h-auto select-none drop-shadow-[0_0_24px_rgba(251,191,36,0.12)]"
+          src="/assets/logo/Wizard_Head.png"
+          alt="Magic AI Wizard logo"
+          className="w-28 sm:w-32 md:w-36 h-auto object-contain mb-3 drop-shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
         />
-      </div>
-      <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-2">
-        <RabbitIcon className="w-10 h-10 md:w-12 md:h-12 text-purple-400" />
-        <h1 className="font-cinzel text-4xl md:text-6xl font-bold text-amber-300 tracking-widest text-center">
-          Magicians' AI Wizard
-        </h1>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-2">
+          <RabbitIcon className="w-12 h-12 md:w-16 md:h-16 text-purple-400" />
+          <h1 className="font-cinzel text-4xl md:text-6xl font-bold text-amber-300 tracking-widest text-center">
+            Magicians' AI Wizard
+          </h1>
+        </div>
       </div>
       <p className="text-slate-200 mb-2 text-lg text-center font-semibold">The operating system for professional magicians.</p>
       <p className="text-slate-300 mb-12 text-base text-center">Choose your experience</p>

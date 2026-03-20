@@ -30,45 +30,31 @@ const usageRows: UsageRow[] = [
     },
     {
         label: 'Image generations',
-        free: '2 / 14-day trial',
+        free: '12 / 14 days',
         amateur: '40 / month',
         professional: '200 / month',
         note: 'Used by image-heavy tools such as Visual Brainstorm and related generation workflows.',
     },
     {
         label: 'Identify a Trick',
-        free: '18 / 14-day trial',
+        free: '18 / 14 days',
         amateur: '50 / month',
         professional: '100 / month',
         note: 'For trick-identification style AI analysis requests.',
     },
     {
         label: 'Live Rehearsal audio',
-        free: '10 min / day',
-        amateur: '45 min / day',
-        professional: '180 min / day',
-        note: 'Live rehearsal is shown to trial users as a per-day coaching limit.',
+        free: '15 min/day, 90 min / 14 days',
+        amateur: '45 min/day, 60 min/month',
+        professional: '180 min/day, 300 min/month',
+        note: 'Live rehearsal is also controlled by plan access and feature availability.',
     },
     {
         label: 'Video Rehearsal uploads',
-        free: '1 / 14-day trial',
+        free: '0 / day, 0 / month',
         amateur: '1 / day, 10 / month',
         professional: '6 / day, 50 / month',
         note: 'Upload-based rehearsal analysis is capped separately because of higher processing cost.',
-    },
-    {
-        label: 'Saved ideas',
-        free: '10 active items',
-        amateur: 'Included',
-        professional: 'Included',
-        note: 'Trial messaging uses active-item counts for items users keep in progress.',
-    },
-    {
-        label: 'Show Planner active shows',
-        free: '1 active item',
-        amateur: 'Included',
-        professional: 'Included',
-        note: 'Trial messaging uses active-item counts for items users keep in progress.',
     },
 ];
 
@@ -180,15 +166,15 @@ const DisclaimerModal: React.FC<DisclaimerModalProps> = ({ onClose }) => {
                         <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
                             <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-4">
                                 <div className="text-sm font-semibold text-green-300">Trial</div>
-                                <p className="mt-2 text-sm leading-6 text-slate-300">Broad-access evaluation tier with many creative and rehearsal tools available, but selected advanced business and pro workflows remain locked.</p>
+                                <p className="mt-2 text-sm leading-6 text-slate-300">Broad-access 14-day evaluation tier with many creative and rehearsal tools available, but selected advanced business and pro workflows remain locked.</p>
                             </div>
                             <div className="rounded-xl border border-sky-500/20 bg-sky-500/5 p-4">
                                 <div className="text-sm font-semibold text-sky-300">Amateur</div>
-                                <p className="mt-2 text-sm leading-6 text-slate-300">Includes the core creator workflow plus <span className="text-white font-semibold">Magic Wire</span>, <span className="text-white font-semibold">Publications</span>, and <span className="text-white font-semibold">Community</span> alongside planning, archives, search, video rehearsal, visual brainstorming, and <span className="text-white font-semibold">limited access</span> to <span className="text-white font-semibold">Magic Dictionary</span>, <span className="text-white font-semibold">Magic Theory Tutor</span>, <span className="text-white font-semibold">Mentalism Assistant</span>, and <span className="text-white font-semibold">Gospel Magic Assistant</span>.</p>
+                                <p className="mt-2 text-sm leading-6 text-slate-300">Includes the core creator workflow plus <span className="text-white font-semibold">Magic Wire</span>, <span className="text-white font-semibold">Publications</span>, and <span className="text-white font-semibold">Community</span> alongside planning, archives, search, video rehearsal, and visual brainstorming.</p>
                             </div>
                             <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
                                 <div className="text-sm font-semibold text-amber-300">Professional</div>
-                                <p className="mt-2 text-sm leading-6 text-slate-300">Unlocks the full platform, including advanced rehearsal, business, assistant, analytics, and the <span className="text-white font-semibold">full versions</span> of Magic Dictionary, Magic Theory Tutor, Mentalism Assistant, and Gospel Magic Assistant.</p>
+                                <p className="mt-2 text-sm leading-6 text-slate-300">Unlocks the full platform, including advanced rehearsal, business, assistant, analytics, and pro-only specialty tools.</p>
                             </div>
                         </div>
                     </section>
@@ -207,7 +193,7 @@ const DisclaimerModal: React.FC<DisclaimerModalProps> = ({ onClose }) => {
                             <h3 className="font-cinzel text-lg font-bold text-white">How Usage Limits Work</h3>
                             <ul className="mt-2 space-y-2 text-sm text-slate-300">
                                 <li><span className="text-amber-300 font-semibold">•</span> Limits help manage AI cost, performance, and fair access across the platform.</li>
-                                <li><span className="text-amber-300 font-semibold">•</span> Trial limits are shown using three simple patterns: per day, during the 14-day trial, or active item count.</li>
+                                <li><span className="text-amber-300 font-semibold">•</span> Some limits reset daily, while others apply across your full 14-day trial or reset monthly on paid plans.</li>
                                 <li><span className="text-amber-300 font-semibold">•</span> Higher-cost tools such as image generation, live audio, and video analysis are tracked separately.</li>
                                 <li><span className="text-amber-300 font-semibold">•</span> Actual access also depends on your plan. A limit row does not override a locked feature.</li>
                             </ul>
@@ -223,7 +209,7 @@ const DisclaimerModal: React.FC<DisclaimerModalProps> = ({ onClose }) => {
                                 </p>
                             </div>
                             <div className="text-xs text-slate-400 rounded-full border border-slate-700/70 bg-slate-900/30 px-3 py-1 w-fit">
-                                Trial limits shown as daily, 14-day, or active-item caps
+                                Daily, 14-day trial, and monthly quotas shown together where applicable
                             </div>
                         </div>
 
@@ -232,7 +218,7 @@ const DisclaimerModal: React.FC<DisclaimerModalProps> = ({ onClose }) => {
                                 <thead className="bg-slate-800/60 text-slate-200">
                                     <tr>
                                         <th className="text-left px-4 py-3 font-semibold">Usage Type</th>
-                                        <th className="text-left px-4 py-3 font-semibold">Free</th>
+                                        <th className="text-left px-4 py-3 font-semibold">Trial (14 days)</th>
                                         <th className="text-left px-4 py-3 font-semibold">Amateur</th>
                                         <th className="text-left px-4 py-3 font-semibold">Professional</th>
                                     </tr>

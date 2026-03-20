@@ -93,7 +93,7 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
         ? (dailyRemaining ?? 0) <= 0
         : (typeof remaining === 'number' && remaining <= 0)
     );
-    const exhaustedLabel = hasDaily ? 'Daily remaining: 0' : plan === 'trial' ? 'Trial remaining: 0' : 'Monthly remaining: 0';
+    const exhaustedLabel = hasDaily ? 'Daily remaining: 0' : (plan === 'trial' ? 'Trial remaining: 0' : 'Monthly remaining: 0');
     const progressPct = hasDaily && typeof daily?.limit === 'number' && daily.limit > 0 && typeof daily?.used === 'number'
       ? Math.min(100, Math.max(0, (daily.used / daily.limit) * 100))
       : null;
@@ -138,10 +138,6 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
                 </div>
               )}
             </>
-          ) : monthlyRemaining !== null && typeof limit === 'number' ? (
-            <div className="text-[12px] text-slate-400">
-              {plan === 'trial' ? 'During 14-day trial' : 'Monthly'}: <span className="tabular-nums text-slate-300">{Math.max(0, limit - monthlyRemaining)}</span> / <span className="tabular-nums">{limit}</span>{opts?.unit ? ` ${opts.unit}` : ''}
-            </div>
           ) : null}
         </div>
         <div className={`text-[15px] font-semibold tabular-nums ${isNotTrackedYet ? 'text-slate-50/95' : 'text-slate-50'}`}>{display}</div>
@@ -224,7 +220,7 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
                   <div className="text-xs font-semibold text-slate-300">Tool usage</div>
                   <div className="text-[11px] text-slate-300/70 text-right">
                     {(resetHourLocal != null && resetTz) ? `Daily AI resets at ${resetHourLocal}:00 (${resetTz})` : 'Daily AI usage resets each day'}
-                    {plan === 'trial' ? <span className="block">Trial limits remain in effect for your 14-day access period</span> : monthlyResetAt ? <span className="block">Monthly limits reset {new Date(monthlyResetAt).toLocaleDateString()}</span> : null}
+                    {plan !== 'trial' && monthlyResetAt ? <span className="block">Monthly limits reset {new Date(monthlyResetAt).toLocaleDateString()}</span> : null}
                   </div>
                 </div>
 
@@ -232,7 +228,7 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
                   {quotaRow('Live Rehearsal (Audio)', 'live_audio_minutes', { unit: 'min' })}
                   {quotaRow(plan === 'amateur' ? 'Visual Brainstorm' : 'Image Generation', 'image_gen')}
                   {quotaRow('Identify a Trick', 'identify')}
-                  {quotaRow(plan === 'trial' ? 'Video Rehearsal Uploads (during 14-day trial)' : 'Video Rehearsal Uploads', 'video_uploads')}
+                  {quotaRow('Video Rehearsal Uploads', 'video_uploads')}
                 </div>
 
                 {shouldShowUpgrade && (

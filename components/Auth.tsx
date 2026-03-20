@@ -52,13 +52,13 @@ const initialMode = (() => {
   }, [email, password, confirm, mode]);
 
   const title =
-    mode === 'login' ? 'Magician Login' : mode === 'signup' ? 'Start Your Free Trial' : 'Password Recovery';
+    mode === 'login' ? 'Magician Login' : mode === 'signup' ? 'Start Your 14-Day Free Trial' : 'Password Recovery';
 
   const subtitle =
     mode === 'login'
       ? 'Enter your credentials to open the Studio.'
       : mode === 'signup'
-      ? 'Create your account and begin your 14-day trial — no credit card required.'
+      ? 'Create your account and start your 14-day trial workspace — no credit card required.'
       : 'We’ll email you a secure reset link.';
 
   function formatAuthError(err: any, context: 'login' | 'signup' | 'reset'): string {
@@ -194,7 +194,7 @@ const initialMode = (() => {
 
                 {mode === 'signup' && (
                   <div className="mt-4 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-                    <div className="text-xs font-semibold tracking-wide text-white/80">Free Trial includes</div>
+                    <div className="text-xs font-semibold tracking-wide text-white/80">Your 14-day trial includes</div>
                     <ul className="mt-2 space-y-1.5 text-sm text-white/75">
                       <li className="flex items-start gap-2">
                         <span className="mt-1 inline-block h-1.5 w-1.5 rounded-full bg-yellow-400/90" />
@@ -202,7 +202,7 @@ const initialMode = (() => {
                       </li>
                       <li className="flex items-start gap-2">
                         <span className="mt-1 inline-block h-1.5 w-1.5 rounded-full bg-yellow-400/90" />
-                        <span>Rehearsal coaching: <span className="font-semibold text-white">10 minutes per day</span></span>
+                        <span><span className="font-semibold text-white">10 minutes per day</span> of rehearsal coaching</span>
                       </li>
                       <li className="flex items-start gap-2">
                         <span className="mt-1 inline-block h-1.5 w-1.5 rounded-full bg-yellow-400/90" />
@@ -210,11 +210,11 @@ const initialMode = (() => {
                       </li>
                       <li className="flex items-start gap-2">
                         <span className="mt-1 inline-block h-1.5 w-1.5 rounded-full bg-yellow-400/90" />
-                        <span>Image Generation: <span className="font-semibold text-white">2 during 14-day trial</span></span>
+                        <span><span className="font-semibold text-white">2</span> image generations during trial</span>
                       </li>
                       <li className="flex items-start gap-2">
                         <span className="mt-1 inline-block h-1.5 w-1.5 rounded-full bg-yellow-400/90" />
-                        <span>Video Rehearsal uploads: <span className="font-semibold text-white">1 during 14-day trial</span></span>
+                        <span><span className="font-semibold text-white">1</span> Video Rehearsal upload during trial</span>
                       </li>
                       <li className="flex items-start gap-2">
                         <span className="mt-1 inline-block h-1.5 w-1.5 rounded-full bg-yellow-400/90" />

@@ -35,8 +35,8 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
     variant === 'trial-expired'
       ? ux.message
       : founderProtected
-      ? 'Your founder pricing remains protected across upgrades, downgrades, cancellation, and reactivation. Public pricing may change later, but your eligible founder rate stays attached to your account.'
-      : 'Choose the plan that matches your current access needs. Plan labels, upgrade paths, and founder protections are aligned here before Stripe launch.';
+      ? 'Your founder pricing remains protected across upgrades, downgrades, cancellation, and reactivation.'
+      : 'Keep plan language and upgrade paths consistent across the platform.';
 
   return (
     <div
@@ -78,20 +78,20 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="p-6 bg-slate-950/30 border border-slate-800 rounded-2xl flex flex-col">
               <div className="flex items-center justify-between">
-                <h3 className="text-2xl font-bold text-slate-100 font-cinzel">Free Trial</h3>
+                <h3 className="text-2xl font-bold text-slate-100 font-cinzel">14-Day Free Trial</h3>
                 <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-800/70 border border-slate-700 text-slate-200">
                   Trial
                 </span>
               </div>
-              <p className="text-slate-400 mt-2">Good for initial exploration, not for sustained use.</p>
+              <p className="text-slate-400 mt-2">Built for evaluation and first-week momentum, not long-term production use.</p>
               <div className="mt-4">
                 <div className="text-3xl font-bold text-white">$0</div>
                 <div className="text-sm text-slate-400">No credit card required</div>
               </div>
               <ul className="space-y-2 mt-5 mb-6 flex-1">
-                <Row>Trial limits use simple daily and 14-day caps</Row>
-                <Row>Includes active-item limits for shows and saved ideas</Row>
-                <Row>Best for evaluation, not full production workflow</Row>
+                <Row>Daily AI cap plus 14-day trial limits on selected tools</Row>
+                <Row>Basic idea generation and research access</Row>
+                <Row>Best for evaluation, not full production workflow after trial ends</Row>
               </ul>
               <button
                 onClick={onClose}
@@ -110,13 +110,13 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
               </div>
               <p className="text-slate-400 mt-2">For consistent rehearsal and show-building work.</p>
               <div className="mt-4">
-                <div className="text-3xl font-bold text-white">$15.95<span className="text-sm font-normal text-slate-400">/mo</span></div>
-                <div className="text-sm text-slate-400">Expanded monthly limits, saved workspaces, and limited specialty-tool access</div>
+                <div className="text-3xl font-bold text-white">$9.95<span className="text-sm font-normal text-slate-400">/mo</span></div>
+                <div className="text-sm text-slate-400">Expanded monthly limits with saved workspaces and broader ongoing access</div>
               </div>
               <ul className="space-y-2 mt-5 mb-6 flex-1">
                 <Row>Higher monthly AI and image limits</Row>
                 <Row>Show Planner, Saved Ideas, and Search access</Row>
-                <Row>Limited access to Magic Dictionary, Magic Theory Tutor, Mentalism Assistant, and Gospel Magic Assistant</Row>
+                <Row>Standard upgrade path from Free and Trial</Row>
               </ul>
               <button
                 onClick={() => onUpgrade('amateur')}
@@ -145,13 +145,13 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
               <ul className="space-y-2 mt-5 mb-6 flex-1">
                 <Row>Highest monthly AI and heavy-tool capacity</Row>
                 <Row>Live Rehearsal, Video Analysis, and business tools</Row>
-                <Row>Full access to Magic Dictionary, Magic Theory Tutor, Mentalism Assistant, and Gospel Magic Assistant</Row>
+                <Row>Founder users keep protected pricing through billing changes</Row>
               </ul>
               <button
                 onClick={() => onUpgrade('professional')}
                 className="w-full py-3 px-4 bg-amber-500 hover:bg-amber-600 rounded-xl text-slate-900 font-extrabold transition-colors"
               >
-                {founderProtected ? 'Upgrade with founder pricing' : 'Upgrade to Professional'}
+                {founderProtected ? 'Continue with founder pricing' : 'Upgrade to Professional'}
               </button>
             </div>
           </div>
@@ -171,7 +171,7 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
                 onClick={() => onUpgrade('professional')}
                 className="order-1 sm:order-3 w-full sm:w-auto py-2.5 px-4 bg-amber-500/90 hover:bg-amber-500 rounded-xl text-slate-950 font-extrabold transition-colors"
               >
-                {founderProtected ? 'Upgrade with founder pricing' : 'Upgrade to Professional'}
+                {founderProtected ? 'Continue with founder pricing' : 'Upgrade to Professional'}
               </button>
               <button
                 onClick={() => onUpgrade('amateur')}
