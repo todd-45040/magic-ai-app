@@ -68,33 +68,15 @@ export type BillingPlanDefinition = {
 const INFINITE_LIMIT = Number.MAX_SAFE_INTEGER;
 
 const FREE_FEATURES: ToolName[] = ['EffectGenerator', 'PatterEngine', 'MagicWire', 'Publications', 'Community', 'IdentifyTrick'];
-const AMATEUR_FEATURES: ToolName[] = [...FREE_FEATURES, 'ShowPlanner', 'SavedIdeas', 'Search', 'VisualBrainstorm', 'VideoAnalysis', 'MagicArchives', 'InnovationEngine'];
-const TRIAL_FEATURES: ToolName[] = [
-  ...FREE_FEATURES,
-  'ShowPlanner',
-  'SavedIdeas',
-  'Search',
+const AMATEUR_FEATURES: ToolName[] = [...FREE_FEATURES, 'ShowPlanner', 'SavedIdeas', 'Search', 'VisualBrainstorm', 'VideoAnalysis'];
+const PROFESSIONAL_FEATURES: ToolName[] = [
+  ...AMATEUR_FEATURES,
   'LiveRehearsal',
   'VideoAnalysis',
   'PersonaSimulator',
   'AngleRiskAnalysis',
   'RehearsalCoaching',
   'VisualBrainstorm',
-  'ImageGeneration',
-  'PropChecklists',
-  'GospelMagic',
-  'MentalismAssistant',
-  'MagicDictionary',
-  'MagicTheoryTutor',
-  'MagicArchives',
-  'InnovationEngine',
-];
-const PROFESSIONAL_FEATURES: ToolName[] = [
-  ...AMATEUR_FEATURES,
-  'LiveRehearsal',
-  'PersonaSimulator',
-  'AngleRiskAnalysis',
-  'RehearsalCoaching',
   'DirectorMode',
   'ImageGeneration',
   'CRM',
@@ -107,8 +89,6 @@ const PROFESSIONAL_FEATURES: ToolName[] = [
   'GospelMagic',
   'MentalismAssistant',
   'IllusionBlueprint',
-  'MagicDictionary',
-  'MagicTheoryTutor',
 ];
 
 const ALL_TOOLS: ToolName[] = [
@@ -139,10 +119,6 @@ const ALL_TOOLS: ToolName[] = [
   'GospelMagic',
   'MentalismAssistant',
   'IllusionBlueprint',
-  'MagicDictionary',
-  'MagicTheoryTutor',
-  'MagicArchives',
-  'InnovationEngine',
 ];
 
 function buildFeatureMatrix(enabledTools: ToolName[]): Record<ToolName, boolean> {
@@ -361,30 +337,6 @@ export const BILLING_UPGRADE_PATHS: UpgradePathRule[] = [
   { from: 'founder_professional', to: 'professional', allowed: false, reason: 'Founder pricing should not be silently converted to public Professional pricing.' },
 ];
 
-const TRIAL_PLAN_LIMITS: PlanLimits = {
-  text_generations: 75,
-  image_generations: 2,
-  live_rehearsal_minutes: 10,
-  video_analysis_clips: 1,
-  saved_shows: 1,
-  saved_ideas: 10,
-};
-
-const TRIAL_HEAVY_TOOL_LIMITS: HeavyToolLimits = {
-  imageGenerationsMonthly: 2,
-  videoAnalysisClipsMonthly: 1,
-  liveRehearsalMinutesMonthly: 10,
-  maxConcurrentLiveSessions: 1,
-  maxReconnectAttemptsPerSession: 1,
-  maxVideoUploadMb: 25,
-  maxImageUploadMb: 10,
-};
-
-const TRIAL_STORAGE_LIMITS: StorageLimits = {
-  savedShows: 1,
-  savedIdeas: 10,
-};
-
 const INTERNAL_PLAN_STATE_TO_BILLING_PLAN: Record<Exclude<InternalPlanState, BillingPlanKey>, BillingPlanKey> = {
   admin: 'professional',
   expired: 'free',
@@ -429,22 +381,18 @@ export function getEffectiveEntitlementTier(user?: User | null): CanonicalTier {
 }
 
 export function getPlanLimits(user?: User | null): PlanLimits {
-  if (resolveInternalPlanState(user) === 'trial') return TRIAL_PLAN_LIMITS;
   return getBillingPlanDefinition(resolveBillingPlanKey(user)).monthlyLimits;
 }
 
 export function getStorageLimits(user?: User | null): StorageLimits {
-  if (resolveInternalPlanState(user) === 'trial') return TRIAL_STORAGE_LIMITS;
   return getBillingPlanDefinition(resolveBillingPlanKey(user)).storageLimits;
 }
 
 export function getHeavyToolLimits(user?: User | null): HeavyToolLimits {
-  if (resolveInternalPlanState(user) === 'trial') return TRIAL_HEAVY_TOOL_LIMITS;
   return getBillingPlanDefinition(resolveBillingPlanKey(user)).heavyToolLimits;
 }
 
 export function getFeatureMatrix(user?: User | null): Record<ToolName, boolean> {
-  if (resolveInternalPlanState(user) === 'trial') return buildFeatureMatrix(TRIAL_FEATURES);
   return getBillingPlanDefinition(resolveBillingPlanKey(user)).featureAccessMatrix;
 }
 

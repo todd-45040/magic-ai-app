@@ -112,15 +112,15 @@ export const PLAN_USAGE_MATRIX: Record<CanonicalTier, TierConfig> = {
 const TOOL_POLICIES: Record<ToolName, ToolPolicy> = {
   EffectGenerator: { minTier: 'free', limitedTiers: ['free', 'trial'], usageResource: 'text_generations', upgradeLabel: 'Amateur' },
   PatterEngine: { minTier: 'free', limitedTiers: ['free', 'trial'], usageResource: 'text_generations', upgradeLabel: 'Amateur' },
-  ShowPlanner: { minTier: 'trial', limitedTiers: ['trial', 'amateur'], usageResource: 'saved_shows', upgradeLabel: 'Amateur' },
-  SavedIdeas: { minTier: 'trial', limitedTiers: ['trial', 'amateur'], usageResource: 'saved_ideas', upgradeLabel: 'Amateur' },
-  Search: { minTier: 'trial', limitedTiers: ['trial', 'amateur'], upgradeLabel: 'Amateur' },
-  LiveRehearsal: { minTier: 'trial', limitedTiers: ['trial'], usageResource: 'live_rehearsal_minutes', upgradeLabel: 'Professional' },
-  VideoAnalysis: { minTier: 'trial', limitedTiers: ['trial', 'amateur'], usageResource: 'video_analysis_clips', upgradeLabel: 'Professional' },
-  PersonaSimulator: { minTier: 'trial', limitedTiers: ['trial'], usageResource: 'text_generations', upgradeLabel: 'Professional' },
-  VisualBrainstorm: { minTier: 'trial', limitedTiers: ['trial', 'amateur'], usageResource: 'image_generations', upgradeLabel: 'Professional' },
+  ShowPlanner: { minTier: 'amateur', limitedTiers: ['amateur'], usageResource: 'saved_shows', upgradeLabel: 'Amateur' },
+  SavedIdeas: { minTier: 'amateur', limitedTiers: ['amateur'], usageResource: 'saved_ideas', upgradeLabel: 'Amateur' },
+  Search: { minTier: 'amateur', limitedTiers: ['amateur'], upgradeLabel: 'Amateur' },
+  LiveRehearsal: { minTier: 'professional', usageResource: 'live_rehearsal_minutes', upgradeLabel: 'Professional' },
+  VideoAnalysis: { minTier: 'amateur', limitedTiers: ['amateur'], usageResource: 'video_analysis_clips', upgradeLabel: 'Professional' },
+  PersonaSimulator: { minTier: 'professional', usageResource: 'text_generations', upgradeLabel: 'Professional' },
+  VisualBrainstorm: { minTier: 'amateur', limitedTiers: ['amateur'], usageResource: 'image_generations', upgradeLabel: 'Professional' },
   DirectorMode: { minTier: 'professional', usageResource: 'text_generations', upgradeLabel: 'Professional' },
-  ImageGeneration: { minTier: 'trial', limitedTiers: ['trial'], usageResource: 'image_generations', upgradeLabel: 'Professional' },
+  ImageGeneration: { minTier: 'professional', usageResource: 'image_generations', upgradeLabel: 'Professional' },
   CRM: { minTier: 'professional', upgradeLabel: 'Professional' },
   Contracts: { minTier: 'professional', upgradeLabel: 'Professional' },
   FinanceTracker: { minTier: 'professional', upgradeLabel: 'Professional' },
@@ -130,17 +130,17 @@ const TOOL_POLICIES: Record<ToolName, ToolPolicy> = {
   Community: { minTier: 'free' },
   IdentifyTrick: { minTier: 'free', limitedTiers: ['free', 'trial'], upgradeLabel: 'Amateur' },
   AssistantStudio: { minTier: 'professional', upgradeLabel: 'Professional' },
-  PropChecklists: { minTier: 'trial', limitedTiers: ['trial'], upgradeLabel: 'Professional' },
+  PropChecklists: { minTier: 'professional', upgradeLabel: 'Professional' },
   ShowFeedback: { minTier: 'professional', upgradeLabel: 'Professional' },
-  GospelMagic: { minTier: 'trial', limitedTiers: ['trial'], usageResource: 'text_generations', upgradeLabel: 'Professional' },
-  MentalismAssistant: { minTier: 'trial', limitedTiers: ['trial'], usageResource: 'text_generations', upgradeLabel: 'Professional' },
+  GospelMagic: { minTier: 'professional', usageResource: 'text_generations', upgradeLabel: 'Professional' },
+  MentalismAssistant: { minTier: 'professional', usageResource: 'text_generations', upgradeLabel: 'Professional' },
   IllusionBlueprint: { minTier: 'professional', usageResource: 'image_generations', upgradeLabel: 'Professional' },
-  MagicDictionary: { minTier: 'trial', limitedTiers: ['trial'], upgradeLabel: 'Professional' },
-  MagicTheoryTutor: { minTier: 'trial', limitedTiers: ['trial'], upgradeLabel: 'Professional' },
-  MagicArchives: { minTier: 'trial', limitedTiers: ['trial'], upgradeLabel: 'Amateur' },
-  InnovationEngine: { minTier: 'trial', limitedTiers: ['trial', 'amateur'], usageResource: 'text_generations', upgradeLabel: 'Amateur' },
-  AngleRiskAnalysis: { minTier: 'trial', limitedTiers: ['trial'], usageResource: 'text_generations', upgradeLabel: 'Professional' },
-  RehearsalCoaching: { minTier: 'trial', limitedTiers: ['trial'], usageResource: 'text_generations', upgradeLabel: 'Professional' },
+  MagicDictionary: { minTier: 'professional', upgradeLabel: 'Professional' },
+  MagicTheoryTutor: { minTier: 'professional', upgradeLabel: 'Professional' },
+  MagicArchives: { minTier: 'amateur', upgradeLabel: 'Amateur' },
+  InnovationEngine: { minTier: 'amateur', usageResource: 'text_generations', upgradeLabel: 'Amateur' },
+  AngleRiskAnalysis: { minTier: 'professional', usageResource: 'text_generations', upgradeLabel: 'Professional' },
+  RehearsalCoaching: { minTier: 'professional', usageResource: 'text_generations', upgradeLabel: 'Professional' },
 };
 
 function tierRank(tier: CanonicalTier): number {
@@ -148,15 +148,14 @@ function tierRank(tier: CanonicalTier): number {
     case 'expired':
       return 0;
     case 'free':
-      return 1;
     case 'trial':
-      return 2;
+      return 1;
     case 'amateur':
-      return 3;
+      return 2;
     case 'professional':
-      return 4;
+      return 3;
     case 'admin':
-      return 5;
+      return 4;
     default:
       return 0;
   }
