@@ -170,7 +170,7 @@ const DisclaimerModal: React.FC<DisclaimerModalProps> = ({ onClose }) => {
                             </div>
                             <div className="rounded-xl border border-sky-500/20 bg-sky-500/5 p-4">
                                 <div className="text-sm font-semibold text-sky-300">Amateur</div>
-                                <p className="mt-2 text-sm leading-6 text-slate-300">Includes the core creator workflow plus <span className="text-white font-semibold">Magic Wire</span>, <span className="text-white font-semibold">Publications</span>, and <span className="text-white font-semibold">Community</span> alongside planning, archives, search, video rehearsal, and visual brainstorming.</p>
+                                <p className="mt-2 text-sm leading-6 text-slate-300">Includes the core creator workflow plus <span className="text-white font-semibold">Magic Wire</span>, <span className="text-white font-semibold">Publications</span>, and <span className="text-white font-semibold">Community</span> alongside planning, archives, search, video rehearsal, visual brainstorming, and selected specialty tools such as <span className="text-white font-semibold">Mentalism Assistant</span> and <span className="text-white font-semibold">Gospel Magic Assistant</span> with reduced access compared to Professional.</p>
                             </div>
                             <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
                                 <div className="text-sm font-semibold text-amber-300">Professional</div>
