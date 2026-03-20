@@ -1,6 +1,6 @@
 import React from 'react';
 import { AMATEUR_FEATURES, PROFESSIONAL_FEATURES } from '../constants';
-import { BackIcon, CheckIcon, WandIcon } from './icons';
+import { BackIcon, CheckIcon } from './icons';
 
 interface AboutProps {
   onBack: () => void;
@@ -29,7 +29,11 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
         </button>
 
         <div className="text-center mb-10">
-            <WandIcon className="w-16 h-16 mx-auto mb-4 text-amber-300" />
+            <img
+              src="/assets/logo/Wizard_Head_wText.png"
+              alt="Magic AI Wizard logo"
+              className="mx-auto mb-4 h-auto w-44 max-w-full sm:w-52 md:w-60"
+            />
             <h1 className="font-cinzel text-4xl md:text-5xl font-bold text-white mb-2">About Our Memberships</h1>
             <p className="text-slate-400 text-lg">Find the perfect plan to elevate your craft.</p>
         </div>
