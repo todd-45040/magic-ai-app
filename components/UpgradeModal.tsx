@@ -116,7 +116,7 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
               <ul className="space-y-2 mt-5 mb-6 flex-1">
                 <Row>Higher monthly AI and image limits</Row>
                 <Row>Show Planner, Saved Ideas, and Search access</Row>
-                <Row>Standard upgrade path from Free and Trial</Row>
+                <Row>Limited access to Magic Dictionary, Magic Theory Tutor, Mentalism Assistant, and Gospel Magic Assistant</Row>
               </ul>
               <button
                 onClick={() => onUpgrade('amateur')}
@@ -145,7 +145,7 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
               <ul className="space-y-2 mt-5 mb-6 flex-1">
                 <Row>Highest monthly AI and heavy-tool capacity</Row>
                 <Row>Live Rehearsal, Video Analysis, and business tools</Row>
-                <Row>Founder users keep protected pricing through billing changes</Row>
+                <Row>Full access to Magic Dictionary, Magic Theory Tutor, Mentalism Assistant, and Gospel Magic Assistant</Row>
               </ul>
               <button
                 onClick={() => onUpgrade('professional')}

@@ -184,11 +184,11 @@ const DisclaimerModal: React.FC<DisclaimerModalProps> = ({ onClose }) => {
                             </div>
                             <div className="rounded-xl border border-sky-500/20 bg-sky-500/5 p-4">
                                 <div className="text-sm font-semibold text-sky-300">Amateur</div>
-                                <p className="mt-2 text-sm leading-6 text-slate-300">Includes the core creator workflow plus <span className="text-white font-semibold">Magic Wire</span>, <span className="text-white font-semibold">Publications</span>, and <span className="text-white font-semibold">Community</span> alongside planning, archives, search, video rehearsal, and visual brainstorming.</p>
+                                <p className="mt-2 text-sm leading-6 text-slate-300">Includes the core creator workflow plus <span className="text-white font-semibold">Magic Wire</span>, <span className="text-white font-semibold">Publications</span>, and <span className="text-white font-semibold">Community</span> alongside planning, archives, search, video rehearsal, visual brainstorming, and <span className="text-white font-semibold">limited access</span> to <span className="text-white font-semibold">Magic Dictionary</span>, <span className="text-white font-semibold">Magic Theory Tutor</span>, <span className="text-white font-semibold">Mentalism Assistant</span>, and <span className="text-white font-semibold">Gospel Magic Assistant</span>.</p>
                             </div>
                             <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
                                 <div className="text-sm font-semibold text-amber-300">Professional</div>
-                                <p className="mt-2 text-sm leading-6 text-slate-300">Unlocks the full platform, including advanced rehearsal, business, assistant, analytics, and pro-only specialty tools.</p>
+                                <p className="mt-2 text-sm leading-6 text-slate-300">Unlocks the full platform, including advanced rehearsal, business, assistant, analytics, and the <span className="text-white font-semibold">full versions</span> of Magic Dictionary, Magic Theory Tutor, Mentalism Assistant, and Gospel Magic Assistant.</p>
                             </div>
                         </div>
                     </section>

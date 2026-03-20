@@ -70,14 +70,27 @@ export function getUpgradeUxCopy(kind: UpgradeUxKind, opts?: {
     };
   }
 
+  const amateurLimitedSpecialtyTools = new Set([
+    'Magic Dictionary',
+    'Magic Theory Tutor',
+    'Mentalism Assistant',
+    'Gospel Magic Assistant',
+  ]);
+
   if (kind === 'upgrade_available') {
+    const limitedSpecialtyMessage = amateurLimitedSpecialtyTools.has(toolName)
+      ? founderProtected
+        ? `${toolName} is already available on your current plan with limited access. You can upgrade for fuller access without losing your founder protection.`
+        : `${toolName} is already available on your current plan with limited access. Upgrade for fuller access and more monthly capacity.`
+      : null;
+
     return {
       kind,
       badge: 'Upgrade Available',
       title: 'More capacity is available',
-      message: founderProtected
+      message: limitedSpecialtyMessage ?? (founderProtected
         ? 'You can move up without losing your founder protection. Your locked pricing remains attached to your account.'
-        : 'Upgrade to unlock more monthly capacity, heavier tools, and fewer limits across the platform.',
+        : 'Upgrade to unlock more monthly capacity, heavier tools, and fewer limits across the platform.'),
       primaryCta: founderProtected ? 'See founder upgrade options' : `Upgrade to ${targetPlan}`,
       secondaryCta: 'Not now',
     };
