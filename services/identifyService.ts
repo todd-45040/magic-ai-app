@@ -4,10 +4,10 @@
 // Keeps ALL provider keys server-side.
 // UI components should call this (or still call geminiService.identifyTrickFromImage if you prefer).
 
-import type { User, TrickIdentificationResult } from "../types";
+import type { User, TrickIdentificationResult, TrickPerformanceReference } from "../types";
 import { aiIdentify, aiJson } from "./aiProxy";
 
-type Video = { title: string; url: string };
+type Video = TrickPerformanceReference & { sourceQuery?: string; sourceQueryIndex?: number; score?: number };
 
 async function postJson<T>(url: string, body: any): Promise<T> {
   const r = await fetch(url, {
@@ -50,7 +50,7 @@ export async function identifyTrickFromImageServer(
     "- presentationIdeas (array of 3-6 bullets; performance-safe)\n" +
     "- angleRiskNotes (array of 3-6 bullets; sightlines/reset/handling cautions; NO exposure)\n" +
     "- variations (array of 3-6 bullets; alternate plots/presentations; performance-safe)\n" +
-    "- videoQueries (array of 3 concise YouTube search queries, NO URLs).";
+    "- videoQueries (array of exactly 3 concise YouTube search queries, NO URLs: first 2 should aim to find specific performances/videos, 3rd can be broader).";
 
   // Optional: pass user id for rate limiting (best effort)
   const result = await aiIdentify<{ text: string }>(dataUrl, prompt);
@@ -119,58 +119,88 @@ export async function identifyTrickFromImageServer(
     : [];
 
   const fallbackQueries = [
-    `${trickName} magic trick performance`,
-    `${trickName} illusion performance`,
-    `${trickName} magic trick live show`,
+    `${trickName} magician live performance`,
+    `${trickName} magic routine performance`,
+    `${trickName} magic performance`,
   ];
 
-  const queriesToUse = queries.length ? queries : fallbackQueries;
+  const queriesToUse = [
+    queries[0] || fallbackQueries[0],
+    queries[1] || fallbackQueries[1],
+    queries[2] || fallbackQueries[2],
+  ].filter(Boolean).slice(0, 3);
 
-let videos: Video[] = [];
-try {
-  const yt = await postJson<any>("/api/videoSearch", {
-    queries: queriesToUse,
-    maxResultsPerQuery: 3,
-    safeSearch: "strict",
-  });
+  let videos: Video[] = [];
+  try {
+    const yt = await postJson<any>("/api/videoSearch", {
+      queries: queriesToUse,
+      maxResultsPerQuery: 5,
+      safeSearch: "strict",
+    });
 
-  const ytVideos = Array.isArray(yt?.videos) ? yt.videos : [];
-  const specificVideos = ytVideos
-    .map((v: any) => ({
-      title: String(v?.title || "").trim(),
-      url: String(v?.url || "").trim(),
-      kind: 'specific' as const,
-      platform: 'youtube' as const,
-      channelTitle: String(v?.channelTitle || v?.channel || "").trim() || undefined,
-    }))
-    .filter((v: any) => v.title && v.url && /youtube\.com\/watch|youtu\.be\//i.test(v.url));
+    const ytVideos = Array.isArray(yt?.videos) ? yt.videos : [];
+    const normalized: Video[] = ytVideos
+      .map((v: any) => ({
+        title: String(v?.title || "").trim(),
+        url: String(v?.url || "").trim(),
+        channelTitle: String(v?.channelTitle || "").trim() || undefined,
+        sourceQuery: String(v?.sourceQuery || "").trim() || undefined,
+        sourceQueryIndex: Number.isFinite(Number(v?.sourceQueryIndex)) ? Number(v.sourceQueryIndex) : undefined,
+        score: Number.isFinite(Number(v?.score)) ? Number(v.score) : undefined,
+        kind: 'specific' as const,
+        platform: 'youtube' as const,
+      }))
+      .filter((v: Video) => v.title && v.url && /youtube\.com\/watch|youtu\.be\//i.test(v.url));
 
-  const seen = new Set<string>();
-  const uniqueSpecific = specificVideos.filter((v: any) => {
-    const key = String(v.url).trim().toLowerCase();
-    if (!key || seen.has(key)) return false
-    seen.add(key)
-    return True
-  }).slice(0, 2);
+    const query0Specific = normalized.find((v: Video) => v.sourceQueryIndex === 0);
+    const query1Specific = normalized.find((v: Video) => v.sourceQueryIndex === 1 && v.url !== query0Specific?.url);
 
-  const broadQuery = queriesToUse[0] || `${trickName} magic performance`;
-  const searchFallback = {
-    title: `Explore on YouTube: ${broadQuery}`,
-    url: `https://www.youtube.com/results?search_query=${encodeURIComponent(broadQuery)}`,
-    kind: 'search' as const,
-    platform: 'youtube' as const,
-  };
+    const used = new Set<string>();
+    const specificRefs: TrickPerformanceReference[] = [];
+    for (const candidate of [query0Specific, query1Specific, ...normalized]) {
+      if (!candidate?.url || used.has(candidate.url)) continue;
+      used.add(candidate.url);
+      specificRefs.push({
+        title: candidate.title,
+        url: candidate.url,
+        kind: 'specific',
+        platform: 'youtube',
+        channelTitle: candidate.channelTitle,
+      });
+      if (specificRefs.length >= 2) break;
+    }
 
-  videos = [...uniqueSpecific, searchFallback];
-} catch {
-  const broadQueries = queriesToUse.slice(0, 3);
-  videos = broadQueries.map((q, index) => ({
-    title: index < 2 ? `Watch examples on YouTube: ${q}` : `Explore on YouTube: ${q}`,
-    url: `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
-    kind: 'search' as const,
-    platform: 'youtube' as const,
-  }));
-}
+    const broadQuery = queriesToUse[2] || queriesToUse[0] || `${trickName} magic performance`;
+    const searchRef: TrickPerformanceReference = {
+      title: `Explore on YouTube: ${broadQuery}`,
+      url: `https://www.youtube.com/results?search_query=${encodeURIComponent(broadQuery)}`,
+      kind: 'search',
+      platform: 'youtube',
+    };
+
+    videos = [...specificRefs, searchRef];
+  } catch {
+    videos = [
+      {
+        title: `Watch examples on YouTube: ${queriesToUse[0] || `${trickName} magician live performance`}`,
+        url: `https://www.youtube.com/results?search_query=${encodeURIComponent(queriesToUse[0] || `${trickName} magician live performance`)}`,
+        kind: 'search',
+        platform: 'youtube',
+      },
+      {
+        title: `Watch examples on YouTube: ${queriesToUse[1] || `${trickName} magic routine performance`}`,
+        url: `https://www.youtube.com/results?search_query=${encodeURIComponent(queriesToUse[1] || `${trickName} magic routine performance`)}`,
+        kind: 'search',
+        platform: 'youtube',
+      },
+      {
+        title: `Explore on YouTube: ${queriesToUse[2] || `${trickName} magic performance`}`,
+        url: `https://www.youtube.com/results?search_query=${encodeURIComponent(queriesToUse[2] || `${trickName} magic performance`)}`,
+        kind: 'search',
+        platform: 'youtube',
+      },
+    ];
+  }
 
   return {
     trickName,
