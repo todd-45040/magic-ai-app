@@ -4,10 +4,10 @@
 // Keeps ALL provider keys server-side.
 // UI components should call this (or still call geminiService.identifyTrickFromImage if you prefer).
 
-import type { User, TrickIdentificationResult, PerformanceReference } from "../types";
+import type { User, TrickIdentificationResult } from "../types";
 import { aiIdentify, aiJson } from "./aiProxy";
 
-type Video = { title: string; url: string; platform?: "youtube" | "vimeo" | "tiktok" | "instagram" | "web"; kind?: "specific" | "search"; channelTitle?: string };
+type Video = { title: string; url: string };
 
 async function postJson<T>(url: string, body: any): Promise<T> {
   const r = await fetch(url, {
@@ -126,58 +126,51 @@ export async function identifyTrickFromImageServer(
 
   const queriesToUse = queries.length ? queries : fallbackQueries;
 
-  let videos: PerformanceReference[] = [];
+let videos: Video[] = [];
+try {
+  const yt = await postJson<any>("/api/videoSearch", {
+    queries: queriesToUse,
+    maxResultsPerQuery: 3,
+    safeSearch: "strict",
+  });
+
+  const ytVideos = Array.isArray(yt?.videos) ? yt.videos : [];
+  const specificVideos = ytVideos
+    .map((v: any) => ({
+      title: String(v?.title || "").trim(),
+      url: String(v?.url || "").trim(),
+      kind: 'specific' as const,
+      platform: 'youtube' as const,
+      channelTitle: String(v?.channelTitle || v?.channel || "").trim() || undefined,
+    }))
+    .filter((v: any) => v.title && v.url && /youtube\.com\/watch|youtu\.be\//i.test(v.url));
+
+  const seen = new Set<string>();
+  const uniqueSpecific = specificVideos.filter((v: any) => {
+    const key = String(v.url).trim().toLowerCase();
+    if (!key || seen.has(key)) return false
+    seen.add(key)
+    return True
+  }).slice(0, 2);
+
   const broadQuery = queriesToUse[0] || `${trickName} magic performance`;
+  const searchFallback = {
+    title: `Explore on YouTube: ${broadQuery}`,
+    url: `https://www.youtube.com/results?search_query=${encodeURIComponent(broadQuery)}`,
+    kind: 'search' as const,
+    platform: 'youtube' as const,
+  };
 
-  try {
-    const yt = await postJson<any>("/api/videoSearch", {
-      queries: queriesToUse,
-      maxResultsPerQuery: 3,
-      safeSearch: "strict",
-    });
-
-    const ytVideos = Array.isArray(yt?.videos) ? yt.videos : [];
-    const specifics: PerformanceReference[] = ytVideos
-      .map((v: any) => ({
-        title: String(v?.title || "").trim(),
-        url: String(v?.url || "").trim(),
-        channelTitle: String(v?.channelTitle || "").trim() || undefined,
-        platform: 'youtube' as const,
-        kind: 'specific' as const,
-      }))
-      .filter((v: any) => v.title && v.url)
-      .slice(0, 2);
-
-    const broad: PerformanceReference = {
-      title: `Explore more on YouTube: ${broadQuery}`,
-      url: `https://www.youtube.com/results?search_query=${encodeURIComponent(broadQuery)}`,
-      platform: 'youtube',
-      kind: 'search',
-    };
-
-    videos = [...specifics, broad];
-  } catch {
-    videos = [
-      {
-        title: `Explore on YouTube: ${queriesToUse[0] || `${trickName} magic trick performance`}`,
-        url: `https://www.youtube.com/results?search_query=${encodeURIComponent(queriesToUse[0] || `${trickName} magic trick performance`)}`,
-        platform: 'youtube',
-        kind: 'search',
-      },
-      {
-        title: `Explore on YouTube: ${queriesToUse[1] || `${trickName} illusion performance`}`,
-        url: `https://www.youtube.com/results?search_query=${encodeURIComponent(queriesToUse[1] || `${trickName} illusion performance`)}`,
-        platform: 'youtube',
-        kind: 'search',
-      },
-      {
-        title: `Explore on YouTube: ${queriesToUse[2] || `${trickName} magic trick live show`}`,
-        url: `https://www.youtube.com/results?search_query=${encodeURIComponent(queriesToUse[2] || `${trickName} magic trick live show`)}`,
-        platform: 'youtube',
-        kind: 'search',
-      },
-    ];
-  }
+  videos = [...uniqueSpecific, searchFallback];
+} catch {
+  const broadQueries = queriesToUse.slice(0, 3);
+  videos = broadQueries.map((q, index) => ({
+    title: index < 2 ? `Watch examples on YouTube: ${q}` : `Explore on YouTube: ${q}`,
+    url: `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
+    kind: 'search' as const,
+    platform: 'youtube' as const,
+  }));
+}
 
   return {
     trickName,
