@@ -78,20 +78,20 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="p-6 bg-slate-950/30 border border-slate-800 rounded-2xl flex flex-col">
               <div className="flex items-center justify-between">
-                <h3 className="text-2xl font-bold text-slate-100 font-cinzel">Free Trial</h3>
+                <h3 className="text-2xl font-bold text-slate-100 font-cinzel">14-Day Free Trial</h3>
                 <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-800/70 border border-slate-700 text-slate-200">
                   Trial
                 </span>
               </div>
-              <p className="text-slate-400 mt-2">Good for initial exploration, not for sustained use.</p>
+              <p className="text-slate-400 mt-2">Built for evaluation and first-week momentum, not long-term production use.</p>
               <div className="mt-4">
                 <div className="text-3xl font-bold text-white">$0</div>
                 <div className="text-sm text-slate-400">No credit card required</div>
               </div>
               <ul className="space-y-2 mt-5 mb-6 flex-1">
-                <Row>Daily AI cap with limited monthly quotas</Row>
+                <Row>Daily AI cap plus 14-day trial limits on selected tools</Row>
                 <Row>Basic idea generation and research access</Row>
-                <Row>Best for evaluation, not full production workflow</Row>
+                <Row>Best for evaluation, not full production workflow after trial ends</Row>
               </ul>
               <button
                 onClick={onClose}
@@ -111,7 +111,7 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
               <p className="text-slate-400 mt-2">For consistent rehearsal and show-building work.</p>
               <div className="mt-4">
                 <div className="text-3xl font-bold text-white">$9.95<span className="text-sm font-normal text-slate-400">/mo</span></div>
-                <div className="text-sm text-slate-400">Expanded monthly limits with saved workspaces</div>
+                <div className="text-sm text-slate-400">Expanded monthly limits with saved workspaces and broader ongoing access</div>
               </div>
               <ul className="space-y-2 mt-5 mb-6 flex-1">
                 <Row>Higher monthly AI and image limits</Row>

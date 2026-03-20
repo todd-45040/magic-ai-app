@@ -164,7 +164,7 @@ export function buildNormalizedUsageSnapshot(user?: User | null, serverStatus?: 
     nearLimit: dailyAiLimit > 0 ? dailyAiRemaining <= Math.ceil(dailyAiLimit * 0.15) : false,
     upgradeRecommended: plan === 'trial' && dailyAiLimit > 0 ? dailyAiRemaining <= Math.ceil(dailyAiLimit * 0.15) : false,
     warnings: [],
-    resetLabel: 'Daily usage resets each day',
+    resetLabel: plan === 'trial' ? 'Daily usage resets each day during your 14-day trial' : 'Daily usage resets each day',
     toolRows,
     liveHeader,
   };

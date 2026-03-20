@@ -38,7 +38,7 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
     if (plan === 'admin') return 'Admin';
     if (plan === 'professional') return 'Professional';
     if (plan === 'amateur') return 'Amateur';
-    if (plan === 'trial') return 'Trial';
+    if (plan === 'trial') return '14-Day Trial';
     return String(plan).slice(0, 1).toUpperCase() + String(plan).slice(1);
   }, [plan]);
 
@@ -93,7 +93,7 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
         ? (dailyRemaining ?? 0) <= 0
         : (typeof remaining === 'number' && remaining <= 0)
     );
-    const exhaustedLabel = hasDaily ? 'Daily remaining: 0' : 'Monthly remaining: 0';
+    const exhaustedLabel = hasDaily ? 'Daily remaining: 0' : (plan === 'trial' ? 'Trial remaining: 0' : 'Monthly remaining: 0');
     const progressPct = hasDaily && typeof daily?.limit === 'number' && daily.limit > 0 && typeof daily?.used === 'number'
       ? Math.min(100, Math.max(0, (daily.used / daily.limit) * 100))
       : null;
@@ -110,7 +110,7 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
           )}
           {!hasDaily && monthlyRemaining !== null && monthlyRemaining <= 0 && !exhausted && (
             <span className="text-[11px] px-2 py-0.5 rounded-full border border-slate-400/20 bg-slate-500/10 text-slate-200">
-              Monthly remaining: 0
+              {plan === 'trial' ? 'Trial remaining: 0' : 'Monthly remaining: 0'}
             </span>
           )}
           {locked && (
@@ -129,7 +129,7 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
               <div className="text-[12px] text-slate-400">
                 Daily: <span className="tabular-nums text-slate-300">{daily.used}</span> / <span className="tabular-nums">{daily.limit}</span>{opts?.unit ? ` ${opts.unit}` : ''}
                 {key === 'image_gen' && monthlyRemaining !== null && typeof limit === 'number' ? (
-                  <span className="ml-2 text-slate-500">• Monthly remaining: <span className="tabular-nums text-slate-300">{monthlyRemaining}</span> / <span className="tabular-nums">{limit}</span></span>
+                  <span className="ml-2 text-slate-500">• {plan === 'trial' ? 'Trial remaining' : 'Monthly remaining'}: <span className="tabular-nums text-slate-300">{monthlyRemaining}</span> / <span className="tabular-nums">{limit}</span></span>
                 ) : null}
               </div>
               {(key === 'live_audio_minutes' || key === 'image_gen') && progressPct !== null && (
@@ -220,7 +220,7 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
                   <div className="text-xs font-semibold text-slate-300">Tool usage</div>
                   <div className="text-[11px] text-slate-300/70 text-right">
                     {(resetHourLocal != null && resetTz) ? `Daily AI resets at ${resetHourLocal}:00 (${resetTz})` : 'Daily AI usage resets each day'}
-                    {monthlyResetAt ? <span className="block">Monthly limits reset {new Date(monthlyResetAt).toLocaleDateString()}</span> : null}
+                    {plan !== 'trial' && monthlyResetAt ? <span className="block">Monthly limits reset {new Date(monthlyResetAt).toLocaleDateString()}</span> : null}
                   </div>
                 </div>
 

@@ -166,7 +166,7 @@ const DisclaimerModal: React.FC<DisclaimerModalProps> = ({ onClose }) => {
                         <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
                             <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-4">
                                 <div className="text-sm font-semibold text-green-300">Trial</div>
-                                <p className="mt-2 text-sm leading-6 text-slate-300">Broad-access evaluation tier with many creative and rehearsal tools available, but selected advanced business and pro workflows remain locked.</p>
+                                <p className="mt-2 text-sm leading-6 text-slate-300">Broad-access 14-day evaluation tier with many creative and rehearsal tools available, but selected advanced business and pro workflows remain locked.</p>
                             </div>
                             <div className="rounded-xl border border-sky-500/20 bg-sky-500/5 p-4">
                                 <div className="text-sm font-semibold text-sky-300">Amateur</div>
@@ -193,7 +193,7 @@ const DisclaimerModal: React.FC<DisclaimerModalProps> = ({ onClose }) => {
                             <h3 className="font-cinzel text-lg font-bold text-white">How Usage Limits Work</h3>
                             <ul className="mt-2 space-y-2 text-sm text-slate-300">
                                 <li><span className="text-amber-300 font-semibold">•</span> Limits help manage AI cost, performance, and fair access across the platform.</li>
-                                <li><span className="text-amber-300 font-semibold">•</span> Some limits reset daily, while others reset monthly.</li>
+                                <li><span className="text-amber-300 font-semibold">•</span> Some limits reset daily, while others apply across your full 14-day trial or reset monthly on paid plans.</li>
                                 <li><span className="text-amber-300 font-semibold">•</span> Higher-cost tools such as image generation, live audio, and video analysis are tracked separately.</li>
                                 <li><span className="text-amber-300 font-semibold">•</span> Actual access also depends on your plan. A limit row does not override a locked feature.</li>
                             </ul>
@@ -209,7 +209,7 @@ const DisclaimerModal: React.FC<DisclaimerModalProps> = ({ onClose }) => {
                                 </p>
                             </div>
                             <div className="text-xs text-slate-400 rounded-full border border-slate-700/70 bg-slate-900/30 px-3 py-1 w-fit">
-                                Daily and monthly quotas shown together where applicable
+                                Daily, 14-day trial, and monthly quotas shown together where applicable
                             </div>
                         </div>
 
@@ -218,7 +218,7 @@ const DisclaimerModal: React.FC<DisclaimerModalProps> = ({ onClose }) => {
                                 <thead className="bg-slate-800/60 text-slate-200">
                                     <tr>
                                         <th className="text-left px-4 py-3 font-semibold">Usage Type</th>
-                                        <th className="text-left px-4 py-3 font-semibold">Free</th>
+                                        <th className="text-left px-4 py-3 font-semibold">Trial (14 days)</th>
                                         <th className="text-left px-4 py-3 font-semibold">Amateur</th>
                                         <th className="text-left px-4 py-3 font-semibold">Professional</th>
                                     </tr>

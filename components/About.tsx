@@ -53,7 +53,7 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
                         </div>
                     </div>
                     <hr className="border-slate-700 my-4" />
-                    <FeatureList features={['14-day trial access (most tools)', 'Up to 10 saved ideas', '10 minutes of rehearsal coaching', '1 active show in Show Planner', 'Includes Image Generation (2) + Video Rehearsal (1) during trial', 'Demo Mode access']} />
+                    <FeatureList features={['14-day trial access (most tools)', 'Save up to 10 ideas during trial', 'Rehearsal coaching: 10 minutes per day', '1 active show in Show Planner', 'Image Generation: 2 during trial', 'Video Rehearsal: 1 upload during trial', 'Demo Mode access']} />
                     <div className="flex-grow" />
                 </div>
 
