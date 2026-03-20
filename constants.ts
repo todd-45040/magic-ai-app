@@ -340,10 +340,6 @@ export const AMATEUR_FEATURES = [
     'Community',
     'Visual Brainstorm Studio (limited)',
     'Video Rehearsal Studio (limited)',
-    'Magic Dictionary (limited)',
-    'Magic Theory Tutor (limited)',
-    'Mentalism Assistant (limited)',
-    'Gospel Magic Assistant (limited)',
 ];
 
 // Display-only marketing labels for the mid-tier / business layer.

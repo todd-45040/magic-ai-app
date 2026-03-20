@@ -30,21 +30,21 @@ const usageRows: UsageRow[] = [
     },
     {
         label: 'Image generations',
-        free: '5 / month',
+        free: '12 / 14 days',
         amateur: '40 / month',
         professional: '200 / month',
         note: 'Used by image-heavy tools such as Visual Brainstorm and related generation workflows.',
     },
     {
         label: 'Identify a Trick',
-        free: '10 / month',
+        free: '18 / 14 days',
         amateur: '50 / month',
         professional: '100 / month',
         note: 'For trick-identification style AI analysis requests.',
     },
     {
         label: 'Live Rehearsal audio',
-        free: '10 min/day, 0 monthly access',
+        free: '15 min/day, 90 min / 14 days',
         amateur: '45 min/day, 60 min/month',
         professional: '180 min/day, 300 min/month',
         note: 'Live rehearsal is also controlled by plan access and feature availability.',
@@ -170,7 +170,7 @@ const DisclaimerModal: React.FC<DisclaimerModalProps> = ({ onClose }) => {
                             </div>
                             <div className="rounded-xl border border-sky-500/20 bg-sky-500/5 p-4">
                                 <div className="text-sm font-semibold text-sky-300">Amateur</div>
-                                <p className="mt-2 text-sm leading-6 text-slate-300">Includes the core creator workflow plus <span className="text-white font-semibold">Magic Wire</span>, <span className="text-white font-semibold">Publications</span>, and <span className="text-white font-semibold">Community</span> alongside planning, archives, search, video rehearsal, visual brainstorming, and selected specialty tools such as <span className="text-white font-semibold">Mentalism Assistant</span> and <span className="text-white font-semibold">Gospel Magic Assistant</span> with reduced access compared to Professional.</p>
+                                <p className="mt-2 text-sm leading-6 text-slate-300">Includes the core creator workflow plus <span className="text-white font-semibold">Magic Wire</span>, <span className="text-white font-semibold">Publications</span>, and <span className="text-white font-semibold">Community</span> alongside planning, archives, search, video rehearsal, and visual brainstorming.</p>
                             </div>
                             <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
                                 <div className="text-sm font-semibold text-amber-300">Professional</div>
