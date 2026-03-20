@@ -1015,7 +1015,7 @@ const IdentifyTab: React.FC<{
                      <div>
                         <div className="text-xs uppercase tracking-wider text-slate-400 mb-2">Example performances</div>
                         <div className="space-y-2">
-                            {identificationResult.videoExamples.map((video, index) => (
+                            {identificationResult.videoExamples.map((video, index) => {
                                 <a key={index} href={video.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-2 bg-slate-700/50 hover:bg-purple-900/50 rounded-md transition-colors">
                                     <VideoIcon className="w-6 h-6 text-purple-400 flex-shrink-0"/>
                                     <span className="text-slate-200 text-sm truncate">{video.title}</span>
