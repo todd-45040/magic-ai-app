@@ -1013,14 +1013,38 @@ const IdentifyTab: React.FC<{
 
                    {identificationResult.videoExamples?.length > 0 && (
                      <div>
-                        <div className="text-xs uppercase tracking-wider text-slate-400 mb-2">Example performances</div>
+                        <div className="text-xs uppercase tracking-wider text-slate-400 mb-2">Performance references</div>
                         <div className="space-y-2">
-                            {identificationResult.videoExamples.map((video, index) => (
-                                <a key={index} href={video.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-2 bg-slate-700/50 hover:bg-purple-900/50 rounded-md transition-colors">
+                            {identificationResult.videoExamples.map((video, index) => {
+                                const isSearch = video.kind === 'search';
+                                const label = isSearch
+                                  ? 'Explore more'
+                                  : `Watch example ${Math.min(index + 1, 2)}`;
+                                const platformLabel =
+                                  video.platform === 'youtube'
+                                    ? 'YouTube'
+                                    : video.platform
+                                      ? video.platform.charAt(0).toUpperCase() + video.platform.slice(1)
+                                      : 'Video';
+                                return (
+                                  <a
+                                    key={index}
+                                    href={video.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-3 p-2 bg-slate-700/50 hover:bg-purple-900/50 rounded-md transition-colors"
+                                  >
                                     <VideoIcon className="w-6 h-6 text-purple-400 flex-shrink-0"/>
-                                    <span className="text-slate-200 text-sm truncate">{video.title}</span>
-                                </a>
-                            ))}
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-2 mb-0.5">
+                                        <span className="text-[10px] uppercase tracking-wide text-purple-300">{label}</span>
+                                        <span className="rounded-full border border-slate-500/60 px-2 py-0.5 text-[10px] text-slate-300">{platformLabel}</span>
+                                      </div>
+                                      <div className="text-slate-200 text-sm truncate">{video.title}</div>
+                                    </div>
+                                  </a>
+                                );
+                            })}
                         </div>
                      </div>
                    )}

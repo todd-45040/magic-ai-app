@@ -4,10 +4,10 @@
 // Keeps ALL provider keys server-side.
 // UI components should call this (or still call geminiService.identifyTrickFromImage if you prefer).
 
-import type { User, TrickIdentificationResult } from "../types";
+import type { User, TrickIdentificationResult, PerformanceReference } from "../types";
 import { aiIdentify, aiJson } from "./aiProxy";
 
-type Video = { title: string; url: string };
+type Video = { title: string; url: string; platform?: "youtube" | "vimeo" | "tiktok" | "instagram" | "web"; kind?: "specific" | "search"; channelTitle?: string };
 
 async function postJson<T>(url: string, body: any): Promise<T> {
   const r = await fetch(url, {
@@ -126,7 +126,9 @@ export async function identifyTrickFromImageServer(
 
   const queriesToUse = queries.length ? queries : fallbackQueries;
 
-  let videos: Video[] = [];
+  let videos: PerformanceReference[] = [];
+  const broadQuery = queriesToUse[0] || `${trickName} magic performance`;
+
   try {
     const yt = await postJson<any>("/api/videoSearch", {
       queries: queriesToUse,
@@ -135,15 +137,46 @@ export async function identifyTrickFromImageServer(
     });
 
     const ytVideos = Array.isArray(yt?.videos) ? yt.videos : [];
-    videos = ytVideos
-      .map((v: any) => ({ title: String(v?.title || "").trim(), url: String(v?.url || "").trim() }))
+    const specifics: PerformanceReference[] = ytVideos
+      .map((v: any) => ({
+        title: String(v?.title || "").trim(),
+        url: String(v?.url || "").trim(),
+        channelTitle: String(v?.channelTitle || "").trim() || undefined,
+        platform: 'youtube' as const,
+        kind: 'specific' as const,
+      }))
       .filter((v: any) => v.title && v.url)
-      .slice(0, 3);
+      .slice(0, 2);
+
+    const broad: PerformanceReference = {
+      title: `Explore more on YouTube: ${broadQuery}`,
+      url: `https://www.youtube.com/results?search_query=${encodeURIComponent(broadQuery)}`,
+      platform: 'youtube',
+      kind: 'search',
+    };
+
+    videos = [...specifics, broad];
   } catch {
-    videos = queriesToUse.slice(0, 3).map((q) => ({
-      title: `Search YouTube: ${q}`,
-      url: `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
-    }));
+    videos = [
+      {
+        title: `Explore on YouTube: ${queriesToUse[0] || `${trickName} magic trick performance`}`,
+        url: `https://www.youtube.com/results?search_query=${encodeURIComponent(queriesToUse[0] || `${trickName} magic trick performance`)}`,
+        platform: 'youtube',
+        kind: 'search',
+      },
+      {
+        title: `Explore on YouTube: ${queriesToUse[1] || `${trickName} illusion performance`}`,
+        url: `https://www.youtube.com/results?search_query=${encodeURIComponent(queriesToUse[1] || `${trickName} illusion performance`)}`,
+        platform: 'youtube',
+        kind: 'search',
+      },
+      {
+        title: `Explore on YouTube: ${queriesToUse[2] || `${trickName} magic trick live show`}`,
+        url: `https://www.youtube.com/results?search_query=${encodeURIComponent(queriesToUse[2] || `${trickName} magic trick live show`)}`,
+        platform: 'youtube',
+        kind: 'search',
+      },
+    ];
   }
 
   return {

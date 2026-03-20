@@ -65,6 +65,14 @@ export interface BookingPitch {
 }
 
 
+export interface PerformanceReference {
+  title: string;
+  url: string;
+  platform?: 'youtube' | 'vimeo' | 'tiktok' | 'instagram' | 'web';
+  kind?: 'specific' | 'search';
+  channelTitle?: string;
+}
+
 export interface TrickIdentificationResult {
   trickName: string;
   confidence?: 'High' | 'Medium' | 'Low';
@@ -77,10 +85,7 @@ export interface TrickIdentificationResult {
   variations?: string[];
   /** Best-effort raw JSON returned by the model (for saving/audit/debug). */
   raw?: any;
-  videoExamples: {
-    title: string;
-    url: string;
-  }[];
+  videoExamples: PerformanceReference[];
 }
 
 
