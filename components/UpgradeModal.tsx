@@ -35,8 +35,8 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
     variant === 'trial-expired'
       ? ux.message
       : founderProtected
-      ? 'Your founder pricing remains protected across upgrades, downgrades, cancellation, and reactivation.'
-      : 'Keep plan language and upgrade paths consistent across the platform.';
+      ? 'Your founder pricing remains protected across upgrades, downgrades, cancellation, and reactivation. Public pricing may change later, but your eligible founder rate stays attached to your account.'
+      : 'Choose the plan that matches your current access needs. Plan labels, upgrade paths, and founder protections are aligned here before Stripe launch.';
 
   return (
     <div
@@ -110,8 +110,8 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
               </div>
               <p className="text-slate-400 mt-2">For consistent rehearsal and show-building work.</p>
               <div className="mt-4">
-                <div className="text-3xl font-bold text-white">$9.95<span className="text-sm font-normal text-slate-400">/mo</span></div>
-                <div className="text-sm text-slate-400">Expanded monthly limits with saved workspaces</div>
+                <div className="text-3xl font-bold text-white">$15.95<span className="text-sm font-normal text-slate-400">/mo</span></div>
+                <div className="text-sm text-slate-400">Expanded monthly limits, saved workspaces, and limited specialty-tool access</div>
               </div>
               <ul className="space-y-2 mt-5 mb-6 flex-1">
                 <Row>Higher monthly AI and image limits</Row>
@@ -151,7 +151,7 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
                 onClick={() => onUpgrade('professional')}
                 className="w-full py-3 px-4 bg-amber-500 hover:bg-amber-600 rounded-xl text-slate-900 font-extrabold transition-colors"
               >
-                {founderProtected ? 'Continue with founder pricing' : 'Upgrade to Professional'}
+                {founderProtected ? 'Upgrade with founder pricing' : 'Upgrade to Professional'}
               </button>
             </div>
           </div>
@@ -171,7 +171,7 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
                 onClick={() => onUpgrade('professional')}
                 className="order-1 sm:order-3 w-full sm:w-auto py-2.5 px-4 bg-amber-500/90 hover:bg-amber-500 rounded-xl text-slate-950 font-extrabold transition-colors"
               >
-                {founderProtected ? 'Continue with founder pricing' : 'Upgrade to Professional'}
+                {founderProtected ? 'Upgrade with founder pricing' : 'Upgrade to Professional'}
               </button>
               <button
                 onClick={() => onUpgrade('amateur')}

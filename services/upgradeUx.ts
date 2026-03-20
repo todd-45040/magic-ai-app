@@ -38,8 +38,8 @@ export function getUpgradeUxCopy(kind: UpgradeUxKind, opts?: {
       kind,
       badge: 'Founder Protected',
       title: 'Your founder pricing is protected',
-      message: 'Your Founder Professional rate stays locked across subscription changes and reactivation. You will not be moved onto the public Professional price by mistake.',
-      primaryCta: 'Continue with founder pricing',
+      message: 'Your Founder Professional rate stays locked across subscription changes and reactivation. You will not be moved onto a future public Professional price by mistake.',
+      primaryCta: 'Upgrade with founder pricing',
       secondaryCta: 'Close',
     };
   }
@@ -50,7 +50,7 @@ export function getUpgradeUxCopy(kind: UpgradeUxKind, opts?: {
       badge: 'Trial Exhausted',
       title: 'Your trial access has ended',
       message: founderProtected
-        ? 'Your founder protection remains intact. Choose a paid plan when you are ready and your locked founder pricing will still be honored.'
+        ? 'Your founder protection remains intact. Choose a paid plan when you are ready and your locked founder pricing will still be honored, even if public pricing changes later.'
         : 'Choose a plan to continue creating, rehearsing, and managing your shows without trial limits.',
       primaryCta: founderProtected ? 'View founder options' : 'View plans',
       secondaryCta: 'Close',
@@ -81,7 +81,7 @@ export function getUpgradeUxCopy(kind: UpgradeUxKind, opts?: {
     const limitedSpecialtyMessage = amateurLimitedSpecialtyTools.has(toolName)
       ? founderProtected
         ? `${toolName} is already available on your current plan with limited access. You can upgrade for fuller access without losing your founder protection.`
-        : `${toolName} is already available on your current plan with limited access. Upgrade for fuller access and more monthly capacity.`
+        : `${toolName} is already available on your current plan with limited access. Upgrade for fuller access and more capacity.`
       : null;
 
     return {
@@ -91,7 +91,7 @@ export function getUpgradeUxCopy(kind: UpgradeUxKind, opts?: {
       message: limitedSpecialtyMessage ?? (founderProtected
         ? 'You can move up without losing your founder protection. Your locked pricing remains attached to your account.'
         : 'Upgrade to unlock more monthly capacity, heavier tools, and fewer limits across the platform.'),
-      primaryCta: founderProtected ? 'See founder upgrade options' : `Upgrade to ${targetPlan}`,
+      primaryCta: founderProtected ? 'See founder pricing options' : `Upgrade to ${targetPlan}`,
       secondaryCta: 'Not now',
     };
   }
@@ -103,7 +103,7 @@ export function getUpgradeUxCopy(kind: UpgradeUxKind, opts?: {
     message: founderProtected
       ? `This feature requires ${targetPlan}. Your founder pricing stays protected if you upgrade.`
       : `This feature requires ${targetPlan}. Upgrade to unlock it.`,
-    primaryCta: founderProtected ? 'Unlock with founder pricing' : `Upgrade to ${targetPlan}`,
+    primaryCta: founderProtected ? 'Upgrade with founder pricing' : `Upgrade to ${targetPlan}`,
     secondaryCta: 'Close',
   };
 }

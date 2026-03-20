@@ -36,7 +36,7 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
 
         <div className="max-w-2xl mx-auto mb-10 p-4 rounded-lg bg-purple-900/30 border border-purple-500/50 text-center">
             <h2 className="font-cinzel font-bold text-xl text-amber-300 mb-1">Limited-Time Introductory Pricing</h2>
-            <p className="text-slate-300 text-sm">Lock in these special rates now! Prices will increase after the beta period.</p>
+            <p className="text-slate-300 text-sm">Beta introductory pricing is shown here for launch planning. Founder pricing, when offered, is a separate locked-rate path and future public pricing may change after launch.</p>
         </div>
 
         {/* Centered 3-up layout (Trial / Amateur / Professional) */}
@@ -82,7 +82,7 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
                 <div className="w-full max-w-sm p-6 bg-slate-800/50 border border-amber-400/50 rounded-lg flex flex-col">
                     <h3 className="text-2xl font-bold text-amber-300 font-cinzel mb-4">Professional</h3>
                     <div className="min-h-[10rem] flex flex-col">
-                        <p className="text-slate-400 mb-4">The Business Tier — client, contracts, finance, and analytics.</p>
+                        <p className="text-slate-400 mb-4">The Business Tier — full creative, rehearsal, client, contracts, finance, and analytics access.</p>
                         <div className="text-center">
                             <p className="text-3xl font-bold text-amber-300">$29.95<span className="text-base font-normal text-slate-400">/month</span></p>
                             <p className="text-sm text-slate-400">$299.00 one-time annual billing</p>

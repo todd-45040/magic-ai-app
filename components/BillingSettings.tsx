@@ -132,7 +132,7 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
             Billing settings and upgrade controls
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-white/70">
-            This page reads the billing status endpoint directly, so current plan state, upgrade availability, and founder protection stay aligned with entitlement truth.
+            This page reads the billing status endpoint directly so current plan naming, upgrade availability, billing assumptions, and founder protection stay aligned with entitlement truth.
           </p>
         </div>
         <button
@@ -150,7 +150,7 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
             <div>
               <p className="font-semibold">Stripe not connected yet</p>
               <p className="mt-1 text-amber-100/85">
-                Upgrade available actions are already routed through the billing endpoint layer. Until Stripe is connected, checkout and portal actions return structured placeholder responses and do not change access.
+                Upgrade actions already route through the billing endpoint layer. Until Stripe is connected, checkout and portal actions remain placeholders, do not charge the user, and do not change plan access.
               </p>
             </div>
           </div>
@@ -185,7 +185,7 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
           icon={WandIcon}
           label="Current plan"
           value={loading ? 'Loading…' : currentPlanLabel}
-          hint={status ? `Current plan state: ${status.accessState}` : 'Resolved from billing status when available.'}
+          hint={status ? `Current plan status: ${status.accessState}` : 'Resolved from billing status when available.'}
           accentClassName={isCurrentProfessional ? 'border-amber-400/20 bg-amber-500/5' : isCurrentAmateur ? 'border-purple-400/20 bg-purple-500/5' : ''}
         />
         <InfoTile
@@ -281,7 +281,7 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
             </p>
           </div>
           <div className="text-xs text-white/45">
-            Allowed upgrade targets: {loading ? 'Loading…' : (status?.upgradeTargets.length ? status.upgradeTargets.map((planKey) => humanizePlan(planKey)).join(', ') : 'None')}
+            Allowed upgrade targets: {loading ? 'Loading…' : (status?.upgradeTargets.length ? status?.upgradeTargets.map((planKey) => humanizePlan(planKey)).join(', ') : 'None')}
           </div>
         </div>
 
@@ -301,16 +301,16 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
                     </span>
                   ) : null}
                 </div>
-                <p className="mt-1 text-sm text-white/65">Expanded creation limits with Show Planner, Search, and Saved Ideas access.</p>
+                <p className="mt-1 text-sm text-white/65">Expanded creation limits with Show Planner, Search, Saved Ideas, and limited specialty-tool access.</p>
               </div>
-              <span className="rounded-full border border-purple-400/25 px-3 py-1 text-xs font-semibold text-purple-200">$9.95/mo</span>
+              <span className="rounded-full border border-purple-400/25 px-3 py-1 text-xs font-semibold text-purple-200">$15.95/mo</span>
             </div>
             <button
               onClick={() => void onUpgrade('amateur')}
               disabled={loading || !amateurUpgradeAvailable || isCurrentAmateur}
               className="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-purple-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isCurrentAmateur ? 'Current plan' : amateurUpgradeAvailable ? 'Upgrade to Amateur' : 'Locked by plan'}
+              {isCurrentAmateur ? 'Current plan' : amateurUpgradeAvailable ? 'Upgrade to Amateur' : 'Unavailable from current plan'}
             </button>
           </div>
 
@@ -333,7 +333,7 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
                     </span>
                   ) : null}
                 </div>
-                <p className="mt-1 text-sm text-white/65">Highest limits, rehearsal tools, business tools, and founder-aware upgrade protection.</p>
+                <p className="mt-1 text-sm text-white/65">Highest limits, full rehearsal tools, business tools, and founder-aware pricing protection.</p>
               </div>
               <span className="rounded-full border border-amber-400/25 px-3 py-1 text-xs font-semibold text-amber-100">
                 {status?.founderProtected ? formatPriceCents(status?.founderLockedPriceCents || 2995) : '$29.95/mo'}
@@ -347,10 +347,10 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
               {isCurrentProfessional
                 ? 'Current plan'
                 : status?.founderProtected
-                  ? 'Continue with founder pricing'
+                  ? 'Upgrade with founder pricing'
                   : professionalUpgradeAvailable
                     ? 'Upgrade to Professional'
-                    : 'Locked by plan'}
+                    : 'Unavailable from current plan'}
             </button>
           </div>
         </div>
