@@ -2277,10 +2277,10 @@ Output guidelines:
                         </div>
                     </div>
                 ) : (
-                    <div className="flex-1 flex items-center justify-center text-center text-slate-500 p-4">
-                        <div className="w-full max-w-md">
+                    <div className="flex-1 flex flex-col items-start justify-start text-center text-slate-500 p-4">
+                        <div className="w-full max-w-md mt-4">
                             <PsychologicalLayerVisualizer />
-                            <p className="mt-4 text-sm text-slate-400">Your mentalism routine blueprint will appear here.</p>
+                            <p className="mt-4 text-sm text-slate-400 text-center w-full">Your mentalism routine blueprint will appear here.</p>
                         </div>
                     </div>
                 )}
