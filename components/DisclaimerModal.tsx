@@ -153,6 +153,32 @@ const DisclaimerModal: React.FC<DisclaimerModalProps> = ({ onClose }) => {
                         </section>
                     </div>
 
+                    <section className="rounded-2xl bg-slate-800/35 border border-slate-700/70 p-4 md:p-5">
+                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                            <div>
+                                <h3 className="font-cinzel text-lg font-bold text-white">Plan Access Snapshot</h3>
+                                <p className="mt-1 text-sm text-slate-400">A simple view of how the customer-facing plans are positioned today.</p>
+                            </div>
+                            <div className="text-xs text-slate-400 rounded-full border border-slate-700/70 bg-slate-900/30 px-3 py-1 w-fit">
+                                Social pages are included for Amateur members
+                            </div>
+                        </div>
+                        <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
+                            <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-4">
+                                <div className="text-sm font-semibold text-green-300">Trial</div>
+                                <p className="mt-2 text-sm leading-6 text-slate-300">Broad-access evaluation tier with many creative and rehearsal tools available, but selected advanced business and pro workflows remain locked.</p>
+                            </div>
+                            <div className="rounded-xl border border-sky-500/20 bg-sky-500/5 p-4">
+                                <div className="text-sm font-semibold text-sky-300">Amateur</div>
+                                <p className="mt-2 text-sm leading-6 text-slate-300">Includes the core creator workflow plus <span className="text-white font-semibold">Magic Wire</span>, <span className="text-white font-semibold">Publications</span>, and <span className="text-white font-semibold">Community</span> alongside planning, archives, search, video rehearsal, and visual brainstorming.</p>
+                            </div>
+                            <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+                                <div className="text-sm font-semibold text-amber-300">Professional</div>
+                                <p className="mt-2 text-sm leading-6 text-slate-300">Unlocks the full platform, including advanced rehearsal, business, assistant, analytics, and pro-only specialty tools.</p>
+                            </div>
+                        </div>
+                    </section>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <section className="rounded-2xl bg-slate-800/35 border border-slate-700/70 p-4 md:p-5">
                             <h3 className="font-cinzel text-lg font-bold text-white">Security</h3>
