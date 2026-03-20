@@ -99,22 +99,22 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
       : null;
 
     return (
-      <div className="flex items-start justify-between gap-3 rounded-xl px-1 py-2.5 maw-interactive-row">
+      <div className="flex items-start justify-between gap-3 py-2.5">
         <div className="flex flex-col gap-1.5 min-w-0 flex-1">
           <div className="flex items-center gap-2 min-w-0 flex-wrap">
             <span className="text-sm text-slate-200 truncate">{resolvedLabel}</span>
           {exhausted && (
-            <span className="maw-pill border-rose-400/25 bg-rose-500/10 text-rose-200">
+            <span className="text-[11px] px-2 py-0.5 rounded-full border border-rose-400/25 bg-rose-500/10 text-rose-200">
               {exhaustedLabel}
             </span>
           )}
           {!hasDaily && monthlyRemaining !== null && monthlyRemaining <= 0 && !exhausted && (
-            <span className="maw-pill border-slate-400/20 bg-slate-500/10 text-slate-200">
+            <span className="text-[11px] px-2 py-0.5 rounded-full border border-slate-400/20 bg-slate-500/10 text-slate-200">
               {plan === 'trial' ? 'Trial remaining: 0' : 'Monthly remaining: 0'}
             </span>
           )}
           {locked && (
-            <span className="maw-pill border-amber-400/20 bg-amber-500/10 text-amber-200">
+            <span className="text-[11px] px-2 py-0.5 rounded-full border border-amber-400/20 bg-amber-500/10 text-amber-200">
               Pro-only
             </span>
           )}
@@ -146,20 +146,20 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
   };
 
   return (
-    <section className={`maw-card-soft transition-all duration-300 ${open ? 'ring-1 ring-white/10' : 'hover:bg-white/[0.05]'}`}>
+    <section className={`rounded-2xl border border-white/10 bg-white/5 shadow-sm transition-all duration-300 ${open ? 'ring-1 ring-white/10' : 'hover:bg-white/[0.06]'}`}>
       <button
         type="button"
-        className="w-full flex items-center justify-between gap-3 rounded-2xl px-4 py-3 maw-interactive-row maw-focus-ring"
+        className="w-full flex items-center justify-between gap-3 px-4 py-3 transition-colors rounded-2xl"
         onClick={() => setOpen(v => !v)}
         aria-expanded={open}
       >
         <div className="flex items-center gap-3 min-w-0">
-          <div className="text-sm font-semibold tracking-[0.01em] text-slate-100">Usage &amp; Limits</div>
-          <span className={`maw-pill ${planBadgeClasses}`}>
+          <div className="text-sm font-semibold text-slate-100">Usage &amp; Limits</div>
+          <span className={`text-[11px] px-2 py-0.5 rounded-full border ${planBadgeClasses}`}>
             {planLabel}
           </span>
           {(nearLimit || upgradeRecommended) && (
-            <span className="maw-pill border border-[#E6C77A]/25 bg-[#E6C77A]/10 text-[#E6C77A]">
+            <span className="text-[11px] px-2 py-0.5 rounded-full border border-[#E6C77A]/25 bg-[#E6C77A]/10 text-[#E6C77A]">
               Upgrade available
             </span>
           )}
@@ -192,7 +192,7 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
             <>
               <div className="mt-3">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="maw-section-kicker">Daily AI usage</div>
+                  <div className="text-xs font-semibold text-slate-300">Daily AI usage</div>
                   <div className="text-xs text-slate-300/80 tabular-nums">
                     {dailyUsed} used • {dailyRemaining} remaining
                   </div>
@@ -217,7 +217,7 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
 
               <div className="mt-4">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="maw-section-kicker">Tool usage</div>
+                  <div className="text-xs font-semibold text-slate-300">Tool usage</div>
                   <div className="text-[11px] text-slate-300/70 text-right">
                     {(resetHourLocal != null && resetTz) ? `Daily AI resets at ${resetHourLocal}:00 (${resetTz})` : 'Daily AI usage resets each day'}
                     {plan !== 'trial' && monthlyResetAt ? <span className="block">Monthly limits reset {new Date(monthlyResetAt).toLocaleDateString()}</span> : null}
@@ -236,7 +236,7 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
                     <button
                       type="button"
                       onClick={onRequestUpgrade}
-                      className="maw-btn-secondary border-[#E6C77A]/25 bg-[#E6C77A]/10 text-[#E6C77A] hover:bg-[#E6C77A]/15"
+                      className="px-4 py-2 rounded-xl border border-[#E6C77A]/25 bg-[#E6C77A]/10 text-[#E6C77A] text-sm font-semibold hover:bg-[#E6C77A]/15 transition-colors"
                     >
                       {upgradeCopy.primaryCta}
                     </button>

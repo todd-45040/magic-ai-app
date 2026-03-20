@@ -1013,7 +1013,7 @@ const IdentifyTab: React.FC<{
 
                    {identificationResult.videoExamples?.length > 0 && (
                      <div>
-                        <div className="maw-section-kicker mb-3">Performance references</div>
+                        <div className="text-xs uppercase tracking-wider text-slate-400 mb-2">Performance references</div>
                         <div className="space-y-2">
                             {identificationResult.videoExamples.map((video, index) => {
                               const platformLabel = video.platform
@@ -1038,7 +1038,7 @@ const IdentifyTab: React.FC<{
                                   href={video.url}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="maw-interactive-row flex items-center gap-3 rounded-xl border border-white/8 bg-slate-700/50 p-3 hover:bg-purple-900/40 hover:scale-[1.02]"
+                                  className="flex items-center gap-3 p-3 bg-slate-700/50 hover:bg-purple-900/50 rounded-md transition-all duration-200 hover:scale-[1.02] hover:shadow-lg"
                                 >
                                   {thumbSrc ? (
                                     <img
@@ -4688,6 +4688,8 @@ ${action.payload.content}`;
       'patter-engine',
       'illusion-blueprint',
       'assistant-studio',
+      'gospel-magic-assistant',
+      'mentalism-assistant',
       'magic-dictionary',
     ]);
 
@@ -5065,18 +5067,18 @@ const renderIntentSubnav = () => {
       
       
       {showFooter && (
-        <footer className="border-t border-slate-800/80 bg-slate-950/40 p-4">
-          <div className="maw-footer-shell flex items-center rounded-2xl bg-slate-800/70">
+        <footer className="p-4 border-t border-slate-800">
+          <div className="flex items-center bg-slate-800 rounded-lg">
             <input
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !isLoading && handleSend()}
               placeholder="Describe the effect you're working on..."
-              className="maw-focus-ring flex-1 w-full bg-transparent px-4 py-3.5 text-white placeholder-slate-400 focus:outline-none"
+              className="flex-1 w-full bg-transparent px-4 py-3 text-white placeholder-slate-400 focus:outline-none"
               disabled={isLoading}
             />
-            <button onClick={() => handleSend()} disabled={isLoading || !input.trim()} className="maw-btn-ghost m-1 p-3 text-purple-300 hover:text-white disabled:text-slate-600">
+            <button onClick={() => handleSend()} disabled={isLoading || !input.trim()} className="p-3 text-purple-400 hover:text-purple-300 disabled:text-slate-600 transition-colors">
               <SendIcon className="w-6 h-6" />
             </button>
           </div>

@@ -412,17 +412,17 @@ function App() {
         />
       ) : null}
 
-      <footer className="relative z-10 mx-auto mb-4 mt-2 w-[calc(100%-1rem)] max-w-6xl maw-footer-shell px-4 py-4 text-center text-xs text-slate-400">
-        <p className="text-yellow-300/85 mb-1 font-medium tracking-[0.02em]">
+      <footer className="relative z-10 w-full text-center p-4 text-xs text-slate-500">
+        <p className="text-yellow-300/80 mb-1">
           Magic AI Wizard — Actively evolving with the magic community
         </p>
 
         {/* Restored global footer links */}
-        <div className="mt-3 flex flex-wrap items-center justify-center gap-2 sm:gap-3">
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-3">
           <button
             type="button"
             onClick={() => setMode('about')}
-            className="maw-btn-ghost px-1.5 py-1 text-purple-300 hover:text-white"
+            className="text-purple-300 hover:text-white transition hover:underline hover:underline-offset-4"
           >
             Membership Types
           </button>
@@ -430,7 +430,7 @@ function App() {
           <button
             type="button"
             onClick={() => setIsDisclaimerOpen(true)}
-            className="maw-btn-ghost px-1.5 py-1 text-purple-300 hover:text-white"
+            className="text-purple-300 hover:text-white transition hover:underline hover:underline-offset-4"
           >
             <span className="inline-flex items-center gap-1">
               <svg
@@ -454,13 +454,13 @@ function App() {
           <button
             type="button"
             onClick={() => setIsSuggestionModalOpen(true)}
-            className="maw-btn-ghost px-1.5 py-1 text-purple-300 hover:text-white"
+            className="text-purple-300 hover:text-white transition hover:underline hover:underline-offset-4"
           >
             Feedback
           </button>
         </div>
 
-        <p className="mt-3 text-slate-400/90">Copyright 2026 Magicians&apos; AI Wizard, LLC — {APP_VERSION}</p>
+        <p>Copyright 2026 Magicians&apos; AI Wizard, LLC — {APP_VERSION}</p>
       </footer>
     </div>
   );

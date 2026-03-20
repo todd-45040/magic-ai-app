@@ -291,10 +291,10 @@ const DisclaimerModal: React.FC<DisclaimerModalProps> = ({ onClose }) => {
                         </p>
                     </div>
                 </main>
-                <footer className="p-4 border-t border-slate-700/80 flex-shrink-0 flex justify-end bg-slate-950/40">
+                <footer className="p-4 border-t border-slate-700 flex-shrink-0 flex justify-end">
                     <button
                         onClick={onClose}
-                        className="maw-btn-primary bg-gradient-to-r from-purple-600 to-purple-700 border border-purple-400/20 shadow-lg shadow-purple-900/30 hover:from-purple-500 hover:to-purple-700"
+                        className="px-6 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-700 text-white font-bold shadow-lg shadow-purple-900/30 border border-purple-400/20 transition"
                     >
                         I Understand
                     </button>
