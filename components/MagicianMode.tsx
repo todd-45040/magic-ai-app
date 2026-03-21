@@ -3054,7 +3054,7 @@ useEffect(() => {
           live_audio_minutes: { limit: 0, remaining: 0, dailyLimit: 0, hidden: true },
           image_gen: { limit: 20, remaining: 20, hidden: false },
           identify: { limit: 50, remaining: 50, hidden: false },
-          video_uploads: { limit: 0, remaining: 0, dailyLimit: 0, hidden: true },
+          video_uploads: { limit: 1, remaining: 1, dailyLimit: 1, hidden: false },
         };
       }
       if (plan === 'free' || plan === 'trial') {
