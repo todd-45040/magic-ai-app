@@ -122,8 +122,13 @@ function buildVideoRow(plan: string, user?: User | null, serverStatus?: UsageSta
     };
   }
 
-  const usage = user ? getUsage(user, 'video_upload') : { used: 0, limit: 0, remaining: 0 };
-  return buildRowFromUsage('video_uploads', 'Video Rehearsal Uploads', usage);
+  const localUsage = user ? getUsage(user, 'video_upload') : { used: 0, limit: 0, remaining: 0 };
+  const mergedUsage = {
+    used: Math.max(Number(quota?.daily?.used ?? 0), Number(localUsage.used ?? 0)),
+    limit: Number(quota?.daily?.limit ?? localUsage.limit),
+    remaining: Math.min(Number(quota?.daily?.remaining ?? localUsage.remaining), Number(localUsage.remaining ?? 0 || localUsage.limit)),
+  };
+  return buildRowFromUsage('video_uploads', 'Video Rehearsal Uploads', mergedUsage);
 }
 
 export function buildNormalizedUsageSnapshot(user?: User | null, serverStatus?: UsageStatus | null): NormalizedUsageSnapshot {

@@ -3145,13 +3145,16 @@ useEffect(() => {
             },
           },
           video_uploads: {
-            remaining: Number(videoQuota.remaining ?? defaults.video_uploads.remaining),
+            remaining: Number(videoQuota.remaining ?? Math.max(0, defaults.video_uploads.limit - videoUsage.used)),
             limit: Number(videoQuota.limit ?? defaults.video_uploads.limit),
             hidden: defaults.video_uploads.hidden || videoAccess.state === 'locked',
             daily: {
-              used: Number(videoQuota?.daily?.used ?? videoUsage.used),
+              used: Math.max(Number(videoQuota?.daily?.used ?? 0), Number(videoUsage.used ?? 0)),
               limit: Number(videoQuota?.daily?.limit ?? videoUsage.limit),
-              remaining: Number(videoQuota?.daily?.remaining ?? videoUsage.remaining),
+              remaining: Math.min(
+                Number(videoQuota?.daily?.remaining ?? videoUsage.remaining),
+                Number(videoUsage.remaining ?? defaults.video_uploads.remaining),
+              ),
             },
           },
           resetAt: serverQuota.resetAt ?? null,
