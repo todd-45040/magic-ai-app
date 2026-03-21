@@ -843,8 +843,8 @@ const IdentifyTab: React.FC<{
     onRequestUpgrade: () => void;
     onReset: () => void;
 }> = ({ imagePreview, identificationResult, isIdentifying, identificationError, identificationBlocked, identifySaved, identifySaving, identifyIsStrong, fileInputRef, handleImageUpload, handleIdentifyClick, onSave, onAddToShow, onConvertToTask, onCopy, onShare, onToggleStrong, onRefine, refining, lastRefine, onRequestUpgrade, onReset }) => (
-    <div className="flex-1 overflow-y-auto px-4 pb-4 pt-1 md:px-5 md:pb-5 md:pt-1">
-        <div className="animate-fade-in space-y-4 max-w-2xl mx-auto">
+    <div className="flex-1 overflow-y-auto p-4 md:p-6">
+        <div className="animate-fade-in space-y-4 max-w-3xl">
             <h2 className="text-2xl font-bold text-slate-200 font-cinzel">Identify a Trick</h2>
             <p className="text-slate-400">Research an effect you've seen. Upload a picture, and the AI will try to identify it and find performance examples.</p>
             <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" />
