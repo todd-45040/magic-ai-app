@@ -143,13 +143,16 @@ interface EffectGeneratorProps {
 
 const LoadingIndicator: React.FC = () => (
     <div className="flex flex-col items-center justify-center text-center p-8">
-        <div className="relative">
-            <WandIcon className="w-16 h-16 text-purple-400 animate-pulse" />
-            <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center">
-                 <div className="w-24 h-24 border-t-2 border-purple-300 rounded-full animate-spin"></div>
-            </div>
+        <div className="relative flex h-40 w-40 items-center justify-center">
+            <div className="absolute inset-0 rounded-full bg-purple-500/10 blur-2xl" />
+            <div className="absolute inset-3 rounded-full border border-purple-500/20" />
+            <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-purple-300 border-r-fuchsia-400/80 animate-spin" />
+            <div className="absolute inset-5 rounded-full border border-indigo-400/20 border-b-indigo-300/60 animate-[spin_2.6s_linear_infinite_reverse]" />
+            <div className="absolute h-20 w-20 rounded-full bg-slate-950/70 border border-slate-700/80 shadow-[0_0_30px_rgba(168,85,247,0.18)]" />
+            <WandIcon className="relative z-10 w-14 h-14 text-purple-300 animate-pulse drop-shadow-[0_0_12px_rgba(168,85,247,0.55)]" />
+            <div className="absolute h-2.5 w-2.5 rounded-full bg-fuchsia-300 shadow-[0_0_18px_rgba(232,121,249,0.9)] animate-ping" />
         </div>
-        <p className="text-slate-300 mt-4 text-lg">Brewing creative ideas...</p>
+        <p className="text-slate-200 mt-3 text-lg font-semibold">Brewing creative ideas...</p>
         <p className="text-slate-400 text-sm">Your next masterpiece is moments away.</p>
     </div>
 );
