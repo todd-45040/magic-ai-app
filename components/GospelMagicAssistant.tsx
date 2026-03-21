@@ -1663,7 +1663,7 @@ Populate arrays for categories the user selected; for unselected categories, ret
       {/* Result Area */}
       <div className="flex flex-col bg-slate-900/50 rounded-lg border border-slate-800 min-h-[300px]">
         {isLoading ? (
-          <div className="flex-1 flex flex-col items-start justify-start mt-4">
+          <div className="flex-1 flex items-center justify-center">
             <LoadingIndicator />
           </div>
         ) : blueprint ? (
@@ -1762,7 +1762,7 @@ Populate arrays for categories the user selected; for unselected categories, ret
             </div>
           </div>
         ) : (
-          <div className="flex-1 relative overflow-hidden flex items-center justify-center text-center text-slate-500 p-6">
+          <div className="flex-1 relative overflow-hidden flex flex-col items-start justify-start text-center text-slate-500 p-6">
             {/* Reverent empty state: parchment blueprint + subtle cross-line motif (very faint) */}
             <div className="absolute inset-0 opacity-[0.10]">
               <div className="absolute inset-0 bg-gradient-to-br from-amber-200/10 via-slate-950 to-slate-900" />
