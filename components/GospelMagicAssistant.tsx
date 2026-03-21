@@ -1663,7 +1663,7 @@ Populate arrays for categories the user selected; for unselected categories, ret
       {/* Result Area */}
       <div className="flex flex-col bg-slate-900/50 rounded-lg border border-slate-800 min-h-[300px]">
         {isLoading ? (
-          <div className="flex-1 flex items-center justify-center">
+          <div className="flex-1 flex flex-col items-start justify-start mt-4">
             <LoadingIndicator />
           </div>
         ) : blueprint ? (
