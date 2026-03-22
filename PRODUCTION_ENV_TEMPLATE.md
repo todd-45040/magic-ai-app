@@ -52,8 +52,11 @@ Provider override (break-glass only):
 ### Stripe (prepared, not live yet)
 - `STRIPE_SECRET_KEY`
 - `STRIPE_WEBHOOK_SECRET`
-- `STRIPE_PRICE_AMATEUR`
-- `STRIPE_PRICE_PRO`
+- `STRIPE_PRICE_AMATEUR_MONTHLY`
+- `STRIPE_PRICE_PRO_MONTHLY`
+- `STRIPE_PRICE_PRO_FOUNDER_MONTHLY`
+- `NEXT_PUBLIC_APP_URL` *(or `APP_URL` / `VITE_APP_URL`)*
+- `STRIPE_API_VERSION` *(optional override; default in server helper)*
 
 ---
 

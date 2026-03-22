@@ -1,6 +1,14 @@
 import { requireSupabaseAuth } from '../_auth.js';
 import { getBillingConfig, getBillingPlanPlaceholder, isBillingCheckoutLookupKey } from '../../server/billing/billingConfig.js';
 import { resolveBillingStatusForUser } from '../../server/billing/status.js';
+import { createStripeCheckoutSession } from '../../server/billing/stripeClient.js';
+
+function ensureAbsoluteUrl(value: string, fallbackBase: string): string {
+  const raw = String(value || '').trim();
+  if (!raw) return fallbackBase;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return `${fallbackBase.replace(/\/$/, '')}/${raw.replace(/^\//, '')}`;
+}
 
 export default async function handler(request: any, response: any) {
   try {
@@ -41,7 +49,7 @@ export default async function handler(request: any, response: any) {
 
     const config = getBillingConfig();
 
-    if (!config.stripeConfigured) {
+    if (!config.stripeConfigured || !target.configuredStripePriceId) {
       return response.status(200).json({
         ok: true,
         mode: 'placeholder',
@@ -54,13 +62,95 @@ export default async function handler(request: any, response: any) {
       });
     }
 
-    return response.status(501).json({
-      error: 'Stripe checkout session creation is not connected yet.',
+    const { data: profile, error: profileError } = await auth.admin
+      .from('users')
+      .select('id, email, founding_circle_member, pricing_lock, founding_bucket')
+      .eq('id', auth.userId)
+      .maybeSingle();
+
+    if (profileError) {
+      throw new Error(profileError.message || 'Unable to load user profile for billing.');
+    }
+
+    const { data: billingCustomer, error: billingCustomerError } = await auth.admin
+      .from('billing_customers')
+      .select('id, stripe_customer_id')
+      .eq('user_id', auth.userId)
+      .maybeSingle();
+
+    if (billingCustomerError) {
+      throw new Error(billingCustomerError.message || 'Unable to inspect billing customer record.');
+    }
+
+    const customerId = String(billingCustomer?.stripe_customer_id || '').trim() || undefined;
+    const email = String(profile?.email || '').trim() || undefined;
+    const founderProtected = Boolean(
+      billingStatus.founderProtected || profile?.founding_circle_member || String(profile?.pricing_lock || '').trim()
+    );
+
+    const successUrl = ensureAbsoluteUrl(
+      request?.body?.successUrl || config.successUrl,
+      config.appBaseUrl,
+    );
+    const cancelUrl = ensureAbsoluteUrl(
+      request?.body?.cancelUrl || config.cancelUrl,
+      config.appBaseUrl,
+    );
+
+    const session = await createStripeCheckoutSession({
+      mode: 'subscription',
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      client_reference_id: auth.userId,
+      customer: customerId,
+      customer_email: customerId ? undefined : email,
+      allow_promotion_codes: target.internalPlanKey !== 'founder_professional',
+      line_items: [{
+        price: target.configuredStripePriceId,
+        quantity: 1,
+      }],
+      metadata: {
+        user_id: auth.userId,
+        internal_plan_key: target.internalPlanKey,
+        checkout_lookup_key: target.internalLookupKey,
+        tier_requested: target.internalPlanKey === 'founder_professional' ? 'professional' : target.internalPlanKey,
+        founding_member: founderProtected ? 'true' : 'false',
+        founder_offer: target.internalPlanKey === 'founder_professional' ? 'true' : 'false',
+        pricing_lock: billingStatus.founderLockedPlan === 'founder_professional'
+          ? String(profile?.pricing_lock || billingStatus.founderLockedPlan || 'founding_pro_admc_2026')
+          : String(profile?.pricing_lock || ''),
+        founding_bucket: String(profile?.founding_bucket || ''),
+        environment_name: config.environmentName,
+      },
+      subscription_data: {
+        metadata: {
+          user_id: auth.userId,
+          internal_plan_key: target.internalPlanKey,
+          checkout_lookup_key: target.internalLookupKey,
+          tier_requested: target.internalPlanKey === 'founder_professional' ? 'professional' : target.internalPlanKey,
+          founding_member: founderProtected ? 'true' : 'false',
+          founder_offer: target.internalPlanKey === 'founder_professional' ? 'true' : 'false',
+          pricing_lock: billingStatus.founderLockedPlan === 'founder_professional'
+            ? String(profile?.pricing_lock || billingStatus.founderLockedPlan || 'founding_pro_admc_2026')
+            : String(profile?.pricing_lock || ''),
+          founding_bucket: String(profile?.founding_bucket || ''),
+        },
+      },
+    });
+
+    if (!session?.url) {
+      throw new Error('Stripe returned no checkout URL.');
+    }
+
+    return response.status(200).json({
+      ok: true,
+      stripeConfigured: true,
       targetPlanKey: target.internalPlanKey,
       targetLookupKey: target.internalLookupKey,
+      url: session.url,
     });
   } catch (err: any) {
     console.error('billing/create-checkout-session error:', err);
-    return response.status(500).json({ error: err?.message || 'checkout scaffold failed' });
+    return response.status(500).json({ error: err?.message || 'checkout creation failed' });
   }
 }

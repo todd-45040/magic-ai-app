@@ -1,5 +1,13 @@
 import { requireSupabaseAuth } from '../_auth.js';
 import { getBillingConfig } from '../../server/billing/billingConfig.js';
+import { createStripeBillingPortalSession } from '../../server/billing/stripeClient.js';
+
+function ensureAbsoluteUrl(value: string, fallbackBase: string): string {
+  const raw = String(value || '').trim();
+  if (!raw) return fallbackBase;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return `${fallbackBase.replace(/\/$/, '')}/${raw.replace(/^\//, '')}`;
+}
 
 export default async function handler(request: any, response: any) {
   try {
@@ -25,6 +33,7 @@ export default async function handler(request: any, response: any) {
     }
 
     const billingCustomerExists = Boolean(billingCustomer?.id);
+    const stripeCustomerId = String(billingCustomer?.stripe_customer_id || '').trim();
 
     if (!config.stripeConfigured) {
       return response.status(200).json({
@@ -39,20 +48,30 @@ export default async function handler(request: any, response: any) {
       });
     }
 
-    if (!billingCustomerExists) {
+    if (!billingCustomerExists || !stripeCustomerId) {
       return response.status(404).json({
-        error: 'No billing customer exists for this account yet.',
+        error: 'No Stripe billing customer exists for this account yet.',
         stripeConfigured: true,
       });
     }
 
-    return response.status(501).json({
-      error: 'Stripe customer portal is not connected yet.',
-      billingCustomerExists: true,
+    const portal = await createStripeBillingPortalSession({
+      customer: stripeCustomerId,
+      return_url: ensureAbsoluteUrl(request?.body?.returnUrl || config.portalReturnUrl, config.appBaseUrl),
+    });
+
+    if (!portal?.url) {
+      throw new Error('Stripe returned no portal URL.');
+    }
+
+    return response.status(200).json({
+      ok: true,
       stripeConfigured: true,
+      billingCustomerExists: true,
+      url: portal.url,
     });
   } catch (err: any) {
     console.error('billing/create-portal-session error:', err);
-    return response.status(500).json({ error: err?.message || 'portal scaffold failed' });
+    return response.status(500).json({ error: err?.message || 'portal creation failed' });
   }
 }

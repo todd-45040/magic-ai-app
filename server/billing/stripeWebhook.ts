@@ -267,6 +267,75 @@ async function upsertFounderOverride(admin: any, params: { userId: string | null
   ], { onConflict: 'user_id' });
 }
 
+
+async function syncUserMembership(admin: any, params: {
+  userId: string | null;
+  planKey: BillingPlanKey;
+  billingStatus: string;
+  founderLockedPlan?: BillingPlanKey | null;
+  founderProtected?: boolean;
+  pricingLock?: string | null;
+  foundingBucket?: string | null;
+}) {
+  if (!params.userId) return;
+
+  const resolution = resolveBillingPlan({
+    planKey: params.planKey,
+    billingStatus: params.billingStatus,
+    founderLockedPlan: null,
+  });
+
+  const paidMembership = resolution.keepAccess
+    ? ((params.founderLockedPlan === 'founder_professional' || params.planKey === 'professional' || params.planKey === 'founder_professional')
+      ? 'professional'
+      : params.planKey === 'amateur'
+        ? 'amateur'
+        : 'free')
+    : 'free';
+
+  await admin
+    .from('users')
+    .update({
+      membership: paidMembership,
+      trial_end_date: paidMembership === 'free' ? null : null,
+      pricing_lock: params.founderProtected ? (params.pricingLock || 'founding_pro_admc_2026') : undefined,
+      founding_bucket: params.founderProtected ? (params.foundingBucket || undefined) : undefined,
+      founding_circle_member: params.founderProtected ? true : undefined,
+    })
+    .eq('id', params.userId);
+}
+
+async function upsertUsagePeriod(admin: any, params: {
+  userId: string | null;
+  planKey: BillingPlanKey;
+  currentPeriodStart?: string | null;
+  currentPeriodEnd?: string | null;
+}) {
+  if (!params.userId || !params.currentPeriodStart || !params.currentPeriodEnd) return;
+
+  const effectivePlan = params.planKey === 'founder_professional' ? 'professional' : params.planKey;
+  const { data: existing } = await admin
+    .from('usage_periods')
+    .select('id')
+    .eq('user_id', params.userId)
+    .order('period_start', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const payload = {
+    id: existing?.id || undefined,
+    user_id: params.userId,
+    plan_key: effectivePlan,
+    period_start: params.currentPeriodStart,
+    period_end: params.currentPeriodEnd,
+    source_of_truth: 'stripe',
+    source_updated_at: new Date().toISOString(),
+    last_synced_at: new Date().toISOString(),
+  };
+
+  await admin.from('usage_periods').upsert([payload], { onConflict: 'id' });
+}
+
 async function upsertSubscription(admin: any, params: {
   userId: string | null;
   billingCustomerId: string | null;
@@ -362,6 +431,23 @@ async function syncFromEvent(admin: any, event: any) {
   if (founderLockedPlan) {
     await upsertFounderOverride(admin, { userId, planKey, metadata, existingOverride: existingFounderOverride });
   }
+
+  await syncUserMembership(admin, {
+    userId,
+    planKey,
+    billingStatus,
+    founderLockedPlan,
+    founderProtected: founderState.founderProtected,
+    pricingLock: founderState.pricingLockKey,
+    foundingBucket: founderState.bucket,
+  });
+
+  await upsertUsagePeriod(admin, {
+    userId,
+    planKey,
+    currentPeriodStart,
+    currentPeriodEnd,
+  });
 
   const subscriptionId = await upsertSubscription(admin, {
     userId,
