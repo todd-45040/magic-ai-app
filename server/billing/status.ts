@@ -38,8 +38,8 @@ function normalizeProfileMembership(value: unknown): BillingPlanKey {
 
 function normalizeBillingPlanKey(value: unknown): BillingPlanKey | null {
   const raw = String(value || '').trim();
-  if (raw === 'free' || raw === 'amateur' || raw === 'professional' || raw === 'founder_professional') {
-    return raw;
+  if (raw === 'free' || raw === 'amateur' || raw === 'founder_amateur' || raw === 'professional' || raw === 'founder_professional') {
+    return raw as BillingPlanKey;
   }
   return null;
 }
@@ -124,10 +124,7 @@ export async function resolveBillingStatusForUser(admin: any, userId: string): P
     : 'free';
 
   const planDef = BILLING_PLAN_CATALOG[effectivePlanKey] || BILLING_PLAN_CATALOG.free;
-  const upgradeTargets = (planDef.allowedUpgrades || []).filter((planKey) => {
-    if (planKey === 'founder_professional') return founderProtection.founderProtected;
-    return true;
-  });
+  const upgradeTargets = planDef.allowedUpgrades || [];
 
   return {
     ok: true,

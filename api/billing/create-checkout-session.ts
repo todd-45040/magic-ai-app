@@ -41,12 +41,6 @@ export default async function handler(request: any, response: any) {
       });
     }
 
-    if (target.founderOnly && !billingStatus.founderProtected) {
-      return response.status(403).json({
-        error: 'Founder pricing is protected and is not available for this account.',
-      });
-    }
-
     const config = getBillingConfig();
 
     if (!config.stripeConfigured || !target.configuredStripePriceId) {
@@ -104,7 +98,7 @@ export default async function handler(request: any, response: any) {
       client_reference_id: auth.userId,
       customer: customerId,
       customer_email: customerId ? undefined : email,
-      allow_promotion_codes: target.internalPlanKey !== 'founder_professional',
+      allow_promotion_codes: !target.founderOnly,
       line_items: [{
         price: target.configuredStripePriceId,
         quantity: 1,
@@ -113,11 +107,11 @@ export default async function handler(request: any, response: any) {
         user_id: auth.userId,
         internal_plan_key: target.internalPlanKey,
         checkout_lookup_key: target.internalLookupKey,
-        tier_requested: target.internalPlanKey === 'founder_professional' ? 'professional' : target.internalPlanKey,
-        founding_member: founderProtected ? 'true' : 'false',
-        founder_offer: target.internalPlanKey === 'founder_professional' ? 'true' : 'false',
-        pricing_lock: billingStatus.founderLockedPlan === 'founder_professional'
-          ? String(profile?.pricing_lock || billingStatus.founderLockedPlan || 'founding_pro_admc_2026')
+        tier_requested: target.internalPlanKey.includes('professional') ? 'professional' : 'amateur',
+        founding_member: (founderProtected || target.founderOnly) ? 'true' : 'false',
+        founder_offer: target.founderOnly ? 'true' : 'false',
+        pricing_lock: target.founderOnly || billingStatus.founderLockedPlan
+          ? String(profile?.pricing_lock || billingStatus.founderLockedPlan || 'founding_member_2026')
           : String(profile?.pricing_lock || ''),
         founding_bucket: String(profile?.founding_bucket || ''),
         environment_name: config.environmentName,
@@ -127,11 +121,11 @@ export default async function handler(request: any, response: any) {
           user_id: auth.userId,
           internal_plan_key: target.internalPlanKey,
           checkout_lookup_key: target.internalLookupKey,
-          tier_requested: target.internalPlanKey === 'founder_professional' ? 'professional' : target.internalPlanKey,
-          founding_member: founderProtected ? 'true' : 'false',
-          founder_offer: target.internalPlanKey === 'founder_professional' ? 'true' : 'false',
-          pricing_lock: billingStatus.founderLockedPlan === 'founder_professional'
-            ? String(profile?.pricing_lock || billingStatus.founderLockedPlan || 'founding_pro_admc_2026')
+          tier_requested: target.internalPlanKey.includes('professional') ? 'professional' : 'amateur',
+          founding_member: (founderProtected || target.founderOnly) ? 'true' : 'false',
+          founder_offer: target.founderOnly ? 'true' : 'false',
+          pricing_lock: target.founderOnly || billingStatus.founderLockedPlan
+            ? String(profile?.pricing_lock || billingStatus.founderLockedPlan || 'founding_member_2026')
             : String(profile?.pricing_lock || ''),
           founding_bucket: String(profile?.founding_bucket || ''),
         },

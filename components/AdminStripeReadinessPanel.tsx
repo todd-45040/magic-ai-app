@@ -66,11 +66,11 @@ export default function AdminStripeReadinessPanel() {
     const required = [
       'STRIPE_SECRET_KEY',
       'STRIPE_PRICE_AMATEUR_MONTHLY',
-      'STRIPE_PRICE_AMATEUR_ANNUAL',
+      'STRIPE_PRICE_AMATEUR_YEARLY',
       'STRIPE_PRICE_PRO_MONTHLY',
-      'STRIPE_PRICE_PRO_ANNUAL',
+      'STRIPE_PRICE_PRO_YEARLY',
     ];
-    const founderOptional = ['STRIPE_PRICE_PRO_FOUNDER_MONTHLY', 'STRIPE_PRICE_PRO_FOUNDER_ANNUAL', 'STRIPE_COUPON_FOUNDER_PRO'];
+    const founderOptional = ['STRIPE_PRICE_PRO_FOUNDER_MONTHLY', 'STRIPE_PRICE_PRO_FOUNDER_YEARLY', 'STRIPE_COUPON_FOUNDER_PRO'];
     const webhook = ['STRIPE_WEBHOOK_SECRET'];
 
     const ordered = [...required, ...founderOptional, ...webhook].filter((k, i, a) => a.indexOf(k) === i && keys.includes(k));

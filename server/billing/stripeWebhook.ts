@@ -90,13 +90,14 @@ function normalizeBool(value: unknown): boolean {
 function normalizePlanFromObject(object: any): BillingPlanKey {
   const metadata = object?.metadata || {};
   const explicitPlan = String(metadata?.plan_key || metadata?.internal_plan_key || '').trim();
-  if (explicitPlan === 'free' || explicitPlan === 'amateur' || explicitPlan === 'professional' || explicitPlan === 'founder_professional') {
-    return explicitPlan;
+  if (explicitPlan === 'free' || explicitPlan === 'amateur' || explicitPlan === 'founder_amateur' || explicitPlan === 'professional' || explicitPlan === 'founder_professional') {
+    return explicitPlan as BillingPlanKey;
   }
 
   const founderLike = normalizeBool(metadata?.founding_member) || Boolean(String(metadata?.pricing_lock || '').trim()) || Boolean(String(metadata?.founder_offer || '').trim());
   const requestedTier = String(metadata?.tier_requested || metadata?.tier || '').trim().toLowerCase();
   if (founderLike && requestedTier === 'professional') return 'founder_professional';
+  if (founderLike && requestedTier === 'amateur') return 'founder_amateur';
   if (requestedTier === 'professional') return 'professional';
   if (requestedTier === 'amateur') return 'amateur';
 
@@ -107,7 +108,7 @@ function normalizePlanFromObject(object: any): BillingPlanKey {
     productId: firstPrice?.product || object?.price?.product || object?.product || null,
   });
 
-  return resolved || (founderLike ? 'founder_professional' : 'free');
+  return resolved || (founderLike ? (requestedTier === 'amateur' ? 'founder_amateur' : 'founder_professional') : 'free');
 }
 
 function normalizeStatusFromEvent(eventType: string, object: any): string {
@@ -249,16 +250,16 @@ async function getFounderOverride(admin: any, userId: string | null) {
 }
 
 async function upsertFounderOverride(admin: any, params: { userId: string | null; planKey: BillingPlanKey; metadata: any; existingOverride?: any }) {
-  if (!params.userId || params.planKey !== 'founder_professional') return;
+  if (!params.userId || (params.planKey !== 'founder_professional' && params.planKey !== 'founder_amateur')) return;
   const founderState = deriveFounderProtection({ metadata: params.metadata, founderOverride: params.existingOverride || null });
 
   await admin.from('founder_overrides').upsert([
     {
       user_id: params.userId,
-      locked_plan_key: 'founder_professional',
-      locked_price_cents: founderState.lockedPriceCents || 2995,
+      locked_plan_key: params.planKey,
+      locked_price_cents: founderState.lockedPriceCents || (params.planKey === 'founder_amateur' ? 995 : 2995),
       override_active: true,
-      pricing_lock: founderState.pricingLockKey || 'founding_pro_admc_2026',
+      pricing_lock: founderState.pricingLockKey || (params.planKey === 'founder_amateur' ? 'founding_amateur_2026' : 'founding_pro_admc_2026'),
       founder_bucket: founderState.bucket,
       granted_reason: 'stripe_webhook_sync',
       source_updated_at: new Date().toISOString(),
@@ -288,7 +289,7 @@ async function syncUserMembership(admin: any, params: {
   const paidMembership = resolution.keepAccess
     ? ((params.founderLockedPlan === 'founder_professional' || params.planKey === 'professional' || params.planKey === 'founder_professional')
       ? 'professional'
-      : params.planKey === 'amateur'
+      : (params.founderLockedPlan === 'founder_amateur' || params.planKey === 'amateur' || params.planKey === 'founder_amateur')
         ? 'amateur'
         : 'free')
     : 'free';
@@ -298,7 +299,7 @@ async function syncUserMembership(admin: any, params: {
     .update({
       membership: paidMembership,
       trial_end_date: paidMembership === 'free' ? null : null,
-      pricing_lock: params.founderProtected ? (params.pricingLock || 'founding_pro_admc_2026') : undefined,
+      pricing_lock: params.founderProtected ? (params.pricingLock || (params.founderLockedPlan === 'founder_amateur' ? 'founding_amateur_2026' : 'founding_pro_admc_2026')) : undefined,
       founding_bucket: params.founderProtected ? (params.foundingBucket || undefined) : undefined,
       founding_circle_member: params.founderProtected ? true : undefined,
     })
@@ -313,7 +314,7 @@ async function upsertUsagePeriod(admin: any, params: {
 }) {
   if (!params.userId || !params.currentPeriodStart || !params.currentPeriodEnd) return;
 
-  const effectivePlan = params.planKey === 'founder_professional' ? 'professional' : params.planKey;
+  const effectivePlan = params.planKey === 'founder_professional' ? 'professional' : params.planKey === 'founder_amateur' ? 'amateur' : params.planKey;
   const { data: existing } = await admin
     .from('usage_periods')
     .select('id')
@@ -418,8 +419,8 @@ async function syncFromEvent(admin: any, event: any) {
   const checkoutSessionId = object?.object === 'checkout.session' ? String(object?.id || '').trim() || null : null;
   const currentPeriodStart = safeIsoFromUnixSeconds(object?.current_period_start || object?.period_start) || null;
   const currentPeriodEnd = safeIsoFromUnixSeconds(object?.current_period_end || object?.period_end) || null;
-  const founderLockedPlan = founderState.founderProtected && founderState.lockedPlan ? founderState.lockedPlan : (planKey === 'founder_professional' ? 'founder_professional' : null);
-  const founderLockedPrice = founderState.founderProtected ? (founderState.lockedPriceCents || 2995) : null;
+  const founderLockedPlan = founderState.founderProtected && founderState.lockedPlan ? founderState.lockedPlan : (planKey === 'founder_professional' ? 'founder_professional' : planKey === 'founder_amateur' ? 'founder_amateur' : null);
+  const founderLockedPrice = founderState.founderProtected ? (founderState.lockedPriceCents || (founderLockedPlan === 'founder_amateur' ? 995 : 2995)) : null;
 
   const billingCustomerId = await upsertBillingCustomer(admin, {
     userId,

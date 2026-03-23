@@ -25,12 +25,12 @@ type Billing = 'monthly' | 'annual';
 
 function pickPriceId(tier: Tier, billing: Billing, founderLocked: boolean): { priceId: string | null; couponId: string | null; strategy: 'founder_price' | 'coupon' | 'normal' | 'missing' } {
   const amateurMonthly = getEnv('STRIPE_PRICE_AMATEUR_MONTHLY');
-  const amateurAnnual = getEnv('STRIPE_PRICE_AMATEUR_ANNUAL');
+  const amateurAnnual = getEnv('STRIPE_PRICE_AMATEUR_YEARLY');
   const proMonthly = getEnv('STRIPE_PRICE_PRO_MONTHLY');
-  const proAnnual = getEnv('STRIPE_PRICE_PRO_ANNUAL');
+  const proAnnual = getEnv('STRIPE_PRICE_PRO_YEARLY');
 
   const founderProMonthly = getEnv('STRIPE_PRICE_PRO_FOUNDER_MONTHLY');
-  const founderProAnnual = getEnv('STRIPE_PRICE_PRO_FOUNDER_ANNUAL');
+  const founderProAnnual = getEnv('STRIPE_PRICE_PRO_FOUNDER_YEARLY');
   const founderCoupon = getEnv('STRIPE_COUPON_FOUNDER_PRO');
 
   if (tier === 'amateur') {
@@ -61,11 +61,11 @@ export default async function handler(req: any, res: any) {
     STRIPE_SECRET_KEY: hasEnv('STRIPE_SECRET_KEY'),
     STRIPE_WEBHOOK_SECRET: hasEnv('STRIPE_WEBHOOK_SECRET'),
     STRIPE_PRICE_AMATEUR_MONTHLY: hasEnv('STRIPE_PRICE_AMATEUR_MONTHLY'),
-    STRIPE_PRICE_AMATEUR_ANNUAL: hasEnv('STRIPE_PRICE_AMATEUR_ANNUAL'),
+    STRIPE_PRICE_AMATEUR_YEARLY: hasEnv('STRIPE_PRICE_AMATEUR_YEARLY'),
     STRIPE_PRICE_PRO_MONTHLY: hasEnv('STRIPE_PRICE_PRO_MONTHLY'),
-    STRIPE_PRICE_PRO_ANNUAL: hasEnv('STRIPE_PRICE_PRO_ANNUAL'),
+    STRIPE_PRICE_PRO_YEARLY: hasEnv('STRIPE_PRICE_PRO_YEARLY'),
     STRIPE_PRICE_PRO_FOUNDER_MONTHLY: hasEnv('STRIPE_PRICE_PRO_FOUNDER_MONTHLY'),
-    STRIPE_PRICE_PRO_FOUNDER_ANNUAL: hasEnv('STRIPE_PRICE_PRO_FOUNDER_ANNUAL'),
+    STRIPE_PRICE_PRO_FOUNDER_YEARLY: hasEnv('STRIPE_PRICE_PRO_FOUNDER_YEARLY'),
     STRIPE_COUPON_FOUNDER_PRO: hasEnv('STRIPE_COUPON_FOUNDER_PRO'),
     // Phase 4 fail-safe backup
     STRIPE_FOUNDER_PAYMENT_LINK_URL: hasEnv('STRIPE_FOUNDER_PAYMENT_LINK_URL'),
