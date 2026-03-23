@@ -3,8 +3,13 @@ import type { BillingPlanKey } from './planCatalog.js';
 
 export type BillingCheckoutLookupKey =
   | 'amateur_monthly'
+  | 'amateur_yearly'
+  | 'founder_amateur_monthly'
+  | 'founder_amateur_yearly'
   | 'professional_monthly'
-  | 'founder_professional_monthly';
+  | 'professional_yearly'
+  | 'founder_professional_monthly'
+  | 'founder_professional_yearly';
 
 export type BillingStatusPayload = {
   ok: true;
@@ -82,19 +87,27 @@ async function authorizedFetch<T>(input: string, init?: RequestInit): Promise<T>
 
 export function resolveCheckoutLookupKey(
   targetTier: 'amateur' | 'professional',
+  billingCycle: 'monthly' | 'yearly',
+  founderRequested: boolean,
   billingStatus: Pick<BillingStatusPayload, 'founderProtected' | 'founderLockedPlan' | 'planKey' | 'upgradeTargets'>,
 ): BillingCheckoutLookupKey {
-  if (targetTier === 'amateur') return 'amateur_monthly';
-
   const founderCheckoutEligible = Boolean(
-    billingStatus.founderProtected && (
+    founderRequested && billingStatus.founderProtected && (
       billingStatus.founderLockedPlan === 'founder_professional'
       || billingStatus.planKey === 'founder_professional'
       || billingStatus.upgradeTargets.includes('founder_professional')
+      || billingStatus.upgradeTargets.includes('professional')
+      || billingStatus.upgradeTargets.includes('amateur')
     ),
   );
 
-  return founderCheckoutEligible ? 'founder_professional_monthly' : 'professional_monthly';
+  if (targetTier === 'amateur') {
+    if (founderCheckoutEligible) return billingCycle === 'yearly' ? 'founder_amateur_yearly' : 'founder_amateur_monthly';
+    return billingCycle === 'yearly' ? 'amateur_yearly' : 'amateur_monthly';
+  }
+
+  if (founderCheckoutEligible) return billingCycle === 'yearly' ? 'founder_professional_yearly' : 'founder_professional_monthly';
+  return billingCycle === 'yearly' ? 'professional_yearly' : 'professional_monthly';
 }
 
 export async function fetchBillingStatus(): Promise<BillingStatusPayload> {

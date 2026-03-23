@@ -4325,8 +4325,8 @@ ${action.payload.content}`;
     handleNavigate('performance-analytics');
   };
 
-  const handleUpgrade = (tier: 'amateur' | 'professional') => {
-    onUpgrade(tier as any);
+  const handleUpgrade = (tier: 'amateur' | 'professional', billingCycle: 'monthly' | 'yearly' = 'monthly', founderRequested = false) => {
+    onUpgrade(tier as any, billingCycle, founderRequested);
     setIsUpgradeModalOpen(false);
   }
   

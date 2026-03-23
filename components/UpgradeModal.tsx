@@ -4,7 +4,7 @@ import { getFounderLockLabel, getUpgradeUxCopy, isFounderProtected } from '../se
 
 interface UpgradeModalProps {
   onClose: () => void;
-  onUpgrade: (tier: 'amateur' | 'professional') => void;
+  onUpgrade: (tier: 'amateur' | 'professional', billingCycle?: 'monthly' | 'yearly', founderRequested?: boolean) => void;
   variant?: 'locked-tool' | 'trial-expired' | 'generic';
   user?: any;
 }
@@ -18,6 +18,8 @@ const Row: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 
 const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant = 'generic', user }) => {
   const founderProtected = isFounderProtected(user);
+  const [billingCycle, setBillingCycle] = React.useState<'monthly' | 'yearly'>('monthly');
+  const [founderRequested, setFounderRequested] = React.useState<boolean>(Boolean(founderProtected));
   const founderLockLabel = getFounderLockLabel(user);
   const ux = getUpgradeUxCopy(
     variant === 'trial-expired' ? 'trial_exhausted' : founderProtected ? 'founder_protected' : 'locked_by_plan',
@@ -75,6 +77,25 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
             </div>
           )}
 
+          <div className="mb-6 rounded-2xl border border-white/10 bg-black/20 p-4">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-white">Checkout options</p>
+                <p className="mt-1 text-sm text-slate-400">Expose the real Stripe path here so monthly, yearly, and founder-aware checkout can be tested directly.</p>
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div className="inline-flex rounded-xl border border-slate-700 bg-slate-900/50 p-1">
+                  <button type="button" onClick={() => setBillingCycle('monthly')} className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${billingCycle === 'monthly' ? 'bg-purple-600 text-white' : 'text-slate-300 hover:text-white'}`}>Monthly</button>
+                  <button type="button" onClick={() => setBillingCycle('yearly')} className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${billingCycle === 'yearly' ? 'bg-purple-600 text-white' : 'text-slate-300 hover:text-white'}`}>Yearly</button>
+                </div>
+                <label className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm ${founderProtected ? 'border-amber-300/30 bg-amber-500/10 text-amber-100' : 'border-slate-700 bg-slate-900/50 text-slate-500'}`}>
+                  <input type="checkbox" checked={founderRequested} onChange={(e) => setFounderRequested(e.target.checked)} disabled={!founderProtected} />
+                  <span>Use founder pricing path</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="p-6 bg-slate-950/30 border border-slate-800 rounded-2xl flex flex-col">
               <div className="flex items-center justify-between">
@@ -110,7 +131,7 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
               </div>
               <p className="text-slate-400 mt-2">For consistent rehearsal and show-building work.</p>
               <div className="mt-4">
-                <div className="text-3xl font-bold text-white">$9.95<span className="text-sm font-normal text-slate-400">/mo</span></div>
+                <div className="text-3xl font-bold text-white">{billingCycle === 'yearly' ? '$95.40' : '$9.95'}<span className="text-sm font-normal text-slate-400">/{billingCycle === 'yearly' ? 'yr' : 'mo'}</span></div>
                 <div className="text-sm text-slate-400">Expanded monthly limits with saved workspaces and broader ongoing access</div>
               </div>
               <ul className="space-y-2 mt-5 mb-6 flex-1">
@@ -119,10 +140,10 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
                 <Row>Standard upgrade path from Free and Trial</Row>
               </ul>
               <button
-                onClick={() => onUpgrade('amateur')}
+                onClick={() => onUpgrade('amateur', billingCycle, founderRequested)}
                 className="w-full py-3 px-4 bg-purple-600 hover:bg-purple-700 rounded-xl text-white font-bold transition-colors"
               >
-                Upgrade to Amateur
+                {`Upgrade to Amateur ${billingCycle === 'yearly' ? 'Yearly' : 'Monthly'}${founderRequested && founderProtected ? ' (Founder)' : ''}`}
               </button>
             </div>
 
@@ -137,7 +158,7 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
                 </span>
               </div>
               <div className="mt-4">
-                <div className="text-3xl font-bold text-white">$29.95<span className="text-sm font-normal text-slate-400">/mo</span></div>
+                <div className="text-3xl font-bold text-white">{billingCycle === 'yearly' ? '$299.50' : '$29.95'}<span className="text-sm font-normal text-slate-400">/{billingCycle === 'yearly' ? 'yr' : 'mo'}</span></div>
                 <div className="text-sm text-slate-400">
                   {founderProtected ? 'Locked founder rate preserved on reactivation' : 'Highest limits and full feature access'}
                 </div>
@@ -148,10 +169,10 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
                 <Row>Founder users keep protected pricing through billing changes</Row>
               </ul>
               <button
-                onClick={() => onUpgrade('professional')}
+                onClick={() => onUpgrade('professional', billingCycle, founderRequested)}
                 className="w-full py-3 px-4 bg-amber-500 hover:bg-amber-600 rounded-xl text-slate-900 font-extrabold transition-colors"
               >
-                {founderProtected ? 'Continue with founder pricing' : 'Upgrade to Professional'}
+                {founderRequested && founderProtected ? `Continue with founder ${billingCycle}` : `Upgrade to Professional ${billingCycle === 'yearly' ? 'Yearly' : 'Monthly'}`}
               </button>
             </div>
           </div>
@@ -168,16 +189,16 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant
             </button>
             <div className="grid grid-cols-1 sm:flex sm:flex-row gap-3 sm:justify-end sm:items-center w-full sm:w-auto">
               <button
-                onClick={() => onUpgrade('professional')}
+                onClick={() => onUpgrade('professional', billingCycle, founderRequested)}
                 className="order-1 sm:order-3 w-full sm:w-auto py-2.5 px-4 bg-amber-500/90 hover:bg-amber-500 rounded-xl text-slate-950 font-extrabold transition-colors"
               >
-                {founderProtected ? 'Continue with founder pricing' : 'Upgrade to Professional'}
+                {founderRequested && founderProtected ? `Continue with founder ${billingCycle}` : `Upgrade to Professional ${billingCycle === 'yearly' ? 'Yearly' : 'Monthly'}`}
               </button>
               <button
-                onClick={() => onUpgrade('amateur')}
+                onClick={() => onUpgrade('amateur', billingCycle, founderRequested)}
                 className="order-2 sm:order-2 w-full sm:w-auto py-2.5 px-4 rounded-xl font-bold transition-colors border border-purple-400/40 text-purple-200 bg-slate-900/30 hover:bg-slate-800/60 sm:border-0 sm:text-white sm:bg-purple-700/80 sm:hover:bg-purple-700"
               >
-                Upgrade to Amateur
+                {`Upgrade to Amateur ${billingCycle === 'yearly' ? 'Yearly' : 'Monthly'}${founderRequested && founderProtected ? ' (Founder)' : ''}`}
               </button>
               {variant !== 'trial-expired' && (
                 <button
