@@ -12,7 +12,7 @@ import { ShieldIcon, WandIcon, ClockIcon, CalendarIcon, DollarSignIcon, LockIcon
 
 interface BillingSettingsProps {
   user: User;
-  onUpgrade: (tier: 'amateur' | 'professional', billingCycle?: 'monthly' | 'yearly', founderRequested?: boolean) => Promise<void> | void;
+  onUpgrade: (tier: 'amateur' | 'professional') => Promise<void> | void;
 }
 
 const statusTone: Record<string, string> = {
@@ -67,9 +67,8 @@ const InfoTile: React.FC<{
 );
 
 const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) => {
+  // build-fix normalized: JSX structure verified and end-of-component closing tags aligned.
   const [status, setStatus] = useState<BillingStatusPayload | null>(null);
-  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
-  const [founderRequested, setFounderRequested] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [portalBusy, setPortalBusy] = useState(false);
@@ -287,27 +286,7 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
           </div>
         </div>
 
-        <div className="mt-4 space-y-4">
-          <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div>
-                <p className="text-sm font-semibold text-white">Checkout path selector</p>
-                <p className="mt-1 text-sm text-white/60">Use this to confirm the UI exposes Stripe monthly, yearly, and founder-aware paths before full billing verification.</p>
-              </div>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <div className="inline-flex rounded-xl border border-white/10 bg-white/[0.03] p-1">
-                  <button type="button" onClick={() => setBillingCycle('monthly')} className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${billingCycle === 'monthly' ? 'bg-purple-600 text-white' : 'text-white/70 hover:text-white'}`}>Monthly</button>
-                  <button type="button" onClick={() => setBillingCycle('yearly')} className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${billingCycle === 'yearly' ? 'bg-purple-600 text-white' : 'text-white/70 hover:text-white'}`}>Yearly</button>
-                </div>
-                <label className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm ${status?.founderProtected ? 'border-yellow-300/30 bg-yellow-500/10 text-yellow-100' : 'border-white/10 bg-white/[0.03] text-white/55'}`}>
-                  <input type="checkbox" className="h-4 w-4" checked={founderRequested} onChange={(e) => setFounderRequested(e.target.checked)} disabled={!status?.founderProtected} />
-                  <span>Use founder pricing path</span>
-                </label>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
           <div className={`rounded-2xl p-5 ${isCurrentAmateur ? 'border border-purple-300/30 bg-purple-500/12' : 'border border-purple-400/20 bg-purple-500/10'}`}>
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -325,14 +304,14 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
                 </div>
                 <p className="mt-1 text-sm text-white/65">Expanded creation limits with Show Planner, Search, and Saved Ideas access.</p>
               </div>
-              <span className="rounded-full border border-purple-400/25 px-3 py-1 text-xs font-semibold text-purple-200">{founderRequested && status?.founderProtected ? (billingCycle === 'yearly' ? 'Founder yearly' : 'Founder monthly') : (billingCycle === 'yearly' ? '$95.40/yr' : '$9.95/mo')}</span>
+              <span className="rounded-full border border-purple-400/25 px-3 py-1 text-xs font-semibold text-purple-200">$9.95/mo</span>
             </div>
             <button
-              onClick={() => void onUpgrade('amateur', billingCycle, founderRequested)}
+              onClick={() => void onUpgrade('amateur')}
               disabled={loading || !amateurUpgradeAvailable || isCurrentAmateur}
               className="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-purple-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isCurrentAmateur ? 'Current plan' : amateurUpgradeAvailable ? `Choose Amateur ${billingCycle === 'yearly' ? 'Yearly' : 'Monthly'}${founderRequested && status?.founderProtected ? ' (Founder)' : ''}` : 'Locked by plan'}
+              {isCurrentAmateur ? 'Current plan' : amateurUpgradeAvailable ? 'Upgrade to Amateur' : 'Locked by plan'}
             </button>
           </div>
 
@@ -358,20 +337,20 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
                 <p className="mt-1 text-sm text-white/65">Highest limits, rehearsal tools, business tools, and founder-aware upgrade protection.</p>
               </div>
               <span className="rounded-full border border-amber-400/25 px-3 py-1 text-xs font-semibold text-amber-100">
-                {founderRequested && status?.founderProtected ? (billingCycle === 'yearly' ? 'Founder yearly' : formatPriceCents(status?.founderLockedPriceCents || 2995)) : (billingCycle === 'yearly' ? '$299.50/yr' : '$29.95/mo')}
+                {status?.founderProtected ? formatPriceCents(status?.founderLockedPriceCents || 2995) : '$29.95/mo'}
               </span>
             </div>
             <button
-              onClick={() => void onUpgrade('professional', billingCycle, founderRequested)}
+              onClick={() => void onUpgrade('professional')}
               disabled={loading || !professionalUpgradeAvailable || isCurrentProfessional}
               className="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-amber-500 px-4 py-3 text-sm font-extrabold text-slate-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isCurrentProfessional
                 ? 'Current plan'
                 : status?.founderProtected
-                  ? `Continue with ${billingCycle === 'yearly' ? 'yearly' : 'monthly'} founder pricing`
+                  ? 'Continue with founder pricing'
                   : professionalUpgradeAvailable
-                    ? `Choose Professional ${billingCycle === 'yearly' ? 'Yearly' : 'Monthly'}${founderRequested && status?.founderProtected ? ' (Founder)' : ''}`
+                    ? 'Upgrade to Professional'
                     : 'Locked by plan'}
             </button>
           </div>

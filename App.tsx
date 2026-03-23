@@ -43,10 +43,10 @@ function App() {
   const dispatch = useAppDispatch();
   const loggingOutRef = useRef(false);
 
-  const handleUpgrade = async (tier: 'amateur' | 'professional', billingCycle: 'monthly' | 'yearly' = 'monthly', founderRequested = false) => {
+  const handleUpgrade = async (tier: 'amateur' | 'professional') => {
     try {
       const billingStatus = await fetchBillingStatus();
-      const lookupKey = resolveCheckoutLookupKey(tier, billingCycle, founderRequested, billingStatus);
+      const lookupKey = resolveCheckoutLookupKey(tier, billingStatus);
       const result = await createCheckoutSession(lookupKey);
 
       if (result?.url) {
