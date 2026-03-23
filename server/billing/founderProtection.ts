@@ -9,7 +9,7 @@ export function deriveFounderProtection(input?: { metadata?:Record<string,unknow
   const normalizedLockedPlan = (['founder_amateur','founder_professional'] as BillingPlanKey[]).includes(lockedPlanRaw as BillingPlanKey) ? lockedPlanRaw as BillingPlanKey : null;
   const fallbackLockedPlan: BillingPlanKey | null = founderProtected ? (String(metadata['tier_requested'] || '').trim() === 'amateur' ? 'founder_amateur' : 'founder_professional') : null;
   const lockedPlan = normalizedLockedPlan || fallbackLockedPlan;
-  const defaultPrice = lockedPlan === 'founder_amateur' ? 995 : 2995;
+  const defaultPrice = lockedPlan === 'founder_amateur' ? 1595 : 2995;
   const lockedPriceRaw = Number(founderOverride['locked_price_cents'] ?? subscription['founder_locked_price'] ?? defaultPrice);
   const lockedPriceCents = founderProtected && Number.isFinite(lockedPriceRaw) ? lockedPriceRaw : null;
   const bucket = String(founderOverride['founder_bucket'] || metadata['founding_bucket'] || user['founding_bucket'] || '').trim() || null;

@@ -257,7 +257,7 @@ async function upsertFounderOverride(admin: any, params: { userId: string | null
     {
       user_id: params.userId,
       locked_plan_key: params.planKey,
-      locked_price_cents: founderState.lockedPriceCents || (params.planKey === 'founder_amateur' ? 995 : 2995),
+      locked_price_cents: founderState.lockedPriceCents || (params.planKey === 'founder_amateur' ? 1595 : 2995),
       override_active: true,
       pricing_lock: founderState.pricingLockKey || (params.planKey === 'founder_amateur' ? 'founding_amateur_2026' : 'founding_pro_admc_2026'),
       founder_bucket: founderState.bucket,
@@ -420,7 +420,7 @@ async function syncFromEvent(admin: any, event: any) {
   const currentPeriodStart = safeIsoFromUnixSeconds(object?.current_period_start || object?.period_start) || null;
   const currentPeriodEnd = safeIsoFromUnixSeconds(object?.current_period_end || object?.period_end) || null;
   const founderLockedPlan = founderState.founderProtected && founderState.lockedPlan ? founderState.lockedPlan : (planKey === 'founder_professional' ? 'founder_professional' : planKey === 'founder_amateur' ? 'founder_amateur' : null);
-  const founderLockedPrice = founderState.founderProtected ? (founderState.lockedPriceCents || (founderLockedPlan === 'founder_amateur' ? 995 : 2995)) : null;
+  const founderLockedPrice = founderState.founderProtected ? (founderState.lockedPriceCents || (founderLockedPlan === 'founder_amateur' ? 1595 : 2995)) : null;
 
   const billingCustomerId = await upsertBillingCustomer(admin, {
     userId,

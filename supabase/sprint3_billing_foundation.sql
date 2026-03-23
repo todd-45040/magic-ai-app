@@ -225,7 +225,7 @@ values
     'amateur',
     'Amateur',
     'Amateur',
-    995,
+    1595,
     null,
     'amateur',
     'amateur_monthly',

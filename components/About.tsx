@@ -68,9 +68,9 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
                     <div className="min-h-[10rem] flex flex-col">
                         <p className="text-slate-400 mb-4">The Creative Tier — built to level up your material, rehearsal, and ongoing connection to the magic world.</p>
                         <div className="text-center">
-                            <p className="text-3xl font-bold text-sky-300">$9.95<span className="text-base font-normal text-slate-400">/month</span></p>
-                            <p className="text-sm text-slate-400">$99.50 one-time annual billing</p>
-<p className="text-xs text-slate-300 mt-1"><span className="mt-2 block text-sm text-slate-400">Save $19.90/year</span></p>
+                            <p className="text-3xl font-bold text-sky-300">$15.95<span className="text-base font-normal text-slate-400">/month</span></p>
+                            <p className="text-sm text-slate-400">$159.00 one-time annual billing</p>
+<p className="text-xs text-slate-300 mt-1"><span className="mt-2 block text-sm text-slate-400">Save $32.40/year</span></p>
                         </div>
                     </div>
                     <hr className="border-slate-700 my-4" />

@@ -58,7 +58,7 @@ export const BILLING_PLAN_CATALOG: Record<BillingPlanKey, BillingPlanDefinition>
     founderOverrideBehavior: { eligible: false, lockedPlan: null, lockedPriceCents: null, preventAutomaticDowngrade: false, preservePriceOnReactivation: false, notes: ['Baseline plan with no founder protections.'] },
   },
   amateur: {
-    key: 'amateur', planId: 'amateur', stripeLookupKey: 'amateur_monthly', displayName: 'Amateur', publicLabel: 'Amateur', monthlyPriceCents: 995, annualPriceCents: 9950, entitlementTier: 'amateur',
+    key: 'amateur', planId: 'amateur', stripeLookupKey: 'amateur_monthly', displayName: 'Amateur', publicLabel: 'Amateur', monthlyPriceCents: 1595, annualPriceCents: 15900, entitlementTier: 'amateur',
     monthlyLimits: { text_generations: 200, image_generations: 20, live_rehearsal_minutes: 0, video_analysis_clips: 2, saved_shows: 25, saved_ideas: 100 },
     heavyToolLimits: { imageGenerationsMonthly: 20, videoAnalysisClipsMonthly: 2, liveRehearsalMinutesMonthly: 0, maxConcurrentLiveSessions: 0, maxReconnectAttemptsPerSession: 0, maxVideoUploadMb: 25, maxImageUploadMb: 10 },
     storageLimits: { savedShows: 25, savedIdeas: 100 }, featureAccessMatrix: buildFeatureMatrix(AMATEUR_FEATURES),
@@ -67,13 +67,13 @@ export const BILLING_PLAN_CATALOG: Record<BillingPlanKey, BillingPlanDefinition>
     founderOverrideBehavior: { eligible: false, lockedPlan: null, lockedPriceCents: null, preventAutomaticDowngrade: false, preservePriceOnReactivation: false, notes: ['Standard Amateur pricing.'] },
   },
   founder_amateur: {
-    key: 'founder_amateur', planId: 'founder_amateur', stripeLookupKey: 'founder_amateur_monthly', displayName: 'Founder Amateur', publicLabel: 'Founder Amateur', monthlyPriceCents: 995, annualPriceCents: 9950, entitlementTier: 'amateur',
+    key: 'founder_amateur', planId: 'founder_amateur', stripeLookupKey: 'founder_amateur_monthly', displayName: 'Founder Amateur', publicLabel: 'Founder Amateur', monthlyPriceCents: 1595, annualPriceCents: 15900, entitlementTier: 'amateur',
     monthlyLimits: { text_generations: 200, image_generations: 20, live_rehearsal_minutes: 0, video_analysis_clips: 2, saved_shows: 25, saved_ideas: 100 },
     heavyToolLimits: { imageGenerationsMonthly: 20, videoAnalysisClipsMonthly: 2, liveRehearsalMinutesMonthly: 0, maxConcurrentLiveSessions: 0, maxReconnectAttemptsPerSession: 0, maxVideoUploadMb: 25, maxImageUploadMb: 10 },
     storageLimits: { savedShows: 25, savedIdeas: 100 }, featureAccessMatrix: buildFeatureMatrix(AMATEUR_FEATURES),
     allowedUpgrades: ['professional', 'founder_professional'],
     downgradeBehavior: { downgradeTo: 'free', takesEffect: 'period_end', preserveExistingProjects: true, blockNewStorageWhenOverLimit: true, overageMessage: 'Founder Amateur keeps access history, but new saves remain limited until billing is restored.' },
-    founderOverrideBehavior: { eligible: true, lockedPlan: 'founder_amateur', lockedPriceCents: 995, preventAutomaticDowngrade: true, preservePriceOnReactivation: true, notes: FOUNDER_RATE_NOTES },
+    founderOverrideBehavior: { eligible: true, lockedPlan: 'founder_amateur', lockedPriceCents: 1595, preventAutomaticDowngrade: true, preservePriceOnReactivation: true, notes: FOUNDER_RATE_NOTES },
   },
   professional: {
     key: 'professional', planId: 'professional', stripeLookupKey: 'professional_monthly', displayName: 'Professional', publicLabel: 'Professional', monthlyPriceCents: 2995, annualPriceCents: 29950, entitlementTier: 'professional',

@@ -27,7 +27,7 @@ export default async function handler(req: any, res: any) {
 
     // Plan pricing (pre-Stripe estimates)
     const pricesUSD: Record<string, number> = {
-      amateur: 9.95,
+      amateur: 15.95,
       pro: 29.95,
     };
 
