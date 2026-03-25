@@ -1,4 +1,4 @@
-import type { BillingPlanKey } from '../../services/planCatalog.js';
+import type { BillingCycle, BillingPlanKey } from '../../services/planCatalog.js';
 import { BILLING_PLAN_CATALOG } from '../../services/planCatalog.js';
 import { deriveFounderProtection } from './founderProtection.js';
 import { resolveBillingPlan } from './planMapping.js';
@@ -7,8 +7,6 @@ import { getBillingConfig } from './billingConfig.js';
 export type BillingStatusResponse = {
   ok: true;
   planKey: BillingPlanKey;
-  currentBillingCycle: 'monthly' | 'yearly';
-  currentPriceId: string | null;
   billingStatus: string;
   accessState: string;
   renewalDate: string | null;
@@ -16,6 +14,8 @@ export type BillingStatusResponse = {
   founderProtected: boolean;
   founderLockedPlan: BillingPlanKey | null;
   founderLockedPriceCents: number | null;
+  currentBillingCycle: BillingCycle;
+  currentPriceId: string | null;
   usagePeriodStart: string | null;
   usagePeriodEnd: string | null;
   upgradeTargets: BillingPlanKey[];
@@ -47,19 +47,11 @@ function normalizeBillingPlanKey(value: unknown): BillingPlanKey | null {
 }
 
 
-function inferBillingCycleFromPriceId(value: unknown, config: ReturnType<typeof getBillingConfig>): 'monthly' | 'yearly' {
-  const raw = String(value || '').trim();
+function inferBillingCycle(priceId: unknown): BillingCycle {
+  const raw = String(priceId || '').trim().toLowerCase();
   if (!raw) return 'monthly';
-
-  const matchedLookup = Object.values(config.priceLookup).find((entry) => {
-    const configured = entry.stripePriceEnvKey ? process.env[entry.stripePriceEnvKey] : null;
-    const fallback = entry.stripePriceEnvFallbackKey ? process.env[entry.stripePriceEnvFallbackKey] : null;
-    return raw === configured || raw === fallback;
-  });
-
-  if (matchedLookup?.internalLookupKey?.includes('yearly')) return 'yearly';
-  if (matchedLookup?.internalLookupKey?.includes('monthly')) return 'monthly';
-  if (/year|annual/i.test(raw)) return 'yearly';
+  if (raw.includes('year')) return 'yearly';
+  if (raw.includes('annual')) return 'yearly';
   return 'monthly';
 }
 
@@ -148,8 +140,6 @@ export async function resolveBillingStatusForUser(admin: any, userId: string): P
   return {
     ok: true,
     planKey: effectivePlanKey,
-    currentBillingCycle: inferBillingCycleFromPriceId(subscription?.price_id, config),
-    currentPriceId: String(subscription?.price_id || '').trim() || null,
     billingStatus: resolved.billingStatus,
     accessState: resolved.accessState,
     renewalDate: asIso(subscription?.current_period_end),
@@ -157,6 +147,8 @@ export async function resolveBillingStatusForUser(admin: any, userId: string): P
     founderProtected: founderProtection.founderProtected,
     founderLockedPlan: founderProtection.lockedPlan,
     founderLockedPriceCents: founderProtection.lockedPriceCents,
+    currentBillingCycle: inferBillingCycle(subscription?.price_id),
+    currentPriceId: String(subscription?.price_id || '').trim() || null,
     usagePeriodStart: asIso(usagePeriod?.period_start),
     usagePeriodEnd: asIso(usagePeriod?.period_end),
     upgradeTargets,
