@@ -23,7 +23,17 @@ export function getBillingConfig(env: NodeJS.ProcessEnv = process.env): BillingR
   const appBaseUrl = normalizeBaseUrl(getOptionalEnv('NEXT_PUBLIC_APP_URL', env) || getOptionalEnv('VITE_APP_URL', env) || getOptionalEnv('APP_URL', env) || getOptionalEnv('VERCEL_PROJECT_PRODUCTION_URL', env));
   const stripeEnv = getStripeEnvironmentReport(env);
   const configuredCount = Object.values(PRICE_LOOKUP).filter((plan) => getOptionalEnv(plan.stripePriceEnvKey, env) || (plan.stripePriceEnvFallbackKey && getOptionalEnv(plan.stripePriceEnvFallbackKey, env))).length;
-  return { stripeConfigured: Boolean(getOptionalEnv('STRIPE_SECRET_KEY', env) && configuredCount >= 2), appBaseUrl, successUrl:`${appBaseUrl}/account/billing?checkout=success`, cancelUrl:`${appBaseUrl}/account/billing?checkout=cancel`, portalReturnUrl:`${appBaseUrl}/account/billing`, environmentName: stripeEnv.environmentName, priceLookup: PRICE_LOOKUP };
+  const appShellUrl = `${appBaseUrl}/app`;
+  const billingAppUrl = `${appShellUrl}?view=billing-settings`;
+  return {
+    stripeConfigured: Boolean(getOptionalEnv('STRIPE_SECRET_KEY', env) && configuredCount >= 2),
+    appBaseUrl,
+    successUrl: `${billingAppUrl}&checkout=success`,
+    cancelUrl: `${billingAppUrl}&checkout=cancel`,
+    portalReturnUrl: billingAppUrl,
+    environmentName: stripeEnv.environmentName,
+    priceLookup: PRICE_LOOKUP,
+  };
 }
 export const isBillingCheckoutLookupKey = (value: unknown): value is BillingCheckoutLookupKey => typeof value === 'string' && value in PRICE_LOOKUP;
 export function getBillingPlanPlaceholder(value: BillingCheckoutLookupKey, env: NodeJS.ProcessEnv = process.env) {

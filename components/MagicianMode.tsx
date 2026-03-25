@@ -2855,6 +2855,9 @@ useEffect(() => {
     // "chat" view to become a sticky landing state.
     try {
       const savedView = localStorage.getItem(MAGICIAN_VIEW_STORAGE_KEY) as MagicianView | null;
+      const params = new URLSearchParams(window.location.search);
+      const queryView = params.get('view') as MagicianView | null;
+      const checkoutState = params.get('checkout');
 
       const validViews: MagicianView[] = [
         'dashboard',
@@ -2888,7 +2891,16 @@ useEffect(() => {
         'performance-analytics',
         'show-feedback',
         'member-management',
+        'billing-settings',
       ];
+
+      if (queryView && validViews.includes(queryView)) {
+        return queryView;
+      }
+
+      if (checkoutState === 'success' || checkoutState === 'cancel') {
+        return 'billing-settings';
+      }
 
       if (savedView && validViews.includes(savedView)) {
         // Treat "chat" as a tool view. If it was saved previously, we land on the
