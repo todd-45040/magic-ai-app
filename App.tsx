@@ -89,6 +89,17 @@ function App() {
       } catch {}
     };
 
+    const exchangeAuthCodeIfPresent = async () => {
+      try {
+        const currentUrl = new URL(window.location.href);
+        const hasCode = Boolean(currentUrl.searchParams.get('code'));
+        if (!hasCode) return;
+        await supabase.auth.exchangeCodeForSession(window.location.href);
+      } catch (error) {
+        console.error('Auth code exchange failed:', error);
+      }
+    };
+
     const demoEnabled = (() => {
       try {
         return isDemoEnabled();
@@ -225,11 +236,11 @@ function App() {
             prev === 'auth' || prev === 'selection' ? 'magician' : prev
           );
 
-          if (modeParam === 'auth-callback') cleanupAuthCallbackUrl();
+          if (modeParam === 'auth-callback' || urlParams.get('code')) cleanupAuthCallbackUrl();
         } else {
           setUser(null);
           setMode(prev => (prev === 'magician' ? 'selection' : prev));
-          if (modeParam === 'auth-callback') cleanupAuthCallbackUrl();
+          if (modeParam === 'auth-callback' || urlParams.get('code')) cleanupAuthCallbackUrl();
         }
       } catch (error) {
         console.error('Auth sync error:', error);
@@ -243,6 +254,7 @@ function App() {
 
     const initialHydrate = async () => {
       try {
+        await exchangeAuthCodeIfPresent();
         const { data } = await supabase.auth.getSession();
         await applySessionToState(data?.session ?? null);
       } catch {

@@ -86,7 +86,15 @@ const initialMode = (() => {
   }
 
   async function doSignup() {
-    const { error } = await supabase.auth.signUp({ email, password });
+    const base = getAppBasePath();
+    const emailRedirectTo = `${window.location.origin}${base}/?mode=auth-callback`;
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo,
+      },
+    });
     if (error) throw error;
   }
 
