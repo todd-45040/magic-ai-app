@@ -30,14 +30,12 @@ export default async function handler(request: any, response: any) {
 
     const billingStatus = await resolveBillingStatusForUser(auth.admin, auth.userId);
     const target = getBillingPlanPlaceholder(planKey);
-    const currentBaseTier = billingStatus.planKey === 'founder_amateur' ? 'amateur' : billingStatus.planKey === 'founder_professional' ? 'professional' : billingStatus.planKey;
-    const requestedBaseTier = target.internalPlanKey === 'founder_amateur' ? 'amateur' : target.internalPlanKey === 'founder_professional' ? 'professional' : target.internalPlanKey;
-    const sameTierCycleChange = currentBaseTier === requestedBaseTier && currentBaseTier !== 'free';
-    const allowedTarget = sameTierCycleChange || billingStatus.upgradeTargets.includes(target.internalPlanKey);
+    const samePlanCycleChange = billingStatus.planKey === target.internalPlanKey;
+    const allowedTarget = samePlanCycleChange || billingStatus.upgradeTargets.includes(target.internalPlanKey);
 
     if (!allowedTarget) {
       return response.status(403).json({
-        error: 'Requested billing path is not allowed for this account.',
+        error: 'Requested upgrade path is not allowed for this account.',
         currentPlan: billingStatus.planKey,
         allowedTargets: billingStatus.upgradeTargets,
         requestedPlan: target.internalPlanKey,

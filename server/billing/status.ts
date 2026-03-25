@@ -1,4 +1,4 @@
-import type { BillingCycle, BillingPlanKey } from '../../services/planCatalog.js';
+import type { BillingPlanKey } from '../../services/planCatalog.js';
 import { BILLING_PLAN_CATALOG } from '../../services/planCatalog.js';
 import { deriveFounderProtection } from './founderProtection.js';
 import { resolveBillingPlan } from './planMapping.js';
@@ -14,14 +14,14 @@ export type BillingStatusResponse = {
   founderProtected: boolean;
   founderLockedPlan: BillingPlanKey | null;
   founderLockedPriceCents: number | null;
-  currentBillingCycle: BillingCycle;
-  currentPriceId: string | null;
   usagePeriodStart: string | null;
   usagePeriodEnd: string | null;
   upgradeTargets: BillingPlanKey[];
   stripeConfigured: boolean;
   billingCustomerExists: boolean;
   stripeCustomerIdPresent: boolean;
+  currentBillingCycle: 'monthly' | 'yearly';
+  currentPriceId: string | null;
   source: 'database' | 'fallback';
 };
 
@@ -46,15 +46,6 @@ function normalizeBillingPlanKey(value: unknown): BillingPlanKey | null {
   return null;
 }
 
-
-function inferBillingCycle(priceId: unknown): BillingCycle {
-  const raw = String(priceId || '').trim().toLowerCase();
-  if (!raw) return 'monthly';
-  if (raw.includes('year')) return 'yearly';
-  if (raw.includes('annual')) return 'yearly';
-  return 'monthly';
-}
-
 async function maybeSelectSingle(query: Promise<any>) {
   try {
     const { data, error } = await query;
@@ -71,7 +62,7 @@ export async function resolveBillingStatusForUser(admin: any, userId: string): P
   const [profile, billingCustomer, subscription, usagePeriod, founderOverride] = await Promise.all([
     maybeSelectSingle(
       admin.from('users')
-        .select('id, membership, is_admin, pricing_lock, founding_bucket, founding_circle_member')
+        .select('id, membership, is_admin, pricing_lock, founding_bucket, founding_circle_member, stripe_price_id')
         .eq('id', userId)
         .maybeSingle()
     ),
@@ -137,6 +128,14 @@ export async function resolveBillingStatusForUser(admin: any, userId: string): P
   const planDef = BILLING_PLAN_CATALOG[effectivePlanKey] || BILLING_PLAN_CATALOG.free;
   const upgradeTargets = planDef.allowedUpgrades || [];
 
+  const currentPriceId =
+    String(subscription?.price_id || profile?.stripe_price_id || '').trim() || null;
+
+  const currentBillingCycle: 'monthly' | 'yearly' =
+    currentPriceId && /(?:yearly|annual|_yr\b|yr\b)/i.test(currentPriceId)
+      ? 'yearly'
+      : 'monthly';
+
   return {
     ok: true,
     planKey: effectivePlanKey,
@@ -147,14 +146,14 @@ export async function resolveBillingStatusForUser(admin: any, userId: string): P
     founderProtected: founderProtection.founderProtected,
     founderLockedPlan: founderProtection.lockedPlan,
     founderLockedPriceCents: founderProtection.lockedPriceCents,
-    currentBillingCycle: inferBillingCycle(subscription?.price_id),
-    currentPriceId: String(subscription?.price_id || '').trim() || null,
     usagePeriodStart: asIso(usagePeriod?.period_start),
     usagePeriodEnd: asIso(usagePeriod?.period_end),
     upgradeTargets,
     stripeConfigured: config.stripeConfigured,
     billingCustomerExists: Boolean(billingCustomer?.id),
     stripeCustomerIdPresent: Boolean(String(billingCustomer?.stripe_customer_id || '').trim()),
+    currentBillingCycle,
+    currentPriceId,
     source: subscription || billingCustomer || usagePeriod || founderOverride ? 'database' : 'fallback',
   };
 }
