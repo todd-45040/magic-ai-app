@@ -200,7 +200,7 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
 
       <div className="mt-12 flex justify-center">
         <div className="grid w-full max-w-6xl grid-cols-1 gap-6 text-left justify-items-center md:grid-cols-2 xl:grid-cols-3">
-          <div className="flex w-full max-w-sm flex-col rounded-2xl border border-green-500/50 bg-slate-800/50 p-6 shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
+          <div className="flex w-full max-w-sm flex-col rounded-2xl border border-green-500/50 bg-slate-800/50 p-6 shadow-[0_10px_30px_rgba(0,0,0,0.25)] transition-all duration-200 ease-out hover:-translate-y-[2px] hover:shadow-[0_0_25px_rgba(34,197,94,0.25)]">
             <div className="mb-4 flex items-start justify-between gap-3">
               <h3 className="font-cinzel text-2xl font-bold text-green-300">14-Day Free Trial</h3>
               <ValuePill tone="green">Start free</ValuePill>
@@ -230,7 +230,7 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
             <div className="flex-grow" />
           </div>
 
-          <div className="relative flex w-full max-w-sm flex-col rounded-2xl border border-sky-400/70 bg-slate-800/60 p-6 shadow-[0_16px_48px_rgba(14,165,233,0.18)] ring-1 ring-sky-300/30">
+          <div className="relative flex w-full max-w-sm flex-col rounded-2xl border border-sky-400/70 bg-slate-800/60 p-6 shadow-[0_16px_48px_rgba(14,165,233,0.18)] ring-1 ring-sky-300/30 transition-all duration-200 ease-out hover:-translate-y-[2px] hover:shadow-[0_0_30px_rgba(59,130,246,0.35)]">
             <div className="absolute -top-3 right-5">
               <ValuePill tone="sky">Most Popular</ValuePill>
             </div>
@@ -273,7 +273,7 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
             <div className="flex-grow" />
           </div>
 
-          <div className="flex w-full max-w-sm flex-col rounded-2xl border border-amber-400/50 bg-slate-800/50 p-6 shadow-[0_14px_40px_rgba(251,191,36,0.12)]">
+          <div className="flex w-full max-w-sm flex-col rounded-2xl border border-amber-400/50 bg-slate-800/50 p-6 shadow-[0_14px_40px_rgba(251,191,36,0.12)] transition-all duration-200 ease-out hover:-translate-y-[2px] hover:shadow-[0_0_28px_rgba(234,179,8,0.30)]">
             <div className="mb-4 flex items-start justify-between gap-3">
               <h3 className="font-cinzel text-2xl font-bold text-amber-300">Professional</h3>
               <ValuePill tone="amber">Full Access</ValuePill>
