@@ -73,6 +73,7 @@ function App() {
     const showIdParam = urlParams.get('showId');
     const tokenParam = urlParams.get('token');
     const recordParam = urlParams.get('record') === '1';
+    const isAuthCallbackFlow = modeParam === 'auth-callback' || Boolean(urlParams.get('code'));
 
     const getAppBasePath = () => {
       try {
@@ -85,7 +86,20 @@ function App() {
     const cleanupAuthCallbackUrl = () => {
       try {
         const base = getAppBasePath();
-        window.history.replaceState({}, document.title, `${base}/`);
+        const cleanPath = `${base}/`;
+        window.history.replaceState({}, document.title, cleanPath);
+      } catch {}
+    };
+
+    const routeAuthCallbackToHome = () => {
+      try {
+        localStorage.setItem('magician_active_view', 'home');
+      } catch {}
+
+      try {
+        const base = getAppBasePath();
+        const cleanPath = `${base}/`;
+        window.history.replaceState({}, document.title, cleanPath);
       } catch {}
     };
 
@@ -95,6 +109,7 @@ function App() {
         const hasCode = Boolean(currentUrl.searchParams.get('code'));
         if (!hasCode) return;
         await supabase.auth.exchangeCodeForSession(window.location.href);
+        routeAuthCallbackToHome();
       } catch (error) {
         console.error('Auth code exchange failed:', error);
       }
@@ -232,15 +247,20 @@ function App() {
           setUser(appUser);
           refreshAllData(dispatch);
 
-          setMode(prev =>
-            prev === 'auth' || prev === 'selection' ? 'magician' : prev
-          );
+          if (isAuthCallbackFlow) {
+            routeAuthCallbackToHome();
+            setMode('magician');
+          } else {
+            setMode(prev =>
+              prev === 'auth' || prev === 'selection' ? 'magician' : prev
+            );
+          }
 
-          if (modeParam === 'auth-callback' || urlParams.get('code')) cleanupAuthCallbackUrl();
+          if (isAuthCallbackFlow) cleanupAuthCallbackUrl();
         } else {
           setUser(null);
           setMode(prev => (prev === 'magician' ? 'selection' : prev));
-          if (modeParam === 'auth-callback' || urlParams.get('code')) cleanupAuthCallbackUrl();
+          if (isAuthCallbackFlow) cleanupAuthCallbackUrl();
         }
       } catch (error) {
         console.error('Auth sync error:', error);
@@ -377,7 +397,7 @@ function App() {
 
   return (
     <div className="magical-bg text-white min-h-screen flex flex-col relative">
-      
+
       <DemoBanner />
 <div className="relative z-10 flex flex-col flex-1 w-full max-w-7xl mx-auto p-4 sm:p-6 md:p-8 justify-center">
         {renderContent()}
