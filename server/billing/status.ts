@@ -7,6 +7,8 @@ import { getBillingConfig } from './billingConfig.js';
 export type BillingStatusResponse = {
   ok: true;
   planKey: BillingPlanKey;
+  currentBillingCycle: 'monthly' | 'yearly';
+  currentPriceId: string | null;
   billingStatus: string;
   accessState: string;
   renewalDate: string | null;
@@ -44,6 +46,23 @@ function normalizeBillingPlanKey(value: unknown): BillingPlanKey | null {
   return null;
 }
 
+
+function inferBillingCycleFromPriceId(value: unknown, config: ReturnType<typeof getBillingConfig>): 'monthly' | 'yearly' {
+  const raw = String(value || '').trim();
+  if (!raw) return 'monthly';
+
+  const matchedLookup = Object.values(config.priceLookup).find((entry) => {
+    const configured = entry.stripePriceEnvKey ? process.env[entry.stripePriceEnvKey] : null;
+    const fallback = entry.stripePriceEnvFallbackKey ? process.env[entry.stripePriceEnvFallbackKey] : null;
+    return raw === configured || raw === fallback;
+  });
+
+  if (matchedLookup?.internalLookupKey?.includes('yearly')) return 'yearly';
+  if (matchedLookup?.internalLookupKey?.includes('monthly')) return 'monthly';
+  if (/year|annual/i.test(raw)) return 'yearly';
+  return 'monthly';
+}
+
 async function maybeSelectSingle(query: Promise<any>) {
   try {
     const { data, error } = await query;
@@ -72,7 +91,7 @@ export async function resolveBillingStatusForUser(admin: any, userId: string): P
     ),
     maybeSelectSingle(
       admin.from('subscriptions')
-        .select('id, plan_key, billing_status, current_period_start, current_period_end, cancel_at_period_end, founder_locked_price, founder_locked_plan, stripe_subscription_id')
+        .select('id, plan_key, billing_status, current_period_start, current_period_end, cancel_at_period_end, founder_locked_price, founder_locked_plan, stripe_subscription_id, price_id')
         .eq('user_id', userId)
         .order('updated_at', { ascending: false })
         .limit(1)
@@ -129,6 +148,8 @@ export async function resolveBillingStatusForUser(admin: any, userId: string): P
   return {
     ok: true,
     planKey: effectivePlanKey,
+    currentBillingCycle: inferBillingCycleFromPriceId(subscription?.price_id, config),
+    currentPriceId: String(subscription?.price_id || '').trim() || null,
     billingStatus: resolved.billingStatus,
     accessState: resolved.accessState,
     renewalDate: asIso(subscription?.current_period_end),
