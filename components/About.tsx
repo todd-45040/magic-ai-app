@@ -207,7 +207,7 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
             </div>
             <div className="min-h-[11rem] flex flex-col">
               <p className="mb-4 text-slate-300">
-                Get hands-on with the platform before spending anything. Perfect for testing your first ideas,
+                Start here. Explore the platform and experience AI-powered magic creation before spending anything. Perfect for testing your first ideas,
                 scripts, and rehearsal workflows.
               </p>
               <div className="text-center">
@@ -230,7 +230,7 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
             <div className="flex-grow" />
           </div>
 
-          <div className="relative flex w-full max-w-sm flex-col rounded-2xl border border-sky-500/50 bg-slate-800/60 p-6 shadow-[0_14px_40px_rgba(14,165,233,0.12)] ring-1 ring-sky-400/20">
+          <div className="relative flex w-full max-w-sm flex-col rounded-2xl border border-sky-400/70 bg-slate-800/60 p-6 shadow-[0_16px_48px_rgba(14,165,233,0.18)] ring-1 ring-sky-300/30">
             <div className="absolute -top-3 right-5">
               <ValuePill tone="sky">Most Popular</ValuePill>
             </div>
@@ -256,7 +256,7 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
                 Built for hobbyists, learners, and active developing performers.
               </div>
               <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 px-3 py-2 text-slate-400">
-                Upgrade later for full rehearsal, director, and business tools.
+                Upgrade anytime to unlock full AI rehearsal, director tools, and business suite.
               </div>
             </div>
             <hr className="my-4 border-slate-700" />
@@ -296,7 +296,7 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
                 Best for pros who need full rehearsal power and business organization.
               </div>
               <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 px-3 py-2 text-slate-400">
-                All creative tools, all advanced AI tools, all business tools.
+                Unlimited access to all AI tools and features.
               </div>
             </div>
             <hr className="my-4 border-slate-700" />
