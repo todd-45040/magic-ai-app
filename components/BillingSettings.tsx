@@ -10,9 +10,9 @@ interface BillingSettingsProps {
 
 const humanizePlan = (plan?: string | null) => String(plan || 'free')
   .replace(/_/g, ' ')
-  .replace(/\w/g, (m) => m.toUpperCase());
+  .replace(/\b\w/g, (m) => m.toUpperCase());
 
-const formatDate = (value?: string | null) => value ? new Date(value).toLocaleDateString() : '-';
+const formatRenewal = (value?: string | null) => value ? new Date(value).toLocaleDateString() : 'Not active';
 
 const planPrice = (tier: 'amateur'|'professional', founder: boolean, cycle: BillingCycle) => {
   const key = founder
@@ -96,7 +96,7 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ onUpgrade }) => {
           </div>
           <div className="rounded-xl border border-white/10 bg-black/20 p-3">
             <div className="text-white/50 text-xs uppercase">Renewal</div>
-            <div className="mt-1">{loading ? 'Loading…' : formatDate(status?.renewalDate)}</div>
+            <div className="mt-1">{loading ? 'Loading…' : formatRenewal(status?.renewalDate)}</div>
           </div>
           <div className="rounded-xl border border-white/10 bg-black/20 p-3">
             <div className="text-white/50 text-xs uppercase">Billing cycle</div>
