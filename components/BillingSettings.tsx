@@ -22,7 +22,24 @@ const planPrice = (tier: 'amateur'|'professional', founder: boolean, cycle: Bill
   return `${formatPriceCents(cycle === 'yearly' ? plan.annualPriceCents : plan.monthlyPriceCents)}${cycle === 'yearly' ? '/yr' : '/mo'}`;
 };
 
-const BillingSettings: React.FC<BillingSettingsProps> = ({ onUpgrade }) => {
+const normalizeMembershipToPlanKey = (membership?: User['membership'] | null): string | null => {
+  switch (membership) {
+    case 'amateur':
+    case 'performer':
+      return 'amateur';
+    case 'professional':
+    case 'semi-pro':
+      return 'professional';
+    case 'free':
+    case 'trial':
+    case 'expired':
+    case 'admin':
+    default:
+      return membership || null;
+  }
+};
+
+const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) => {
   const [status, setStatus] = useState<BillingStatusPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [portalBusy, setPortalBusy] = useState(false);
@@ -50,7 +67,9 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ onUpgrade }) => {
     };
   }, []);
 
-  const currentPlanKey = status?.planKey || 'free';
+  const statusPlanKey = status?.planKey || 'free';
+  const membershipPlanKey = normalizeMembershipToPlanKey(user?.membership);
+  const currentPlanKey = statusPlanKey !== 'free' ? statusPlanKey : (membershipPlanKey || statusPlanKey);
   const currentBillingCycle = status?.currentBillingCycle || 'monthly';
   const founderEligible = Boolean(status?.founderProtected || status?.founderLockedPlan);
   const founderLabel = useMemo(
@@ -159,6 +178,7 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ onUpgrade }) => {
           if (isSameTier && isSameCycle) {
             buttonLabel = 'Current plan';
             buttonDisabled = true;
+            helperText = `Your ${planName} ${selectedCycle} plan is already active.`;
           } else if (isSameTier) {
             if (!status?.billingCustomerExists) {
               buttonLabel = 'Complete checkout to activate billing';
