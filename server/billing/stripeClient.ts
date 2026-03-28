@@ -15,6 +15,34 @@ export type StripeCheckoutSessionRecord = {
   payment_status?: string | null;
 };
 
+
+
+export type StripeSubscriptionItemRecord = {
+  id: string;
+  price?: {
+    id?: string | null;
+    recurring?: {
+      interval?: string | null;
+    } | null;
+  } | null;
+};
+
+export type StripeSubscriptionRecord = {
+  id: string;
+  status?: string | null;
+  customer?: string | StripeCustomerRecord | null;
+  cancel_at_period_end?: boolean | null;
+  current_period_start?: number | null;
+  current_period_end?: number | null;
+  latest_invoice?: {
+    id?: string | null;
+    status?: string | null;
+    payment_intent?: { status?: string | null } | null;
+  } | null;
+  items?: { data?: StripeSubscriptionItemRecord[] | null } | null;
+  metadata?: Record<string, string> | null;
+};
+
 export type StripeBillingPortalSessionRecord = {
   id: string;
   url?: string | null;
@@ -50,6 +78,24 @@ function encodeBody(input: Record<string, unknown>): string {
   return params.toString();
 }
 
+async function stripeGetRequest<T>(path: string, env: NodeJS.ProcessEnv = process.env): Promise<T> {
+  const apiVersion = getOptionalEnv('STRIPE_API_VERSION', env) || '2024-06-20';
+  const response = await fetch(`https://api.stripe.com${path}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${getStripeSecretKey(env)}`,
+      'Stripe-Version': apiVersion,
+    },
+  });
+
+  const json = await response.json().catch(() => ({} as any));
+  if (!response.ok) {
+    const message = String(json?.error?.message || json?.message || `Stripe request failed: ${response.status}`);
+    throw new Error(message);
+  }
+  return json as T;
+}
+
 async function stripeRequest<T>(path: string, body: Record<string, unknown>, env: NodeJS.ProcessEnv = process.env): Promise<T> {
   const apiVersion = getOptionalEnv('STRIPE_API_VERSION', env) || '2024-06-20';
   const response = await fetch(`https://api.stripe.com${path}`, {
@@ -76,4 +122,17 @@ export async function createStripeCheckoutSession(input: Record<string, unknown>
 
 export async function createStripeBillingPortalSession(input: Record<string, unknown>, env: NodeJS.ProcessEnv = process.env) {
   return stripeRequest<StripeBillingPortalSessionRecord>('/v1/billing_portal/sessions', input, env);
+}
+
+
+export async function fetchStripeSubscription(subscriptionId: string, env: NodeJS.ProcessEnv = process.env) {
+  return stripeGetRequest<StripeSubscriptionRecord>(`/v1/subscriptions/${encodeURIComponent(subscriptionId)}?expand[]=latest_invoice.payment_intent`, env);
+}
+
+export async function listStripeSubscriptionsByCustomer(customerId: string, env: NodeJS.ProcessEnv = process.env) {
+  return stripeGetRequest<{ data?: StripeSubscriptionRecord[] }>(`/v1/subscriptions?customer=${encodeURIComponent(customerId)}&status=all&limit=10&expand[]=data.latest_invoice.payment_intent`, env);
+}
+
+export async function updateStripeSubscription(subscriptionId: string, input: Record<string, unknown>, env: NodeJS.ProcessEnv = process.env) {
+  return stripeRequest<StripeSubscriptionRecord>(`/v1/subscriptions/${encodeURIComponent(subscriptionId)}`, input, env);
 }

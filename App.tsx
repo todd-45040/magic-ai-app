@@ -55,6 +55,12 @@ function App() {
         return;
       }
 
+      if (result?.cycleSwitchApplied) {
+        alert(result?.message || 'Billing cycle updated successfully.');
+        window.location.reload();
+        return;
+      }
+
       alert(result?.message || (result?.stripeConfigured ? 'Upgrade session is not ready yet.' : 'Stripe is not configured yet.'));
     } catch (e: any) {
       alert(e?.message || 'Upgrade could not start. Please try again.');

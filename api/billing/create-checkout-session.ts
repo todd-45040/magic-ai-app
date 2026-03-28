@@ -1,7 +1,60 @@
 import { requireSupabaseAuth } from '../_auth.js';
 import { getBillingConfig, getBillingPlanPlaceholder, isBillingCheckoutLookupKey } from '../../server/billing/billingConfig.js';
 import { resolveBillingStatusForUser } from '../../server/billing/status.js';
-import { createStripeCheckoutSession } from '../../server/billing/stripeClient.js';
+import { createStripeCheckoutSession, fetchStripeSubscription, listStripeSubscriptionsByCustomer, updateStripeSubscription, type StripeSubscriptionRecord } from '../../server/billing/stripeClient.js';
+
+
+
+function pickBestSubscription(rows: StripeSubscriptionRecord[] | undefined | null): StripeSubscriptionRecord | null {
+  const list = Array.isArray(rows) ? rows.filter(Boolean) : [];
+  if (!list.length) return null;
+
+  const score = (row: StripeSubscriptionRecord) => {
+    const status = String(row?.status || '').trim();
+    const statusRank = status === 'active' ? 5 : status === 'trialing' ? 4 : status === 'past_due' ? 3 : status === 'incomplete' ? 2 : status === 'canceled' ? 1 : 0;
+    const end = Number(row?.current_period_end || 0);
+    return statusRank * 1_000_000_000 + end;
+  };
+
+  return [...list].sort((a, b) => score(b) - score(a))[0] || null;
+}
+
+async function resolveLiveSubscription(params: { stripeSubscriptionId?: string | null; stripeCustomerId?: string | null }): Promise<StripeSubscriptionRecord | null> {
+  const directId = String(params.stripeSubscriptionId || '').trim();
+  const customerId = String(params.stripeCustomerId || '').trim();
+
+  let direct: StripeSubscriptionRecord | null = null;
+  if (directId) {
+    try {
+      direct = await fetchStripeSubscription(directId);
+    } catch {
+      direct = null;
+    }
+  }
+
+  if (!customerId) return direct;
+
+  try {
+    const listed = await listStripeSubscriptionsByCustomer(customerId);
+    const best = pickBestSubscription(listed?.data);
+    if (!best) return direct;
+    if (!direct) return best;
+
+    const directStatus = String(direct.status || '').trim();
+    const bestStatus = String(best.status || '').trim();
+    const directActive = directStatus === 'active' || directStatus === 'trialing';
+    const bestActive = bestStatus === 'active' || bestStatus === 'trialing';
+    if (best.id !== direct.id && bestActive && !directActive) return best;
+
+    const bestEnd = Number(best.current_period_end || 0);
+    const directEnd = Number(direct.current_period_end || 0);
+    if (best.id !== direct.id && bestEnd > directEnd) return best;
+
+    return direct;
+  } catch {
+    return direct;
+  }
+}
 
 function ensureAbsoluteUrl(value: string, fallbackBase: string): string {
   const raw = String(value || '').trim();
@@ -67,21 +120,86 @@ export default async function handler(request: any, response: any) {
       throw new Error(profileError.message || 'Unable to load user profile for billing.');
     }
 
-    const { data: billingCustomer, error: billingCustomerError } = await auth.admin
-      .from('billing_customers')
-      .select('id, stripe_customer_id')
-      .eq('user_id', auth.userId)
-      .maybeSingle();
+    const [{ data: billingCustomer, error: billingCustomerError }, { data: subscriptionRow, error: subscriptionRowError }] = await Promise.all([
+      auth.admin
+        .from('billing_customers')
+        .select('id, stripe_customer_id')
+        .eq('user_id', auth.userId)
+        .maybeSingle(),
+      auth.admin
+        .from('subscriptions')
+        .select('id, stripe_subscription_id, stripe_customer_id, plan_key, billing_status, price_id')
+        .eq('user_id', auth.userId)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
 
     if (billingCustomerError) {
       throw new Error(billingCustomerError.message || 'Unable to inspect billing customer record.');
     }
+    if (subscriptionRowError) {
+      throw new Error(subscriptionRowError.message || 'Unable to inspect current subscription record.');
+    }
 
-    const customerId = String(billingCustomer?.stripe_customer_id || '').trim() || undefined;
+    const customerId = String(billingCustomer?.stripe_customer_id || subscriptionRow?.stripe_customer_id || '').trim() || undefined;
     const email = String(profile?.email || '').trim() || undefined;
     const founderProtected = Boolean(
       billingStatus.founderProtected || profile?.founding_circle_member || String(profile?.pricing_lock || '').trim()
     );
+
+    if (samePlanCycleChange && customerId) {
+      const liveSubscription = await resolveLiveSubscription({
+        stripeSubscriptionId: String(subscriptionRow?.stripe_subscription_id || '').trim() || null,
+        stripeCustomerId: customerId,
+      });
+
+      const subscriptionId = String(liveSubscription?.id || '').trim();
+      const subscriptionItemId = String(liveSubscription?.items?.data?.[0]?.id || '').trim();
+      if (!subscriptionId || !subscriptionItemId) {
+        return response.status(409).json({
+          error: 'Unable to locate the existing Stripe subscription for this billing-cycle switch. Open the billing portal or refresh billing status and try again.',
+          currentPlan: billingStatus.planKey,
+          requestedPlan: target.internalPlanKey,
+        });
+      }
+
+      {
+        const updated = await updateStripeSubscription(subscriptionId, {
+          cancel_at_period_end: false,
+          billing_cycle_anchor: 'now',
+          proration_behavior: 'create_prorations',
+          items: [{
+            id: subscriptionItemId,
+            price: target.configuredStripePriceId,
+          }],
+          metadata: {
+            user_id: auth.userId,
+            internal_plan_key: target.internalPlanKey,
+            checkout_lookup_key: target.internalLookupKey,
+            tier_requested: target.internalPlanKey.includes('professional') ? 'professional' : 'amateur',
+            founding_member: (founderProtected || target.founderOnly) ? 'true' : 'false',
+            founder_offer: target.founderOnly ? 'true' : 'false',
+            pricing_lock: target.founderOnly || billingStatus.founderLockedPlan
+              ? String(profile?.pricing_lock || billingStatus.founderLockedPlan || 'founding_member_2026')
+              : String(profile?.pricing_lock || ''),
+            founding_bucket: String(profile?.founding_bucket || ''),
+            environment_name: config.environmentName,
+          },
+        });
+
+        return response.status(200).json({
+          ok: true,
+          stripeConfigured: true,
+          targetPlanKey: target.internalPlanKey,
+          targetLookupKey: target.internalLookupKey,
+          cycleSwitchApplied: true,
+          billingAction: 'subscription_update',
+          subscriptionId: String(updated?.id || subscriptionId),
+          message: 'Billing cycle updated on the existing Stripe subscription.',
+        });
+      }
+    }
 
     const successUrl = ensureAbsoluteUrl(
       request?.body?.successUrl || config.successUrl,
