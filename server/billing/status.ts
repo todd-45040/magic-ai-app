@@ -23,6 +23,16 @@ export type BillingStatusResponse = {
   currentBillingCycle: 'monthly' | 'yearly';
   currentPriceId: string | null;
   source: 'database' | 'fallback';
+  billingReadiness: {
+    expectedWebhookPath: string;
+    expectedWebhookUrl: string;
+    missingEnvKeys: string[];
+    configuredPriceKeys: string[];
+    missingPriceKeys: string[];
+    hasPublishableKey: boolean;
+    hasWebhookSecret: boolean;
+    hasServerSecretKey: boolean;
+  };
 };
 
 function asIso(value: unknown): string | null {
@@ -155,5 +165,6 @@ export async function resolveBillingStatusForUser(admin: any, userId: string): P
     currentBillingCycle,
     currentPriceId,
     source: subscription || billingCustomer || usagePeriod || founderOverride ? 'database' : 'fallback',
+    billingReadiness: config.readiness,
   };
 }

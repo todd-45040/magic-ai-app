@@ -60,6 +60,8 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ onUpgrade }) => {
         : 'Standard pricing',
     [status]
   );
+  const readiness = status?.billingReadiness;
+  const missingEnvKeys = readiness?.missingEnvKeys || [];
 
   const openPortal = async () => {
     setPortalBusy(true);
@@ -203,6 +205,36 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ onUpgrade }) => {
             </div>
           );
         })}
+      </div>
+
+      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-white">
+        <h2 className="text-lg font-semibold">Stripe readiness check</h2>
+        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+            <div className="text-white/50 text-xs uppercase">Expected webhook path</div>
+            <div className="mt-1 break-all text-sm">{readiness?.expectedWebhookPath || '/api/stripeWebhook'}</div>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+            <div className="text-white/50 text-xs uppercase">Expected webhook URL</div>
+            <div className="mt-1 break-all text-sm">{readiness?.expectedWebhookUrl || 'Unavailable'}</div>
+          </div>
+        </div>
+        <div className="mt-3 text-sm text-white/70">
+          Server secret: {readiness?.hasServerSecretKey ? 'Present' : 'Missing'} · Publishable key: {readiness?.hasPublishableKey ? 'Present' : 'Missing'} · Webhook secret: {readiness?.hasWebhookSecret ? 'Present' : 'Missing'}
+        </div>
+        <div className="mt-2 text-sm text-white/70">
+          Configured price IDs: {readiness?.configuredPriceKeys?.length || 0} · Missing price IDs: {readiness?.missingPriceKeys?.length || 0}
+        </div>
+        {missingEnvKeys.length ? (
+          <div className="mt-3 rounded-xl border border-amber-400/20 bg-amber-500/10 p-3 text-sm text-amber-100">
+            <div className="font-semibold">Missing Stripe env vars</div>
+            <div className="mt-2 break-words">{missingEnvKeys.join(', ')}</div>
+          </div>
+        ) : (
+          <div className="mt-3 rounded-xl border border-emerald-400/20 bg-emerald-500/10 p-3 text-sm text-emerald-100">
+            Stripe readiness check passed for the current expected env set.
+          </div>
+        )}
       </div>
 
       <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-white">

@@ -6,7 +6,17 @@ export type BillingCheckoutLookupKey =
   | 'amateur_monthly' | 'amateur_yearly' | 'founder_amateur_monthly' | 'founder_amateur_yearly'
   | 'professional_monthly' | 'professional_yearly' | 'founder_professional_monthly' | 'founder_professional_yearly';
 export type StripePlaceholderPlanConfig = { internalLookupKey:BillingCheckoutLookupKey; internalPlanKey:BillingPlanKey; displayName:string; productLookupKey:string; priceLookupKey:string; founderOnly:boolean; founderPricePlaceholderCents:number|null; stripeProductEnvKey:string; stripePriceEnvKey:string; stripePriceEnvFallbackKey?:string; };
-export type BillingRuntimeConfig = { stripeConfigured:boolean; appBaseUrl:string; successUrl:string; cancelUrl:string; portalReturnUrl:string; environmentName:string; priceLookup:Record<BillingCheckoutLookupKey, StripePlaceholderPlanConfig>; };
+export type BillingReadiness = {
+  expectedWebhookPath:string;
+  expectedWebhookUrl:string;
+  missingEnvKeys:string[];
+  configuredPriceKeys:string[];
+  missingPriceKeys:string[];
+  hasPublishableKey:boolean;
+  hasWebhookSecret:boolean;
+  hasServerSecretKey:boolean;
+};
+export type BillingRuntimeConfig = { stripeConfigured:boolean; appBaseUrl:string; successUrl:string; cancelUrl:string; portalReturnUrl:string; environmentName:string; priceLookup:Record<BillingCheckoutLookupKey, StripePlaceholderPlanConfig>; readiness: BillingReadiness; };
 
 const PRICE_LOOKUP: Record<BillingCheckoutLookupKey, StripePlaceholderPlanConfig> = {
   amateur_monthly: { internalLookupKey:'amateur_monthly', internalPlanKey:'amateur', displayName:BILLING_PLAN_CATALOG.amateur.displayName, productLookupKey:'product_amateur', priceLookupKey:'price_amateur_monthly', founderOnly:false, founderPricePlaceholderCents:null, stripeProductEnvKey:'STRIPE_PRODUCT_AMATEUR', stripePriceEnvKey:'STRIPE_PRICE_AMATEUR_MONTHLY' },
@@ -22,17 +32,38 @@ const normalizeBaseUrl = (value?: string | null) => String(value || '').trim().r
 export function getBillingConfig(env: NodeJS.ProcessEnv = process.env): BillingRuntimeConfig {
   const appBaseUrl = normalizeBaseUrl(getOptionalEnv('NEXT_PUBLIC_APP_URL', env) || getOptionalEnv('VITE_APP_URL', env) || getOptionalEnv('APP_URL', env) || getOptionalEnv('VERCEL_PROJECT_PRODUCTION_URL', env));
   const stripeEnv = getStripeEnvironmentReport(env);
-  const configuredCount = Object.values(PRICE_LOOKUP).filter((plan) => getOptionalEnv(plan.stripePriceEnvKey, env) || (plan.stripePriceEnvFallbackKey && getOptionalEnv(plan.stripePriceEnvFallbackKey, env))).length;
+  const requiredPriceKeys = Array.from(new Set(Object.values(PRICE_LOOKUP).map((plan) => plan.stripePriceEnvKey)));
+  const configuredPriceKeys = requiredPriceKeys.filter((key) => Boolean(getOptionalEnv(key, env)));
+  const missingPriceKeys = requiredPriceKeys.filter((key) => !getOptionalEnv(key, env));
+  const requiredEnvKeys = [
+    'STRIPE_SECRET_KEY',
+    'STRIPE_WEBHOOK_SECRET',
+    'STRIPE_PUBLISHABLE_KEY',
+    ...requiredPriceKeys,
+  ];
+  const missingEnvKeys = requiredEnvKeys.filter((key) => !getOptionalEnv(key, env));
   const appShellUrl = `${appBaseUrl}/app`;
   const billingAppUrl = `${appShellUrl}?view=billing-settings`;
+  const expectedWebhookPath = '/api/stripeWebhook';
+  const readiness = {
+    expectedWebhookPath,
+    expectedWebhookUrl: `${appBaseUrl}${expectedWebhookPath}`,
+    missingEnvKeys,
+    configuredPriceKeys,
+    missingPriceKeys,
+    hasPublishableKey: Boolean(getOptionalEnv('STRIPE_PUBLISHABLE_KEY', env)),
+    hasWebhookSecret: Boolean(getOptionalEnv('STRIPE_WEBHOOK_SECRET', env)),
+    hasServerSecretKey: Boolean(getOptionalEnv('STRIPE_SECRET_KEY', env)),
+  };
   return {
-    stripeConfigured: Boolean(getOptionalEnv('STRIPE_SECRET_KEY', env) && configuredCount >= 2),
+    stripeConfigured: missingEnvKeys.length === 0,
     appBaseUrl,
     successUrl: `${billingAppUrl}&checkout=success`,
     cancelUrl: `${billingAppUrl}&checkout=cancel`,
     portalReturnUrl: billingAppUrl,
     environmentName: stripeEnv.environmentName,
     priceLookup: PRICE_LOOKUP,
+    readiness,
   };
 }
 export const isBillingCheckoutLookupKey = (value: unknown): value is BillingCheckoutLookupKey => typeof value === 'string' && value in PRICE_LOOKUP;
