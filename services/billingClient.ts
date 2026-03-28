@@ -1,5 +1,35 @@
+/**
+ * Phase 1 billing freeze scope
+ *
+ * Keep client-side billing work isolated to Stripe endpoints and billing state.
+ * Do not widen edits from this file into auth, DNS, email, or unrelated UI.
+ */
 import { supabase } from '../supabase';
 import type { BillingPlanKey, BillingCycle } from './planCatalog.js';
+
+export const BILLING_API_ROUTES = {
+  status: '/api/billing/status',
+  checkout: '/api/billing/create-checkout-session',
+  portal: '/api/billing/create-portal-session',
+} as const;
+
+export const PHASE_ONE_BILLING_SCOPE = Object.freeze({
+  touches: [
+    'server/billing/status.ts',
+    'server/billing/stripeWebhook.ts',
+    'server/billing/planMapping.ts',
+    'services/billingClient.ts',
+    'Stripe dashboard webhook/event config',
+    'billing-related DB rows',
+  ],
+  avoids: [
+    'Supabase auth',
+    'confirmation email setup',
+    'domain / DNS',
+    'non-Stripe env vars',
+    'unrelated UI components',
+  ],
+});
 
 export type BillingCheckoutLookupKey =
   | 'amateur_monthly' | 'amateur_yearly' | 'founder_amateur_monthly' | 'founder_amateur_yearly'
@@ -12,8 +42,38 @@ export type BillingCheckoutPayload = { ok:boolean; mode?:'placeholder'; stripeCo
 export type BillingPortalPayload = { ok:boolean; mode?:'placeholder'; stripeConfigured:boolean; billingCustomerExists?:boolean; message?:string; returnUrl?:string; url?:string; };
 export type UpgradeSelection = { tier:'amateur'|'professional'; billingCycle?:BillingCycle; founderRequested?:boolean; };
 
-async function getAccessToken(): Promise<string> { const { data } = await supabase.auth.getSession(); const token = data?.session?.access_token; if (!token) throw new Error('Please sign in to manage billing.'); return token; }
-async function authorizedFetch<T>(input: string, init?: RequestInit): Promise<T> { const token = await getAccessToken(); const response = await fetch(input, { ...init, headers: { 'Content-Type':'application/json', Authorization:`Bearer ${token}`, ...(init?.headers||{}) } }); const payload = await response.json().catch(() => ({})); if (!response.ok) throw new Error(typeof payload?.error === 'string' ? payload.error : typeof payload?.message === 'string' ? payload.message : 'Billing request failed.'); return payload as T; }
+async function getAccessToken(): Promise<string> {
+  const { data } = await supabase.auth.getSession();
+  const token = data?.session?.access_token;
+  if (!token) throw new Error('Please sign in to manage billing.');
+  return token;
+}
+
+async function authorizedFetch<T>(input: string, init?: RequestInit): Promise<T> {
+  const token = await getAccessToken();
+  const response = await fetch(input, {
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      ...(init?.headers || {}),
+    },
+  });
+
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(
+      typeof payload?.error === 'string'
+        ? payload.error
+        : typeof payload?.message === 'string'
+          ? payload.message
+          : 'Billing request failed.',
+    );
+  }
+
+  return payload as T;
+}
 
 export function resolveCheckoutLookupKey(selection: UpgradeSelection, billingStatus: Pick<BillingStatusPayload, 'founderProtected'|'founderLockedPlan'|'planKey'|'upgradeTargets'>): BillingCheckoutLookupKey {
   const cycle = selection.billingCycle === 'yearly' ? 'yearly' : 'monthly';
@@ -21,6 +81,19 @@ export function resolveCheckoutLookupKey(selection: UpgradeSelection, billingSta
   if (selection.tier === 'amateur') return founderEligible ? (`founder_amateur_${cycle}` as BillingCheckoutLookupKey) : (`amateur_${cycle}` as BillingCheckoutLookupKey);
   return founderEligible ? (`founder_professional_${cycle}` as BillingCheckoutLookupKey) : (`professional_${cycle}` as BillingCheckoutLookupKey);
 }
-export const fetchBillingStatus = async (): Promise<BillingStatusPayload> => authorizedFetch<BillingStatusPayload>('/api/billing/status', { method:'GET' });
-export const createCheckoutSession = async (planKey: BillingCheckoutLookupKey): Promise<BillingCheckoutPayload> => authorizedFetch<BillingCheckoutPayload>('/api/billing/create-checkout-session', { method:'POST', body: JSON.stringify({ planKey }) });
-export const createPortalSession = async (): Promise<BillingPortalPayload> => authorizedFetch<BillingPortalPayload>('/api/billing/create-portal-session', { method:'POST', body: JSON.stringify({}) });
+export const fetchBillingStatus = async (): Promise<BillingStatusPayload> =>
+  authorizedFetch<BillingStatusPayload>(BILLING_API_ROUTES.status, { method: 'GET' });
+
+export const createCheckoutSession = async (
+  planKey: BillingCheckoutLookupKey,
+): Promise<BillingCheckoutPayload> =>
+  authorizedFetch<BillingCheckoutPayload>(BILLING_API_ROUTES.checkout, {
+    method: 'POST',
+    body: JSON.stringify({ planKey }),
+  });
+
+export const createPortalSession = async (): Promise<BillingPortalPayload> =>
+  authorizedFetch<BillingPortalPayload>(BILLING_API_ROUTES.portal, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });

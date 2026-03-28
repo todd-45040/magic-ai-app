@@ -1,3 +1,9 @@
+/**
+ * Phase 1 billing freeze scope
+ *
+ * Plan resolution stays isolated to Stripe/billing truth work so the current
+ * stable auth, DNS, email, and broader UI layers remain untouched.
+ */
 import type { BillingPlanKey } from '../../services/planCatalog.js';
 import { BILLING_PLAN_CATALOG } from '../../services/planCatalog.js';
 

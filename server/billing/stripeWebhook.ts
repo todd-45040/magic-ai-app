@@ -1,3 +1,9 @@
+/**
+ * Phase 1 billing freeze scope
+ *
+ * This webhook file is part of the isolated Stripe validation surface. Avoid
+ * unrelated auth, domain, email, or non-billing infrastructure changes here.
+ */
 import crypto from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import type { BillingPlanKey } from '../../services/planCatalog.js';

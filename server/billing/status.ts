@@ -1,3 +1,9 @@
+/**
+ * Phase 1 billing freeze scope
+ *
+ * This module is inside the Stripe-only validation area. Keep auth, DNS,
+ * email, and unrelated UI changes out of this file during billing cleanup.
+ */
 import type { BillingPlanKey } from '../../services/planCatalog.js';
 import { BILLING_PLAN_CATALOG } from '../../services/planCatalog.js';
 import { deriveFounderProtection } from './founderProtection.js';
