@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import type { User } from '../types';
-import { BILLING_PLAN_CATALOG, formatPriceCents, type BillingCycle } from '../services/planCatalog';
+import { BILLING_PLAN_CATALOG, formatPriceCents, resolveBillingPlanKey, type BillingCycle } from '../services/planCatalog';
 import { createPortalSession, fetchBillingStatus, type BillingStatusPayload } from '../services/billingClient';
 
 interface BillingSettingsProps {
@@ -39,6 +39,26 @@ const normalizeMembershipToPlanKey = (membership?: User['membership'] | null): s
   }
 };
 
+
+const getPlanTierRank = (planKey?: string | null): number => {
+  switch (planKey) {
+    case 'founder_professional':
+    case 'professional':
+      return 2;
+    case 'founder_amateur':
+    case 'amateur':
+      return 1;
+    default:
+      return 0;
+  }
+};
+
+const pickMostAuthoritativePlanKey = (...planKeys: Array<string | null | undefined>): string => {
+  return planKeys.reduce((best, candidate) =>
+    getPlanTierRank(candidate) > getPlanTierRank(best) ? String(candidate) : best,
+    'free'
+  );
+};
 const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) => {
   const [status, setStatus] = useState<BillingStatusPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -69,7 +89,8 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
 
   const statusPlanKey = status?.planKey || 'free';
   const membershipPlanKey = normalizeMembershipToPlanKey(user?.membership);
-  const currentPlanKey = statusPlanKey !== 'free' ? statusPlanKey : (membershipPlanKey || statusPlanKey);
+  const userPlanKey = resolveBillingPlanKey(user);
+  const currentPlanKey = pickMostAuthoritativePlanKey(statusPlanKey, membershipPlanKey, userPlanKey);
   const currentBillingCycle = status?.currentBillingCycle || 'monthly';
   const founderEligible = Boolean(status?.founderProtected || status?.founderLockedPlan);
   const founderLabel = useMemo(
@@ -168,6 +189,9 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
           const badge = founderRequested && founderEligible ? 'Founder pricing path' : 'Standard pricing';
           const selectedCycle = billingCycle;
           const planName = tier === 'amateur' ? 'Amateur' : 'Professional';
+          const currentTierRank = getPlanTierRank(currentPlanKey);
+          const targetTierRank = getPlanTierRank(tier);
+          const isDowngradePath = targetTierRank < currentTierRank;
           const isSamePlanAndCycle = current && currentBillingCycle === selectedCycle;
           const isSamePlanDifferentCycle = current && currentBillingCycle !== selectedCycle;
 
@@ -175,7 +199,11 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
           let buttonDisabled = loading;
           let helperText = '';
 
-          if (isSamePlanAndCycle) {
+          if (isDowngradePath) {
+            buttonLabel = 'Higher plan active';
+            buttonDisabled = true;
+            helperText = `Your ${humanizePlan(currentPlanKey)} plan is currently active. Downgrade paths are not available from this billing screen.`;
+          } else if (isSamePlanAndCycle) {
             buttonLabel = 'Current plan';
             buttonDisabled = true;
             helperText = `Your ${planName} ${selectedCycle} plan is already active.`;
@@ -186,6 +214,7 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
               helperText = 'Complete checkout to activate billing.';
             } else {
               buttonLabel = selectedCycle === 'yearly' ? 'Switch to Yearly' : 'Switch to Monthly';
+              helperText = `Switch your ${planName} plan to ${selectedCycle} billing.`;
             }
           }
 
@@ -222,6 +251,10 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
 
               <button
                 onClick={() => {
+                  if (isDowngradePath) {
+                    console.warn('Blocked lower-tier checkout attempt while a higher-tier plan is active.');
+                    return;
+                  }
                   if (isSamePlanAndCycle) {
                     console.warn('Blocked duplicate subscription attempt for the current billing plan and cycle.');
                     return;
@@ -229,7 +262,7 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
                   onUpgrade({ tier, billingCycle: selectedCycle, founderRequested: founderRequested && founderEligible });
                 }}
                 disabled={buttonDisabled}
-                className={`mt-4 inline-flex w-full items-center justify-center rounded-xl px-4 py-3 text-sm font-bold transition ${tier === 'amateur' ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-amber-500 text-slate-950 hover:bg-amber-400'} ${isSamePlanAndCycle ? 'opacity-50 cursor-not-allowed' : ''} disabled:cursor-not-allowed disabled:opacity-50`}
+                className={`mt-4 inline-flex w-full items-center justify-center rounded-xl px-4 py-3 text-sm font-bold transition ${tier === 'amateur' ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-amber-500 text-slate-950 hover:bg-amber-400'} ${(isSamePlanAndCycle || isDowngradePath) ? 'opacity-50 cursor-not-allowed' : ''} disabled:cursor-not-allowed disabled:opacity-50`}
               >
                 {buttonLabel}
               </button>
