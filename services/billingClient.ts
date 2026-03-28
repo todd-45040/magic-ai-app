@@ -36,6 +36,44 @@ export type BillingCheckoutLookupKey =
   | 'professional_monthly' | 'professional_yearly' | 'founder_professional_monthly' | 'founder_professional_yearly';
 
 
+export type BillingEventSnapshot = {
+  eventId: string | null;
+  eventType: string | null;
+  eventStatus: string | null;
+  createdAt: string | null;
+  processedAt: string | null;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+  requestId: string | null;
+  lastError: string | null;
+  summary: {
+    livemode: boolean | null;
+    objectType: string | null;
+    customerId: string | null;
+    subscriptionId: string | null;
+    status: string | null;
+  };
+};
+
+export type BillingValidationChecks = {
+  hasBillingCustomerLink: boolean;
+  hasSubscriptionLink: boolean;
+  checkoutReady: boolean;
+  portalReady: boolean;
+  webhookHealthy: boolean;
+  renewalVisible: boolean;
+  activeOrTrialing: boolean;
+  currentPlanAligned: boolean;
+  periodDatesPersisted: boolean;
+  cancelStateReadable: boolean;
+};
+
+export type BillingValidationGuide = {
+  recommendedOrder: string[];
+  nextManualChecks: string[];
+  likelyOwner: 'webhook_ingest' | 'db_persistence' | 'status_resolution' | 'ui_rendering' | 'ready_for_manual_validation';
+};
+
 export type BillingTruthDebug = {
   dbSnapshot: {
     billingCustomerId: string | null;
@@ -86,7 +124,7 @@ export type BillingTruthDebug = {
 };
 
 export type BillingStatusPayload = {
-  ok:true; planKey:BillingPlanKey; billingStatus:string; accessState:string; renewalDate:string|null; cancelAtPeriodEnd:boolean; founderProtected:boolean; founderLockedPlan:BillingPlanKey|null; founderLockedPriceCents:number|null; usagePeriodStart:string|null; usagePeriodEnd:string|null; upgradeTargets:BillingPlanKey[]; stripeConfigured:boolean; billingCustomerExists:boolean; stripeCustomerIdPresent:boolean; currentBillingCycle: BillingCycle; currentPriceId: string | null; source:'database'|'fallback'|'stripe_live'; billingTruth: BillingTruthDebug; billingReadiness:{ expectedWebhookPath:string; expectedWebhookUrl:string; missingEnvKeys:string[]; configuredPriceKeys:string[]; missingPriceKeys:string[]; hasPublishableKey:boolean; hasWebhookSecret:boolean; hasServerSecretKey:boolean; };
+  ok:true; planKey:BillingPlanKey; billingStatus:string; accessState:string; renewalDate:string|null; cancelAtPeriodEnd:boolean; founderProtected:boolean; founderLockedPlan:BillingPlanKey|null; founderLockedPriceCents:number|null; usagePeriodStart:string|null; usagePeriodEnd:string|null; upgradeTargets:BillingPlanKey[]; stripeConfigured:boolean; billingCustomerExists:boolean; stripeCustomerIdPresent:boolean; currentBillingCycle: BillingCycle; currentPriceId: string | null; source:'database'|'fallback'|'stripe_live'; billingTruth: BillingTruthDebug; recentBillingEvents: BillingEventSnapshot[]; validationChecks: BillingValidationChecks; validationGuide: BillingValidationGuide; billingReadiness:{ expectedWebhookPath:string; expectedWebhookUrl:string; missingEnvKeys:string[]; configuredPriceKeys:string[]; missingPriceKeys:string[]; hasPublishableKey:boolean; hasWebhookSecret:boolean; hasServerSecretKey:boolean; };
 };
 export type BillingCheckoutPayload = { ok:boolean; mode?:'placeholder'; stripeConfigured:boolean; message?:string; targetPlanKey?:BillingPlanKey; targetLookupKey?:BillingCheckoutLookupKey; successUrl?:string; cancelUrl?:string; url?:string; };
 export type BillingPortalPayload = { ok:boolean; mode?:'placeholder'; stripeConfigured:boolean; billingCustomerExists?:boolean; message?:string; returnUrl?:string; url?:string; };

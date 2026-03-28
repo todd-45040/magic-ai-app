@@ -24,6 +24,45 @@ type StripeSubscriptionSnapshot = {
   latestPaymentIntentStatus: string | null;
 };
 
+
+type BillingEventSnapshot = {
+  eventId: string | null;
+  eventType: string | null;
+  eventStatus: string | null;
+  createdAt: string | null;
+  processedAt: string | null;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+  requestId: string | null;
+  lastError: string | null;
+  summary: {
+    livemode: boolean | null;
+    objectType: string | null;
+    customerId: string | null;
+    subscriptionId: string | null;
+    status: string | null;
+  };
+};
+
+type BillingValidationChecks = {
+  hasBillingCustomerLink: boolean;
+  hasSubscriptionLink: boolean;
+  checkoutReady: boolean;
+  portalReady: boolean;
+  webhookHealthy: boolean;
+  renewalVisible: boolean;
+  activeOrTrialing: boolean;
+  currentPlanAligned: boolean;
+  periodDatesPersisted: boolean;
+  cancelStateReadable: boolean;
+};
+
+type BillingValidationGuide = {
+  recommendedOrder: string[];
+  nextManualChecks: string[];
+  likelyOwner: 'webhook_ingest' | 'db_persistence' | 'status_resolution' | 'ui_rendering' | 'ready_for_manual_validation';
+};
+
 type BillingTruthDebug = {
   dbSnapshot: {
     billingCustomerId: string | null;
@@ -93,6 +132,9 @@ export type BillingStatusResponse = {
   currentPriceId: string | null;
   source: 'database' | 'fallback' | 'stripe_live';
   billingTruth: BillingTruthDebug;
+  recentBillingEvents: BillingEventSnapshot[];
+  validationChecks: BillingValidationChecks;
+  validationGuide: BillingValidationGuide;
   billingReadiness: {
     expectedWebhookPath: string;
     expectedWebhookUrl: string;
@@ -306,6 +348,148 @@ function buildBillingTruthDebug(input: {
   };
 }
 
+
+async function fetchRecentBillingEvents(admin: any, input: {
+  userId: string;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+}): Promise<BillingEventSnapshot[]> {
+  const seen = new Set<string>();
+  const rows: any[] = [];
+
+  const collect = async (query: Promise<any>) => {
+    try {
+      const { data, error } = await query;
+      if (error || !Array.isArray(data)) return;
+      for (const row of data) {
+        const id = String(row?.id || row?.stripe_event_id || '').trim();
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        rows.push(row);
+      }
+    } catch {
+      return;
+    }
+  };
+
+  await collect(
+    admin.from('billing_events')
+      .select('id, stripe_event_id, event_type, event_status, created_at, processed_at, stripe_customer_id, stripe_subscription_id, request_id, last_error, payload')
+      .eq('user_id', input.userId)
+      .order('created_at', { ascending: false })
+      .limit(6)
+  );
+
+  if (input.stripeCustomerId) {
+    await collect(
+      admin.from('billing_events')
+        .select('id, stripe_event_id, event_type, event_status, created_at, processed_at, stripe_customer_id, stripe_subscription_id, request_id, last_error, payload')
+        .eq('stripe_customer_id', input.stripeCustomerId)
+        .order('created_at', { ascending: false })
+        .limit(6)
+    );
+  }
+
+  if (input.stripeSubscriptionId) {
+    await collect(
+      admin.from('billing_events')
+        .select('id, stripe_event_id, event_type, event_status, created_at, processed_at, stripe_customer_id, stripe_subscription_id, request_id, last_error, payload')
+        .eq('stripe_subscription_id', input.stripeSubscriptionId)
+        .order('created_at', { ascending: false })
+        .limit(6)
+    );
+  }
+
+  return rows
+    .sort((a, b) => new Date(b?.created_at || 0).getTime() - new Date(a?.created_at || 0).getTime())
+    .slice(0, 6)
+    .map((row) => ({
+      eventId: String(row?.stripe_event_id || '').trim() || null,
+      eventType: String(row?.event_type || '').trim() || null,
+      eventStatus: String(row?.event_status || '').trim() || null,
+      createdAt: asIso(row?.created_at),
+      processedAt: asIso(row?.processed_at),
+      stripeCustomerId: String(row?.stripe_customer_id || '').trim() || null,
+      stripeSubscriptionId: String(row?.stripe_subscription_id || '').trim() || null,
+      requestId: String(row?.request_id || '').trim() || null,
+      lastError: String(row?.last_error || '').trim() || null,
+      summary: {
+        livemode: typeof row?.payload?.summary?.livemode === 'boolean' ? row.payload.summary.livemode : null,
+        objectType: String(row?.payload?.summary?.objectType || '').trim() || null,
+        customerId: String(row?.payload?.summary?.customerId || '').trim() || null,
+        subscriptionId: String(row?.payload?.summary?.subscriptionId || '').trim() || null,
+        status: String(row?.payload?.summary?.status || '').trim() || null,
+      },
+    }));
+}
+
+function buildValidationChecks(input: {
+  billingTruth: BillingTruthDebug;
+  billingCustomerExists: boolean;
+  stripeConfigured: boolean;
+  upgradeTargets: BillingPlanKey[];
+  renewalDate: string | null;
+  cancelAtPeriodEnd: boolean;
+}): BillingValidationChecks {
+  const processedEvents = input.billingTruth.stripeSnapshot.subscriptionExists;
+  const freshStatus = input.billingTruth.resolvedSnapshot.billingStatus;
+  const activeOrTrialing = freshStatus === 'active' || freshStatus === 'trialing';
+  return {
+    hasBillingCustomerLink: input.billingCustomerExists && !input.billingTruth.mismatches.missingStripeCustomer,
+    hasSubscriptionLink: !input.billingTruth.mismatches.missingStripeSubscription,
+    checkoutReady: input.stripeConfigured && input.upgradeTargets.length > 0,
+    portalReady: input.stripeConfigured && input.billingCustomerExists,
+    webhookHealthy: processedEvents && !input.billingTruth.mismatches.statusMismatch,
+    renewalVisible: Boolean(input.renewalDate),
+    activeOrTrialing,
+    currentPlanAligned: !input.billingTruth.mismatches.planMismatch,
+    periodDatesPersisted: !input.billingTruth.mismatches.missingDbPeriodDates,
+    cancelStateReadable: input.cancelAtPeriodEnd ? Boolean(input.renewalDate) : true,
+  };
+}
+
+function buildValidationGuide(input: {
+  checks: BillingValidationChecks;
+  billingTruth: BillingTruthDebug;
+  recentBillingEvents: BillingEventSnapshot[];
+}): BillingValidationGuide {
+  const nextManualChecks: string[] = [];
+  let likelyOwner: BillingValidationGuide['likelyOwner'] = 'ready_for_manual_validation';
+
+  if (!input.checks.hasBillingCustomerLink || !input.checks.hasSubscriptionLink) {
+    likelyOwner = 'db_persistence';
+    nextManualChecks.push('Verify billing_customers and subscriptions rows are linked to the same test user.');
+  }
+  if (!input.checks.periodDatesPersisted) {
+    likelyOwner = 'webhook_ingest';
+    nextManualChecks.push('Inspect recent webhook events and confirm current_period_start/current_period_end are being persisted.');
+  }
+  if (!input.checks.activeOrTrialing || !input.checks.renewalVisible) {
+    likelyOwner = likelyOwner === 'ready_for_manual_validation' ? 'status_resolution' : likelyOwner;
+    nextManualChecks.push('Compare resolved billing status/renewal with live Stripe subscription truth in billingTruth.');
+  }
+  if (input.recentBillingEvents.some((event) => event.eventStatus === 'failed' || event.lastError)) {
+    likelyOwner = 'webhook_ingest';
+    nextManualChecks.push('Open the newest failed billing event and review last_error plus summary payload.');
+  }
+  if (!nextManualChecks.length) {
+    nextManualChecks.push('Proceed with manual Phase 4 tests in order using the same test account.');
+  }
+
+  return {
+    recommendedOrder: [
+      'Test 1 — New trial user',
+      'Test 2 — Upgrade to Amateur monthly',
+      'Test 3 — Upgrade to Professional',
+      'Test 4 — Portal session',
+      'Test 5 — Cancel at period end',
+      'Test 6 — Renewal / invoice behavior',
+    ],
+    nextManualChecks,
+    likelyOwner,
+  };
+}
+
 export async function resolveBillingStatusForUser(admin: any, userId: string): Promise<BillingStatusResponse> {
   const config = getBillingConfig();
 
@@ -416,6 +600,27 @@ export async function resolveBillingStatusForUser(admin: any, userId: string): P
     },
   });
 
+  const recentBillingEvents = await fetchRecentBillingEvents(admin, {
+    userId,
+    stripeCustomerId: String(billingCustomer?.stripe_customer_id || subscription?.stripe_customer_id || '').trim() || null,
+    stripeSubscriptionId: String(subscription?.stripe_subscription_id || '').trim() || null,
+  });
+
+  const validationChecks = buildValidationChecks({
+    billingTruth,
+    billingCustomerExists: Boolean(billingCustomer?.id),
+    stripeConfigured: config.stripeConfigured,
+    upgradeTargets,
+    renewalDate,
+    cancelAtPeriodEnd: effectiveCancelAtPeriodEnd,
+  });
+
+  const validationGuide = buildValidationGuide({
+    checks: validationChecks,
+    billingTruth,
+    recentBillingEvents,
+  });
+
   return {
     ok: true,
     planKey: effectivePlanKey,
@@ -436,6 +641,9 @@ export async function resolveBillingStatusForUser(admin: any, userId: string): P
     currentPriceId,
     source,
     billingTruth,
+    recentBillingEvents,
+    validationChecks,
+    validationGuide,
     billingReadiness: config.readiness,
   };
 }
