@@ -59,6 +59,7 @@ type TierConfig = {
 
 type ToolPolicy = {
   minTier: CanonicalTier;
+  allowedTiers?: CanonicalTier[];
   limitedTiers?: CanonicalTier[];
   usageResource?: ResourceType;
   upgradeLabel?: 'Amateur' | 'Professional';
@@ -112,13 +113,13 @@ export const PLAN_USAGE_MATRIX: Record<CanonicalTier, TierConfig> = {
 const TOOL_POLICIES: Record<ToolName, ToolPolicy> = {
   EffectGenerator: { minTier: 'free', limitedTiers: ['free', 'trial'], usageResource: 'text_generations', upgradeLabel: 'Amateur' },
   PatterEngine: { minTier: 'free', limitedTiers: ['free', 'trial'], usageResource: 'text_generations', upgradeLabel: 'Amateur' },
-  ShowPlanner: { minTier: 'amateur', limitedTiers: ['amateur'], usageResource: 'saved_shows', upgradeLabel: 'Amateur' },
-  SavedIdeas: { minTier: 'amateur', limitedTiers: ['amateur'], usageResource: 'saved_ideas', upgradeLabel: 'Amateur' },
+  ShowPlanner: { minTier: 'amateur', allowedTiers: ['trial', 'amateur', 'professional', 'admin'], limitedTiers: ['trial', 'amateur'], usageResource: 'saved_shows', upgradeLabel: 'Amateur' },
+  SavedIdeas: { minTier: 'amateur', allowedTiers: ['trial', 'amateur', 'professional', 'admin'], limitedTiers: ['trial', 'amateur'], usageResource: 'saved_ideas', upgradeLabel: 'Amateur' },
   Search: { minTier: 'amateur', limitedTiers: ['amateur'], upgradeLabel: 'Amateur' },
   LiveRehearsal: { minTier: 'professional', usageResource: 'live_rehearsal_minutes', upgradeLabel: 'Professional' },
-  VideoAnalysis: { minTier: 'amateur', limitedTiers: ['amateur'], usageResource: 'video_analysis_clips', upgradeLabel: 'Professional' },
+  VideoAnalysis: { minTier: 'amateur', allowedTiers: ['trial', 'amateur', 'professional', 'admin'], limitedTiers: ['trial', 'amateur'], usageResource: 'video_analysis_clips', upgradeLabel: 'Professional' },
   PersonaSimulator: { minTier: 'professional', usageResource: 'text_generations', upgradeLabel: 'Professional' },
-  VisualBrainstorm: { minTier: 'amateur', limitedTiers: ['amateur'], usageResource: 'image_generations', upgradeLabel: 'Professional' },
+  VisualBrainstorm: { minTier: 'amateur', allowedTiers: ['trial', 'amateur', 'professional', 'admin'], limitedTiers: ['trial', 'amateur'], usageResource: 'image_generations', upgradeLabel: 'Professional' },
   DirectorMode: { minTier: 'professional', usageResource: 'text_generations', upgradeLabel: 'Professional' },
   ImageGeneration: { minTier: 'professional', usageResource: 'image_generations', upgradeLabel: 'Professional' },
   CRM: { minTier: 'professional', upgradeLabel: 'Professional' },
@@ -132,8 +133,8 @@ const TOOL_POLICIES: Record<ToolName, ToolPolicy> = {
   AssistantStudio: { minTier: 'professional', upgradeLabel: 'Professional' },
   PropChecklists: { minTier: 'professional', upgradeLabel: 'Professional' },
   ShowFeedback: { minTier: 'professional', upgradeLabel: 'Professional' },
-  GospelMagic: { minTier: 'amateur', limitedTiers: ['amateur'], usageResource: 'text_generations', upgradeLabel: 'Professional' },
-  MentalismAssistant: { minTier: 'amateur', limitedTiers: ['amateur'], usageResource: 'text_generations', upgradeLabel: 'Professional' },
+  GospelMagic: { minTier: 'amateur', allowedTiers: ['trial', 'amateur', 'professional', 'admin'], limitedTiers: ['trial', 'amateur'], usageResource: 'text_generations', upgradeLabel: 'Professional' },
+  MentalismAssistant: { minTier: 'amateur', allowedTiers: ['trial', 'amateur', 'professional', 'admin'], limitedTiers: ['trial', 'amateur'], usageResource: 'text_generations', upgradeLabel: 'Professional' },
   IllusionBlueprint: { minTier: 'professional', usageResource: 'image_generations', upgradeLabel: 'Professional' },
   MagicDictionary: { minTier: 'amateur', limitedTiers: ['amateur'], usageResource: 'text_generations', upgradeLabel: 'Professional' },
   MagicTheoryTutor: { minTier: 'amateur', limitedTiers: ['amateur'], usageResource: 'text_generations', upgradeLabel: 'Professional' },
@@ -196,6 +197,7 @@ export function getWarningLevel(user: User | null | undefined, resourceType: Res
 export function canUseTool(user: User | null | undefined, toolName: ToolName): boolean {
   const policy = TOOL_POLICIES[toolName];
   const tier = getEffectiveEntitlementTier(user);
+  if (policy.allowedTiers?.length) return policy.allowedTiers.includes(tier);
   return tierRank(tier) >= tierRank(policy.minTier);
 }
 

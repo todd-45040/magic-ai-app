@@ -218,6 +218,23 @@ export function getUsageQuotaConfigForMembership(membership?: string | null): Us
     };
   }
 
+  if (planAlias === 'trial') {
+    return {
+      dailyAiLimit: 20,
+      burstLimit: 20,
+      monthlyToolQuotas: {
+        quota_live_audio_minutes: 20,
+        quota_image_gen: 2,
+        quota_identify: 10,
+        quota_video_uploads: 1,
+      },
+      dailyToolLimits: {
+        live_audio_minutes: 20,
+        video_uploads: 1,
+      },
+    };
+  }
+
   const billingPlanKey: BillingPlanKey =
     planAlias === 'professional' ? 'professional'
     : planAlias === 'amateur' ? 'amateur'

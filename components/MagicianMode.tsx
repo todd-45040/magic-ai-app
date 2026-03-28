@@ -3069,7 +3069,15 @@ useEffect(() => {
           video_uploads: { limit: 1, remaining: 1, dailyLimit: 1, hidden: false },
         };
       }
-      if (plan === 'free' || plan === 'trial') {
+      if (plan === 'trial') {
+        return {
+          live_audio_minutes: { limit: 20, remaining: 20, dailyLimit: 20, hidden: false },
+          image_gen: { limit: 2, remaining: 2, hidden: false },
+          identify: { limit: 10, remaining: 10, hidden: false },
+          video_uploads: { limit: 1, remaining: 1, dailyLimit: 1, hidden: false },
+        };
+      }
+      if (plan === 'free') {
         return {
           live_audio_minutes: { limit: 0, remaining: 0, dailyLimit: 0, hidden: true },
           image_gen: { limit: 0, remaining: 0, hidden: true },
@@ -4756,11 +4764,11 @@ ${action.payload.content}`;
       case 'create':
         return 'effect-generator';
       case 'rehearse':
-        return (userPlan === 'free' || userPlan === 'trial')
+        return userPlan === 'free'
           ? 'dashboard'
           : (hasProfessionalAccess ? 'live-rehearsal' : 'video-rehearsal');
       case 'manage':
-        return (userPlan === 'free' || userPlan === 'trial') ? 'dashboard' : 'show-planner';
+        return userPlan === 'free' ? 'dashboard' : 'show-planner';
       case 'social':
         return 'magic-wire';
       case 'admin':

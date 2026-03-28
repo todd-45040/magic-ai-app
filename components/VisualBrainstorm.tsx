@@ -66,9 +66,10 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
   const { shows } = useAppState();
   const dispatch = useAppDispatch();
   const normalizedTier = normalizeTier(user?.membership);
-  const sessionVariationLimit = normalizedTier === 'amateur' ? 2 : 4;
-  const sessionLimitCopy = normalizedTier === 'amateur'
-    ? 'Amateur includes up to 2 images per brainstorm session. Upgrade to Professional for 4-image variation sets.'
+  const isLimitedBrainstormTier = normalizedTier === 'trial' || normalizedTier === 'amateur';
+  const sessionVariationLimit = isLimitedBrainstormTier ? 2 : 4;
+  const sessionLimitCopy = isLimitedBrainstormTier
+    ? 'This tier includes up to 2 images per brainstorm session. Upgrade to Professional for 4-image variation sets.'
     : null;
 
   const [editPrompt, setEditPrompt] = useState('');
