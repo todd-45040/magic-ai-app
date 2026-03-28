@@ -166,7 +166,6 @@ async function insertBillingEventReceipt(admin: any, event: any, requestId: stri
   const metadata = object?.metadata || {};
   const stripeEventId = String(event?.id || '').trim();
   const stripeSubscriptionId = String(object?.subscription || (object?.object === 'subscription' ? object?.id : '') || '').trim() || null;
-  const stripeCustomerId = String(object?.customer || '').trim() || null;
   const userId = String(metadata?.user_id || '').trim() || null;
 
   const payload = {
@@ -220,16 +219,40 @@ async function upsertBillingCustomer(admin: any, params: { userId: string | null
   if (!params.userId && !params.stripeCustomerId) return null;
 
   const { data: existingByCustomer } = params.stripeCustomerId
-    ? await admin.from('billing_customers').select('id').eq('stripe_customer_id', params.stripeCustomerId).maybeSingle()
+    ? await admin.from('billing_customers').select('id, user_id, stripe_customer_id, email').eq('stripe_customer_id', params.stripeCustomerId).maybeSingle()
     : { data: null };
   const { data: existingByUser } = params.userId
-    ? await admin.from('billing_customers').select('id').eq('user_id', params.userId).maybeSingle()
+    ? await admin.from('billing_customers').select('id, user_id, stripe_customer_id, email').eq('user_id', params.userId).maybeSingle()
     : { data: null };
 
+  const resolvedUserId = params.userId || existingByCustomer?.user_id || existingByUser?.user_id || null;
+
+  // Synthetic Stripe CLI events can arrive without app metadata. In that case,
+  // only update an existing row if we can match by stripe_customer_id; otherwise
+  // skip the customer upsert instead of inserting a null user_id row.
+  if (!resolvedUserId) {
+    if (!existingByCustomer?.id) return null;
+    const patch: Record<string, unknown> = {
+      billing_provider: 'stripe',
+      provider_status: 'synced',
+      synced_at: new Date().toISOString(),
+      source_updated_at: new Date().toISOString(),
+    };
+    if (params.email) patch.email = params.email;
+    const { data, error } = await admin
+      .from('billing_customers')
+      .update(patch)
+      .eq('id', existingByCustomer.id)
+      .select('id')
+      .single();
+    if (error) throw new Error(`billing_customer_upsert_failed:${error.message}`);
+    return data?.id as string | null;
+  }
+
   const payload: Record<string, unknown> = {
-    user_id: params.userId,
-    stripe_customer_id: params.stripeCustomerId,
-    email: params.email || null,
+    user_id: resolvedUserId,
+    stripe_customer_id: params.stripeCustomerId || existingByCustomer?.stripe_customer_id || null,
+    email: params.email || existingByCustomer?.email || existingByUser?.email || null,
     billing_provider: 'stripe',
     provider_status: 'synced',
     synced_at: new Date().toISOString(),
@@ -238,8 +261,7 @@ async function upsertBillingCustomer(admin: any, params: { userId: string | null
   const existingId = existingByCustomer?.id || existingByUser?.id || null;
   if (existingId) payload.id = existingId;
 
-  const conflictTarget = params.userId ? 'user_id' : 'stripe_customer_id';
-  const { data, error } = await admin.from('billing_customers').upsert([payload], { onConflict: conflictTarget }).select('id').single();
+  const { data, error } = await admin.from('billing_customers').upsert([payload], { onConflict: 'user_id' }).select('id').single();
   if (error) throw new Error(`billing_customer_upsert_failed:${error.message}`);
   return data?.id as string | null;
 }
@@ -325,7 +347,8 @@ async function upsertUsagePeriod(admin: any, params: {
     .limit(1)
     .maybeSingle();
 
-  const payload: Record<string, unknown> = {
+  const payload = {
+    id: existing?.id || undefined,
     user_id: params.userId,
     plan_key: effectivePlan,
     period_start: params.currentPeriodStart,
@@ -334,7 +357,6 @@ async function upsertUsagePeriod(admin: any, params: {
     source_updated_at: new Date().toISOString(),
     last_synced_at: new Date().toISOString(),
   };
-  if (existing?.id) payload.id = existing.id;
 
   await admin.from('usage_periods').upsert([payload], { onConflict: 'id' });
 }
@@ -380,6 +402,7 @@ async function upsertSubscription(admin: any, params: {
   });
 
   const payload: Record<string, unknown> = {
+    id: existingId || undefined,
     user_id: params.userId,
     billing_customer_id: params.billingCustomerId,
     stripe_customer_id: params.stripeCustomerId,
@@ -397,7 +420,6 @@ async function upsertSubscription(admin: any, params: {
     last_synced_at: new Date().toISOString(),
     source_updated_at: new Date().toISOString(),
   };
-  if (existingId) payload.id = existingId;
 
   const { data, error } = await admin.from('subscriptions').upsert([payload], { onConflict: 'stripe_subscription_id' }).select('id').single();
   if (error) throw new Error(`subscription_upsert_failed:${error.message}`);
@@ -410,13 +432,22 @@ async function syncFromEvent(admin: any, event: any) {
   const metadata = object?.metadata || {};
   const firstPrice = object?.items?.data?.[0]?.price || object?.lines?.data?.[0]?.price || object?.plan || null;
 
-  const userId = String(metadata?.user_id || object?.client_reference_id || '').trim() || null;
+  const metadataUserId = String(metadata?.user_id || object?.client_reference_id || '').trim() || null;
+  const stripeCustomerId = String(object?.customer || '').trim() || null;
+  let userId = metadataUserId;
+  if (!userId && stripeCustomerId) {
+    const { data: billingCustomerMatch } = await admin
+      .from('billing_customers')
+      .select('user_id')
+      .eq('stripe_customer_id', stripeCustomerId)
+      .maybeSingle();
+    userId = (billingCustomerMatch?.user_id as string | undefined) || null;
+  }
   const existingFounderOverride = await getFounderOverride(admin, userId);
   const founderState = deriveFounderProtection({ metadata, founderOverride: existingFounderOverride });
   const normalizedPlanKey = normalizePlanFromObject(object);
   const planKey = founderState.founderProtected && founderState.lockedPlan ? founderState.lockedPlan : normalizedPlanKey;
   const billingStatus = normalizeStatusFromEvent(eventType, object);
-  const stripeCustomerId = String(object?.customer || '').trim() || null;
   const stripeSubscriptionId = String(object?.subscription || (object?.object === 'subscription' ? object?.id : '') || '').trim() || null;
   const checkoutSessionId = object?.object === 'checkout.session' ? String(object?.id || '').trim() || null : null;
   const currentPeriodStart = safeIsoFromUnixSeconds(object?.current_period_start || object?.period_start) || null;
