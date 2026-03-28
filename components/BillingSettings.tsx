@@ -168,18 +168,18 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
           const badge = founderRequested && founderEligible ? 'Founder pricing path' : 'Standard pricing';
           const selectedCycle = billingCycle;
           const planName = tier === 'amateur' ? 'Amateur' : 'Professional';
-          const isSameTier = current;
-          const isSameCycle = currentBillingCycle === selectedCycle;
+          const isSamePlanAndCycle = current && currentBillingCycle === selectedCycle;
+          const isSamePlanDifferentCycle = current && currentBillingCycle !== selectedCycle;
 
           let buttonLabel = `Upgrade to ${planName}`;
           let buttonDisabled = loading;
           let helperText = '';
 
-          if (isSameTier && isSameCycle) {
+          if (isSamePlanAndCycle) {
             buttonLabel = 'Current plan';
             buttonDisabled = true;
             helperText = `Your ${planName} ${selectedCycle} plan is already active.`;
-          } else if (isSameTier) {
+          } else if (isSamePlanDifferentCycle) {
             if (!status?.billingCustomerExists) {
               buttonLabel = 'Complete checkout to activate billing';
               buttonDisabled = true;
@@ -221,9 +221,15 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
               </div>
 
               <button
-                onClick={() => onUpgrade({ tier, billingCycle: selectedCycle, founderRequested: founderRequested && founderEligible })}
+                onClick={() => {
+                  if (isSamePlanAndCycle) {
+                    console.warn('Blocked duplicate subscription attempt for the current billing plan and cycle.');
+                    return;
+                  }
+                  onUpgrade({ tier, billingCycle: selectedCycle, founderRequested: founderRequested && founderEligible });
+                }}
                 disabled={buttonDisabled}
-                className={`mt-4 inline-flex w-full items-center justify-center rounded-xl px-4 py-3 text-sm font-bold transition ${tier === 'amateur' ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-amber-500 text-slate-950 hover:bg-amber-400'} disabled:cursor-not-allowed disabled:opacity-50`}
+                className={`mt-4 inline-flex w-full items-center justify-center rounded-xl px-4 py-3 text-sm font-bold transition ${tier === 'amateur' ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-amber-500 text-slate-950 hover:bg-amber-400'} ${isSamePlanAndCycle ? 'opacity-50 cursor-not-allowed' : ''} disabled:cursor-not-allowed disabled:opacity-50`}
               >
                 {buttonLabel}
               </button>
