@@ -2,7 +2,7 @@ import type { BillingPlanKey } from '../../services/planCatalog.js';
 import { BILLING_PLAN_CATALOG } from '../../services/planCatalog.js';
 import { deriveFounderProtection } from './founderProtection.js';
 import { resolveBillingPlan } from './planMapping.js';
-import { getBillingConfig } from './billingConfig.js';
+import { getBillingConfig, type BillingCheckoutLookupKey } from './billingConfig.js';
 
 export type BillingStatusResponse = {
   ok: true;
@@ -53,6 +53,50 @@ function normalizeBillingPlanKey(value: unknown): BillingPlanKey | null {
   if (raw === 'free' || raw === 'amateur' || raw === 'founder_amateur' || raw === 'professional' || raw === 'founder_professional') {
     return raw as BillingPlanKey;
   }
+  return null;
+}
+
+
+function inferBillingCycleFromLookupKey(lookupKey: BillingCheckoutLookupKey | null): 'monthly' | 'yearly' | null {
+  if (!lookupKey) return null;
+  return lookupKey.endsWith('_yearly') ? 'yearly' : 'monthly';
+}
+
+function findConfiguredLookupKeyForPriceId(
+  priceId: string | null,
+  priceLookup: Record<BillingCheckoutLookupKey, { stripePriceEnvKey: string; stripePriceEnvFallbackKey?: string }>,
+  env: NodeJS.ProcessEnv = process.env,
+): BillingCheckoutLookupKey | null {
+  const normalizedPriceId = String(priceId || '').trim();
+  if (!normalizedPriceId) return null;
+
+  for (const [lookupKey, config] of Object.entries(priceLookup) as Array<[BillingCheckoutLookupKey, { stripePriceEnvKey: string; stripePriceEnvFallbackKey?: string }]>) {
+    const primaryPriceId = String(env?.[config.stripePriceEnvKey] || '').trim();
+    if (primaryPriceId && primaryPriceId === normalizedPriceId) {
+      return lookupKey;
+    }
+
+    const fallbackPriceId = config.stripePriceEnvFallbackKey
+      ? String(env?.[config.stripePriceEnvFallbackKey] || '').trim()
+      : '';
+    if (fallbackPriceId && fallbackPriceId === normalizedPriceId) {
+      return lookupKey;
+    }
+  }
+
+  return null;
+}
+
+function inferBillingCycleFromPeriod(start: unknown, end: unknown): 'monthly' | 'yearly' | null {
+  const startMs = start ? new Date(start as any).getTime() : NaN;
+  const endMs = end ? new Date(end as any).getTime() : NaN;
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
+    return null;
+  }
+
+  const days = (endMs - startMs) / (1000 * 60 * 60 * 24);
+  if (days >= 300) return 'yearly';
+  if (days >= 20 && days <= 45) return 'monthly';
   return null;
 }
 
@@ -141,10 +185,11 @@ export async function resolveBillingStatusForUser(admin: any, userId: string): P
   const currentPriceId =
     String(subscription?.price_id || profile?.stripe_price_id || '').trim() || null;
 
+  const configuredLookupKey = findConfiguredLookupKeyForPriceId(currentPriceId, config.priceLookup);
   const currentBillingCycle: 'monthly' | 'yearly' =
-    currentPriceId && /(?:yearly|annual|_yr\b|yr\b)/i.test(currentPriceId)
-      ? 'yearly'
-      : 'monthly';
+    inferBillingCycleFromLookupKey(configuredLookupKey)
+    ?? inferBillingCycleFromPeriod(subscription?.current_period_start, subscription?.current_period_end)
+    ?? 'monthly';
 
   return {
     ok: true,
