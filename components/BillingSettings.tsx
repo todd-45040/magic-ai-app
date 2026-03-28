@@ -185,15 +185,17 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
 
         <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2 text-white">
         {(['amateur', 'professional'] as const).map((tier) => {
-          const current = tier === 'amateur' ? isCurrentAmateur : isCurrentProfessional;
+          const currentPlanMatch = tier === 'amateur' ? isCurrentAmateur : isCurrentProfessional;
           const badge = founderRequested && founderEligible ? 'Founder pricing path' : 'Standard pricing';
           const selectedCycle = billingCycle;
           const planName = tier === 'amateur' ? 'Amateur' : 'Professional';
           const currentTierRank = getPlanTierRank(currentPlanKey);
           const targetTierRank = getPlanTierRank(tier);
           const isDowngradePath = targetTierRank < currentTierRank;
-          const isSamePlanAndCycle = current && currentBillingCycle === selectedCycle;
-          const isSamePlanDifferentCycle = current && currentBillingCycle !== selectedCycle;
+          const isSamePlanAndCycle = currentPlanMatch && currentBillingCycle === selectedCycle;
+          const isSamePlanDifferentCycle = currentPlanMatch && currentBillingCycle !== selectedCycle;
+          const showCurrentBadge = isSamePlanAndCycle;
+          const showCycleSwitchBadge = isSamePlanDifferentCycle;
 
           let buttonLabel = `Upgrade to ${planName}`;
           let buttonDisabled = loading;
@@ -227,8 +229,10 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
                 <div>
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-semibold">{planName}</p>
-                    {current ? (
+                    {showCurrentBadge ? (
                       <span className="rounded-full border border-white/20 px-2 py-0.5 text-[10px] uppercase">Current</span>
+                    ) : showCycleSwitchBadge ? (
+                      <span className="rounded-full border border-white/20 px-2 py-0.5 text-[10px] uppercase">Switch billing cycle</span>
                     ) : (
                       <span className="rounded-full border border-white/20 px-2 py-0.5 text-[10px] uppercase">{badge}</span>
                     )}

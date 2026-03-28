@@ -575,8 +575,8 @@ export async function resolveBillingStatusForUser(admin: any, userId: string): P
 
   const configuredLookupKey = findConfiguredLookupKeyForPriceId(currentPriceId, config.priceLookup);
   const currentBillingCycle: 'monthly' | 'yearly' =
-    stripeSnapshot?.interval
-    ?? inferBillingCycleFromLookupKey(configuredLookupKey)
+    inferBillingCycleFromLookupKey(configuredLookupKey)
+    ?? stripeSnapshot?.interval
     ?? inferBillingCycleFromPeriod(stripeSnapshot?.currentPeriodStart || subscription?.current_period_start, stripeSnapshot?.currentPeriodEnd || subscription?.current_period_end)
     ?? 'monthly';
 
