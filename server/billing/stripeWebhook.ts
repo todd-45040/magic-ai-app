@@ -87,13 +87,52 @@ function safeIsoFromUnixSeconds(value: unknown): string | null {
   return new Date(seconds * 1000).toISOString();
 }
 
+async function fetchLiveStripeSubscriptionSnapshot(subscriptionId: string | null) {
+  const normalizedId = String(subscriptionId || '').trim();
+  const stripeKey = getOptionalEnv('STRIPE_SECRET_KEY');
+  if (!normalizedId || !stripeKey) return null;
+
+  try {
+    const apiVersion = getOptionalEnv('STRIPE_API_VERSION') || '2024-06-20';
+    const response = await fetch(
+      `https://api.stripe.com/v1/subscriptions/${encodeURIComponent(normalizedId)}?expand[]=latest_invoice.payment_intent`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${stripeKey}`,
+          'Stripe-Version': apiVersion,
+        },
+      },
+    );
+
+    if (!response.ok) return null;
+    const json: any = await response.json().catch(() => null);
+    if (!json?.id) return null;
+
+    return {
+      id: String(json.id),
+      status: String(json?.status || '').trim() || null,
+      currentPeriodStart: safeIsoFromUnixSeconds(json?.current_period_start),
+      currentPeriodEnd: safeIsoFromUnixSeconds(json?.current_period_end),
+      cancelAtPeriodEnd: Boolean(json?.cancel_at_period_end),
+      priceId: String(json?.items?.data?.[0]?.price?.id || '').trim() || null,
+      productId: String(json?.items?.data?.[0]?.price?.product || '').trim() || null,
+      latestInvoiceId: String(json?.latest_invoice?.id || '').trim() || null,
+      latestInvoiceStatus: String(json?.latest_invoice?.status || '').trim() || null,
+      latestPaymentIntentStatus: String(json?.latest_invoice?.payment_intent?.status || '').trim() || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function normalizeBool(value: unknown): boolean {
   if (typeof value === 'boolean') return value;
   const raw = String(value ?? '').trim().toLowerCase();
   return raw === 'true' || raw === '1' || raw === 'yes';
 }
 
-function normalizePlanFromObject(object: any): BillingPlanKey {
+function normalizePlanFromObject(object: any, fallback?: { priceId?: string | null; productId?: string | null }): BillingPlanKey {
   const metadata = object?.metadata || {};
   const explicitPlan = String(metadata?.plan_key || metadata?.internal_plan_key || '').trim();
   if (explicitPlan === 'free' || explicitPlan === 'amateur' || explicitPlan === 'founder_amateur' || explicitPlan === 'professional' || explicitPlan === 'founder_professional') {
@@ -110,8 +149,8 @@ function normalizePlanFromObject(object: any): BillingPlanKey {
   const firstPrice = object?.items?.data?.[0]?.price || object?.lines?.data?.[0]?.price || object?.plan || null;
   const resolved = resolvePlanKeyFromStripeRefs({
     lookupKey: firstPrice?.lookup_key || object?.lookup_key || null,
-    priceId: firstPrice?.id || object?.price?.id || null,
-    productId: firstPrice?.product || object?.price?.product || object?.product || null,
+    priceId: firstPrice?.id || object?.price?.id || fallback?.priceId || null,
+    productId: firstPrice?.product || object?.price?.product || object?.product || fallback?.productId || null,
   });
 
   return resolved || (founderLike ? (requestedTier === 'amateur' ? 'founder_amateur' : 'founder_professional') : 'free');
@@ -419,14 +458,18 @@ async function syncFromEvent(admin: any, event: any) {
   const userId = String(metadata?.user_id || object?.client_reference_id || '').trim() || null;
   const existingFounderOverride = await getFounderOverride(admin, userId);
   const founderState = deriveFounderProtection({ metadata, founderOverride: existingFounderOverride });
-  const normalizedPlanKey = normalizePlanFromObject(object);
-  const planKey = founderState.founderProtected && founderState.lockedPlan ? founderState.lockedPlan : normalizedPlanKey;
-  const billingStatus = normalizeStatusFromEvent(eventType, object);
   const stripeCustomerId = String(object?.customer || '').trim() || null;
   const stripeSubscriptionId = String(object?.subscription || (object?.object === 'subscription' ? object?.id : '') || '').trim() || null;
+  const liveSubscription = await fetchLiveStripeSubscriptionSnapshot(stripeSubscriptionId);
+  const normalizedPlanKey = normalizePlanFromObject(object, {
+    priceId: liveSubscription?.priceId || null,
+    productId: liveSubscription?.productId || null,
+  });
+  const planKey = founderState.founderProtected && founderState.lockedPlan ? founderState.lockedPlan : normalizedPlanKey;
+  const billingStatus = String(liveSubscription?.status || normalizeStatusFromEvent(eventType, object)).trim();
   const checkoutSessionId = object?.object === 'checkout.session' ? String(object?.id || '').trim() || null : null;
-  const currentPeriodStart = safeIsoFromUnixSeconds(object?.current_period_start || object?.period_start) || null;
-  const currentPeriodEnd = safeIsoFromUnixSeconds(object?.current_period_end || object?.period_end) || null;
+  const currentPeriodStart = liveSubscription?.currentPeriodStart || safeIsoFromUnixSeconds(object?.current_period_start || object?.period_start) || null;
+  const currentPeriodEnd = liveSubscription?.currentPeriodEnd || safeIsoFromUnixSeconds(object?.current_period_end || object?.period_end) || null;
   const founderLockedPlan = founderState.founderProtected && founderState.lockedPlan ? founderState.lockedPlan : (planKey === 'founder_professional' ? 'founder_professional' : planKey === 'founder_amateur' ? 'founder_amateur' : null);
   const founderLockedPrice = founderState.founderProtected ? (founderState.lockedPriceCents || (founderLockedPlan === 'founder_amateur' ? 1595 : 2995)) : null;
 
@@ -468,11 +511,11 @@ async function syncFromEvent(admin: any, event: any) {
     billingStatus,
     currentPeriodStart,
     currentPeriodEnd,
-    cancelAtPeriodEnd: Boolean(object?.cancel_at_period_end),
+    cancelAtPeriodEnd: liveSubscription?.cancelAtPeriodEnd ?? Boolean(object?.cancel_at_period_end),
     founderLockedPrice,
     founderLockedPlan,
-    priceId: firstPrice?.id || object?.price?.id || null,
-    productId: firstPrice?.product || object?.price?.product || null,
+    priceId: liveSubscription?.priceId || firstPrice?.id || object?.price?.id || null,
+    productId: liveSubscription?.productId || firstPrice?.product || object?.price?.product || null,
   });
 
   return {

@@ -37,51 +37,56 @@ export type BillingCheckoutLookupKey =
 
 
 export type BillingTruthDebug = {
-  database: {
-    billingCustomer: any | null;
-    subscription: any | null;
-    usagePeriod: any | null;
-    founderOverride: any | null;
-  };
-  stripe: {
-    customerExists: boolean;
-    subscriptionExists: boolean;
-    customerId: string | null;
+  dbSnapshot: {
+    billingCustomerId: string | null;
+    stripeCustomerId: string | null;
     subscriptionId: string | null;
-    status: string | null;
-    priceId: string | null;
-    interval: string | null;
+    stripeSubscriptionId: string | null;
+    planKey: BillingPlanKey | null;
+    billingStatus: string | null;
     currentPeriodStart: string | null;
     currentPeriodEnd: string | null;
-    cancelAtPeriodEnd: boolean | null;
+    cancelAtPeriodEnd: boolean;
+    priceId: string | null;
+    founderLockedPlan: BillingPlanKey | null;
+    founderLockedPriceCents: number | null;
+    founderOverrideActive: boolean;
+  };
+  stripeSnapshot: {
+    customerExists: boolean;
+    subscriptionExists: boolean;
+    status: string | null;
+    priceId: string | null;
+    interval: BillingCycle | null;
+    currentPeriodStart: string | null;
+    currentPeriodEnd: string | null;
+    cancelAtPeriodEnd: boolean;
     latestInvoiceId: string | null;
     latestInvoiceStatus: string | null;
     latestPaymentIntentStatus: string | null;
-    error?: string | null;
   };
-  resolved: {
-    currentPlan: BillingPlanKey;
-    billingState: string;
+  resolvedSnapshot: {
+    planKey: BillingPlanKey;
+    billingStatus: string;
     accessState: string;
-    currentBillingCycle: BillingCycle;
     renewalDate: string | null;
-    founderProtected: boolean;
-    upgradeTargets: BillingPlanKey[];
+    currentBillingCycle: BillingCycle;
+    source: 'database' | 'fallback' | 'stripe_live';
   };
   mismatches: {
     planMismatch: boolean;
     statusMismatch: boolean;
     renewalMismatch: boolean;
     cycleMismatch: boolean;
-    missingStripeCustomerLink: boolean;
-    missingStripeSubscriptionLink: boolean;
+    missingStripeCustomer: boolean;
+    missingStripeSubscription: boolean;
     missingDbPeriodDates: boolean;
   };
   nextInspectionFocus: string[];
 };
 
 export type BillingStatusPayload = {
-  ok:true; planKey:BillingPlanKey; billingStatus:string; accessState:string; renewalDate:string|null; cancelAtPeriodEnd:boolean; founderProtected:boolean; founderLockedPlan:BillingPlanKey|null; founderLockedPriceCents:number|null; usagePeriodStart:string|null; usagePeriodEnd:string|null; upgradeTargets:BillingPlanKey[]; stripeConfigured:boolean; billingCustomerExists:boolean; stripeCustomerIdPresent:boolean; currentBillingCycle: BillingCycle; currentPriceId: string | null; source:'database'|'fallback'; billingReadiness:{ expectedWebhookPath:string; expectedWebhookUrl:string; missingEnvKeys:string[]; configuredPriceKeys:string[]; missingPriceKeys:string[]; hasPublishableKey:boolean; hasWebhookSecret:boolean; hasServerSecretKey:boolean; }; billingTruth: BillingTruthDebug;
+  ok:true; planKey:BillingPlanKey; billingStatus:string; accessState:string; renewalDate:string|null; cancelAtPeriodEnd:boolean; founderProtected:boolean; founderLockedPlan:BillingPlanKey|null; founderLockedPriceCents:number|null; usagePeriodStart:string|null; usagePeriodEnd:string|null; upgradeTargets:BillingPlanKey[]; stripeConfigured:boolean; billingCustomerExists:boolean; stripeCustomerIdPresent:boolean; currentBillingCycle: BillingCycle; currentPriceId: string | null; source:'database'|'fallback'|'stripe_live'; billingTruth: BillingTruthDebug; billingReadiness:{ expectedWebhookPath:string; expectedWebhookUrl:string; missingEnvKeys:string[]; configuredPriceKeys:string[]; missingPriceKeys:string[]; hasPublishableKey:boolean; hasWebhookSecret:boolean; hasServerSecretKey:boolean; };
 };
 export type BillingCheckoutPayload = { ok:boolean; mode?:'placeholder'; stripeConfigured:boolean; message?:string; targetPlanKey?:BillingPlanKey; targetLookupKey?:BillingCheckoutLookupKey; successUrl?:string; cancelUrl?:string; url?:string; };
 export type BillingPortalPayload = { ok:boolean; mode?:'placeholder'; stripeConfigured:boolean; billingCustomerExists?:boolean; message?:string; returnUrl?:string; url?:string; };
