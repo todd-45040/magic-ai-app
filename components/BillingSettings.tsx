@@ -86,8 +86,41 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ onUpgrade }) => {
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-white">
-        <h2 className="text-lg font-semibold">Billing summary</h2>
-        <div className="mt-3 grid gap-3 md:grid-cols-5 text-sm">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">Billing summary</h2>
+            <p className="mt-1 text-sm text-white/60">
+              Choose a plan and billing cycle in one place. This keeps the pricing controls visually attached to the upgrade cards.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-3 xl:justify-end">
+            <div className="inline-flex rounded-xl border border-white/10 bg-black/20 p-1">
+              <button
+                onClick={() => setBillingCycle('monthly')}
+                className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${billingCycle === 'monthly' ? 'bg-purple-600 text-white' : 'text-white/70 hover:bg-white/[0.05]'}`}
+              >
+                Monthly
+              </button>
+              <button
+                onClick={() => setBillingCycle('yearly')}
+                className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${billingCycle === 'yearly' ? 'bg-purple-600 text-white' : 'text-white/70 hover:bg-white/[0.05]'}`}
+              >
+                Yearly
+              </button>
+            </div>
+            <button
+              onClick={() => founderEligible && setFounderRequested((v) => !v)}
+              disabled={!founderEligible}
+              className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${founderRequested ? 'bg-amber-500 text-slate-950' : 'border border-white/10 bg-white/[0.04] text-white/70'} disabled:cursor-not-allowed disabled:opacity-60`}
+            >
+              {founderEligible
+                ? `Founder pricing path ${founderRequested ? 'On' : 'Off'}`
+                : 'Founder pricing path unavailable'}
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-5 text-sm">
           <div className="rounded-xl border border-white/10 bg-black/20 p-3">
             <div className="text-white/50 text-xs uppercase">Current plan</div>
             <div className="mt-1">{loading ? 'Loading…' : humanizePlan(currentPlanKey)}</div>
@@ -109,35 +142,8 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ onUpgrade }) => {
             <div className="mt-1">{loading ? 'Loading…' : founderLabel}</div>
           </div>
         </div>
-        <div className="mt-4 flex flex-wrap gap-3">
-          <button
-            onClick={() => setBillingCycle('monthly')}
-            className={`rounded-xl px-4 py-2 text-sm font-semibold ${billingCycle === 'monthly' ? 'bg-purple-600 text-white' : 'border border-white/10 bg-white/[0.04] text-white/70'}`}
-          >
-            Monthly
-          </button>
-          <button
-            onClick={() => setBillingCycle('yearly')}
-            className={`rounded-xl px-4 py-2 text-sm font-semibold ${billingCycle === 'yearly' ? 'bg-purple-600 text-white' : 'border border-white/10 bg-white/[0.04] text-white/70'}`}
-          >
-            Yearly
-          </button>
-          <button
-            onClick={() => founderEligible && setFounderRequested((v) => !v)}
-            disabled={!founderEligible}
-            className={`rounded-xl px-4 py-2 text-sm font-semibold ${founderRequested ? 'bg-amber-500 text-slate-950' : 'border border-white/10 bg-white/[0.04] text-white/70'} disabled:cursor-not-allowed disabled:opacity-60`}
-          >
-            {founderEligible
-              ? `Founder pricing path ${founderRequested ? 'On' : 'Off'}`
-              : 'Founder pricing path unavailable'}
-          </button>
-        </div>
-        <p className="mt-3 text-xs text-white/50">
-          Single billing truth model: Amateur and Professional each support monthly, yearly, founder monthly, and founder yearly checkout paths.
-        </p>
-      </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 text-white">
+        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2 text-white">
         {(['amateur', 'professional'] as const).map((tier) => {
           const current = tier === 'amateur' ? isCurrentAmateur : isCurrentProfessional;
           const badge = founderRequested && founderEligible ? 'Founder pricing path' : 'Standard pricing';
@@ -205,6 +211,11 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ onUpgrade }) => {
             </div>
           );
         })}
+        </div>
+
+        <p className="mt-4 text-xs text-white/50">
+          Single billing truth model: Amateur and Professional each support monthly, yearly, founder monthly, and founder yearly checkout paths.
+        </p>
       </div>
 
       <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-white">
