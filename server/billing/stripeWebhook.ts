@@ -226,8 +226,7 @@ async function upsertBillingCustomer(admin: any, params: { userId: string | null
     ? await admin.from('billing_customers').select('id').eq('user_id', params.userId).maybeSingle()
     : { data: null };
 
-  const payload = {
-    id: existingByCustomer?.id || existingByUser?.id || undefined,
+  const payload: Record<string, unknown> = {
     user_id: params.userId,
     stripe_customer_id: params.stripeCustomerId,
     email: params.email || null,
@@ -236,8 +235,11 @@ async function upsertBillingCustomer(admin: any, params: { userId: string | null
     synced_at: new Date().toISOString(),
     source_updated_at: new Date().toISOString(),
   };
+  const existingId = existingByCustomer?.id || existingByUser?.id || null;
+  if (existingId) payload.id = existingId;
 
-  const { data, error } = await admin.from('billing_customers').upsert([payload], { onConflict: 'user_id' }).select('id').single();
+  const conflictTarget = params.userId ? 'user_id' : 'stripe_customer_id';
+  const { data, error } = await admin.from('billing_customers').upsert([payload], { onConflict: conflictTarget }).select('id').single();
   if (error) throw new Error(`billing_customer_upsert_failed:${error.message}`);
   return data?.id as string | null;
 }
@@ -323,8 +325,7 @@ async function upsertUsagePeriod(admin: any, params: {
     .limit(1)
     .maybeSingle();
 
-  const payload = {
-    id: existing?.id || undefined,
+  const payload: Record<string, unknown> = {
     user_id: params.userId,
     plan_key: effectivePlan,
     period_start: params.currentPeriodStart,
@@ -333,6 +334,7 @@ async function upsertUsagePeriod(admin: any, params: {
     source_updated_at: new Date().toISOString(),
     last_synced_at: new Date().toISOString(),
   };
+  if (existing?.id) payload.id = existing.id;
 
   await admin.from('usage_periods').upsert([payload], { onConflict: 'id' });
 }
@@ -378,7 +380,6 @@ async function upsertSubscription(admin: any, params: {
   });
 
   const payload: Record<string, unknown> = {
-    id: existingId || undefined,
     user_id: params.userId,
     billing_customer_id: params.billingCustomerId,
     stripe_customer_id: params.stripeCustomerId,
@@ -396,6 +397,7 @@ async function upsertSubscription(admin: any, params: {
     last_synced_at: new Date().toISOString(),
     source_updated_at: new Date().toISOString(),
   };
+  if (existingId) payload.id = existingId;
 
   const { data, error } = await admin.from('subscriptions').upsert([payload], { onConflict: 'stripe_subscription_id' }).select('id').single();
   if (error) throw new Error(`subscription_upsert_failed:${error.message}`);
