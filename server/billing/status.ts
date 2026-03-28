@@ -39,6 +39,51 @@ export type BillingStatusResponse = {
     hasWebhookSecret: boolean;
     hasServerSecretKey: boolean;
   };
+  billingTruth: BillingTruthDebug;
+};
+
+export type BillingTruthDebug = {
+  database: {
+    billingCustomer: any | null;
+    subscription: any | null;
+    usagePeriod: any | null;
+    founderOverride: any | null;
+  };
+  stripe: {
+    customerExists: boolean;
+    subscriptionExists: boolean;
+    customerId: string | null;
+    subscriptionId: string | null;
+    status: string | null;
+    priceId: string | null;
+    interval: string | null;
+    currentPeriodStart: string | null;
+    currentPeriodEnd: string | null;
+    cancelAtPeriodEnd: boolean | null;
+    latestInvoiceId: string | null;
+    latestInvoiceStatus: string | null;
+    latestPaymentIntentStatus: string | null;
+    error?: string | null;
+  };
+  resolved: {
+    currentPlan: BillingPlanKey;
+    billingState: string;
+    accessState: string;
+    currentBillingCycle: 'monthly' | 'yearly';
+    renewalDate: string | null;
+    founderProtected: boolean;
+    upgradeTargets: BillingPlanKey[];
+  };
+  mismatches: {
+    planMismatch: boolean;
+    statusMismatch: boolean;
+    renewalMismatch: boolean;
+    cycleMismatch: boolean;
+    missingStripeCustomerLink: boolean;
+    missingStripeSubscriptionLink: boolean;
+    missingDbPeriodDates: boolean;
+  };
+  nextInspectionFocus: string[];
 };
 
 function asIso(value: unknown): string | null {
@@ -106,6 +151,136 @@ function inferBillingCycleFromPeriod(start: unknown, end: unknown): 'monthly' | 
   return null;
 }
 
+
+async function fetchStripeBillingSnapshot(stripeCustomerId: string | null, stripeSubscriptionId: string | null): Promise<BillingTruthDebug['stripe']> {
+  const secretKey = String(process.env.STRIPE_SECRET_KEY || '').trim();
+  const emptySnapshot: BillingTruthDebug['stripe'] = {
+    customerExists: false,
+    subscriptionExists: false,
+    customerId: stripeCustomerId,
+    subscriptionId: stripeSubscriptionId,
+    status: null,
+    priceId: null,
+    interval: null,
+    currentPeriodStart: null,
+    currentPeriodEnd: null,
+    cancelAtPeriodEnd: null,
+    latestInvoiceId: null,
+    latestInvoiceStatus: null,
+    latestPaymentIntentStatus: null,
+  };
+
+  if (!secretKey) {
+    return { ...emptySnapshot, error: 'missing_stripe_secret_key' };
+  }
+
+  const authHeader = `Bearer ${secretKey}`;
+
+  async function stripeGet(path: string) {
+    const response = await fetch(`https://api.stripe.com${path}`, {
+      method: 'GET',
+      headers: {
+        Authorization: authHeader,
+      },
+    });
+
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      const message = typeof payload?.error?.message === 'string'
+        ? payload.error.message
+        : `stripe_http_${response.status}`;
+      throw new Error(message);
+    }
+
+    return payload;
+  }
+
+  try {
+    let customer: any = null;
+    if (stripeCustomerId) {
+      customer = await stripeGet(`/v1/customers/${encodeURIComponent(stripeCustomerId)}`);
+    }
+
+    let subscription: any = null;
+    if (stripeSubscriptionId) {
+      subscription = await stripeGet(`/v1/subscriptions/${encodeURIComponent(stripeSubscriptionId)}?expand[]=latest_invoice.payment_intent`);
+    } else if (stripeCustomerId) {
+      const list = await stripeGet(`/v1/subscriptions?customer=${encodeURIComponent(stripeCustomerId)}&status=all&limit=1&expand[]=data.latest_invoice.payment_intent`);
+      subscription = Array.isArray(list?.data) ? (list.data[0] || null) : null;
+    }
+
+    const latestInvoice = subscription?.latest_invoice || null;
+    const paymentIntent = latestInvoice?.payment_intent || null;
+
+    return {
+      customerExists: Boolean(customer?.id),
+      subscriptionExists: Boolean(subscription?.id),
+      customerId: customer?.id || stripeCustomerId || null,
+      subscriptionId: subscription?.id || stripeSubscriptionId || null,
+      status: subscription?.status || null,
+      priceId: subscription?.items?.data?.[0]?.price?.id || null,
+      interval: subscription?.items?.data?.[0]?.price?.recurring?.interval || null,
+      currentPeriodStart: asIso(subscription?.current_period_start ? subscription.current_period_start * 1000 : null),
+      currentPeriodEnd: asIso(subscription?.current_period_end ? subscription.current_period_end * 1000 : null),
+      cancelAtPeriodEnd: typeof subscription?.cancel_at_period_end === 'boolean' ? subscription.cancel_at_period_end : null,
+      latestInvoiceId: latestInvoice?.id || null,
+      latestInvoiceStatus: latestInvoice?.status || null,
+      latestPaymentIntentStatus: paymentIntent?.status || null,
+    };
+  } catch (error: any) {
+    return {
+      ...emptySnapshot,
+      error: String(error?.message || error || 'stripe_fetch_failed'),
+    };
+  }
+}
+
+function buildBillingTruthDebug(args: {
+  billingCustomer: any | null;
+  subscription: any | null;
+  usagePeriod: any | null;
+  founderOverride: any | null;
+  stripe: BillingTruthDebug['stripe'];
+  resolved: BillingTruthDebug['resolved'];
+}): BillingTruthDebug {
+  const dbPlan = normalizeBillingPlanKey(args.subscription?.plan_key);
+  const dbStatus = String(args.subscription?.billing_status || '').trim() || null;
+  const dbPeriodEnd = asIso(args.subscription?.current_period_end);
+  const dbCycle = inferBillingCycleFromPeriod(args.subscription?.current_period_start, args.subscription?.current_period_end);
+  const stripeCycle = args.stripe.interval === 'year' ? 'yearly' : args.stripe.interval === 'month' ? 'monthly' : null;
+
+  const mismatches = {
+    planMismatch: Boolean(dbPlan && args.resolved.currentPlan !== dbPlan),
+    statusMismatch: Boolean(dbStatus && args.resolved.billingState !== dbStatus),
+    renewalMismatch: Boolean(dbPeriodEnd && args.resolved.renewalDate && dbPeriodEnd !== args.resolved.renewalDate),
+    cycleMismatch: Boolean((stripeCycle || dbCycle) && args.resolved.currentBillingCycle !== (stripeCycle || dbCycle)),
+    missingStripeCustomerLink: !String(args.billingCustomer?.stripe_customer_id || '').trim(),
+    missingStripeSubscriptionLink: !String(args.subscription?.stripe_subscription_id || '').trim(),
+    missingDbPeriodDates: !args.subscription?.current_period_start || !args.subscription?.current_period_end,
+  };
+
+  const nextInspectionFocus: string[] = [];
+  if (mismatches.missingStripeCustomerLink || mismatches.missingStripeSubscriptionLink) nextInspectionFocus.push('DB linkage issue (customer/subscription missing)');
+  if (mismatches.missingDbPeriodDates) nextInspectionFocus.push('Webhook persistence issue (period dates missing in DB)');
+  if (mismatches.statusMismatch) nextInspectionFocus.push('status.ts billing state mapping issue');
+  if (mismatches.renewalMismatch) nextInspectionFocus.push('renewal date resolution mismatch');
+  if (mismatches.cycleMismatch) nextInspectionFocus.push('billing cycle inference mismatch');
+  if (args.stripe.error) nextInspectionFocus.push('live Stripe snapshot unavailable');
+
+  return {
+    database: {
+      billingCustomer: args.billingCustomer,
+      subscription: args.subscription,
+      usagePeriod: args.usagePeriod,
+      founderOverride: args.founderOverride,
+    },
+    stripe: args.stripe,
+    resolved: args.resolved,
+    mismatches,
+    nextInspectionFocus,
+  };
+}
+
 async function maybeSelectSingle(query: Promise<any>) {
   try {
     const { data, error } = await query;
@@ -128,13 +303,13 @@ export async function resolveBillingStatusForUser(admin: any, userId: string): P
     ),
     maybeSelectSingle(
       admin.from('billing_customers')
-        .select('id, stripe_customer_id, provider_status')
+        .select('id, user_id, stripe_customer_id, provider_status, created_at, updated_at')
         .eq('user_id', userId)
         .maybeSingle()
     ),
     maybeSelectSingle(
       admin.from('subscriptions')
-        .select('id, plan_key, billing_status, current_period_start, current_period_end, cancel_at_period_end, founder_locked_price, founder_locked_plan, stripe_subscription_id, price_id')
+        .select('id, user_id, plan_key, billing_status, current_period_start, current_period_end, cancel_at_period_end, founder_locked_price, founder_locked_plan, stripe_subscription_id, stripe_customer_id, price_id, created_at, updated_at')
         .eq('user_id', userId)
         .order('updated_at', { ascending: false })
         .limit(1)
@@ -197,6 +372,27 @@ export async function resolveBillingStatusForUser(admin: any, userId: string): P
     ?? inferBillingCycleFromPeriod(subscription?.current_period_start, subscription?.current_period_end)
     ?? 'monthly';
 
+  const stripeCustomerId = String(billingCustomer?.stripe_customer_id || subscription?.stripe_customer_id || '').trim() || null;
+  const stripeSubscriptionId = String(subscription?.stripe_subscription_id || '').trim() || null;
+  const stripeSnapshot = await fetchStripeBillingSnapshot(stripeCustomerId, stripeSubscriptionId);
+
+  const billingTruth = buildBillingTruthDebug({
+    billingCustomer,
+    subscription,
+    usagePeriod,
+    founderOverride,
+    stripe: stripeSnapshot,
+    resolved: {
+      currentPlan: effectivePlanKey,
+      billingState: resolved.billingStatus,
+      accessState: resolved.accessState,
+      currentBillingCycle,
+      renewalDate: asIso(subscription?.current_period_end),
+      founderProtected: founderProtection.founderProtected,
+      upgradeTargets,
+    },
+  });
+
   return {
     ok: true,
     planKey: effectivePlanKey,
@@ -217,5 +413,6 @@ export async function resolveBillingStatusForUser(admin: any, userId: string): P
     currentPriceId,
     source: subscription || billingCustomer || usagePeriod || founderOverride ? 'database' : 'fallback',
     billingReadiness: config.readiness,
+    billingTruth,
   };
 }
