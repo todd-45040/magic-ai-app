@@ -227,7 +227,24 @@ async function maybeSelectSingle(query: Promise<any>) {
   }
 }
 
-async function fetchStripeSubscriptionSnapshot(stripeSubscriptionId: string | null): Promise<StripeSubscriptionSnapshot | null> {
+function normalizeStripeSubscriptionSnapshot(json: any): StripeSubscriptionSnapshot | null {
+  if (!json?.id) return null;
+  const recurringInterval = String(json?.items?.data?.[0]?.price?.recurring?.interval || '').trim();
+  return {
+    id: String(json.id),
+    status: String(json?.status || '').trim() || null,
+    cancelAtPeriodEnd: Boolean(json?.cancel_at_period_end),
+    currentPeriodStart: safeIsoFromUnixSeconds(json?.current_period_start),
+    currentPeriodEnd: safeIsoFromUnixSeconds(json?.current_period_end),
+    priceId: String(json?.items?.data?.[0]?.price?.id || '').trim() || null,
+    interval: recurringInterval === 'year' ? 'yearly' : recurringInterval === 'month' ? 'monthly' : null,
+    latestInvoiceId: String(json?.latest_invoice?.id || '').trim() || null,
+    latestInvoiceStatus: String(json?.latest_invoice?.status || '').trim() || null,
+    latestPaymentIntentStatus: String(json?.latest_invoice?.payment_intent?.status || '').trim() || null,
+  };
+}
+
+async function fetchStripeSubscriptionSnapshotById(stripeSubscriptionId: string | null): Promise<StripeSubscriptionSnapshot | null> {
   const subscriptionId = String(stripeSubscriptionId || '').trim();
   const stripeKey = getOptionalEnv('STRIPE_SECRET_KEY');
   if (!subscriptionId || !stripeKey) return null;
@@ -247,24 +264,60 @@ async function fetchStripeSubscriptionSnapshot(stripeSubscriptionId: string | nu
 
     if (!response.ok) return null;
     const json: any = await response.json().catch(() => null);
-    if (!json?.id) return null;
-
-    const recurringInterval = String(json?.items?.data?.[0]?.price?.recurring?.interval || '').trim();
-
-    return {
-      id: String(json.id),
-      status: String(json?.status || '').trim() || null,
-      cancelAtPeriodEnd: Boolean(json?.cancel_at_period_end),
-      currentPeriodStart: safeIsoFromUnixSeconds(json?.current_period_start),
-      currentPeriodEnd: safeIsoFromUnixSeconds(json?.current_period_end),
-      priceId: String(json?.items?.data?.[0]?.price?.id || '').trim() || null,
-      interval: recurringInterval === 'year' ? 'yearly' : recurringInterval === 'month' ? 'monthly' : null,
-      latestInvoiceId: String(json?.latest_invoice?.id || '').trim() || null,
-      latestInvoiceStatus: String(json?.latest_invoice?.status || '').trim() || null,
-      latestPaymentIntentStatus: String(json?.latest_invoice?.payment_intent?.status || '').trim() || null,
-    };
+    return normalizeStripeSubscriptionSnapshot(json);
   } catch {
     return null;
+  }
+}
+
+async function fetchPreferredStripeSubscriptionSnapshot(params: { stripeSubscriptionId: string | null; stripeCustomerId: string | null }): Promise<StripeSubscriptionSnapshot | null> {
+  const stripeKey = getOptionalEnv('STRIPE_SECRET_KEY');
+  if (!stripeKey) return null;
+
+  const direct = await fetchStripeSubscriptionSnapshotById(params.stripeSubscriptionId);
+  const customerId = String(params.stripeCustomerId || '').trim();
+  if (!customerId) return direct;
+
+  try {
+    const apiVersion = getOptionalEnv('STRIPE_API_VERSION') || '2024-06-20';
+    const response = await fetch(
+      `https://api.stripe.com/v1/subscriptions?customer=${encodeURIComponent(customerId)}&status=all&limit=10&expand[]=data.latest_invoice.payment_intent`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${stripeKey}`,
+          'Stripe-Version': apiVersion,
+        },
+      },
+    );
+
+    if (!response.ok) return direct;
+    const json: any = await response.json().catch(() => null);
+    const rows = Array.isArray(json?.data) ? json.data : [];
+    if (!rows.length) return direct;
+
+    const score = (row: any) => {
+      const status = String(row?.status || '').trim();
+      const statusRank = status === 'active' ? 5 : status === 'trialing' ? 4 : status === 'past_due' ? 3 : status === 'incomplete' ? 2 : status === 'canceled' ? 1 : 0;
+      const created = Number(row?.created || 0);
+      return statusRank * 1_000_000_000 + created;
+    };
+
+    rows.sort((a: any, b: any) => score(b) - score(a));
+    const best = normalizeStripeSubscriptionSnapshot(rows[0]);
+    if (!best) return direct;
+
+    if (!direct) return best;
+
+    const isDirectStale = best.id !== direct.id && (
+      (best.status === 'active' || best.status === 'trialing') &&
+      !(direct.status === 'active' || direct.status === 'trialing')
+    );
+    const isDirectOlderCycle = best.id !== direct.id && best.currentPeriodEnd && direct.currentPeriodEnd && new Date(best.currentPeriodEnd).getTime() > new Date(direct.currentPeriodEnd).getTime();
+
+    return (isDirectStale || isDirectOlderCycle) ? best : direct;
+  } catch {
+    return direct;
   }
 }
 
@@ -530,7 +583,10 @@ export async function resolveBillingStatusForUser(admin: any, userId: string): P
     ),
   ]);
 
-  const stripeSnapshot = await fetchStripeSubscriptionSnapshot(subscription?.stripe_subscription_id || null);
+  const stripeSnapshot = await fetchPreferredStripeSubscriptionSnapshot({
+    stripeSubscriptionId: subscription?.stripe_subscription_id || null,
+    stripeCustomerId: billingCustomer?.stripe_customer_id || subscription?.stripe_customer_id || null,
+  });
 
   const founderProtection = deriveFounderProtection({
     user: profile || undefined,

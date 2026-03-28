@@ -87,15 +87,56 @@ function safeIsoFromUnixSeconds(value: unknown): string | null {
   return new Date(seconds * 1000).toISOString();
 }
 
-async function fetchLiveStripeSubscriptionSnapshot(subscriptionId: string | null) {
+function normalizeLiveStripeSubscriptionSnapshot(json: any) {
+  if (!json?.id) return null;
+  return {
+    id: String(json.id),
+    status: String(json?.status || '').trim() || null,
+    currentPeriodStart: safeIsoFromUnixSeconds(json?.current_period_start),
+    currentPeriodEnd: safeIsoFromUnixSeconds(json?.current_period_end),
+    cancelAtPeriodEnd: Boolean(json?.cancel_at_period_end),
+    priceId: String(json?.items?.data?.[0]?.price?.id || '').trim() || null,
+    productId: String(json?.items?.data?.[0]?.price?.product || '').trim() || null,
+    latestInvoiceId: String(json?.latest_invoice?.id || '').trim() || null,
+    latestInvoiceStatus: String(json?.latest_invoice?.status || '').trim() || null,
+    latestPaymentIntentStatus: String(json?.latest_invoice?.payment_intent?.status || '').trim() || null,
+  };
+}
+
+async function fetchLiveStripeSubscriptionSnapshot(subscriptionId: string | null, stripeCustomerId?: string | null) {
   const normalizedId = String(subscriptionId || '').trim();
   const stripeKey = getOptionalEnv('STRIPE_SECRET_KEY');
-  if (!normalizedId || !stripeKey) return null;
+  if (!normalizedId && !stripeCustomerId || !stripeKey) return null;
+
+  const apiVersion = getOptionalEnv('STRIPE_API_VERSION') || '2024-06-20';
+
+  let direct: any = null;
+  if (normalizedId) {
+    try {
+      const response = await fetch(
+        `https://api.stripe.com/v1/subscriptions/${encodeURIComponent(normalizedId)}?expand[]=latest_invoice.payment_intent`,
+        {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${stripeKey}`,
+            'Stripe-Version': apiVersion,
+          },
+        },
+      );
+      if (response.ok) {
+        direct = normalizeLiveStripeSubscriptionSnapshot(await response.json().catch(() => null));
+      }
+    } catch {
+      direct = null;
+    }
+  }
+
+  const customerId = String(stripeCustomerId || '').trim();
+  if (!customerId) return direct;
 
   try {
-    const apiVersion = getOptionalEnv('STRIPE_API_VERSION') || '2024-06-20';
     const response = await fetch(
-      `https://api.stripe.com/v1/subscriptions/${encodeURIComponent(normalizedId)}?expand[]=latest_invoice.payment_intent`,
+      `https://api.stripe.com/v1/subscriptions?customer=${encodeURIComponent(customerId)}&status=all&limit=10&expand[]=data.latest_invoice.payment_intent`,
       {
         method: 'GET',
         headers: {
@@ -104,25 +145,25 @@ async function fetchLiveStripeSubscriptionSnapshot(subscriptionId: string | null
         },
       },
     );
-
-    if (!response.ok) return null;
+    if (!response.ok) return direct;
     const json: any = await response.json().catch(() => null);
-    if (!json?.id) return null;
-
-    return {
-      id: String(json.id),
-      status: String(json?.status || '').trim() || null,
-      currentPeriodStart: safeIsoFromUnixSeconds(json?.current_period_start),
-      currentPeriodEnd: safeIsoFromUnixSeconds(json?.current_period_end),
-      cancelAtPeriodEnd: Boolean(json?.cancel_at_period_end),
-      priceId: String(json?.items?.data?.[0]?.price?.id || '').trim() || null,
-      productId: String(json?.items?.data?.[0]?.price?.product || '').trim() || null,
-      latestInvoiceId: String(json?.latest_invoice?.id || '').trim() || null,
-      latestInvoiceStatus: String(json?.latest_invoice?.status || '').trim() || null,
-      latestPaymentIntentStatus: String(json?.latest_invoice?.payment_intent?.status || '').trim() || null,
+    const rows = Array.isArray(json?.data) ? json.data : [];
+    if (!rows.length) return direct;
+    const score = (row: any) => {
+      const status = String(row?.status || '').trim();
+      const statusRank = status === 'active' ? 5 : status === 'trialing' ? 4 : status === 'past_due' ? 3 : status === 'incomplete' ? 2 : status === 'canceled' ? 1 : 0;
+      return statusRank * 1_000_000_000 + Number(row?.created || 0);
     };
+    rows.sort((a: any, b: any) => score(b) - score(a));
+    const best = normalizeLiveStripeSubscriptionSnapshot(rows[0]);
+    if (!best) return direct;
+    if (!direct) return best;
+    const directActive = direct.status === 'active' || direct.status === 'trialing';
+    const bestActive = best.status === 'active' || best.status === 'trialing';
+    const newerBest = best.currentPeriodEnd && direct.currentPeriodEnd && new Date(best.currentPeriodEnd).getTime() > new Date(direct.currentPeriodEnd).getTime();
+    return (best.id !== direct.id && ((bestActive && !directActive) || newerBest)) ? best : direct;
   } catch {
-    return null;
+    return direct;
   }
 }
 
@@ -460,7 +501,7 @@ async function syncFromEvent(admin: any, event: any) {
   const founderState = deriveFounderProtection({ metadata, founderOverride: existingFounderOverride });
   const stripeCustomerId = String(object?.customer || '').trim() || null;
   const stripeSubscriptionId = String(object?.subscription || (object?.object === 'subscription' ? object?.id : '') || '').trim() || null;
-  const liveSubscription = await fetchLiveStripeSubscriptionSnapshot(stripeSubscriptionId);
+  const liveSubscription = await fetchLiveStripeSubscriptionSnapshot(stripeSubscriptionId, stripeCustomerId);
   const normalizedPlanKey = normalizePlanFromObject(object, {
     priceId: liveSubscription?.priceId || null,
     productId: liveSubscription?.productId || null,
