@@ -307,8 +307,45 @@ async function mirrorWebhookHealthEvent(admin: any, event: any, requestId: strin
         received_at: new Date().toISOString(),
         request_id: requestId,
         signature_present: signaturePresent,
+        processed: false,
+        error: null,
+        delivery_attempts: 1,
       },
     ], { onConflict: 'stripe_event_id' });
+}
+
+async function incrementWebhookHealthAttempt(admin: any, stripeEventId: string | null, requestId?: string | null) {
+  const normalizedEventId = String(stripeEventId || '').trim();
+  if (!normalizedEventId) return;
+
+  const { data } = await admin
+    .from('maw_stripe_webhook_events')
+    .select('delivery_attempts')
+    .eq('stripe_event_id', normalizedEventId)
+    .maybeSingle();
+
+  const nextAttempts = Math.max(1, Number(data?.delivery_attempts || 1) + 1);
+  await admin
+    .from('maw_stripe_webhook_events')
+    .update({
+      delivery_attempts: nextAttempts,
+      received_at: new Date().toISOString(),
+      request_id: requestId || null,
+    })
+    .eq('stripe_event_id', normalizedEventId);
+}
+
+async function markWebhookHealthStatus(admin: any, stripeEventId: string | null, status: 'processed' | 'failed', error?: string | null) {
+  const normalizedEventId = String(stripeEventId || '').trim();
+  if (!normalizedEventId) return;
+
+  await admin
+    .from('maw_stripe_webhook_events')
+    .update({
+      processed: status === 'processed',
+      error: error || null,
+    })
+    .eq('stripe_event_id', normalizedEventId);
 }
 
 async function incrementBillingEventAttempt(admin: any, billingEventId: string | null) {
@@ -443,15 +480,20 @@ async function syncUserMembership(admin: any, params: {
   const normalizedStripeSubscriptionId = String(params.stripeSubscriptionId || '').trim() || null;
   const normalizedStripePriceId = String(params.stripePriceId || '').trim() || null;
   const normalizedPeriodEnd = params.stripeCurrentPeriodEnd || null;
-  const normalizedCancelAtPeriodEnd = Boolean(params.stripeCancelAtPeriodEnd);
+  const normalizedCancelAtPeriodEnd = typeof params.stripeCancelAtPeriodEnd === 'boolean'
+    ? params.stripeCancelAtPeriodEnd
+    : Boolean(existingUser.stripe_cancel_at_period_end);
 
   const patch: Record<string, unknown> = {
     membership: paidMembership,
     trial_end_date: null,
-    stripe_status: params.billingStatus || null,
-    stripe_current_period_end: normalizedPeriodEnd,
+    stripe_status: params.billingStatus || existingUser.stripe_status || null,
     stripe_cancel_at_period_end: normalizedCancelAtPeriodEnd,
   };
+
+  if (normalizedPeriodEnd || !existingUser.stripe_current_period_end) {
+    patch.stripe_current_period_end = normalizedPeriodEnd;
+  }
 
   if (params.founderProtected) {
     patch.pricing_lock = params.pricingLock || (params.founderLockedPlan === 'founder_amateur' ? 'founding_amateur_2026' : 'founding_pro_admc_2026');
@@ -640,7 +682,8 @@ async function syncFromEvent(admin: any, event: any) {
     stripeSubscriptionId,
     stripePriceId: liveSubscription?.priceId || firstPrice?.id || object?.price?.id || null,
     stripeCurrentPeriodEnd: currentPeriodEnd,
-    stripeCancelAtPeriodEnd: liveSubscription?.cancelAtPeriodEnd ?? Boolean(object?.cancel_at_period_end),
+    stripeCancelAtPeriodEnd: liveSubscription?.cancelAtPeriodEnd
+      ?? (typeof object?.cancel_at_period_end === 'boolean' ? object.cancel_at_period_end : undefined),
   });
 
   await upsertUsagePeriod(admin, {
@@ -760,6 +803,7 @@ export async function processStripeWebhook(input: {
     billingEventId = receipt.billingEventId;
     if (receipt.duplicate) {
       await incrementBillingEventAttempt(admin, billingEventId);
+      await incrementWebhookHealthAttempt(admin, eventId, input.requestId || null);
       return { ok: true, received: true, duplicate: true, processed: true, eventType, eventId };
     }
 
@@ -768,6 +812,7 @@ export async function processStripeWebhook(input: {
         summary: buildEventSummary(event),
         note: 'Unhandled event type ignored intentionally.',
       });
+      await markWebhookHealthStatus(admin, eventId, 'processed', null);
       return { ok: true, received: true, ignored: true, eventType, eventId };
     }
 
@@ -779,13 +824,16 @@ export async function processStripeWebhook(input: {
       sync,
       founderCap,
     });
+    await markWebhookHealthStatus(admin, eventId, 'processed', null);
 
     return { ok: true, received: true, processed: true, eventType, eventId };
   } catch (error: any) {
+    const normalizedError = String(error?.message || error || 'unknown_webhook_failure');
     await markBillingEventStatus(admin, billingEventId, 'failed', {
       summary: event ? buildEventSummary(event) : null,
-      error: sanitizeStripeLogValue(String(error?.message || error || 'unknown_webhook_failure')),
+      error: sanitizeStripeLogValue(normalizedError),
     });
-    return { ok: false, received: true, processed: false, eventType, eventId, error: String(error?.message || error || 'unknown_webhook_failure') };
+    await markWebhookHealthStatus(admin, eventId, 'failed', normalizedError);
+    return { ok: false, received: true, processed: false, eventType, eventId, error: normalizedError };
   }
 }
