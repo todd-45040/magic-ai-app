@@ -174,7 +174,7 @@ const founderLabel = useMemo(
           </div>
           <div className="rounded-xl border border-white/10 bg-black/20 p-3">
             <div className="text-white/50 text-xs uppercase">Billing cycle</div>
-            <div className="mt-1">{loading ? 'Loading…' : humanizePlan(currentBillingCycle)}</div>
+            <div className="mt-1">{loading ? 'Loading…' : currentBillingCycle?.replace(/^./, (c) => c.toUpperCase())}</div>
           </div>
           <div className="rounded-xl border border-white/10 bg-black/20 p-3">
             <div className="text-white/50 text-xs uppercase">Founder status</div>
