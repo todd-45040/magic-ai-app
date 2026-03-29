@@ -90,17 +90,19 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
   const currentBillingCycle = status?.currentBillingCycle || 'monthly';
   const founderEligible = Boolean(status?.founderProtected || status?.founderLockedPlan);
   const founderPricingApplied = founderEligible;
-  const founderLabel = useMemo(
-    () =>
-      status?.founderProtected
-        ? `Founding Circle — Your ${humanizePlan(
-            status.founderLockedPlan?.replace('founder_', '')
-          )} pricing is locked at ${formatPriceCents(
-            status.founderLockedPriceCents
-          )}${(status?.currentBillingCycle || 'monthly') === 'yearly' ? '/yr' : '/mo'}`
-        : 'Standard pricing',
-    [status]
-  );
+  const cleanPlanName = status?.founderLockedPlan
+  ?.replace('founder_', '')
+  ?.replace(/^./, (c) => c.toUpperCase());
+
+const founderLabel = useMemo(
+  () =>
+    status?.founderProtected
+      ? `Founding Circle — Your ${cleanPlanName} pricing is locked at ${formatPriceCents(
+          status.founderLockedPriceCents
+        )}${(status?.currentBillingCycle || 'monthly') === 'yearly' ? '/yr' : '/mo'}`
+      : 'Standard pricing',
+  [status]
+);
   const readiness = status?.billingReadiness;
   const missingEnvKeys = readiness?.missingEnvKeys || [];
 
