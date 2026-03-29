@@ -93,7 +93,11 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
   const founderLabel = useMemo(
     () =>
       status?.founderProtected
-        ? `Founding Circle — Your ${humanizePlan(status.founderLockedPlan)} pricing is locked at ${formatPriceCents(status.founderLockedPriceCents)}${(status?.currentBillingCycle || 'monthly') === 'yearly' ? '/yr' : '/mo'}`
+        ? `Founding Circle — Your ${humanizePlan(
+            status.founderLockedPlan?.replace('founder_', '')
+          )} pricing is locked at ${formatPriceCents(
+            status.founderLockedPriceCents
+          )}${(status?.currentBillingCycle || 'monthly') === 'yearly' ? '/yr' : '/mo'}`
         : 'Standard pricing',
     [status]
   );
