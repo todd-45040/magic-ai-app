@@ -365,6 +365,11 @@ async function syncUserMembership(admin: any, params: {
   founderProtected?: boolean;
   pricingLock?: string | null;
   foundingBucket?: string | null;
+  stripeCustomerId?: string | null;
+  stripeSubscriptionId?: string | null;
+  stripePriceId?: string | null;
+  stripeCurrentPeriodEnd?: string | null;
+  stripeCancelAtPeriodEnd?: boolean;
 }) {
   if (!params.userId) return;
 
@@ -390,6 +395,12 @@ async function syncUserMembership(admin: any, params: {
       pricing_lock: params.founderProtected ? (params.pricingLock || (params.founderLockedPlan === 'founder_amateur' ? 'founding_amateur_2026' : 'founding_pro_admc_2026')) : undefined,
       founding_bucket: params.founderProtected ? (params.foundingBucket || undefined) : undefined,
       founding_circle_member: params.founderProtected ? true : undefined,
+      stripe_customer_id: params.stripeCustomerId || null,
+      stripe_subscription_id: params.stripeSubscriptionId || null,
+      stripe_price_id: params.stripePriceId || null,
+      stripe_status: params.billingStatus || null,
+      stripe_current_period_end: params.stripeCurrentPeriodEnd || null,
+      stripe_cancel_at_period_end: Boolean(params.stripeCancelAtPeriodEnd),
     })
     .eq('id', params.userId);
 }
@@ -533,6 +544,11 @@ async function syncFromEvent(admin: any, event: any) {
     founderProtected: founderState.founderProtected,
     pricingLock: founderState.pricingLockKey,
     foundingBucket: founderState.bucket,
+    stripeCustomerId,
+    stripeSubscriptionId,
+    stripePriceId: liveSubscription?.priceId || firstPrice?.id || object?.price?.id || null,
+    stripeCurrentPeriodEnd: currentPeriodEnd,
+    stripeCancelAtPeriodEnd: liveSubscription?.cancelAtPeriodEnd ?? Boolean(object?.cancel_at_period_end),
   });
 
   await upsertUsagePeriod(admin, {
