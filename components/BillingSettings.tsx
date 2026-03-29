@@ -12,14 +12,7 @@ const humanizePlan = (plan?: string | null) => String(plan || 'free')
   .replace(/_/g, ' ')
   .replace(/\w/g, (m) => m.toUpperCase());
 
-const formatDate = (value?: string | null) => {
-  if (!value) return '-';
-  return new Date(value).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
-};
+const formatDate = (value?: string | null) => value ? new Date(value).toLocaleDateString() : '-';
 
 const planPrice = (tier: 'amateur'|'professional', founder: boolean, cycle: BillingCycle) => {
   const key = founder
@@ -72,7 +65,6 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
   const [portalBusy, setPortalBusy] = useState(false);
   const [portalMessage, setPortalMessage] = useState('');
   const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly');
-  const [founderRequested, setFounderRequested] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -82,9 +74,6 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
         if (!active) return;
         setStatus(next);
         setBillingCycle(next.currentBillingCycle || 'monthly');
-        if (!next.founderProtected && next.founderLockedPlan == null) {
-          setFounderRequested(false);
-        }
       } finally {
         if (active) setLoading(false);
       }
@@ -100,6 +89,7 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
   const currentPlanKey = pickMostAuthoritativePlanKey(statusPlanKey, membershipPlanKey, userPlanKey);
   const currentBillingCycle = status?.currentBillingCycle || 'monthly';
   const founderEligible = Boolean(status?.founderProtected || status?.founderLockedPlan);
+  const founderPricingApplied = founderEligible;
   const founderLabel = useMemo(
     () =>
       status?.founderProtected
@@ -155,15 +145,11 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
                 Yearly
               </button>
             </div>
-            <button
-              onClick={() => founderEligible && setFounderRequested((v) => !v)}
-              disabled={!founderEligible}
-              className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${founderRequested ? 'bg-amber-500 text-slate-950' : 'border border-white/10 bg-white/[0.04] text-white/70'} disabled:cursor-not-allowed disabled:opacity-60`}
+            <div
+              className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${founderPricingApplied ? 'bg-amber-500/15 text-amber-200 border border-amber-400/30' : 'border border-white/10 bg-white/[0.04] text-white/70'}`}
             >
-              {founderEligible
-                ? `Founder pricing path ${founderRequested ? 'On' : 'Off'}`
-                : 'Founder pricing path unavailable'}
-            </button>
+              {founderPricingApplied ? 'Founder pricing applied' : 'Founder pricing path unavailable'}
+            </div>
           </div>
         </div>
 
@@ -190,17 +176,10 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
           </div>
         </div>
 
-        {!loading && status?.cancelAtPeriodEnd ? (
-          <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-            Your subscription will end on{' '}
-            <span className="font-semibold">{formatDate(status?.renewalDate)}</span>. You will retain full access until then.
-          </div>
-        ) : null}
-
         <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2 text-white">
         {(['amateur', 'professional'] as const).map((tier) => {
           const currentPlanMatch = tier === 'amateur' ? isCurrentAmateur : isCurrentProfessional;
-          const badge = founderRequested && founderEligible ? 'Founder pricing path' : 'Standard pricing';
+          const badge = founderPricingApplied ? 'Founder pricing' : 'Standard pricing';
           const selectedCycle = billingCycle;
           const planName = tier === 'amateur' ? 'Amateur' : 'Professional';
           const currentTierRank = getPlanTierRank(currentPlanKey);
@@ -259,7 +238,7 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
                 </div>
                 <div className="text-right">
                   <span className="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold">
-                    {planPrice(tier, founderRequested && founderEligible, selectedCycle)}
+                    {planPrice(tier, founderPricingApplied, selectedCycle)}
                   </span>
                   {selectedCycle === 'yearly' ? (
                     <div className="mt-2 text-xs text-emerald-300">Save with yearly billing</div>
@@ -277,7 +256,7 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
                     console.warn('Blocked duplicate subscription attempt for the current billing plan and cycle.');
                     return;
                   }
-                  onUpgrade({ tier, billingCycle: selectedCycle, founderRequested: founderRequested && founderEligible });
+                  onUpgrade({ tier, billingCycle: selectedCycle, founderRequested: founderPricingApplied });
                 }}
                 disabled={buttonDisabled}
                 className={`mt-4 inline-flex w-full items-center justify-center rounded-xl px-4 py-3 text-sm font-bold transition ${tier === 'amateur' ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-amber-500 text-slate-950 hover:bg-amber-400'} ${(isSamePlanAndCycle || isDowngradePath) ? 'opacity-50 cursor-not-allowed' : ''} disabled:cursor-not-allowed disabled:opacity-50`}
