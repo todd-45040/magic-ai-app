@@ -93,7 +93,7 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
   const founderLabel = useMemo(
     () =>
       status?.founderProtected
-        ? `${humanizePlan(status.founderLockedPlan)} at ${formatPriceCents(status.founderLockedPriceCents)}`
+        ? `Founding Circle — ${humanizePlan(status.founderLockedPlan)} pricing locked at ${formatPriceCents(status.founderLockedPriceCents)}${(status?.currentBillingCycle || 'monthly') === 'yearly' ? '/yr' : '/mo'}`
         : 'Standard pricing',
     [status]
   );
@@ -148,7 +148,7 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
             <div
               className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${founderPricingApplied ? 'bg-amber-500/15 text-amber-200 border border-amber-400/30' : 'border border-white/10 bg-white/[0.04] text-white/70'}`}
             >
-              {founderPricingApplied ? 'Founder pricing applied' : 'Founder pricing path unavailable'}
+              {founderPricingApplied ? 'Founder pricing locked' : 'Founder pricing path unavailable'}
             </div>
           </div>
         </div>
@@ -173,6 +173,11 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
           <div className="rounded-xl border border-white/10 bg-black/20 p-3">
             <div className="text-white/50 text-xs uppercase">Founder status</div>
             <div className="mt-1">{loading ? 'Loading…' : founderLabel}</div>
+            {!loading && founderPricingApplied ? (
+              <div className="mt-1 text-xs text-amber-200/80">
+                Your current pricing is protected from future increases.
+              </div>
+            ) : null}
           </div>
         </div>
 
