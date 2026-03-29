@@ -291,6 +291,45 @@ async function insertBillingEventReceipt(admin: any, event: any, requestId: stri
   return { duplicate: false, billingEventId: data?.id as string | null };
 }
 
+
+async function mirrorWebhookHealthEvent(admin: any, event: any, requestId: string | null, signaturePresent: boolean) {
+  const stripeEventId = String(event?.id || '').trim();
+  if (!stripeEventId) return;
+
+  await admin
+    .from('maw_stripe_webhook_events')
+    .upsert([
+      {
+        stripe_event_id: stripeEventId,
+        event_type: String(event?.type || 'unknown'),
+        livemode: Boolean(event?.livemode),
+        stripe_created_at: safeIsoFromUnixSeconds(event?.created),
+        received_at: new Date().toISOString(),
+        request_id: requestId,
+        signature_present: signaturePresent,
+      },
+    ], { onConflict: 'stripe_event_id' });
+}
+
+async function incrementBillingEventAttempt(admin: any, billingEventId: string | null) {
+  if (!billingEventId) return;
+
+  const { data } = await admin
+    .from('billing_events')
+    .select('delivery_attempts')
+    .eq('id', billingEventId)
+    .maybeSingle();
+
+  const nextAttempts = Math.max(1, Number(data?.delivery_attempts || 1) + 1);
+  await admin
+    .from('billing_events')
+    .update({
+      delivery_attempts: nextAttempts,
+      last_received_at: new Date().toISOString(),
+    })
+    .eq('id', billingEventId);
+}
+
 async function markBillingEventStatus(admin: any, billingEventId: string | null, status: 'processed' | 'ignored' | 'failed', details?: unknown) {
   if (!billingEventId) return;
   const patch: Record<string, unknown> = {
@@ -371,7 +410,20 @@ async function syncUserMembership(admin: any, params: {
   stripeCurrentPeriodEnd?: string | null;
   stripeCancelAtPeriodEnd?: boolean;
 }) {
-  if (!params.userId) return;
+  if (!params.userId) return { updated: false, reason: 'missing_user_id' };
+
+  const { data: existingUser, error: existingUserError } = await admin
+    .from('users')
+    .select('id,membership,pricing_lock,founding_bucket,founding_circle_member,stripe_customer_id,stripe_subscription_id,stripe_price_id,stripe_status,stripe_current_period_end,stripe_cancel_at_period_end')
+    .eq('id', params.userId)
+    .maybeSingle();
+
+  if (existingUserError) {
+    throw new Error(`user_sync_lookup_failed:${existingUserError.message}`);
+  }
+  if (!existingUser?.id) {
+    return { updated: false, reason: 'user_not_found' };
+  }
 
   const resolution = resolveBillingPlan({
     planKey: params.planKey,
@@ -387,22 +439,62 @@ async function syncUserMembership(admin: any, params: {
         : 'free')
     : 'free';
 
-  await admin
+  const normalizedStripeCustomerId = String(params.stripeCustomerId || '').trim() || null;
+  const normalizedStripeSubscriptionId = String(params.stripeSubscriptionId || '').trim() || null;
+  const normalizedStripePriceId = String(params.stripePriceId || '').trim() || null;
+  const normalizedPeriodEnd = params.stripeCurrentPeriodEnd || null;
+  const normalizedCancelAtPeriodEnd = Boolean(params.stripeCancelAtPeriodEnd);
+
+  const patch: Record<string, unknown> = {
+    membership: paidMembership,
+    trial_end_date: null,
+    stripe_status: params.billingStatus || null,
+    stripe_current_period_end: normalizedPeriodEnd,
+    stripe_cancel_at_period_end: normalizedCancelAtPeriodEnd,
+  };
+
+  if (params.founderProtected) {
+    patch.pricing_lock = params.pricingLock || (params.founderLockedPlan === 'founder_amateur' ? 'founding_amateur_2026' : 'founding_pro_admc_2026');
+    patch.founding_bucket = params.foundingBucket || existingUser.founding_bucket || null;
+    patch.founding_circle_member = true;
+  }
+
+  if (normalizedStripeCustomerId || !existingUser.stripe_customer_id) {
+    patch.stripe_customer_id = normalizedStripeCustomerId;
+  }
+  if (normalizedStripeSubscriptionId || !existingUser.stripe_subscription_id) {
+    patch.stripe_subscription_id = normalizedStripeSubscriptionId;
+  }
+  if (normalizedStripePriceId || !existingUser.stripe_price_id) {
+    patch.stripe_price_id = normalizedStripePriceId;
+  }
+
+  const { error: updateError } = await admin
     .from('users')
-    .update({
-      membership: paidMembership,
-      trial_end_date: paidMembership === 'free' ? null : null,
-      pricing_lock: params.founderProtected ? (params.pricingLock || (params.founderLockedPlan === 'founder_amateur' ? 'founding_amateur_2026' : 'founding_pro_admc_2026')) : undefined,
-      founding_bucket: params.founderProtected ? (params.foundingBucket || undefined) : undefined,
-      founding_circle_member: params.founderProtected ? true : undefined,
-      stripe_customer_id: params.stripeCustomerId || null,
-      stripe_subscription_id: params.stripeSubscriptionId || null,
-      stripe_price_id: params.stripePriceId || null,
-      stripe_status: params.billingStatus || null,
-      stripe_current_period_end: params.stripeCurrentPeriodEnd || null,
-      stripe_cancel_at_period_end: Boolean(params.stripeCancelAtPeriodEnd),
-    })
+    .update(patch)
     .eq('id', params.userId);
+
+  if (updateError) {
+    throw new Error(`user_sync_update_failed:${updateError.message}`);
+  }
+
+  return {
+    updated: true,
+    membership: paidMembership,
+    previous: existingUser,
+    next: {
+      membership: paidMembership,
+      pricing_lock: patch.pricing_lock ?? existingUser.pricing_lock,
+      founding_bucket: patch.founding_bucket ?? existingUser.founding_bucket,
+      founding_circle_member: patch.founding_circle_member ?? existingUser.founding_circle_member,
+      stripe_customer_id: patch.stripe_customer_id ?? existingUser.stripe_customer_id,
+      stripe_subscription_id: patch.stripe_subscription_id ?? existingUser.stripe_subscription_id,
+      stripe_price_id: patch.stripe_price_id ?? existingUser.stripe_price_id,
+      stripe_status: patch.stripe_status,
+      stripe_current_period_end: patch.stripe_current_period_end,
+      stripe_cancel_at_period_end: patch.stripe_cancel_at_period_end,
+    },
+  };
 }
 
 async function upsertUsagePeriod(admin: any, params: {
@@ -536,7 +628,7 @@ async function syncFromEvent(admin: any, event: any) {
     await upsertFounderOverride(admin, { userId, planKey, metadata, existingOverride: existingFounderOverride });
   }
 
-  await syncUserMembership(admin, {
+  const userSync = await syncUserMembership(admin, {
     userId,
     planKey,
     billingStatus,
@@ -583,6 +675,7 @@ async function syncFromEvent(admin: any, event: any) {
     stripeSubscriptionId,
     planKey,
     billingStatus,
+    userSync,
   };
 }
 
@@ -650,6 +743,8 @@ export async function processStripeWebhook(input: {
 
   const eventType = String(event?.type || '').trim();
   const eventId = String(event?.id || '').trim();
+
+  await mirrorWebhookHealthEvent(admin, event, input.requestId || null, Boolean(input.signatureHeader));
   const trackedEventTypes = new Set([
     'checkout.session.completed',
     'customer.subscription.created',
@@ -664,6 +759,7 @@ export async function processStripeWebhook(input: {
     const receipt = await insertBillingEventReceipt(admin, event, input.requestId || null, verification.secretIndex);
     billingEventId = receipt.billingEventId;
     if (receipt.duplicate) {
+      await incrementBillingEventAttempt(admin, billingEventId);
       return { ok: true, received: true, duplicate: true, processed: true, eventType, eventId };
     }
 
