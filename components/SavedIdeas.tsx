@@ -81,15 +81,65 @@ function collectReadableText(value: any, depth = 0): string[] {
     return [];
 }
 
+function unwrapStoredIdeaPayload(input: string): string {
+    let text = decodeHtmlEntities((input ?? '').toString().trim());
+    if (!text) return '';
+
+    for (let i = 0; i < 3; i += 1) {
+        const trimmed = text.trim();
+
+        try {
+            if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+                const parsed = JSON.parse(trimmed);
+
+                if (typeof parsed === 'string') {
+                    text = decodeHtmlEntities(parsed).trim();
+                    continue;
+                }
+
+                if (parsed && typeof parsed === 'object') {
+                    return JSON.stringify(parsed);
+                }
+
+                return trimmed;
+            }
+
+            if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+                const parsed = JSON.parse(trimmed);
+                if (typeof parsed === 'string') {
+                    text = decodeHtmlEntities(parsed).trim();
+                    continue;
+                }
+            }
+        } catch {
+            break;
+        }
+
+        break;
+    }
+
+    return text;
+}
+
 function normalizeDisplayBody(content: string): string {
-    const rawText = (content ?? '').toString().trim();
+    const rawText = unwrapStoredIdeaPayload(content);
     if (!rawText) return '';
 
     const text = decodeHtmlEntities(rawText);
     const v2 = tryParseMawIdeaV2(text);
+
     if (v2) {
-        const direct = [v2.display, v2.body, v2.text, v2.content, v2.result]
-            .find((value) => typeof value === 'string' && value.trim());
+        const direct = [
+            v2.display,
+            v2.body,
+            v2.text,
+            v2.content,
+            v2.result,
+            (v2 as any)?.structured?.summary,
+            (v2 as any)?.structured?.description,
+            (v2 as any)?.structured?.notes,
+        ].find((value) => typeof value === 'string' && value.trim());
+
         if (typeof direct === 'string' && direct.trim()) {
             const { rest } = splitLeadingHeading(direct.trim());
             return rest || direct.trim();
@@ -112,7 +162,7 @@ function normalizeDisplayBody(content: string): string {
             const readable = collectReadableText(parsed).filter(Boolean);
             if (readable.length) return Array.from(new Set(readable)).join('\n\n').trim();
         } catch {
-            // leave as legacy plain text
+            // leave as plain text
         }
     }
 
@@ -229,7 +279,7 @@ function ideaIsArchived(idea: SavedIdea): boolean {
 }
 
 function tryParseMawIdeaV2(content: string): MawIdeaV2 | null {
-    const t = decodeHtmlEntities((content ?? '').toString().trim());
+    const t = unwrapStoredIdeaPayload(content);
     if (!t || t[0] !== '{') return null;
     try {
         const parsed = JSON.parse(t);
