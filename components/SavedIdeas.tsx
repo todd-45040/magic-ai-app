@@ -21,6 +21,29 @@ type MawIdeaV2 = {
     result?: any;
 };
 
+function decodeHtmlEntities(input: string): string {
+    return String(input || '')
+        .replace(/&quot;/g, '"')
+        .replace(/&#34;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&apos;/g, "'")
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>');
+}
+
+function stripMarkdownForTitle(input: string): string {
+    return String(input || '')
+        .replace(/```[\s\S]*?```/g, ' ')
+        .replace(/`([^`]+)`/g, '$1')
+        .replace(/\*\*(.*?)\*\*/g, '$1')
+        .replace(/\*(.*?)\*/g, '$1')
+        .replace(/^#{1,6}\s+/gm, '')
+        .replace(/\[(.*?)\]\((.*?)\)/g, '$1')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
 const METADATA_ONLY_KEYS = new Set([
     'format',
     'tool',
@@ -59,14 +82,18 @@ function collectReadableText(value: any, depth = 0): string[] {
 }
 
 function normalizeDisplayBody(content: string): string {
-    const text = (content ?? '').toString().trim();
-    if (!text) return '';
+    const rawText = (content ?? '').toString().trim();
+    if (!rawText) return '';
 
+    const text = decodeHtmlEntities(rawText);
     const v2 = tryParseMawIdeaV2(text);
     if (v2) {
         const direct = [v2.display, v2.body, v2.text, v2.content, v2.result]
             .find((value) => typeof value === 'string' && value.trim());
-        if (typeof direct === 'string' && direct.trim()) return direct.trim();
+        if (typeof direct === 'string' && direct.trim()) {
+            const { rest } = splitLeadingHeading(direct.trim());
+            return rest || direct.trim();
+        }
 
         const readable = collectReadableText(v2).filter(Boolean);
         if (readable.length) return Array.from(new Set(readable)).join('\n\n').trim();
@@ -77,7 +104,10 @@ function normalizeDisplayBody(content: string): string {
             const parsed = JSON.parse(text);
             const prioritized = [parsed?.display, parsed?.content, parsed?.text, parsed?.body, parsed?.result, parsed?.response, parsed?.markdown]
                 .find((value) => typeof value === 'string' && value.trim());
-            if (typeof prioritized === 'string' && prioritized.trim()) return prioritized.trim();
+            if (typeof prioritized === 'string' && prioritized.trim()) {
+                const { rest } = splitLeadingHeading(prioritized.trim());
+                return rest || prioritized.trim();
+            }
 
             const readable = collectReadableText(parsed).filter(Boolean);
             if (readable.length) return Array.from(new Set(readable)).join('\n\n').trim();
@@ -199,7 +229,7 @@ function ideaIsArchived(idea: SavedIdea): boolean {
 }
 
 function tryParseMawIdeaV2(content: string): MawIdeaV2 | null {
-    const t = (content ?? '').toString().trim();
+    const t = decodeHtmlEntities((content ?? '').toString().trim());
     if (!t || t[0] !== '{') return null;
     try {
         const parsed = JSON.parse(t);
@@ -231,12 +261,34 @@ function getIdeaDisplay(idea: SavedIdea): { title: string; body: string } {
         return { title: idea.title || 'Saved Rehearsal', body: cleanedBody || idea.content || '' };
     }
 
-    if (v2 && (v2.display || v2.title)) {
-        const title = (idea.title || v2.title || 'Saved Idea').toString();
+    if (v2) {
+        const displayHeading = typeof v2.display === 'string' ? splitLeadingHeading(v2.display).heading : undefined;
+        const structuredLabel = [
+            (v2 as any)?.structured?.mostLikelyTrick,
+            (v2 as any)?.structured?.effectName,
+            (v2 as any)?.structured?.routineName,
+            (v2 as any)?.structured?.title,
+        ].find((value) => typeof value === 'string' && value.trim());
+
+        let title = (
+            displayHeading ||
+            structuredLabel ||
+            v2.title ||
+            idea.title ||
+            'Saved Idea'
+        ).toString().trim();
+
+        title = stripMarkdownForTitle(title).replace(/^Identify Trick:\s*/i, '');
+        if (typeof structuredLabel === 'string' && structuredLabel.trim()) {
+            title = structuredLabel.trim();
+        }
+        if (!title) title = 'Saved Idea';
+
         return { title, body: cleanedBody };
     }
 
-    return { title: idea.title || splitLeadingHeading(cleanedBody || idea.content).heading || 'Saved Note', body: cleanedBody || idea.content || '' };
+    const fallbackTitle = stripMarkdownForTitle(idea.title || splitLeadingHeading(cleanedBody || idea.content).heading || 'Saved Note') || 'Saved Note';
+    return { title: fallbackTitle, body: cleanedBody || idea.content || '' };
 }
 
 
