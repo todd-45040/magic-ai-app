@@ -10,7 +10,7 @@ interface BillingSettingsProps {
 
 const humanizePlan = (plan?: string | null) => String(plan || 'free')
   .replace(/_/g, ' ')
-  .replace(/\w/g, (m) => m.toUpperCase());
+  .replace(/\b\w/g, (m) => m.toUpperCase());
 
 const formatDate = (value?: string | null) => value ? new Date(value).toLocaleDateString() : '-';
 
@@ -59,6 +59,8 @@ const pickMostAuthoritativePlanKey = (...planKeys: Array<string | null | undefin
     'free'
   );
 };
+const BILLING_CYCLE_NOTICE_KEY = 'maw_billing_cycle_notice';
+
 const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) => {
   const [status, setStatus] = useState<BillingStatusPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -66,6 +68,16 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
   const [portalMessage, setPortalMessage] = useState('');
   const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly');
   const [founderRequested, setFounderRequested] = useState(false);
+  const [billingNotice, setBillingNotice] = useState('');
+
+  useEffect(() => {
+    try {
+      const savedNotice = window.sessionStorage.getItem(BILLING_CYCLE_NOTICE_KEY);
+      if (!savedNotice) return;
+      setBillingNotice(savedNotice);
+      window.sessionStorage.removeItem(BILLING_CYCLE_NOTICE_KEY);
+    } catch {}
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -160,6 +172,22 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
           </div>
         </div>
 
+        {billingNotice ? (
+          <div className="mt-4 flex items-start justify-between gap-3 rounded-xl border border-emerald-400/20 bg-emerald-500/10 p-3 text-sm text-emerald-100">
+            <div>
+              <div className="font-semibold">Proration applied</div>
+              <div className="mt-1 text-emerald-50/90">{billingNotice}</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setBillingNotice('')}
+              className="rounded-lg border border-white/10 px-2 py-1 text-xs font-semibold text-white/80 transition hover:bg-white/10"
+            >
+              Dismiss
+            </button>
+          </div>
+        ) : null}
+
         <div className="mt-4 grid gap-3 md:grid-cols-5 text-sm">
           <div className="rounded-xl border border-white/10 bg-black/20 p-3">
             <div className="text-white/50 text-xs uppercase">Current plan</div>
@@ -170,8 +198,17 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
             <div className="mt-1">{loading ? 'Loading…' : (status?.billingStatus || 'unknown')}</div>
           </div>
           <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-            <div className="text-white/50 text-xs uppercase">Renewal</div>
+            <div className="flex items-center gap-2 text-white/50 text-xs uppercase">
+              <span>Renewal</span>
+              <span
+                title="If you recently changed billing cycles, Stripe may apply a proration credit or charge and adjust the next invoice accordingly."
+                className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-white/15 text-[10px] normal-case text-white/70 cursor-help"
+              >
+                i
+              </span>
+            </div>
             <div className="mt-1">{loading ? 'Loading…' : formatDate(status?.renewalDate)}</div>
+            <div className="mt-1 text-[11px] text-white/45">Next invoice may be adjusted due to billing changes.</div>
           </div>
           <div className="rounded-xl border border-white/10 bg-black/20 p-3">
             <div className="text-white/50 text-xs uppercase">Billing cycle</div>

@@ -56,7 +56,12 @@ function App() {
       }
 
       if (result?.cycleSwitchApplied) {
-        alert(result?.message || 'Billing cycle updated successfully.');
+        const cycleSwitchMessage = result?.message || 'Billing cycle updated on the existing Stripe subscription.';
+        const prorationMessage = `${cycleSwitchMessage} Proration applied. Your next invoice may be adjusted due to the billing change.`;
+        try {
+          window.sessionStorage.setItem('maw_billing_cycle_notice', prorationMessage);
+        } catch {}
+        alert(prorationMessage);
         window.location.reload();
         return;
       }
