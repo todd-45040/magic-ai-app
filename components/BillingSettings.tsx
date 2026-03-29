@@ -12,7 +12,14 @@ const humanizePlan = (plan?: string | null) => String(plan || 'free')
   .replace(/_/g, ' ')
   .replace(/\w/g, (m) => m.toUpperCase());
 
-const formatDate = (value?: string | null) => value ? new Date(value).toLocaleDateString() : '-';
+const formatDate = (value?: string | null) => {
+  if (!value) return '-';
+  return new Date(value).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+};
 
 const planPrice = (tier: 'amateur'|'professional', founder: boolean, cycle: BillingCycle) => {
   const key = founder
@@ -182,6 +189,13 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
             <div className="mt-1">{loading ? 'Loading…' : founderLabel}</div>
           </div>
         </div>
+
+        {!loading && status?.cancelAtPeriodEnd ? (
+          <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+            Your subscription will end on{' '}
+            <span className="font-semibold">{formatDate(status?.renewalDate)}</span>. You will retain full access until then.
+          </div>
+        ) : null}
 
         <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2 text-white">
         {(['amateur', 'professional'] as const).map((tier) => {
