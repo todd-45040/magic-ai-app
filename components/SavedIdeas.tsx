@@ -1156,11 +1156,11 @@ const openPromoteModal = (idea: SavedIdea) => {
 
 
     const mainSectionGridClass = viewMode === 'compact'
-        ? 'grid grid-cols-1 xl:grid-cols-2 gap-3'
-        : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4';
+        ? 'grid grid-cols-1 2xl:grid-cols-2 gap-4'
+        : 'grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-5';
     const summarySectionGridClass = viewMode === 'compact'
-        ? 'grid grid-cols-1 xl:grid-cols-2 gap-3'
-        : 'grid grid-cols-1 lg:grid-cols-2 gap-4';
+        ? 'grid grid-cols-1 2xl:grid-cols-2 gap-4'
+        : 'grid grid-cols-1 xl:grid-cols-2 gap-5';
 
     const archivedIdeas = useMemo(() => {
         const q = searchQuery.trim().toLowerCase();
@@ -1291,10 +1291,7 @@ const openPromoteModal = (idea: SavedIdea) => {
                                 <h3 className="font-bold text-yellow-300 pr-20 overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">{idea.title || 'Untitled Rehearsal'}</h3>
                                                 <div className="flex items-center gap-2 mt-1">
                                                     <div className="flex items-center gap-2 mt-1">
-                                                    <p className="text-xs text-slate-400">{getIdeaSourceTool(idea)} • Used in {getUsedInShowsCount(idea)} shows • Last opened {lastOpenedMap[idea.id] ? formatRelative(lastOpenedMap[idea.id]) : "—"} • Created {formatSavedOn(idea)}</p>
-                                                                        <div className="text-[11px] text-slate-500 mt-1">
-                                                                            Used in {getUsedInShowsCount(idea)} shows • Last opened {lastOpenedMap[idea.id] ? formatRelative(lastOpenedMap[idea.id]) : '—'} • Created {formatSavedOn(idea)}
-                                                                        </div>
+                                                    <p className="text-xs leading-5 text-slate-400">{getIdeaSourceTool(idea)} • Used in {getUsedInShowsCount(idea)} shows • Last opened {lastOpenedMap[idea.id] ? formatRelative(lastOpenedMap[idea.id]) : "—"} • Created {formatSavedOn(idea)}</p>
                                                     <span className="text-[10px] px-2 py-0.5 rounded-full border border-slate-600 bg-slate-900/40 text-slate-300 uppercase tracking-wide">
                                                         {idea.type}
                                                     </span>
@@ -1334,7 +1331,7 @@ const openPromoteModal = (idea: SavedIdea) => {
     };
 
     const renderLibraryRow = (idea: SavedIdea) => (
-        <div key={idea.id} className={`group rounded-2xl border border-slate-800 bg-slate-950/70 ${viewMode === 'compact' ? 'p-3 min-h-[148px]' : 'p-4 min-h-[160px]'} transition hover:border-purple-400/30`}>
+        <div key={idea.id} className={`group flex h-full flex-col rounded-2xl border border-slate-800 bg-slate-950/70 ${viewMode === 'compact' ? 'p-4 min-h-[188px]' : 'p-5 min-h-[220px]'} transition hover:border-purple-400/30 hover:bg-slate-950/85`}>
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                     <div className="flex items-center gap-2">
@@ -1343,23 +1340,25 @@ const openPromoteModal = (idea: SavedIdea) => {
                     </div>
                     <div className="mt-1 text-xs text-slate-400">{getIdeaSourceTool(idea)} • {formatSavedOn(idea)}</div>
                 </div>
-                <button onClick={() => toggleStar(idea.id)} className="px-2.5 py-1 text-xs rounded-full bg-slate-800 text-slate-200 hover:bg-slate-700 transition">
+                <button onClick={() => toggleStar(idea.id)} className="shrink-0 px-2.5 py-1 text-xs rounded-full bg-slate-800 text-slate-200 hover:bg-slate-700 transition">
                     {isStarred(idea.id) ? '★ Favorite' : '☆ Favorite'}
                 </button>
             </div>
-            <p className={`mt-2 text-sm text-slate-300 overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] ${viewMode === 'compact' ? '[-webkit-line-clamp:2] group-hover:[-webkit-line-clamp:4]' : '[-webkit-line-clamp:3] group-hover:[-webkit-line-clamp:5]'}`}>{(getIdeaDisplay(idea).body || idea.content || '').trim()}</p>
-            {idea.tags?.length ? (
-                <div className="mt-3 flex flex-wrap gap-2">
-                    {idea.tags.slice(0, viewMode === 'compact' ? 3 : 4).map((tag) => (
-                        <span key={tag} className="rounded-full border border-slate-700 bg-slate-900/70 px-2 py-0.5 text-[11px] text-slate-300">{tag}</span>
-                    ))}
+            <p className={`mt-3 text-sm leading-6 text-slate-300 overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] ${viewMode === 'compact' ? '[-webkit-line-clamp:3]' : '[-webkit-line-clamp:4]'}`}>{(getIdeaDisplay(idea).body || idea.content || '').trim()}</p>
+            <div className="mt-auto pt-4">
+                {idea.tags?.length ? (
+                    <div className="mb-3 flex flex-wrap gap-2">
+                        {idea.tags.slice(0, viewMode === 'compact' ? 3 : 4).map((tag) => (
+                            <span key={tag} className="rounded-full border border-slate-700 bg-slate-900/70 px-2 py-0.5 text-[11px] text-slate-300">{tag}</span>
+                        ))}
+                    </div>
+                ) : null}
+                <div className="flex flex-wrap gap-2 border-t border-slate-800/80 pt-3">
+                    <button onClick={() => openIdeaView(idea)} className="px-3 py-1.5 text-xs rounded-full bg-slate-800 text-slate-200 hover:bg-slate-700 transition">Open</button>
+                    <button onClick={() => openPromoteModal(idea)} className="px-3 py-1.5 text-xs rounded-full bg-purple-900/30 text-purple-100 hover:bg-purple-900/50 transition">Promote</button>
+                    <button onClick={() => openAddToShowModal(idea)} className="px-3 py-1.5 text-xs rounded-full bg-blue-900/30 text-blue-100 hover:bg-blue-900/50 transition">Add to Show</button>
+                    {!ideaIsArchived(idea) ? <button onClick={() => archiveIdea(idea)} className="px-3 py-1.5 text-xs rounded-full bg-slate-800 text-slate-200 hover:bg-slate-700 transition">Archive</button> : null}
                 </div>
-            ) : null}
-            <div className="mt-3 flex flex-wrap gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                <button onClick={() => openIdeaView(idea)} className="px-3 py-1.5 text-xs rounded-full bg-slate-800 text-slate-200 hover:bg-slate-700 transition">Open</button>
-                <button onClick={() => openPromoteModal(idea)} className="px-3 py-1.5 text-xs rounded-full bg-purple-900/30 text-purple-100 hover:bg-purple-900/50 transition">Promote</button>
-                <button onClick={() => openAddToShowModal(idea)} className="px-3 py-1.5 text-xs rounded-full bg-blue-900/30 text-blue-100 hover:bg-blue-900/50 transition">Add to Show</button>
-                {!ideaIsArchived(idea) ? <button onClick={() => archiveIdea(idea)} className="px-3 py-1.5 text-xs rounded-full bg-slate-800 text-slate-200 hover:bg-slate-700 transition">Archive</button> : null}
             </div>
         </div>
     );
@@ -1372,8 +1371,9 @@ const openPromoteModal = (idea: SavedIdea) => {
             </div>
 
             {/* Sticky Filters */}
-            <div className="sticky top-0 z-20 -mx-4 md:-mx-6 px-4 md:px-6 py-3 mb-4 bg-slate-950/70 backdrop-blur border-b border-slate-800">
-                <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+            <div className="sticky top-0 z-20 -mx-4 md:-mx-6 px-4 md:px-6 py-3 mb-5 bg-slate-950/80 backdrop-blur border-b border-slate-800">
+                <div className="rounded-2xl border border-slate-800/90 bg-slate-900/55 p-4 shadow-[0_12px_32px_rgba(15,23,42,0.22)]">
+                <div className="flex flex-col xl:flex-row xl:items-center gap-3">
                     <div className="flex-1">
                         <input
                             value={searchQuery}
@@ -1403,7 +1403,7 @@ const openPromoteModal = (idea: SavedIdea) => {
                     </button>
 
 
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2 xl:gap-3">
                         <label className="text-xs font-semibold text-slate-400">View:</label>
                         <div className="flex overflow-hidden rounded-md border border-slate-700 bg-slate-900/60">
                             <button
@@ -1450,7 +1450,7 @@ const openPromoteModal = (idea: SavedIdea) => {
                         </select>
 
 
-                        <div className="flex items-center gap-2 ml-auto">
+                        <div className="flex items-center gap-2 xl:ml-auto w-full xl:w-auto justify-end">
                             <button
                                 type="button"
                                 onClick={expandAllSections}
@@ -1470,7 +1470,7 @@ const openPromoteModal = (idea: SavedIdea) => {
                         </div>
                     </div>
                 </div>
-                <div className="mt-3 flex flex-wrap items-center gap-2">
+                <div className="mt-4 flex flex-wrap items-center gap-2">
                     {([
                         { key: 'all', label: 'All', icon: '✨' },
                         ...IDEA_CATEGORY_ORDER.map((key) => ({ key, label: IDEA_CATEGORY_META[key].label, icon: IDEA_CATEGORY_META[key].icon })),
@@ -1546,6 +1546,7 @@ const openPromoteModal = (idea: SavedIdea) => {
                 })()}
 
 
+            </div>
             </div>
 
             {/* Empty / No Results */}
@@ -1646,11 +1647,11 @@ const openPromoteModal = (idea: SavedIdea) => {
                                                                         key={idea.id}
                                                                         ref={el => { ideaRefs.current.set(idea.id, el); }}
                                                                         onClick={() => openIdeaView(idea)}
-                                                                        className="group relative bg-slate-900 border border-slate-700 rounded-lg flex flex-col justify-between overflow-hidden aspect-square transition-all hover:border-purple-500"
+                                                                        className="group relative bg-slate-900 border border-slate-700 rounded-xl flex flex-col justify-between overflow-hidden aspect-square transition-all hover:border-purple-500"
                                                                     >
                                                                         <img src={getImageUrlForIdea(idea)} alt={idea.title || 'Saved visual idea'} className="w-full h-full object-cover absolute inset-0 transition-transform duration-300 group-hover:scale-105"/>
                                                                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent"></div>
-                                                                        <div className="relative z-10 p-3 flex flex-col justify-end h-full">
+                                                                        <div className="relative z-10 p-4 flex flex-col justify-end h-full">
                                                                             <div className="flex items-center gap-2">
                                                                                 <div className="w-8 h-8 bg-slate-900/70 rounded-lg flex items-center justify-center flex-shrink-0 backdrop-blur-sm"><ImageIcon className="w-5 h-5 text-purple-400" /></div>
                                                                                 <div className="min-w-0">
@@ -1671,7 +1672,7 @@ const openPromoteModal = (idea: SavedIdea) => {
                                                                     key={idea.id}
                                                                     ref={el => { ideaRefs.current.set(idea.id, el); }}
                                                                     onClick={() => openIdeaView(idea)}
-                                                                    className={`group relative bg-slate-800 border border-slate-700 rounded-lg ${viewMode === 'compact' ? 'p-3 min-h-[148px] max-h-[148px]' : 'p-4 min-h-[160px] max-h-[160px]'} flex flex-col justify-between transition-all hover:border-purple-500 overflow-hidden`}
+                                                                    className={`group relative bg-slate-800 border border-slate-700 rounded-xl ${viewMode === 'compact' ? 'p-4 min-h-[250px]' : 'p-5 min-h-[290px]'} flex flex-col transition-all hover:border-purple-500 overflow-hidden`}
                                                                 >
                                                                     <div className="absolute top-3 left-3 z-10 rounded-full border border-slate-600 bg-slate-950/70 px-2 py-0.5 text-[11px] font-semibold text-slate-200">{getIdeaCategoryMeta(idea).icon} {getIdeaCategoryMeta(idea).label}</div>
                                                                     <div className="min-w-0 pt-7">
@@ -1737,7 +1738,7 @@ const openPromoteModal = (idea: SavedIdea) => {
                                             {sec.items.map((idea) => {
                                                 if (idea.type === 'image') {
                                                     return (
-                                                        <div key={idea.id} ref={el => { ideaRefs.current.set(idea.id, el); }} onClick={() => openIdeaView(idea)} className="group relative bg-slate-900 border border-slate-700 rounded-lg flex flex-col justify-between overflow-hidden aspect-square transition-all hover:border-purple-500">
+                                                        <div key={idea.id} ref={el => { ideaRefs.current.set(idea.id, el); }} onClick={() => openIdeaView(idea)} className="group relative bg-slate-900 border border-slate-700 rounded-xl flex flex-col justify-between overflow-hidden aspect-square transition-all hover:border-purple-500">
                                                             <div className="absolute left-3 top-11 z-20 rounded-full border border-slate-600 bg-slate-950/70 px-2 py-0.5 text-[11px] font-semibold text-slate-200">{getIdeaCategoryMeta(idea).icon} {getIdeaCategoryMeta(idea).label}</div>
                                                             <button
                                                                 type="button"
@@ -1763,8 +1764,7 @@ const openPromoteModal = (idea: SavedIdea) => {
                                                                     </div>
                                                                 </div>
                                                                 {editingIdeaId === idea.id ? <TagEditor idea={idea} /> : <TagDisplay idea={idea} />}
-                                                            </div>
-                                                            <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                                                                <div className="mt-3 flex flex-wrap items-center gap-1.5 rounded-xl border border-white/10 bg-black/30 p-2 backdrop-blur-sm">
                                                                 <button onClick={(e) => { e.stopPropagation(); openIdeaView(idea); }} className="px-2.5 py-1 text-xs bg-black/40 hover:bg-black/60 rounded-full text-slate-200 transition-colors backdrop-blur-sm" aria-label="Open">Open</button>
                                                                 <button onClick={(e) => { e.stopPropagation(); openPromoteModal(idea); }} className="px-2.5 py-1 text-xs bg-purple-900/30 hover:bg-purple-900/50 rounded-full text-purple-100 transition-colors backdrop-blur-sm" aria-label="Promote to Routine">Promote</button>
                                                                 <button onClick={(e) => { e.stopPropagation(); openAddToShowModal(idea); }} className="px-2.5 py-1 text-xs bg-blue-900/30 hover:bg-blue-900/50 rounded-full text-blue-100 transition-colors backdrop-blur-sm" aria-label="Add to Show">Add to Show</button>
@@ -1777,6 +1777,7 @@ const openPromoteModal = (idea: SavedIdea) => {
                                                                 </button>
                                                                 <IdeaShareWrapper idea={idea} />
                                                                 <button onClick={(e) => { e.stopPropagation(); handleDelete(idea.id); }} className="p-1.5 bg-black/50 text-slate-300 hover:text-red-400 hover:bg-red-900/50 rounded-full transition-colors backdrop-blur-sm" aria-label="Delete idea"><TrashIcon className="w-4 h-4" /></button>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     );
@@ -1790,7 +1791,7 @@ const openPromoteModal = (idea: SavedIdea) => {
                                                         key={idea.id}
                                                         ref={el => { ideaRefs.current.set(idea.id, el); }}
                                                         onClick={() => openIdeaView(idea)}
-                                                        className={`group relative bg-slate-800 border border-slate-700 rounded-lg ${viewMode === 'compact' ? 'p-3 min-h-[148px] max-h-[148px]' : 'p-4 min-h-[160px] max-h-[160px]'} flex flex-col justify-between transition-all hover:border-purple-500 overflow-hidden`}
+                                                        className={`group relative bg-slate-800 border border-slate-700 rounded-xl ${viewMode === 'compact' ? 'p-4 min-h-[250px]' : 'p-5 min-h-[290px]'} flex flex-col transition-all hover:border-purple-500 overflow-hidden`}
                                                     >
                                                         <button
                                                             type="button"
@@ -1818,10 +1819,7 @@ const openPromoteModal = (idea: SavedIdea) => {
                                                                     <div className="w-10 h-10 bg-slate-900 rounded-lg flex items-center justify-center flex-shrink-0"><FileTextIcon className="w-6 h-6 text-purple-400" /></div>
                                                                     <div className="min-w-0">
                                                                         <h3 className="font-bold text-yellow-300 pr-20 overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">{idea.title || splitLeadingHeading(idea.content).heading || 'Saved Note'}</h3>
-                                                                        <p className="text-xs text-slate-400">{getIdeaSourceTool(idea)} • Used in {getUsedInShowsCount(idea)} shows • Last opened {lastOpenedMap[idea.id] ? formatRelative(lastOpenedMap[idea.id]) : "—"} • Created {formatSavedOn(idea)}</p>
-                                                                        <div className="text-[11px] text-slate-500 mt-1">
-                                                                            Used in {getUsedInShowsCount(idea)} shows • Last opened {lastOpenedMap[idea.id] ? formatRelative(lastOpenedMap[idea.id]) : '—'} • Created {formatSavedOn(idea)}
-                                                                        </div>
+                                                                        <p className="text-xs leading-5 text-slate-400">{getIdeaSourceTool(idea)} • Used in {getUsedInShowsCount(idea)} shows • Last opened {lastOpenedMap[idea.id] ? formatRelative(lastOpenedMap[idea.id]) : "—"} • Created {formatSavedOn(idea)}</p>
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -1835,7 +1833,7 @@ const openPromoteModal = (idea: SavedIdea) => {
                                                                         {isError ? (
                                                                             <div className="text-sm text-slate-300">
                                                                                 <div className="font-semibold text-slate-200">This item failed to load.</div>
-                                                                                <div className={`text-slate-400 mt-1 overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] ${viewMode === 'compact' ? '[-webkit-line-clamp:2] group-hover:[-webkit-line-clamp:4]' : '[-webkit-line-clamp:3] group-hover:[-webkit-line-clamp:4]'}`}>
+                                                                                <div className={`text-slate-400 mt-1 overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] ${viewMode === 'compact' ? '[-webkit-line-clamp:2]' : '[-webkit-line-clamp:3]'}`}>
                                                                                     {idea.content}
                                                                                 </div>
                                                                                 <div className="text-slate-500 mt-2">You can safely delete it.</div>
@@ -1855,7 +1853,7 @@ const openPromoteModal = (idea: SavedIdea) => {
                                                                                         </button>
                                                                                     </div>
                                                                                 ) : null}
-                                                                                <div className={`overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] ${viewMode === 'compact' ? '[-webkit-line-clamp:2] group-hover:[-webkit-line-clamp:4]' : '[-webkit-line-clamp:3] group-hover:[-webkit-line-clamp:5]'}`}>{cleaned}</div>
+                                                                                <div className={`overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] ${viewMode === 'compact' ? '[-webkit-line-clamp:2]' : '[-webkit-line-clamp:3]'}`}>{cleaned}</div>
                                                                             </>
                                                                         )}
                                                                     </div>
@@ -1863,9 +1861,10 @@ const openPromoteModal = (idea: SavedIdea) => {
                                                             })()}
                                                         </div>
 
-                                                        {editingIdeaId === idea.id ? <TagEditor idea={idea} /> : <TagDisplay idea={idea} />}
+                                                        <div className="mt-auto pt-4">
+                                                            {editingIdeaId === idea.id ? <TagEditor idea={idea} /> : <TagDisplay idea={idea} />}
 
-                                                        <div className="absolute top-3 right-3 flex items-center gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                                                            <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-slate-700/70 pt-3">
                                                             <button onClick={(e) => { e.stopPropagation(); openIdeaView(idea); }} className="px-2.5 py-1 text-xs bg-slate-700/50 hover:bg-slate-700/70 rounded-full text-slate-200 transition-colors" aria-label="Open">Open</button>
                                                             <button onClick={(e) => { e.stopPropagation(); openPromoteModal(idea); }} className="px-2.5 py-1 text-xs bg-purple-900/30 hover:bg-purple-900/50 rounded-full text-purple-100 transition-colors" aria-label="Promote to Routine">Promote</button>
                                                             <button onClick={(e) => { e.stopPropagation(); openAddToShowModal(idea); }} className="px-2.5 py-1 text-xs bg-blue-900/30 hover:bg-blue-900/50 rounded-full text-blue-100 transition-colors" aria-label="Add to Show">Add to Show</button>
@@ -1877,6 +1876,7 @@ const openPromoteModal = (idea: SavedIdea) => {
                                                             <IdeaShareWrapper idea={idea} />
                                                             <button onClick={(e) => { e.stopPropagation(); handlePrint(idea); }} className="flex items-center gap-1.5 px-2.5 py-1 text-xs bg-slate-700/50 hover:bg-purple-900/50 rounded-full text-slate-300 hover:text-purple-300 transition-colors" aria-label="Print"><PrintIcon className="w-3 h-3" /></button>
                                                             <button onClick={(e) => { e.stopPropagation(); handleDelete(idea.id); }} className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-900/50 rounded-full transition-colors" aria-label="Delete idea"><TrashIcon className="w-4 h-4" /></button>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 );
