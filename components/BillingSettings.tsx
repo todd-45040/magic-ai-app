@@ -162,7 +162,7 @@ const founderLabel = useMemo(
         <div className="mt-4 grid gap-3 md:grid-cols-5 text-sm">
           <div className="rounded-xl border border-white/10 bg-black/20 p-3">
             <div className="text-white/50 text-xs uppercase">Current plan</div>
-            <div className="mt-1">{loading ? 'Loading…' : humanizePlan(currentPlanKey)}</div>
+            <div className="mt-1">{loading ? 'Loading…' : humanizePlan(currentPlanKey)?.replace(/^./, (c) => c.toUpperCase())}</div>
           </div>
           <div className="rounded-xl border border-white/10 bg-black/20 p-3">
             <div className="text-white/50 text-xs uppercase">Billing state</div>
