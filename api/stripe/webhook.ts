@@ -1,4 +1,4 @@
-import stripeWebhookHandler, { config } from '../stripeWebhook';
+import handler, { config } from '../stripeWebhook';
 
 export { config };
-export default stripeWebhookHandler;
+export default handler;
