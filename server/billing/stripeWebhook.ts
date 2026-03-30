@@ -262,7 +262,7 @@ async function insertBillingEventReceipt(admin: any, event: any, requestId: stri
   };
 
   const existing = stripeEventId ? await findExistingBillingEvent(admin, stripeEventId) : null;
-  if (existing?.processed_at || existing?.event_status === 'processed' || existing?.event_status === 'ignored') {
+  if (existing?.event_status === 'processed' || existing?.event_status === 'ignored') {
     return { duplicate: true, billingEventId: existing.id };
   }
 
@@ -314,31 +314,44 @@ async function mirrorWebhookHealthEvent(admin: any, event: any, requestId: strin
 async function incrementBillingEventAttempt(admin: any, billingEventId: string | null) {
   if (!billingEventId) return;
 
-  const { data } = await admin
-    .from('billing_events')
-    .select('delivery_attempts')
-    .eq('id', billingEventId)
-    .maybeSingle();
+  try {
+    const { data } = await admin
+      .from('billing_events')
+      .select('delivery_attempts')
+      .eq('id', billingEventId)
+      .maybeSingle();
 
-  const nextAttempts = Math.max(1, Number(data?.delivery_attempts || 1) + 1);
-  await admin
-    .from('billing_events')
-    .update({
-      delivery_attempts: nextAttempts,
-      last_received_at: new Date().toISOString(),
-    })
-    .eq('id', billingEventId);
+    const nextAttempts = Math.max(1, Number((data as any)?.delivery_attempts || 1) + 1);
+    await admin
+      .from('billing_events')
+      .update({
+        delivery_attempts: nextAttempts,
+        last_received_at: new Date().toISOString(),
+      })
+      .eq('id', billingEventId);
+  } catch {
+    // Best-effort only. Do not let observability bookkeeping break Stripe webhook processing.
+  }
 }
 
 async function markBillingEventStatus(admin: any, billingEventId: string | null, status: 'processed' | 'ignored' | 'failed', details?: unknown) {
   if (!billingEventId) return;
-  const patch: Record<string, unknown> = {
-    event_status: status,
-    processed_at: new Date().toISOString(),
-  };
-  if (details !== undefined) patch.payload = sanitizeStripeLogValue(details);
-  if (status === 'failed' && details && typeof details === 'object' && 'error' in (details as any)) patch.last_error = String((details as any).error || '');
-  await admin.from('billing_events').update(patch).eq('id', billingEventId);
+  try {
+    const patch: Record<string, unknown> = {
+      event_status: status,
+    };
+    if (status === 'processed' || status === 'ignored') {
+      patch.processed_at = new Date().toISOString();
+    }
+    if (status === 'failed') {
+      patch.processed_at = null;
+    }
+    if (details !== undefined) patch.payload = sanitizeStripeLogValue(details);
+    if (status === 'failed' && details && typeof details === 'object' && 'error' in (details as any)) patch.last_error = String((details as any).error || '');
+    await admin.from('billing_events').update(patch).eq('id', billingEventId);
+  } catch {
+    // Best-effort only. Never throw from failure bookkeeping.
+  }
 }
 
 async function upsertBillingCustomer(admin: any, params: { userId: string | null; stripeCustomerId: string | null; email?: string | null; livemode?: boolean }) {
@@ -699,22 +712,24 @@ async function syncFromEvent(admin: any, event: any) {
     currentPeriodEnd,
   });
 
-  const subscriptionId = await upsertSubscription(admin, {
-    userId,
-    billingCustomerId,
-    stripeCustomerId,
-    stripeSubscriptionId,
-    checkoutSessionId,
-    planKey,
-    billingStatus,
-    currentPeriodStart,
-    currentPeriodEnd,
-    cancelAtPeriodEnd: liveSubscription?.cancelAtPeriodEnd ?? Boolean(object?.cancel_at_period_end),
-    founderLockedPrice,
-    founderLockedPlan,
-    priceId: liveSubscription?.priceId || firstPrice?.id || object?.price?.id || null,
-    productId: liveSubscription?.productId || firstPrice?.product || object?.price?.product || null,
-  });
+  const subscriptionId = userId
+    ? await upsertSubscription(admin, {
+        userId,
+        billingCustomerId,
+        stripeCustomerId,
+        stripeSubscriptionId,
+        checkoutSessionId,
+        planKey,
+        billingStatus,
+        currentPeriodStart,
+        currentPeriodEnd,
+        cancelAtPeriodEnd: liveSubscription?.cancelAtPeriodEnd ?? Boolean(object?.cancel_at_period_end),
+        founderLockedPrice,
+        founderLockedPlan,
+        priceId: liveSubscription?.priceId || firstPrice?.id || object?.price?.id || null,
+        productId: liveSubscription?.productId || firstPrice?.product || object?.price?.product || null,
+      })
+    : null;
 
   return {
     userId,
