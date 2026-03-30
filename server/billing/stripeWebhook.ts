@@ -644,8 +644,6 @@ async function syncFromEvent(admin: any, event: any) {
   const firstPrice = object?.items?.data?.[0]?.price || object?.lines?.data?.[0]?.price || object?.plan || null;
 
   const explicitUserId = String(metadata?.user_id || object?.client_reference_id || '').trim() || null;
-  const existingFounderOverride = await getFounderOverride(admin, userId);
-  const founderState = deriveFounderProtection({ metadata, founderOverride: existingFounderOverride });
   const stripeCustomerId = String(object?.customer || '').trim() || null;
   const stripeSubscriptionId = String(object?.subscription || (object?.object === 'subscription' ? object?.id : '') || '').trim() || null;
   const userId = await resolveUserIdForBillingEvent(admin, {
@@ -653,6 +651,8 @@ async function syncFromEvent(admin: any, event: any) {
     stripeCustomerId,
     stripeSubscriptionId,
   });
+  const existingFounderOverride = await getFounderOverride(admin, userId);
+  const founderState = deriveFounderProtection({ metadata, founderOverride: existingFounderOverride });
   const liveSubscription = await fetchLiveStripeSubscriptionSnapshot(stripeSubscriptionId, stripeCustomerId);
   const normalizedPlanKey = normalizePlanFromObject(object, {
     priceId: liveSubscription?.priceId || null,
