@@ -44,7 +44,7 @@ export function getBillingConfig(env: NodeJS.ProcessEnv = process.env): BillingR
   const missingEnvKeys = requiredEnvKeys.filter((key) => !getOptionalEnv(key, env));
   const appShellUrl = `${appBaseUrl}/app`;
   const billingAppUrl = `${appShellUrl}?view=billing-settings`;
-  const expectedWebhookPath = '/api/stripeWebhook';
+  const expectedWebhookPath = '/api/stripe/webhook';
   const readiness = {
     expectedWebhookPath,
     expectedWebhookUrl: `${appBaseUrl}${expectedWebhookPath}`,

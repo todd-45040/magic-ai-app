@@ -290,7 +290,7 @@ const founderLabel = useMemo(
         <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
           <div className="rounded-xl border border-white/10 bg-black/20 p-3">
             <div className="text-white/50 text-xs uppercase">Expected webhook path</div>
-            <div className="mt-1 break-all text-sm">{readiness?.expectedWebhookPath || '/api/stripeWebhook'}</div>
+            <div className="mt-1 break-all text-sm">{readiness?.expectedWebhookPath || '/api/stripe/webhook'}</div>
           </div>
           <div className="rounded-xl border border-white/10 bg-black/20 p-3">
             <div className="text-white/50 text-xs uppercase">Expected webhook URL</div>
