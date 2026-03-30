@@ -262,7 +262,7 @@ async function insertBillingEventReceipt(admin: any, event: any, requestId: stri
   };
 
   const existing = stripeEventId ? await findExistingBillingEvent(admin, stripeEventId) : null;
-  if (existing?.event_status === 'processed' || existing?.event_status === 'ignored') {
+  if (existing?.processed_at || existing?.event_status === 'processed' || existing?.event_status === 'ignored') {
     return { duplicate: true, billingEventId: existing.id };
   }
 
@@ -296,19 +296,23 @@ async function mirrorWebhookHealthEvent(admin: any, event: any, requestId: strin
   const stripeEventId = String(event?.id || '').trim();
   if (!stripeEventId) return;
 
-  await admin
-    .from('maw_stripe_webhook_events')
-    .upsert([
-      {
-        stripe_event_id: stripeEventId,
-        event_type: String(event?.type || 'unknown'),
-        livemode: Boolean(event?.livemode),
-        stripe_created_at: safeIsoFromUnixSeconds(event?.created),
-        received_at: new Date().toISOString(),
-        request_id: requestId,
-        signature_present: signaturePresent,
-      },
-    ], { onConflict: 'stripe_event_id' });
+  try {
+    await admin
+      .from('maw_stripe_webhook_events')
+      .upsert([
+        {
+          stripe_event_id: stripeEventId,
+          event_type: String(event?.type || 'unknown'),
+          livemode: Boolean(event?.livemode),
+          stripe_created_at: safeIsoFromUnixSeconds(event?.created),
+          received_at: new Date().toISOString(),
+          request_id: requestId,
+          signature_present: signaturePresent,
+        },
+      ], { onConflict: 'stripe_event_id' });
+  } catch {
+    // best effort only
+  }
 }
 
 async function incrementBillingEventAttempt(admin: any, billingEventId: string | null) {
@@ -321,7 +325,7 @@ async function incrementBillingEventAttempt(admin: any, billingEventId: string |
       .eq('id', billingEventId)
       .maybeSingle();
 
-    const nextAttempts = Math.max(1, Number((data as any)?.delivery_attempts || 1) + 1);
+    const nextAttempts = Math.max(1, Number(data?.delivery_attempts || 1) + 1);
     await admin
       .from('billing_events')
       .update({
@@ -330,12 +334,13 @@ async function incrementBillingEventAttempt(admin: any, billingEventId: string |
       })
       .eq('id', billingEventId);
   } catch {
-    // Best-effort only. Do not let observability bookkeeping break Stripe webhook processing.
+    // best effort only
   }
 }
 
 async function markBillingEventStatus(admin: any, billingEventId: string | null, status: 'processed' | 'ignored' | 'failed', details?: unknown) {
   if (!billingEventId) return;
+
   try {
     const patch: Record<string, unknown> = {
       event_status: status,
@@ -343,14 +348,13 @@ async function markBillingEventStatus(admin: any, billingEventId: string | null,
     if (status === 'processed' || status === 'ignored') {
       patch.processed_at = new Date().toISOString();
     }
-    if (status === 'failed') {
-      patch.processed_at = null;
-    }
     if (details !== undefined) patch.payload = sanitizeStripeLogValue(details);
-    if (status === 'failed' && details && typeof details === 'object' && 'error' in (details as any)) patch.last_error = String((details as any).error || '');
+    if (status === 'failed' && details && typeof details === 'object' && 'error' in (details as any)) {
+      patch.last_error = String((details as any).error || '');
+    }
     await admin.from('billing_events').update(patch).eq('id', billingEventId);
   } catch {
-    // Best-effort only. Never throw from failure bookkeeping.
+    // best effort only
   }
 }
 
@@ -557,6 +561,8 @@ async function upsertSubscription(admin: any, params: {
   priceId?: string | null;
   productId?: string | null;
 }) {
+  if (!params.userId) return null;
+
   const matchSubscriptionId = String(params.stripeSubscriptionId || '').trim();
   let existingId: string | null = null;
   if (matchSubscriptionId) {
@@ -610,6 +616,7 @@ async function resolveUserIdForBillingEvent(admin: any, params: {
   explicitUserId?: string | null;
   stripeCustomerId?: string | null;
   stripeSubscriptionId?: string | null;
+  email?: string | null;
 }) {
   const explicitUserId = String(params.explicitUserId || '').trim() || null;
   if (explicitUserId) return explicitUserId;
@@ -647,6 +654,18 @@ async function resolveUserIdForBillingEvent(admin: any, params: {
     if (directUserId) return directUserId;
   }
 
+  const email = String(params.email || '').trim().toLowerCase() || null;
+  if (email) {
+    const { data: emailUser } = await admin
+      .from('users')
+      .select('id')
+      .ilike('email', email)
+      .maybeSingle();
+
+    const emailUserId = String(emailUser?.id || '').trim() || null;
+    if (emailUserId) return emailUserId;
+  }
+
   return null;
 }
 
@@ -663,6 +682,7 @@ async function syncFromEvent(admin: any, event: any) {
     explicitUserId,
     stripeCustomerId,
     stripeSubscriptionId,
+    email: object?.customer_email || object?.customer_details?.email || null,
   });
   const existingFounderOverride = await getFounderOverride(admin, userId);
   const founderState = deriveFounderProtection({ metadata, founderOverride: existingFounderOverride });
@@ -712,24 +732,22 @@ async function syncFromEvent(admin: any, event: any) {
     currentPeriodEnd,
   });
 
-  const subscriptionId = userId
-    ? await upsertSubscription(admin, {
-        userId,
-        billingCustomerId,
-        stripeCustomerId,
-        stripeSubscriptionId,
-        checkoutSessionId,
-        planKey,
-        billingStatus,
-        currentPeriodStart,
-        currentPeriodEnd,
-        cancelAtPeriodEnd: liveSubscription?.cancelAtPeriodEnd ?? Boolean(object?.cancel_at_period_end),
-        founderLockedPrice,
-        founderLockedPlan,
-        priceId: liveSubscription?.priceId || firstPrice?.id || object?.price?.id || null,
-        productId: liveSubscription?.productId || firstPrice?.product || object?.price?.product || null,
-      })
-    : null;
+  const subscriptionId = await upsertSubscription(admin, {
+    userId,
+    billingCustomerId,
+    stripeCustomerId,
+    stripeSubscriptionId,
+    checkoutSessionId,
+    planKey,
+    billingStatus,
+    currentPeriodStart,
+    currentPeriodEnd,
+    cancelAtPeriodEnd: liveSubscription?.cancelAtPeriodEnd ?? Boolean(object?.cancel_at_period_end),
+    founderLockedPrice,
+    founderLockedPlan,
+    priceId: liveSubscription?.priceId || firstPrice?.id || object?.price?.id || null,
+    productId: liveSubscription?.productId || firstPrice?.product || object?.price?.product || null,
+  });
 
   return {
     userId,
