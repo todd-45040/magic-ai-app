@@ -110,3 +110,27 @@ export function consumeLiveMinutes(user: User, minutes: number): { ok: boolean; 
   const amt = Math.max(0, Math.ceil(minutes));
   return consume(user, 'live_minutes', amt);
 }
+
+
+export function getSoftLimitWarning(user: User, metric: UsageMetric): string | null {
+  const cur = getUsage(user, metric);
+  if (cur.limit <= 0) return null;
+  const remaining = Math.max(0, Number(cur.remaining ?? 0));
+  const used = Math.max(0, Number(cur.used ?? 0));
+  const limit = Math.max(0, Number(cur.limit ?? 0));
+
+  const label =
+    metric === "image" ? "image generations" :
+    metric === "video_upload" ? "video analyses" :
+    metric === "live_minutes" ? "live rehearsal minutes" :
+    "AI actions";
+
+  if (remaining <= 0) return `You have no ${label} remaining today.`;
+
+  const nearlyOut = remaining <= Math.max(1, Math.ceil(limit * 0.2));
+  if (nearlyOut) {
+    return `Heads up: you have ${remaining} ${label} remaining today (${used}/${limit} used).`;
+  }
+
+  return null;
+}

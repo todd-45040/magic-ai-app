@@ -1,6 +1,6 @@
 
 import React, { useMemo, useState, useEffect, useRef } from 'react';
-import { generateImages, editImageWithPrompt } from '../services/geminiService';
+import { generateImages, editImageWithPrompt, normalizeAiUserFacingError, getHighCostToolNotice } from '../services/geminiService';
 import BlockedPanel from './BlockedPanel';
 import { normalizeBlockedUx } from '../services/blockedUx';
 import { saveIdea } from '../services/ideasService';
@@ -9,7 +9,7 @@ import { useAppDispatch, useAppState, refreshShows, refreshIdeas } from '../stor
 import SaveActionBar from './shared/SaveActionBar';
 import { BackIcon, ImageIcon, WandIcon, TrashIcon, CameraIcon } from './icons';
 import type { User } from '../types';
-import { canConsume, consume } from '../services/usageTracker';
+import { canConsume, consume, getSoftLimitWarning } from '../services/usageTracker';
 import { normalizeTier } from '../services/membershipService';
 import { trackClientEvent } from "../services/telemetryClient";
 
@@ -87,6 +87,8 @@ const VisualBrainstorm: React.FC<VisualBrainstormProps> = ({ onIdeaSaved, user, 
   const [lastGeneratePrompt, setLastGeneratePrompt] = useState<string>('');
   const [lastGenerateAspect, setLastGenerateAspect] = useState<'1:1' | '16:9' | '9:16'>('1:1');
   const [error, setError] = useState<string | null>(null);
+  const [usageWarning, setUsageWarning] = useState<string | null>(null);
+  const resourceNotice = useMemo(() => getHighCostToolNotice('visual_brainstorm'), []);
   const [blockedUi, setBlockedUi] = useState<ReturnType<typeof normalizeBlockedUx> | null>(null);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   // Phase 5: Multi-image generation (variations)
@@ -677,6 +679,7 @@ const addToHistory = (
     setLoadingKind(action.kind as any);
     setIsLoading(true);
     setError(null);
+    setUsageWarning(null);
     setGeneratedImage(null);
     setVariationImages([]);
     setVariationHistoryIds([]);
@@ -729,6 +732,7 @@ const addToHistory = (
 
       if (!skipConsume) {
         consume(user, 'image', successfulImages);
+        setUsageWarning(getSoftLimitWarning(user, 'image'));
       }
 
       try {
@@ -811,11 +815,11 @@ const addToHistory = (
       const raw = err instanceof Error ? err.message : 'An unknown error occurred.';
       const isTimeout = /timed out/i.test(raw);
       const is503 = /\b503\b/.test(raw);
-      const friendly = isTimeout
+      const friendly = normalizeAiUserFacingError(err) || (isTimeout
         ? 'Request timed out (90s). The image generator can be slow sometimes — please try again.'
         : is503
           ? 'The image generator is temporarily overloaded (503). Please try again.'
-          : raw;
+          : raw);
 
       setLastFailedAction(action);
       setLastFailedMessage(friendly);
@@ -927,6 +931,11 @@ const refinementPresets: Array<{ label: string; instruction: string }> = [
     };
     await runAction(action);
   };
+
+  useEffect(() => {
+    if (!user) return;
+    setUsageWarning(getSoftLimitWarning(user, 'image'));
+  }, [user]);
 
   const promptSummary = useMemo(() => {
     const p = String(promptUsed || finalPrompt || '').trim();
@@ -1443,6 +1452,14 @@ const activeSession = useMemo(() => {
                   <span>Generate Variations</span>
                 </button>
               </div>
+                <div className="mt-2 rounded-md border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-center">
+                  <p className="text-amber-200 text-xs">{resourceNotice}</p>
+                </div>
+                {usageWarning && !error && (
+                  <div className="mt-2 text-center">
+                    <p className="text-amber-300 text-sm">{usageWarning}</p>
+                  </div>
+                )}
                 {error && (
                   <div className="mt-2 text-center">
                     <p className="text-red-400 text-sm">{lastFailedMessage || error}</p>

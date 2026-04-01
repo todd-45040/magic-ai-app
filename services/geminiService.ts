@@ -2,6 +2,7 @@ import { Type } from "@google/genai";
 import { supabase } from '../supabase';
 import type { ChatMessage, TrickIdentificationResult, User } from '../types';
 import { getAiProvider } from './aiProviderService';
+import { normalizeBlockedUx } from './blockedUx';
 
 // Keep this type export for components that reference live sessions.
 // NOTE: Live sessions are intentionally disabled in the production baseline because
@@ -223,6 +224,61 @@ function sleep(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }
 
+function buildServiceUnavailableMessage(err: unknown): string {
+  const blocked = normalizeBlockedUx(err, { toolName: 'AI' });
+  if (blocked.blocked) {
+    if (blocked.reason === 'USAGE_LIMIT_REACHED' || blocked.reason === 'QUOTA_EXCEEDED') {
+      return blocked.message;
+    }
+    if (blocked.reason === 'RATE_LIMITED' || blocked.reason === 'TIMEOUT' || blocked.reason === 'SERVICE_UNAVAILABLE') {
+      return 'AI temporarily unavailable. Please try again in a moment.';
+    }
+    return blocked.message || 'AI temporarily unavailable. Please try again in a moment.';
+  }
+
+  const raw = String((err as any)?.message || err || '').toLowerCase();
+  if (
+    raw.includes('timed out') ||
+    raw.includes('timeout') ||
+    raw.includes('rate limit') ||
+    raw.includes('too many requests') ||
+    raw.includes('resource_exhausted') ||
+    raw.includes('overloaded') ||
+    raw.includes('503') ||
+    raw.includes('502') ||
+    raw.includes('504') ||
+    raw.includes('failed to fetch') ||
+    raw.includes('network')
+  ) {
+    return 'AI temporarily unavailable. Please try again in a moment.';
+  }
+  return String((err as any)?.message || 'AI temporarily unavailable. Please try again in a moment.');
+}
+
+export function normalizeAiUserFacingError(err: unknown): string {
+  return buildServiceUnavailableMessage(err);
+}
+
+export function getHighCostToolNotice(tool: 'visual_brainstorm' | 'video_rehearsal' | 'live_rehearsal'): string {
+  if (tool === 'visual_brainstorm') {
+    return 'Image generation uses higher AI resources. Repeated runs may be limited during busy periods.';
+  }
+  if (tool === 'video_rehearsal') {
+    return 'Video analysis uses higher AI resources. Upload intentionally and reuse saved notes when possible.';
+  }
+  return 'Live rehearsal uses higher AI resources. Longer sessions may be limited during busy periods.';
+}
+
+function createHttpError(status: number, json: any, fallbackMessage: string): Error {
+  const message = json?.error || json?.message || fallbackMessage;
+  const err: any = new Error(message);
+  err.status = status;
+  err.error_code = json?.error_code || json?.code || (status === 429 ? 'RATE_LIMITED' : undefined);
+  err.retryable = typeof json?.retryable === 'boolean' ? json.retryable : isRetryableStatus(status);
+  err.details = json;
+  return err;
+}
+
 function isRetryableStatus(status: number) {
   return status === 429 || status === 502 || status === 503 || status === 504;
 }
@@ -297,7 +353,7 @@ async function postJson<T>(
           continue;
         }
 
-        throw new Error(message);
+        throw createHttpError(res.status, json, message);
       }
 
       return json as T;
@@ -318,12 +374,21 @@ async function postJson<T>(
   }
 
   // If we exhausted retries, surface a helpful message
+  if (lastErr?.status || lastErr?.error_code) {
+    throw lastErr;
+  }
+
   const msg = lastErr?.name === 'AbortError'
     ? `Request timed out (${Math.round((options?.timeoutMs ?? 90000) / 1000)}s)`
     : (lastErr?.message || 'Request failed');
 
-  throw new Error(msg);
+  const finalErr: any = new Error(msg);
+  finalErr.retryable = /timed out|timeout|failed to fetch|network/i.test(String(msg));
+  if (/timed out|timeout/i.test(String(msg))) finalErr.error_code = 'TIMEOUT';
+  if (/failed to fetch|network/i.test(String(msg))) finalErr.error_code = 'SERVICE_UNAVAILABLE';
+  throw finalErr;
 }
+
 
 
 
@@ -368,7 +433,7 @@ export const generateResponse = async (
     return extractText(result);
   } catch (error: any) {
     console.error('AI Error:', error);
-    return `Error: ${error?.message || 'Failed to connect to AI wizard.'}`;
+    return buildServiceUnavailableMessage(error);
   }
 };
 
@@ -396,7 +461,7 @@ export const generateResponseWithParts = async (
     return extractText(result);
   } catch (error: any) {
     console.error('AI Error:', error);
-    return `Error: ${error?.message || 'Failed to connect to AI wizard.'}`;
+    return buildServiceUnavailableMessage(error);
   }
 };
 
@@ -777,11 +842,16 @@ export const generateImage = async (
   aspectRatio: "1:1" | "3:4" | "4:3" | "9:16" | "16:9" = "1:1",
   currentUser?: User
 ): Promise<string> => {
-  const result = await postJson<any>(
-    '/api/generate-images',
-    { prompt, aspectRatio },
-    currentUser
-  );
+  let result: any;
+  try {
+    result = await postJson<any>(
+      '/api/generate-images',
+      { prompt, aspectRatio },
+      currentUser
+    );
+  } catch (error) {
+    throw new Error(normalizeAiUserFacingError(error));
+  }
 
   // Try common response shapes
   const img = result?.generatedImages?.[0] || result?.images?.[0] || result?.data?.[0];
@@ -812,11 +882,16 @@ export const generateImages = async (
 ): Promise<string[]> => {
   const safeCount = Math.max(1, Math.min(4, Math.floor(Number(count) || 1)));
 
-  const result = await postJson<any>(
-    '/api/generate-images',
-    { prompt, aspectRatio, count: safeCount, tool },
-    currentUser
-  );
+  let result: any;
+  try {
+    result = await postJson<any>(
+      '/api/generate-images',
+      { prompt, aspectRatio, count: safeCount, tool },
+      currentUser
+    );
+  } catch (error) {
+    throw new Error(normalizeAiUserFacingError(error));
+  }
 
   const imgs = result?.generatedImages || result?.images || result?.data;
   if (!Array.isArray(imgs) || imgs.length === 0) {
@@ -853,11 +928,16 @@ export const editImageWithPrompt = async (
   prompt: string,
   currentUser?: User
 ): Promise<string> => {
-  const result = await postJson<any>(
-    '/api/edit-images',
-    { imageBase64: base64ImageData, mimeType, prompt },
-    currentUser
-  );
+  let result: any;
+  try {
+    result = await postJson<any>(
+      '/api/edit-images',
+      { imageBase64: base64ImageData, mimeType, prompt },
+      currentUser
+    );
+  } catch (error) {
+    throw new Error(normalizeAiUserFacingError(error));
+  }
 
   // Try common response shapes
   const img = result?.generatedImages?.[0] || result?.images?.[0] || result?.data?.[0];

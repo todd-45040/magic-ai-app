@@ -2,10 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 // NOTE: This project does not depend on react-router-dom. Navigation is handled
 // by the parent App shell (props callback) and/or a simple location redirect.
 import { LiveServerMessage, FunctionCall } from '@google/genai';
-import { startLiveSession, decode, decodeAudioData, type LiveSession } from '../services/geminiService';
+import { startLiveSession, decode, decodeAudioData, type LiveSession, normalizeAiUserFacingError, getHighCostToolNotice } from '../services/geminiService';
 import { saveIdea, updateIdea, getRehearsalSessions } from '../services/ideasService';
 import type { Transcription, TimerState, User } from '../types';
-import { canConsume, getUsage, consumeLiveMinutes } from '../services/usageTracker';
+import { canConsume, getUsage, consumeLiveMinutes, getSoftLimitWarning } from '../services/usageTracker';
 import { consumeLiveMinutesServer, emitLiveUsageUpdate } from '../services/liveMinutesService';
 import { fetchUsageStatus } from '../services/usageStatusService';
 import { MAGICIAN_LIVE_REHEARSAL_SYSTEM_INSTRUCTION, LIVE_REHEARSAL_TOOLS } from '../constants';
@@ -554,6 +554,8 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
     const [status, setStatus] = useState<'idle' | 'connecting' | 'listening' | 'error'>('idle');
     const [errorMessage, setErrorMessage] = useState('');
     const [blockedUx, setBlockedUx] = useState<BlockedUx | null>(null);
+  const [usageWarning, setUsageWarning] = useState<string | null>(getSoftLimitWarning(user, 'live_minutes'));
+  const resourceNotice = getHighCostToolNotice('live_rehearsal');
     const [transcriptionHistory, setTranscriptionHistory] = useState<Transcription[]>([]);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     
@@ -903,6 +905,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             if ((s as any)?.ok && daily && Number(daily.limit ?? 0) > 0) {
                 setDailyLive({ used: Number(daily.used ?? 0), limit: Number(daily.limit ?? 0), remaining: Number(daily.remaining ?? 0), source: 'server' });
                 dailyLiveStartRemainingRef.current = Number(daily.remaining ?? 0);
+                setUsageWarning(Number(daily.remaining ?? 0) <= Math.max(1, Math.ceil(Number(daily.limit ?? 0) * 0.2)) ? `Heads up: you only have ${Number(daily.remaining ?? 0)} live rehearsal minutes remaining today.` : null);
             }
 
             if ((s as any)?.ok && daily && Number(daily.limit ?? 0) > 0 && Number(daily.remaining ?? 0) <= 0) {
@@ -925,6 +928,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 const cur = getUsage(user, 'live_minutes');
                 setDailyLive({ used: Number(cur.used ?? 0), limit: Number(cur.limit ?? 0), remaining: Number(cur.remaining ?? 0), source: 'local' });
                 dailyLiveStartRemainingRef.current = Number(cur.remaining ?? 0);
+                setUsageWarning(getSoftLimitWarning(user, 'live_minutes'));
                 if (cur.limit > 0 && cur.remaining <= 0) {
                     setBlockedUx(
                         normalizeBlockedUx(
@@ -1102,7 +1106,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                     onerror: async (e) => {
                         console.error('Live session error:', e);
                         errorOccurred.current = true;
-                        setErrorMessage('A live session error occurred. The connection may have been interrupted.');
+                        setErrorMessage(normalizeAiUserFacingError(e));
                         await safeCleanupSession();
                         trackLiveRehearsalEvent('live_rehearsal_session_error', { phase: 'live_session', has_transcript: transcriptionHistoryRef.current.length > 0 }, { outcome: 'ERROR_UPSTREAM', error_code: 'live_session_error', retryable: true });
                         setStatus('error');
@@ -1149,9 +1153,9 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             } else if (errorName === 'NotReadableError' || errorName === 'TrackStartError') {
                 setErrorMessage('Your microphone is busy or unavailable. Close other apps using the mic and try again.');
             } else if (errorName === 'AbortError' || errorName === 'NetworkError' || /network|fetch|timeout|connection/i.test(errorMessage)) {
-                setErrorMessage('Network or API connection failed while starting live rehearsal. Please check your connection and try again.');
+                setErrorMessage(normalizeAiUserFacingError(error));
             } else {
-                setErrorMessage('Live session failed to initialize. Please try again in a moment.');
+                setErrorMessage('AI temporarily unavailable. Please try again in a moment.');
             }
             trackLiveRehearsalEvent('live_rehearsal_session_error', { phase: 'session_start', error_name: errorName || 'unknown' }, { outcome: 'ERROR_UPSTREAM', error_code: errorName || 'live_start_failed', retryable: true });
             await safeCleanupSession();
@@ -1396,6 +1400,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 // Fall back to local tracker if server is unavailable.
                 try {
                     consumeLiveMinutes(user, minutes);
+                    setUsageWarning(getSoftLimitWarning(user, 'live_minutes'));
                     void refreshDailyLive();
                 } catch {
                     // ignore
@@ -1615,6 +1620,8 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                             status={status}
                             isAnalyzing={isAnalyzing}
                             errorMessage={errorMessage}
+                            usageWarning={usageWarning}
+                            resourceNotice={resourceNotice}
                             blockedUx={blockedUx}
                             onUpgrade={onRequestUpgrade}
                             onStart={handleStartSession}
@@ -1742,6 +1749,8 @@ const StatusIndicator: React.FC<{
     status: string,
     isAnalyzing: boolean,
     errorMessage: string,
+    usageWarning: string | null,
+    resourceNotice: string,
     blockedUx: BlockedUx | null,
     onUpgrade?: () => void,
     onStart: () => void,
@@ -1757,7 +1766,7 @@ const StatusIndicator: React.FC<{
     demoScript: string,
     demoDurationSeconds: number,
     demoMarkers: SegmentMarker[],
-}> = ({status, isAnalyzing, errorMessage, blockedUx, onUpgrade, onStart, elapsed, markerCount, helpOpen, onToggleHelp, onReset, onAddMarker, currentMarkers, onLoadDemo, onRunDemoReview, demoScript, demoDurationSeconds, demoMarkers}) => {
+}> = ({status, isAnalyzing, errorMessage, usageWarning, resourceNotice, blockedUx, onUpgrade, onStart, elapsed, markerCount, helpOpen, onToggleHelp, onReset, onAddMarker, currentMarkers, onLoadDemo, onRunDemoReview, demoScript, demoDurationSeconds, demoMarkers}) => {
     const isDemoLoaded = Boolean(demoScript.trim());
     const isRecording = status === 'listening';
     const isConnecting = status === 'connecting';
@@ -1812,6 +1821,14 @@ const StatusIndicator: React.FC<{
                 {status === 'error' && !blockedUx && errorMessage ? (
                     <div className="mt-5 text-sm text-red-300 bg-red-900/20 border border-red-700/40 rounded-md px-3 py-2">
                         {errorMessage}
+                    </div>
+                ) : null}
+                <div className="mt-5 text-xs text-amber-100 bg-amber-900/20 border border-amber-700/30 rounded-md px-3 py-2">
+                    {resourceNotice}
+                </div>
+                {status !== 'error' && usageWarning ? (
+                    <div className="mt-5 text-sm text-amber-200 bg-amber-900/20 border border-amber-700/40 rounded-md px-3 py-2">
+                        {usageWarning}
                     </div>
                 ) : null}
 

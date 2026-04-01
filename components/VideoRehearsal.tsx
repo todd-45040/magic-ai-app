@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useRef } from 'react';
-import { generateResponseWithParts } from '../services/geminiService';
+import { generateResponseWithParts, normalizeAiUserFacingError, getHighCostToolNotice } from '../services/geminiService';
 import BlockedPanel from './BlockedPanel';
 import { normalizeBlockedUx } from '../services/blockedUx';
 import { saveIdea } from '../services/ideasService';
@@ -11,7 +11,7 @@ import { VideoIcon, WandIcon, SaveIcon, CheckIcon, ShareIcon, TrashIcon, InfoIco
 import ShareButton from './ShareButton';
 import FormattedText from './FormattedText';
 import type { User, AiSparkAction } from '../types';
-import { canConsume, consume } from '../services/usageTracker';
+import { canConsume, consume, getSoftLimitWarning } from '../services/usageTracker';
 import { trackClientEvent } from '../services/telemetryClient';
 
 interface VideoRehearsalProps {
@@ -124,6 +124,8 @@ const VideoRehearsal: React.FC<VideoRehearsalProps> = ({
 
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [usageWarning, setUsageWarning] = useState<string | null>(getSoftLimitWarning(user, 'video_upload'));
+    const resourceNotice = getHighCostToolNotice('video_rehearsal');
   const [blockedUi, setBlockedUi] = useState<ReturnType<typeof normalizeBlockedUx> | null>(null);
     const [analysisResult, setAnalysisResult] = useState<string | null>(null);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
@@ -351,11 +353,11 @@ useEffect(() => {
             setError(`Daily video limit reached (${chk.used}/${chk.limit}). Upgrade to continue.`);
             return;
         }
-        consume(user, 'video_upload', 1);
         void trackClientEvent({ tool: 'video_rehearsal', action: isDemoClipLoaded ? 'demo_analyze_click' : 'analyze_click' });
         
         setIsLoading(true);
         setError(null);
+        setUsageWarning(null);
         setBlockedUi(null);
         setAnalysisResult(null);
         setSaveStatus('idle');
@@ -406,6 +408,8 @@ useEffect(() => {
 
             const response = await generateResponseWithParts(parts, VIDEO_REHEARSAL_SYSTEM_INSTRUCTION, user);
             setAnalysisResult(response);
+            consume(user, 'video_upload', 1);
+            setUsageWarning(getSoftLimitWarning(user, 'video_upload'));
             void trackClientEvent({ tool: 'video_rehearsal', action: isDemoClipLoaded ? 'demo_analyze_success' : 'analyze_success', outcome: 'SUCCESS_NOT_CHARGED' });
 
             // Phase 4: soft upsell after first successful analysis for trial users.
@@ -419,13 +423,15 @@ useEffect(() => {
             }
         } catch (err) {
             console.error('Video analysis error:', err);
-            const message = err instanceof Error ? err.message : "An unknown error occurred during the analysis.";
+            const message = normalizeAiUserFacingError(err) || (err instanceof Error ? err.message : "An unknown error occurred during the analysis.");
             if (isDemoClipLoaded) {
                 setAnalysisResult(DEMO_ANALYSIS);
-                setError('Live AI analysis was unavailable, so the demo fallback result was shown.');
+                setError('AI temporarily unavailable. The demo fallback result was shown instead.');
                 void trackClientEvent({ tool: 'video_rehearsal', action: 'demo_analyze_fallback', outcome: 'SUCCESS_NOT_CHARGED', metadata: { message } });
             } else {
-                setError(message);
+                const blocked = normalizeBlockedUx(err, { toolName: 'Video Rehearsal', user, targetPlan: 'Professional' });
+                setBlockedUi(blocked.blocked ? blocked : null);
+                setError(blocked.blocked ? blocked.message : message);
                 void trackClientEvent({ tool: 'video_rehearsal', action: 'analyze_error', outcome: 'ERROR_UPSTREAM', metadata: { message } });
             }
         } finally {
@@ -712,6 +718,10 @@ const deriveAutoTags = (): string[] => {
                             {isLoading ? 'Analyzing…' : videoFile ? 'Analyze Performance (Ready)' : 'Analyze Performance'}
                         </span>
                     </button>
+                    <div className="mt-2 rounded-md border border-amber-500/20 bg-amber-500/10 px-3 py-2">
+                        <p className="text-amber-200 text-xs text-center">{resourceNotice}</p>
+                    </div>
+                    {usageWarning && !error && <p className="text-amber-300 mt-2 text-sm text-center">{usageWarning}</p>}
                     {error && <p className="text-red-400 mt-2 text-sm text-center">{error}</p>}
                 </div>
             </div>
