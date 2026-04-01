@@ -12,7 +12,13 @@ function safeIsoFromUnixSeconds(value: unknown): string | null {
 function normalizePlanKey(session: any, subscription: any): BillingPlanKey {
   const metadata = session?.metadata || subscription?.metadata || {};
   const explicit = String(metadata?.internal_plan_key || metadata?.plan_key || '').trim();
-  if (explicit === 'free' || explicit === 'amateur' || explicit === 'founder_amateur' || explicit === 'professional' || explicit === 'founder_professional') {
+  if (
+    explicit === 'free' ||
+    explicit === 'amateur' ||
+    explicit === 'founder_amateur' ||
+    explicit === 'professional' ||
+    explicit === 'founder_professional'
+  ) {
     return explicit as BillingPlanKey;
   }
 
@@ -60,7 +66,9 @@ export default async function handler(request: any, response: any) {
         : rawSubscription;
 
     const planKey = normalizePlanKey(session, subscription);
-    const billingStatus = String(subscription?.status || (session?.payment_status === 'paid' ? 'active' : session?.status || 'unknown')).trim() || 'unknown';
+    const billingStatus = String(
+      subscription?.status || (session?.payment_status === 'paid' ? 'active' : session?.status || 'unknown')
+    ).trim() || 'unknown';
     const currentPeriodStart = safeIsoFromUnixSeconds(subscription?.current_period_start);
     const currentPeriodEnd = safeIsoFromUnixSeconds(subscription?.current_period_end);
     const cancelAtPeriodEnd = Boolean(subscription?.cancel_at_period_end);
@@ -74,17 +82,20 @@ export default async function handler(request: any, response: any) {
     const membership = toPaidMembership(planKey, resolution.keepAccess);
 
     const stripeCustomer = session?.customer || null;
-    const stripeCustomerId = typeof stripeCustomer === 'string'
-      ? stripeCustomer
-      : String(stripeCustomer?.id || '').trim() || null;
+    const stripeCustomerId =
+      typeof stripeCustomer === 'string'
+        ? stripeCustomer
+        : String(stripeCustomer?.id || '').trim() || null;
 
-    const stripeSubscriptionId = String(subscription?.id || (typeof rawSubscription === 'string' ? rawSubscription : '') || '').trim() || null;
-    const stripePriceId = String(subscription?.items?.data?.[0]?.price?.id || session?.line_items?.data?.[0]?.price?.id || '').trim() || null;
-    const stripeProductId = String(subscription?.items?.data?.[0]?.price?.product || session?.line_items?.data?.[0]?.price?.product || '').trim() || null;
+    const stripeSubscriptionId =
+      String(subscription?.id || (typeof rawSubscription === 'string' ? rawSubscription : '') || '').trim() || null;
+    const stripePriceId =
+      String(subscription?.items?.data?.[0]?.price?.id || session?.line_items?.data?.[0]?.price?.id || '').trim() || null;
+    const stripeProductId =
+      String(subscription?.items?.data?.[0]?.price?.product || session?.line_items?.data?.[0]?.price?.product || '').trim() || null;
 
     const customerEmail =
       String(
-        session?.customer_details?.email ||
         session?.customer_email ||
         (typeof stripeCustomer === 'object' && stripeCustomer ? stripeCustomer.email : '') ||
         ''
