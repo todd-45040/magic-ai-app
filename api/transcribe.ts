@@ -1,4 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
+import { enforceAiUsage } from '../server/usage.js';
 import { getGoogleAiApiKey } from '../server/gemini.js';
 
 type Body = {
@@ -6,6 +7,8 @@ type Body = {
   mimeType?: string;
   prompt?: string;
 };
+
+const DEFAULT_TIMEOUT_MS = 45_000;
 
 function getApiKey(): string | undefined {
   return getGoogleAiApiKey() || undefined;
@@ -17,6 +20,40 @@ function getModel(): string {
   return process.env.GEMINI_TRANSCRIBE_MODEL || 'gemini-2.0-flash';
 }
 
+function friendlyTransientMessage(): string {
+  return 'AI temporarily unavailable. Please try again in a moment.';
+}
+
+function buildUsageErrorResponse(usage: Awaited<ReturnType<typeof enforceAiUsage>>) {
+  return {
+    error: usage.error || 'AI usage limit reached.',
+    remaining: usage.remaining,
+    limit: usage.limit,
+    burstRemaining: usage.burstRemaining,
+    burstLimit: usage.burstLimit,
+  };
+}
+
+function applyUsageHeaders(res: any, usage: Awaited<ReturnType<typeof enforceAiUsage>>) {
+  res.setHeader('X-AI-Remaining', String(usage.remaining ?? ''));
+  res.setHeader('X-AI-Limit', String(usage.limit ?? ''));
+  res.setHeader('X-AI-Membership', String(usage.membership ?? ''));
+  res.setHeader('X-AI-Burst-Remaining', String(usage.burstRemaining ?? ''));
+  res.setHeader('X-AI-Burst-Limit', String(usage.burstLimit ?? ''));
+}
+
+async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  let t: any;
+  const timeout = new Promise<never>((_, reject) => {
+    t = setTimeout(() => reject(new Error(`TIMEOUT_${ms}MS`)), ms);
+  });
+  try {
+    return await Promise.race([p, timeout]);
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 async function generateWithFallback(
   ai: GoogleGenAI,
   models: string[],
@@ -25,7 +62,7 @@ async function generateWithFallback(
   let lastErr: any = null;
   for (const model of models) {
     try {
-      return await ai.models.generateContent({ ...args, model });
+      return await withTimeout(ai.models.generateContent({ ...args, model }), DEFAULT_TIMEOUT_MS);
     } catch (err: any) {
       lastErr = err;
       const msg = String(err?.message || '');
@@ -40,6 +77,17 @@ export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
     return;
+  }
+
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ') || authHeader.trim() === 'Bearer guest') {
+    res.status(401).json({ error: 'Unauthorized. Please log in.' });
+    return;
+  }
+
+  const usage = await enforceAiUsage(req, 1, { tool: 'live_rehearsal_audio' });
+  if (!usage.ok) {
+    return res.status(usage.status || 429).json(buildUsageErrorResponse(usage));
   }
 
   const apiKey = getApiKey();
@@ -86,9 +134,13 @@ export default async function handler(req: any, res: any) {
     });
 
     const text = (result.text || '').trim();
+    applyUsageHeaders(res, usage);
     res.status(200).json({ transcript: text });
   } catch (err: any) {
     console.error('Transcribe error:', err);
-    res.status(500).json({ error: err?.message || 'Transcribe failed' });
+    if (String(err?.message || '').startsWith('TIMEOUT_')) {
+      return res.status(504).json({ error: friendlyTransientMessage() });
+    }
+    return res.status(500).json({ error: friendlyTransientMessage() });
   }
 }

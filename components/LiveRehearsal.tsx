@@ -1308,9 +1308,13 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         pushDebug('transcribe_request', { bytes: blob.size, mimeType: blob.type, base64Len: audioBase64.length });
 
         try {
+            const { getBearerToken } = await import('../services/usageStatusService');
             const res = await fetch('/api/transcribe', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: await getBearerToken(),
+                },
                 body: JSON.stringify({ audioBase64, mimeType: blob.type }),
             });
             const json = await res.json().catch(() => ({}));
