@@ -336,15 +336,16 @@ function App() {
         const sbUser = refreshedSession?.session?.user;
         if (sbUser?.id) {
           const refreshed = await getUserProfile(sbUser.id);
-          if (refreshed) setUser((prev) => ({ ...(prev as any), ...refreshed }));
+          if (refreshed) setUser(refreshed as any);
         }
-        refreshAllData(dispatch);
+        await refreshAllData(dispatch);
 
         params.delete('checkout');
         params.delete('session_id');
         const nextQuery = params.toString();
         const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash || ''}`;
-        window.history.replaceState({}, document.title, nextUrl);
+        window.location.replace(nextUrl);
+        return;
       } catch (error) {
         console.error('Checkout confirmation sync failed:', error);
       }

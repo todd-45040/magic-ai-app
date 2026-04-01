@@ -68,7 +68,9 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
 
   useEffect(() => {
     let active = true;
-    (async () => {
+
+    const loadStatus = async () => {
+      setLoading(true);
       try {
         const next = await fetchBillingStatus();
         if (!active) return;
@@ -77,11 +79,13 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
       } finally {
         if (active) setLoading(false);
       }
-    })();
+    };
+
+    void loadStatus();
     return () => {
       active = false;
     };
-  }, []);
+  }, [user?.membership, user?.stripe_subscription_id, user?.stripe_status, user?.stripe_price_id]);
 
   const statusPlanKey = status?.planKey || 'free';
   const membershipPlanKey = normalizeMembershipToPlanKey(user?.membership);
