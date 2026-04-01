@@ -73,18 +73,28 @@ export default async function handler(request: any, response: any) {
     });
     const membership = toPaidMembership(planKey, resolution.keepAccess);
 
-    const stripeCustomerId = typeof session?.customer === 'string'
-      ? session.customer
-      : String(session?.customer?.id || '').trim() || null;
+    const stripeCustomer = session?.customer || null;
+    const stripeCustomerId = typeof stripeCustomer === 'string'
+      ? stripeCustomer
+      : String(stripeCustomer?.id || '').trim() || null;
+
     const stripeSubscriptionId = String(subscription?.id || (typeof rawSubscription === 'string' ? rawSubscription : '') || '').trim() || null;
     const stripePriceId = String(subscription?.items?.data?.[0]?.price?.id || session?.line_items?.data?.[0]?.price?.id || '').trim() || null;
     const stripeProductId = String(subscription?.items?.data?.[0]?.price?.product || session?.line_items?.data?.[0]?.price?.product || '').trim() || null;
-    const email = String(session?.customer_email || session?.customer?.email || '').trim().toLowerCase() || null;
+
+    const customerEmail =
+      String(
+        session?.customer_details?.email ||
+        session?.customer_email ||
+        (typeof stripeCustomer === 'object' && stripeCustomer ? stripeCustomer.email : '') ||
+        ''
+      ).trim().toLowerCase() || null;
+
     const founderProtected = planKey === 'founder_professional' || planKey === 'founder_amateur';
 
     const userPatch: Record<string, unknown> = {
       membership,
-      trial_end_date: membership === 'free' ? null : null,
+      trial_end_date: null,
       stripe_customer_id: stripeCustomerId,
       stripe_subscription_id: stripeSubscriptionId,
       stripe_price_id: stripePriceId,
@@ -106,7 +116,7 @@ export default async function handler(request: any, response: any) {
         .upsert([{
           user_id: auth.userId,
           stripe_customer_id: stripeCustomerId,
-          email,
+          email: customerEmail,
           billing_provider: 'stripe',
           provider_status: 'synced',
           synced_at: new Date().toISOString(),
@@ -134,9 +144,6 @@ export default async function handler(request: any, response: any) {
           source_updated_at: new Date().toISOString(),
         }], { onConflict: 'stripe_subscription_id' });
     }
-
-
-
 
     return response.status(200).json({
       ok: true,
