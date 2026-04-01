@@ -10,9 +10,21 @@ export type StripeCheckoutSessionRecord = {
   id: string;
   url?: string | null;
   customer?: string | StripeCustomerRecord | null;
-  subscription?: string | null;
+  subscription?: string | StripeSubscriptionRecord | null;
   status?: string | null;
   payment_status?: string | null;
+  client_reference_id?: string | null;
+  customer_email?: string | null;
+  metadata?: Record<string, string> | null;
+  line_items?: {
+    data?: Array<{
+      price?: {
+        id?: string | null;
+        product?: string | null;
+        lookup_key?: string | null;
+      } | null;
+    }> | null;
+  } | null;
 };
 
 
@@ -21,6 +33,8 @@ export type StripeSubscriptionItemRecord = {
   id: string;
   price?: {
     id?: string | null;
+    product?: string | null;
+    lookup_key?: string | null;
     recurring?: {
       interval?: string | null;
     } | null;
@@ -135,4 +149,8 @@ export async function listStripeSubscriptionsByCustomer(customerId: string, env:
 
 export async function updateStripeSubscription(subscriptionId: string, input: Record<string, unknown>, env: NodeJS.ProcessEnv = process.env) {
   return stripeRequest<StripeSubscriptionRecord>(`/v1/subscriptions/${encodeURIComponent(subscriptionId)}`, input, env);
+}
+
+export async function fetchStripeCheckoutSession(sessionId: string, env: NodeJS.ProcessEnv = process.env) {
+  return stripeGetRequest<StripeCheckoutSessionRecord>(`/v1/checkout/sessions/${encodeURIComponent(sessionId)}?expand[]=subscription&expand[]=customer&expand[]=line_items.data.price`, env);
 }

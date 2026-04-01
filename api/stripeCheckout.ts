@@ -214,7 +214,7 @@ if (founderOfferEligible) {
   // guided Founder Success Page (activation-first). Otherwise, use the generic return.
   const successUrl = (tier === 'professional' && founderLocked)
     ? `${origin}/app/founder-success?session_id={CHECKOUT_SESSION_ID}`
-    : `${origin}/app/?stripe=success&tier=${encodeURIComponent(tier)}`;
+    : `${origin}/app/?view=billing-settings&checkout=success&session_id={CHECKOUT_SESSION_ID}&tier=${encodeURIComponent(tier)}`;
   const cancelUrl = `${origin}/app/?stripe=cancel`;
 
   // Stripe Checkout API (REST) – no stripe SDK dependency required.

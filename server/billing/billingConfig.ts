@@ -58,7 +58,7 @@ export function getBillingConfig(env: NodeJS.ProcessEnv = process.env): BillingR
   return {
     stripeConfigured: missingEnvKeys.length === 0,
     appBaseUrl,
-    successUrl: `${billingAppUrl}&checkout=success`,
+    successUrl: `${billingAppUrl}&checkout=success&session_id={CHECKOUT_SESSION_ID}`,
     cancelUrl: `${billingAppUrl}&checkout=cancel`,
     portalReturnUrl: billingAppUrl,
     environmentName: stripeEnv.environmentName,

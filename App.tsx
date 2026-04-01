@@ -42,6 +42,7 @@ function App() {
 
   const dispatch = useAppDispatch();
   const loggingOutRef = useRef(false);
+  const checkoutSyncRef = useRef<string | null>(null);
 
   const handleUpgrade = async (selection: any, options?: any) => {
     try {
@@ -304,6 +305,53 @@ function App() {
       window.clearTimeout(loadingTimeout);
     };
   }, [dispatch]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const checkoutState = String(params.get('checkout') || '').trim();
+    const sessionId = String(params.get('session_id') || '').trim();
+    if (!user?.email || checkoutState !== 'success' || !sessionId) return;
+    if (checkoutSyncRef.current === sessionId) return;
+    checkoutSyncRef.current = sessionId;
+
+    const run = async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        const token = data?.session?.access_token;
+        if (!token) return;
+
+        const response = await fetch('/api/billing/confirm-checkout', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ sessionId }),
+        });
+
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(String(payload?.error || 'Checkout confirmation sync failed.'));
+
+        const { data: refreshedSession } = await supabase.auth.getSession();
+        const sbUser = refreshedSession?.session?.user;
+        if (sbUser?.id) {
+          const refreshed = await getUserProfile(sbUser.id);
+          if (refreshed) setUser((prev) => ({ ...(prev as any), ...refreshed }));
+        }
+        refreshAllData(dispatch);
+
+        params.delete('checkout');
+        params.delete('session_id');
+        const nextQuery = params.toString();
+        const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash || ''}`;
+        window.history.replaceState({}, document.title, nextUrl);
+      } catch (error) {
+        console.error('Checkout confirmation sync failed:', error);
+      }
+    };
+
+    void run();
+  }, [dispatch, user?.email]);
 
   const renderContent = () => {
     if (authLoading) {
