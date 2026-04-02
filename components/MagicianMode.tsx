@@ -4443,7 +4443,7 @@ ${action.payload.content}`;
               <p className="mt-2 max-w-2xl text-sm leading-6 text-white/70">
                 Everything you need to create effects, rehearse performances, and manage your shows.
               </p>
-              <p className="mt-4 text-sm text-white/55">
+              <p className="mt-4 mb-6 text-sm text-white/55">
                 Welcome back, {user.name || (user.email ? user.email.split('@')[0] : 'magician')}.
               </p>
             </div>
@@ -5057,16 +5057,6 @@ const renderIntentSubnav = () => {
         ) : null}
 
         <div className="flex-1" />
-
-        {/* Premium polish: always-visible jump to the full tool grid */}
-        <button
-          type="button"
-          onClick={jumpToAllTools}
-          className="whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium border border-slate-700/80 bg-slate-900/40 text-slate-300 hover:bg-slate-800/50 hover:text-white transition-colors"
-          title="Jump to the full tool list"
-        >
-          All Tools
-        </button>
 
         {/* Rightmost utility: keep feedback visible without cluttering primary tools */}
         <TabButton
