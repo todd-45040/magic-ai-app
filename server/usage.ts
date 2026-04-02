@@ -642,6 +642,50 @@ if (profile) {
   }
 
   const tier = normalizeTier(membership as any);
+
+  if (tier === 'admin') {
+    const engagement = await getEngagementSignals(admin, userId);
+    return {
+      ok: true,
+      membership: 'admin',
+      used: 0,
+      limit: 1000000,
+      remaining: 1000000,
+      resetAt: nextResetAtISO(),
+      resetTz: RESET_TZ,
+      resetHourLocal: RESET_HOUR_LOCAL,
+      sessionsToday: engagement.sessionsToday,
+      toolsUsedToday: engagement.toolsUsedToday,
+      distinctToolsToday: engagement.distinctToolsToday,
+      liveUsed: 0,
+      liveLimit: 1000000,
+      liveRemaining: 1000000,
+      burstLimit: 1000000,
+      burstRemaining: 1000000,
+      quotaLiveAudioRemaining: 1000000,
+      quotaImageGenRemaining: 1000000,
+      quotaIdentifyRemaining: 1000000,
+      quotaVideoUploadsRemaining: 1000000,
+      monthlyToolQuotas: {
+        quota_live_audio_minutes: 1000000,
+        quota_image_gen: 1000000,
+        quota_identify: 1000000,
+        quota_video_uploads: 1000000,
+      },
+      dailyToolLimits: {
+        live_audio_minutes: 1000000,
+        video_uploads: 1000000,
+      },
+      dailyLiveUsed: 0,
+      dailyLiveLimit: 1000000,
+      dailyLiveRemaining: 1000000,
+      dailyVideoUsed: 0,
+      dailyVideoLimit: 1000000,
+      dailyVideoRemaining: 1000000,
+      unlimited: true,
+    };
+  }
+
   const limit = getDailyAiLimit(tier);
   const remaining = Math.max(0, limit - generationCount);
 
@@ -961,6 +1005,24 @@ export async function enforceAiUsage(
   }
 
   // Daily reset (UTC midnight by default; configurable)
+  const tier = normalizeTier(membership as any);
+
+  // Admin accounts bypass AI usage enforcement entirely.
+  if (tier === 'admin') {
+    return {
+      ok: true,
+      remaining: 1000000,
+      limit: 1000000,
+      membership: 'admin',
+      burstRemaining: 1000000,
+      burstLimit: 1000000,
+      resetAt: nextResetAtISO(),
+      resetTz: RESET_TZ,
+      resetHourLocal: RESET_HOUR_LOCAL,
+      unlimited: true,
+    } as any;
+  }
+
   const lastKey = usageDayKey(new Date(lastResetDateISO));
   if (lastKey !== today) {
     generationCount = 0;
