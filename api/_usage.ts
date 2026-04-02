@@ -1,12 +1,10 @@
 import { requireSupabaseAuth } from './_auth.js';
 // Canonical membership tiers used for usage enforcement.
 // Legacy tiers are accepted and normalized server-side.
-type Membership = 'free' | 'trial' | 'performer' | 'professional' | 'admin' | 'expired' | 'amateur' | 'semi-pro';
+type Membership = 'free' | 'trial' | 'performer' | 'professional' | 'expired' | 'amateur' | 'semi-pro';
 
-function normalizeTier(m?: string | null): 'free' | 'trial' | 'amateur' | 'professional' | 'admin' | 'expired' {
+function normalizeTier(m?: string | null): 'free' | 'trial' | 'amateur' | 'professional' | 'expired' {
   switch (m) {
-    case 'admin':
-      return 'admin';
     case 'professional':
       return 'professional';
     case 'amateur':
@@ -28,7 +26,6 @@ const TIER_LIMITS: Record<string, number> = {
   trial: 20,
   amateur: 200,
   professional: 10000,
-  admin: 1000000,
   expired: 0,
   // legacy
   performer: 200,
@@ -41,7 +38,6 @@ const BURST_LIMITS: Record<string, number> = {
   trial: 20,
   amateur: 60,
   professional: 120,
-  admin: 1000000,
   expired: 0,
   // legacy
   performer: 60,
@@ -126,7 +122,7 @@ export async function getAiUsageStatus(req: any): Promise<{
   const admin = (auth as any).admin as any;
   const { data: profile, error: profileErr } = await admin
     .from('users')
-    .select('id, membership, is_admin, generation_count, last_reset_date')
+    .select('id, membership, generation_count, last_reset_date')
     .eq('id', userId)
     .maybeSingle();
 
@@ -137,7 +133,7 @@ export async function getAiUsageStatus(req: any): Promise<{
   let lastResetDateISO = new Date().toISOString();
 
   if (profile) {
-    membership = (profile.is_admin ? 'admin' : (profile.membership as Membership)) || 'trial';
+    membership = (profile.membership as Membership) || 'trial';
     generationCount = profile.generation_count ?? 0;
     lastResetDateISO = profile.last_reset_date ? new Date(profile.last_reset_date).toISOString() : lastResetDateISO;
   } else {
@@ -223,7 +219,7 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
   // Authed user: enforce against public.users table
   const { data: profile, error: profileErr } = await admin
     .from('users')
-    .select('id, membership, is_admin, generation_count, last_reset_date')
+    .select('id, membership, generation_count, last_reset_date')
     .eq('id', userId)
     .maybeSingle();
 
@@ -237,7 +233,7 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
   }
 
   if (profile) {
-    membership = (profile.is_admin ? 'admin' : (profile.membership as Membership)) || 'trial';
+    membership = (profile.membership as Membership) || 'trial';
     generationCount = profile.generation_count ?? 0;
     lastResetDateISO = profile.last_reset_date ? new Date(profile.last_reset_date).toISOString() : lastResetDateISO;
   } else {
@@ -264,19 +260,6 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
 
   // Burst limit (per minute) — enforce BEFORE reserving daily units
   const tier = normalizeTier(membership as any);
-
-  // Admin accounts must never hit AI usage limits during demos or ops work.
-  if (tier === 'admin') {
-    return {
-      ok: true,
-      remaining: 1000000,
-      limit: 1000000,
-      membership: 'admin' as any,
-      burstRemaining: 1000000,
-      burstLimit: 1000000,
-    };
-  }
-
   const burstLimit = BURST_LIMITS[tier] ?? BURST_LIMITS.trial;
   const burst = enforceBurst(userId, burstLimit);
   if (!burst.ok) {

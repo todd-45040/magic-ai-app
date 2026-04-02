@@ -22,12 +22,17 @@ export default function UsageMeter({ user }: { user?: User | null }) {
     return Math.min(100, Math.max(0, Math.round((used / limit) * 100)));
   }, [status.used, status.limit, status.remaining]);
 
+  const isAdmin = Boolean(user?.isAdmin) || status.membership === 'admin';
+
   const label = useMemo(() => {
     const remaining = status.remaining;
     const limit = status.limit;
     const used = status.used ?? (limit != null && remaining != null ? limit - remaining : undefined);
-    const mem = formatMembership(status.membership);
+    const mem = formatMembership(status.membership || (isAdmin ? 'admin' : undefined));
 
+    if (isAdmin) {
+      return `${mem || 'Admin'}: Unlimited`;
+    }
     if (limit === 10000 && remaining != null) {
       return `${mem}: ${remaining}+`;
     }
@@ -36,13 +41,14 @@ export default function UsageMeter({ user }: { user?: User | null }) {
     }
     // Show USED/LIMIT to avoid confusion (e.g., "11/20" can read like used when it's actually remaining).
     return used == null ? `${mem}: ${remaining}/${limit}` : `${mem}: ${used}/${limit}`;
-  }, [status.used, status.remaining, status.limit, status.membership]);
+  }, [status.used, status.remaining, status.limit, status.membership, isAdmin]);
 
   const liveLabel = useMemo(() => {
+    if (isAdmin) return 'Live Rehearsal (Audio): Unlimited';
     if (!live || !live.limit) return null;
     // Show USED/LIMIT for consistency with AI label.
     return `Live Rehearsal (Audio): ${live.used}/${live.limit} min`;
-  }, [live]);
+  }, [live, isAdmin]);
 
   useEffect(() => {
     let mounted = true;
@@ -141,7 +147,7 @@ export default function UsageMeter({ user }: { user?: User | null }) {
   }, [user]);
 
   // If we have no data yet, keep it subtle
-  const showBar = status.limit != null && status.limit > 0 && status.remaining != null;
+  const showBar = !isAdmin && status.limit != null && status.limit > 0 && status.remaining != null;
 
   return (
     <div className="hidden sm:flex items-center gap-3 px-3 py-1.5 rounded-full bg-slate-900/60 border border-slate-700">

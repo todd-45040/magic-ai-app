@@ -3019,6 +3019,7 @@ useEffect(() => {
     let cancelled = false;
 
     const normalizePlan = (membership?: string | null) => {
+      if (user?.isAdmin || membership === 'admin') return 'admin';
       const tier = normalizeTier(membership || user?.membership || 'free');
       if (tier === 'admin') return 'admin';
       if (tier === 'professional') return 'professional';
@@ -3102,7 +3103,7 @@ useEffect(() => {
     };
 
     const buildUsageSnapshot = (serverStatus?: UsageStatus | null) => {
-      const plan = normalizePlan(serverStatus?.membership);
+      const plan = user?.isAdmin ? 'admin' : normalizePlan(serverStatus?.membership);
       const dailyAiLimit = Number(serverStatus?.limit ?? getDailyAiLimitForPlan(plan));
       const dailyAiUsed = Number(serverStatus?.used ?? user?.generationCount ?? 0);
       const dailyAiRemaining = Number(serverStatus?.remaining ?? Math.max(0, dailyAiLimit - dailyAiUsed));

@@ -18,6 +18,13 @@ const DAILY_LIMITS: Record<CanonicalTier, Limits> = {
   professional: { image: 100, video_upload: 6, live_minutes: 180, identify: 100 },
 };
 
+const ADMIN_LIMIT = 999999;
+
+function isAdminUser(user: User | null | undefined): boolean {
+  if (!user) return false;
+  return Boolean(user.isAdmin) || normalizeTier(user.membership) === 'admin';
+}
+
 function getTodayKeyUTC(d = new Date()): string {
   const y = d.getUTCFullYear();
   const m = String(d.getUTCMonth() + 1).padStart(2, '0');
@@ -76,11 +83,17 @@ function emitLocalUsageUpdate(user: User | null, metric: UsageMetric) {
 }
 
 export function getDailyLimits(user: User): Limits {
+  if (isAdminUser(user)) {
+    return { image: ADMIN_LIMIT, video_upload: ADMIN_LIMIT, live_minutes: ADMIN_LIMIT, identify: ADMIN_LIMIT };
+  }
   const tier = normalizeTier(user.membership);
   return DAILY_LIMITS[tier] ?? DAILY_LIMITS.trial;
 }
 
 export function getUsage(user: User, metric: UsageMetric): { used: number; limit: number; remaining: number } {
+  if (isAdminUser(user)) {
+    return { used: 0, limit: ADMIN_LIMIT, remaining: ADMIN_LIMIT };
+  }
   const tier = normalizeTier(user.membership);
   const limits = DAILY_LIMITS[tier] ?? DAILY_LIMITS.trial;
   const s = load(user);
@@ -91,11 +104,19 @@ export function getUsage(user: User, metric: UsageMetric): { used: number; limit
 }
 
 export function canConsume(user: User, metric: UsageMetric, amount = 1): { ok: boolean; remaining: number; limit: number; used: number } {
+  if (isAdminUser(user)) {
+    return { ok: true, used: 0, limit: ADMIN_LIMIT, remaining: ADMIN_LIMIT };
+  }
   const cur = getUsage(user, metric);
   return { ok: cur.remaining >= amount, ...cur };
 }
 
 export function consume(user: User, metric: UsageMetric, amount = 1): { ok: boolean; remaining: number; limit: number; used: number } {
+  if (isAdminUser(user)) {
+    const cur = { ok: true, used: 0, limit: ADMIN_LIMIT, remaining: ADMIN_LIMIT };
+    emitLocalUsageUpdate(user, metric);
+    return cur;
+  }
   const check = canConsume(user, metric, amount);
   if (!check.ok) return check;
   const s = load(user);
@@ -113,6 +134,7 @@ export function consumeLiveMinutes(user: User, minutes: number): { ok: boolean; 
 
 
 export function getSoftLimitWarning(user: User, metric: UsageMetric): string | null {
+  if (isAdminUser(user)) return null;
   const cur = getUsage(user, metric);
   if (cur.limit <= 0) return null;
   const remaining = Math.max(0, Number(cur.remaining ?? 0));

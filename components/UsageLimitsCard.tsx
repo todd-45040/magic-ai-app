@@ -50,11 +50,14 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
     return 'bg-slate-900/60 border-slate-700 text-slate-200';
   }, [plan]);
 
+  const isAdmin = plan === 'admin';
+
   const pct = useMemo(() => {
+    if (isAdmin) return 0;
     if (!dailyLimit || dailyLimit <= 0) return 0;
     const v = Math.min(100, Math.max(0, (dailyUsed / dailyLimit) * 100));
     return v;
-  }, [dailyUsed, dailyLimit]);
+  }, [dailyUsed, dailyLimit, isAdmin]);
 
   const quotaRow = (label: string, key: string, opts?: { proOnly?: boolean; unit?: string }) => {
     const node = quota?.[key];
@@ -66,7 +69,7 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
     const resolvedLabel = key === 'image_gen' && plan === 'amateur' ? 'Visual Brainstorm' : label;
     const isProOnly = Boolean(opts?.proOnly);
     const locked = isProOnly && plan !== 'professional';
-    const isUnlimited = !locked && ((typeof limit === 'number' && limit >= 9999) || (typeof remaining === 'number' && remaining >= 9999));
+    const isUnlimited = !locked && (isAdmin || (typeof limit === 'number' && limit >= 9999) || (typeof remaining === 'number' && remaining >= 9999));
     const isNotTrackedYet = Boolean(node?.tracked === false);
     const hasDaily = daily && typeof daily?.used === 'number' && typeof daily?.limit === 'number';
     const dailyRemaining = hasDaily && typeof daily?.remaining === 'number'
@@ -194,7 +197,7 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-xs font-semibold text-slate-300">Daily AI usage</div>
                   <div className="text-xs text-slate-300/80 tabular-nums">
-                    {dailyUsed} used • {dailyRemaining} remaining
+                    {isAdmin ? 'Unlimited' : `${dailyUsed} used • ${dailyRemaining} remaining`}
                   </div>
                 </div>
                 <div className="mt-2 h-2 rounded-full bg-black/30 overflow-hidden border border-white/10">
@@ -205,7 +208,7 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
                   />
                 </div>
                 <div className="mt-1 text-[11px] text-slate-300/70">
-                  Limit: {dailyLimit || '—'} • Burst: {usageSnapshot?.burstRemaining ?? '—'} / {usageSnapshot?.burstLimit ?? '—'}
+                  {isAdmin ? 'Unlimited admin usage' : `Limit: ${dailyLimit || '—'} • Burst: ${usageSnapshot?.burstRemaining ?? '—'} / ${usageSnapshot?.burstLimit ?? '—'}`}
                 </div>
               </div>
 
