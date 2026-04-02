@@ -355,8 +355,41 @@
       .callout strong{ color: rgba(255,255,255,0.92); }
 
 
-  
-    
+      .audience-grid{
+        display:grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-top: 10px;
+      }
+      @media (max-width: 520px) {
+        .audience-grid { grid-template-columns: 1fr; }
+      }
+      .audience-tile{
+        padding: 14px 14px;
+        border-radius: 16px;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        background: rgba(15, 23, 42, 0.52);
+      }
+      .audience-head{
+        display:flex;
+        align-items:center;
+        justify-content: space-between;
+        gap: 10px;
+        font-weight: 900;
+        color: rgba(255,255,255,0.92);
+      }
+      .audience-tile p{
+        margin-top: 8px;
+        font-size: 14px;
+        line-height: 1.55;
+        color: rgba(255,255,255,0.72);
+      }
+      .pill-muted{
+        background: rgba(255,255,255,0.06);
+        border-color: rgba(255,255,255,0.10);
+        color: rgba(255,255,255,0.74);
+      }
+
       .right-card{
         display:flex;
         flex-direction: column;
@@ -531,6 +564,46 @@
 
           <div class="callout" role="note">
             <strong>Why magicians use it:</strong> stop juggling separate tools for ideas, rehearsal, and show planning. This gives you one continuous workflow from concept to performance.
+          </div>
+
+          <div class="section-title section-title--white">How the workflow feels</div>
+          <div class="how" aria-label="How the workflow works">
+            <div class="step">
+              <div class="kicker"><span class="pill">1</span> Build the routine</div>
+              <p>Start with an idea, generate the structure, and turn it into a usable performance beat.</p>
+            </div>
+            <div class="step">
+              <div class="kicker"><span class="pill">2</span> Tighten the details</div>
+              <p>Refine wording, timing, transitions, and audience moments before you ever step onstage.</p>
+            </div>
+            <div class="step">
+              <div class="kicker"><span class="pill">3</span> Rehearse with feedback</div>
+              <p>Use coaching tools to improve clarity, confidence, and stage presence while the routine is still in progress.</p>
+            </div>
+            <div class="step">
+              <div class="kicker"><span class="pill">4</span> Perform with confidence</div>
+              <p>Walk in with a routine that is structured, rehearsed, and connected to your real show workflow.</p>
+            </div>
+          </div>
+
+          <div class="section-title section-title--white">Built for real performers</div>
+          <div class="audience-grid" aria-label="Performer types">
+            <div class="audience-tile">
+              <div class="audience-head"><span>Close-up</span><span class="pill pill-muted">Practical</span></div>
+              <p>Develop compact routines, resets, and pocket-aware handling for real working conditions.</p>
+            </div>
+            <div class="audience-tile">
+              <div class="audience-head"><span>Stage &amp; parlor</span><span class="pill pill-muted">Scalable</span></div>
+              <p>Expand beats into full audience moments with pacing, transitions, and stronger reveals.</p>
+            </div>
+            <div class="audience-tile">
+              <div class="audience-head"><span>Corporate</span><span class="pill pill-muted">Professional</span></div>
+              <p>Keep ideas, scripts, and client-facing details connected in one organized workflow.</p>
+            </div>
+            <div class="audience-tile">
+              <div class="audience-head"><span>Students &amp; hobbyists</span><span class="pill pill-muted">Guided</span></div>
+              <p>Learn faster with structure, rehearsal support, and tools that help turn ideas into performance.</p>
+            </div>
           </div>
 
         </div>
