@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { addSuggestion } from '../services/suggestionService';
 import { ChatBubbleIcon, CheckIcon, WandIcon } from './icons';
 
@@ -34,9 +35,9 @@ const AppSuggestionModal: React.FC<AppSuggestionModalProps> = ({ onClose }) => {
         }
     };
 
-    return (
+    const modalContent = (
         <div 
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in"
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-[9999] animate-fade-in"
             onClick={onClose}
         >
             <div 
@@ -134,6 +135,8 @@ const AppSuggestionModal: React.FC<AppSuggestionModalProps> = ({ onClose }) => {
             </div>
         </div>
     );
+
+    return createPortal(modalContent, document.body);
 };
 
 export default AppSuggestionModal;
