@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
-import { getFoundersConfig, countFounders, permanentlyCloseFounders } from './_lib/foundersCap';
+import { getFoundersConfig, countFounders, permanentlyCloseFounders } from './_lib/foundersCap.js';
 import { rateLimit, rateLimitHeaders } from './ai/_lib/rateLimit.js';
 import { isPreviewEnv } from './ai/_lib/hardening.js';
 import { sendMail, isMailerConfigured } from './_lib/mailer.js';
