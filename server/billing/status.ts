@@ -10,7 +10,6 @@ import { deriveFounderProtection } from './founderProtection.js';
 import { resolveBillingPlan, resolvePlanKeyFromStripeRefs } from './planMapping.js';
 import { getBillingConfig, type BillingCheckoutLookupKey } from './billingConfig.js';
 import { getOptionalEnv } from './stripeConfig.js';
-import { findActiveCompGrant, type ActiveCompGrant } from './compAccess.js';
 
 type StripeSubscriptionSnapshot = {
   id: string;
@@ -99,7 +98,7 @@ type BillingTruthDebug = {
     accessState: string;
     renewalDate: string | null;
     currentBillingCycle: 'monthly' | 'yearly';
-    source: 'database' | 'fallback' | 'stripe_live' | 'comp_access';
+    source: 'database' | 'fallback' | 'stripe_live';
   };
   mismatches: {
     planMismatch: boolean;
@@ -114,7 +113,6 @@ type BillingTruthDebug = {
 };
 
 export type BillingStatusResponse = {
-  compAccessGrant: ActiveCompGrant | null;
   ok: true;
   planKey: BillingPlanKey;
   billingStatus: string;
@@ -132,7 +130,7 @@ export type BillingStatusResponse = {
   stripeCustomerIdPresent: boolean;
   currentBillingCycle: 'monthly' | 'yearly';
   currentPriceId: string | null;
-  source: 'database' | 'fallback' | 'stripe_live' | 'comp_access';
+  source: 'database' | 'fallback' | 'stripe_live';
   billingTruth: BillingTruthDebug;
   recentBillingEvents: BillingEventSnapshot[];
   validationChecks: BillingValidationChecks;
@@ -334,7 +332,7 @@ function buildBillingTruthDebug(input: {
     accessState: string;
     renewalDate: string | null;
     currentBillingCycle: 'monthly' | 'yearly';
-    source: 'database' | 'fallback' | 'stripe_live' | 'comp_access';
+    source: 'database' | 'fallback' | 'stripe_live';
   };
 }): BillingTruthDebug {
   const dbSnapshot = {
@@ -551,7 +549,7 @@ export async function resolveBillingStatusForUser(admin: any, userId: string): P
   const [profile, billingCustomer, subscription, usagePeriod, founderOverride] = await Promise.all([
     maybeSelectSingle(
       admin.from('users')
-        .select('id, email, membership, is_admin, pricing_lock, founding_bucket, founding_circle_member, stripe_price_id')
+        .select('id, membership, is_admin, pricing_lock, founding_bucket, founding_circle_member, stripe_price_id')
         .eq('id', userId)
         .maybeSingle()
     ),
@@ -585,16 +583,10 @@ export async function resolveBillingStatusForUser(admin: any, userId: string): P
     ),
   ]);
 
-  const [stripeSnapshot, compAccessGrant] = await Promise.all([
-    fetchPreferredStripeSubscriptionSnapshot({
-      stripeSubscriptionId: subscription?.stripe_subscription_id || null,
-      stripeCustomerId: billingCustomer?.stripe_customer_id || subscription?.stripe_customer_id || null,
-    }),
-    findActiveCompGrant(admin, {
-      userId,
-      email: String(profile?.email || '').trim() || null,
-    }),
-  ]);
+  const stripeSnapshot = await fetchPreferredStripeSubscriptionSnapshot({
+    stripeSubscriptionId: subscription?.stripe_subscription_id || null,
+    stripeCustomerId: billingCustomer?.stripe_customer_id || subscription?.stripe_customer_id || null,
+  });
 
   const founderProtection = deriveFounderProtection({
     user: profile || undefined,
@@ -614,32 +606,18 @@ export async function resolveBillingStatusForUser(admin: any, userId: string): P
     stripeSnapshot?.id
   );
 
-  const compPlan = compAccessGrant?.planKey || null;
-  const effectivePlanInput = compPlan || stripePlan || dbSubscriptionPlan || (!hasSubscriptionSignal ? profilePlan : 'free');
-  const effectiveBillingStatus = compPlan
-    ? 'active'
-    : (stripeSnapshot?.status || subscription?.billing_status || (!hasSubscriptionSignal && profilePlan !== 'free' ? 'active' : 'unknown'));
-  const effectiveCurrentPeriodEnd = compAccessGrant?.endsAt || stripeSnapshot?.currentPeriodEnd || asIso(subscription?.current_period_end);
-  const effectiveCancelAtPeriodEnd = compPlan
-    ? false
-    : (stripeSnapshot?.cancelAtPeriodEnd ?? Boolean(subscription?.cancel_at_period_end));
+  const effectivePlanInput = stripePlan || dbSubscriptionPlan || (!hasSubscriptionSignal ? profilePlan : 'free');
+  const effectiveBillingStatus = stripeSnapshot?.status || subscription?.billing_status || (!hasSubscriptionSignal && profilePlan !== 'free' ? 'active' : 'unknown');
+  const effectiveCurrentPeriodEnd = stripeSnapshot?.currentPeriodEnd || asIso(subscription?.current_period_end);
+  const effectiveCancelAtPeriodEnd = stripeSnapshot?.cancelAtPeriodEnd ?? Boolean(subscription?.cancel_at_period_end);
 
-  const resolved = compPlan
-    ? {
-        planKey: compPlan,
-        accessState: 'active' as const,
-        billingStatus: 'active' as const,
-        keepAccess: true,
-        downgradeTo: 'free' as const,
-        notes: ['Active complimentary access grant overrides billing state.'],
-      }
-    : resolveBillingPlan({
-        planKey: effectivePlanInput,
-        billingStatus: effectiveBillingStatus,
-        cancelAtPeriodEnd: effectiveCancelAtPeriodEnd,
-        currentPeriodEnd: effectiveCurrentPeriodEnd,
-        founderLockedPlan: null,
-      });
+  const resolved = resolveBillingPlan({
+    planKey: effectivePlanInput,
+    billingStatus: effectiveBillingStatus,
+    cancelAtPeriodEnd: effectiveCancelAtPeriodEnd,
+    currentPeriodEnd: effectiveCurrentPeriodEnd,
+    founderLockedPlan: null,
+  });
 
   const effectivePlanKey = resolved.keepAccess
     ? resolved.planKey
@@ -658,12 +636,10 @@ export async function resolveBillingStatusForUser(admin: any, userId: string): P
     ?? inferBillingCycleFromPeriod(stripeSnapshot?.currentPeriodStart || subscription?.current_period_start, stripeSnapshot?.currentPeriodEnd || subscription?.current_period_end)
     ?? 'monthly';
 
-  const renewalDate = compAccessGrant?.endsAt || stripeSnapshot?.currentPeriodEnd || asIso(subscription?.current_period_end);
-  const source: 'database' | 'fallback' | 'stripe_live' | 'comp_access' = compAccessGrant
-    ? 'comp_access'
-    : stripeSnapshot?.id
-      ? 'stripe_live'
-      : (subscription || billingCustomer || usagePeriod || founderOverride ? 'database' : 'fallback');
+  const renewalDate = stripeSnapshot?.currentPeriodEnd || asIso(subscription?.current_period_end);
+  const source: 'database' | 'fallback' | 'stripe_live' = stripeSnapshot?.id
+    ? 'stripe_live'
+    : (subscription || billingCustomer || usagePeriod || founderOverride ? 'database' : 'fallback');
 
   const billingTruth = buildBillingTruthDebug({
     billingCustomer,
@@ -676,7 +652,7 @@ export async function resolveBillingStatusForUser(admin: any, userId: string): P
       accessState: resolved.accessState,
       renewalDate,
       currentBillingCycle,
-      source: source === 'comp_access' ? 'database' : source,
+      source,
     },
   });
 
@@ -703,7 +679,6 @@ export async function resolveBillingStatusForUser(admin: any, userId: string): P
 
   return {
     ok: true,
-    compAccessGrant,
     planKey: effectivePlanKey,
     billingStatus: resolved.billingStatus,
     accessState: resolved.accessState,

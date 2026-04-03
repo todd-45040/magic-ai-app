@@ -772,10 +772,19 @@
           const fd = new FormData(form);
           const payload = Object.fromEntries(fd.entries());
           payload.source = 'admc';
+          payload.founding_circle = true;
+          payload.founding_source = 'ADMC_2026';
+          payload.founding_bucket = 'admc_2026';
+          payload.pricing_lock = 'founding_pro_admc_2026';
+          payload.meta = {
+            founding_circle: true,
+            joined_from: 'admc-landing-page',
+            source_bucket: 'admc',
+            pricing_lock: 'founding_pro_admc_2026'
+          };
 
           try {
-            // TODO: update this endpoint to match your production waitlist route
-            const res = await fetch('/api/waitlist', {
+            const res = await fetch('/api/waitlistSignup', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(payload)

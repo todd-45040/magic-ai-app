@@ -1,5 +1,4 @@
 import { requireSupabaseAuth } from './_auth.js';
-import { findActiveCompGrant, normalizeMembershipFromPlanKey } from '../server/billing/compAccess.js';
 // Canonical membership tiers used for usage enforcement.
 // Legacy tiers are accepted and normalized server-side.
 type Membership = 'free' | 'trial' | 'performer' | 'professional' | 'expired' | 'amateur' | 'semi-pro';
@@ -123,7 +122,7 @@ export async function getAiUsageStatus(req: any): Promise<{
   const admin = (auth as any).admin as any;
   const { data: profile, error: profileErr } = await admin
     .from('users')
-    .select('id, email, membership, generation_count, last_reset_date')
+    .select('id, membership, generation_count, last_reset_date')
     .eq('id', userId)
     .maybeSingle();
 
@@ -137,8 +136,6 @@ export async function getAiUsageStatus(req: any): Promise<{
     membership = (profile.membership as Membership) || 'trial';
     generationCount = profile.generation_count ?? 0;
     lastResetDateISO = profile.last_reset_date ? new Date(profile.last_reset_date).toISOString() : lastResetDateISO;
-    const compGrant = await findActiveCompGrant(admin, { userId, email: String(profile.email || '').trim() || null });
-    if (compGrant) membership = normalizeMembershipFromPlanKey(compGrant.planKey) as Membership;
   } else {
     // If no profile exists yet, treat as trial until created
     membership = 'trial';
@@ -222,7 +219,7 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
   // Authed user: enforce against public.users table
   const { data: profile, error: profileErr } = await admin
     .from('users')
-    .select('id, email, membership, generation_count, last_reset_date')
+    .select('id, membership, generation_count, last_reset_date')
     .eq('id', userId)
     .maybeSingle();
 
@@ -239,8 +236,6 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
     membership = (profile.membership as Membership) || 'trial';
     generationCount = profile.generation_count ?? 0;
     lastResetDateISO = profile.last_reset_date ? new Date(profile.last_reset_date).toISOString() : lastResetDateISO;
-    const compGrant = await findActiveCompGrant(admin, { userId, email: String(profile.email || '').trim() || null });
-    if (compGrant) membership = normalizeMembershipFromPlanKey(compGrant.planKey) as Membership;
   } else {
     const { error: upsertErr } = await admin.from('users').upsert({
       id: userId,
