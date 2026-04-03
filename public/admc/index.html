@@ -640,16 +640,12 @@
         </p>
 
         <div class="admc-actions">
-          <a class="btn" href="#join">Join the Founders Circle</a>
+          <a class="btn" href="#join">Unlock Founding Access</a>
           <a class="btn-secondary" href="/app/?demo=1">Try Demo Mode</a>
         </div>
 
-        <div class="admc-note" style="max-width:760px; margin-left:auto; margin-right:auto; line-height:1.55;">
-          <strong>Founders Circle enrollment window:</strong> Opens <strong>April 2 at 6:00 PM</strong> and closes <strong>Wednesday, April 8 at 11:59 PM</strong>.<br>
-          Lock in your <strong>lifetime Founder rate</strong> during the official ADMC launch window.
-        </div>
-        <div id="founderCountdown" class="admc-note" style="margin-top:10px; color:#ffd978; font-weight:700;">
-          Founder window closes in: calculating...
+        <div class="admc-note">
+          Founders Circle enrollment opens <strong>April 2 at 6:00 PM</strong> and closes <strong>Wednesday, April 8 at 11:59 PM</strong>. Lock in your lifetime Founder rate during the ADMC launch window.
         </div>
       </section>
 
@@ -684,13 +680,9 @@
 
         <div class="card" id="join">
           <div class="section-title section-title--white">Join the Founders Circle</div>
-          <p style="margin-bottom: 10px; line-height:1.6;">
-            Join during the official ADMC enrollment window to lock in <strong>ADMC-only Founder pricing</strong>, receive early access updates, and get the first invite when new tools ship.
+          <p style="margin-bottom: 10px;">
+            Join during the ADMC launch window to secure Founder access, lock in the special launch rate, and get first invitation access as new tools roll out.
           </p>
-          <div class="callout admc-tight" role="note" style="margin-bottom:14px;">
-            <strong>Enrollment window:</strong> April 2 at 6:00 PM through Wednesday, April 8 at 11:59 PM.<br>
-            <strong>Founder benefit:</strong> Lock in your lifetime Founder rate during this limited sign-up period.
-          </div>
 
           <!--
             Hook this up to your existing waitlist endpoint if you want.
@@ -717,15 +709,15 @@
           </form>
 
           <div class="admc-success" id="admcSuccess">
-            You’re in! Watch your inbox tonight — we’ll send your ADMC founding access details.
+            You’re in! Watch your inbox for your ADMC Founders Circle details and next steps.
           </div>
 
           <div class="admc-error" id="admcError">
             Could not save your email. Please try again (or ask at the booth).
           </div>
 
-          <div class="admc-note" style="line-height:1.55;">
-            We respect privacy. No spam — just product updates, early access, and your Founders Circle details during the April 2–8 enrollment window.
+          <div class="admc-note">
+            Enrollment window: April 2 at 6:00 PM through Wednesday, April 8 at 11:59 PM. We respect privacy — no spam, just founder updates and early access.
           </div>
         </div>
       </section>
@@ -739,26 +731,7 @@
       // Optional: lightweight demo submit handler.
       // Replace fetch URL with your real endpoint (e.g., /api/waitlist or Supabase edge function).
       (function() {
-  
-      const founderCountdown = document.getElementById('founderCountdown');
-      const founderClose = new Date('2026-04-08T23:59:00');
-      function updateFounderCountdown() {
-        if (!founderCountdown) return;
-        const now = new Date();
-        const diff = founderClose - now;
-        if (diff <= 0) {
-          founderCountdown.textContent = 'The Founders Circle enrollment window has now closed.';
-          return;
-        }
-        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-        const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
-        const minutes = Math.floor((diff / (1000 * 60)) % 60);
-        founderCountdown.textContent = `Founder window closes in: ${days}d ${hours}h ${minutes}m`;
-      }
-      updateFounderCountdown();
-      setInterval(updateFounderCountdown, 60000);
-
-      const form = document.getElementById('admcForm');
+        const form = document.getElementById('admcForm');
         const ok = document.getElementById('admcSuccess');
         const err = document.getElementById('admcError');
 
@@ -772,20 +745,30 @@
           const fd = new FormData(form);
           const payload = Object.fromEntries(fd.entries());
           payload.source = 'admc';
+          payload.founding_circle = true;
+          payload.founding_source = 'ADMC_2026';
+          payload.founding_bucket = 'admc_2026';
+          payload.pricing_lock = 'founding_pro_admc_2026';
 
           try {
-            // TODO: update this endpoint to match your production waitlist route
-            const res = await fetch('/api/waitlist', {
+            const res = await fetch('/api/waitlistSignup', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(payload)
             });
 
-            if (!res.ok) throw new Error('bad response');
+            const data = await res.json().catch(() => ({}));
 
+            if (!res.ok || !data.ok) {
+              throw new Error(data?.message || 'Could not save your email. Please try again (or ask at the booth).');
+            }
+
+            err.style.display = 'none';
             ok.style.display = 'block';
             form.reset();
           } catch (e) {
+            ok.style.display = 'none';
+            err.textContent = e?.message || 'Could not save your email. Please try again (or ask at the booth).';
             err.style.display = 'block';
           }
         });

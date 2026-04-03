@@ -1,7 +1,10 @@
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
+import { getFoundersConfig, countFounders, permanentlyCloseFounders } from './_lib/foundersCap.js';
 import { rateLimit, rateLimitHeaders } from './ai/_lib/rateLimit.js';
 import { isPreviewEnv } from './ai/_lib/hardening.js';
+import { sendMail, isMailerConfigured } from './_lib/mailer.js';
+import { renderFoundingEmail } from './_lib/foundingCircleEmailTemplates.js';
 
 
 function normalizeAttributionSource(raw: any): 'admc' | 'reddit' | 'organic' | 'other' {
@@ -180,25 +183,13 @@ export default async function handler(req: any, res: any) {
 
   try {
     let alreadySubscribed = false;
-
-    const captureMeta = meta && typeof meta === 'object' ? { ...(meta as any) } : {};
-    if (isFounding) {
-      (captureMeta as any).founding_circle = true;
-      (captureMeta as any).founding_source = foundingSource;
-      (captureMeta as any).founding_bucket = foundingBucket;
-      (captureMeta as any).pricing_lock = pricingLock;
-      (captureMeta as any).capture_mode = 'admc_safe_waitlist';
-    }
-
-    const safePayload = {
-      ...payload,
-      meta: captureMeta,
-    };
-
-    const { error } = await admin.from('maw_waitlist_signups').insert(safePayload);
+    const { error } = await admin.from('maw_waitlist_signups').insert(payload);
     if (error) {
+      // Duplicate email
       if ((error as any).code === '23505') {
         alreadySubscribed = true;
+        // Not a founding join? We're done.
+        if (!isFounding) return json(res, 200, { ok: true, already_subscribed: true });
       } else {
         console.error('waitlist insert error:', error);
         return json(res, 500, {
@@ -211,15 +202,152 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    return json(res, 200, {
-      ok: true,
-      already_subscribed: alreadySubscribed,
-      founding_circle: isFounding,
-      capture_mode: 'admc_safe_waitlist',
-      message: isFounding
-        ? 'Thanks — your Founder request has been received. We will follow up by email with your Founder details.'
-        : 'Thanks — your email has been received.',
-    });
+    // Founding Circle upgrade path:
+    // - If Authorization Bearer token is provided, mark the signed-in user as a founder.
+    // - Always upsert into a lead table so Stripe/coupons can be reconciled later.
+    // - Queue a 4-email sequence (send first immediately if SMTP is configured).
+
+    let authedUserId: string | null = null;
+    if (isFounding) {
+      try {
+        const authHeader = String(req?.headers?.authorization || '').trim();
+        const token = authHeader.toLowerCase().startsWith('bearer ') ? authHeader.slice(7).trim() : '';
+        if (token && admin?.auth?.getUser) {
+          const { data } = await admin.auth.getUser(token);
+          authedUserId = (data as any)?.user?.id ? String((data as any).user.id) : null;
+        }
+      } catch {
+        authedUserId = null;
+      }
+
+      // 1) Upsert lead row
+      try {
+        await admin.from('maw_founding_circle_leads').upsert(
+          {
+            email,
+            email_lower: email,
+            name,
+            source: foundingSource,
+            converted_to_user: Boolean(authedUserId),
+            converted_user_id: authedUserId,
+            founding_bucket: foundingBucket,
+            meta,
+            ip_hash: ipHash,
+            user_agent: ua,
+          },
+          { onConflict: 'email_lower' }
+        );
+      } catch (e) {
+        // Don't block signup on secondary tracking table.
+        console.warn('founding lead upsert failed', e);
+      }
+
+      // 2) Mark user as founder (if authenticated)
+      if (authedUserId) {
+// 2a) Atomically claim the founding bucket + enforce caps (prevents race conditions).
+// Step 6 — Permanent closure gate (if config installed)
+try {
+  const cfg = await getFoundersConfig(admin);
+  if (cfg?.closed) {
+    return json(res, 409, { ok: false, error_code: 'FOUNDERS_CLOSED', message: 'Founders Circle is full and permanently closed.', retryable: false });
+  }
+} catch {
+  // non-blocking (fallback to RPC cap enforcement)
+}
+
+try {
+  const desiredBucket = (foundingBucket || 'admc_2026') as any;
+          const { data: claimRows, error: claimErr } = await admin.rpc('maw_claim_founding_bucket', {
+            p_user_id: authedUserId,
+            p_bucket: desiredBucket,
+          });
+
+          const claim = Array.isArray(claimRows) ? (claimRows[0] as any) : (claimRows as any);
+          if (claimErr || !claim?.ok) {
+            const reason = String(claim?.reason || claimErr?.message || 'limit_reached');
+            return json(res, 409, {
+              ok: false,
+              error_code: 'FOUNDERS_CLOSED',
+              message:
+                reason === 'admc_limit_reached'
+                  ? 'ADMC Founders Circle is full (75/75).'
+                  : reason === 'total_limit_reached'
+                  ? 'Founders Circle is full.'
+                  : 'Founders Circle is currently unavailable.',
+              retryable: false,
+            });
+          }
+        } catch (e) {
+          console.warn('founding bucket claim failed', e);
+          return json(res, 409, {
+            ok: false,
+            error_code: 'FOUNDERS_CLOSED',
+            message: 'Founders Circle is currently unavailable.',
+            retryable: false,
+          });
+        }
+
+        // 2b) Set additional identity fields (safe/idempotent).
+        try {
+          await admin
+            .from('users')
+            .update({
+              founding_source: foundingSource,
+              ...(pricingLock ? { pricing_lock: pricingLock } : {}),
+            })
+            .eq('id', authedUserId);
+
+// Step 6 — if we just hit the cap, permanently close founders (idempotent)
+try {
+  const cfg = await getFoundersConfig(admin);
+  if (cfg && !cfg.closed) {
+    const current = await countFounders(admin);
+    if (current >= Number(cfg.cap || 100)) await permanentlyCloseFounders(admin);
+  }
+} catch {
+  // ignore
+}
+
+        } catch (e) {
+          console.warn('founding user update failed', e);
+        }
+      }
+
+      // 3) Queue email sequence
+      try {
+        const now = Date.now();
+        const mk = (hoursFromNow: number) => new Date(now + hoursFromNow * 60 * 60 * 1000).toISOString();
+        const basePayload = { name, email, founding_source: foundingSource, pricing_lock: pricingLock, founding_bucket: foundingBucket || 'admc_2026' };
+
+        const queueRows = [
+          { to_email: email, template_key: 'founding_welcome', send_at: mk(0), payload: basePayload },
+          { to_email: email, template_key: 'founding_early_access', send_at: mk(24), payload: basePayload },
+          { to_email: email, template_key: 'founding_pricing_lock', send_at: mk(72), payload: basePayload },
+          { to_email: email, template_key: 'founding_next_tools', send_at: mk(144), payload: basePayload },
+        ];
+
+        await admin.from('maw_email_queue').insert(queueRows);
+
+        // Best-effort immediate send of the first message (so it works even without cron).
+        if (isMailerConfigured()) {
+          const rendered = renderFoundingEmail('founding_welcome' as any, { name, email });
+          const r = await sendMail({ to: email, subject: rendered.subject, html: rendered.html, text: rendered.text });
+          if (r.ok) {
+            // Mark the first queued email as sent to avoid duplicates.
+            await admin
+              .from('maw_email_queue')
+              .update({ status: 'sent', sent_at: new Date().toISOString(), last_error: null })
+              .eq('to_email', email)
+              .eq('template_key', 'founding_welcome')
+              .eq('status', 'queued');
+          }
+        }
+      } catch (e) {
+        console.warn('email queue failed', e);
+      }
+    }
+
+    return json(res, 200, { ok: true, already_subscribed: alreadySubscribed, founding_circle: isFounding });
   } catch (err: any) {
     return json(res, 500, {
       ok: false,
