@@ -750,11 +750,11 @@
             Hook this up to your existing waitlist endpoint if you want.
             For now, this submits to /api/waitlist (example). Update the action to match your backend.
           -->
-          <form class="admc-form" id="admcForm">
-            <input class="field" type="text" name="name" placeholder="First name" autocomplete="given-name" required>
-            <input class="field" type="email" name="email" placeholder="Email" autocomplete="email" required>
+          <form class="admc-form" id="admcForm" novalidate>
+            <input class="field" type="text" id="admcName" name="name" placeholder="First name" autocomplete="given-name" required>
+            <input class="field" type="email" id="admcEmail" name="email" placeholder="Email" autocomplete="email" required>
 
-            <select class="field" name="type">
+            <select class="field" id="admcType" name="type">
               <option value="">Performer type (optional)</option>
               <option>Hobbyist</option>
               <option>Part-time performer</option>
@@ -804,13 +804,42 @@
           ok.style.display = 'none';
           err.style.display = 'none';
 
-          const fd = new FormData(form);
-          const payload = Object.fromEntries(fd.entries());
-          payload.source = 'admc';
-          payload.founding_circle = true;
-          payload.founding_source = 'ADMC_2026';
-          payload.founding_bucket = 'admc_2026';
-          payload.pricing_lock = 'founding_pro_admc_2026';
+          const nameInput = form.querySelector('#admcName');
+          const emailInput = form.querySelector('#admcEmail');
+          const typeInput = form.querySelector('#admcType');
+
+          const payload = {
+            name: (nameInput?.value || '').trim(),
+            email: (emailInput?.value || '').trim(),
+            type: (typeInput?.value || '').trim(),
+            source: 'admc',
+            founding_circle: true,
+            founding_source: 'ADMC_2026',
+            founding_bucket: 'admc_2026',
+            pricing_lock: 'founding_pro_admc_2026'
+          };
+
+          if (!payload.name) {
+            err.textContent = 'Please enter your first name.';
+            err.style.display = 'block';
+            nameInput?.focus();
+            return;
+          }
+
+          if (!payload.email) {
+            err.textContent = 'Please enter your email address.';
+            err.style.display = 'block';
+            emailInput?.focus();
+            return;
+          }
+
+          const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (!emailPattern.test(payload.email)) {
+            err.textContent = 'Please enter a valid email address.';
+            err.style.display = 'block';
+            emailInput?.focus();
+            return;
+          }
 
           try {
             const res = await fetch('/api/waitlistSignup', {
