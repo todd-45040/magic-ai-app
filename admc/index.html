@@ -791,7 +791,7 @@
 
     <script>
       // Optional: lightweight demo submit handler.
-      // Replace fetch URL with your real endpoint (e.g., /api/waitlist or Supabase edge function).
+      // Founder signup submit handler wired to the production waitlist endpoint.
       (function() {
         const form = document.getElementById('admcForm');
         const ok = document.getElementById('admcSuccess');
@@ -811,12 +811,6 @@
           payload.founding_source = 'ADMC_2026';
           payload.founding_bucket = 'admc_2026';
           payload.pricing_lock = 'founding_pro_admc_2026';
-          payload.meta = {
-            founding_circle: true,
-            joined_from: 'admc-landing-page',
-            source_bucket: 'admc',
-            pricing_lock: 'founding_pro_admc_2026'
-          };
 
           try {
             const res = await fetch('/api/waitlistSignup', {
@@ -825,11 +819,17 @@
               body: JSON.stringify(payload)
             });
 
-            if (!res.ok) throw new Error('bad response');
+            const data = await res.json().catch(() => ({}));
 
+            if (!res.ok || !data?.ok) {
+              throw new Error(data?.message || 'Could not save your email. Please try again (or ask at the booth).');
+            }
+
+            err.textContent = 'Could not save your email. Please try again (or ask at the booth).';
             ok.style.display = 'block';
             form.reset();
           } catch (e) {
+            err.textContent = e?.message || 'Could not save your email. Please try again (or ask at the booth).';
             err.style.display = 'block';
           }
         });
