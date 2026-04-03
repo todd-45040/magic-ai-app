@@ -729,7 +729,7 @@
 
     <script>
       // Optional: lightweight demo submit handler.
-      // Founder signup submit handler wired to the production waitlist endpoint.
+      // Replace fetch URL with your real endpoint (e.g., /api/waitlist or Supabase edge function).
       (function() {
         const form = document.getElementById('admcForm');
         const ok = document.getElementById('admcSuccess');
@@ -759,14 +759,15 @@
 
             const data = await res.json().catch(() => ({}));
 
-            if (!res.ok || !data?.ok) {
+            if (!res.ok || !data.ok) {
               throw new Error(data?.message || 'Could not save your email. Please try again (or ask at the booth).');
             }
 
-            err.textContent = 'Could not save your email. Please try again (or ask at the booth).';
+            err.style.display = 'none';
             ok.style.display = 'block';
             form.reset();
           } catch (e) {
+            ok.style.display = 'none';
             err.textContent = e?.message || 'Could not save your email. Please try again (or ask at the booth).';
             err.style.display = 'block';
           }
