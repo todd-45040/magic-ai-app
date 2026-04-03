@@ -251,6 +251,20 @@ function App() {
           await registerOrUpdateUser(appUser, sbUser.id);
           appUser = await checkAndUpdateUserTrialStatus(appUser, sbUser.id);
 
+          try {
+            const billing = await fetchBillingStatus();
+            const effectiveMembership = billing?.planKey === 'professional' || billing?.planKey === 'founder_professional'
+              ? 'professional'
+              : billing?.planKey === 'amateur' || billing?.planKey === 'founder_amateur'
+                ? 'amateur'
+                : appUser.membership;
+            if (effectiveMembership) {
+              appUser = { ...appUser, membership: effectiveMembership as any };
+            }
+          } catch {
+            // Keep auth hydration resilient even if billing status is temporarily unavailable.
+          }
+
           setUser(appUser);
           refreshAllData(dispatch);
 
@@ -336,7 +350,19 @@ function App() {
         const sbUser = refreshedSession?.session?.user;
         if (sbUser?.id) {
           const refreshed = await getUserProfile(sbUser.id);
-          if (refreshed) setUser(refreshed as any);
+          if (refreshed) {
+            try {
+              const billing = await fetchBillingStatus();
+              const effectiveMembership = billing?.planKey === 'professional' || billing?.planKey === 'founder_professional'
+                ? 'professional'
+                : billing?.planKey === 'amateur' || billing?.planKey === 'founder_amateur'
+                  ? 'amateur'
+                  : refreshed.membership;
+              setUser({ ...(refreshed as any), membership: effectiveMembership as any });
+            } catch {
+              setUser(refreshed as any);
+            }
+          }
         }
         await refreshAllData(dispatch);
 

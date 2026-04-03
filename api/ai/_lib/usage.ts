@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import type { GoTrueClient } from '@supabase/auth-js';
 import { getIpFromReq, hashIp, logUsageEvent, } from './telemetry.js';
 import { getUsageQuotaConfigForMembership, nextMonthlyResetAtISO } from '../../../server/billing/planMapping.js';
+import { findActiveCompGrant, normalizeMembershipFromPlanKey } from '../../../server/billing/compAccess.js';
 
 // Canonical membership tiers used for usage enforcement.
 // Legacy tiers are accepted and normalized server-side.
@@ -589,6 +590,10 @@ export async function getAiUsageStatus(req: any): Promise<{
     membership = (profile.is_admin ? 'admin' : (profile.membership as Membership)) || 'trial';
     generationCount = profile.generation_count ?? 0;
     lastResetDateISO = profile.last_reset_date ? new Date(profile.last_reset_date).toISOString() : lastResetDateISO;
+    if (!profile.is_admin) {
+      const compGrant = await findActiveCompGrant(admin, { userId, email: String(profile.email || '').trim() || null });
+      if (compGrant) membership = normalizeMembershipFromPlanKey(compGrant.planKey) as Membership;
+    }
   } else {
     // If no profile exists yet, treat as trial until created
     membership = 'trial';
@@ -935,6 +940,10 @@ export async function enforceAiUsage(
     membership = (profile.is_admin ? 'admin' : (profile.membership as Membership)) || 'trial';
     generationCount = profile.generation_count ?? 0;
     lastResetDateISO = profile.last_reset_date ? new Date(profile.last_reset_date).toISOString() : lastResetDateISO;
+    if (!profile.is_admin) {
+      const compGrant = await findActiveCompGrant(admin, { userId, email: String(profile.email || '').trim() || null });
+      if (compGrant) membership = normalizeMembershipFromPlanKey(compGrant.planKey) as Membership;
+    }
   } else {
     const { error: upsertErr } = await admin.from('users').upsert({
       id: userId,
