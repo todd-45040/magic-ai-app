@@ -56,6 +56,22 @@ if (!__telemetrySupabaseUrl || !__telemetryServiceRoleKey) {
   });
 }
 
+
+function estimateCostFallback(model?: string | null, units?: number | null): number {
+  if (!model) return 0;
+  const table: Record<string, number> = {
+    "gemini-2.5-flash": 0.000002,
+    "gemini-2.5-pro": 0.00001,
+    "gemini-2.0-flash": 0.000002,
+    "gemini-3-pro-preview": 0.000012,
+    "gemini-3-flash-preview": 0.000003,
+    "imagen-4.0-generate-001": 0.02,
+    "gpt-image-1": 0.02
+  };
+  const rate = table[model] ?? 0.000005;
+  return (units ?? 1) * rate;
+}
+
 export function sha256Hex(input: string): string {
   return crypto.createHash('sha256').update(input).digest('hex');
 }
