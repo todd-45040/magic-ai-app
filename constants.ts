@@ -31,7 +31,7 @@ import {
 
 export const ADMIN_EMAIL = 'admin@magicaiwizard.com';
 // Keep this in sync with your current git benchmark/tag so the UI + SW cache are coherent.
-export const APP_VERSION = 'v1.0.01';
+export const APP_VERSION = 'v1.0.02';
 
 // Add GUEST_USER for Audience Mode services
 export const GUEST_USER: User = {
