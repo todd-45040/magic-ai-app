@@ -62,12 +62,6 @@ function normalizeTier(m?: string | null): 'trial' | 'amateur' | 'professional' 
 }
 
 
-const ADMIN_USAGE_PLACEHOLDER = 999999999;
-
-function isAdminProfile(profile: any): boolean {
-  return Boolean(profile?.is_admin) || String(profile?.membership || '').trim() === 'admin';
-}
-
 // Phase 2C-B: Tool tier + quota enforcement (monthly buckets).
 // Quota columns in public.users are treated as "remaining" balances for the current month.
 type ToolKey = 'live_rehearsal_audio' | 'image_generation' | 'visual_brainstorm' | 'identify_trick' | 'video_rehearsal';
@@ -620,44 +614,6 @@ if (profile) {
   }
 }
 
-  if (isAdminProfile(profile)) {
-    const engagement = await getEngagementSignals(admin, userId);
-    return {
-      ok: true,
-      membership: 'admin',
-      used: 0,
-      limit: ADMIN_USAGE_PLACEHOLDER,
-      remaining: ADMIN_USAGE_PLACEHOLDER,
-      resetAt: nextResetAtISO(),
-      resetTz: RESET_TZ,
-      resetHourLocal: RESET_HOUR_LOCAL,
-      sessionsToday: engagement.sessionsToday,
-      toolsUsedToday: engagement.toolsUsedToday,
-      distinctToolsToday: engagement.distinctToolsToday,
-      liveUsed: 0,
-      liveLimit: ADMIN_USAGE_PLACEHOLDER,
-      liveRemaining: ADMIN_USAGE_PLACEHOLDER,
-      quota: {
-        live_audio_minutes: {
-          remaining: ADMIN_USAGE_PLACEHOLDER,
-          limit: ADMIN_USAGE_PLACEHOLDER,
-          daily: { used: 0, limit: ADMIN_USAGE_PLACEHOLDER, remaining: ADMIN_USAGE_PLACEHOLDER },
-        },
-        image_gen: { remaining: ADMIN_USAGE_PLACEHOLDER, limit: ADMIN_USAGE_PLACEHOLDER },
-        identify: { remaining: ADMIN_USAGE_PLACEHOLDER, limit: ADMIN_USAGE_PLACEHOLDER },
-        video_uploads: {
-          remaining: ADMIN_USAGE_PLACEHOLDER,
-          limit: ADMIN_USAGE_PLACEHOLDER,
-          daily: { used: 0, limit: ADMIN_USAGE_PLACEHOLDER, remaining: ADMIN_USAGE_PLACEHOLDER },
-        },
-        resetAt: null,
-        nextResetAt: null,
-      },
-      burstLimit: ADMIN_USAGE_PLACEHOLDER,
-      burstRemaining: ADMIN_USAGE_PLACEHOLDER,
-    };
-  }
-
   // Daily reset (UTC midnight by default; configurable via USAGE_RESET_TZ + USAGE_RESET_HOUR_LOCAL)
   const today = usageDayKey();
   const lastKey = usageDayKey(new Date(lastResetDateISO));
@@ -987,38 +943,6 @@ export async function enforceAiUsage(
       last_reset_date: new Date().toISOString(),
     });
     if (upsertErr) console.error('Usage profile upsert error:', upsertErr);
-  }
-
-  // Admin users are always allowed through without charging usage or applying burst/quota checks.
-  if (isAdminProfile(profile)) {
-    await logUsageEvent({
-      request_id: requestId,
-      actor_type: 'user',
-      user_id: userId,
-      identity_key: identity,
-      ip_hash,
-      tool: opts?.tool ?? null,
-      endpoint: req?.url ?? null,
-      outcome: 'SUCCESS_NOT_CHARGED',
-      http_status: 200,
-      error_code: null,
-      retryable: false,
-      units: costUnits,
-      charged_units: 0,
-      membership: 'admin',
-      user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
-      estimated_cost_usd: 0,
-    });
-    return {
-      ok: true,
-      remaining: ADMIN_USAGE_PLACEHOLDER,
-      limit: ADMIN_USAGE_PLACEHOLDER,
-      membership: 'admin',
-      burstRemaining: ADMIN_USAGE_PLACEHOLDER,
-      burstLimit: ADMIN_USAGE_PLACEHOLDER,
-      resetTz: RESET_TZ,
-      resetHourLocal: RESET_HOUR_LOCAL,
-    };
   }
 
   // Daily reset (UTC midnight by default; configurable)

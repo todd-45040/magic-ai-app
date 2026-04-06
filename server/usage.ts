@@ -62,12 +62,6 @@ function normalizeTier(m?: string | null): 'trial' | 'amateur' | 'professional' 
 }
 
 
-const ADMIN_USAGE_PLACEHOLDER = 999999999;
-
-function isAdminProfile(profile: any): boolean {
-  return Boolean(profile?.is_admin) || String(profile?.membership || '').trim() === 'admin';
-}
-
 // Phase 2C-B: Tool tier + quota enforcement (monthly buckets).
 // Quota columns in public.users are treated as "remaining" balances for the current month.
 type ToolKey = 'live_rehearsal_audio' | 'image_generation' | 'visual_brainstorm' | 'identify_trick' | 'video_rehearsal';
@@ -142,6 +136,34 @@ function isTrialActive(trialEnd: any, nowMs = Date.now()): boolean {
   const t = typeof trialEnd === 'number' ? trialEnd : Number(trialEnd);
   if (!Number.isFinite(t)) return true;
   return nowMs < t;
+}
+
+async function safeLogUsageEvent(payload: any): Promise<void> {
+  try {
+    await logUsageEvent(payload);
+  } catch (err) {
+    console.error('logUsageEvent non-blocking error:', err);
+  }
+}
+
+function isAdminProfile(profile: any): boolean {
+  if (!profile) return false;
+  return Boolean(profile?.is_admin) || normalizeTier(profile?.membership as any) === 'admin';
+}
+
+function buildAdminUsageResponse() {
+  const unlimited = Number.MAX_SAFE_INTEGER;
+  return {
+    ok: true,
+    membership: 'admin' as const,
+    remaining: unlimited,
+    limit: unlimited,
+    burstRemaining: unlimited,
+    burstLimit: unlimited,
+    resetAt: nextResetAtISO(),
+    resetTz: RESET_TZ,
+    resetHourLocal: RESET_HOUR_LOCAL,
+  };
 }
 
 function needsMonthlyReset(resetDateISO?: string | null, now = new Date()): boolean {
@@ -615,6 +637,36 @@ export async function getAiUsageStatus(req: any): Promise<{
     generationCount = 0;
     lastResetDateISO = new Date().toISOString();
   }
+
+  if (isAdminProfile(profile)) {
+    const unlimited = Number.MAX_SAFE_INTEGER;
+    return {
+      ok: true,
+      membership: 'admin',
+      used: 0,
+      limit: unlimited,
+      remaining: unlimited,
+      resetAt: nextResetAtISO(),
+      resetTz: RESET_TZ,
+      resetHourLocal: RESET_HOUR_LOCAL,
+      sessionsToday: 0,
+      toolsUsedToday: [],
+      distinctToolsToday: 0,
+      liveUsed: 0,
+      liveLimit: unlimited,
+      liveRemaining: unlimited,
+      quota: {
+        live_audio_minutes: { remaining: unlimited, limit: unlimited, daily: { used: 0, limit: unlimited, remaining: unlimited } },
+        image_gen: { remaining: unlimited, limit: unlimited },
+        identify: { remaining: unlimited, limit: unlimited },
+        video_uploads: { remaining: unlimited, limit: unlimited, daily: { used: 0, limit: unlimited, remaining: unlimited } },
+        resetAt: null,
+        nextResetAt: null,
+      },
+      burstLimit: unlimited,
+      burstRemaining: unlimited,
+    };
+  }
 // Phase 2C-B: ensure monthly tool quotas are initialized/reset (best-effort)
 if (profile) {
   const refreshed = await ensureMonthlyQuotas(admin, userId, membership, profile);
@@ -633,44 +685,6 @@ if (profile) {
     profile.quota_reset_date = refreshed.quota_reset_date;
   }
 }
-
-  if (isAdminProfile(profile)) {
-    const engagement = await getEngagementSignals(admin, userId);
-    return {
-      ok: true,
-      membership: 'admin',
-      used: 0,
-      limit: ADMIN_USAGE_PLACEHOLDER,
-      remaining: ADMIN_USAGE_PLACEHOLDER,
-      resetAt: nextResetAtISO(),
-      resetTz: RESET_TZ,
-      resetHourLocal: RESET_HOUR_LOCAL,
-      sessionsToday: engagement.sessionsToday,
-      toolsUsedToday: engagement.toolsUsedToday,
-      distinctToolsToday: engagement.distinctToolsToday,
-      liveUsed: 0,
-      liveLimit: ADMIN_USAGE_PLACEHOLDER,
-      liveRemaining: ADMIN_USAGE_PLACEHOLDER,
-      quota: {
-        live_audio_minutes: {
-          remaining: ADMIN_USAGE_PLACEHOLDER,
-          limit: ADMIN_USAGE_PLACEHOLDER,
-          daily: { used: 0, limit: ADMIN_USAGE_PLACEHOLDER, remaining: ADMIN_USAGE_PLACEHOLDER },
-        },
-        image_gen: { remaining: ADMIN_USAGE_PLACEHOLDER, limit: ADMIN_USAGE_PLACEHOLDER },
-        identify: { remaining: ADMIN_USAGE_PLACEHOLDER, limit: ADMIN_USAGE_PLACEHOLDER },
-        video_uploads: {
-          remaining: ADMIN_USAGE_PLACEHOLDER,
-          limit: ADMIN_USAGE_PLACEHOLDER,
-          daily: { used: 0, limit: ADMIN_USAGE_PLACEHOLDER, remaining: ADMIN_USAGE_PLACEHOLDER },
-        },
-        resetAt: null,
-        nextResetAt: null,
-      },
-      burstLimit: ADMIN_USAGE_PLACEHOLDER,
-      burstRemaining: ADMIN_USAGE_PLACEHOLDER,
-    };
-  }
 
   // Daily reset (UTC midnight by default; configurable via USAGE_RESET_TZ + USAGE_RESET_HOUR_LOCAL)
   const today = usageDayKey();
@@ -788,7 +802,7 @@ export async function enforceAiUsage(
     const burst = enforceBurst(anonIdentity, 10);
     if (!burst.ok) {
       // Telemetry (best-effort)
-      await logUsageEvent({
+      await safeLogUsageEvent({
         request_id: requestId,
         actor_type: 'guest',
         user_id: null,
@@ -824,7 +838,7 @@ export async function enforceAiUsage(
 
     if (remaining < costUnits) {
       // Telemetry (best-effort)
-      await logUsageEvent({
+      await safeLogUsageEvent({
         request_id: requestId,
         actor_type: 'guest',
         user_id: null,
@@ -847,7 +861,7 @@ export async function enforceAiUsage(
 
     map.set(memKey, used + costUnits);
     // Telemetry (best-effort)
-    await logUsageEvent({
+    await safeLogUsageEvent({
       request_id: requestId,
       actor_type: 'guest',
       user_id: null,
@@ -889,7 +903,7 @@ export async function enforceAiUsage(
     const burst = enforceBurst(identity_key, 8);
     if (!burst.ok) {
       // Telemetry (best-effort)
-      await logUsageEvent({
+      await safeLogUsageEvent({
         request_id: requestId,
         actor_type: 'guest',
         user_id: null,
@@ -920,7 +934,7 @@ export async function enforceAiUsage(
     const remaining = Math.max(0, limit - used);
 
     if (remaining < costUnits) {
-      await logUsageEvent({
+      await safeLogUsageEvent({
         request_id: requestId,
         actor_type: 'guest',
         user_id: null,
@@ -941,7 +955,7 @@ export async function enforceAiUsage(
       return { ok: false, status: 429, error: 'AI usage limit reached for today.', error_code: 'USAGE_LIMIT_REACHED', retryable: true, resetAt: nextResetAtISO(), remaining, limit, burstRemaining: burst.remaining, burstLimit: burst.limit };
     }
     map.set(key, used + costUnits);
-    await logUsageEvent({
+    await safeLogUsageEvent({
       request_id: requestId,
       actor_type: 'guest',
       user_id: null,
@@ -1004,13 +1018,12 @@ export async function enforceAiUsage(
     if (upsertErr) console.error('Usage profile upsert error:', upsertErr);
   }
 
-  // Admin users are always allowed through without charging usage or applying burst/quota checks.
   if (isAdminProfile(profile)) {
-    await logUsageEvent({
+    await safeLogUsageEvent({
       request_id: requestId,
       actor_type: 'user',
       user_id: userId,
-      identity_key: identity,
+      identity_key,
       ip_hash,
       tool: opts?.tool ?? null,
       endpoint: req?.url ?? null,
@@ -1024,16 +1037,7 @@ export async function enforceAiUsage(
       user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
       estimated_cost_usd: 0,
     });
-    return {
-      ok: true,
-      remaining: ADMIN_USAGE_PLACEHOLDER,
-      limit: ADMIN_USAGE_PLACEHOLDER,
-      membership: 'admin',
-      burstRemaining: ADMIN_USAGE_PLACEHOLDER,
-      burstLimit: ADMIN_USAGE_PLACEHOLDER,
-      resetTz: RESET_TZ,
-      resetHourLocal: RESET_HOUR_LOCAL,
-    };
+    return buildAdminUsageResponse();
   }
 
   // Daily reset (UTC midnight by default; configurable)
@@ -1063,7 +1067,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
 
   // Hard gate by tier (ex: video_rehearsal is pro-only)
   if (tierRank(norm) < tierRank(policy.minTier)) {
-    await logUsageEvent({
+    await safeLogUsageEvent({
       request_id: requestId,
       actor_type: 'user',
       user_id: userId,
@@ -1101,7 +1105,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
   const units = Number.isFinite(costUnits) ? Math.max(0, Math.ceil(costUnits)) : 0;
 
   if (currentRemaining < units) {
-    await logUsageEvent({
+    await safeLogUsageEvent({
       request_id: requestId,
       actor_type: 'user',
       user_id: userId,
@@ -1158,7 +1162,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
   const burstLimit = getBurstLimit(tier);
   const burst = enforceBurst(userId, burstLimit);
   if (!burst.ok) {
-    await logUsageEvent({
+    await safeLogUsageEvent({
       request_id: requestId,
       actor_type: 'user',
       user_id: userId,
@@ -1194,7 +1198,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
   const remaining = Math.max(0, limit - generationCount);
 
   if (remaining < costUnits) {
-    await logUsageEvent({
+    await safeLogUsageEvent({
       request_id: requestId,
       actor_type: 'user',
       user_id: userId,
@@ -1244,7 +1248,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
   }
 
   // Telemetry: SUCCESS (best-effort; never blocks)
-  await logUsageEvent({
+  await safeLogUsageEvent({
     request_id: requestId,
     actor_type: 'user',
     user_id: userId,
@@ -1348,9 +1352,8 @@ export async function enforceLiveMinutes(
   if (!trialActive && normalizeTier(membership as any) === 'trial') membership = 'expired';
   const tier = normalizeTier(membership as any);
 
-  // Admin live rehearsal bypass: never decrement daily/monthly minutes for admins.
-  if (profileData?.is_admin || String(profileData?.membership || '').trim() === 'admin') {
-    await logUsageEvent({
+  if (isAdminProfile(profileData)) {
+    await safeLogUsageEvent({
       request_id: requestId,
       actor_type: 'user',
       user_id: userId,
@@ -1368,12 +1371,13 @@ export async function enforceLiveMinutes(
       user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
       estimated_cost_usd: 0,
     });
+    const unlimited = Number.MAX_SAFE_INTEGER;
     return {
       ok: true,
-      membership: 'admin',
+      membership: 'admin' as any,
       liveUsed: 0,
-      liveLimit: ADMIN_USAGE_PLACEHOLDER,
-      liveRemaining: ADMIN_USAGE_PLACEHOLDER,
+      liveLimit: unlimited,
+      liveRemaining: unlimited,
     };
   }
 
@@ -1399,7 +1403,7 @@ export async function enforceLiveMinutes(
   const liveLimit = clampInt(getDailyLiveAudioLimit(tier));
   const liveRemaining = Math.max(0, liveLimit - dailyUsed);
   if (units > 0 && liveRemaining < units) {
-    await logUsageEvent({
+    await safeLogUsageEvent({
       request_id: requestId,
       actor_type: 'user',
       user_id: userId,
@@ -1431,7 +1435,7 @@ export async function enforceLiveMinutes(
   // Monthly minutes quota (existing tool quota)
   const monthlyRemaining = clampInt(profile?.quota_live_audio_minutes);
   if (units > 0 && monthlyRemaining < units) {
-    await logUsageEvent({
+    await safeLogUsageEvent({
       request_id: requestId,
       actor_type: 'user',
       user_id: userId,
@@ -1478,7 +1482,7 @@ export async function enforceLiveMinutes(
     return { ok: false, status: 503, error: 'Usage tracking unavailable. Try again shortly.' };
   }
 
-  await logUsageEvent({
+  await safeLogUsageEvent({
     request_id: requestId,
     actor_type: 'user',
     user_id: userId,

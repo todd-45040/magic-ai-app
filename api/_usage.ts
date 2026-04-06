@@ -21,12 +21,6 @@ function normalizeTier(m?: string | null): 'free' | 'trial' | 'amateur' | 'profe
   }
 }
 
-const ADMIN_USAGE_PLACEHOLDER = 999999999;
-
-function isAdminProfile(profile: any): boolean {
-  return Boolean(profile?.is_admin) || String(profile?.membership || '').trim() === 'admin';
-}
-
 const TIER_LIMITS: Record<string, number> = {
   free: 10,
   trial: 20,
@@ -128,7 +122,7 @@ export async function getAiUsageStatus(req: any): Promise<{
   const admin = (auth as any).admin as any;
   const { data: profile, error: profileErr } = await admin
     .from('users')
-    .select('id, membership, is_admin, generation_count, last_reset_date')
+    .select('id, membership, generation_count, last_reset_date')
     .eq('id', userId)
     .maybeSingle();
 
@@ -147,18 +141,6 @@ export async function getAiUsageStatus(req: any): Promise<{
     membership = 'trial';
     generationCount = 0;
     lastResetDateISO = new Date().toISOString();
-  }
-
-  if (isAdminProfile(profile)) {
-    return {
-      ok: true,
-      membership: 'admin' as any,
-      used: 0,
-      limit: ADMIN_USAGE_PLACEHOLDER,
-      remaining: ADMIN_USAGE_PLACEHOLDER,
-      burstLimit: ADMIN_USAGE_PLACEHOLDER,
-      burstRemaining: ADMIN_USAGE_PLACEHOLDER,
-    };
   }
 
   // Daily reset (UTC)
@@ -237,7 +219,7 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
   // Authed user: enforce against public.users table
   const { data: profile, error: profileErr } = await admin
     .from('users')
-    .select('id, membership, is_admin, generation_count, last_reset_date')
+    .select('id, membership, generation_count, last_reset_date')
     .eq('id', userId)
     .maybeSingle();
 
@@ -262,18 +244,6 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
       last_reset_date: new Date().toISOString(),
     });
     if (upsertErr) console.error('Usage profile upsert error:', upsertErr);
-  }
-
-  // Admin users bypass all legacy usage caps.
-  if (isAdminProfile(profile)) {
-    return {
-      ok: true,
-      remaining: ADMIN_USAGE_PLACEHOLDER,
-      limit: ADMIN_USAGE_PLACEHOLDER,
-      membership: 'admin' as any,
-      burstRemaining: ADMIN_USAGE_PLACEHOLDER,
-      burstLimit: ADMIN_USAGE_PLACEHOLDER,
-    };
   }
 
   // Daily reset (UTC)
