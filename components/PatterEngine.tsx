@@ -117,6 +117,7 @@ Tones: ${tones}`;
     }
 
     setIsLoading(true);
+    const startedAt = Date.now();
     setError(null);
     setResult(null);
     void trackClientEvent({ tool: 'patter_engine', action: 'patter_generate_start', metadata: { tones, descriptionLength: desc.length } });
@@ -170,9 +171,9 @@ Tones: ${tones}`;
       }
 
       setResult(text);
-      void trackClientEvent({ tool: 'patter_engine', action: 'patter_generate_success', outcome: 'SUCCESS_NOT_CHARGED', metadata: { tones, descriptionLength: desc.length } });
+      void trackClientEvent({ tool: 'patter_engine', action: 'patter_generate_success', outcome: 'SUCCESS_NOT_CHARGED', metadata: { tones, descriptionLength: desc.length, duration_ms: Date.now() - startedAt } });
     } catch (err: any) {
-      void trackClientEvent({ tool: 'patter_engine', action: 'patter_generate_error', outcome: 'ERROR_UPSTREAM', metadata: { tones, descriptionLength: desc.length, message: err?.message || 'unknown' } });
+      void trackClientEvent({ tool: 'patter_engine', action: 'patter_generate_error', outcome: 'ERROR_UPSTREAM', metadata: { tones, descriptionLength: desc.length, duration_ms: Date.now() - startedAt, message: err?.message || 'unknown' } });
       console.error("Patter generation failed:", err);
       if (err?.name === "AbortError") {
         setError("Request timed out. Please try again.");

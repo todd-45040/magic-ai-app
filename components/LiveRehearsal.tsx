@@ -13,6 +13,7 @@ import { BackIcon, MicrophoneIcon, StopIcon, SaveIcon, WandIcon, TrashIcon, Time
 import BlockedPanel from './BlockedPanel';
 import { normalizeBlockedUx, type BlockedUx } from '../services/blockedUx';
 import { trackClientEvent } from '../services/telemetryClient';
+import { logUserActivity } from '../services/userActivityService';
 
 // ---- Debug instrumentation (enabled via ?debugRehearsal=1 or localStorage MAW_DEBUG_REHEARSAL=1) ----
 type DebugEvent = { ts: number; event: string; data?: any };
@@ -1307,6 +1308,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         const audioBase64 = await blobToBase64(blob);
         pushDebug('transcribe_request', { bytes: blob.size, mimeType: blob.type, base64Len: audioBase64.length });
 
+        const transcribeStartedAt = Date.now();
         try {
             const { getBearerToken } = await import('../services/usageStatusService');
             const res = await fetch('/api/transcribe', {
@@ -1338,11 +1340,16 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             });
 
             if (res.ok && transcript) {
+                void logUserActivity({ tool_name: 'live_rehearsal', event_type: 'tool_used', success: true, duration_ms: Date.now() - transcribeStartedAt, metadata: { source: 'transcribe', transcript_length: transcript.length } });
                 const finalHistory: Transcription[] = [{ source: 'user', text: transcript, isFinal: true } as any];
                 setTranscriptionHistory(finalHistory);
                 return finalHistory;
             }
+            if (!res.ok) {
+                void logUserActivity({ tool_name: 'live_rehearsal', event_type: 'error', success: false, duration_ms: Date.now() - transcribeStartedAt, metadata: { source: 'transcribe', message: json?.error ? String(json.error) : `HTTP ${res.status}`, error_kind: /quota|limit/i.test(String(json?.error || '')) ? 'usage_limit_hit' : /timeout/i.test(String(json?.error || '')) ? 'timeout' : 'ai_failure', status: res.status } });
+            }
         } catch (err: any) {
+            void logUserActivity({ tool_name: 'live_rehearsal', event_type: 'error', success: false, duration_ms: Date.now() - transcribeStartedAt, metadata: { source: 'transcribe', message: String(err?.message || err), error_kind: /timeout/i.test(String(err?.message || err)) ? 'timeout' : 'ai_failure' } });
             pushDebug('transcribe_error', { message: String(err?.message || err) });
             try {
                 (window as any).__REHEARSAL_TRANSCRIBE__ = { status: 0, ok: false, error: String(err?.message || err), len: 0, preview: '', ts: Date.now() };

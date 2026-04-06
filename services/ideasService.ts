@@ -1,5 +1,6 @@
 import { supabase } from '../supabase';
 import type { IdeaCategory, IdeaType, SavedIdea } from '../types';
+import { logUserActivity } from './userActivityService';
 
 // --- DB row shape (maps to SavedIdea used by the UI) ---
 type DbIdeaRow = {
@@ -244,7 +245,20 @@ export async function updateIdea(id: string, updates: Partial<SavedIdea>): Promi
     .single();
 
   if (error) throw error;
-  return mapRowToIdea(data as DbIdeaRow);
+  const savedIdea = mapRowToIdea(data as DbIdeaRow);
+  void logUserActivity({
+    tool_name: String(payload.type || 'idea'),
+    event_type: 'idea_saved',
+    success: true,
+    metadata: {
+      idea_id: savedIdea.id,
+      idea_type: payload.type,
+      title: payload.title ?? null,
+      category: payload.category ?? null,
+      tag_count: Array.isArray(payload.tags) ? payload.tags.length : 0,
+    },
+  });
+  return savedIdea;
 }
 
 export async function deleteIdea(id: string): Promise<void> {

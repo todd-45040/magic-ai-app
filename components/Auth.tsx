@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { supabase } from '../supabase';
+import { logUserActivity } from '../services/userActivityService';
 
 type AuthMode = 'login' | 'signup' | 'reset';
 
@@ -116,6 +117,7 @@ const initialMode = (() => {
     try {
       if (mode === 'login') {
         await doLogin();
+        void logUserActivity({ tool_name: 'system', event_type: 'login', success: true, metadata: { source: 'auth_login' } });
         setMessage('Welcome back — loading your Studio…');
         try { onLoginSuccess?.(); } catch {}
         try { onLogin?.({ email }); } catch {}

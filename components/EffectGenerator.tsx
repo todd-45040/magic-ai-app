@@ -327,6 +327,7 @@ const handleTryExample = () => {
     }
     
     setIsLoading(true);
+    const startedAt = Date.now();
     setError(null);
     setIdeas(null);
     setDisplayIdeas(null);
@@ -374,12 +375,12 @@ const handleTryExample = () => {
       }
 
       setDisplayIdeas(response);
-      void trackClientEvent({ tool: 'effect_generator', action: 'effect_generate_success', outcome: 'SUCCESS_NOT_CHARGED', metadata: { fast: !!opts?.fast, creativeIntent, difficulty, itemCount: validItems.length } });
+      void trackClientEvent({ tool: 'effect_generator', action: 'effect_generate_success', outcome: 'SUCCESS_NOT_CHARGED', metadata: { fast: !!opts?.fast, creativeIntent, difficulty, itemCount: validItems.length, duration_ms: Date.now() - startedAt } });
       if (demoActive) {
         try { markDemoToolCompleted('effect_engine'); } catch {}
       }
     } catch (err) {
-      void trackClientEvent({ tool: 'effect_generator', action: 'effect_generate_error', outcome: 'ERROR_UPSTREAM', metadata: { fast: !!opts?.fast, creativeIntent, difficulty, itemCount: validItems.length, message: err instanceof Error ? err.message : 'unknown' } });
+      void trackClientEvent({ tool: 'effect_generator', action: 'effect_generate_error', outcome: 'ERROR_UPSTREAM', metadata: { fast: !!opts?.fast, creativeIntent, difficulty, itemCount: validItems.length, duration_ms: Date.now() - startedAt, message: err instanceof Error ? err.message : 'unknown' } });
       setError(err instanceof Error ? err.message : "An unknown error occurred.");
     } finally {
       setIsLoading(false);
@@ -399,6 +400,7 @@ const handleTryExample = () => {
     }
 
     setIsLoading(true);
+    const startedAt = Date.now();
     setError(null);
     setIdeas(null);
     setDisplayIdeas(null);
@@ -553,6 +555,7 @@ const handleTryExample = () => {
     ].join(' ');
 
     setIsLoading(true);
+    const startedAt = Date.now();
     setError(null);
     setSaveStatus('idle');
     setCopyStatus('idle');

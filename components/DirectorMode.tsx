@@ -827,7 +827,7 @@ try {
           trackClientEvent({
             tool: 'director_mode',
             action: 'director_request_success',
-            metadata: { speed_mode: speedMode },
+            metadata: { speed_mode: speedMode, duration_ms: elapsedMs },
             units: Array.isArray(blueprint?.segments) ? blueprint.segments.length : undefined,
           });
           // Persist blueprint JSON (non-fatal if table not installed yet)
@@ -855,7 +855,7 @@ try {
           trackClientEvent({
             tool: 'director_mode',
             action: 'director_request_error',
-            metadata: { speed_mode: speedMode },
+            metadata: { speed_mode: speedMode, message: err instanceof Error ? err.message : 'unknown' },
             outcome: 'ERROR_UPSTREAM',
             error_code: err instanceof Error ? err.name : 'UNKNOWN',
           });

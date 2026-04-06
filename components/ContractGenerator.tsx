@@ -656,6 +656,7 @@ Guidelines:
 `;
 
         try {
+            const startedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
             const response = await generateStructuredResponse(prompt, CONTRACT_GENERATOR_SYSTEM_INSTRUCTION, responseSchema, user);
             const normalized: ContractSections = {
                 performanceDetails: String(response?.performanceDetails ?? ''),
@@ -668,11 +669,14 @@ Guidelines:
                 clientId: selectedClientId || undefined,
             };
             setResult(normalized);
+            const endedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
             emitContractTelemetry('contract_generated', {
                 has_ai_sections: true,
                 generated_section_count: 6,
+                duration_ms: Math.max(0, Math.round((endedAt as number) - (startedAt as number))),
             });
         } catch (err) {
+            emitContractTelemetry('contract_generate_error', { message: err instanceof Error ? err.message : 'unknown' });
             setError(err instanceof Error ? err.message : 'An unknown error occurred.');
         } finally {
             setIsLoading(false);
