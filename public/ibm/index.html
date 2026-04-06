@@ -4,137 +4,97 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Magic AI Wizard | IBM 30-Day Trial</title>
-  <meta
-    name="description"
-    content="Exclusive 30-day Magic AI Wizard trial for International Brotherhood of Magicians members."
-  />
-  <link rel="icon" href="/favicon.ico" />
-  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
-  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-  <link rel="manifest" href="/site.webmanifest" />
-
+  <meta name="description" content="Special 30-day Magic AI Wizard trial for International Brotherhood of Magicians members." />
   <style>
     :root {
-      --bg: #0d0413;
-      --bg-2: #170924;
+      --bg1: #120718;
+      --bg2: #1c0d2b;
       --panel: rgba(255,255,255,0.06);
-      --panel-2: rgba(255,255,255,0.08);
-      --panel-dark: rgba(6, 2, 10, 0.55);
-      --border: rgba(255,255,255,0.11);
-      --text: #f8f1ff;
-      --muted: rgba(248,241,255,0.74);
-      --muted-2: rgba(248,241,255,0.58);
-      --gold: #f1c35d;
-      --purple: #c07cff;
-      --purple-2: #8d45f7;
-      --shadow: 0 30px 70px rgba(0, 0, 0, 0.42);
-      --radius-xl: 30px;
-      --radius-lg: 22px;
-      --radius-md: 16px;
-      --max: 1180px;
+      --panel-dark: rgba(0,0,0,0.28);
+      --border: rgba(255,255,255,0.12);
+      --text: #f7f2ff;
+      --muted: rgba(247,242,255,0.72);
+      --gold: #f2c55c;
+      --gold-dark: #d9a72d;
+      --purple: #b26cff;
+      --shadow: 0 20px 50px rgba(0,0,0,0.35);
+      --radius: 24px;
     }
 
     * { box-sizing: border-box; }
-
     html { scroll-behavior: smooth; }
-
     body {
       margin: 0;
-      color: var(--text);
       font-family: Georgia, "Times New Roman", serif;
+      color: var(--text);
       background:
-        radial-gradient(circle at top, rgba(168,85,247,0.18), transparent 26%),
-        radial-gradient(circle at 85% 20%, rgba(241,195,93,0.10), transparent 18%),
-        radial-gradient(circle at bottom left, rgba(168,85,247,0.10), transparent 20%),
-        linear-gradient(180deg, #0f0516 0%, #170924 42%, #09030d 100%);
+        radial-gradient(circle at top, rgba(178,108,255,0.15), transparent 30%),
+        radial-gradient(circle at bottom right, rgba(242,197,92,0.12), transparent 25%),
+        linear-gradient(180deg, var(--bg1), var(--bg2) 42%, #09040d 100%);
     }
 
-    img {
-      max-width: 100%;
-      display: block;
-    }
+    a { color: inherit; text-decoration: none; }
+    img { max-width: 100%; display: block; }
 
-    a {
-      color: inherit;
-      text-decoration: none;
-    }
-
-    .page-glow {
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      background:
-        radial-gradient(circle at 20% 18%, rgba(192,124,255,0.08), transparent 18%),
-        radial-gradient(circle at 82% 70%, rgba(241,195,93,0.06), transparent 22%);
-      z-index: 0;
-    }
-
-    .wrap {
-      width: min(var(--max), calc(100% - 32px));
+    .container {
+      width: min(1180px, calc(100% - 32px));
       margin: 0 auto;
-      position: relative;
-      z-index: 1;
     }
 
     .topbar {
-      padding: 18px 0;
       border-bottom: 1px solid rgba(255,255,255,0.08);
-      backdrop-filter: blur(10px);
-      background: linear-gradient(180deg, rgba(18,7,24,0.82), rgba(18,7,24,0.48));
-      position: sticky;
-      top: 0;
-      z-index: 10;
+      padding: 18px 0;
     }
 
     .topbar-inner {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 18px;
+      gap: 16px;
     }
 
     .brand {
       display: flex;
       align-items: center;
-      gap: 14px;
+      gap: 12px;
       min-width: 0;
     }
 
-    .brand img {
+    .brand-mark {
       width: 46px;
       height: 46px;
       border-radius: 14px;
-      object-fit: contain;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.04);
       padding: 4px;
-      background: rgba(255,255,255,0.05);
-      border: 1px solid rgba(255,255,255,0.10);
-      box-shadow: 0 10px 28px rgba(0,0,0,0.35);
+      object-fit: contain;
     }
 
     .brand-title {
-      margin: 0;
-      font: 700 18px/1.1 Arial, Helvetica, sans-serif;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 18px;
+      font-weight: 700;
       letter-spacing: 0.02em;
+      margin: 0;
     }
 
     .brand-sub {
-      margin: 4px 0 0;
-      font: 400 12px/1.2 Arial, Helvetica, sans-serif;
-      color: var(--muted-2);
+      margin: 2px 0 0;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 12px;
+      color: var(--muted);
     }
 
-    .offer-pill {
-      white-space: nowrap;
+    .pill {
+      border: 1px solid rgba(242,197,92,0.35);
+      background: rgba(242,197,92,0.10);
+      color: #ffe6aa;
       border-radius: 999px;
       padding: 10px 14px;
-      border: 1px solid rgba(241,195,93,0.32);
-      background: linear-gradient(180deg, rgba(241,195,93,0.15), rgba(241,195,93,0.06));
-      color: #ffe7ac;
       font: 700 11px/1 Arial, Helvetica, sans-serif;
       letter-spacing: 0.18em;
       text-transform: uppercase;
-      box-shadow: 0 10px 26px rgba(241,195,93,0.08);
+      white-space: nowrap;
     }
 
     .hero {
@@ -143,136 +103,121 @@
 
     .hero-grid {
       display: grid;
-      grid-template-columns: minmax(0, 1.02fr) minmax(360px, 0.98fr);
-      gap: 28px;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 24px;
       align-items: center;
     }
 
     .eyebrow {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
+      display: inline-block;
+      margin-bottom: 12px;
+      border: 1px solid rgba(178,108,255,0.25);
+      background: rgba(178,108,255,0.10);
+      color: #efddff;
       border-radius: 999px;
-      padding: 8px 14px;
-      border: 1px solid rgba(192,124,255,0.24);
-      background: rgba(192,124,255,0.10);
-      color: #f0deff;
+      padding: 8px 12px;
       font: 700 11px/1 Arial, Helvetica, sans-serif;
-      text-transform: uppercase;
       letter-spacing: 0.16em;
-      margin-bottom: 16px;
+      text-transform: uppercase;
     }
 
     h1 {
       margin: 0;
-      font-size: clamp(44px, 6vw, 86px);
-      line-height: 0.95;
-      letter-spacing: -0.045em;
-      text-wrap: balance;
+      font-size: clamp(42px, 6vw, 82px);
+      line-height: 0.98;
+      letter-spacing: -0.04em;
+      font-weight: 700;
     }
 
-    .gold {
-      color: var(--gold);
-    }
+    .gold { color: var(--gold); }
 
     .hero-copy {
-      margin: 16px 0 0;
+      margin: 14px 0 0;
       max-width: 760px;
+      font-size: clamp(18px, 2vw, 23px);
+      line-height: 1.5;
       color: var(--muted);
-      font-size: clamp(18px, 2vw, 22px);
-      line-height: 1.55;
     }
 
     .feature-grid {
-      margin-top: 22px;
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px;
+      gap: 10px;
+      margin-top: 20px;
     }
 
     .feature {
-      border-radius: 18px;
       border: 1px solid var(--border);
-      background: linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.04));
-      padding: 13px 14px;
-      box-shadow: var(--shadow);
+      background: var(--panel);
+      border-radius: 18px;
+      padding: 12px 14px;
       font: 600 14px/1.45 Arial, Helvetica, sans-serif;
-      color: rgba(255,255,255,0.92);
-    }
-
-    .feature span {
-      color: #ffd97d;
-      margin-right: 7px;
+      box-shadow: var(--shadow);
     }
 
     .actions {
-      margin-top: 22px;
       display: flex;
       flex-wrap: wrap;
       gap: 12px;
+      margin-top: 18px;
     }
 
     .btn {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      min-height: 50px;
-      padding: 0 22px;
       border-radius: 18px;
-      transition: 0.16s ease;
+      padding: 14px 22px;
       font: 700 14px/1 Arial, Helvetica, sans-serif;
-      letter-spacing: 0.01em;
+      transition: transform 0.15s ease, background 0.15s ease;
     }
 
     .btn:hover { transform: translateY(-1px); }
 
     .btn-primary {
-      background: linear-gradient(180deg, #f6cc69, #e4b148);
-      color: #150a1d;
-      box-shadow: 0 18px 32px rgba(241,195,93,0.18);
+      background: var(--gold);
+      color: #120718;
+      box-shadow: 0 16px 30px rgba(242,197,92,0.22);
     }
 
     .btn-secondary {
       border: 1px solid var(--border);
       background: rgba(255,255,255,0.05);
-      color: white;
+      color: var(--text);
     }
 
     .helper {
-      margin-top: 14px;
-      color: var(--muted-2);
-      font: 400 14px/1.6 Arial, Helvetica, sans-serif;
+      margin-top: 12px;
+      font: 400 14px/1.55 Arial, Helvetica, sans-serif;
+      color: rgba(247,242,255,0.62);
     }
 
-    .hero-stack {
+    .hero-side {
       display: grid;
       gap: 16px;
     }
 
     .panel {
-      border-radius: var(--radius-xl);
       border: 1px solid var(--border);
-      background: linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.04));
+      background: var(--panel);
+      border-radius: var(--radius);
       padding: 14px;
       box-shadow: var(--shadow);
-      backdrop-filter: blur(10px);
+      backdrop-filter: blur(8px);
     }
 
-    .ad-card {
-      overflow: hidden;
+    .panel-dark {
+      background: rgba(20,12,32,0.95);
     }
 
-    .ad-card img {
-      width: 100%;
-      border-radius: 20px;
+    .ad-image {
+      border-radius: 18px;
       border: 1px solid rgba(255,255,255,0.10);
+      width: 100%;
+      object-fit: cover;
     }
 
-    .trial-panel {
-      background: linear-gradient(180deg, rgba(20,12,32,0.96), rgba(12,7,19,0.92));
-    }
-
-    .trial-head {
+    .mini-head {
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
@@ -280,68 +225,64 @@
       margin-bottom: 12px;
     }
 
-    .trial-head small {
-      display: block;
+    .mini-head p {
+      margin: 0;
       font: 700 11px/1 Arial, Helvetica, sans-serif;
       letter-spacing: 0.16em;
       text-transform: uppercase;
-      color: var(--muted-2);
-      margin-bottom: 8px;
+      color: rgba(247,242,255,0.56);
     }
 
-    .trial-head h2 {
-      margin: 0;
-      font-size: 30px;
-      line-height: 1.05;
+    .mini-head h2 {
+      margin: 6px 0 0;
+      font-size: 28px;
+      line-height: 1.1;
     }
 
     .tag {
-      flex: 0 0 auto;
       border-radius: 12px;
       padding: 8px 10px;
-      background: rgba(192,124,255,0.14);
-      color: #efdfff;
+      background: rgba(178,108,255,0.15);
+      color: #efddff;
       font: 700 11px/1 Arial, Helvetica, sans-serif;
       text-transform: uppercase;
       letter-spacing: 0.12em;
+      white-space: nowrap;
     }
 
-    .trial-list {
-      display: grid;
-      gap: 10px;
-    }
+    .trial-list { display: grid; gap: 10px; }
 
     .trial-item {
-      border-radius: 16px;
       border: 1px solid var(--border);
-      background: rgba(255,255,255,0.04);
-      padding: 13px 14px;
+      background: var(--panel-dark);
+      border-radius: 16px;
+      padding: 12px 14px;
     }
 
     .trial-item strong {
       display: block;
+      color: #ffe6aa;
+      font: 700 16px/1.3 Arial, Helvetica, sans-serif;
       margin-bottom: 4px;
-      color: #ffe4a1;
-      font: 700 16px/1.25 Arial, Helvetica, sans-serif;
     }
 
     .trial-item span {
-      color: var(--muted);
-      font: 400 14px/1.5 Arial, Helvetica, sans-serif;
+      font: 400 14px/1.45 Arial, Helvetica, sans-serif;
+      color: rgba(247,242,255,0.72);
     }
 
     .quote {
       margin-top: 12px;
+      border: 1px solid rgba(242,197,92,0.20);
+      background: rgba(242,197,92,0.10);
       border-radius: 16px;
-      border: 1px solid rgba(241,195,93,0.20);
-      background: rgba(241,195,93,0.10);
       padding: 12px 14px;
-      color: #ffe5a5;
+      color: #ffe6aa;
       font: 400 14px/1.55 Arial, Helvetica, sans-serif;
     }
 
     .section {
-      padding: 24px 0;
+      padding: 20px 0;
     }
 
     .section-head {
@@ -350,18 +291,17 @@
     }
 
     .section-kicker {
-      color: #eedcff;
-      opacity: 0.8;
       font: 700 11px/1 Arial, Helvetica, sans-serif;
-      text-transform: uppercase;
       letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: #efddff;
+      opacity: 0.8;
     }
 
     .section-title {
-      margin: 12px 0 0;
-      font-size: clamp(34px, 4.2vw, 52px);
-      line-height: 1.04;
-      letter-spacing: -0.035em;
+      margin: 10px 0 0;
+      font-size: clamp(32px, 4vw, 50px);
+      line-height: 1.05;
     }
 
     .benefit-grid {
@@ -373,27 +313,26 @@
     .benefit-card,
     .info-card,
     .list-card {
-      border-radius: 22px;
       border: 1px solid var(--border);
-      background: linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.04));
+      border-radius: 22px;
+      background: var(--panel);
       padding: 18px;
-      box-shadow: var(--shadow);
     }
 
     .benefit-card h3,
     .info-card h3,
     .list-card h3 {
       margin: 0;
-      color: #ffe4a1;
       font-size: 22px;
+      color: #ffe6aa;
     }
 
     .benefit-card p,
     .info-card p,
     .list-card li {
       margin: 10px 0 0;
-      color: var(--muted);
       font: 400 14px/1.65 Arial, Helvetica, sans-serif;
+      color: rgba(247,242,255,0.74);
     }
 
     .two-col {
@@ -410,8 +349,8 @@
     }
 
     .small-card {
-      border-radius: 16px;
       border: 1px solid var(--border);
+      border-radius: 16px;
       background: rgba(255,255,255,0.05);
       padding: 14px;
     }
@@ -419,13 +358,12 @@
     .small-card h4 {
       margin: 0;
       font: 700 14px/1.2 Arial, Helvetica, sans-serif;
-      color: white;
     }
 
     .small-card p {
       margin: 8px 0 0;
-      color: var(--muted);
       font: 400 14px/1.6 Arial, Helvetica, sans-serif;
+      color: rgba(247,242,255,0.72);
     }
 
     .logo-block {
@@ -434,61 +372,58 @@
       align-items: center;
       justify-content: center;
       text-align: center;
-      overflow: hidden;
-      min-height: 100%;
     }
 
     .logo-block img {
-      width: min(100%, 430px);
+      width: min(100%, 380px);
       object-fit: contain;
-      filter: drop-shadow(0 22px 40px rgba(0,0,0,0.35));
     }
 
     .claim-wrap {
-      max-width: 920px;
+      max-width: 880px;
       margin: 0 auto;
+      border: 1px solid rgba(242,197,92,0.20);
+      background: linear-gradient(135deg, rgba(242,197,92,0.10), rgba(178,108,255,0.12));
       border-radius: 28px;
-      border: 1px solid rgba(241,195,93,0.22);
-      background:
-        radial-gradient(circle at top, rgba(241,195,93,0.10), transparent 35%),
-        linear-gradient(135deg, rgba(241,195,93,0.10), rgba(192,124,255,0.12));
-      padding: 24px;
+      padding: 22px;
       box-shadow: var(--shadow);
     }
 
+    .claim-wrap .section-head { margin-bottom: 14px; }
+
     .claim-copy {
-      max-width: 740px;
-      margin: 14px auto 0;
+      max-width: 720px;
+      margin: 12px auto 0;
       text-align: center;
-      color: rgba(248,241,255,0.82);
-      font: 400 16px/1.75 Arial, Helvetica, sans-serif;
+      font: 400 16px/1.7 Arial, Helvetica, sans-serif;
+      color: rgba(247,242,255,0.80);
     }
 
     .form-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 12px;
-      max-width: 740px;
-      margin: 20px auto 0;
+      margin: 18px auto 0;
+      max-width: 720px;
     }
 
     .form-grid .full { grid-column: 1 / -1; }
 
     input {
       width: 100%;
-      border: 1px solid rgba(255,255,255,0.16);
-      background: rgba(0,0,0,0.30);
-      color: white;
+      border: 1px solid var(--border);
+      background: rgba(0,0,0,0.25);
+      color: var(--text);
       border-radius: 18px;
       padding: 14px 16px;
       font: 400 15px/1.2 Arial, Helvetica, sans-serif;
       outline: none;
     }
 
-    input::placeholder { color: rgba(248,241,255,0.42); }
+    input::placeholder { color: rgba(247,242,255,0.38); }
 
     .form-foot {
-      max-width: 740px;
+      max-width: 720px;
       margin: 14px auto 0;
       display: flex;
       align-items: center;
@@ -498,8 +433,8 @@
 
     .form-foot p {
       margin: 0;
-      color: var(--muted-2);
       font: 400 13px/1.55 Arial, Helvetica, sans-serif;
+      color: rgba(247,242,255,0.60);
     }
 
     .lists {
@@ -513,93 +448,59 @@
       padding-left: 18px;
     }
 
-    .footer-note {
-      text-align: center;
-      color: rgba(248,241,255,0.52);
-      font: 400 13px/1.5 Arial, Helvetica, sans-serif;
-      padding: 6px 0 24px;
-    }
-
-    @media (max-width: 1024px) {
+    @media (max-width: 980px) {
       .hero-grid,
       .two-col,
       .benefit-grid,
-      .lists {
-        grid-template-columns: 1fr;
-      }
+      .lists { grid-template-columns: 1fr; }
+      .three-grid { grid-template-columns: 1fr; }
     }
 
-    @media (max-width: 760px) {
+    @media (max-width: 720px) {
       .topbar-inner,
-      .form-foot {
-        flex-direction: column;
-        align-items: stretch;
-      }
-
+      .form-foot,
+      .actions { align-items: stretch; }
+      .topbar-inner,
+      .form-foot { flex-direction: column; }
       .feature-grid,
-      .form-grid,
-      .three-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .form-grid .full {
-        grid-column: auto;
-      }
-
-      .offer-pill {
-        white-space: normal;
-        text-align: center;
-      }
-
-      h1 {
-        font-size: 52px;
-      }
-
-      .section-title {
-        font-size: 36px;
-      }
-
-      .trial-head h2 {
-        font-size: 26px;
-      }
+      .form-grid { grid-template-columns: 1fr; }
+      .form-grid .full { grid-column: auto; }
+      .pill { white-space: normal; text-align: center; }
+      h1 { font-size: 48px; }
+      .section-title { font-size: 34px; }
+      .mini-head h2 { font-size: 24px; }
     }
   </style>
 </head>
 <body>
-  <div class="page-glow"></div>
-
   <header class="topbar">
-    <div class="wrap topbar-inner">
+    <div class="container topbar-inner">
       <div class="brand">
-        <img src="/Wizard_Head.png" alt="Magic AI Wizard logo" />
+        <img class="brand-mark" src="/Wizard_Head.png" alt="Magic AI Wizard logo" />
         <div>
           <p class="brand-title">Magic AI Wizard</p>
           <p class="brand-sub">Special offer for IBM members</p>
         </div>
       </div>
-      <div class="offer-pill">30-Day IBM Trial</div>
+      <div class="pill">30-Day IBM Trial</div>
     </div>
   </header>
 
   <main>
     <section class="hero">
-      <div class="wrap hero-grid">
+      <div class="container hero-grid">
         <div>
           <div class="eyebrow">Seen in The Linking Ring &amp; via IBM</div>
-
-          <h1>
-            Stop practicing <span class="gold">to a silent mirror.</span>
-          </h1>
-
+          <h1>Stop practicing <span class="gold">to a silent mirror.</span></h1>
           <p class="hero-copy">
             Magic AI Wizard gives magicians real rehearsal feedback, smarter scripting tools, and practical business help—so you can improve your act before you ever step on stage.
           </p>
 
           <div class="feature-grid">
-            <div class="feature"><span>✨</span>30-day free trial for IBM members</div>
-            <div class="feature"><span>✨</span>Live rehearsal and feedback tools</div>
-            <div class="feature"><span>✨</span>Built specifically for magicians</div>
-            <div class="feature"><span>✨</span>Scripts, planning, and business help</div>
+            <div class="feature">✨ 30-day free trial for IBM members</div>
+            <div class="feature">✨ Live rehearsal and feedback tools</div>
+            <div class="feature">✨ Built specifically for magicians</div>
+            <div class="feature">✨ Scripts, planning, and business help</div>
           </div>
 
           <div class="actions">
@@ -607,42 +508,28 @@
             <a class="btn btn-secondary" href="#how-it-helps">See What It Helps You Do</a>
           </div>
 
-          <p class="helper">
-            Designed for IBM magicians who want better rehearsal, clearer thinking, and less admin friction.
-          </p>
+          <p class="helper">Designed for IBM magicians who want better rehearsal, clearer thinking, and less admin friction.</p>
         </div>
 
-        <div class="hero-stack">
-          <div class="panel ad-card">
-            <img src="/ibm-ad1.png" alt="Magic AI Wizard IBM ad preview" />
+        <div class="hero-side">
+          <div class="panel">
+            <img class="ad-image" src="/ibm.png" alt="Magic AI Wizard IBM ad preview" />
           </div>
 
-          <div class="panel trial-panel">
-            <div class="trial-head">
+          <div class="panel panel-dark">
+            <div class="mini-head">
               <div>
-                <small>IBM Member Quick Preview</small>
+                <p>IBM Member Quick Preview</p>
                 <h2>What you get in the trial</h2>
               </div>
               <div class="tag">30 days</div>
             </div>
 
             <div class="trial-list">
-              <div class="trial-item">
-                <strong>Live Rehearsal</strong>
-                <span>Get feedback on pacing, tone, and delivery.</span>
-              </div>
-              <div class="trial-item">
-                <strong>Patter Engine</strong>
-                <span>Turn rough ideas into stronger presentation.</span>
-              </div>
-              <div class="trial-item">
-                <strong>Director Mode</strong>
-                <span>Think through flow, structure, and audience fit.</span>
-              </div>
-              <div class="trial-item">
-                <strong>Contract + Business Tools</strong>
-                <span>Save time on the non-performing work.</span>
-              </div>
+              <div class="trial-item"><strong>Live Rehearsal</strong><span>Get feedback on pacing, tone, and delivery.</span></div>
+              <div class="trial-item"><strong>Patter Engine</strong><span>Turn rough ideas into stronger presentation.</span></div>
+              <div class="trial-item"><strong>Director Mode</strong><span>Think through flow, structure, and audience fit.</span></div>
+              <div class="trial-item"><strong>Contract + Business Tools</strong><span>Save time on the non-performing work.</span></div>
             </div>
 
             <div class="quote">“You don’t need a human director to start polishing your act.”</div>
@@ -652,51 +539,29 @@
     </section>
 
     <section id="how-it-helps" class="section">
-      <div class="wrap">
+      <div class="container">
         <div class="section-head">
           <div class="section-kicker">Why IBM members may care</div>
           <h2 class="section-title">Built to help you improve your act and run it better</h2>
         </div>
 
         <div class="benefit-grid">
-          <div class="benefit-card">
-            <h3>Create</h3>
-            <p>Generate patter, brainstorm effects, and develop stronger presentations faster.</p>
-          </div>
-          <div class="benefit-card">
-            <h3>Refine</h3>
-            <p>Use rehearsal tools to hear where your delivery, clarity, or structure needs work.</p>
-          </div>
-          <div class="benefit-card">
-            <h3>Rehearse</h3>
-            <p>Practice with guidance instead of guessing what an audience will feel.</p>
-          </div>
-          <div class="benefit-card">
-            <h3>Run the Business</h3>
-            <p>Handle contracts, planning, and show organization with less friction.</p>
-          </div>
+          <div class="benefit-card"><h3>Create</h3><p>Generate patter, brainstorm effects, and develop stronger presentations faster.</p></div>
+          <div class="benefit-card"><h3>Refine</h3><p>Use rehearsal tools to hear where your delivery, clarity, or structure needs work.</p></div>
+          <div class="benefit-card"><h3>Rehearse</h3><p>Practice with guidance instead of guessing what an audience will feel.</p></div>
+          <div class="benefit-card"><h3>Run the Business</h3><p>Handle contracts, planning, and show organization with less friction.</p></div>
         </div>
       </div>
     </section>
 
     <section class="section">
-      <div class="wrap two-col">
-        <div class="info-card" style="background: linear-gradient(180deg, rgba(0,0,0,0.24), rgba(255,255,255,0.04));">
+      <div class="container two-col">
+        <div class="info-card" style="background: rgba(0,0,0,0.22);">
           <h3>Why this page should convert better than the homepage</h3>
-
           <div class="three-grid">
-            <div class="small-card">
-              <h4>For hobbyists</h4>
-              <p>Get help organizing ideas, tightening patter, and building confidence before performing.</p>
-            </div>
-            <div class="small-card">
-              <h4>For working performers</h4>
-              <p>Use the app as a practical assistant for rehearsal, contracts, planning, and faster prep.</p>
-            </div>
-            <div class="small-card">
-              <h4>For IBM club sharing</h4>
-              <p>A focused trial offer makes it easier to spread through Rings and IBM channels.</p>
-            </div>
+            <div class="small-card"><h4>For hobbyists</h4><p>Get help organizing ideas, tightening patter, and building confidence before performing.</p></div>
+            <div class="small-card"><h4>For working performers</h4><p>Use the app as a practical assistant for rehearsal, contracts, planning, and faster prep.</p></div>
+            <div class="small-card"><h4>For IBM club sharing</h4><p>A focused trial offer makes it easier to spread through Rings and IBM channels.</p></div>
           </div>
         </div>
 
@@ -708,35 +573,32 @@
     </section>
 
     <section id="claim" class="section">
-      <div class="wrap">
-        <div class="claim-wrap">
-          <div class="section-head">
-            <div class="section-kicker" style="color:#ffe5a5;">IBM Member Offer</div>
-            <h2 class="section-title">Claim your 30-day free trial</h2>
-          </div>
+      <div class="claim-wrap">
+        <div class="section-head">
+          <div class="section-kicker" style="color:#ffe6aa;">IBM Member Offer</div>
+          <h2 class="section-title">Claim your 30-day free trial</h2>
+        </div>
+        <p class="claim-copy">
+          Use the IBM offer to explore Magic AI Wizard without pressure. The goal is simple: help you see whether better rehearsal feedback and stronger structure can improve your performance.
+        </p>
 
-          <p class="claim-copy">
-            Use the IBM offer to explore Magic AI Wizard without pressure. The goal is simple: help you see whether better rehearsal feedback and stronger structure can improve your performance.
-          </p>
+        <form class="form-grid" action="#" method="post">
+          <input type="text" name="first_name" placeholder="First name" />
+          <input type="text" name="last_name" placeholder="Last name" />
+          <input class="full" type="email" name="email" placeholder="Email address" />
+          <input type="text" name="ibm_ring" placeholder="IBM Ring / Chapter (optional)" />
+          <input type="text" name="promo_code" value="IBM30" placeholder="Promo code: IBM30" />
+        </form>
 
-          <form class="form-grid" action="#" method="post">
-            <input type="text" name="first_name" placeholder="First name" />
-            <input type="text" name="last_name" placeholder="Last name" />
-            <input class="full" type="email" name="email" placeholder="Email address" />
-            <input type="text" name="ibm_ring" placeholder="IBM Ring / Chapter (optional)" />
-            <input type="text" name="promo_code" value="IBM30" placeholder="Promo code: IBM30" />
-          </form>
-
-          <div class="form-foot">
-            <p>Connect this form to your signup flow and tag every lead with <strong>source = IBM</strong>.</p>
-            <a class="btn btn-primary" href="#">Start My 30-Day Trial</a>
-          </div>
+        <div class="form-foot">
+          <p>Connect this form to your signup flow and tag every lead with <strong>source = IBM</strong>.</p>
+          <a class="btn btn-primary" href="#">Start My 30-Day Trial</a>
         </div>
       </div>
     </section>
 
     <section class="section" style="padding-top: 0;">
-      <div class="wrap lists">
+      <div class="container lists">
         <div class="list-card">
           <h3>Suggested proof elements</h3>
           <ul>
@@ -746,8 +608,7 @@
             <li>A note that the trial is reserved for IBM readers and referrals</li>
           </ul>
         </div>
-
-        <div class="list-card" style="background: linear-gradient(180deg, rgba(0,0,0,0.24), rgba(255,255,255,0.04));">
+        <div class="list-card" style="background: rgba(0,0,0,0.22);">
           <h3>Suggested page behavior</h3>
           <ul>
             <li>Use the route: <strong>/ibm</strong></li>
@@ -758,10 +619,6 @@
         </div>
       </div>
     </section>
-
-    <div class="wrap footer-note">
-      Reserved for IBM members and referrals.
-    </div>
   </main>
 </body>
 </html>
