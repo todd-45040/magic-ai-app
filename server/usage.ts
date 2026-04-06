@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import type { GoTrueClient } from '@supabase/auth-js';
-import { getIpFromReq, hashIp, logUsageEvent, } from './telemetry.js';
+import { getIpFromReq, hashIp, logUsageEvent, estimateCostUSD } from './telemetry.js';
 import { getUsageQuotaConfigForMembership, nextMonthlyResetAtISO } from './billing/planMapping.js';
 
 // Canonical membership tiers used for usage enforcement.
@@ -144,6 +144,32 @@ async function safeLogUsageEvent(payload: any): Promise<void> {
   } catch (err) {
     console.error('logUsageEvent non-blocking error:', err);
   }
+}
+
+function estimateUsageEventCost(tool: string | null | undefined, units: number): number | null {
+  const normalizedTool = String(tool || '').trim();
+  const safeUnits = Number.isFinite(units) ? Math.max(0, Number(units)) : 0;
+  if (safeUnits <= 0) return 0;
+
+  let provider = 'gemini';
+  let model = 'gemini-2.5-flash';
+
+  switch (normalizedTool) {
+    case 'image_generation':
+      provider = 'imagen';
+      model = 'imagen-4.0-generate-001';
+      break;
+    case 'live_rehearsal_audio':
+      provider = 'gemini';
+      model = 'gemini-2.5-flash-native-audio-preview';
+      break;
+    default:
+      provider = 'gemini';
+      model = 'gemini-2.5-flash';
+      break;
+  }
+
+  return estimateCostUSD({ provider, model, charged_units: safeUnits, tool: normalizedTool || null });
 }
 
 function isAdminProfile(profile: any): boolean {
@@ -877,7 +903,7 @@ export async function enforceAiUsage(
       charged_units: 0,
       membership: 'free',
       user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
-      estimated_cost_usd: 0,
+      estimated_cost_usd: estimateUsageEventCost(opts?.tool ?? null, costUnits),
     });
     return { ok: true, remaining: limit - (used + costUnits), limit, burstRemaining: burst.remaining, burstLimit: burst.limit };
   }
@@ -971,7 +997,7 @@ export async function enforceAiUsage(
       charged_units: 0,
       membership: 'free',
       user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
-      estimated_cost_usd: 0,
+      estimated_cost_usd: estimateUsageEventCost(opts?.tool ?? null, costUnits),
     });
     return {
       ok: true,
@@ -1035,7 +1061,7 @@ export async function enforceAiUsage(
       charged_units: 0,
       membership: 'admin',
       user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
-      estimated_cost_usd: 0,
+      estimated_cost_usd: estimateUsageEventCost(opts?.tool ?? null, costUnits),
     });
     return buildAdminUsageResponse();
   }
@@ -1264,7 +1290,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
     charged_units: costUnits,
     membership: tier,
     user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
-    estimated_cost_usd: 0,
+    estimated_cost_usd: estimateUsageEventCost(opts?.tool ?? null, costUnits),
   });
 
   return {
@@ -1369,7 +1395,7 @@ export async function enforceLiveMinutes(
       charged_units: 0,
       membership: 'admin',
       user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
-      estimated_cost_usd: 0,
+      estimated_cost_usd: estimateUsageEventCost('live_rehearsal_audio', units),
     });
     const unlimited = Number.MAX_SAFE_INTEGER;
     return {
@@ -1498,7 +1524,7 @@ export async function enforceLiveMinutes(
     charged_units: units,
     membership: tier,
     user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
-    estimated_cost_usd: 0,
+    estimated_cost_usd: estimateUsageEventCost('live_rehearsal_audio', units),
   });
 
   return {
