@@ -1,0 +1,234 @@
+export default function IBMReferralLandingPage() {
+  const logoMark = "data:image/webp;base64,UklGRoIXAABXRUJQVlA4IHYXAABwgQCdASr0AU0BPp1OokylpDIiI5Oo8kATiWNu4WzyGl1rV/3eu0+f/vf7k+0XaH89+QvaD3+9jedRzd/zPvY+YX+v9VP65xw7XmP7nP2M+p3ZP1X7c+U3zKfV7uP9f9f4k5n7QxI5JXwQJv4Yk1pJg0gX6yO3X5o0+J9E5/3y5T8u0sY2wW8G9dQ1v3dZK+7D3v8s0p0Yq1j3fBf8c4L7mQO4b6cM5m7iXK6m7KfQ9T8V8O7m8Jr8m3mV3t4h+6z6X0S7vL2oW5E8eRkJc4KkJ0m5i0lKzH0+0m3f1m1b0yYh8D8Fj2yI8q8yM8S8Bv4L7K7n3dJ4n7S0iX8Wb0lK7C8l+2bV6f0cL1j6P7eM5l5s6m2+vYqv8m8Y+N4h4H1QWq8n7Cz2X2j7c+6P4m5u8YcM3i7R6m8J4n8R8G4W7x2v4Y0b4l3S5q8P3H1n4S1o5D5o8F7s5p8d7r3h6c8n6a7r5w6F6g5p4g7Y7o6f6w6a6m7W8e4J7m8J5QAAAz+QIIlw4x4ykqpsQAAA=";
+  const logoLockup = "data:image/webp;base64,UklGRmgmAABXRUJQVlA4IFwmAADQswCdASr0AU0BPp1MoEwlpCMiJVSpiLATiU3cLcpNS61Wf77uHO2+n/sv7k+0Nx32be/fvH7L9qfad2V5fPln7n/vvvI+0mQ6+eI7k0g4o4mE5kYhU6w9SgQ9r8s1uS6m0Qq5G+V4QfZ3h3aU8n0pQ0mHq5Kj8f8G9M5x9n8m7W8Kz7cY4m7d+L4a7x4h6W7s9V5p8f4o7q9f5u7z8d6Y6z6V7V7L6m8s5m8m8a7o7g5j5w6y8f6t7U7J4c7k7d6j7W8N4W7j7i7m7t5W7Z7b7m7o7k6u7M6l8X7d8G5o6q7f8P4X7x7N7Y7m7x5R7d8U5v8k6f7V5k7M5q7a7s7f7S7w7g8V8d8b7G7L8Q7j7e6w7x7v6J8D6M7v7f5V8p7Z8m8q8g8T8i8D8t8r8l8Q8E8W8m8d8K8I8D8e8x8g8f8n8P8m8J8D8C8B8A8v7z7y7x7w7v7u7t7s7r7q7p7o7n7m7l7k7j7i7h7g7f7e7d7c7b7a7Z7Y7X7W7V7U7T7S7R7Q7P7O7N7M7L7K7J7I7H7G7F7E7D7C7B7A7/6/5/4/3/2/1/0AABoQ/IHtaiwYAAAAAAAAAA";
+  const heroAd = "data:image/webp;base64,UklGRqZeAQBXRUJQVlA4IJpeAQBwDAWdASq8AhoEPp1GnUqlo6KkqJObcLATiWNrA97cFUe/n2f/ZvM7yR2ccWyMXm9E3+BbE18MQKnZX1Gx+JpzP9b4IvYbJ0zvM8tJ3x9h3dN5B6LhBrS7m6d7r2t5+G4n8k6m2v6y7m4l4x7m3R8f7e8g6e7M6l6m5e6u8b8T8P8Y8N8M8I8H8G8F8E8D8C8B8A8/7+6+5+4+3+2+1+0+z+y+x+w+v+u+t+s+r+q+p+o+n+m+l+k+j+i+h+g+f+e+d+c+b+a+Z+Y+X+W+V+U+T+S+R+Q+P+O+N+M+L+K+J+I+H+G+F+E+D+C+B+A+9+8+7+6+5+4+3+2+1+0+zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzUeICa5scIYFWlUAAAAA=";
+
+  const features = [
+    '30-day free trial for IBM members',
+    'Live rehearsal and feedback tools',
+    'Built specifically for magicians',
+    'Scripts, planning, and business help'
+  ];
+
+  const benefitCards = [
+    {
+      title: 'Create',
+      body: 'Generate patter, brainstorm effects, and develop stronger presentations faster.'
+    },
+    {
+      title: 'Refine',
+      body: 'Use rehearsal tools to hear where your delivery, clarity, or structure needs work.'
+    },
+    {
+      title: 'Rehearse',
+      body: 'Practice with guidance instead of guessing what an audience will feel.'
+    },
+    {
+      title: 'Run the Business',
+      body: 'Handle contracts, planning, and show organization with less friction.'
+    }
+  ];
+
+  const trialItems = [
+    ['Live Rehearsal', 'Get feedback on pacing, tone, and delivery.'],
+    ['Patter Engine', 'Turn rough ideas into stronger presentation.'],
+    ['Director Mode', 'Think through flow, structure, and audience fit.'],
+    ['Contract + Business Tools', 'Save time on the non-performing work.']
+  ];
+
+  return (
+    <div className="min-h-screen bg-[#120718] text-white">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(168,85,247,0.18),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(251,191,36,0.14),transparent_25%)] pointer-events-none" />
+
+      <section className="relative border-b border-white/8">
+        <div className="mx-auto max-w-6xl px-5 py-6 md:px-8 md:py-8">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <img src={logoMark} alt="Magic AI Wizard mark" className="h-11 w-11 rounded-xl border border-white/10 bg-white/5 object-contain p-1" />
+              <div className="min-w-0">
+                <p className="truncate text-base font-semibold tracking-wide">Magic AI Wizard</p>
+                <p className="text-xs text-white/65">Special offer for IBM members</p>
+              </div>
+            </div>
+            <div className="rounded-full border border-amber-300/35 bg-amber-300/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-amber-200">
+              30-Day IBM Trial
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="relative overflow-hidden">
+        <div className="mx-auto max-w-6xl px-5 py-8 md:px-8 md:py-10">
+          <div className="grid items-center gap-6 lg:grid-cols-[1.05fr_.95fr]">
+            <div>
+              <div className="mb-3 inline-flex items-center rounded-full border border-fuchsia-400/25 bg-fuchsia-500/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-fuchsia-200">
+                Seen in The Linking Ring & via IBM
+              </div>
+              <h1 className="max-w-2xl text-4xl font-black leading-[1.02] tracking-tight md:text-6xl">
+                Stop practicing <span className="text-amber-300">to a silent mirror.</span>
+              </h1>
+              <p className="mt-3 max-w-2xl text-lg leading-7 text-white/80 md:text-xl">
+                Magic AI Wizard gives magicians real rehearsal feedback, smarter scripting tools, and practical business help—so you can improve your act before you ever step on stage.
+              </p>
+
+              <div className="mt-5 grid gap-2.5 sm:grid-cols-2">
+                {features.map((item) => (
+                  <div key={item} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/90 shadow-lg backdrop-blur-sm">
+                    ✨ {item}
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+                <a
+                  href="#claim"
+                  className="inline-flex items-center justify-center rounded-2xl bg-amber-300 px-6 py-3.5 text-sm font-bold text-black shadow-xl transition hover:scale-[1.02]"
+                >
+                  Claim Your 30-Day Trial
+                </a>
+                <a
+                  href="#how-it-helps"
+                  className="inline-flex items-center justify-center rounded-2xl border border-white/15 bg-white/5 px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-white/10"
+                >
+                  See What It Helps You Do
+                </a>
+              </div>
+
+              <p className="mt-3 text-sm text-white/60">
+                Designed for IBM magicians who want better rehearsal, clearer thinking, and less admin friction.
+              </p>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-[1.1fr_.9fr] lg:grid-cols-1">
+              <div className="rounded-[1.5rem] border border-white/10 bg-white/5 p-3 shadow-2xl backdrop-blur-md">
+                <img
+                  src={heroAd}
+                  alt="Magic AI Wizard IBM ad preview"
+                  className="h-full w-full rounded-[1.1rem] border border-white/10 object-cover"
+                />
+              </div>
+
+              <div className="rounded-[1.5rem] border border-white/10 bg-[#140c20] p-4 shadow-xl">
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-white/55">IBM Member Quick Preview</p>
+                    <h2 className="mt-1 text-xl font-bold">What you get in the trial</h2>
+                  </div>
+                  <div className="rounded-lg bg-fuchsia-500/15 px-2.5 py-1.5 text-xs font-semibold text-fuchsia-200">30 days</div>
+                </div>
+
+                <div className="space-y-2.5">
+                  {trialItems.map(([title, body]) => (
+                    <div key={title} className="rounded-xl border border-white/10 bg-black/20 p-3">
+                      <p className="font-semibold text-amber-200">{title}</p>
+                      <p className="mt-1 text-sm leading-5 text-white/70">{body}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-3 rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-sm leading-6 text-amber-100">
+                  “You don’t need a human director to start polishing your act.”
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="how-it-helps" className="mx-auto max-w-6xl px-5 py-6 md:px-8 md:py-8">
+        <div className="mb-5 flex flex-col gap-2 text-center">
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-fuchsia-200/80">Why IBM members may care</p>
+          <h2 className="text-3xl font-black md:text-4xl">Built to help you improve your act and run it better</h2>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-4">
+          {benefitCards.map((card) => (
+            <div key={card.title} className="rounded-[1.4rem] border border-white/10 bg-white/5 p-5 shadow-lg backdrop-blur-sm">
+              <h3 className="text-lg font-bold text-amber-200">{card.title}</h3>
+              <p className="mt-2 text-sm leading-6 text-white/75">{card.body}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-6xl px-5 py-4 md:px-8 md:py-6">
+        <div className="grid gap-4 md:grid-cols-[1.2fr_.8fr]">
+          <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-5">
+            <h3 className="text-xl font-bold text-amber-200">Why this page should convert better than the homepage</h3>
+            <div className="mt-3 grid gap-3 md:grid-cols-3">
+              {[
+                ['For hobbyists', 'Get help organizing ideas, tightening patter, and building confidence before performing.'],
+                ['For working performers', 'Use the app as a practical assistant for rehearsal, contracts, planning, and faster prep.'],
+                ['For IBM club sharing', 'A focused trial offer makes it easier to spread through Rings and IBM channels.']
+              ].map(([title, body]) => (
+                <div key={title} className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <h4 className="text-sm font-bold">{title}</h4>
+                  <p className="mt-2 text-sm leading-6 text-white/70">{body}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
+            <img src={logoLockup} alt="Magicians' AI Wizard logo" className="mx-auto h-auto w-full max-w-sm object-contain" />
+            <p className="mt-3 text-center text-sm leading-6 text-white/65">
+              Reserve this page for IBM readers and referrals only. Keep the offer simple and the action obvious.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section id="claim" className="mx-auto max-w-4xl px-5 py-8 md:px-8 md:py-10">
+        <div className="rounded-[1.75rem] border border-amber-300/20 bg-gradient-to-br from-amber-300/10 to-fuchsia-500/10 p-5 shadow-2xl backdrop-blur-sm md:p-6">
+          <div className="text-center">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-200">IBM Member Offer</p>
+            <h2 className="mt-2 text-3xl font-black md:text-4xl">Claim your 30-day free trial</h2>
+            <p className="mx-auto mt-3 max-w-2xl text-base leading-7 text-white/80">
+              Use the IBM offer to explore Magic AI Wizard without pressure. The goal is simple: help you see whether better rehearsal feedback and stronger structure can improve your performance.
+            </p>
+          </div>
+
+          <div className="mx-auto mt-5 grid max-w-3xl gap-3 md:grid-cols-2">
+            <input className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3.5 text-white placeholder:text-white/40 outline-none" placeholder="First name" />
+            <input className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3.5 text-white placeholder:text-white/40 outline-none" placeholder="Last name" />
+            <input className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3.5 text-white placeholder:text-white/40 outline-none md:col-span-2" placeholder="Email address" />
+            <input className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3.5 text-white placeholder:text-white/40 outline-none" placeholder="IBM Ring / Chapter (optional)" />
+            <input className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3.5 text-white placeholder:text-white/40 outline-none" placeholder="Promo code: IBM30" defaultValue="IBM30" />
+          </div>
+
+          <div className="mx-auto mt-4 flex max-w-3xl flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <p className="text-sm leading-6 text-white/60">
+              Connect this form to your signup flow and tag every lead with source = IBM.
+            </p>
+            <button className="inline-flex items-center justify-center rounded-2xl bg-amber-300 px-7 py-3.5 text-sm font-bold text-black shadow-xl transition hover:scale-[1.02]">
+              Start My 30-Day Trial
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-6xl px-5 pb-8 md:px-8 md:pb-10">
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="rounded-[1.4rem] border border-white/10 bg-white/5 p-5">
+            <h3 className="text-lg font-bold text-amber-200">Suggested proof elements</h3>
+            <ul className="mt-3 space-y-2.5 text-sm leading-6 text-white/75">
+              <li>• Short quote from ADMC or early users</li>
+              <li>• One screenshot of Live Rehearsal or Director Mode</li>
+              <li>• A simple line: “Built specifically for magicians”</li>
+              <li>• A note that the trial is reserved for IBM readers and referrals</li>
+            </ul>
+          </div>
+          <div className="rounded-[1.4rem] border border-white/10 bg-black/20 p-5">
+            <h3 className="text-lg font-bold text-amber-200">Suggested page behavior</h3>
+            <ul className="mt-3 space-y-2.5 text-sm leading-6 text-white/75">
+              <li>• URL suggestion: /ibm</li>
+              <li>• QR code should point directly here, not the main homepage</li>
+              <li>• Hide top-nav clutter and keep this page focused on one action</li>
+              <li>• Add analytics tags so IBM traffic can be measured separately</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
