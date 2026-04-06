@@ -104,8 +104,8 @@
     .hero-grid {
       display: grid;
       grid-template-columns: 1.05fr 0.95fr;
-      gap: 24px;
-      align-items: center;
+      gap: 28px;
+      align-items: start;
     }
 
     .eyebrow {
@@ -193,8 +193,7 @@
     }
 
     .hero-side {
-      display: grid;
-      gap: 16px;
+      display: block;
     }
 
     .panel {
@@ -211,10 +210,13 @@
     }
 
     .ad-image {
-      border-radius: 18px;
+      border-radius: 22px;
       border: 1px solid rgba(255,255,255,0.10);
       width: 100%;
+      height: 100%;
+      max-height: 760px;
       object-fit: cover;
+      object-position: center;
     }
 
     .mini-head {
@@ -470,6 +472,20 @@
       .section-title { font-size: 34px; }
       .mini-head h2 { font-size: 24px; }
     }
+
+    .panel {
+      position: relative;
+    }
+
+    .panel::before {
+      content: "";
+      position: absolute;
+      inset: -2px;
+      border-radius: 24px;
+      background: radial-gradient(circle at top right, rgba(242,197,92,0.25), transparent 40%);
+      z-index: -1;
+      filter: blur(20px);
+    }
   </style>
 </head>
 <body>
@@ -515,15 +531,8 @@
           <div class="panel">
             <img class="ad-image" src="/ibm.png" alt="Magic AI Wizard IBM ad preview" />
           </div>
-
-          <div class="panel panel-dark">
-            <div class="mini-head">
-              <div>
-                <p>IBM Member Quick Preview</p>
-                <h2>What you get in the trial</h2>
-              </div>
-              <div class="tag">30 days</div>
-            </div>
+        </div>
+      </div>
 
             <div class="trial-list">
               <div class="trial-item"><strong>Live Rehearsal</strong><span>Get feedback on pacing, tone, and delivery.</span></div>
