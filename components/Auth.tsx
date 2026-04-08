@@ -22,6 +22,19 @@ function getAppBasePath(): string {
 
 export default function Auth({ onLoginSuccess, onLogin, onBack }: AuthProps) {
 
+  const signupContext = useMemo(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const source = (params.get('source') || '').toLowerCase();
+      const trial = params.get('trial') || '';
+      const email = params.get('email') || '';
+      const isIbm = source === 'ibm' && trial === '30';
+      return { source, trial, email, isIbm };
+    } catch {
+      return { source: '', trial: '', email: '', isIbm: false };
+    }
+  }, []);
+
 const initialMode = (() => {
   try {
     const params = new URLSearchParams(window.location.search);
@@ -36,7 +49,7 @@ const initialMode = (() => {
 
   const [mode, setMode] = useState<AuthMode>(initialMode);
 
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(signupContext.email || '');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
 
@@ -53,13 +66,13 @@ const initialMode = (() => {
   }, [email, password, confirm, mode]);
 
   const title =
-    mode === 'login' ? 'Magician Login' : mode === 'signup' ? 'Start Your 14-Day Free Trial' : 'Password Recovery';
+    mode === 'login' ? 'Magician Login' : mode === 'signup' ? (signupContext.isIbm ? 'Start Your 30-Day IBM Trial' : 'Start Your 14-Day Free Trial') : 'Password Recovery';
 
   const subtitle =
     mode === 'login'
       ? 'Enter your credentials to open the Studio.'
       : mode === 'signup'
-      ? 'Create your account and start your 14-day trial workspace — no credit card required.'
+      ? (signupContext.isIbm ? 'Create your account and unlock your 30-day IBM Partner trial — no credit card required.' : 'Create your account and start your 14-day trial workspace — no credit card required.')
       : 'We’ll email you a secure reset link.';
 
   function formatAuthError(err: any, context: 'login' | 'signup' | 'reset'): string {
@@ -94,6 +107,10 @@ const initialMode = (() => {
       password,
       options: {
         emailRedirectTo,
+        data: {
+          signup_source: signupContext.source || 'direct',
+          requested_trial_days: signupContext.trial ? Number(signupContext.trial) : 14,
+        },
       },
     });
     if (error) throw error;
@@ -204,11 +221,20 @@ const initialMode = (() => {
 
                 {mode === 'signup' && (
                   <div className="mt-4 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-                    <div className="text-xs font-semibold tracking-wide text-white/80">Your 14-day trial includes</div>
+                    {signupContext.isIbm && (
+                      <div className="mb-3 rounded-lg border border-yellow-400/20 bg-yellow-400/10 px-3 py-2 text-sm text-yellow-100">
+                        You’ve unlocked a <span className="font-semibold text-white">30-day Professional Trial (IBM Partner Access)</span>.
+                      </div>
+                    )}
+                    <div className="text-xs font-semibold tracking-wide text-white/80">{signupContext.isIbm ? 'Your 30-day IBM trial starts with' : 'Your 14-day trial includes'}</div>
                     <ul className="mt-2 space-y-1.5 text-sm text-white/75">
                       <li className="flex items-start gap-2">
                         <span className="mt-1 inline-block h-1.5 w-1.5 rounded-full bg-yellow-400/90" />
-                        <span>Save up to <span className="font-semibold text-white">10</span> ideas during trial</span>
+                        {signupContext.isIbm ? (
+                          <span>Extended onboarding window with <span className="font-semibold text-white">IBM source tracking</span></span>
+                        ) : (
+                          <span>Save up to <span className="font-semibold text-white">10</span> ideas during trial</span>
+                        )}
                       </li>
                       <li className="flex items-start gap-2">
                         <span className="mt-1 inline-block h-1.5 w-1.5 rounded-full bg-yellow-400/90" />

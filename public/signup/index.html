@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Redirecting to signup…</title>
+  <meta name="robots" content="noindex" />
+  <script>
+    (function () {
+      var params = new URLSearchParams(window.location.search);
+      var source = params.get('source') || '';
+      var trial = params.get('trial') || '';
+      var email = params.get('email') || '';
+      var target = new URL('/app/', window.location.origin);
+      target.searchParams.set('mode', 'auth');
+      target.searchParams.set('auth', 'signup');
+      if (source) target.searchParams.set('source', source);
+      if (trial) target.searchParams.set('trial', trial);
+      if (email) target.searchParams.set('email', email);
+      window.location.replace(target.toString());
+    })();
+  </script>
+</head>
+<body>
+  Redirecting to signup…
+</body>
+</html>
