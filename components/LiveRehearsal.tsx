@@ -921,6 +921,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                     `Daily live rehearsal minutes limit reached (${Number(daily.used ?? 0)}/${Number(daily.limit ?? 0)} min). This is separate from the AI message limit. Upgrade to continue.`
                 );
                 trackLiveRehearsalEvent('live_rehearsal_start_blocked', { source: 'server', used: Number(daily.used ?? 0), limit: Number(daily.limit ?? 0) }, { outcome: 'ERROR_UPSTREAM', http_status: 429, error_code: 'quota_exceeded', retryable: false });
+                void logUserActivity({ tool_name: 'live_rehearsal', event_type: 'quota_hit', success: false, metadata: { reason: 'daily_limit', source: 'server_start_block', used: Number(daily.used ?? 0), limit: Number(daily.limit ?? 0) } });
                 return;
             }
         } catch {
@@ -942,6 +943,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                         `Daily live rehearsal minutes limit reached (${cur.used}/${cur.limit} min). This is separate from the AI message limit. Upgrade to continue.`
                     );
                     trackLiveRehearsalEvent('live_rehearsal_start_blocked', { source: 'local', used: Number(cur.used ?? 0), limit: Number(cur.limit ?? 0) }, { outcome: 'ERROR_UPSTREAM', http_status: 429, error_code: 'quota_exceeded', retryable: false });
+                    void logUserActivity({ tool_name: 'live_rehearsal', event_type: 'quota_hit', success: false, metadata: { reason: 'daily_limit', source: 'local_start_block', used: Number(cur.used ?? 0), limit: Number(cur.limit ?? 0) } });
                     return;
                 }
             } catch {

@@ -14,6 +14,7 @@ import type { User, AiSparkAction } from '../types';
 import { canConsume, consume, getSoftLimitWarning } from '../services/usageTracker';
 import { trackClientEvent } from '../services/telemetryClient';
 import { fetchUsageStatus, getBearerToken } from '../services/usageStatusService';
+import { logUserActivity } from '../services/userActivityService';
 
 interface VideoRehearsalProps {
     user: User;
@@ -493,6 +494,7 @@ useEffect(() => {
                 if (quotaReason === 'daily_limit') {
                     setBlockedUi(null);
                     setError('You’ve reached today’s video rehearsal limit. Your uploads reset tomorrow.');
+                    void logUserActivity({ tool_name: 'video_rehearsal', event_type: 'quota_hit', success: false, metadata: { reason: quotaReason, source: 'video_analysis', membership: user?.membership || 'free' } });
                     try {
                         const latest = await fetchUsageStatus();
                         const remaining = latest?.quota?.video_uploads?.daily?.remaining;

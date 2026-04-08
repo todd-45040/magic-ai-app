@@ -284,13 +284,20 @@ function App() {
           if (profile) appUser = { ...appUser, ...profile };
 
           if (isNewProfile) {
+            const signupMetadata = signupSource === 'ibm'
+              ? { source: 'ibm', campaign: 'ibm-30day', requested_trial_days: initialTrialDays, trial_days: initialTrialDays }
+              : { source: signupSource || 'direct', requested_trial_days: initialTrialDays, trial_days: initialTrialDays };
             void logUserActivity({
               tool_name: 'system',
               event_type: 'signup',
               success: true,
-              metadata: signupSource === 'ibm'
-                ? { source: 'ibm', campaign: 'ibm-30day', requested_trial_days: initialTrialDays }
-                : { source: signupSource || 'direct', requested_trial_days: initialTrialDays },
+              metadata: signupMetadata,
+            });
+            void logUserActivity({
+              tool_name: 'system',
+              event_type: 'trial_started',
+              success: true,
+              metadata: signupMetadata,
             });
           }
 

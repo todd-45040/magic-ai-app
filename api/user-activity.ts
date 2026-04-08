@@ -40,6 +40,19 @@ async function resolveUser(admin: any, token: string | null): Promise<{ id: stri
   }
 }
 
+async function hasEvent(admin: any, userId: string, eventType: string): Promise<boolean> {
+  try {
+    const { count } = await admin
+      .from('user_activity_log')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('event_type', eventType);
+    return Boolean(count);
+  } catch {
+    return false;
+  }
+}
+
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     return res.status(405).json({ ok: false, error: 'Method not allowed' });
@@ -71,13 +84,9 @@ export default async function handler(req: any, res: any) {
       metadata,
     };
 
-    if (event_type === 'signup' || event_type === 'trial_expired' || event_type === 'checkout_completed') {
-      const { count } = await admin
-        .from('user_activity_log')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .eq('event_type', 'signup');
-      if (!count) {
+    const dedupeOnceEvents = new Set(['signup', 'trial_started', 'trial_expired', 'checkout_completed']);
+    if (dedupeOnceEvents.has(event_type)) {
+      if (!(await hasEvent(admin, user.id, event_type))) {
         await admin.from('user_activity_log').insert(baseRow);
       }
     } else {
@@ -85,34 +94,19 @@ export default async function handler(req: any, res: any) {
     }
 
     if (event_type === 'login') {
-      const { count } = await admin
-        .from('user_activity_log')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .eq('event_type', 'first_login');
-      if (!count) {
+      if (!(await hasEvent(admin, user.id, 'first_login'))) {
         await admin.from('user_activity_log').insert({ ...baseRow, event_type: 'first_login', tool_name: 'system' });
       }
     }
 
     if (event_type === 'tool_used') {
-      const { count } = await admin
-        .from('user_activity_log')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .eq('event_type', 'first_tool_used');
-      if (!count) {
+      if (!(await hasEvent(admin, user.id, 'first_tool_used'))) {
         await admin.from('user_activity_log').insert({ ...baseRow, event_type: 'first_tool_used' });
       }
     }
 
     if (event_type === 'idea_saved') {
-      const { count } = await admin
-        .from('user_activity_log')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .eq('event_type', 'first_idea_saved');
-      if (!count) {
+      if (!(await hasEvent(admin, user.id, 'first_idea_saved'))) {
         await admin.from('user_activity_log').insert({ ...baseRow, event_type: 'first_idea_saved' });
       }
     }

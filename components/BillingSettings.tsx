@@ -4,6 +4,7 @@ import { BILLING_PLAN_CATALOG, formatPriceCents, resolveBillingPlanKey, type Bil
 import { createPortalSession, fetchBillingStatus, type BillingStatusPayload } from '../services/billingClient';
 import { getTrialPromptCopy } from '../services/trialMessaging';
 import { logTrialExpiredOnce, logTrialPromptViewed } from '../services/ibmConversionTracking';
+import { logUserActivity } from '../services/userActivityService';
 
 interface BillingSettingsProps {
   user: User | null;
@@ -122,6 +123,28 @@ const founderLabel = useMemo(
       void logTrialExpiredOnce(user, 'billing');
     }
   }, [trialPrompt?.stage, user?.email, user?.trialEndDate, user?.signupSource]);
+
+  useEffect(() => {
+    const email = String(user?.email || '').trim().toLowerCase();
+    if (!email) return;
+    const key = `maw_pricing_viewed_${email}`;
+    try {
+      if (typeof window !== 'undefined' && window.sessionStorage.getItem(key)) return;
+      if (typeof window !== 'undefined') window.sessionStorage.setItem(key, '1');
+    } catch {
+      // ignore storage issues
+    }
+    void logUserActivity({
+      tool_name: 'billing',
+      event_type: 'pricing_viewed',
+      success: true,
+      metadata: {
+        source: user?.signupSource || null,
+        membership: user?.membership || 'free',
+        requested_trial_days: user?.requestedTrialDays || null,
+      },
+    });
+  }, [user?.email, user?.membership, user?.requestedTrialDays, user?.signupSource]);
 
   const openPortal = async () => {
     setPortalBusy(true);
