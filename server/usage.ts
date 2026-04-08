@@ -40,7 +40,7 @@ function makeRequestId(): string {
 
 // NOTE: For ADMC soft launch, "free" behaves like "trial".
 // We keep the legacy string accepted, but normalize it to "trial".
-function normalizeTier(m?: string | null): 'trial' | 'amateur' | 'professional' | 'admin' | 'expired' {
+function normalizeTier(m?: string | null): 'free' | 'trial' | 'amateur' | 'professional' | 'admin' | 'expired' {
   switch (m) {
     case 'admin':
       return 'admin';
@@ -56,9 +56,9 @@ function normalizeTier(m?: string | null): 'trial' | 'amateur' | 'professional' 
       return 'expired';
     case 'trial':
       return 'trial';
+    case 'free':
     default:
-      // free/unknown -> trial
-      return 'trial';
+      return 'free';
   }
 }
 
@@ -95,6 +95,10 @@ function tierRank(tier: string): number {
       return 2;
     case 'trial':
       return 1;
+    case 'free':
+      return 0;
+    case 'expired':
+      return -1;
     default:
       return 0;
   }
@@ -133,10 +137,75 @@ function isNewUsageDay(lastISO?: string | null): boolean {
 }
 
 function isTrialActive(trialEnd: any, nowMs = Date.now()): boolean {
-  if (!trialEnd) return true;
+  if (!trialEnd) return false;
   const t = typeof trialEnd === 'number' ? trialEnd : Number(trialEnd);
-  if (!Number.isFinite(t)) return true;
+  if (!Number.isFinite(t)) return false;
   return nowMs < t;
+}
+
+function resolveEffectiveMembership(
+  membership: any,
+  trialEndDate: any,
+  isAdmin = false,
+  fallback: Membership = 'free',
+): Membership {
+  if (isAdmin) return 'admin';
+
+  const raw = String(membership || fallback).trim().toLowerCase();
+  if (raw === 'trial') {
+    return isTrialActive(trialEndDate) ? 'professional' : 'free';
+  }
+
+  return normalizeTier(raw) as Membership;
+}
+
+function getRpcRow(data: any): any {
+  if (Array.isArray(data)) return data[0] ?? null;
+  return data ?? null;
+}
+
+async function consumeAiUsageAtomic(
+  admin: any,
+  userId: string,
+  units: number,
+  dailyLimit: number,
+  quotaColumn?: ToolPolicy['quotaColumn'] | null,
+) {
+  const { data, error } = await admin.rpc('maw_consume_ai_usage', {
+    p_user_id: userId,
+    p_units: units,
+    p_daily_limit: dailyLimit,
+    p_quota_column: quotaColumn ?? null,
+  });
+  return { data: getRpcRow(data), error };
+}
+
+async function consumeLiveMinutesAtomic(
+  admin: any,
+  userId: string,
+  units: number,
+  dailyLimit: number,
+) {
+  const { data, error } = await admin.rpc('maw_consume_live_minutes', {
+    p_user_id: userId,
+    p_units: units,
+    p_daily_limit: dailyLimit,
+  });
+  return { data: getRpcRow(data), error };
+}
+
+async function consumeVideoUploadsAtomic(
+  admin: any,
+  userId: string,
+  units: number,
+  dailyLimit: number,
+) {
+  const { data, error } = await admin.rpc('maw_consume_video_uploads', {
+    p_user_id: userId,
+    p_units: units,
+    p_daily_limit: dailyLimit,
+  });
+  return { data: getRpcRow(data), error };
 }
 
 async function safeLogUsageEvent(payload: any): Promise<void> {
@@ -658,10 +727,7 @@ export async function getAiUsageStatus(req: any): Promise<{
   let lastResetDateISO = new Date().toISOString();
 
   if (profile) {
-    membership = (profile.is_admin ? 'admin' : (profile.membership as Membership)) || 'trial';
-    if (normalizeTier(membership as any) === 'trial') {
-      membership = isTrialActive(profile?.trial_end_date) ? 'professional' : 'free';
-    }
+    membership = resolveEffectiveMembership(profile.membership, profile?.trial_end_date, Boolean(profile?.is_admin), 'trial');
     generationCount = profile.generation_count ?? 0;
     lastResetDateISO = profile.last_reset_date ? new Date(profile.last_reset_date).toISOString() : lastResetDateISO;
   } else {
@@ -1035,10 +1101,7 @@ export async function enforceAiUsage(
   }
 
   if (profile) {
-    membership = (profile.is_admin ? 'admin' : (profile.membership as Membership)) || 'trial';
-    if (normalizeTier(membership as any) === 'trial') {
-      membership = isTrialActive(profile?.trial_end_date) ? 'professional' : 'free';
-    }
+    membership = resolveEffectiveMembership(profile.membership, profile?.trial_end_date, Boolean(profile?.is_admin), 'trial');
     generationCount = profile.generation_count ?? 0;
     lastResetDateISO = profile.last_reset_date ? new Date(profile.last_reset_date).toISOString() : lastResetDateISO;
   } else {
@@ -1086,13 +1149,13 @@ export async function enforceAiUsage(
   }
 // Phase 2C-B: tool-level tier + monthly quota enforcement (for high-cost tools)
 const toolKey = (typeof opts?.tool === 'string' ? opts.tool.trim() : '') as ToolKey | '';
-if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
-  const policy = (TOOL_POLICIES as any)[toolKey] as ToolPolicy;
-
+const toolPolicy = toolKey && (TOOL_POLICIES as any)[toolKey]
+  ? ((TOOL_POLICIES as any)[toolKey] as ToolPolicy)
+  : null;
+if (toolPolicy) {
   const norm = normalizeTier(membership as any);
 
-  // Hard gate by tier (ex: video_rehearsal is pro-only)
-  if (tierRank(norm) < tierRank(policy.minTier)) {
+  if (tierRank(norm) < tierRank(toolPolicy.minTier)) {
     await safeLogUsageEvent({
       request_id: requestId,
       actor_type: 'user',
@@ -1121,60 +1184,9 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
     };
   }
 
-  // Ensure monthly quotas are initialized/reset (best-effort)
   if (profile) {
     profile = await ensureMonthlyQuotas(admin, userId, membership, profile);
   }
-
-  const col = policy.quotaColumn;
-  const currentRemaining = Number((profile as any)?.[col] ?? 0);
-  const units = Number.isFinite(costUnits) ? Math.max(0, Math.ceil(costUnits)) : 0;
-
-  if (currentRemaining < units) {
-    await safeLogUsageEvent({
-      request_id: requestId,
-      actor_type: 'user',
-      user_id: userId,
-      identity_key: identity_key,
-      ip_hash,
-      tool: opts?.tool ?? null,
-      endpoint: req?.url ?? null,
-      outcome: 'BLOCKED_QUOTA',
-      http_status: 402,
-      error_code: 'USAGE_LIMIT_REACHED',
-      retryable: false,
-      units: costUnits,
-      charged_units: 0,
-      membership: norm,
-      user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
-      estimated_cost_usd: 0,
-    });
-    return {
-      ok: false,
-      status: 402,
-      error: 'Monthly quota exceeded for your plan.',
-      error_code: 'USAGE_LIMIT_REACHED',
-      retryable: false,
-      membership: norm as any,
-    };
-  }
-
-  // Best-effort decrement (Supabase-js does not support atomic arithmetic without RPC).
-  // This is sufficient for convention-scale traffic; we can harden with RPC later.
-  const nextRemaining = currentRemaining - units;
-  const { error: qErr } = await admin
-    .from('users')
-    .update({ [col]: nextRemaining })
-    .eq('id', userId);
-
-  if (qErr) {
-    console.error('Quota decrement error:', qErr);
-    return { ok: false, status: 503, error: 'Usage tracking unavailable. Try again shortly.', error_code: 'SERVER_ERROR', retryable: true };
-  }
-
-  // Reflect new remaining quota in the response (for headers/UI)
-  // @ts-ignore
-  profile[col] = nextRemaining;
 }
 
   // Burst limit (per minute) — enforce BEFORE reserving daily units
@@ -1216,6 +1228,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
 
   const limit = getDailyAiLimit(tier);
   const remaining = Math.max(0, limit - generationCount);
+  const quotaColumn = toolPolicy?.quotaColumn ?? null;
 
   if (remaining < costUnits) {
     await safeLogUsageEvent({
@@ -1253,21 +1266,64 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
     };
   }
 
-  // Reserve units immediately (prevents racing on repeated clicks)
-  const newCount = generationCount + costUnits;
-  const { error: incErr } = await admin
-    .from('users')
-    .update({ generation_count: newCount })
-    .eq('id', userId);
+  const { data: consumeData, error: consumeErr } = await consumeAiUsageAtomic(
+    admin,
+    userId,
+    costUnits,
+    limit,
+    quotaColumn,
+  );
 
-  if (incErr) {
-    console.error('Usage increment error:', incErr);
-    // Fail safe: if we can't record usage, block to protect costs.
+  if (consumeErr) {
+    console.error('Usage increment error:', consumeErr);
     return { ok: false, status: 503, error: 'Usage tracking unavailable. Try again shortly.', error_code: 'SERVER_ERROR', retryable: true };
-
   }
 
-  // Telemetry: SUCCESS (best-effort; never blocks)
+  if (!consumeData?.consumed) {
+    const blockedReason = String(consumeData?.reason || 'daily_limit');
+    const blockedStatus = blockedReason === 'monthly_limit' ? 402 : 429;
+    const blockedRemaining = blockedReason === 'monthly_limit'
+      ? Math.max(0, clampInt(consumeData?.quota_remaining))
+      : Math.max(0, limit - clampInt(consumeData?.generation_count));
+
+    await safeLogUsageEvent({
+      request_id: requestId,
+      actor_type: 'user',
+      user_id: userId,
+      identity_key: identity_key,
+      ip_hash,
+      tool: opts?.tool ?? null,
+      endpoint: req?.url ?? null,
+      outcome: 'BLOCKED_QUOTA',
+      http_status: blockedStatus,
+      error_code: 'USAGE_LIMIT_REACHED',
+      retryable: blockedStatus !== 402,
+      units: costUnits,
+      charged_units: 0,
+      membership: tier,
+      user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
+      estimated_cost_usd: 0,
+    });
+
+    return {
+      ok: false,
+      status: blockedStatus,
+      error: blockedReason === 'monthly_limit' ? 'Monthly quota exceeded for your plan.' : `Daily AI limit reached for your plan (${tier}).`,
+      error_code: 'USAGE_LIMIT_REACHED',
+      retryable: blockedStatus !== 402,
+      resetAt: nextResetAtISO(),
+      remaining: blockedRemaining,
+      limit,
+      membership: tier as any,
+      burstRemaining: burst.remaining,
+      burstLimit,
+      resetTz: RESET_TZ,
+      resetHourLocal: RESET_HOUR_LOCAL,
+    };
+  }
+
+  const newCount = clampInt(consumeData?.generation_count);
+
   await safeLogUsageEvent({
     request_id: requestId,
     actor_type: 'user',
@@ -1294,7 +1350,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
     membership: tier as any,
     burstRemaining: burst.remaining,
     burstLimit,
-      resetTz: RESET_TZ,
+    resetTz: RESET_TZ,
     resetHourLocal: RESET_HOUR_LOCAL,
   };
   } catch (e: any) {
@@ -1375,11 +1431,12 @@ export async function enforceLiveMinutes(
     return { ok: false, status: 503, error: 'Usage tracking unavailable. Try again shortly.' };
   }
 
-  let membership: Membership = (profileData?.is_admin ? 'admin' : (profileData?.membership as any)) || 'trial';
-  const trialActive = isTrialActive(profileData?.trial_end_date);
-  if (normalizeTier(membership as any) === 'trial') {
-    membership = trialActive ? 'professional' : 'expired';
-  }
+  let membership: Membership = resolveEffectiveMembership(
+    profileData?.membership,
+    profileData?.trial_end_date,
+    Boolean(profileData?.is_admin),
+    'trial',
+  );
   const tier = normalizeTier(membership as any);
 
   if (tierRank(tier) < tierRank(TOOL_POLICIES.live_rehearsal_audio.minTier)) {
@@ -1459,65 +1516,23 @@ export async function enforceLiveMinutes(
     profile = await ensureMonthlyQuotas(admin, userId, tier, profile);
   }
 
-  // Daily reset for live minutes bucket
-  const nowISO = new Date().toISOString();
-  let dailyUsed = clampInt(profile?.daily_live_audio_minutes_used);
-  const lastDailyISO = profile?.daily_live_audio_reset_date ? new Date(profile.daily_live_audio_reset_date).toISOString() : null;
-  if (isNewUsageDay(lastDailyISO)) {
-    dailyUsed = 0;
-    const { error: resetErr } = await admin
-      .from('users')
-      .update({ daily_live_audio_minutes_used: 0, daily_live_audio_reset_date: nowISO })
-      .eq('id', userId);
-    if (resetErr) {
-      console.error('daily live reset error:', resetErr);
-    } else if (profile) {
-      profile.daily_live_audio_reset_date = nowISO;
-      profile.daily_live_audio_minutes_used = 0;
-    }
-  }
-
   const liveLimit = clampInt(getDailyLiveAudioLimit(tier));
-  const liveRemaining = Math.max(0, liveLimit - dailyUsed);
-  if (units > 0 && liveRemaining < units) {
-    await safeLogUsageEvent({
-      request_id: requestId,
-      actor_type: 'user',
-      user_id: userId,
-      identity_key: userId,
-      ip_hash,
-      tool: 'live_rehearsal_audio',
-      endpoint: req?.url ?? null,
-      outcome: 'BLOCKED_QUOTA',
-      http_status: 429,
-      error_code: 'USAGE_LIMIT_REACHED',
-      retryable: true,
-      units,
-      charged_units: 0,
-      membership: tier,
-      user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
-      estimated_cost_usd: 0,
-    });
-    return {
-      ok: false,
-      status: 429,
-      error: 'You’ve reached today’s live rehearsal limit. Your minutes reset tomorrow.',
-      membership: tier as any,
-      reason: 'daily_limit',
-      liveUsed: dailyUsed,
-      liveLimit,
-      liveRemaining,
-      usedDailyMinutes: dailyUsed,
-      remainingDailyMinutes: liveRemaining,
-      remainingMonthlyMinutes: clampInt(profile?.quota_live_audio_minutes),
-      burstRemaining: burst.remaining,
-      burstLimit,
-    };
+  const { data: consumeData, error: consumeErr } = await consumeLiveMinutesAtomic(admin, userId, units, liveLimit);
+
+  if (consumeErr) {
+    console.error(`live minutes charge error (${route}):`, consumeErr);
+    return { ok: false, status: 503, error: 'Usage tracking unavailable. Try again shortly.', membership: tier as any };
   }
 
-  // Monthly minutes quota (existing tool quota)
-  const monthlyRemaining = clampInt(profile?.quota_live_audio_minutes);
-  if (units > 0 && monthlyRemaining < units) {
+  const consumed = Boolean(consumeData?.consumed);
+  const dailyUsed = clampInt(consumeData?.daily_used);
+  const monthlyRemaining = clampInt(consumeData?.quota_remaining);
+  const liveRemaining = Math.max(0, liveLimit - dailyUsed);
+
+  if (!consumed) {
+    const reason = String(consumeData?.reason || 'daily_limit') as 'daily_limit' | 'monthly_limit';
+    const status = reason === 'monthly_limit' ? 402 : 429;
+
     await safeLogUsageEvent({
       request_id: requestId,
       actor_type: 'user',
@@ -1527,9 +1542,9 @@ export async function enforceLiveMinutes(
       tool: 'live_rehearsal_audio',
       endpoint: req?.url ?? null,
       outcome: 'BLOCKED_QUOTA',
-      http_status: 402,
+      http_status: status,
       error_code: 'USAGE_LIMIT_REACHED',
-      retryable: false,
+      retryable: status !== 402,
       units,
       charged_units: 0,
       membership: tier,
@@ -1538,10 +1553,12 @@ export async function enforceLiveMinutes(
     });
     return {
       ok: false,
-      status: 402,
-      error: 'Monthly Live Rehearsal quota exceeded for your plan.',
+      status,
+      error: reason === 'monthly_limit'
+        ? 'Monthly Live Rehearsal quota exceeded for your plan.'
+        : 'You’ve reached today’s live rehearsal limit. Your minutes reset tomorrow.',
       membership: tier as any,
-      reason: 'monthly_limit',
+      reason,
       liveUsed: dailyUsed,
       liveLimit,
       liveRemaining,
@@ -1551,24 +1568,6 @@ export async function enforceLiveMinutes(
       burstRemaining: burst.remaining,
       burstLimit,
     };
-  }
-
-  // Charge: decrement monthly + increment daily
-  const nextMonthly = Math.max(0, monthlyRemaining - units);
-  const nextDaily = dailyUsed + units;
-
-  const { error: updErr } = await admin
-    .from('users')
-    .update({
-      quota_live_audio_minutes: nextMonthly,
-      daily_live_audio_minutes_used: nextDaily,
-      daily_live_audio_reset_date: profile?.daily_live_audio_reset_date ? profile.daily_live_audio_reset_date : nowISO,
-    })
-    .eq('id', userId);
-
-  if (updErr) {
-    console.error(`live minutes charge error (${route}):`, updErr);
-    return { ok: false, status: 503, error: 'Usage tracking unavailable. Try again shortly.', membership: tier as any };
   }
 
   await safeLogUsageEvent({
@@ -1593,12 +1592,12 @@ export async function enforceLiveMinutes(
   return {
     ok: true,
     membership: tier as any,
-    liveUsed: nextDaily,
+    liveUsed: dailyUsed,
     liveLimit,
-    liveRemaining: Math.max(0, liveLimit - nextDaily),
-    usedDailyMinutes: nextDaily,
-    remainingDailyMinutes: Math.max(0, liveLimit - nextDaily),
-    remainingMonthlyMinutes: nextMonthly,
+    liveRemaining,
+    usedDailyMinutes: dailyUsed,
+    remainingDailyMinutes: liveRemaining,
+    remainingMonthlyMinutes: monthlyRemaining,
     burstRemaining: burst.remaining,
     burstLimit,
   };
@@ -1659,11 +1658,12 @@ export async function enforceVideoUploads(
     return { ok: false, status: 503, error: 'Usage tracking unavailable. Try again shortly.' };
   }
 
-  let membership: Membership = (profileData?.is_admin ? 'admin' : (profileData?.membership as any)) || 'trial';
-  const trialActive = isTrialActive(profileData?.trial_end_date);
-  if (normalizeTier(membership as any) === 'trial') {
-    membership = trialActive ? 'professional' : 'expired';
-  }
+  let membership: Membership = resolveEffectiveMembership(
+    profileData?.membership,
+    profileData?.trial_end_date,
+    Boolean(profileData?.is_admin),
+    'trial',
+  );
   const tier = normalizeTier(membership as any);
 
   if (tierRank(tier) < tierRank(TOOL_POLICIES.video_rehearsal.minTier)) {
@@ -1733,60 +1733,23 @@ export async function enforceVideoUploads(
     profile = await ensureMonthlyQuotas(admin, userId, tier, profile);
   }
 
-  const nowISO = new Date().toISOString();
-  let dailyUsed = clampInt(profile?.daily_video_uploads_used);
-  const lastDailyISO = profile?.daily_video_uploads_reset_date ? new Date(profile.daily_video_uploads_reset_date).toISOString() : null;
-  if (isNewUsageDay(lastDailyISO)) {
-    dailyUsed = 0;
-    const { error: resetErr } = await admin
-      .from('users')
-      .update({ daily_video_uploads_used: 0, daily_video_uploads_reset_date: nowISO })
-      .eq('id', userId);
-    if (resetErr) {
-      console.error('daily video reset error:', resetErr);
-    } else if (profile) {
-      profile.daily_video_uploads_reset_date = nowISO;
-      profile.daily_video_uploads_used = 0;
-    }
-  }
-
   const dailyLimit = clampInt(getDailyVideoUploadLimit(tier));
-  const dailyRemaining = Math.max(0, dailyLimit - dailyUsed);
-  if (units > 0 && dailyRemaining < units) {
-    await safeLogUsageEvent({
-      request_id: requestId,
-      actor_type: 'user',
-      user_id: userId,
-      identity_key: userId,
-      ip_hash,
-      tool: 'video_rehearsal',
-      endpoint: req?.url ?? null,
-      outcome: 'BLOCKED_QUOTA',
-      http_status: 429,
-      error_code: 'USAGE_LIMIT_REACHED',
-      retryable: true,
-      units,
-      charged_units: 0,
-      membership: tier,
-      user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
-      estimated_cost_usd: 0,
-    });
-    return {
-      ok: false,
-      status: 429,
-      error: 'You’ve reached today’s video rehearsal limit. Your uploads reset tomorrow.',
-      membership: tier as any,
-      reason: 'daily_limit',
-      usedDailyUploads: dailyUsed,
-      remainingDailyUploads: dailyRemaining,
-      remainingMonthlyUploads: clampInt(profile?.quota_video_uploads),
-      burstRemaining: burst.remaining,
-      burstLimit,
-    };
+  const { data: consumeData, error: consumeErr } = await consumeVideoUploadsAtomic(admin, userId, units, dailyLimit);
+
+  if (consumeErr) {
+    console.error('video upload charge error:', consumeErr);
+    return { ok: false, status: 503, error: 'Usage tracking unavailable. Try again shortly.', membership: tier as any };
   }
 
-  const monthlyRemaining = clampInt(profile?.quota_video_uploads);
-  if (units > 0 && monthlyRemaining < units) {
+  const consumed = Boolean(consumeData?.consumed);
+  const dailyUsed = clampInt(consumeData?.daily_used);
+  const monthlyRemaining = clampInt(consumeData?.quota_remaining);
+  const dailyRemaining = Math.max(0, dailyLimit - dailyUsed);
+
+  if (!consumed) {
+    const reason = String(consumeData?.reason || 'daily_limit') as 'daily_limit' | 'monthly_limit';
+    const status = reason === 'monthly_limit' ? 402 : 429;
+
     await safeLogUsageEvent({
       request_id: requestId,
       actor_type: 'user',
@@ -1796,9 +1759,9 @@ export async function enforceVideoUploads(
       tool: 'video_rehearsal',
       endpoint: req?.url ?? null,
       outcome: 'BLOCKED_QUOTA',
-      http_status: 402,
+      http_status: status,
       error_code: 'USAGE_LIMIT_REACHED',
-      retryable: false,
+      retryable: status !== 402,
       units,
       charged_units: 0,
       membership: tier,
@@ -1807,32 +1770,18 @@ export async function enforceVideoUploads(
     });
     return {
       ok: false,
-      status: 402,
-      error: 'Monthly Video Rehearsal quota exceeded for your plan.',
+      status,
+      error: reason === 'monthly_limit'
+        ? 'Monthly Video Rehearsal quota exceeded for your plan.'
+        : 'You’ve reached today’s video rehearsal limit. Your uploads reset tomorrow.',
       membership: tier as any,
-      reason: 'monthly_limit',
+      reason,
       usedDailyUploads: dailyUsed,
       remainingDailyUploads: dailyRemaining,
       remainingMonthlyUploads: monthlyRemaining,
       burstRemaining: burst.remaining,
       burstLimit,
     };
-  }
-
-  const nextMonthly = Math.max(0, monthlyRemaining - units);
-  const nextDaily = dailyUsed + units;
-  const { error: updErr } = await admin
-    .from('users')
-    .update({
-      quota_video_uploads: nextMonthly,
-      daily_video_uploads_used: nextDaily,
-      daily_video_uploads_reset_date: profile?.daily_video_uploads_reset_date ? profile.daily_video_uploads_reset_date : nowISO,
-    })
-    .eq('id', userId);
-
-  if (updErr) {
-    console.error('video upload charge error:', updErr);
-    return { ok: false, status: 503, error: 'Usage tracking unavailable. Try again shortly.', membership: tier as any };
   }
 
   await safeLogUsageEvent({
@@ -1857,9 +1806,9 @@ export async function enforceVideoUploads(
   return {
     ok: true,
     membership: tier as any,
-    usedDailyUploads: nextDaily,
-    remainingDailyUploads: Math.max(0, dailyLimit - nextDaily),
-    remainingMonthlyUploads: nextMonthly,
+    usedDailyUploads: dailyUsed,
+    remainingDailyUploads: dailyRemaining,
+    remainingMonthlyUploads: monthlyRemaining,
     burstRemaining: burst.remaining,
     burstLimit,
   };
