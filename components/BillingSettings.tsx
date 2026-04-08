@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import type { User } from '../types';
 import { BILLING_PLAN_CATALOG, formatPriceCents, resolveBillingPlanKey, type BillingCycle } from '../services/planCatalog';
 import { createPortalSession, fetchBillingStatus, type BillingStatusPayload } from '../services/billingClient';
+import { getTrialPromptCopy } from '../services/trialMessaging';
 
 interface BillingSettingsProps {
   user: User | null;
@@ -111,6 +112,7 @@ const founderLabel = useMemo(
 );
   const readiness = status?.billingReadiness;
   const missingEnvKeys = readiness?.missingEnvKeys || [];
+  const trialPrompt = getTrialPromptCopy(user);
 
   const openPortal = async () => {
     setPortalBusy(true);
@@ -134,6 +136,22 @@ const founderLabel = useMemo(
 
   return (
     <div className="space-y-6">
+      {trialPrompt ? (
+        <div className={`rounded-2xl border p-5 text-white ${trialPrompt.stage === 'expired' ? 'border-amber-400/35 bg-amber-500/10' : 'border-purple-400/30 bg-purple-500/10'}`}>
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="text-base font-semibold">{trialPrompt.title}</div>
+              <div className="mt-1 text-sm text-white/80">{trialPrompt.message}</div>
+            </div>
+            <button
+              onClick={() => onUpgrade({ tier: 'professional', billingCycle, founderRequested: founderPricingApplied })}
+              className={`inline-flex items-center justify-center rounded-xl px-4 py-3 text-sm font-bold transition ${trialPrompt.stage === 'expired' ? 'bg-amber-500 text-slate-950 hover:bg-amber-400' : 'bg-purple-600 text-white hover:bg-purple-700'}`}
+            >
+              {trialPrompt.cta}
+            </button>
+          </div>
+        </div>
+      ) : null}
       <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-white">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div>

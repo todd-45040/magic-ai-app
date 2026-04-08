@@ -34,7 +34,8 @@ export type BlockedUx = {
 
 import type { User } from '../types';
 import { getUpgradeUxCopy, isFounderProtected } from './upgradeUx';
-import { formatTierLabel, normalizeTier } from './membershipService';
+import { formatTierLabel, hasExpiredTrial, normalizeTier } from './membershipService';
+import { isIbmTrialUser } from './trialMessaging';
 
 type AnyErr = any;
 
@@ -132,12 +133,15 @@ export function normalizeBlockedUx(err: unknown, opts?: { toolName?: string; pla
   const showTryAgain = retryable || inferred === 'UNAUTHORIZED';
 
   const targetPlan = opts?.targetPlan ?? (plan === 'amateur' ? 'Professional' : 'Amateur');
+  const expiredIbmTrial = hasExpiredTrial(opts?.user) && isIbmTrialUser(opts?.user);
   const upgradeCopy =
-    inferred === 'PRO_ONLY' || inferred === 'TIER_RESTRICTED'
-      ? getUpgradeUxCopy('locked_by_plan', { toolName, targetPlan, user: opts?.user ?? null })
-      : inferred === 'QUOTA_EXCEEDED' || inferred === 'USAGE_LIMIT_REACHED'
-        ? getUpgradeUxCopy('limit_reached', { toolName, targetPlan, user: opts?.user ?? null })
-        : null;
+    expiredIbmTrial && (inferred === 'PRO_ONLY' || inferred === 'TIER_RESTRICTED' || inferred === 'QUOTA_EXCEEDED' || inferred === 'USAGE_LIMIT_REACHED')
+      ? getUpgradeUxCopy('trial_exhausted', { toolName, targetPlan, user: opts?.user ?? null })
+      : inferred === 'PRO_ONLY' || inferred === 'TIER_RESTRICTED'
+        ? getUpgradeUxCopy('locked_by_plan', { toolName, targetPlan, user: opts?.user ?? null })
+        : inferred === 'QUOTA_EXCEEDED' || inferred === 'USAGE_LIMIT_REACHED'
+          ? getUpgradeUxCopy('limit_reached', { toolName, targetPlan, user: opts?.user ?? null })
+          : null;
 
   const title =
     inferred === 'RATE_LIMITED' ? 'Please wait a moment' :

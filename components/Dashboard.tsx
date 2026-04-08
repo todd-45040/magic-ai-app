@@ -4,7 +4,8 @@ import { getLayout, saveLayout, WIDGETS, getDefaultLayout } from '../services/da
 import { updateTaskInShow } from '../services/showsService';
 import { getPerformancesByShowId } from '../services/performanceService';
 import { supabase } from '../supabase';
-import { normalizeTier } from '../services/membershipService';
+import { normalizeTier, getEffectiveMembershipTier, isActiveTrialUser } from '../services/membershipService';
+import { getTrialPromptCopy } from '../services/trialMessaging';
 import { RabbitIcon, ClockIcon, BookmarkIcon, WandIcon, MicrophoneIcon, StageCurtainsIcon, LightbulbIcon, UsersCogIcon, ChecklistIcon, FileTextIcon, ImageIcon, BookIcon, CustomizeIcon, DragHandleIcon, EyeIcon, EyeOffIcon, ChevronDownIcon } from './icons';
 
 interface DashboardProps {
@@ -514,12 +515,29 @@ const Dashboard: React.FC<DashboardProps> = ({ variant = 'full', user, shows, fe
 
     const isTrialActive = isActiveTrialUser(user);
     const hasProAccess = ['professional','admin'].includes(getEffectiveMembershipTier(user)) || isTrialActive;
+    const trialPrompt = getTrialPromptCopy(user);
 
 
     // Phase 3A (Home Tightening): render a calmer, compact dashboard on Home.
     if (variant === 'home') {
         return (
             <div className="px-4 md:px-6 pb-10 space-y-6">
+                {trialPrompt ? (
+                    <div className={`rounded-2xl border p-4 ${trialPrompt.stage === 'expired' ? 'border-amber-400/35 bg-amber-500/10' : 'border-purple-400/30 bg-purple-500/10'}`}>
+                        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                            <div>
+                                <div className="text-sm font-semibold text-white">{trialPrompt.title}</div>
+                                <div className="mt-1 text-sm text-white/75">{trialPrompt.message}</div>
+                            </div>
+                            <button
+                                onClick={() => onNavigate('billing-settings')}
+                                className={`inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold transition ${trialPrompt.stage === 'expired' ? 'bg-amber-500 text-slate-950 hover:bg-amber-400' : 'bg-purple-600 text-white hover:bg-purple-700'}`}
+                            >
+                                {trialPrompt.cta}
+                            </button>
+                        </div>
+                    </div>
+                ) : null}
                 <FirstActionGuidance shows={shows} ideas={ideas} onNavigate={onNavigate} />
                 <div>
                     <h2 className="text-xs uppercase tracking-[0.08em] font-semibold text-slate-400/85">Quick Paths</h2>
@@ -699,6 +717,23 @@ const Dashboard: React.FC<DashboardProps> = ({ variant = 'full', user, shows, fe
                     </button>
                 )}
             </header>
+
+            {trialPrompt ? (
+                <div className={`rounded-2xl border p-4 ${trialPrompt.stage === 'expired' ? 'border-amber-400/35 bg-amber-500/10' : 'border-purple-400/30 bg-purple-500/10'}`}>
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div>
+                            <div className="text-sm font-semibold text-white">{trialPrompt.title}</div>
+                            <div className="mt-1 text-sm text-white/75">{trialPrompt.message}</div>
+                        </div>
+                        <button
+                            onClick={() => onNavigate('billing-settings')}
+                            className={`inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold transition ${trialPrompt.stage === 'expired' ? 'bg-amber-500 text-slate-950 hover:bg-amber-400' : 'bg-purple-600 text-white hover:bg-purple-700'}`}
+                        >
+                            {trialPrompt.cta}
+                        </button>
+                    </div>
+                </div>
+            ) : null}
             
             <div className="space-y-6">
                 {layout.visible.map(widgetId => (

@@ -47,11 +47,11 @@ export function getUpgradeUxCopy(kind: UpgradeUxKind, opts?: {
   if (kind === 'trial_exhausted') {
     return {
       kind,
-      badge: 'Trial Exhausted',
-      title: 'Your trial access has ended',
+      badge: 'Trial Ended',
+      title: 'Your IBM Partner Access trial has ended',
       message: founderProtected
         ? 'Your founder protection remains intact. Choose a paid plan when you are ready and your locked founder pricing will still be honored.'
-        : 'Choose a plan to continue creating, rehearsing, and managing your shows without trial limits.',
+        : 'Your 30-day Professional Trial has ended. Choose a paid plan to keep your rehearsal tools, scripts, and show-planning workflow active.',
       primaryCta: founderProtected ? 'View founder options' : 'View plans',
       secondaryCta: 'Close',
     };
