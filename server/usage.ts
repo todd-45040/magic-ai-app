@@ -254,10 +254,6 @@ function estimateUsageEventCost(tool: string | null | undefined, units: number):
   return estimateCostUSD({ provider, model, charged_units: safeUnits, tool: normalizedTool || null });
 }
 
-function isAdminProfile(profile: any): boolean {
-  if (!profile) return false;
-  return Boolean(profile?.is_admin) || normalizeTier(profile?.membership as any) === 'admin';
-}
 
 function buildAdminUsageResponse() {
   const unlimited = Number.MAX_SAFE_INTEGER;
@@ -1400,7 +1396,7 @@ export const incrementAiUsage = enforceAiUsage;
 export async function enforceLiveMinutes(
   req: any,
   minutes: number,
-  opts?: { route?: 'liveMinutes' | 'liveRehearsal' | string }
+  _opts?: { route?: 'liveMinutes' | 'liveRehearsal' | string }
 ): Promise<{
   ok: boolean;
   status?: number;
@@ -1532,7 +1528,7 @@ export async function enforceLiveMinutes(
 export async function enforceVideoUploads(
   req: any,
   uploadsRequested: number,
-  opts?: { route?: 'videoRehearsal' | 'video-analysis' | string }
+  _opts?: { route?: 'videoRehearsal' | 'video-analysis' | string }
 ): Promise<{
   ok: boolean;
   status?: number;

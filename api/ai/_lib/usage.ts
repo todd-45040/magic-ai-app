@@ -37,6 +37,14 @@ function makeRequestId(): string {
   }
 }
 
+async function safeLogUsageEvent(payload: any): Promise<void> {
+  try {
+    await logUsageEvent(payload);
+  } catch (err) {
+    console.error('logUsageEvent non-blocking error:', err);
+  }
+}
+
 // NOTE: For ADMC soft launch, "free" behaves like "trial".
 // We keep the legacy string accepted, but normalize it to "trial".
 function normalizeTier(m?: string | null): 'trial' | 'amateur' | 'professional' | 'admin' | 'expired' {
@@ -1293,7 +1301,7 @@ export const incrementAiUsage = enforceAiUsage;
 export async function enforceLiveMinutes(
   req: any,
   minutes: number,
-  opts?: { route?: 'liveMinutes' | 'liveRehearsal' | string }
+  _opts?: { route?: 'liveMinutes' | 'liveRehearsal' | string }
 ): Promise<{
   ok: boolean;
   status?: number;
@@ -1425,7 +1433,7 @@ export async function enforceLiveMinutes(
 export async function enforceVideoUploads(
   req: any,
   uploadsRequested: number,
-  opts?: { route?: 'videoRehearsal' | 'video-analysis' | string }
+  _opts?: { route?: 'videoRehearsal' | 'video-analysis' | string }
 ): Promise<{
   ok: boolean;
   status?: number;

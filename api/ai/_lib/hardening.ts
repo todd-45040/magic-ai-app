@@ -11,6 +11,9 @@ export type ApiErrorPayload = {
   error_code: string;
   message: string;
   retryable: boolean;
+  code?: string;
+  reason?: string | null;
+  usage?: any;
   details?: any;
 };
 
