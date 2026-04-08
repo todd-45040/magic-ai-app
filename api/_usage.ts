@@ -128,17 +128,17 @@ export async function getAiUsageStatus(req: any): Promise<{
 
   if (profileErr) console.error('Usage lookup error:', profileErr);
 
-  let membership: Membership = 'trial';
+  let membership: Membership = 'free';
   let generationCount = 0;
   let lastResetDateISO = new Date().toISOString();
 
   if (profile) {
-    membership = (profile.membership as Membership) || 'trial';
+    membership = (profile.membership as Membership) || 'free';
     generationCount = profile.generation_count ?? 0;
     lastResetDateISO = profile.last_reset_date ? new Date(profile.last_reset_date).toISOString() : lastResetDateISO;
   } else {
-    // If no profile exists yet, treat as trial until created
-    membership = 'trial';
+    // If no profile exists yet, treat as free until an explicit trial is created
+    membership = 'free';
     generationCount = 0;
     lastResetDateISO = new Date().toISOString();
   }
@@ -224,7 +224,7 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
     .maybeSingle();
 
   // If no profile exists yet, create one (trial by default)
-  let membership: Membership = 'trial';
+  let membership: Membership = 'free';
   let generationCount = 0;
   let lastResetDateISO = new Date().toISOString();
 
@@ -233,7 +233,7 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
   }
 
   if (profile) {
-    membership = (profile.membership as Membership) || 'trial';
+    membership = (profile.membership as Membership) || 'free';
     generationCount = profile.generation_count ?? 0;
     lastResetDateISO = profile.last_reset_date ? new Date(profile.last_reset_date).toISOString() : lastResetDateISO;
   } else {

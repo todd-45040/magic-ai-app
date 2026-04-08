@@ -111,7 +111,7 @@ export const registerOrUpdateUser = async (user: User, uid: string): Promise<voi
     }
 
     const existingMembership = String(existing?.membership ?? '').toLowerCase();
-    const requestedMembership = String((user as any).membership ?? 'trial').toLowerCase() as Membership;
+    const requestedMembership = String((user as any).membership ?? 'free').toLowerCase() as Membership;
 
     const requestedIsAdmin = Boolean((user as any).isAdmin) || email === ADMIN_EMAIL;
     const existingIsAdmin = Boolean(existing?.is_admin) || existingMembership === 'admin';
@@ -143,13 +143,22 @@ export const registerOrUpdateUser = async (user: User, uid: string): Promise<voi
       trialEndDate = null;
     }
 
-    // Enforce trial logic ONLY if not a recognized tier.
-    if (!(['amateur', 'professional', 'performer', 'semi-pro', 'admin'] as Membership[]).includes(membership)) {
+    // Trial logic must be explicit. Free stays free.
+    const paidOrPrivilegedTiers = ['amateur', 'professional', 'performer', 'semi-pro', 'admin'] as Membership[];
+    const requestedExplicitTrial = requestedMembership === 'trial';
+    const existingActiveTrial = existingMembership === 'trial' && typeof existing?.trial_end_date === 'number' && existing.trial_end_date > Date.now();
+
+    if (paidOrPrivilegedTiers.includes(membership)) {
+      // keep as-is
+    } else if (requestedExplicitTrial || existingActiveTrial) {
       membership = 'trial';
-      if (!trialEndDate) {
+      if (!trialEndDate || !Number.isFinite(Number(trialEndDate))) {
         const trialDays = requestedSource === 'ibm' && requestedTrialDays === 30 ? 30 : 14;
         trialEndDate = Date.now() + trialDays * 24 * 60 * 60 * 1000;
       }
+    } else {
+      membership = 'free';
+      trialEndDate = null;
     }
 
     const row: any = {

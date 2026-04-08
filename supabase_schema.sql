@@ -5,7 +5,7 @@
 create table if not exists public.users (
   id uuid primary key references auth.users (id) on delete cascade,
   email text unique,
-  membership text default 'trial',
+  membership text default 'free',
   is_admin boolean default false,
   generation_count integer default 0,
   last_reset_date timestamptz default now(),
