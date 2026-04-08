@@ -4,6 +4,7 @@ import { fetchAdminWatchlist, fetchAdminOpsNotes, addAdminOpsNote } from '../ser
 import { fetchAdminWaitlistLeads } from '../services/adminLeadsService';
 import { fetchAdminAiHealth, type AdminAiHealth } from '../services/adminAiHealthService';
 import { fetchAdminEnvSanity, type AdminEnvSanity } from '../services/adminSettingsService';
+import { fetchAdminIbmFunnel } from '../services/adminIbmFunnelService';
 import { downloadCsv } from './adminCsv';
 
 function money(n: any, digits = 2) {
@@ -70,6 +71,8 @@ export default function AdminOverviewDashboard({ onGoUsers, onGoLeads }: { onGoU
   const [admcLeads, setAdmcLeads] = useState<number | null>(null);
   const [founderCounts, setFounderCounts] = useState<any>(null);
   const [founderCountsErr, setFounderCountsErr] = useState<string | null>(null);
+  const [ibmFunnel, setIbmFunnel] = useState<any>(null);
+  const [ibmFunnelErr, setIbmFunnelErr] = useState<string | null>(null);
 
   const [selectedFailure, setSelectedFailure] = useState<any | null>(null);
 
@@ -102,6 +105,14 @@ export default function AdminOverviewDashboard({ onGoUsers, onGoLeads }: { onGoU
         setAdmcLeads(typeof l?.count === 'number' ? l.count : null);
       } catch {
         setAdmcLeads(null);
+      }
+      try {
+        setIbmFunnelErr(null);
+        const ibm = await fetchAdminIbmFunnel(days);
+        setIbmFunnel(ibm);
+      } catch (e: any) {
+        setIbmFunnel(null);
+        setIbmFunnelErr(e?.message || 'Failed to load IBM funnel');
       }
     } catch (e: any) {
       setErr(e?.message || 'Failed to load');
@@ -482,6 +493,87 @@ const kUsers = data?.users || {};
         </div>
       </div>
 
+      </div>
+
+      <div className="rounded-2xl border border-sky-400/20 bg-sky-500/5 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold text-sky-100">IBM Funnel Reporting</div>
+            <div className="text-xs text-white/60 mt-1">Measure IBM signups, activation, expirations, conversions, and tool adoption.</div>
+          </div>
+          <div className="text-xs text-white/60">Window: {WINDOW_OPTIONS.find((w) => w.days === days)?.label || `${days}d`}</div>
+        </div>
+
+        {ibmFunnelErr ? (
+          <div className="mt-3 rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm text-red-100">
+            {ibmFunnelErr}
+          </div>
+        ) : null}
+
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
+          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+            <div className="text-xs text-white/60">IBM signups</div>
+            <div className="mt-1 text-2xl font-extrabold text-white">{Number(ibmFunnel?.summary?.signups_window ?? 0).toLocaleString()}</div>
+            <div className="text-[11px] text-white/50 mt-1">Total IBM users: {Number(ibmFunnel?.summary?.signups_total ?? 0).toLocaleString()}</div>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+            <div className="text-xs text-white/60">IBM activated users</div>
+            <div className="mt-1 text-2xl font-extrabold text-white">{Number(ibmFunnel?.summary?.activated_users_window ?? 0).toLocaleString()}</div>
+            <div className="text-[11px] text-white/50 mt-1">Total activated: {Number(ibmFunnel?.summary?.activated_users_total ?? 0).toLocaleString()}</div>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+            <div className="text-xs text-white/60">IBM expired users</div>
+            <div className="mt-1 text-2xl font-extrabold text-white">{Number(ibmFunnel?.summary?.expired_users_current ?? 0).toLocaleString()}</div>
+            <div className="text-[11px] text-white/50 mt-1">Current expired, unpaid IBM users</div>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+            <div className="text-xs text-white/60">IBM conversions</div>
+            <div className="mt-1 text-2xl font-extrabold text-white">{Number(ibmFunnel?.summary?.conversions_total ?? 0).toLocaleString()}</div>
+            <div className="text-[11px] text-white/50 mt-1">Conv. rate: {pct(ibmFunnel?.summary?.conversion_rate_total, 0)}</div>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+            <div className="text-xs text-white/60">IBM active trials</div>
+            <div className="mt-1 text-2xl font-extrabold text-white">{Number(ibmFunnel?.summary?.active_trial_current ?? 0).toLocaleString()}</div>
+            <div className="text-[11px] text-white/50 mt-1">Current IBM users still evaluating</div>
+          </div>
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 xl:grid-cols-3 gap-4">
+          <div className="rounded-xl border border-white/10 bg-white/5 p-3 xl:col-span-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="font-semibold text-white">IBM most-used tools</div>
+              <div className="text-xs text-white/50">By event volume in selected window</div>
+            </div>
+            <div className="mt-3 space-y-2">
+              {(ibmFunnel?.most_used_tools || []).length === 0 ? (
+                <div className="text-sm text-white/60">No IBM tool data yet for this window.</div>
+              ) : (
+                (ibmFunnel?.most_used_tools || []).map((row: any) => (
+                  <div key={row.tool} className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+                    <div>
+                      <div className="text-sm font-medium text-white">{row.tool}</div>
+                      <div className="text-[11px] text-white/50">{Number(row.users || 0).toLocaleString()} IBM users</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-semibold text-white">{Number(row.events || 0).toLocaleString()} events</div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+            <div className="font-semibold text-white">IBM conversion events</div>
+            <div className="mt-3 space-y-2 text-sm">
+              <div className="flex items-center justify-between"><span className="text-white/70">Upgrade prompts viewed</span><span className="font-semibold text-white">{Number(ibmFunnel?.events?.upgrade_prompt_viewed ?? 0).toLocaleString()}</span></div>
+              <div className="flex items-center justify-between"><span className="text-white/70">Upgrade clicks</span><span className="font-semibold text-white">{Number(ibmFunnel?.events?.upgrade_clicked ?? 0).toLocaleString()}</span></div>
+              <div className="flex items-center justify-between"><span className="text-white/70">Checkout started</span><span className="font-semibold text-white">{Number(ibmFunnel?.events?.checkout_started ?? 0).toLocaleString()}</span></div>
+              <div className="flex items-center justify-between"><span className="text-white/70">Checkout completed</span><span className="font-semibold text-white">{Number(ibmFunnel?.events?.checkout_completed ?? 0).toLocaleString()}</span></div>
+              <div className="flex items-center justify-between"><span className="text-white/70">Trial expired</span><span className="font-semibold text-white">{Number(ibmFunnel?.events?.trial_expired ?? 0).toLocaleString()}</span></div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Phase 6.5 — Safety alert: top daily spenders (last 24h) */}
