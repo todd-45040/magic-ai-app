@@ -136,7 +136,7 @@
 
     .hero-copy {
       margin: 10px 0 0;
-      max-width: 620px;
+      max-width: 520px;
       font-size: clamp(16px, 1.55vw, 19px);
       line-height: 1.45;
       color: var(--muted);
@@ -172,18 +172,17 @@
       align-items: center;
       justify-content: center;
       border-radius: 16px;
-      padding: 0 20px;
-      min-height: 54px;
-      font: 700 18px/1 Arial, Helvetica, sans-serif;
+      padding: 12px 18px;
+      font: 700 13px/1 Arial, Helvetica, sans-serif;
       transition: transform 0.15s ease, background 0.15s ease;
     }
 
     .btn:hover { transform: translateY(-1px); }
 
     .btn-primary {
-      background: var(--gold);
+      background: linear-gradient(135deg, #FFD36B, #FFB347);
       color: #120718;
-      box-shadow: 0 0 12px rgba(255, 200, 100, 0.35), 0 16px 30px rgba(242,197,92,0.22);
+      box-shadow: 0 0 12px rgba(255,200,100,0.35), 0 16px 30px rgba(242,197,92,0.22);
     }
 
     .btn-secondary {
@@ -193,15 +192,15 @@
     }
 
     .helper {
-      margin-top: 4px;
+      margin-top: 8px;
       max-width: 660px;
-      font: 400 13.5px/1.5 Arial, Helvetica, sans-serif;
+      font: 400 13px/1.45 Arial, Helvetica, sans-serif;
       color: rgba(247,242,255,0.62);
     }
 
     .hero-side {
       display: grid;
-      gap: 10px;
+      gap: 14px;
       align-content: start;
       max-width: 470px;
       width: 100%;
@@ -221,11 +220,11 @@
       border-radius: 24px;
       border: 1px solid rgba(255,255,255,0.12);
       background: rgba(9,4,13,0.55);
-      min-height: 618px;
+      min-height: 660px;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 10px;
+      padding: 12px;
       overflow: hidden;
     }
 
@@ -233,7 +232,7 @@
       border-radius: 18px;
       width: 100%;
       height: auto;
-      max-height: 596px;
+      max-height: 636px;
       object-fit: contain;
       object-position: top center;
       box-shadow: 0 20px 48px rgba(0,0,0,0.32);
@@ -242,24 +241,23 @@
     .hero-mini-grid {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 6px;
+      gap: 10px;
       align-items: stretch;
       width: 100%;
-      margin-top: -4px;
     }
 
     .hero-mini {
       border: 1px solid rgba(242,197,92,0.16);
       background: rgba(242,197,92,0.08);
       border-radius: 18px;
-      padding: 14px;
-      min-height: 110px;
+      padding: 10px 12px;
+      min-height: 104px;
     }
 
     .hero-mini strong {
       display: block;
       color: #ffe6aa;
-      font: 700 12.5px/1.2 Arial, Helvetica, sans-serif;
+      font: 700 12px/1.2 Arial, Helvetica, sans-serif;
       letter-spacing: 0.06em;
       text-transform: uppercase;
       margin-bottom: 6px;
@@ -275,13 +273,9 @@
       padding: 12px 0;
     }
 
-    .section-after-hero {
-      margin-top: 24px;
-    }
-
     .section-head {
       text-align: center;
-      margin-bottom: 10px;
+      margin-bottom: 14px;
     }
 
     .section-kicker {
@@ -295,7 +289,7 @@
     .section-title {
       margin: 8px auto 0;
       max-width: 820px;
-      font-size: clamp(28px, 3.2vw, 42px);
+      font-size: clamp(30px, 3.6vw, 46px);
       line-height: 1.05;
       letter-spacing: -0.03em;
     }
@@ -305,7 +299,7 @@
       grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 12px;
       align-items: stretch;
-      margin-top: 4px;
+      margin-top: 8px;
     }
 
     .benefit-card,
@@ -379,7 +373,7 @@
     .logo-block {
       align-items: center;
       text-align: center;
-      padding: 28px;
+      padding-inline: 22px;
       min-height: 100%;
       max-width: 470px;
       width: 100%;
@@ -395,8 +389,8 @@
     .logo-copy {
       max-width: 380px;
       margin: 0 auto;
-      font: 400 16px/1.6 Arial, Helvetica, sans-serif;
-      color: rgba(247,242,255,1);
+      font: 400 14px/1.55 Arial, Helvetica, sans-serif;
+      color: rgba(247,242,255,0.72);
     }
 
     .claim-wrap {
@@ -435,8 +429,7 @@
       background: rgba(0,0,0,0.25);
       color: var(--text);
       border-radius: 16px;
-      padding: 0 14px;
-      min-height: 52px;
+      padding: 12px 14px;
       font: 400 14px/1.2 Arial, Helvetica, sans-serif;
       outline: none;
     }
@@ -544,11 +537,11 @@
       </div>
     </section>
 
-    <section id="how-it-helps" class="section section-after-hero">
+    <section id="how-it-helps" class="section">
       <div class="container">
         <div class="section-head">
           <div class="section-kicker">Why IBM members may care</div>
-          <h2 class="section-title">Built to improve your act<br/>and run it better</h2>
+          <h2 class="section-title">Built to help you improve your act and run it better</h2>
         </div>
 
         <div class="benefit-grid">
