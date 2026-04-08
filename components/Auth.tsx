@@ -20,20 +20,20 @@ function getAppBasePath(): string {
   }
 }
 
-export default function Auth({ onLoginSuccess, onLogin, onBack }: AuthProps) {
+function getSignupContext() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const source = String(params.get('source') || '').trim().toLowerCase();
+    const trial = String(params.get('trial') || '').trim();
+    const email = String(params.get('email') || '').trim();
+    const isIbm = source === 'ibm' && trial === '30';
+    return { source, trial, email, isIbm };
+  } catch {
+    return { source: '', trial: '', email: '', isIbm: false };
+  }
+}
 
-  const signupContext = useMemo(() => {
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const source = (params.get('source') || '').toLowerCase();
-      const trial = params.get('trial') || '';
-      const email = params.get('email') || '';
-      const isIbm = source === 'ibm' && trial === '30';
-      return { source, trial, email, isIbm };
-    } catch {
-      return { source: '', trial: '', email: '', isIbm: false };
-    }
-  }, []);
+export default function Auth({ onLoginSuccess, onLogin, onBack }: AuthProps) {
 
 const initialMode = (() => {
   try {
@@ -48,6 +48,8 @@ const initialMode = (() => {
 })();
 
   const [mode, setMode] = useState<AuthMode>(initialMode);
+
+  const signupContext = getSignupContext();
 
   const [email, setEmail] = useState(signupContext.email || '');
   const [password, setPassword] = useState('');
@@ -66,13 +68,21 @@ const initialMode = (() => {
   }, [email, password, confirm, mode]);
 
   const title =
-    mode === 'login' ? 'Magician Login' : mode === 'signup' ? (signupContext.isIbm ? 'Start Your 30-Day IBM Trial' : 'Start Your 14-Day Free Trial') : 'Password Recovery';
+    mode === 'login'
+      ? 'Magician Login'
+      : mode === 'signup'
+      ? signupContext.isIbm
+        ? 'Start Your 30-Day IBM Trial'
+        : 'Start Your 14-Day Free Trial'
+      : 'Password Recovery';
 
   const subtitle =
     mode === 'login'
       ? 'Enter your credentials to open the Studio.'
       : mode === 'signup'
-      ? (signupContext.isIbm ? 'Create your account and unlock your 30-day IBM Partner trial — no credit card required.' : 'Create your account and start your 14-day trial workspace — no credit card required.')
+      ? signupContext.isIbm
+        ? 'Create your account and unlock 30 days of IBM Partner trial access — no credit card required.'
+        : 'Create your account and start your 14-day trial workspace — no credit card required.'
       : 'We’ll email you a secure reset link.';
 
   function formatAuthError(err: any, context: 'login' | 'signup' | 'reset'): string {
@@ -109,7 +119,7 @@ const initialMode = (() => {
         emailRedirectTo,
         data: {
           signup_source: signupContext.source || 'direct',
-          requested_trial_days: signupContext.trial ? Number(signupContext.trial) : 14,
+          requested_trial_days: signupContext.isIbm ? 30 : 14,
         },
       },
     });
@@ -219,22 +229,19 @@ const initialMode = (() => {
 <div className="mt-2 text-white text-xl font-semibold">{title}</div>
                 <div className="mt-1 text-white/65 text-sm text-center">{subtitle}</div>
 
+                {mode === 'signup' && signupContext.isIbm && (
+                  <div className="mt-4 w-full rounded-xl border border-yellow-300/20 bg-yellow-400/10 px-4 py-3 text-sm text-yellow-100">
+                    IBM Partner Access detected. We’ll carry your 30-day trial source into signup.
+                  </div>
+                )}
+
                 {mode === 'signup' && (
                   <div className="mt-4 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-                    {signupContext.isIbm && (
-                      <div className="mb-3 rounded-lg border border-yellow-400/20 bg-yellow-400/10 px-3 py-2 text-sm text-yellow-100">
-                        You’ve unlocked a <span className="font-semibold text-white">30-day Professional Trial (IBM Partner Access)</span>.
-                      </div>
-                    )}
-                    <div className="text-xs font-semibold tracking-wide text-white/80">{signupContext.isIbm ? 'Your 30-day IBM trial starts with' : 'Your 14-day trial includes'}</div>
+                    <div className="text-xs font-semibold tracking-wide text-white/80">{signupContext.isIbm ? 'Your 30-day IBM trial includes' : 'Your 14-day trial includes'}</div>
                     <ul className="mt-2 space-y-1.5 text-sm text-white/75">
                       <li className="flex items-start gap-2">
                         <span className="mt-1 inline-block h-1.5 w-1.5 rounded-full bg-yellow-400/90" />
-                        {signupContext.isIbm ? (
-                          <span>Extended onboarding window with <span className="font-semibold text-white">IBM source tracking</span></span>
-                        ) : (
-                          <span>Save up to <span className="font-semibold text-white">10</span> ideas during trial</span>
-                        )}
+                        <span>{signupContext.isIbm ? <>IBM signup source captured for your extended trial</> : <>Save up to <span className="font-semibold text-white">10</span> ideas during trial</>}</span>
                       </li>
                       <li className="flex items-start gap-2">
                         <span className="mt-1 inline-block h-1.5 w-1.5 rounded-full bg-yellow-400/90" />
@@ -254,7 +261,7 @@ const initialMode = (() => {
                       </li>
                       <li className="flex items-start gap-2">
                         <span className="mt-1 inline-block h-1.5 w-1.5 rounded-full bg-yellow-400/90" />
-                        <span>Full Demo Mode access</span>
+                        <span>{signupContext.isIbm ? 'Extended 30-day IBM evaluation window' : 'Full Demo Mode access'}</span>
                       </li>
                     </ul>
                   </div>

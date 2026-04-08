@@ -18,6 +18,8 @@ const normalizeUserRow = (row: any): User => {
     generationCount: typeof row?.generation_count === 'number' ? row.generation_count : 0,
     lastResetDate: row?.last_reset_date ?? new Date().toISOString(),
     ...(row?.trial_end_date ? { trialEndDate: row.trial_end_date } : {}),
+    ...(row?.signup_source ? { signupSource: row.signup_source } : {}),
+    ...(typeof row?.requested_trial_days === 'number' ? { requestedTrialDays: row.requested_trial_days } : {}),
 
     // Founding Circle identity layer
     foundingCircleMember: Boolean(row?.founding_circle_member ?? false),
@@ -96,11 +98,11 @@ export const registerOrUpdateUser = async (user: User, uid: string): Promise<voi
     const email = user.email.toLowerCase();
 
     // Read existing row (if any) so we never downgrade a paid/admin account during auth hydration.
-    let existing: { membership?: string | null; is_admin?: boolean | null; trial_end_date?: any } | null = null;
+    let existing: { membership?: string | null; is_admin?: boolean | null; trial_end_date?: any; signup_source?: string | null; requested_trial_days?: number | null } | null = null;
     try {
       const { data: existingRow } = await supabase
         .from(USERS_TABLE)
-        .select('membership,is_admin,trial_end_date')
+.select('membership,is_admin,trial_end_date,signup_source,requested_trial_days')
         .eq('id', uid)
         .maybeSingle();
       existing = (existingRow as any) || null;
@@ -129,6 +131,10 @@ export const registerOrUpdateUser = async (user: User, uid: string): Promise<voi
     }
 
     // Admin overrides everything.
+    const requestedSource = String((user as any).signupSource ?? existing?.signup_source ?? '').trim().toLowerCase();
+    const requestedTrialDaysRaw = Number((user as any).requestedTrialDays ?? existing?.requested_trial_days ?? 14);
+    const requestedTrialDays = Number.isFinite(requestedTrialDaysRaw) && requestedTrialDaysRaw > 0 ? requestedTrialDaysRaw : 14;
+
     let trialEndDate: number | null =
       (user as any).trialEndDate ?? (typeof existing?.trial_end_date === 'number' ? existing?.trial_end_date : null);
 
@@ -141,21 +147,31 @@ export const registerOrUpdateUser = async (user: User, uid: string): Promise<voi
     if (!(['amateur', 'professional', 'performer', 'semi-pro', 'admin'] as Membership[]).includes(membership)) {
       membership = 'trial';
       if (!trialEndDate) {
-        trialEndDate = Date.now() + 14 * 24 * 60 * 60 * 1000;
+        const trialDays = requestedSource === 'ibm' && requestedTrialDays === 30 ? 30 : 14;
+        trialEndDate = Date.now() + trialDays * 24 * 60 * 60 * 1000;
       }
     }
 
-    const row = {
+    const row: any = {
       id: uid,
       email,
       membership,
       is_admin: isAdmin, // critical: preserve admin flag from DB
       generation_count: typeof user.generationCount === 'number' ? user.generationCount : 0,
       last_reset_date: user.lastResetDate ?? new Date().toISOString(),
-      trial_end_date: membership === 'trial' ? trialEndDate : null
+      trial_end_date: membership === 'trial' ? trialEndDate : null,
+      signup_source: requestedSource || 'direct',
+      requested_trial_days: membership === 'trial' ? requestedTrialDays : null,
     };
 
-    const { error } = await supabase.from(USERS_TABLE).upsert(row);
+    let error = null as any;
+    ({ error } = await supabase.from(USERS_TABLE).upsert(row));
+    if (error && String(error?.message || '').toLowerCase().includes('signup_source')) {
+      const fallbackRow = { ...row };
+      delete fallbackRow.signup_source;
+      delete fallbackRow.requested_trial_days;
+      ({ error } = await supabase.from(USERS_TABLE).upsert(fallbackRow));
+    }
     if (error) throw error;
   } catch (error) {
     console.error('Failed to register/update user in Supabase', error);

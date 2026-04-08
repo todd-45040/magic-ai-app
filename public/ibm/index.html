@@ -525,7 +525,7 @@
           Use the IBM offer to explore Magic AI Wizard without pressure. The goal is simple: help you see whether better rehearsal feedback and stronger structure can improve your performance.
         </p>
 
-        <form class="form-grid" action="#" method="post">
+        <form id="ibm-trial-form" class="form-grid" action="#" method="post">
           <input type="text" name="first_name" placeholder="First name" />
           <input type="text" name="last_name" placeholder="Last name" />
           <input class="full" type="email" name="email" placeholder="Email address" />
@@ -535,38 +535,29 @@
 
         <div class="form-foot">
           <p>Connect this form to your signup flow and tag every lead with <strong>source = IBM</strong>.</p>
-          <a id="ibm-start-trial" class="btn btn-primary" href="/signup?source=ibm&trial=30">Start My 30-Day Trial</a>
+          <button class="btn btn-primary" type="submit" form="ibm-trial-form">Start My 30-Day Trial</button>
         </div>
       </div>
     </section>
 
     
   </main>
-
-<script>
-  (function () {
-    const form = document.querySelector('#claim form');
-    if (!form) return;
-    form.addEventListener('submit', function (e) {
+  <script>
+    function handleIbmTrialSubmit(e) {
       e.preventDefault();
-      const emailInput = form.querySelector('input[type="email"], input[name="email"]');
-      const email = emailInput && emailInput.value ? emailInput.value.trim() : '';
-      const target = `/signup?source=ibm&trial=30${email ? `&email=${encodeURIComponent(email)}` : ''}`;
-      window.location.href = target;
-    });
-
-    const cta = document.getElementById('ibm-start-trial');
-    if (cta) {
-      cta.addEventListener('click', function (e) {
-        e.preventDefault();
-        if (form) {
-          form.requestSubmit ? form.requestSubmit() : form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-        } else {
-          window.location.href = '/signup?source=ibm&trial=30';
-        }
-      });
+      var form = e.target;
+      var emailInput = form.querySelector('input[name="email"]');
+      var email = emailInput ? String(emailInput.value || ).trim() : ;
+      if (!email) {
+        if (emailInput) emailInput.focus();
+        return;
+      }
+      window.location.href = `/signup?source=ibm&trial=30&email=${encodeURIComponent(email)}`;
     }
-  })();
-</script>
+    document.addEventListener('DOMContentLoaded', function () {
+      var form = document.getElementById('ibm-trial-form');
+      if (form) form.addEventListener('submit', handleIbmTrialSubmit);
+    });
+  </script>
 </body>
 </html>

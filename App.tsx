@@ -230,13 +230,24 @@ function App() {
             reconciled = false;
           }
 
+          const metadata = (sbUser as any)?.user_metadata || {};
+          const signupSource = String(metadata?.signup_source || '').trim().toLowerCase();
+          const requestedTrialDaysRaw = Number(metadata?.requested_trial_days);
+          const requestedTrialDays = Number.isFinite(requestedTrialDaysRaw) && requestedTrialDaysRaw > 0
+            ? requestedTrialDaysRaw
+            : 14;
+          const initialTrialDays = signupSource === 'ibm' && requestedTrialDays === 30 ? 30 : 14;
+
           let appUser: User = {
             email: sbUser.email,
             membership: 'trial',
             isAdmin: sbUser.email === ADMIN_EMAIL,
             generationCount: 0,
             lastResetDate: new Date().toISOString(),
-          };
+            trialEndDate: Date.now() + initialTrialDays * 24 * 60 * 60 * 1000,
+            signupSource: signupSource || 'direct',
+            requestedTrialDays: initialTrialDays,
+          } as any;
 
           const profile = await getUserProfile(sbUser.id);
           if (profile) appUser = { ...appUser, ...profile };
