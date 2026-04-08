@@ -576,6 +576,9 @@ export async function getAiUsageStatus(req: any): Promise<{
   liveRemaining?: number;
   burstLimit?: number;
   burstRemaining?: number;
+  dailyVideoUploadsUsed?: number;
+  dailyVideoUploadsRemaining?: number;
+  monthlyVideoUploadsRemaining?: number | null;
 }> {
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -784,6 +787,9 @@ if (profile) {
     },
 burstLimit,
     burstRemaining,
+    dailyVideoUploadsUsed: dailyVideoUsed,
+    dailyVideoUploadsRemaining: dailyVideoRemaining,
+    monthlyVideoUploadsRemaining: profile?.quota_video_uploads ?? null,
   };
 }
 
@@ -1593,6 +1599,267 @@ export async function enforceLiveMinutes(
     usedDailyMinutes: nextDaily,
     remainingDailyMinutes: Math.max(0, liveLimit - nextDaily),
     remainingMonthlyMinutes: nextMonthly,
+    burstRemaining: burst.remaining,
+    burstLimit,
+  };
+}
+
+
+// Canonical video-upload enforcement used by Video Rehearsal / Video Analysis.
+// Enforces daily + monthly upload quotas consistently server-side.
+export async function enforceVideoUploads(
+  req: any,
+  uploadsRequested: number,
+  opts?: { route?: 'videoRehearsal' | 'video-analysis' | string }
+): Promise<{
+  ok: boolean;
+  status?: number;
+  error?: string;
+  membership?: Membership;
+  reason?: 'daily_limit' | 'monthly_limit' | 'auth' | 'plan';
+  usedDailyUploads?: number;
+  remainingDailyUploads?: number;
+  remainingMonthlyUploads?: number;
+  burstRemaining?: number;
+  burstLimit?: number;
+}> {
+  const units = Number.isFinite(uploadsRequested) ? Math.max(0, Math.ceil(uploadsRequested)) : 0;
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const token = parseBearer(req);
+  const requestId = makeRequestId();
+  const ip = getIpFromReq(req);
+  const ip_hash = hashIp(ip);
+
+  if (!supabaseUrl || !serviceKey) {
+    return { ok: false, status: 503, error: 'Server usage tracking is not configured.', membership: 'free', reason: 'auth' };
+  }
+  if (!token || token === 'guest') {
+    return { ok: false, status: 401, error: 'Unauthorized.', membership: 'free', reason: 'auth' };
+  }
+
+  const admin = createClient(supabaseUrl, serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const auth = admin.auth as unknown as GoTrueClient;
+  const { data: authed, error: authErr } = await auth.getUser(token);
+  const userId = authErr ? null : authed?.user?.id ?? null;
+  if (!userId) {
+    return { ok: false, status: 401, error: 'Unauthorized.', membership: 'free', reason: 'auth' };
+  }
+
+  const { data: profileData, error: profileErr } = await admin
+    .from('users')
+    .select('id, membership, is_admin, trial_end_date, quota_video_uploads, quota_reset_date, daily_video_uploads_used, daily_video_uploads_reset_date')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (profileErr) {
+    console.error('enforceVideoUploads profile error:', profileErr);
+    return { ok: false, status: 503, error: 'Usage tracking unavailable. Try again shortly.' };
+  }
+
+  let membership: Membership = (profileData?.is_admin ? 'admin' : (profileData?.membership as any)) || 'trial';
+  const trialActive = isTrialActive(profileData?.trial_end_date);
+  if (normalizeTier(membership as any) === 'trial') {
+    membership = trialActive ? 'professional' : 'expired';
+  }
+  const tier = normalizeTier(membership as any);
+
+  if (tierRank(tier) < tierRank(TOOL_POLICIES.video_rehearsal.minTier)) {
+    return {
+      ok: false,
+      status: 402,
+      error: 'Upgrade required to use Video Rehearsal.',
+      membership: tier as any,
+      reason: 'plan',
+      usedDailyUploads: 0,
+      remainingDailyUploads: 0,
+      remainingMonthlyUploads: 0,
+    };
+  }
+
+  if (isAdminProfile(profileData)) {
+    await safeLogUsageEvent({
+      request_id: requestId,
+      actor_type: 'user',
+      user_id: userId,
+      identity_key: userId,
+      ip_hash,
+      tool: 'video_rehearsal',
+      endpoint: req?.url ?? null,
+      outcome: 'SUCCESS_NOT_CHARGED',
+      http_status: 200,
+      error_code: null,
+      retryable: false,
+      units,
+      charged_units: 0,
+      membership: 'admin',
+      user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
+      estimated_cost_usd: estimateUsageEventCost('video_rehearsal', units),
+    });
+    const unlimited = Number.MAX_SAFE_INTEGER;
+    return {
+      ok: true,
+      membership: 'admin' as any,
+      usedDailyUploads: 0,
+      remainingDailyUploads: unlimited,
+      remainingMonthlyUploads: unlimited,
+      burstRemaining: unlimited,
+      burstLimit: unlimited,
+    };
+  }
+
+  const burstLimit = getBurstLimit(tier);
+  const burst = enforceBurst(userId, burstLimit);
+  if (!burst.ok) {
+    const dailyLimit = clampInt(getDailyVideoUploadLimit(tier));
+    const dailyUsed = clampInt(profileData?.daily_video_uploads_used);
+    return {
+      ok: false,
+      status: 429,
+      error: 'Rate limit: too many requests per minute.',
+      membership: tier as any,
+      usedDailyUploads: dailyUsed,
+      remainingDailyUploads: Math.max(0, dailyLimit - dailyUsed),
+      remainingMonthlyUploads: clampInt(profileData?.quota_video_uploads),
+      burstRemaining: 0,
+      burstLimit,
+    };
+  }
+
+  let profile: any = profileData;
+  if (profile) {
+    profile = await ensureMonthlyQuotas(admin, userId, tier, profile);
+  }
+
+  const nowISO = new Date().toISOString();
+  let dailyUsed = clampInt(profile?.daily_video_uploads_used);
+  const lastDailyISO = profile?.daily_video_uploads_reset_date ? new Date(profile.daily_video_uploads_reset_date).toISOString() : null;
+  if (isNewUsageDay(lastDailyISO)) {
+    dailyUsed = 0;
+    const { error: resetErr } = await admin
+      .from('users')
+      .update({ daily_video_uploads_used: 0, daily_video_uploads_reset_date: nowISO })
+      .eq('id', userId);
+    if (resetErr) {
+      console.error('daily video reset error:', resetErr);
+    } else if (profile) {
+      profile.daily_video_uploads_reset_date = nowISO;
+      profile.daily_video_uploads_used = 0;
+    }
+  }
+
+  const dailyLimit = clampInt(getDailyVideoUploadLimit(tier));
+  const dailyRemaining = Math.max(0, dailyLimit - dailyUsed);
+  if (units > 0 && dailyRemaining < units) {
+    await safeLogUsageEvent({
+      request_id: requestId,
+      actor_type: 'user',
+      user_id: userId,
+      identity_key: userId,
+      ip_hash,
+      tool: 'video_rehearsal',
+      endpoint: req?.url ?? null,
+      outcome: 'BLOCKED_QUOTA',
+      http_status: 429,
+      error_code: 'USAGE_LIMIT_REACHED',
+      retryable: true,
+      units,
+      charged_units: 0,
+      membership: tier,
+      user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
+      estimated_cost_usd: 0,
+    });
+    return {
+      ok: false,
+      status: 429,
+      error: 'You’ve reached today’s video rehearsal limit. Your uploads reset tomorrow.',
+      membership: tier as any,
+      reason: 'daily_limit',
+      usedDailyUploads: dailyUsed,
+      remainingDailyUploads: dailyRemaining,
+      remainingMonthlyUploads: clampInt(profile?.quota_video_uploads),
+      burstRemaining: burst.remaining,
+      burstLimit,
+    };
+  }
+
+  const monthlyRemaining = clampInt(profile?.quota_video_uploads);
+  if (units > 0 && monthlyRemaining < units) {
+    await safeLogUsageEvent({
+      request_id: requestId,
+      actor_type: 'user',
+      user_id: userId,
+      identity_key: userId,
+      ip_hash,
+      tool: 'video_rehearsal',
+      endpoint: req?.url ?? null,
+      outcome: 'BLOCKED_QUOTA',
+      http_status: 402,
+      error_code: 'USAGE_LIMIT_REACHED',
+      retryable: false,
+      units,
+      charged_units: 0,
+      membership: tier,
+      user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
+      estimated_cost_usd: 0,
+    });
+    return {
+      ok: false,
+      status: 402,
+      error: 'Monthly Video Rehearsal quota exceeded for your plan.',
+      membership: tier as any,
+      reason: 'monthly_limit',
+      usedDailyUploads: dailyUsed,
+      remainingDailyUploads: dailyRemaining,
+      remainingMonthlyUploads: monthlyRemaining,
+      burstRemaining: burst.remaining,
+      burstLimit,
+    };
+  }
+
+  const nextMonthly = Math.max(0, monthlyRemaining - units);
+  const nextDaily = dailyUsed + units;
+  const { error: updErr } = await admin
+    .from('users')
+    .update({
+      quota_video_uploads: nextMonthly,
+      daily_video_uploads_used: nextDaily,
+      daily_video_uploads_reset_date: profile?.daily_video_uploads_reset_date ? profile.daily_video_uploads_reset_date : nowISO,
+    })
+    .eq('id', userId);
+
+  if (updErr) {
+    console.error('video upload charge error:', updErr);
+    return { ok: false, status: 503, error: 'Usage tracking unavailable. Try again shortly.', membership: tier as any };
+  }
+
+  await safeLogUsageEvent({
+    request_id: requestId,
+    actor_type: 'user',
+    user_id: userId,
+    identity_key: userId,
+    ip_hash,
+    tool: 'video_rehearsal',
+    endpoint: req?.url ?? null,
+    outcome: 'SUCCESS_CHARGED',
+    http_status: 200,
+    error_code: null,
+    retryable: false,
+    units,
+    charged_units: units,
+    membership: tier,
+    user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
+    estimated_cost_usd: estimateUsageEventCost('video_rehearsal', units),
+  });
+
+  return {
+    ok: true,
+    membership: tier as any,
+    usedDailyUploads: nextDaily,
+    remainingDailyUploads: Math.max(0, dailyLimit - nextDaily),
+    remainingMonthlyUploads: nextMonthly,
     burstRemaining: burst.remaining,
     burstLimit,
   };

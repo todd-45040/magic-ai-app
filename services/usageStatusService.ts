@@ -20,6 +20,9 @@ export type UsageStatus = {
   liveUsed?: number;
   liveLimit?: number;
   liveRemaining?: number;
+  dailyVideoUploadsUsed?: number;
+  dailyVideoUploadsRemaining?: number;
+  monthlyVideoUploadsRemaining?: number | null;
 };
 
 export async function getBearerToken(): Promise<string> {

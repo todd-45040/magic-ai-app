@@ -13,6 +13,7 @@ import FormattedText from './FormattedText';
 import type { User, AiSparkAction } from '../types';
 import { canConsume, consume, getSoftLimitWarning } from '../services/usageTracker';
 import { trackClientEvent } from '../services/telemetryClient';
+import { fetchUsageStatus, getBearerToken } from '../services/usageStatusService';
 
 interface VideoRehearsalProps {
     user: User;
@@ -344,13 +345,69 @@ useEffect(() => {
         }
     };
 
+
+    const getVideoDurationSeconds = async (file: File): Promise<number> => {
+        return await new Promise((resolve) => {
+            try {
+                const url = URL.createObjectURL(file);
+                const video = document.createElement('video');
+                video.preload = 'metadata';
+                video.onloadedmetadata = () => {
+                    const duration = Number.isFinite(video.duration) ? video.duration : 0;
+                    URL.revokeObjectURL(url);
+                    resolve(duration > 0 ? duration : 0);
+                };
+                video.onerror = () => {
+                    URL.revokeObjectURL(url);
+                    resolve(0);
+                };
+                video.src = url;
+            } catch {
+                resolve(0);
+            }
+        });
+    };
+
+    const preflightVideoAnalysis = async (file: File) => {
+        const durationSeconds = await getVideoDurationSeconds(file);
+        const res = await fetch('/api/ai/video-analysis', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': await getBearerToken(),
+            },
+            body: JSON.stringify({
+                mimeType: file.type,
+                fileSizeBytes: file.size,
+                durationSeconds,
+            }),
+        });
+
+        let payload: any = {};
+        try {
+            payload = await res.json();
+        } catch {
+            payload = {};
+        }
+
+        if (!res.ok) {
+            const message = payload?.message || payload?.error || 'Video Analysis limit reached.';
+            const err: any = new Error(message);
+            err.status = res.status;
+            err.payload = payload;
+            throw err;
+        }
+
+        return payload;
+    };
+
     const handleAnalyze = async () => {
         if (!videoFile) return;
 
-        // Daily cap: video analyses/uploads
+        // Keep the local guard for immediate feedback, but server enforcement is canonical.
         const chk = canConsume(user, 'video_upload', 1);
         if (!chk.ok) {
-            setError(`Daily video limit reached (${chk.used}/${chk.limit}). Upgrade to continue.`);
+            setError(`Daily video limit reached (${chk.used}/${chk.limit}). Your uploads reset tomorrow.`);
             return;
         }
         void trackClientEvent({ tool: 'video_rehearsal', action: isDemoClipLoaded ? 'demo_analyze_click' : 'analyze_click' });
@@ -366,6 +423,8 @@ useEffect(() => {
         // We extract representative frames client-side and send them to Gemini Vision.
         // This ensures the feedback is grounded in the uploaded video (not a simulation).
         try {
+            await preflightVideoAnalysis(videoFile);
+
             const frames = await extractVideoFrames(videoFile, {
                 frameCount: 12,
                 maxWidth: 640,
@@ -429,10 +488,26 @@ useEffect(() => {
                 setError('AI temporarily unavailable. The demo fallback result was shown instead.');
                 void trackClientEvent({ tool: 'video_rehearsal', action: 'demo_analyze_fallback', outcome: 'SUCCESS_NOT_CHARGED', metadata: { message } });
             } else {
-                const blocked = normalizeBlockedUx(err, { toolName: 'Video Rehearsal', user, targetPlan: 'Professional' });
-                setBlockedUi(blocked.blocked ? blocked : null);
-                setError(blocked.blocked ? blocked.message : message);
-                void trackClientEvent({ tool: 'video_rehearsal', action: 'analyze_error', outcome: 'ERROR_UPSTREAM', metadata: { message } });
+                const payload: any = (err as any)?.payload || {};
+                const quotaReason = payload?.details?.reason || null;
+                if (quotaReason === 'daily_limit') {
+                    setBlockedUi(null);
+                    setError('You’ve reached today’s video rehearsal limit. Your uploads reset tomorrow.');
+                    try {
+                        const latest = await fetchUsageStatus();
+                        const remaining = latest?.quota?.video_uploads?.daily?.remaining;
+                        if (typeof remaining === 'number' && remaining <= 1) {
+                            setUsageWarning(`Video Rehearsal uploads remaining today: ${remaining}`);
+                        }
+                    } catch {
+                        // ignore refresh errors
+                    }
+                } else {
+                    const blocked = normalizeBlockedUx(err, { toolName: 'Video Rehearsal', user, targetPlan: 'Professional' });
+                    setBlockedUi(blocked.blocked ? blocked : null);
+                    setError(blocked.blocked ? blocked.message : message);
+                }
+                void trackClientEvent({ tool: 'video_rehearsal', action: 'analyze_error', outcome: 'ERROR_UPSTREAM', metadata: { message, quotaReason } });
             }
         } finally {
             setIsLoading(false);

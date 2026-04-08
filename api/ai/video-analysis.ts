@@ -1,5 +1,5 @@
 import { requireSupabaseAuth } from '../../lib/server/auth/index.js';
-import { getAiUsageStatus, enforceAiUsage } from '../../server/usage.js';
+import { getAiUsageStatus, enforceVideoUploads } from '../../server/usage.js';
 import { jsonError, isPreviewEnv } from './_lib/hardening.js';
 import { enforceBurstProtection } from './_lib/burstProtection.js';
 import { validateVideoRequest, acquireVideoQueue, releaseVideoQueue } from './_lib/videoSafety.js';
@@ -34,12 +34,24 @@ export default async function handler(req: any, res: any) {
   if (!queue.ok) return jsonError(res, queue.status || 409, { ok: false, error_code: queue.error_code ?? 'VIDEO_ANALYSIS_QUEUE_FAILED', message: queue.message ?? 'Unable to queue video analysis.', retryable: true });
 
   try {
-    const usage = await enforceAiUsage(req, 1, { tool: 'video_rehearsal' });
+    const usage = await enforceVideoUploads(req, 1, { route: 'video-analysis' });
     if (!usage.ok) {
-      return jsonError(res, usage.status || 429, { ok: false, error_code: 'AI_LIMIT_REACHED', message: usage.error || 'Video Analysis limit reached.', retryable: Boolean(usage.retryable) });
+      const retryable = usage.reason === 'daily_limit' || (usage.status || 0) === 429;
+      return jsonError(res, usage.status || 429, {
+        ok: false,
+        error_code: 'AI_LIMIT_REACHED',
+        message: usage.error || 'Video Analysis limit reached.',
+        retryable,
+        details: {
+          reason: usage.reason || null,
+          usedDailyUploads: usage.usedDailyUploads ?? null,
+          remainingDailyUploads: usage.remainingDailyUploads ?? null,
+          remainingMonthlyUploads: usage.remainingMonthlyUploads ?? null,
+        },
+      });
     }
 
-    return res.status(202).json({ ok: true, data: { status: 'queued', message: 'Video Analysis request accepted and queued.', limits: { monthlyLimit: validation.monthlyLimit, maxClipDurationSeconds: 180, maxFileBytes: 50 * 1024 * 1024 } } });
+    return res.status(202).json({ ok: true, data: { status: 'queued', message: 'Video Analysis request accepted and queued.', limits: { monthlyLimit: validation.monthlyLimit, maxClipDurationSeconds: 180, maxFileBytes: 50 * 1024 * 1024 }, usage: { usedDailyUploads: usage.usedDailyUploads ?? null, remainingDailyUploads: usage.remainingDailyUploads ?? null, remainingMonthlyUploads: usage.remainingMonthlyUploads ?? null } } });
   } finally {
     releaseVideoQueue(safeUserId);
   }
