@@ -10,14 +10,12 @@
       --bg1: #120718;
       --bg2: #1c0d2b;
       --panel: rgba(255,255,255,0.06);
-      --panel-dark: rgba(0,0,0,0.30);
       --border: rgba(255,255,255,0.12);
       --text: #f7f2ff;
       --muted: rgba(247,242,255,0.75);
       --gold: #f2c55c;
       --purple: #b26cff;
       --shadow: 0 24px 60px rgba(0,0,0,0.36);
-      --radius: 24px;
     }
 
     * { box-sizing: border-box; }
@@ -36,18 +34,18 @@
     img { max-width: 100%; display: block; }
 
     .container {
-      width: min(1220px, calc(100% - 40px));
+      width: min(1220px, calc(100% - 32px));
       margin: 0 auto;
     }
 
     .topbar {
       border-bottom: 1px solid rgba(255,255,255,0.08);
-      padding: 18px 0;
+      padding: 14px 0;
       position: sticky;
       top: 0;
       z-index: 20;
       backdrop-filter: blur(8px);
-      background: linear-gradient(180deg, rgba(18,7,24,0.82), rgba(18,7,24,0.55));
+      background: linear-gradient(180deg, rgba(18,7,24,0.86), rgba(18,7,24,0.58));
     }
 
     .topbar-inner {
@@ -65,8 +63,8 @@
     }
 
     .brand-mark {
-      width: 46px;
-      height: 46px;
+      width: 42px;
+      height: 42px;
       border-radius: 14px;
       border: 1px solid var(--border);
       background: rgba(255,255,255,0.04);
@@ -76,7 +74,7 @@
 
     .brand-title {
       font-family: Arial, Helvetica, sans-serif;
-      font-size: 18px;
+      font-size: 17px;
       font-weight: 700;
       letter-spacing: 0.02em;
       margin: 0;
@@ -94,27 +92,27 @@
       background: rgba(242,197,92,0.10);
       color: #ffe6aa;
       border-radius: 999px;
-      padding: 10px 14px;
+      padding: 9px 13px;
       font: 700 11px/1 Arial, Helvetica, sans-serif;
-      letter-spacing: 0.18em;
+      letter-spacing: 0.16em;
       text-transform: uppercase;
       white-space: nowrap;
     }
 
     .hero {
-      padding: 34px 0 20px;
+      padding: 26px 0 14px;
     }
 
     .hero-grid {
       display: grid;
-      grid-template-columns: minmax(0, 0.95fr) minmax(420px, 1.05fr);
-      gap: 32px;
+      grid-template-columns: minmax(0, 0.96fr) minmax(420px, 1.04fr);
+      gap: 24px;
       align-items: start;
     }
 
     .eyebrow {
       display: inline-block;
-      margin-bottom: 14px;
+      margin-bottom: 12px;
       border: 1px solid rgba(178,108,255,0.25);
       background: rgba(178,108,255,0.10);
       color: #efddff;
@@ -127,19 +125,19 @@
 
     h1 {
       margin: 0;
-      font-size: clamp(50px, 6.5vw, 96px);
+      font-size: clamp(42px, 5.4vw, 78px);
       line-height: 0.94;
       letter-spacing: -0.05em;
       font-weight: 700;
-      max-width: 720px;
+      max-width: 620px;
     }
 
     .gold { color: var(--gold); }
 
     .hero-copy {
       margin: 12px 0 0;
-      max-width: 640px;
-      font-size: clamp(17px, 1.8vw, 21px);
+      max-width: 620px;
+      font-size: clamp(16px, 1.55vw, 19px);
       line-height: 1.45;
       color: var(--muted);
     }
@@ -147,7 +145,7 @@
     .feature-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
+      gap: 10px;
       margin-top: 16px;
       max-width: 620px;
     }
@@ -156,8 +154,9 @@
       border: 1px solid var(--border);
       background: var(--panel);
       border-radius: 18px;
-      padding: 11px 13px;
+      padding: 12px 14px;
       font: 600 13px/1.35 Arial, Helvetica, sans-serif;
+      min-height: 52px;
       box-shadow: var(--shadow);
     }
 
@@ -165,7 +164,7 @@
       display: flex;
       flex-wrap: wrap;
       gap: 10px;
-      margin-top: 18px;
+      margin-top: 16px;
     }
 
     .btn {
@@ -194,53 +193,72 @@
 
     .helper {
       margin-top: 10px;
-      max-width: 680px;
+      max-width: 660px;
       font: 400 13px/1.45 Arial, Helvetica, sans-serif;
       color: rgba(247,242,255,0.62);
     }
 
     .hero-side {
       display: grid;
-      gap: 16px;
+      gap: 14px;
       align-content: start;
     }
 
     .panel {
       border: 1px solid var(--border);
       background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.04));
-      border-radius: 30px;
-      padding: 18px;
+      border-radius: 28px;
+      padding: 14px;
       box-shadow: 0 30px 70px rgba(0,0,0,0.45);
       backdrop-filter: blur(10px);
     }
 
     .ad-image {
-      border-radius: 24px;
+      border-radius: 22px;
       border: 1px solid rgba(255,255,255,0.12);
       width: 100%;
       height: 100%;
-      max-height: 820px;
+      max-height: 760px;
       object-fit: cover;
       object-position: center;
     }
 
-    .ad-note {
-      margin-top: 14px;
-      border: 1px solid rgba(242,197,92,0.20);
-      background: rgba(242,197,92,0.10);
-      border-radius: 16px;
-      padding: 13px 14px;
+    .hero-mini-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .hero-mini {
+      border: 1px solid rgba(242,197,92,0.16);
+      background: rgba(242,197,92,0.08);
+      border-radius: 18px;
+      padding: 12px;
+      min-height: 96px;
+    }
+
+    .hero-mini strong {
+      display: block;
       color: #ffe6aa;
-      font: 400 14px/1.55 Arial, Helvetica, sans-serif;
+      font: 700 12px/1.2 Arial, Helvetica, sans-serif;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .hero-mini span {
+      display: block;
+      font: 400 13px/1.45 Arial, Helvetica, sans-serif;
+      color: rgba(247,242,255,0.78);
     }
 
     .section {
-      padding: 20px 0;
+      padding: 14px 0;
     }
 
     .section-head {
       text-align: center;
-      margin-bottom: 18px;
+      margin-bottom: 16px;
     }
 
     .section-kicker {
@@ -252,9 +270,9 @@
     }
 
     .section-title {
-      margin: 10px auto 0;
+      margin: 8px auto 0;
       max-width: 820px;
-      font-size: clamp(30px, 3.8vw, 48px);
+      font-size: clamp(30px, 3.6vw, 46px);
       line-height: 1.05;
       letter-spacing: -0.03em;
     }
@@ -264,32 +282,33 @@
       grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 12px;
       align-items: stretch;
-      margin-top: 10px;
+      margin-top: 8px;
     }
 
     .benefit-card,
-    .info-card,
-    .list-card {
+    .info-card {
       border: 1px solid var(--border);
-      border-radius: 22px;
+      border-radius: 24px;
       background: var(--panel);
-      padding: 16px;
+      padding: 18px;
       min-height: 100%;
     }
 
+    .benefit-card {
+      min-height: 128px;
+    }
+
     .benefit-card h3,
-    .info-card h3,
-    .list-card h3 {
+    .info-card h3 {
       margin: 0;
       font-size: 20px;
       color: #ffe6aa;
     }
 
     .benefit-card p,
-    .info-card p,
-    .list-card li {
+    .info-card p {
       margin: 8px 0 0;
-      font: 400 13px/1.5 Arial, Helvetica, sans-serif;
+      font: 400 13px/1.55 Arial, Helvetica, sans-serif;
       color: rgba(247,242,255,0.74);
     }
 
@@ -300,48 +319,62 @@
       align-items: stretch;
     }
 
-    .three-grid {
+    .info-card {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .app-grid {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 12px;
-      margin-top: 14px;
+      margin-top: 16px;
+      flex: 1;
     }
 
     .small-card {
       border: 1px solid var(--border);
-      border-radius: 16px;
+      border-radius: 18px;
       background: rgba(255,255,255,0.05);
-      padding: 16px;
-      min-height: 100%;
+      padding: 18px;
+      min-height: 148px;
     }
 
     .small-card h4 {
       margin: 0;
-      font: 700 14px/1.2 Arial, Helvetica, sans-serif;
+      font: 700 15px/1.2 Arial, Helvetica, sans-serif;
+      color: #fff0c3;
     }
 
     .small-card p {
       margin: 8px 0 0;
-      font: 400 14px/1.6 Arial, Helvetica, sans-serif;
-      color: rgba(247,242,255,0.72);
+      font: 400 14px/1.55 Arial, Helvetica, sans-serif;
+      color: rgba(247,242,255,0.74);
     }
 
     .logo-block {
-      display: flex;
-      flex-direction: column;
       align-items: center;
-      justify-content: center;
       text-align: center;
       padding-inline: 22px;
+      min-height: 100%;
     }
 
     .logo-block img {
       width: min(100%, 390px);
       object-fit: contain;
+      margin: 4px auto 12px;
+    }
+
+    .logo-copy {
+      max-width: 420px;
+      margin: 0 auto;
+      font: 400 14px/1.55 Arial, Helvetica, sans-serif;
+      color: rgba(247,242,255,0.72);
     }
 
     .claim-wrap {
-      max-width: 920px;
+      max-width: 960px;
       margin: 0 auto;
       border: 1px solid rgba(242,197,92,0.20);
       background: linear-gradient(135deg, rgba(242,197,92,0.10), rgba(178,108,255,0.12));
@@ -350,10 +383,10 @@
       box-shadow: var(--shadow);
     }
 
-    .claim-wrap .section-head { margin-bottom: 14px; }
+    .claim-wrap .section-head { margin-bottom: 12px; }
 
     .claim-copy {
-      max-width: 720px;
+      max-width: 760px;
       margin: 10px auto 0;
       text-align: center;
       font: 400 14px/1.55 Arial, Helvetica, sans-serif;
@@ -365,7 +398,7 @@
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 10px;
       margin: 14px auto 0;
-      max-width: 760px;
+      max-width: 800px;
     }
 
     .form-grid .full { grid-column: 1 / -1; }
@@ -384,7 +417,7 @@
     input::placeholder { color: rgba(247,242,255,0.38); }
 
     .form-foot {
-      max-width: 760px;
+      max-width: 800px;
       margin: 12px auto 0;
       display: flex;
       align-items: center;
@@ -398,39 +431,31 @@
       color: rgba(247,242,255,0.60);
     }
 
-    .lists {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 16px;
-      align-items: stretch;
-    }
-
-    .list-card ul {
-      margin: 10px 0 0;
-      padding-left: 18px;
-    }
-
-    @media (max-width: 980px) {
+    @media (max-width: 1100px) {
       .hero-grid,
       .two-col,
-      .benefit-grid,
-      .lists { grid-template-columns: 1fr; }
-      .three-grid { grid-template-columns: 1fr; }
+      .benefit-grid { grid-template-columns: 1fr; }
       .hero-side { max-width: 760px; }
     }
 
     @media (max-width: 720px) {
+      .container { width: min(1220px, calc(100% - 20px)); }
       .topbar-inner,
       .form-foot,
       .actions { align-items: stretch; }
       .topbar-inner,
       .form-foot { flex-direction: column; }
       .feature-grid,
-      .form-grid { grid-template-columns: 1fr; }
+      .form-grid,
+      .app-grid,
+      .hero-mini-grid { grid-template-columns: 1fr; }
       .form-grid .full { grid-column: auto; }
       .pill { white-space: normal; text-align: center; }
-      h1 { font-size: 54px; }
+      h1 { font-size: 52px; }
       .section-title { font-size: 36px; }
+      .small-card,
+      .benefit-card,
+      .hero-mini { min-height: auto; }
     }
   </style>
 </head>
@@ -463,6 +488,10 @@
             <div class="feature">✨ Live rehearsal and feedback tools</div>
             <div class="feature">✨ Built specifically for magicians</div>
             <div class="feature">✨ Scripts, planning, and business help</div>
+            <div class="feature">✨ Brainstorm new effects and patter faster</div>
+            <div class="feature">✨ Hear where your delivery needs work</div>
+            <div class="feature">✨ Organize shows, tasks, and prep clearly</div>
+            <div class="feature">✨ Keep contracts and client work in one place</div>
           </div>
 
           <div class="actions">
@@ -477,6 +506,10 @@
           <div class="panel">
             <img class="ad-image" src="../ibm-ad1.png" alt="Magic AI Wizard IBM ad preview" />
           </div>
+          <div class="hero-mini-grid">
+            <div class="hero-mini"><strong>Rehearse</strong><span>Get guided feedback instead of practicing alone.</span></div>
+            <div class="hero-mini"><strong>Refine</strong><span>Polish scripts, timing, and structure before you perform.</span></div>
+            <div class="hero-mini"><strong>Organize</strong><span>Keep ideas, contracts, and planning in one workflow.</span></div>
           </div>
         </div>
       </div>
@@ -501,16 +534,21 @@
     <section class="section">
       <div class="container two-col">
         <div class="info-card" style="background: rgba(0,0,0,0.22);">
-          <h3>Why this page should convert better than the homepage</h3>
-          <div class="three-grid">
-            <div class="small-card"><h4>For hobbyists</h4><p>Get help organizing ideas and build confidence before performing.</p></div>
-            <div class="small-card"><h4>For working performers</h4><p>Use the app as a practical assistant for rehearsal, contracts, planning, and faster prep.</p></div>
-            <div class="small-card"><h4>For IBM club sharing</h4><p>A focused offer makes it easier to share through Rings and IBM channels.</p></div>
+          <div>
+            <h3>How Magic AI Wizard helps IBM magicians</h3>
+            <p>One place to develop ideas, tighten your material, and stay organized between meetings, gigs, and rehearsals.</p>
+          </div>
+          <div class="app-grid">
+            <div class="small-card"><h4>For hobbyists</h4><p>Build confidence, organize ideas, and get better feedback before performing in public.</p></div>
+            <div class="small-card"><h4>For working performers</h4><p>Use the app as a practical assistant for rehearsal, planning, contracts, and faster prep.</p></div>
+            <div class="small-card"><h4>For IBM sharing</h4><p>A focused offer makes it easier to recommend through Rings, club channels, and member newsletters.</p></div>
+            <div class="small-card"><h4>For stronger routines</h4><p>Use scripting, structure, and rehearsal support together so you can improve the whole act—not just one trick.</p></div>
           </div>
         </div>
 
         <div class="info-card logo-block">
           <img src="../magicaiwizard-logo.png" alt="Magicians' AI Wizard logo lockup" />
+          <p class="logo-copy">Magic AI Wizard is built as a rehearsal, creative, and business assistant for magicians—so the same tool that helps you shape material can also help you prepare to perform it.</p>
         </div>
       </div>
     </section>
@@ -539,20 +577,19 @@
         </div>
       </div>
     </section>
-
-    
   </main>
+
   <script>
     function handleIbmTrialSubmit(e) {
       e.preventDefault();
       var form = e.target;
       var emailInput = form.querySelector('input[name="email"]');
-      var email = emailInput ? String(emailInput.value || ).trim() : ;
+      var email = emailInput ? String(emailInput.value || '').trim() : '';
       if (!email) {
         if (emailInput) emailInput.focus();
         return;
       }
-      window.location.href = `/signup?source=ibm&trial=30&email=${encodeURIComponent(email)}`;
+      window.location.href = '/signup?source=ibm&trial=30&email=' + encodeURIComponent(email);
     }
     document.addEventListener('DOMContentLoaded', function () {
       var form = document.getElementById('ibm-trial-form');
