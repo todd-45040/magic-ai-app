@@ -24,6 +24,8 @@ import FoundingCirclePage from './components/FoundingCirclePage';
 import FounderSuccessPage from './components/FounderSuccessPage';
 import { isDemoEnabled, enableDemo, seedDemoData } from './services/demoSeedService';
 import { createCheckoutSession, fetchBillingStatus, resolveCheckoutLookupKey } from './services/billingClient';
+import { logIbmConversionEvent, isIbmConversionCandidate } from './services/ibmConversionTracking';
+import { logUserActivity } from './services/userActivityService';
 
 const DISCLAIMER_ACKNOWLEDGED_KEY = 'magician_ai_disclaimer_acknowledged';
 
@@ -49,14 +51,42 @@ function App() {
       const normalized = typeof selection === 'string' ? { tier: selection, billingCycle: options?.billingCycle || 'monthly', founderRequested: Boolean(options?.founderRequested) } : { tier: selection?.tier, billingCycle: selection?.billingCycle || 'monthly', founderRequested: Boolean(selection?.founderRequested) };
       const billingStatus = await fetchBillingStatus();
       const lookupKey = resolveCheckoutLookupKey(normalized, billingStatus);
+
+      if (isIbmConversionCandidate(user)) {
+        void logIbmConversionEvent(user, 'upgrade_clicked', {
+          target_plan: normalized?.tier || 'professional',
+          billing_cycle: normalized?.billingCycle || 'monthly',
+          founder_requested: Boolean(normalized?.founderRequested),
+          target_lookup_key: lookupKey,
+        });
+      }
+
       const result = await createCheckoutSession(lookupKey);
 
       if (result?.url) {
+        if (isIbmConversionCandidate(user)) {
+          void logIbmConversionEvent(user, 'checkout_started', {
+            target_plan: normalized?.tier || 'professional',
+            billing_cycle: normalized?.billingCycle || 'monthly',
+            founder_requested: Boolean(normalized?.founderRequested),
+            target_lookup_key: lookupKey,
+            billing_action: result?.billingAction || 'checkout_session',
+          });
+        }
         window.location.href = String(result.url);
         return;
       }
 
       if (result?.cycleSwitchApplied) {
+        if (isIbmConversionCandidate(user)) {
+          void logIbmConversionEvent(user, 'checkout_started', {
+            target_plan: normalized?.tier || 'professional',
+            billing_cycle: normalized?.billingCycle || 'monthly',
+            founder_requested: Boolean(normalized?.founderRequested),
+            target_lookup_key: lookupKey,
+            billing_action: result?.billingAction || 'subscription_update',
+          });
+        }
         alert(result?.message || 'Billing cycle updated successfully.');
         window.location.reload();
         return;
@@ -357,11 +387,22 @@ function App() {
 
         const { data: refreshedSession } = await supabase.auth.getSession();
         const sbUser = refreshedSession?.session?.user;
+        let refreshedUser: User | null = null;
         if (sbUser?.id) {
           const refreshed = await getUserProfile(sbUser.id);
-          if (refreshed) setUser(refreshed as any);
+          if (refreshed) {
+            refreshedUser = refreshed as any;
+            setUser(refreshed as any);
+          }
         }
         await refreshAllData(dispatch);
+
+        if (isIbmConversionCandidate(refreshedUser || user)) {
+          void logIbmConversionEvent((refreshedUser || user) as any, 'checkout_completed', {
+            session_id: sessionId,
+            checkout_state: checkoutState,
+          });
+        }
 
         params.delete('checkout');
         params.delete('session_id');

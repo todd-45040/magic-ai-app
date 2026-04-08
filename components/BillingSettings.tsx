@@ -3,6 +3,7 @@ import type { User } from '../types';
 import { BILLING_PLAN_CATALOG, formatPriceCents, resolveBillingPlanKey, type BillingCycle } from '../services/planCatalog';
 import { createPortalSession, fetchBillingStatus, type BillingStatusPayload } from '../services/billingClient';
 import { getTrialPromptCopy } from '../services/trialMessaging';
+import { logTrialExpiredOnce, logTrialPromptViewed } from '../services/ibmConversionTracking';
 
 interface BillingSettingsProps {
   user: User | null;
@@ -113,6 +114,14 @@ const founderLabel = useMemo(
   const readiness = status?.billingReadiness;
   const missingEnvKeys = readiness?.missingEnvKeys || [];
   const trialPrompt = getTrialPromptCopy(user);
+
+  useEffect(() => {
+    if (!trialPrompt) return;
+    void logTrialPromptViewed(user, 'billing');
+    if (trialPrompt.stage === 'expired') {
+      void logTrialExpiredOnce(user, 'billing');
+    }
+  }, [trialPrompt?.stage, user?.email, user?.trialEndDate, user?.signupSource]);
 
   const openPortal = async () => {
     setPortalBusy(true);

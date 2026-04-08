@@ -71,7 +71,7 @@ export default async function handler(req: any, res: any) {
       metadata,
     };
 
-    if (event_type === 'signup') {
+    if (event_type === 'signup' || event_type === 'trial_expired' || event_type === 'checkout_completed') {
       const { count } = await admin
         .from('user_activity_log')
         .select('id', { count: 'exact', head: true })

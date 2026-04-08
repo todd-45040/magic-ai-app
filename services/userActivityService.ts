@@ -8,6 +8,11 @@ export type UserActivityEventType =
   | 'first_tool_used'
   | 'idea_saved'
   | 'first_idea_saved'
+  | 'upgrade_prompt_viewed'
+  | 'upgrade_clicked'
+  | 'checkout_started'
+  | 'checkout_completed'
+  | 'trial_expired'
   | 'error';
 
 async function getDefaultActivityMetadata(): Promise<Record<string, any>> {

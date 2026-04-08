@@ -6,6 +6,7 @@ import { getPerformancesByShowId } from '../services/performanceService';
 import { supabase } from '../supabase';
 import { normalizeTier, getEffectiveMembershipTier, isActiveTrialUser } from '../services/membershipService';
 import { getTrialPromptCopy } from '../services/trialMessaging';
+import { logTrialExpiredOnce, logTrialPromptViewed } from '../services/ibmConversionTracking';
 import { RabbitIcon, ClockIcon, BookmarkIcon, WandIcon, MicrophoneIcon, StageCurtainsIcon, LightbulbIcon, UsersCogIcon, ChecklistIcon, FileTextIcon, ImageIcon, BookIcon, CustomizeIcon, DragHandleIcon, EyeIcon, EyeOffIcon, ChevronDownIcon } from './icons';
 
 interface DashboardProps {
@@ -516,6 +517,14 @@ const Dashboard: React.FC<DashboardProps> = ({ variant = 'full', user, shows, fe
     const isTrialActive = isActiveTrialUser(user);
     const hasProAccess = ['professional','admin'].includes(getEffectiveMembershipTier(user)) || isTrialActive;
     const trialPrompt = getTrialPromptCopy(user);
+
+    useEffect(() => {
+        if (!trialPrompt) return;
+        void logTrialPromptViewed(user, 'dashboard');
+        if (trialPrompt.stage === 'expired') {
+            void logTrialExpiredOnce(user, 'dashboard');
+        }
+    }, [trialPrompt?.stage, user?.email, user?.trialEndDate, user?.signupSource]);
 
 
     // Phase 3A (Home Tightening): render a calmer, compact dashboard on Home.
