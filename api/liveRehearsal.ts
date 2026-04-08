@@ -24,8 +24,13 @@ export default async function handler(request: any, response: any) {
         ok: false,
         code: 'quota_exceeded',
         reason: liveGate.reason,
+        message: liveGate.error || 'Live rehearsal limit reached.',
         error: liveGate.error || 'Live rehearsal limit reached.',
         membership: liveGate.membership,
+        usage: {
+          remainingDaily: liveGate.remainingDailyMinutes ?? liveGate.liveRemaining ?? 0,
+          remainingMonthly: liveGate.remainingMonthlyMinutes ?? 0,
+        },
         liveUsed: liveGate.liveUsed,
         liveLimit: liveGate.liveLimit,
         liveRemaining: liveGate.liveRemaining,

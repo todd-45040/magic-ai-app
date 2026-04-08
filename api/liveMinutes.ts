@@ -36,8 +36,13 @@ export default async function handler(request: any, response: any) {
         ok: false,
         code: 'quota_exceeded',
         reason: result.reason,
+        message: result.error || 'Daily live rehearsal limit reached.',
         error: result.error || 'Daily live rehearsal limit reached.',
         membership: result.membership,
+        usage: {
+          remainingDaily: result.remainingDailyMinutes ?? result.liveRemaining ?? 0,
+          remainingMonthly: result.remainingMonthlyMinutes ?? 0,
+        },
         liveUsed: result.liveUsed,
         liveLimit: result.liveLimit,
         liveRemaining: result.liveRemaining,

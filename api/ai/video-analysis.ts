@@ -39,9 +39,15 @@ export default async function handler(req: any, res: any) {
       const retryable = usage.reason === 'daily_limit' || (usage.status || 0) === 429;
       return jsonError(res, usage.status || 429, {
         ok: false,
+        code: 'quota_exceeded',
         error_code: 'AI_LIMIT_REACHED',
+        reason: usage.reason || null,
         message: usage.error || 'Video Analysis limit reached.',
         retryable,
+        usage: {
+          remainingDaily: usage.remainingDailyUploads ?? 0,
+          remainingMonthly: usage.remainingMonthlyUploads ?? 0,
+        },
         details: {
           reason: usage.reason || null,
           usedDailyUploads: usage.usedDailyUploads ?? null,
