@@ -512,8 +512,8 @@ const Dashboard: React.FC<DashboardProps> = ({ variant = 'full', user, shows, fe
     const [draggedWidgetId, setDraggedWidgetId] = useState<WidgetId | null>(null);
     const [collapsedWidgets, setCollapsedWidgets] = useState<Set<WidgetId>>(new Set());
 
-    const isTrialActive = user.membership === 'trial' && user.trialEndDate ? user.trialEndDate > Date.now() : false;
-    const hasProAccess = user.membership === 'professional' || isTrialActive;
+    const isTrialActive = isActiveTrialUser(user);
+    const hasProAccess = ['professional','admin'].includes(getEffectiveMembershipTier(user)) || isTrialActive;
 
 
     // Phase 3A (Home Tightening): render a calmer, compact dashboard on Home.

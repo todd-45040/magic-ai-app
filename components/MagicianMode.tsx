@@ -34,7 +34,7 @@ import BlockedPanel from './BlockedPanel';
 import { normalizeBlockedUx, type BlockedUx } from '../services/blockedUx';
 import { getPromptAccess, getToolAccess } from '../services/entitlements';
 import { getUpgradeUxCopy, isFounderProtected } from '../services/upgradeUx';
-import { normalizeTier, getMembershipDaysRemaining, formatTierLabel } from '../services/membershipService';
+import { normalizeTier, getMembershipDaysRemaining, formatTierLabel, getEffectiveMembershipTier, isActiveTrialUser } from '../services/membershipService';
 import UpgradeModal from './UpgradeModal';
 import MemberManagement from './MemberManagement';
 import ShowPlanner from './ShowPlanner';
@@ -2996,11 +2996,12 @@ useEffect(() => {
   const [initialIdeaId, setInitialIdeaId] = useState<string | null>(null);
 
   const tier = normalizeTier(user.membership as any);
-  const userPlan = tier ?? 'free';
+  const effectiveTier = getEffectiveMembershipTier(user);
+  const userPlan = effectiveTier ?? 'free';
   if (!tier) {
     console.warn('tier missing in MagicianMode');
   }
-  const isTrialActive = tier === 'trial' && user.trialEndDate ? user.trialEndDate > Date.now() : false;
+  const isTrialActive = isActiveTrialUser(user);
   const isTrialExpired = tier === 'trial' && user.trialEndDate ? user.trialEndDate <= Date.now() : false;
   const isExpired = tier === 'expired' || isTrialExpired;
   const daysRemaining = getMembershipDaysRemaining(user);
@@ -3008,8 +3009,8 @@ useEffect(() => {
 
   // Access mapping
   const hasAmateurAccess = (['trial', 'amateur', 'professional', 'admin'].includes(tier) && !isExpired) as boolean;
-  const hasSemiProAccess = ((tier === 'professional' || tier === 'admin') && !isExpired) as boolean; // business tier (CRM/marketing/contracts/finance)
-  const hasProfessionalAccess = ((tier === 'professional' || tier === 'admin' || user.isAdmin) && !isExpired) as boolean;
+  const hasSemiProAccess = ((effectiveTier === 'professional' || effectiveTier === 'admin') && !isExpired) as boolean; // business tier (CRM/marketing/contracts/finance)
+  const hasProfessionalAccess = ((effectiveTier === 'professional' || effectiveTier === 'admin' || user.isAdmin) && !isExpired) as boolean;
 
   // Usage & Limits card snapshot
   const [usageSnapshot, setUsageSnapshot] = useState<any>(null);
@@ -3103,7 +3104,7 @@ useEffect(() => {
     };
 
     const buildUsageSnapshot = (serverStatus?: UsageStatus | null) => {
-      const plan = user?.isAdmin ? 'admin' : normalizePlan(serverStatus?.membership);
+      const plan = user?.isAdmin ? 'admin' : (effectiveTier === 'professional' ? 'professional' : normalizePlan(serverStatus?.membership));
       const dailyAiLimit = Number(serverStatus?.limit ?? getDailyAiLimitForPlan(plan));
       const dailyAiUsed = Number(serverStatus?.used ?? user?.generationCount ?? 0);
       const dailyAiRemaining = Number(serverStatus?.remaining ?? Math.max(0, dailyAiLimit - dailyAiUsed));

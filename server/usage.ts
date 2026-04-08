@@ -655,6 +655,9 @@ export async function getAiUsageStatus(req: any): Promise<{
 
   if (profile) {
     membership = (profile.is_admin ? 'admin' : (profile.membership as Membership)) || 'trial';
+    if (normalizeTier(membership as any) === 'trial') {
+      membership = isTrialActive(profile?.trial_end_date) ? 'professional' : 'expired';
+    }
     generationCount = profile.generation_count ?? 0;
     lastResetDateISO = profile.last_reset_date ? new Date(profile.last_reset_date).toISOString() : lastResetDateISO;
   } else {
@@ -717,12 +720,6 @@ if (profile) {
   const lastKey = usageDayKey(new Date(lastResetDateISO));
   if (lastKey !== today) {
     generationCount = 0;
-  }
-
-  // Trial expiration: if the 14-day window has ended and user is still on trial, treat as expired.
-  const trialActive = isTrialActive(profile?.trial_end_date);
-  if (!trialActive && normalizeTier(membership as any) === 'trial') {
-    membership = 'expired';
   }
 
   const tier = normalizeTier(membership as any);
@@ -1032,6 +1029,9 @@ export async function enforceAiUsage(
 
   if (profile) {
     membership = (profile.is_admin ? 'admin' : (profile.membership as Membership)) || 'trial';
+    if (normalizeTier(membership as any) === 'trial') {
+      membership = isTrialActive(profile?.trial_end_date) ? 'professional' : 'expired';
+    }
     generationCount = profile.generation_count ?? 0;
     lastResetDateISO = profile.last_reset_date ? new Date(profile.last_reset_date).toISOString() : lastResetDateISO;
   } else {
@@ -1081,13 +1081,6 @@ export async function enforceAiUsage(
 const toolKey = (typeof opts?.tool === 'string' ? opts.tool.trim() : '') as ToolKey | '';
 if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
   const policy = (TOOL_POLICIES as any)[toolKey] as ToolPolicy;
-
-  // Normalize membership tier for comparisons
-  // Trial expiration: if the 14-day window has ended and user is still on trial, treat as expired.
-  const trialActive = isTrialActive(profile?.trial_end_date);
-  if (!trialActive && normalizeTier(membership as any) === 'trial') {
-    membership = 'expired';
-  }
 
   const norm = normalizeTier(membership as any);
 
@@ -1178,12 +1171,6 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
 }
 
   // Burst limit (per minute) — enforce BEFORE reserving daily units
-  // Trial expiration: if the 14-day window has ended and user is still on trial, treat as expired.
-  const trialActive = isTrialActive(profile?.trial_end_date);
-  if (!trialActive && normalizeTier(membership as any) === 'trial') {
-    membership = 'expired';
-  }
-
   const tier = normalizeTier(membership as any);
   const burstLimit = getBurstLimit(tier);
   const burst = enforceBurst(userId, burstLimit);

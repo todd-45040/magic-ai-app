@@ -133,6 +133,8 @@ export interface User {
   generationCount: number;
   lastResetDate: string; // ISO String
   emailVerified?: boolean;
+  signupSource?: string;
+  requestedTrialDays?: number;
 
   // Founding Circle identity layer
   foundingCircleMember?: boolean;

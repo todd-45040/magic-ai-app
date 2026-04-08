@@ -28,6 +28,23 @@ export function normalizeTier(m?: Membership | string | null): CanonicalTier {
   }
 }
 
+
+export function isActiveTrialUser(user?: User | null): boolean {
+  if (!user) return false;
+  if (normalizeTier(user.membership) !== 'trial') return false;
+  if (!user.trialEndDate) return true;
+  return user.trialEndDate > Date.now();
+}
+
+export function getEffectiveMembershipTier(user?: User | null): CanonicalTier {
+  if (!user) return 'free';
+  const tier = normalizeTier(user.membership);
+  if (tier === 'trial') {
+    return isActiveTrialUser(user) ? 'professional' : 'expired';
+  }
+  return tier;
+}
+
 export function isPaidTier(tier: CanonicalTier): boolean {
   return tier === 'amateur' || tier === 'professional' || tier === 'admin';
 }

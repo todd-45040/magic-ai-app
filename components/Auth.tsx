@@ -150,7 +150,7 @@ const initialMode = (() => {
         try { onLogin?.({ email }); } catch {}
       } else if (mode === 'signup') {
         await doSignup();
-        setMessage('Account created! Check your email if confirmation is required.');
+        setMessage(signupContext.isIbm ? 'You’ve unlocked a 30-day Professional Trial (IBM Partner Access). Check your email if confirmation is required.' : 'Account created! Check your email if confirmation is required.');
         try { onLoginSuccess?.(); } catch {}
         try { onLogin?.({ email }); } catch {}
       } else {
