@@ -72,7 +72,6 @@ export default async function handler(req: any, res: any) {
 
     const users = Array.isArray(ibmUsers) ? ibmUsers : [];
     const ibmIds = users.map((u: any) => u.id).filter(Boolean);
-    const usersById = new Map(ibmIds.map((id: string) => [id, users.find((u: any) => u.id === id)]));
 
     const signupsTotal = users.length;
     const signupsWindow = users.filter((u: any) => {
