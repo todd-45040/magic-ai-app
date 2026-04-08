@@ -1,6 +1,6 @@
 import type { User } from '../types';
 import type { CanonicalTier } from './membershipService.js';
-import { normalizeTier, isActiveTrialUser, getEffectiveMembershipTier } from './membershipService.js';
+import { normalizeTier, getEffectiveMembershipTier } from './membershipService.js';
 import type { ResourceType, ToolName } from './entitlements.js';
 
 export type BillingPlanKey = 'free' | 'amateur' | 'founder_amateur' | 'professional' | 'founder_professional';
