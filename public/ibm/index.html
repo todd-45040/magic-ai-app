@@ -105,7 +105,7 @@
 
     .hero-grid {
       display: grid;
-      grid-template-columns: minmax(0, 0.96fr) minmax(420px, 1.04fr);
+      grid-template-columns: minmax(0, 1.12fr) minmax(360px, 0.88fr);
       gap: 24px;
       align-items: start;
     }
@@ -202,6 +202,9 @@
       display: grid;
       gap: 14px;
       align-content: start;
+      max-width: 470px;
+      width: 100%;
+      justify-self: end;
     }
 
     .panel {
@@ -240,6 +243,7 @@
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 10px;
       align-items: stretch;
+      width: 100%;
     }
 
     .hero-mini {
@@ -327,7 +331,7 @@
 
     .two-col {
       display: grid;
-      grid-template-columns: 1.08fr 0.92fr;
+      grid-template-columns: minmax(0, 1.16fr) minmax(340px, 0.84fr);
       gap: 16px;
       align-items: stretch;
     }
@@ -371,16 +375,19 @@
       text-align: center;
       padding-inline: 22px;
       min-height: 100%;
+      max-width: 470px;
+      width: 100%;
+      justify-self: end;
     }
 
     .logo-block img {
-      width: min(100%, 410px);
+      width: min(100%, 380px);
       object-fit: contain;
       margin: 4px auto 12px;
     }
 
     .logo-copy {
-      max-width: 420px;
+      max-width: 380px;
       margin: 0 auto;
       font: 400 14px/1.55 Arial, Helvetica, sans-serif;
       color: rgba(247,242,255,0.72);
@@ -448,7 +455,7 @@
       .hero-grid,
       .two-col,
       .benefit-grid { grid-template-columns: 1fr; }
-      .hero-side { max-width: 760px; }
+      .hero-side { max-width: 640px; justify-self: stretch; }
     }
 
     @media (max-width: 720px) {
