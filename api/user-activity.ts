@@ -71,7 +71,18 @@ export default async function handler(req: any, res: any) {
       metadata,
     };
 
-    await admin.from('user_activity_log').insert(baseRow);
+    if (event_type === 'signup') {
+      const { count } = await admin
+        .from('user_activity_log')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('event_type', 'signup');
+      if (!count) {
+        await admin.from('user_activity_log').insert(baseRow);
+      }
+    } else {
+      await admin.from('user_activity_log').insert(baseRow);
+    }
 
     if (event_type === 'login') {
       const { count } = await admin

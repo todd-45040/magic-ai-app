@@ -1362,7 +1362,9 @@ export async function enforceLiveMinutes(
 
   let membership: Membership = (profileData?.is_admin ? 'admin' : (profileData?.membership as any)) || 'trial';
   const trialActive = isTrialActive(profileData?.trial_end_date);
-  if (!trialActive && normalizeTier(membership as any) === 'trial') membership = 'expired';
+  if (normalizeTier(membership as any) === 'trial') {
+    membership = trialActive ? 'professional' : 'expired';
+  }
   const tier = normalizeTier(membership as any);
 
   if (isAdminProfile(profileData)) {

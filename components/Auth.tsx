@@ -150,6 +150,14 @@ const initialMode = (() => {
         try { onLogin?.({ email }); } catch {}
       } else if (mode === 'signup') {
         await doSignup();
+        void logUserActivity({
+          tool_name: 'system',
+          event_type: 'signup',
+          success: true,
+          metadata: signupContext.isIbm
+            ? { source: 'ibm', campaign: 'ibm-30day', requested_trial_days: 30 }
+            : { source: signupContext.source || 'direct', requested_trial_days: 14 },
+        });
         setMessage(signupContext.isIbm ? 'You’ve unlocked a 30-day Professional Trial (IBM Partner Access). Check your email if confirmation is required.' : 'Account created! Check your email if confirmation is required.');
         try { onLoginSuccess?.(); } catch {}
         try { onLogin?.({ email }); } catch {}

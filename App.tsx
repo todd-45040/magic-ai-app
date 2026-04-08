@@ -250,7 +250,19 @@ function App() {
           } as any;
 
           const profile = await getUserProfile(sbUser.id);
+          const isNewProfile = !profile;
           if (profile) appUser = { ...appUser, ...profile };
+
+          if (isNewProfile) {
+            void logUserActivity({
+              tool_name: 'system',
+              event_type: 'signup',
+              success: true,
+              metadata: signupSource === 'ibm'
+                ? { source: 'ibm', campaign: 'ibm-30day', requested_trial_days: initialTrialDays }
+                : { source: signupSource || 'direct', requested_trial_days: initialTrialDays },
+            });
+          }
 
           // If reconciliation ran, the DB row may have just been upgraded.
           // Pull fresh state so the Founding badge + pricing lock show immediately.

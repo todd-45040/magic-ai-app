@@ -31,9 +31,11 @@ export function normalizeTier(m?: Membership | string | null): CanonicalTier {
 
 export function isActiveTrialUser(user?: User | null): boolean {
   if (!user) return false;
-  if (normalizeTier(user.membership) !== 'trial') return false;
-  if (!user.trialEndDate) return true;
-  return user.trialEndDate > Date.now();
+  if (user.isAdmin) return false;
+  if (typeof user.trialEndDate === 'number' && Number.isFinite(user.trialEndDate)) {
+    return user.trialEndDate > Date.now();
+  }
+  return normalizeTier(user.membership) === 'trial';
 }
 
 export function getEffectiveMembershipTier(user?: User | null): CanonicalTier {

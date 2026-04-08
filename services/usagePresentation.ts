@@ -1,5 +1,6 @@
 import type { User } from '../types';
 import type { UsageStatus } from './usageStatusService';
+import { isActiveTrialUser } from './membershipService';
 import { getUsage } from './usageTracker';
 
 export type ToolUsageRow = {
@@ -35,7 +36,8 @@ export type NormalizedUsageSnapshot = {
   } | null;
 };
 
-function normalizePlan(membership?: string | null) {
+function normalizePlan(membership?: string | null, user?: User | null) {
+  if (user && isActiveTrialUser(user)) return 'professional';
   if (membership === 'admin') return 'admin';
   if (membership === 'professional' || membership === 'semi-pro' || membership === 'performer') return 'professional';
   if (membership === 'amateur') return 'amateur';

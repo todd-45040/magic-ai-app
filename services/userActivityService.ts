@@ -1,6 +1,7 @@
 import { supabase } from '../supabase';
 
 export type UserActivityEventType =
+  | 'signup'
   | 'login'
   | 'first_login'
   | 'tool_used'
@@ -8,6 +9,25 @@ export type UserActivityEventType =
   | 'idea_saved'
   | 'first_idea_saved'
   | 'error';
+
+async function getDefaultActivityMetadata(): Promise<Record<string, any>> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    const session = data?.session;
+    const user = session?.user as any;
+    const source = String(user?.user_metadata?.signup_source || '').trim().toLowerCase();
+    const requestedTrialDaysRaw = Number(user?.user_metadata?.requested_trial_days);
+    const requestedTrialDays = Number.isFinite(requestedTrialDaysRaw) && requestedTrialDaysRaw > 0 ? requestedTrialDaysRaw : null;
+
+    const meta: Record<string, any> = {};
+    if (source) meta.source = source;
+    if (source === 'ibm') meta.campaign = 'ibm-30day';
+    if (requestedTrialDays) meta.requested_trial_days = requestedTrialDays;
+    return meta;
+  } catch {
+    return {};
+  }
+}
 
 export async function logUserActivity(input: {
   tool_name: string;
@@ -19,6 +39,7 @@ export async function logUserActivity(input: {
   try {
     const { data } = await supabase.auth.getSession();
     const token = data?.session?.access_token;
+    const defaultMetadata = await getDefaultActivityMetadata();
     await fetch('/api/user-activity', {
       method: 'POST',
       headers: {
@@ -30,7 +51,7 @@ export async function logUserActivity(input: {
         event_type: input.event_type,
         success: input.success ?? true,
         duration_ms: input.duration_ms ?? null,
-        metadata: input.metadata ?? {},
+        metadata: { ...defaultMetadata, ...(input.metadata ?? {}) },
       }),
     });
   } catch {
