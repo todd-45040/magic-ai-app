@@ -13,7 +13,7 @@ const normalizeUserRow = (row: any): User => {
   const email = (row?.email ?? '').toLowerCase();
   return {
     email,
-    membership: (row?.membership ?? 'trial') as Membership,
+    membership: (row?.membership ?? 'free') as Membership,
     isAdmin: typeof row?.is_admin === 'boolean' ? row.is_admin : email === ADMIN_EMAIL,
     generationCount: typeof row?.generation_count === 'number' ? row.generation_count : 0,
     lastResetDate: row?.last_reset_date ?? new Date().toISOString(),

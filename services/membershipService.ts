@@ -33,10 +33,10 @@ export function isActiveTrialUser(user?: User | null): boolean {
   if (!user || user.isAdmin) return false;
   const tier = normalizeTier(user.membership);
   if (tier !== 'trial') return false;
-  if (typeof user.trialEndDate === 'number' && Number.isFinite(user.trialEndDate)) {
-    return user.trialEndDate > Date.now();
+  if (typeof user.trialEndDate !== 'number' || !Number.isFinite(user.trialEndDate)) {
+    return false;
   }
-  return true;
+  return user.trialEndDate > Date.now();
 }
 
 export function hasExpiredTrial(user?: User | null): boolean {
