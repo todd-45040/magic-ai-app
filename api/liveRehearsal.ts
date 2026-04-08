@@ -1,5 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
-import { enforceAiUsage } from '../server/usage.js';
+import { enforceLiveMinutes } from '../server/usage.js';
 import { resolveProvider, callOpenAI, callAnthropic } from '../lib/server/providers/index.js';
 import { getGoogleAiApiKey } from '../server/gemini.js';
 
@@ -16,16 +16,23 @@ export default async function handler(request: any, response: any) {
   const body = request.body || {};
   const requestedMinutes = Number.isFinite(Number(body.minutes)) ? Number(body.minutes) : 1;
   const minutes = Math.max(1, Math.min(10, Math.ceil(requestedMinutes)));
-  const usage = await enforceAiUsage(request, minutes, { tool: 'live_rehearsal_audio' });
-  if (!usage.ok) {
+  const liveGate = await enforceLiveMinutes(request, minutes, { route: 'liveRehearsal' });
+  if (!liveGate.ok) {
     return response
-      .status(usage.status || 429)
+      .status(liveGate.status || 429)
       .json({
-        error: usage.error || 'AI usage limit reached.',
-        remaining: usage.remaining,
-        limit: usage.limit,
-        burstRemaining: usage.burstRemaining,
-        burstLimit: usage.burstLimit,
+        ok: false,
+        code: 'quota_exceeded',
+        reason: liveGate.reason,
+        error: liveGate.error || 'Live rehearsal limit reached.',
+        membership: liveGate.membership,
+        liveUsed: liveGate.liveUsed,
+        liveLimit: liveGate.liveLimit,
+        liveRemaining: liveGate.liveRemaining,
+        remainingDailyMinutes: liveGate.remainingDailyMinutes,
+        remainingMonthlyMinutes: liveGate.remainingMonthlyMinutes,
+        burstRemaining: liveGate.burstRemaining,
+        burstLimit: liveGate.burstLimit,
       });
   }
 
@@ -93,11 +100,13 @@ export default async function handler(request: any, response: any) {
       }
     }
 
-    response.setHeader('X-AI-Remaining', String(usage.remaining ?? ''));
-    response.setHeader('X-AI-Limit', String(usage.limit ?? ''));
-    response.setHeader('X-AI-Membership', String(usage.membership ?? ''));
-    response.setHeader('X-AI-Burst-Remaining', String(usage.burstRemaining ?? ''));
-    response.setHeader('X-AI-Burst-Limit', String(usage.burstLimit ?? ''));
+    response.setHeader('X-AI-Remaining', String(liveGate.remainingDailyMinutes ?? liveGate.liveRemaining ?? ''));
+    response.setHeader('X-AI-Limit', String(liveGate.liveLimit ?? ''));
+    response.setHeader('X-AI-Membership', String(liveGate.membership ?? ''));
+    response.setHeader('X-AI-Burst-Remaining', String(liveGate.burstRemaining ?? ''));
+    response.setHeader('X-AI-Burst-Limit', String(liveGate.burstLimit ?? ''));
+    response.setHeader('X-Live-Daily-Remaining', String(liveGate.remainingDailyMinutes ?? liveGate.liveRemaining ?? ''));
+    response.setHeader('X-Live-Monthly-Remaining', String(liveGate.remainingMonthlyMinutes ?? ''));
     response.setHeader('X-AI-Provider-Used', provider);
 
     return response.status(200).json(result);

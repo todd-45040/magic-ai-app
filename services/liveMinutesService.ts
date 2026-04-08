@@ -6,6 +6,11 @@ export type LiveMinutesStatus = {
   liveUsed?: number;
   liveLimit?: number;
   liveRemaining?: number;
+  remainingDailyMinutes?: number;
+  remainingMonthlyMinutes?: number;
+  burstRemaining?: number;
+  burstLimit?: number;
+  reason?: 'daily_limit' | 'monthly_limit' | 'auth' | 'plan';
   error?: string;
 };
 

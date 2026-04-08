@@ -1405,7 +1405,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                         )
                     );
                     setStatus('error');
-                    setErrorMessage(res.error || 'Daily live rehearsal minutes limit reached. Upgrade to continue.');
+                    setErrorMessage(res.error || 'You’ve reached today’s live rehearsal limit. Your minutes reset tomorrow.');
                 }
             } catch {
                 // Fall back to local tracker if server is unavailable.

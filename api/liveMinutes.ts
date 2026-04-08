@@ -30,14 +30,21 @@ export default async function handler(request: any, response: any) {
     }
 
     const minutes = Number(request.body?.minutes ?? 0);
-    const result = await enforceLiveMinutes(request, minutes);
+    const result = await enforceLiveMinutes(request, minutes, { route: 'liveMinutes' });
     if (!result.ok) {
       return response.status(result.status || 429).json({
+        ok: false,
+        code: 'quota_exceeded',
+        reason: result.reason,
         error: result.error || 'Daily live rehearsal limit reached.',
         membership: result.membership,
         liveUsed: result.liveUsed,
         liveLimit: result.liveLimit,
         liveRemaining: result.liveRemaining,
+        remainingDailyMinutes: result.remainingDailyMinutes,
+        remainingMonthlyMinutes: result.remainingMonthlyMinutes,
+        burstRemaining: result.burstRemaining,
+        burstLimit: result.burstLimit,
       });
     }
 
@@ -47,6 +54,10 @@ export default async function handler(request: any, response: any) {
       liveUsed: result.liveUsed,
       liveLimit: result.liveLimit,
       liveRemaining: result.liveRemaining,
+      remainingDailyMinutes: result.remainingDailyMinutes,
+      remainingMonthlyMinutes: result.remainingMonthlyMinutes,
+      burstRemaining: result.burstRemaining,
+      burstLimit: result.burstLimit,
     });
   } catch (err: any) {
     console.error('liveMinutes error:', err);

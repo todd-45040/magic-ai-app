@@ -461,7 +461,7 @@ export async function recordUserActivity(
     return { ok: false, status: 503, error: 'Server activity tracking is not configured.' };
   }
   if (!token || token === 'guest') {
-    return { ok: false, status: 401, error: 'Unauthorized.' };
+    return { ok: false, status: 401, error: 'Unauthorized.', membership: 'free', reason: 'auth' };
   }
 
   const admin = createClient(supabaseUrl, serviceKey, {
@@ -471,7 +471,7 @@ export async function recordUserActivity(
   const auth = admin.auth as unknown as GoTrueClient;
   const { data, error } = await auth.getUser(token);
   if (error || !data?.user?.id) {
-    return { ok: false, status: 401, error: 'Unauthorized.' };
+    return { ok: false, status: 401, error: 'Unauthorized.', membership: 'free', reason: 'auth' };
   }
 
   const userId = data.user.id;
@@ -1307,21 +1307,29 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
 // enforceAiUsage already performs: quota check + atomic usage increment.
 export const incrementAiUsage = enforceAiUsage;
 
-// Back-compat: "live minutes" enforcement used by /api/liveMinutes.
-// Currently treated as additional usage units in the same usage bucket.
+// Canonical live-minute enforcement used by both /api/liveMinutes and /api/liveRehearsal.
+// This path enforces daily + monthly live-audio quotas consistently server-side.
 export async function enforceLiveMinutes(
   req: any,
-  minutes: number
+  minutes: number,
+  opts?: { route?: 'liveMinutes' | 'liveRehearsal' | string }
 ): Promise<{
   ok: boolean;
   status?: number;
   error?: string;
   membership?: Membership;
+  reason?: 'daily_limit' | 'monthly_limit' | 'auth' | 'plan';
   liveUsed?: number;
   liveLimit?: number;
   liveRemaining?: number;
+  usedDailyMinutes?: number;
+  remainingDailyMinutes?: number;
+  remainingMonthlyMinutes?: number;
+  burstRemaining?: number;
+  burstLimit?: number;
 }> {
   const units = Number.isFinite(minutes) ? Math.max(0, Math.ceil(minutes)) : 0;
+  const route = opts?.route || 'liveMinutes';
 
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -1331,10 +1339,10 @@ export async function enforceLiveMinutes(
   const ip_hash = hashIp(ip);
 
   if (!supabaseUrl || !serviceKey) {
-    return { ok: false, status: 503, error: 'Server usage tracking is not configured.' };
+    return { ok: false, status: 503, error: 'Server usage tracking is not configured.', membership: 'free', reason: 'auth' };
   }
   if (!token || token === 'guest') {
-    return { ok: false, status: 401, error: 'Unauthorized.' };
+    return { ok: false, status: 401, error: 'Unauthorized.', membership: 'free', reason: 'auth' };
   }
 
   const admin = createClient(supabaseUrl, serviceKey, {
@@ -1345,7 +1353,7 @@ export async function enforceLiveMinutes(
   const { data: authed, error: authErr } = await auth.getUser(token);
   const userId = authErr ? null : authed?.user?.id ?? null;
   if (!userId) {
-    return { ok: false, status: 401, error: 'Unauthorized.' };
+    return { ok: false, status: 401, error: 'Unauthorized.', membership: 'free', reason: 'auth' };
   }
 
   // Fetch user + quotas
@@ -1366,6 +1374,22 @@ export async function enforceLiveMinutes(
     membership = trialActive ? 'professional' : 'expired';
   }
   const tier = normalizeTier(membership as any);
+
+  if (tierRank(tier) < tierRank(TOOL_POLICIES.live_rehearsal_audio.minTier)) {
+    return {
+      ok: false,
+      status: 402,
+      error: 'Upgrade required to use Live Rehearsal.',
+      membership: tier as any,
+      reason: 'plan',
+      liveUsed: 0,
+      liveLimit: clampInt(getDailyLiveAudioLimit(tier)),
+      liveRemaining: 0,
+      usedDailyMinutes: 0,
+      remainingDailyMinutes: 0,
+      remainingMonthlyMinutes: 0,
+    };
+  }
 
   if (isAdminProfile(profileData)) {
     await safeLogUsageEvent({
@@ -1393,6 +1417,32 @@ export async function enforceLiveMinutes(
       liveUsed: 0,
       liveLimit: unlimited,
       liveRemaining: unlimited,
+      usedDailyMinutes: 0,
+      remainingDailyMinutes: unlimited,
+      remainingMonthlyMinutes: unlimited,
+      burstRemaining: unlimited,
+      burstLimit: unlimited,
+    };
+  }
+
+  const burstLimit = getBurstLimit(tier);
+  const burst = enforceBurst(userId, burstLimit);
+  if (!burst.ok) {
+    const liveLimit = clampInt(getDailyLiveAudioLimit(tier));
+    const dailyUsed = clampInt(profileData?.daily_live_audio_minutes_used);
+    return {
+      ok: false,
+      status: 429,
+      error: 'Rate limit: too many requests per minute.',
+      membership: tier as any,
+      liveUsed: dailyUsed,
+      liveLimit,
+      liveRemaining: Math.max(0, liveLimit - dailyUsed),
+      usedDailyMinutes: dailyUsed,
+      remainingDailyMinutes: Math.max(0, liveLimit - dailyUsed),
+      remainingMonthlyMinutes: clampInt(profileData?.quota_live_audio_minutes),
+      burstRemaining: 0,
+      burstLimit,
     };
   }
 
@@ -1412,7 +1462,12 @@ export async function enforceLiveMinutes(
       .from('users')
       .update({ daily_live_audio_minutes_used: 0, daily_live_audio_reset_date: nowISO })
       .eq('id', userId);
-    if (resetErr) console.error('daily live reset error:', resetErr);
+    if (resetErr) {
+      console.error('daily live reset error:', resetErr);
+    } else if (profile) {
+      profile.daily_live_audio_reset_date = nowISO;
+      profile.daily_live_audio_minutes_used = 0;
+    }
   }
 
   const liveLimit = clampInt(getDailyLiveAudioLimit(tier));
@@ -1439,11 +1494,17 @@ export async function enforceLiveMinutes(
     return {
       ok: false,
       status: 429,
-      error: 'Daily Live Rehearsal limit reached. Please wait for your quota to reset.',
+      error: 'You’ve reached today’s live rehearsal limit. Your minutes reset tomorrow.',
       membership: tier as any,
+      reason: 'daily_limit',
       liveUsed: dailyUsed,
       liveLimit,
       liveRemaining,
+      usedDailyMinutes: dailyUsed,
+      remainingDailyMinutes: liveRemaining,
+      remainingMonthlyMinutes: clampInt(profile?.quota_live_audio_minutes),
+      burstRemaining: burst.remaining,
+      burstLimit,
     };
   }
 
@@ -1473,9 +1534,15 @@ export async function enforceLiveMinutes(
       status: 402,
       error: 'Monthly Live Rehearsal quota exceeded for your plan.',
       membership: tier as any,
+      reason: 'monthly_limit',
       liveUsed: dailyUsed,
       liveLimit,
       liveRemaining,
+      usedDailyMinutes: dailyUsed,
+      remainingDailyMinutes: liveRemaining,
+      remainingMonthlyMinutes: monthlyRemaining,
+      burstRemaining: burst.remaining,
+      burstLimit,
     };
   }
 
@@ -1493,8 +1560,8 @@ export async function enforceLiveMinutes(
     .eq('id', userId);
 
   if (updErr) {
-    console.error('live minutes charge error:', updErr);
-    return { ok: false, status: 503, error: 'Usage tracking unavailable. Try again shortly.' };
+    console.error(`live minutes charge error (${route}):`, updErr);
+    return { ok: false, status: 503, error: 'Usage tracking unavailable. Try again shortly.', membership: tier as any };
   }
 
   await safeLogUsageEvent({
@@ -1522,5 +1589,10 @@ export async function enforceLiveMinutes(
     liveUsed: nextDaily,
     liveLimit,
     liveRemaining: Math.max(0, liveLimit - nextDaily),
+    usedDailyMinutes: nextDaily,
+    remainingDailyMinutes: Math.max(0, liveLimit - nextDaily),
+    remainingMonthlyMinutes: nextMonthly,
+    burstRemaining: burst.remaining,
+    burstLimit,
   };
 }
