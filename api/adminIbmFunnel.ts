@@ -72,7 +72,6 @@ export default async function handler(req: any, res: any) {
 
     const users = Array.isArray(ibmUsers) ? ibmUsers : [];
     const ibmIds = users.map((u: any) => u.id).filter(Boolean);
-    const usersById = new Map(ibmIds.map((id: string) => [id, users.find((u: any) => u.id === id)]));
 
     const signupsTotal = users.length;
     const signupsWindow = users.filter((u: any) => {
@@ -125,20 +124,16 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    // total activated users across all time: prefer event log if present, otherwise current paid/trial-active users with activity unavailable won't count.
     if (ibmIds.length > 0) {
-      const { data: allTimeFirstTool, error: ftErr } = await admin
+      const { data: allTimeFirstTool } = await admin
         .from('user_activity_log')
         .select('user_id')
         .in('user_id', ibmIds)
         .eq('event_type', 'first_tool_used')
         .limit(5000);
-      if (ftErr) {
-        console.warn('adminIbmFunnel first_tool_used query failed', ftErr);
-      } else {
-        for (const row of allTimeFirstTool || []) {
-          if (row?.user_id) activatedTotalUsers.add(String(row.user_id));
-        }
+
+      for (const row of allTimeFirstTool || []) {
+        if (row?.user_id) activatedTotalUsers.add(String(row.user_id));
       }
     }
 
