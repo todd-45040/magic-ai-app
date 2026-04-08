@@ -1,3 +1,4 @@
+// FIXED VERSION: removed invalid fields from recordUserActivity unauthorized returns
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import type { GoTrueClient } from '@supabase/auth-js';
@@ -461,7 +462,7 @@ export async function recordUserActivity(
     return { ok: false, status: 503, error: 'Server activity tracking is not configured.' };
   }
   if (!token || token === 'guest') {
-    return { ok: false, status: 401, error: 'Unauthorized.', membership: 'free', reason: 'auth' };
+    return { ok: false, status: 401, error: 'Unauthorized.' };
   }
 
   const admin = createClient(supabaseUrl, serviceKey, {
@@ -471,7 +472,7 @@ export async function recordUserActivity(
   const auth = admin.auth as unknown as GoTrueClient;
   const { data, error } = await auth.getUser(token);
   if (error || !data?.user?.id) {
-    return { ok: false, status: 401, error: 'Unauthorized.', membership: 'free', reason: 'auth' };
+    return { ok: false, status: 401, error: 'Unauthorized.' };
   }
 
   const userId = data.user.id;
@@ -1342,7 +1343,7 @@ export async function enforceLiveMinutes(
     return { ok: false, status: 503, error: 'Server usage tracking is not configured.', membership: 'free', reason: 'auth' };
   }
   if (!token || token === 'guest') {
-    return { ok: false, status: 401, error: 'Unauthorized.', membership: 'free', reason: 'auth' };
+    return { ok: false, status: 401, error: 'Unauthorized.' };
   }
 
   const admin = createClient(supabaseUrl, serviceKey, {
@@ -1353,7 +1354,7 @@ export async function enforceLiveMinutes(
   const { data: authed, error: authErr } = await auth.getUser(token);
   const userId = authErr ? null : authed?.user?.id ?? null;
   if (!userId) {
-    return { ok: false, status: 401, error: 'Unauthorized.', membership: 'free', reason: 'auth' };
+    return { ok: false, status: 401, error: 'Unauthorized.' };
   }
 
   // Fetch user + quotas
