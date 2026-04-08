@@ -125,9 +125,9 @@
 
     h1 {
       margin: 0;
-      font-size: clamp(42px, 5.4vw, 78px);
-      line-height: 0.94;
-      letter-spacing: -0.05em;
+      font-size: clamp(52px, 6.4vw, 92px);
+      line-height: 0.9;
+      letter-spacing: -0.055em;
       font-weight: 700;
       max-width: 620px;
     }
@@ -135,7 +135,7 @@
     .gold { color: var(--gold); }
 
     .hero-copy {
-      margin: 12px 0 0;
+      margin: 10px 0 0;
       max-width: 620px;
       font-size: clamp(16px, 1.55vw, 19px);
       line-height: 1.45;
@@ -146,8 +146,8 @@
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 10px;
-      margin-top: 16px;
-      max-width: 620px;
+      margin-top: 14px;
+      max-width: 640px;
     }
 
     .feature {
@@ -156,7 +156,7 @@
       border-radius: 18px;
       padding: 12px 14px;
       font: 600 13px/1.35 Arial, Helvetica, sans-serif;
-      min-height: 52px;
+      min-height: 50px;
       box-shadow: var(--shadow);
     }
 
@@ -164,7 +164,7 @@
       display: flex;
       flex-wrap: wrap;
       gap: 10px;
-      margin-top: 16px;
+      margin-top: 14px;
     }
 
     .btn {
@@ -192,7 +192,7 @@
     }
 
     .helper {
-      margin-top: 10px;
+      margin-top: 8px;
       max-width: 660px;
       font: 400 13px/1.45 Arial, Helvetica, sans-serif;
       color: rgba(247,242,255,0.62);
@@ -208,25 +208,38 @@
       border: 1px solid var(--border);
       background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.04));
       border-radius: 28px;
-      padding: 14px;
+      padding: 16px;
       box-shadow: 0 30px 70px rgba(0,0,0,0.45);
       backdrop-filter: blur(10px);
     }
 
-    .ad-image {
-      border-radius: 22px;
+    .ad-frame {
+      border-radius: 24px;
       border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(9,4,13,0.55);
+      min-height: 660px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+      overflow: hidden;
+    }
+
+    .ad-image {
+      border-radius: 18px;
       width: 100%;
-      height: 100%;
-      max-height: 760px;
-      object-fit: cover;
-      object-position: center;
+      height: auto;
+      max-height: 636px;
+      object-fit: contain;
+      object-position: top center;
+      box-shadow: 0 20px 48px rgba(0,0,0,0.32);
     }
 
     .hero-mini-grid {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 10px;
+      align-items: stretch;
     }
 
     .hero-mini {
@@ -234,7 +247,7 @@
       background: rgba(242,197,92,0.08);
       border-radius: 18px;
       padding: 12px;
-      min-height: 96px;
+      min-height: 104px;
     }
 
     .hero-mini strong {
@@ -253,12 +266,12 @@
     }
 
     .section {
-      padding: 14px 0;
+      padding: 12px 0;
     }
 
     .section-head {
       text-align: center;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
     }
 
     .section-kicker {
@@ -295,7 +308,7 @@
     }
 
     .benefit-card {
-      min-height: 128px;
+      min-height: 120px;
     }
 
     .benefit-card h3,
@@ -361,7 +374,7 @@
     }
 
     .logo-block img {
-      width: min(100%, 390px);
+      width: min(100%, 410px);
       object-fit: contain;
       margin: 4px auto 12px;
     }
@@ -451,7 +464,7 @@
       .hero-mini-grid { grid-template-columns: 1fr; }
       .form-grid .full { grid-column: auto; }
       .pill { white-space: normal; text-align: center; }
-      h1 { font-size: 52px; }
+      h1 { font-size: 60px; line-height: 0.94; }
       .section-title { font-size: 36px; }
       .small-card,
       .benefit-card,
@@ -504,10 +517,12 @@
 
         <div class="hero-side">
           <div class="panel">
-            <img class="ad-image" src="../ibm-ad1.png" alt="Magic AI Wizard IBM ad preview" />
+            <div class="ad-frame">
+              <img class="ad-image" src="../ibm-ad1.png" alt="Magic AI Wizard IBM ad preview" />
+            </div>
           </div>
           <div class="hero-mini-grid">
-            <div class="hero-mini"><strong>Rehearse</strong><span>Get guided feedback instead of practicing alone.</span></div>
+            <div class="hero-mini"><strong>Rehearse</strong><span>Get guided feedback instead of practicing alone in a silent room.</span></div>
             <div class="hero-mini"><strong>Refine</strong><span>Polish scripts, timing, and structure before you perform.</span></div>
             <div class="hero-mini"><strong>Organize</strong><span>Keep ideas, contracts, and planning in one workflow.</span></div>
           </div>
