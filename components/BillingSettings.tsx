@@ -22,7 +22,7 @@ const planPrice = (tier: 'amateur'|'professional', founder: boolean, cycle: Bill
   return `${formatPriceCents(cycle === 'yearly' ? plan.annualPriceCents : plan.monthlyPriceCents)}${cycle === 'yearly' ? '/yr' : '/mo'}`;
 };
 
-const normalizeMembershipToPlanKey = (membership?: User['membership'] | null): string | null => {
+const normalizeMembershipToPlanKey = (membership?: User['membership'] | null, trialEndDate?: number | null): string | null => {
   switch (membership) {
     case 'amateur':
     case 'performer':
@@ -30,12 +30,14 @@ const normalizeMembershipToPlanKey = (membership?: User['membership'] | null): s
     case 'professional':
     case 'semi-pro':
       return 'professional';
-    case 'free':
     case 'trial':
-    case 'expired':
+      return typeof trialEndDate === 'number' && trialEndDate > Date.now() ? 'professional' : 'free';
     case 'admin':
+      return 'professional';
+    case 'free':
+    case 'expired':
     default:
-      return membership || null;
+      return 'free';
   }
 };
 
@@ -88,7 +90,7 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
   }, [user?.membership, user?.stripe_subscription_id, user?.stripe_status, user?.stripe_price_id]);
 
   const statusPlanKey = status?.planKey || 'free';
-  const membershipPlanKey = normalizeMembershipToPlanKey(user?.membership);
+  const membershipPlanKey = normalizeMembershipToPlanKey(user?.membership, user?.trialEndDate);
   const userPlanKey = resolveBillingPlanKey(user);
   const currentPlanKey = pickMostAuthoritativePlanKey(statusPlanKey, membershipPlanKey, userPlanKey);
   const currentBillingCycle = status?.currentBillingCycle || 'monthly';

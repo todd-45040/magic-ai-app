@@ -8,7 +8,7 @@ function json(res: any, status: number, body: any) {
 }
 
 function buildFallbackUsageResponse(status: any) {
-  const membership = status?.membership === 'free' ? 'trial' : (status?.membership ?? 'trial');
+  const membership = status?.membership ?? 'free';
   const limit = Number(status?.limit ?? 0);
   const used = Number(status?.used ?? 0);
   const remaining = Number(status?.remaining ?? Math.max(0, limit - used));
@@ -29,7 +29,7 @@ function buildFallbackUsageResponse(status: any) {
       resetAt: null,
     },
     nearLimit: limit > 0 ? remaining <= Math.ceil(limit * 0.15) : false,
-    upgradeRecommended: membership === 'trial' && limit > 0 ? remaining <= Math.ceil(limit * 0.15) : false,
+    upgradeRecommended: membership === 'free' && limit > 0 ? remaining <= Math.ceil(limit * 0.15) : false,
     warnings: [],
     sessionsToday: 0,
     toolsUsedToday: [],
@@ -92,8 +92,7 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // "free" behaves like "trial" for ADMC soft launch.
-    const membership = status.membership ?? 'trial';
+    const membership = status.membership ?? 'free';
     const limit = status.limit ?? 0;
     const used = status.used ?? 0;
     const remaining = status.remaining ?? 0;
@@ -149,7 +148,7 @@ export default async function handler(req: any, res: any) {
       || nearDailyVideo
       || nearMonthlyVideo;
 
-    const upgradeRecommended = membership === 'trial' && nearLimit;
+    const upgradeRecommended = membership === 'free' && nearLimit;
 
     res.setHeader('X-AI-Remaining', String(remaining));
     res.setHeader('X-AI-Limit', String(limit));

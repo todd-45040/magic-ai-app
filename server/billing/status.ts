@@ -549,7 +549,7 @@ export async function resolveBillingStatusForUser(admin: any, userId: string): P
   const [profile, billingCustomer, subscription, usagePeriod, founderOverride] = await Promise.all([
     maybeSelectSingle(
       admin.from('users')
-        .select('id, membership, is_admin, pricing_lock, founding_bucket, founding_circle_member, stripe_price_id')
+        .select('id, membership, is_admin, pricing_lock, founding_bucket, founding_circle_member, stripe_price_id, trial_end_date')
         .eq('id', userId)
         .maybeSingle()
     ),
@@ -597,6 +597,11 @@ export async function resolveBillingStatusForUser(admin: any, userId: string): P
   const profilePlan = normalizeProfileMembership(profile?.membership);
   const dbSubscriptionPlan = normalizeBillingPlanKey(subscription?.plan_key);
   const stripePlan = normalizeBillingPlanKey(resolvePlanKeyFromStripeRefs({ priceId: stripeSnapshot?.priceId || null }));
+  const rawMembership = String(profile?.membership || '').trim().toLowerCase();
+  const trialEndMs = Number(profile?.trial_end_date ?? NaN);
+  const hasFiniteTrialEnd = Number.isFinite(trialEndMs);
+  const trialActive = rawMembership === 'trial' && hasFiniteTrialEnd && trialEndMs > Date.now();
+  const trialExpired = rawMembership === 'trial' && hasFiniteTrialEnd && trialEndMs <= Date.now();
 
   const hasSubscriptionSignal = Boolean(
     dbSubscriptionPlan ||
@@ -606,10 +611,16 @@ export async function resolveBillingStatusForUser(admin: any, userId: string): P
     stripeSnapshot?.id
   );
 
-  const effectivePlanInput = stripePlan || dbSubscriptionPlan || (!hasSubscriptionSignal ? profilePlan : 'free');
-  const effectiveBillingStatus = stripeSnapshot?.status || subscription?.billing_status || (!hasSubscriptionSignal && profilePlan !== 'free' ? 'active' : 'unknown');
-  const effectiveCurrentPeriodEnd = stripeSnapshot?.currentPeriodEnd || asIso(subscription?.current_period_end);
-  const effectiveCancelAtPeriodEnd = stripeSnapshot?.cancelAtPeriodEnd ?? Boolean(subscription?.cancel_at_period_end);
+  const effectivePlanInput = stripePlan || dbSubscriptionPlan || (trialActive ? 'professional' : (!hasSubscriptionSignal ? profilePlan : 'free'));
+  const effectiveBillingStatus = trialActive
+    ? 'trialing'
+    : (stripeSnapshot?.status || subscription?.billing_status || (!hasSubscriptionSignal && profilePlan !== 'free' ? 'active' : 'unknown'));
+  const effectiveCurrentPeriodEnd = trialActive
+    ? new Date(trialEndMs).toISOString()
+    : (stripeSnapshot?.currentPeriodEnd || asIso(subscription?.current_period_end));
+  const effectiveCancelAtPeriodEnd = trialActive
+    ? false
+    : (stripeSnapshot?.cancelAtPeriodEnd ?? Boolean(subscription?.cancel_at_period_end));
 
   const resolved = resolveBillingPlan({
     planKey: effectivePlanInput,
@@ -619,9 +630,9 @@ export async function resolveBillingStatusForUser(admin: any, userId: string): P
     founderLockedPlan: null,
   });
 
-  const effectivePlanKey = resolved.keepAccess
-    ? resolved.planKey
-    : 'free';
+  const effectivePlanKey = trialExpired
+    ? 'free'
+    : (resolved.keepAccess ? resolved.planKey : 'free');
 
   const planDef = BILLING_PLAN_CATALOG[effectivePlanKey] || BILLING_PLAN_CATALOG.free;
   const upgradeTargets = planDef.allowedUpgrades || [];
@@ -648,9 +659,9 @@ export async function resolveBillingStatusForUser(admin: any, userId: string): P
     stripeSnapshot,
     resolved: {
       planKey: effectivePlanKey,
-      billingStatus: resolved.billingStatus,
-      accessState: resolved.accessState,
-      renewalDate,
+      billingStatus: trialExpired ? 'unknown' : resolved.billingStatus,
+      accessState: trialExpired ? 'inactive' : resolved.accessState,
+      renewalDate: trialExpired ? null : renewalDate,
       currentBillingCycle,
       source,
     },
@@ -680,9 +691,9 @@ export async function resolveBillingStatusForUser(admin: any, userId: string): P
   return {
     ok: true,
     planKey: effectivePlanKey,
-    billingStatus: resolved.billingStatus,
-    accessState: resolved.accessState,
-    renewalDate,
+    billingStatus: trialExpired ? 'unknown' : resolved.billingStatus,
+    accessState: trialExpired ? 'inactive' : resolved.accessState,
+    renewalDate: trialExpired ? null : renewalDate,
     cancelAtPeriodEnd: effectiveCancelAtPeriodEnd,
     founderProtected: founderProtection.founderProtected,
     founderLockedPlan: founderProtection.lockedPlan,

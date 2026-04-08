@@ -30,21 +30,31 @@ export function normalizeTier(m?: Membership | string | null): CanonicalTier {
 
 
 export function isActiveTrialUser(user?: User | null): boolean {
-  if (!user) return false;
-  if (user.isAdmin) return false;
+  if (!user || user.isAdmin) return false;
+  const tier = normalizeTier(user.membership);
+  if (tier !== 'trial') return false;
   if (typeof user.trialEndDate === 'number' && Number.isFinite(user.trialEndDate)) {
     return user.trialEndDate > Date.now();
   }
-  return normalizeTier(user.membership) === 'trial';
+  return true;
+}
+
+export function hasExpiredTrial(user?: User | null): boolean {
+  if (!user || user.isAdmin) return false;
+  const tier = normalizeTier(user.membership);
+  return tier === 'trial' && typeof user.trialEndDate === 'number' && Number.isFinite(user.trialEndDate) && user.trialEndDate <= Date.now();
 }
 
 export function getEffectiveMembershipTier(user?: User | null): CanonicalTier {
   if (!user) return 'free';
   const tier = normalizeTier(user.membership);
-  if (tier === 'trial') {
-    return isActiveTrialUser(user) ? 'professional' : 'expired';
+  if (tier === 'admin' || tier === 'professional' || tier === 'amateur') {
+    return tier;
   }
-  return tier;
+  if (isActiveTrialUser(user)) {
+    return 'professional';
+  }
+  return 'free';
 }
 
 export function isPaidTier(tier: CanonicalTier): boolean {

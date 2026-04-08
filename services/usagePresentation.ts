@@ -41,30 +41,26 @@ function normalizePlan(membership?: string | null, user?: User | null) {
   if (membership === 'admin') return 'admin';
   if (membership === 'professional' || membership === 'semi-pro' || membership === 'performer') return 'professional';
   if (membership === 'amateur') return 'amateur';
-  if (membership === 'expired') return 'expired';
-  return 'trial';
+  return 'free';
 }
 
 export function formatPlanLabel(plan: string) {
   if (plan === 'admin') return 'Admin';
   if (plan === 'professional') return 'Professional';
   if (plan === 'amateur') return 'Amateur';
-  if (plan === 'expired') return 'Expired';
-  return 'Trial';
+  return 'Free';
 }
 
 function getDailyAiLimitForPlan(plan: string) {
   if (plan === 'admin') return 10000;
   if (plan === 'professional') return 1000;
   if (plan === 'amateur') return 200;
-  if (plan === 'expired') return 0;
   return 20;
 }
 
 function getBurstLimitForPlan(plan: string) {
   if (plan === 'admin' || plan === 'professional') return 120;
   if (plan === 'amateur') return 60;
-  if (plan === 'expired') return 0;
   return 20;
 }
 
@@ -169,9 +165,9 @@ export function buildNormalizedUsageSnapshot(user?: User | null, serverStatus?: 
     burstLimit,
     burstRemaining,
     nearLimit: dailyAiLimit > 0 ? dailyAiRemaining <= Math.ceil(dailyAiLimit * 0.15) : false,
-    upgradeRecommended: plan === 'trial' && dailyAiLimit > 0 ? dailyAiRemaining <= Math.ceil(dailyAiLimit * 0.15) : false,
+    upgradeRecommended: plan === 'free' && dailyAiLimit > 0 ? dailyAiRemaining <= Math.ceil(dailyAiLimit * 0.15) : false,
     warnings: [],
-    resetLabel: plan === 'trial' ? 'Daily usage resets each day during your 14-day trial' : 'Daily usage resets each day',
+    resetLabel: 'Daily usage resets each day',
     toolRows,
     liveHeader,
   };

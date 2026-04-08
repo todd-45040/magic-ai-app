@@ -656,7 +656,7 @@ export async function getAiUsageStatus(req: any): Promise<{
   if (profile) {
     membership = (profile.is_admin ? 'admin' : (profile.membership as Membership)) || 'trial';
     if (normalizeTier(membership as any) === 'trial') {
-      membership = isTrialActive(profile?.trial_end_date) ? 'professional' : 'expired';
+      membership = isTrialActive(profile?.trial_end_date) ? 'professional' : 'free';
     }
     generationCount = profile.generation_count ?? 0;
     lastResetDateISO = profile.last_reset_date ? new Date(profile.last_reset_date).toISOString() : lastResetDateISO;
@@ -1030,7 +1030,7 @@ export async function enforceAiUsage(
   if (profile) {
     membership = (profile.is_admin ? 'admin' : (profile.membership as Membership)) || 'trial';
     if (normalizeTier(membership as any) === 'trial') {
-      membership = isTrialActive(profile?.trial_end_date) ? 'professional' : 'expired';
+      membership = isTrialActive(profile?.trial_end_date) ? 'professional' : 'free';
     }
     generationCount = profile.generation_count ?? 0;
     lastResetDateISO = profile.last_reset_date ? new Date(profile.last_reset_date).toISOString() : lastResetDateISO;

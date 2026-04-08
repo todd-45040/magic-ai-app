@@ -251,10 +251,10 @@ export const checkAndUpdateUserTrialStatus = async (user: User, uid: string): Pr
     if (user.membership === 'trial' && typeof trialEnd === 'number' && trialEnd < Date.now()) {
       const { error } = await supabase
         .from(USERS_TABLE)
-        .update({ membership: 'expired', trial_end_date: null })
+        .update({ membership: 'free' })
         .eq('id', uid);
       if (error) throw error;
-      return { ...user, membership: 'expired' as Membership };
+      return { ...user, membership: 'free' as Membership };
     }
   } catch (error) {
     console.error('Failed to check/update trial status in Supabase', error);

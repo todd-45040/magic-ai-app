@@ -1,6 +1,6 @@
 import type { User } from '../types';
 import type { CanonicalTier } from './membershipService.js';
-import { normalizeTier, isActiveTrialUser } from './membershipService.js';
+import { normalizeTier, isActiveTrialUser, getEffectiveMembershipTier } from './membershipService.js';
 import type { ResourceType, ToolName } from './entitlements.js';
 
 export type BillingPlanKey = 'free' | 'amateur' | 'founder_amateur' | 'professional' | 'founder_professional';
@@ -120,7 +120,7 @@ export const resolveBillingPlanKey = (user?: User | null): BillingPlanKey => {
   const state = resolveInternalPlanState(user);
   return state in BILLING_PLAN_CATALOG ? (state as BillingPlanKey) : INTERNAL_PLAN_STATE_TO_BILLING_PLAN[state as Exclude<InternalPlanState, BillingPlanKey>] ?? 'free';
 };
-export const getEffectiveEntitlementTier = (user?: User | null): CanonicalTier => { if (isActiveTrialUser(user)) return 'professional'; const state = resolveInternalPlanState(user); return state === 'admin' || state === 'expired' || state === 'trial' ? state : BILLING_PLAN_CATALOG[state].entitlementTier; };
+export const getEffectiveEntitlementTier = (user?: User | null): CanonicalTier => getEffectiveMembershipTier(user);
 export const getPlanLimits = (user?: User | null): PlanLimits => getBillingPlanDefinition(resolveBillingPlanKey(user)).monthlyLimits;
 export const getStorageLimits = (user?: User | null): StorageLimits => getBillingPlanDefinition(resolveBillingPlanKey(user)).storageLimits;
 export const getHeavyToolLimits = (user?: User | null): HeavyToolLimits => getBillingPlanDefinition(resolveBillingPlanKey(user)).heavyToolLimits;
