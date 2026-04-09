@@ -2,19 +2,16 @@ import { supabase } from '../supabase';
 
 export type UserActivityEventType =
   | 'signup'
-  | 'trial_started'
   | 'login'
   | 'first_login'
   | 'tool_used'
   | 'first_tool_used'
   | 'idea_saved'
   | 'first_idea_saved'
-  | 'pricing_viewed'
   | 'upgrade_prompt_viewed'
   | 'upgrade_clicked'
   | 'checkout_started'
   | 'checkout_completed'
-  | 'quota_hit'
   | 'trial_expired'
   | 'error';
 

@@ -45,6 +45,60 @@ async function safeLogUsageEvent(payload: any): Promise<void> {
   }
 }
 
+async function safeInsertUserActivity(admin: any, row: {
+  user_id?: string | null;
+  email?: string | null;
+  tool_name?: string | null;
+  event_type: string;
+  success?: boolean;
+  metadata?: Record<string, any>;
+}): Promise<void> {
+  try {
+    if (!admin || !row?.user_id) return;
+    await admin.from('user_activity_log').insert({
+      user_id: row.user_id,
+      email: row.email ?? null,
+      tool_name: row.tool_name ?? 'system',
+      event_type: row.event_type,
+      success: row.success ?? true,
+      metadata: row.metadata ?? {},
+    });
+  } catch (err) {
+    console.error('user_activity_log non-blocking error:', err);
+  }
+}
+
+async function safeLogQuotaHitActivity(admin: any, input: {
+  user_id?: string | null;
+  email?: string | null;
+  tool_name?: string | null;
+  reason?: string | null;
+  membership?: string | null;
+  remainingDaily?: number | null;
+  remainingMonthly?: number | null;
+  requestedUnits?: number | null;
+  route?: string | null;
+  status?: number | null;
+}): Promise<void> {
+  await safeInsertUserActivity(admin, {
+    user_id: input.user_id ?? null,
+    email: input.email ?? null,
+    tool_name: input.tool_name ?? 'system',
+    event_type: 'quota_hit',
+    success: false,
+    metadata: {
+      source: 'server_quota_enforcement',
+      reason: input.reason ?? null,
+      membership: input.membership ?? null,
+      remaining_daily: input.remainingDaily ?? null,
+      remaining_monthly: input.remainingMonthly ?? null,
+      requested_units: input.requestedUnits ?? null,
+      route: input.route ?? null,
+      status: input.status ?? null,
+    },
+  });
+}
+
 // NOTE: For ADMC soft launch, "free" behaves like "trial".
 // We keep the legacy string accepted, but normalize it to "trial".
 function normalizeTier(m?: string | null): 'trial' | 'amateur' | 'professional' | 'admin' | 'expired' {
@@ -935,9 +989,13 @@ export async function enforceAiUsage(
 
   // Determine user id (preferred) or fall back to IP-based identity
   let userId: string | null = null;
+  let userEmail: string | null = null;
   if (token && token !== 'guest') {
     const { data, error } = await auth.getUser(token);
-    if (!error && data?.user?.id) userId = data.user.id;
+    if (!error && data?.user?.id) {
+      userId = data.user.id;
+      userEmail = data.user.email ?? null;
+    }
   }
 
   const identity = userId || ipKey(req);
@@ -1038,7 +1096,7 @@ export async function enforceAiUsage(
     .maybeSingle();
 
   let profile = profileData;
-
+  const profileEmail = String(profileData?.email || userEmail || '').trim() || null;
 
   // If no profile exists yet, create one (trial by default)
   let membership: Membership = 'trial';
@@ -1104,6 +1162,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
       user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
       estimated_cost_usd: 0,
     });
+    await safeLogQuotaHitActivity(admin, { user_id: userId, email: profileEmail, tool_name: opts?.tool ?? 'ai_request', reason: 'plan_restricted', membership: norm, remainingDaily: null, remainingMonthly: null, requestedUnits: costUnits, route: req?.url ?? null, status: 402 });
     return {
       ok: false,
       status: 402,
@@ -1142,6 +1201,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
       user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
       estimated_cost_usd: 0,
     });
+    await safeLogQuotaHitActivity(admin, { user_id: userId, email: profileEmail, tool_name: opts?.tool ?? 'ai_request', reason: 'monthly_limit', membership: norm, remainingDaily: null, remainingMonthly: currentRemaining, requestedUnits: costUnits, route: req?.url ?? null, status: 402 });
     return {
       ok: false,
       status: 402,
@@ -1193,6 +1253,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
       user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
       estimated_cost_usd: 0,
     });
+    await safeLogQuotaHitActivity(admin, { user_id: userId, email: profileEmail, tool_name: opts?.tool ?? 'ai_request', reason: 'burst_limit', membership: tier, remainingDaily: null, remainingMonthly: null, requestedUnits: costUnits, route: req?.url ?? null, status: 429 });
     return {
       ok: false,
       status: 429,
@@ -1229,6 +1290,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
       user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
       estimated_cost_usd: 0,
     });
+    await safeLogQuotaHitActivity(admin, { user_id: userId, email: profileEmail, tool_name: opts?.tool ?? 'ai_request', reason: 'daily_limit', membership: tier, remainingDaily: remaining, remainingMonthly: null, requestedUnits: costUnits, route: req?.url ?? null, status: 429 });
     return {
       ok: false,
       status: 429,
@@ -1336,6 +1398,7 @@ export async function enforceLiveMinutes(
   const auth = admin.auth as unknown as GoTrueClient;
   const { data: authed, error: authErr } = await auth.getUser(token);
   const userId = authErr ? null : authed?.user?.id ?? null;
+  const userEmail = authErr ? null : authed?.user?.email ?? null;
   if (!userId) {
     return { ok: false, status: 401, error: 'Unauthorized.', membership: 'free', reason: 'auth_required' };
   }
@@ -1357,6 +1420,7 @@ export async function enforceLiveMinutes(
 
   if (rawMembership === 'trial' && !trialActive) {
     const reason: QuotaReason = 'trial_inactive';
+    await safeLogQuotaHitActivity(admin, { user_id: userId, email: userEmail, tool_name: 'live_rehearsal', reason, membership, remainingDaily: 0, remainingMonthly: clampInt(profileData?.quota_live_audio_minutes), requestedUnits: units, route: _opts?.route ?? null, status: quotaReasonStatus(reason) });
     return {
       ok: false,
       status: quotaReasonStatus(reason),
@@ -1374,6 +1438,7 @@ export async function enforceLiveMinutes(
 
   if (tierRank(membership) < tierRank(TOOL_POLICIES.live_rehearsal_audio.minTier)) {
     const reason: QuotaReason = 'plan_restricted';
+    await safeLogQuotaHitActivity(admin, { user_id: userId, email: userEmail, tool_name: 'live_rehearsal', reason, membership, remainingDaily: 0, remainingMonthly: clampInt(profileData?.quota_live_audio_minutes), requestedUnits: units, route: _opts?.route ?? null, status: quotaReasonStatus(reason) });
     return {
       ok: false,
       status: quotaReasonStatus(reason),
@@ -1401,6 +1466,7 @@ export async function enforceLiveMinutes(
     const reason: QuotaReason = 'burst_limit';
     const liveLimit = clampInt(getDailyLiveAudioLimit(membership));
     const dailyUsed = clampInt(profileData?.daily_live_audio_minutes_used);
+    await safeLogQuotaHitActivity(admin, { user_id: userId, email: userEmail, tool_name: 'live_rehearsal', reason, membership, remainingDaily: Math.max(0, liveLimit - dailyUsed), remainingMonthly: clampInt(profileData?.quota_live_audio_minutes), requestedUnits: units, route: _opts?.route ?? null, status: quotaReasonStatus(reason) });
     return { ok: false, status: quotaReasonStatus(reason), error: quotaReasonMessage(reason, 'live'), membership, reason, liveUsed: dailyUsed, liveLimit, liveRemaining: Math.max(0, liveLimit - dailyUsed), usedDailyMinutes: dailyUsed, remainingDailyMinutes: Math.max(0, liveLimit - dailyUsed), remainingMonthlyMinutes: clampInt(profileData?.quota_live_audio_minutes), burstRemaining: 0, burstLimit };
   }
 
@@ -1420,6 +1486,7 @@ export async function enforceLiveMinutes(
   if (!rpc.allowed) {
     const reason = mapQuotaReason(rpc.reason, 'monthly_limit');
     await safeLogUsageEvent({ request_id: requestId, actor_type: 'user', user_id: userId, identity_key: userId, ip_hash, tool: 'live_rehearsal_audio', endpoint: req?.url ?? null, outcome: 'ERROR_LIMIT_REACHED', http_status: quotaReasonStatus(reason), error_code: reason, retryable: false, units, charged_units: 0, membership, user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null, estimated_cost_usd: estimateUsageEventCost('live_rehearsal_audio', units) });
+    await safeLogQuotaHitActivity(admin, { user_id: userId, email: userEmail, tool_name: 'live_rehearsal', reason, membership, remainingDaily: remainingDaily, remainingMonthly: remainingMonthly, requestedUnits: units, route: _opts?.route ?? null, status: quotaReasonStatus(reason) });
     return { ok: false, status: quotaReasonStatus(reason), error: quotaReasonMessage(reason, 'live'), membership, reason, liveUsed: usedDaily, liveLimit: dailyLimit, liveRemaining: remainingDaily, usedDailyMinutes: usedDaily, remainingDailyMinutes: remainingDaily, remainingMonthlyMinutes: remainingMonthly, burstRemaining: burst.remaining, burstLimit };
   }
 
@@ -1465,6 +1532,7 @@ export async function enforceVideoUploads(
   const auth = admin.auth as unknown as GoTrueClient;
   const { data: authed, error: authErr } = await auth.getUser(token);
   const userId = authErr ? null : authed?.user?.id ?? null;
+  const userEmail = authErr ? null : authed?.user?.email ?? null;
   if (!userId) {
     return { ok: false, status: 401, error: 'Unauthorized.', membership: 'free', reason: 'auth_required' };
   }
@@ -1486,11 +1554,13 @@ export async function enforceVideoUploads(
 
   if (rawMembership === 'trial' && !trialActive) {
     const reason: QuotaReason = 'trial_inactive';
+    await safeLogQuotaHitActivity(admin, { user_id: userId, email: userEmail, tool_name: 'video_rehearsal', reason, membership, remainingDaily: 0, remainingMonthly: clampInt(profileData?.quota_video_uploads), requestedUnits: units || 1, route: _opts?.route ?? null, status: quotaReasonStatus(reason) });
     return { ok: false, status: quotaReasonStatus(reason), error: quotaReasonMessage(reason, 'video'), membership, reason, usedDailyUploads: clampInt(profileData?.daily_video_uploads_used), remainingDailyUploads: 0, remainingMonthlyUploads: clampInt(profileData?.quota_video_uploads) };
   }
 
   if (tierRank(membership) < tierRank(TOOL_POLICIES.video_rehearsal.minTier)) {
     const reason: QuotaReason = 'plan_restricted';
+    await safeLogQuotaHitActivity(admin, { user_id: userId, email: userEmail, tool_name: 'video_rehearsal', reason, membership, remainingDaily: 0, remainingMonthly: clampInt(profileData?.quota_video_uploads), requestedUnits: units || 1, route: _opts?.route ?? null, status: quotaReasonStatus(reason) });
     return { ok: false, status: quotaReasonStatus(reason), error: quotaReasonMessage(reason, 'video'), membership, reason, usedDailyUploads: clampInt(profileData?.daily_video_uploads_used), remainingDailyUploads: 0, remainingMonthlyUploads: clampInt(profileData?.quota_video_uploads) };
   }
 
@@ -1506,6 +1576,7 @@ export async function enforceVideoUploads(
     const reason: QuotaReason = 'burst_limit';
     const dailyLimit = clampInt(getDailyVideoUploadLimit(membership));
     const dailyUsed = clampInt(profileData?.daily_video_uploads_used);
+    await safeLogQuotaHitActivity(admin, { user_id: userId, email: userEmail, tool_name: 'video_rehearsal', reason, membership, remainingDaily: Math.max(0, dailyLimit - dailyUsed), remainingMonthly: clampInt(profileData?.quota_video_uploads), requestedUnits: units || 1, route: _opts?.route ?? null, status: quotaReasonStatus(reason) });
     return { ok: false, status: quotaReasonStatus(reason), error: quotaReasonMessage(reason, 'video'), membership, reason, usedDailyUploads: dailyUsed, remainingDailyUploads: Math.max(0, dailyLimit - dailyUsed), remainingMonthlyUploads: clampInt(profileData?.quota_video_uploads), burstRemaining: 0, burstLimit };
   }
 
@@ -1525,6 +1596,7 @@ export async function enforceVideoUploads(
   if (!rpc.allowed) {
     const reason = mapQuotaReason(rpc.reason, 'monthly_limit');
     await safeLogUsageEvent({ request_id: requestId, actor_type: 'user', user_id: userId, identity_key: userId, ip_hash, tool: 'video_rehearsal', endpoint: req?.url ?? null, outcome: 'ERROR_LIMIT_REACHED', http_status: quotaReasonStatus(reason), error_code: reason, retryable: false, units, charged_units: 0, membership, user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null, estimated_cost_usd: estimateUsageEventCost('video_rehearsal', units) });
+    await safeLogQuotaHitActivity(admin, { user_id: userId, email: userEmail, tool_name: 'video_rehearsal', reason, membership, remainingDaily: remainingDaily, remainingMonthly: remainingMonthly, requestedUnits: units || 1, route: _opts?.route ?? null, status: quotaReasonStatus(reason) });
     return { ok: false, status: quotaReasonStatus(reason), error: quotaReasonMessage(reason, 'video'), membership, reason, usedDailyUploads: usedDaily, remainingDailyUploads: remainingDaily, remainingMonthlyUploads: remainingMonthly, burstRemaining: burst.remaining, burstLimit };
   }
 
