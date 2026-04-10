@@ -1,10 +1,3 @@
-import { createClient } from '@supabase/supabase-js';
-
-function getEnv(name: string): string | null {
-  const v = process.env[name];
-  return v && String(v).trim() ? String(v).trim() : null;
-}
-
 export function isIbmLikeSource(raw: any): boolean {
   const s = String(raw || '').trim().toLowerCase();
   return s === 'ibm' || s === 'ibm-30day' || s === 'ibm_30day';
