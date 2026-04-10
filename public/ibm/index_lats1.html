@@ -100,41 +100,14 @@
     }
 
     .hero {
-      padding: 22px 0 8px;
+      padding: 26px 0 14px;
     }
 
     .hero-grid {
       display: grid;
-      grid-template-columns: minmax(0, 1.18fr) minmax(330px, 0.82fr);
-      gap: 22px;
+      grid-template-columns: minmax(0, 1.12fr) minmax(360px, 0.88fr);
+      gap: 24px;
       align-items: start;
-    }
-
-    .hero-heading-row {
-      display: flex;
-      align-items: flex-start;
-      gap: 18px;
-      margin-bottom: 10px;
-    }
-
-    .hero-logo-wrap {
-      flex: 0 0 152px;
-      border: 1px solid rgba(255,255,255,0.12);
-      border-radius: 24px;
-      background: linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.03));
-      padding: 10px;
-      box-shadow: 0 20px 50px rgba(0,0,0,0.30);
-    }
-
-    .hero-logo {
-      width: 100%;
-      border-radius: 16px;
-      object-fit: contain;
-    }
-
-    .hero-title-block {
-      min-width: 0;
-      flex: 1;
     }
 
     .eyebrow {
@@ -152,7 +125,7 @@
 
     h1 {
       margin: 0;
-      font-size: clamp(50px, 6.2vw, 90px);
+      font-size: clamp(52px, 6.4vw, 92px);
       line-height: 0.9;
       letter-spacing: -0.055em;
       font-weight: 700;
@@ -162,10 +135,10 @@
     .gold { color: var(--gold); }
 
     .hero-copy {
-      margin: 8px 0 0;
-      max-width: 560px;
-      font-size: clamp(16px, 1.5vw, 19px);
-      line-height: 1.42;
+      margin: 10px 0 0;
+      max-width: 520px;
+      font-size: clamp(16px, 1.55vw, 19px);
+      line-height: 1.45;
       color: var(--muted);
     }
 
@@ -174,7 +147,7 @@
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 10px;
       margin-top: 14px;
-      max-width: 660px;
+      max-width: 640px;
     }
 
     .feature {
@@ -227,9 +200,9 @@
 
     .hero-side {
       display: grid;
-      gap: 0;
+      gap: 14px;
       align-content: start;
-      max-width: 455px;
+      max-width: 470px;
       width: 100%;
       justify-self: end;
     }
@@ -238,7 +211,7 @@
       border: 1px solid var(--border);
       background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.04));
       border-radius: 28px;
-      padding: 14px;
+      padding: 16px;
       box-shadow: 0 30px 70px rgba(0,0,0,0.45);
       backdrop-filter: blur(10px);
     }
@@ -247,11 +220,11 @@
       border-radius: 24px;
       border: 1px solid rgba(255,255,255,0.12);
       background: rgba(9,4,13,0.55);
-      min-height: 620px;
+      min-height: 660px;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 10px;
+      padding: 12px;
       overflow: hidden;
     }
 
@@ -259,10 +232,41 @@
       border-radius: 18px;
       width: 100%;
       height: auto;
-      max-height: 598px;
+      max-height: 636px;
       object-fit: contain;
       object-position: top center;
       box-shadow: 0 20px 48px rgba(0,0,0,0.32);
+    }
+
+    .hero-mini-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      align-items: stretch;
+      width: 100%;
+    }
+
+    .hero-mini {
+      border: 1px solid rgba(242,197,92,0.16);
+      background: rgba(242,197,92,0.08);
+      border-radius: 18px;
+      padding: 10px 12px;
+      min-height: 104px;
+    }
+
+    .hero-mini strong {
+      display: block;
+      color: #ffe6aa;
+      font: 700 12px/1.2 Arial, Helvetica, sans-serif;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .hero-mini span {
+      display: block;
+      font: 400 13px/1.45 Arial, Helvetica, sans-serif;
+      color: rgba(247,242,255,0.78);
     }
 
     .section {
@@ -327,7 +331,7 @@
 
     .two-col {
       display: grid;
-      grid-template-columns: minmax(0, 1.22fr) minmax(300px, 0.78fr);
+      grid-template-columns: minmax(0, 1.16fr) minmax(340px, 0.84fr);
       gap: 16px;
       align-items: stretch;
     }
@@ -366,31 +370,27 @@
       color: rgba(247,242,255,0.74);
     }
 
-    .support-card {
-      background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.04));
-      justify-content: center;
-      text-align: left;
+    .logo-block {
+      align-items: center;
+      text-align: center;
+      padding-inline: 22px;
       min-height: 100%;
+      max-width: 470px;
+      width: 100%;
+      justify-self: end;
     }
 
-    .support-card p {
-      font-size: 14px;
-      line-height: 1.65;
+    .logo-block img {
+      width: min(100%, 380px);
+      object-fit: contain;
+      margin: 4px auto 12px;
     }
 
-    .support-points {
-      display: grid;
-      gap: 10px;
-      margin-top: 16px;
-    }
-
-    .support-point {
-      border: 1px solid rgba(242,197,92,0.16);
-      background: rgba(242,197,92,0.07);
-      border-radius: 16px;
-      padding: 12px 14px;
-      font: 600 13px/1.45 Arial, Helvetica, sans-serif;
-      color: rgba(247,242,255,0.84);
+    .logo-copy {
+      max-width: 380px;
+      margin: 0 auto;
+      font: 400 14px/1.55 Arial, Helvetica, sans-serif;
+      color: rgba(247,242,255,0.72);
     }
 
     .claim-wrap {
@@ -458,17 +458,6 @@
       .hero-side { max-width: 640px; justify-self: stretch; }
     }
 
-    @media (max-width: 860px) {
-      .hero-heading-row {
-        flex-direction: column;
-        align-items: flex-start;
-      }
-      .hero-logo-wrap {
-        width: 180px;
-        max-width: 100%;
-      }
-    }
-
     @media (max-width: 720px) {
       .container { width: min(1220px, calc(100% - 20px)); }
       .topbar-inner,
@@ -478,16 +467,15 @@
       .form-foot { flex-direction: column; }
       .feature-grid,
       .form-grid,
-      .app-grid { grid-template-columns: 1fr; }
+      .app-grid,
+      .hero-mini-grid { grid-template-columns: 1fr; }
       .form-grid .full { grid-column: auto; }
       .pill { white-space: normal; text-align: center; }
-      h1 { font-size: 58px; line-height: 0.94; }
+      h1 { font-size: 60px; line-height: 0.94; }
       .section-title { font-size: 36px; }
       .small-card,
-      .benefit-card { min-height: auto; }
-      .ad-frame {
-        min-height: auto;
-      }
+      .benefit-card,
+      .hero-mini { min-height: auto; }
     }
   </style>
 </head>
@@ -495,7 +483,7 @@
   <header class="topbar">
     <div class="container topbar-inner">
       <div class="brand">
-        <img class="brand-mark" src="logo.png" alt="Magic AI Wizard logo" />
+        <img class="brand-mark" src="../favicon-48x48.png" alt="Magic AI Wizard logo" />
         <div>
           <p class="brand-title">Magic AI Wizard</p>
           <p class="brand-sub">Special offer for IBM members</p>
@@ -509,16 +497,8 @@
     <section class="hero">
       <div class="container hero-grid">
         <div>
-          <div class="hero-heading-row">
-            <div class="hero-logo-wrap">
-              <img class="hero-logo" src="logo.png" alt="Magicians' AI Wizard logo" />
-            </div>
-            <div class="hero-title-block">
-              <div class="eyebrow">Seen in The Linking Ring &amp; via IBM</div>
-              <h1>Stop practicing <span class="gold">to a silent mirror.</span></h1>
-            </div>
-          </div>
-
+          <div class="eyebrow">Seen in The Linking Ring &amp; via IBM</div>
+          <h1>Stop practicing <span class="gold">to a silent mirror.</span></h1>
           <p class="hero-copy">
             Magic AI Wizard gives magicians real rehearsal feedback, smarter scripting tools, and practical business help—so you can improve your act before you ever step on stage.
           </p>
@@ -545,8 +525,13 @@
         <div class="hero-side">
           <div class="panel">
             <div class="ad-frame">
-              <img class="ad-image" src="ibm10.png" alt="Magic AI Wizard IBM ad preview" />
+              <img class="ad-image" src="../ibm-ad1.png" alt="Magic AI Wizard IBM ad preview" />
             </div>
+          </div>
+          <div class="hero-mini-grid">
+            <div class="hero-mini"><strong>Rehearse</strong><span>Get guided feedback instead of practicing alone in a silent room.</span></div>
+            <div class="hero-mini"><strong>Refine</strong><span>Polish scripts, timing, and structure before you perform.</span></div>
+            <div class="hero-mini"><strong>Organize</strong><span>Keep ideas, contracts, and planning in one workflow.</span></div>
           </div>
         </div>
       </div>
@@ -583,16 +568,9 @@
           </div>
         </div>
 
-        <div class="info-card support-card">
-          <div>
-            <h3>Built as a rehearsal and working assistant</h3>
-            <p>With the logo moved into the hero, this side panel now stays focused on the value of the platform instead of repeating the same branding lower on the page.</p>
-          </div>
-          <div class="support-points">
-            <div class="support-point">Sharper rehearsal feedback before you perform.</div>
-            <div class="support-point">Smarter scripting and structure for stronger routines.</div>
-            <div class="support-point">Cleaner planning, contracts, and business workflow in one place.</div>
-          </div>
+        <div class="info-card logo-block">
+          <img src="../magicaiwizard-logo.png" alt="Magicians' AI Wizard logo lockup" />
+          <p class="logo-copy">Magic AI Wizard is built as a rehearsal, creative, and business assistant for magicians—so the same tool that helps you shape material can also help you prepare to perform it.</p>
         </div>
       </div>
     </section>
