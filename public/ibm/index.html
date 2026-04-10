@@ -122,24 +122,37 @@
       min-width: 0;
     }
 
-    .hero-title-block::after {
-      content: "";
-      display: block;
-      clear: both;
+    .cta-row {
+      display: grid;
+      grid-template-columns: 220px minmax(0, 1fr);
+      gap: 18px;
+      align-items: stretch;
+      max-width: 938px;
+      margin: 0 auto;
     }
 
-    .hero-logo-float {
-      float: right;
-      width: 220px;
-      margin: 2px 0 14px 24px;
+    .cta-logo-panel {
+      border: 1px solid rgba(242,197,92,0.18);
+      background: linear-gradient(135deg, rgba(242,197,92,0.08), rgba(178,108,255,0.12));
+      border-radius: 28px;
+      padding: 18px;
+      box-shadow: var(--shadow);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100%;
+    }
+
+    .cta-logo-inner {
+      width: 100%;
       border: 1px solid rgba(255,255,255,0.14);
       border-radius: 24px;
       background: linear-gradient(180deg, rgba(255,255,255,0.09), rgba(255,255,255,0.04));
-      padding: 12px;
-      box-shadow: 0 24px 56px rgba(0,0,0,0.34);
+      padding: 14px;
+      box-shadow: 0 24px 56px rgba(0,0,0,0.22);
     }
 
-    .hero-logo-float img {
+    .cta-logo-inner img {
       width: 100%;
       border-radius: 16px;
       object-fit: contain;
@@ -404,8 +417,8 @@
 
     .claim-wrap {
       width: 100%;
-      max-width: 700px;
-      margin: 0 auto;
+      max-width: none;
+      margin: 0;
       border: 1px solid rgba(242,197,92,0.20);
       background: linear-gradient(135deg, rgba(242,197,92,0.10), rgba(178,108,255,0.12));
       border-radius: 28px;
@@ -469,11 +482,14 @@
     }
 
     @media (max-width: 860px) {
-      .hero-logo-float {
-        float: none;
-        width: 210px;
-        max-width: 100%;
-        margin: 0 0 14px 0;
+      .cta-row {
+        grid-template-columns: 1fr;
+      }
+
+      .cta-logo-panel {
+        max-width: 240px;
+        width: 100%;
+        margin: 0 auto;
       }
     }
 
@@ -496,7 +512,8 @@
       .section-title,
       .hero-copy,
       .feature-grid,
-      .helper {
+      .helper,
+      .cta-row {
         max-width: 100%;
       }
       .form-grid .full { grid-column: auto; }
@@ -530,9 +547,6 @@
       <div class="container hero-grid">
         <div class="content-column">
           <div class="hero-title-block">
-            <div class="hero-logo-float">
-              <img src="../Wizard_Head.png" alt="Magicians' AI Wizard logo" />
-            </div>
             <div class="eyebrow">Seen in The Linking Ring &amp; via IBM</div>
             <h1>Stop practicing <span class="gold">to a silent mirror.</span></h1>
           </div>
@@ -612,26 +626,36 @@
     </section>
 
     <section id="claim" class="section">
-      <div class="claim-wrap">
-        <div class="section-head">
-          <div class="section-kicker" style="color:#ffe6aa;">IBM Member Offer</div>
-          <h2 class="section-title">Claim your 30-day free trial</h2>
-        </div>
-        <p class="claim-copy">
-          Use the IBM offer to explore Magic AI Wizard without pressure. The goal is simple: help you see whether better rehearsal feedback and stronger structure can improve your performance.
-        </p>
+      <div class="container">
+        <div class="cta-row">
+          <div class="cta-logo-panel">
+            <div class="cta-logo-inner">
+              <img src="../Wizard_Head.png" alt="Magicians' AI Wizard logo" />
+            </div>
+          </div>
 
-        <form id="ibm-trial-form" class="form-grid" action="#" method="post">
-          <input type="text" name="first_name" placeholder="First name" />
-          <input type="text" name="last_name" placeholder="Last name" />
-          <input class="full" type="email" name="email" placeholder="Email address" />
-          <input type="text" name="ibm_ring" placeholder="IBM Ring / Chapter (optional)" />
-          <input type="text" name="promo_code" value="IBM30" placeholder="Promo code: IBM30" />
-        </form>
+          <div class="claim-wrap">
+            <div class="section-head">
+              <div class="section-kicker" style="color:#ffe6aa;">IBM Member Offer</div>
+              <h2 class="section-title">Claim your 30-day free trial</h2>
+            </div>
+            <p class="claim-copy">
+              Use the IBM offer to explore Magic AI Wizard without pressure. The goal is simple: help you see whether better rehearsal feedback and stronger structure can improve your performance.
+            </p>
 
-        <div class="form-foot">
-          <p>Connect this form to your signup flow and tag every lead with <strong>source = IBM</strong>.</p>
-          <button class="btn btn-primary" type="submit" form="ibm-trial-form">Start My 30-Day Trial</button>
+            <form id="ibm-trial-form" class="form-grid" action="#" method="post">
+              <input type="text" name="first_name" placeholder="First name" />
+              <input type="text" name="last_name" placeholder="Last name" />
+              <input class="full" type="email" name="email" placeholder="Email address" />
+              <input type="text" name="ibm_ring" placeholder="IBM Ring / Chapter (optional)" />
+              <input type="text" name="promo_code" value="IBM30" placeholder="Promo code: IBM30" />
+            </form>
+
+            <div class="form-foot">
+              <p>Connect this form to your signup flow and tag every lead with <strong>source = IBM</strong>.</p>
+              <button class="btn btn-primary" type="submit" form="ibm-trial-form">Start My 30-Day Trial</button>
+            </div>
+          </div>
         </div>
       </div>
     </section>
