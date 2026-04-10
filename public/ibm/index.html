@@ -110,31 +110,34 @@
       align-items: start;
     }
 
-    .hero-heading-row {
-      display: flex;
-      align-items: flex-start;
-      gap: 18px;
-      margin-bottom: 10px;
+    .hero-title-block {
+      position: relative;
+      max-width: 620px;
+      min-width: 0;
     }
 
-    .hero-logo-wrap {
-      flex: 0 0 152px;
+    .hero-title-block::after {
+      content: "";
+      display: block;
+      clear: both;
+    }
+
+    .hero-logo-float {
+      float: right;
+      width: 160px;
+      margin: 6px 0 10px 18px;
       border: 1px solid rgba(255,255,255,0.12);
-      border-radius: 24px;
+      border-radius: 20px;
       background: linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.03));
       padding: 10px;
       box-shadow: 0 20px 50px rgba(0,0,0,0.30);
     }
 
-    .hero-logo {
+    .hero-logo-float img {
       width: 100%;
-      border-radius: 16px;
+      border-radius: 12px;
       object-fit: contain;
-    }
-
-    .hero-title-block {
-      min-width: 0;
-      flex: 1;
+      display: block;
     }
 
     .eyebrow {
@@ -459,13 +462,11 @@
     }
 
     @media (max-width: 860px) {
-      .hero-heading-row {
-        flex-direction: column;
-        align-items: flex-start;
-      }
-      .hero-logo-wrap {
+      .hero-logo-float {
+        float: none;
         width: 180px;
         max-width: 100%;
+        margin: 0 0 12px 0;
       }
     }
 
@@ -509,14 +510,12 @@
     <section class="hero">
       <div class="container hero-grid">
         <div>
-          <div class="hero-heading-row">
-            <div class="hero-logo-wrap">
-              <img class="hero-logo" src="../magicaiwizard-logo.png" alt="Magicians' AI Wizard logo" />
+          <div class="hero-title-block">
+            <div class="hero-logo-float">
+              <img src="../magicaiwizard-logo.png" alt="Magicians' AI Wizard logo" />
             </div>
-            <div class="hero-title-block">
-              <div class="eyebrow">Seen in The Linking Ring &amp; via IBM</div>
-              <h1>Stop practicing <span class="gold">to a silent mirror.</span></h1>
-            </div>
+            <div class="eyebrow">Seen in The Linking Ring &amp; via IBM</div>
+            <h1>Stop practicing <span class="gold">to a silent mirror.</span></h1>
           </div>
 
           <p class="hero-copy">
@@ -525,11 +524,9 @@
 
           <div class="feature-grid">
             <div class="feature">✨ 30-day free trial for IBM members</div>
-            <div class="feature">✨ Built specifically for magicians</div>
             <div class="feature">✨ Scripts, planning, and business help</div>
             <div class="feature">✨ Brainstorm new effects and patter faster</div>
             <div class="feature">✨ Organize shows, tasks, and prep clearly</div>
-            <div class="feature">✨ Keep contracts and client work in one place</div>
           </div>
 
           <div class="actions">
