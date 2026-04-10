@@ -23,11 +23,13 @@ async function getDefaultActivityMetadata(): Promise<Record<string, any>> {
     const source = String(user?.user_metadata?.signup_source || '').trim().toLowerCase();
     const requestedTrialDaysRaw = Number(user?.user_metadata?.requested_trial_days);
     const requestedTrialDays = Number.isFinite(requestedTrialDaysRaw) && requestedTrialDaysRaw > 0 ? requestedTrialDaysRaw : null;
+    const ibmRing = String(user?.user_metadata?.ibm_ring || '').trim();
 
     const meta: Record<string, any> = {};
     if (source) meta.source = source;
     if (source === 'ibm') meta.campaign = 'ibm-30day';
     if (requestedTrialDays) meta.requested_trial_days = requestedTrialDays;
+    if (ibmRing) meta.ibm_ring = ibmRing;
     return meta;
   } catch {
     return {};

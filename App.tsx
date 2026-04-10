@@ -266,6 +266,7 @@ function App() {
           const requestedTrialDays = Number.isFinite(requestedTrialDaysRaw) && requestedTrialDaysRaw > 0
             ? requestedTrialDaysRaw
             : 14;
+          const ibmRing = String(metadata?.ibm_ring || '').trim();
           const initialTrialDays = signupSource === 'ibm' && requestedTrialDays === 30 ? 30 : 14;
 
           let appUser: User = {
@@ -277,6 +278,7 @@ function App() {
             trialEndDate: Date.now() + initialTrialDays * 24 * 60 * 60 * 1000,
             signupSource: signupSource || 'direct',
             requestedTrialDays: initialTrialDays,
+            ...(ibmRing ? { ibmRing } : {}),
           } as any;
 
           const profile = await getUserProfile(sbUser.id);
@@ -289,7 +291,7 @@ function App() {
               event_type: 'signup',
               success: true,
               metadata: signupSource === 'ibm'
-                ? { source: 'ibm', campaign: 'ibm-30day', requested_trial_days: initialTrialDays }
+                ? { source: 'ibm', campaign: 'ibm-30day', requested_trial_days: initialTrialDays, ...(ibmRing ? { ibm_ring: ibmRing } : {}) }
                 : { source: signupSource || 'direct', requested_trial_days: initialTrialDays },
             });
           }

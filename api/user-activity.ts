@@ -74,12 +74,13 @@ export default async function handler(req: any, res: any) {
       metadata: mergedMetadata,
     };
 
-    if (event_type === 'signup' || event_type === 'trial_expired' || event_type === 'checkout_completed') {
+    const dedupedEventTypes = new Set(['signup', 'trial_expired', 'checkout_completed']);
+    if (dedupedEventTypes.has(event_type)) {
       const { count } = await admin
         .from('user_activity_log')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', user.id)
-        .eq('event_type', 'signup');
+        .eq('event_type', event_type);
       if (!count) {
         await insertUserActivity(admin, baseRow as any);
       }

@@ -686,7 +686,7 @@
         if (ringInput) ringInput.focus();
         return;
       }
-      window.location.href = '/signup?source=ibm&trial=30&email=' + encodeURIComponent(email);
+      window.location.href = '/signup?source=ibm&trial=30&email=' + encodeURIComponent(email) + '&ibm_ring=' + encodeURIComponent(ibmRing);
     }
     document.addEventListener('DOMContentLoaded', function () {
       var form = document.getElementById('ibm-trial-form');

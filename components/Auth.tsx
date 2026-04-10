@@ -26,10 +26,11 @@ function getSignupContext() {
     const source = String(params.get('source') || '').trim().toLowerCase();
     const trial = String(params.get('trial') || '').trim();
     const email = String(params.get('email') || '').trim();
+    const ibmRing = String(params.get('ibm_ring') || '').trim();
     const isIbm = source === 'ibm' && trial === '30';
-    return { source, trial, email, isIbm };
+    return { source, trial, email, ibmRing, isIbm };
   } catch {
-    return { source: '', trial: '', email: '', isIbm: false };
+    return { source: '', trial: '', email: '', ibmRing: '', isIbm: false };
   }
 }
 
@@ -120,6 +121,7 @@ const initialMode = (() => {
         data: {
           signup_source: signupContext.source || 'direct',
           requested_trial_days: signupContext.isIbm ? 30 : 14,
+          ...(signupContext.isIbm && signupContext.ibmRing ? { ibm_ring: signupContext.ibmRing } : {}),
         },
       },
     });
@@ -155,7 +157,7 @@ const initialMode = (() => {
           event_type: 'signup',
           success: true,
           metadata: signupContext.isIbm
-            ? { source: 'ibm', campaign: 'ibm-30day', requested_trial_days: 30 }
+            ? { source: 'ibm', campaign: 'ibm-30day', requested_trial_days: 30, ...(signupContext.ibmRing ? { ibm_ring: signupContext.ibmRing } : {}) }
             : { source: signupContext.source || 'direct', requested_trial_days: 14 },
         });
         setMessage(signupContext.isIbm ? 'You’ve unlocked a 30-day Professional Trial (IBM Partner Access). Check your email if confirmation is required.' : 'Account created! Check your email if confirmation is required.');
