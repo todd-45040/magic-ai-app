@@ -139,7 +139,9 @@
         linear-gradient(135deg, rgba(242,197,92,0.10), rgba(178,108,255,0.14));
       border-radius: 28px;
       padding: 22px;
-      box-shadow: var(--shadow);
+      box-shadow:
+        0 30px 70px rgba(0,0,0,0.45),
+        0 0 40px rgba(178,108,255,0.12);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -234,6 +236,12 @@
 
     .btn:hover { transform: translateY(-1px); }
 
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 0 18px rgba(255,200,100,0.45),
+                  0 20px 40px rgba(242,197,92,0.28);
+    }
+
     .btn-primary {
       background: linear-gradient(135deg, #FFD36B, #FFB347);
       color: #120718;
@@ -304,7 +312,7 @@
 
     .section-kicker {
       font: 700 11px/1 Arial, Helvetica, sans-serif;
-      letter-spacing: 0.22em;
+      letter-spacing: 0.28em;
       text-transform: uppercase;
       color: #efddff;
       opacity: 0.8;
@@ -312,7 +320,7 @@
 
     .section-title {
       margin: 8px auto 0;
-      max-width: 700px;
+      max-width: 640px;
       font-size: clamp(30px, 3.6vw, 46px);
       line-height: 1.05;
       letter-spacing: -0.03em;
@@ -428,7 +436,7 @@
       border: 1px solid rgba(242,197,92,0.20);
       background: linear-gradient(135deg, rgba(242,197,92,0.10), rgba(178,108,255,0.12));
       border-radius: 28px;
-      padding: 22px 24px;
+      padding: 20px 22px;
       box-shadow: var(--shadow);
     }
 
@@ -454,8 +462,8 @@
 
     input {
       width: 100%;
-      border: 1px solid var(--border);
-      background: rgba(0,0,0,0.25);
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(0,0,0,0.35);
       color: var(--text);
       border-radius: 16px;
       padding: 12px 14px;
@@ -470,8 +478,8 @@
       margin: 14px auto 0;
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      gap: 10px;
+      justify-content: flex-start;
+      gap: 16px;
     }
 
     .form-foot p {
@@ -659,7 +667,7 @@
 
             <div class="form-foot">
               <p>Connect this form to your signup flow and tag every lead with <strong>source = IBM</strong>.</p>
-              <button class="btn btn-primary" type="submit" form="ibm-trial-form">Start My 30-Day Trial</button>
+              <button class="btn btn-primary" type="submit" form="ibm-trial-form">Start My Free 30-Day Trial</button>
             </div>
           </div>
         </div>
