@@ -124,19 +124,24 @@
 
     .cta-row {
       display: grid;
-      grid-template-columns: 220px minmax(0, 1fr);
-      gap: 18px;
+      grid-template-columns: 320px minmax(0, 1fr);
+      gap: 20px;
       align-items: stretch;
-      max-width: 938px;
+      max-width: 1220px;
       margin: 0 auto;
     }
 
     .cta-logo-panel {
       border: 1px solid rgba(242,197,92,0.18);
-      background: linear-gradient(135deg, rgba(242,197,92,0.08), rgba(178,108,255,0.12));
+      background:
+        radial-gradient(circle at top left, rgba(242,197,92,0.22), transparent 42%),
+        radial-gradient(circle at bottom right, rgba(178,108,255,0.26), transparent 50%),
+        linear-gradient(135deg, rgba(242,197,92,0.10), rgba(178,108,255,0.14));
       border-radius: 28px;
-      padding: 18px;
-      box-shadow: var(--shadow);
+      padding: 22px;
+      box-shadow:
+        0 30px 70px rgba(0,0,0,0.45),
+        0 0 40px rgba(178,108,255,0.12);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -145,18 +150,20 @@
 
     .cta-logo-inner {
       width: 100%;
-      border: 1px solid rgba(255,255,255,0.14);
-      border-radius: 24px;
-      background: linear-gradient(180deg, rgba(255,255,255,0.09), rgba(255,255,255,0.04));
-      padding: 14px;
+      border: 1px solid rgba(255,255,255,0.16);
+      border-radius: 26px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04));
+      padding: 16px;
       box-shadow: 0 24px 56px rgba(0,0,0,0.22);
     }
 
     .cta-logo-inner img {
       width: 100%;
+      max-height: 260px;
       border-radius: 16px;
       object-fit: contain;
       display: block;
+      margin: 0 auto;
     }
 
     .eyebrow {
@@ -325,7 +332,7 @@
       border: 1px solid var(--border);
       border-radius: 24px;
       background: var(--panel);
-      padding: 18px;
+      padding: 22px;
       min-height: 100%;
     }
 
@@ -372,7 +379,7 @@
       border: 1px solid var(--border);
       border-radius: 18px;
       background: rgba(255,255,255,0.05);
-      padding: 18px;
+      padding: 22px;
       min-height: 148px;
     }
 
@@ -422,7 +429,7 @@
       border: 1px solid rgba(242,197,92,0.20);
       background: linear-gradient(135deg, rgba(242,197,92,0.10), rgba(178,108,255,0.12));
       border-radius: 28px;
-      padding: 22px 24px;
+      padding: 20px 22px;
       box-shadow: var(--shadow);
     }
 
@@ -449,8 +456,8 @@
 
     input {
       width: 100%;
-      border: 1px solid var(--border);
-      background: rgba(0,0,0,0.25);
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(0,0,0,0.35);
       color: var(--text);
       border-radius: 16px;
       padding: 12px 14px;
@@ -465,8 +472,8 @@
       margin: 14px auto 0;
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      gap: 10px;
+      justify-content: flex-start;
+      gap: 16px;
     }
 
     .form-foot p {
@@ -488,7 +495,7 @@
       }
 
       .cta-logo-panel {
-        max-width: 240px;
+        max-width: 280px;
         width: 100%;
         margin: 0 auto;
       }
