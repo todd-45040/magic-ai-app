@@ -124,21 +124,18 @@
 
     .cta-row {
       display: grid;
-      grid-template-columns: 320px minmax(0, 1fr);
-      gap: 20px;
+      grid-template-columns: 220px minmax(0, 1fr);
+      gap: 18px;
       align-items: stretch;
-      max-width: 1220px;
+      max-width: 938px;
       margin: 0 auto;
     }
 
     .cta-logo-panel {
       border: 1px solid rgba(242,197,92,0.18);
-      background:
-        radial-gradient(circle at top left, rgba(242,197,92,0.22), transparent 42%),
-        radial-gradient(circle at bottom right, rgba(178,108,255,0.26), transparent 50%),
-        linear-gradient(135deg, rgba(242,197,92,0.10), rgba(178,108,255,0.14));
+      background: linear-gradient(135deg, rgba(242,197,92,0.08), rgba(178,108,255,0.12));
       border-radius: 28px;
-      padding: 22px;
+      padding: 18px;
       box-shadow: var(--shadow);
       display: flex;
       align-items: center;
@@ -148,21 +145,18 @@
 
     .cta-logo-inner {
       width: 100%;
-      border: 1px solid rgba(255,255,255,0.16);
-      border-radius: 26px;
-      background: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04));
-      padding: 16px;
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 24px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.09), rgba(255,255,255,0.04));
+      padding: 14px;
       box-shadow: 0 24px 56px rgba(0,0,0,0.22);
     }
 
     .cta-logo-inner img {
       width: 100%;
-      max-height: 280px;
       border-radius: 16px;
       object-fit: contain;
       display: block;
-      margin: 0 auto;
-      transform: scale(1.18);
     }
 
     .eyebrow {
@@ -493,7 +487,7 @@
       }
 
       .cta-logo-panel {
-        max-width: 300px;
+        max-width: 240px;
         width: 100%;
         margin: 0 auto;
       }
@@ -643,17 +637,17 @@
           <div class="claim-wrap">
             <div class="section-head">
               <div class="section-kicker" style="color:#ffe6aa;">IBM Member Offer</div>
-              <h2 class="section-title">Try Magic AI Wizard free for 30 days</h2>
+              <h2 class="section-title">Claim your 30-day free trial</h2>
             </div>
             <p class="claim-copy">
-              No pressure. Just better rehearsal, smarter structure, and real improvement for your act.
+              Use the IBM offer to explore Magic AI Wizard without pressure. The goal is simple: help you see whether better rehearsal feedback and stronger structure can improve your performance.
             </p>
 
             <form id="ibm-trial-form" class="form-grid" action="#" method="post">
               <input type="text" name="first_name" placeholder="First name" />
               <input type="text" name="last_name" placeholder="Last name" />
               <input class="full" type="email" name="email" placeholder="Email address" />
-              <input type="text" name="ibm_ring" placeholder="IBM Ring / Chapter (optional)" />
+              <input type="text" name="ibm_ring" placeholder="IBM Ring / Chapter" required />
               <input type="text" name="promo_code" value="IBM30" placeholder="Promo code: IBM30" />
             </form>
 
