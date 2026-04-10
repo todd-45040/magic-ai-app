@@ -36,7 +36,7 @@ async function fetchAllUserActivity(admin: any, ibmIds: string[], sinceIso: stri
     const end = start + pageSize - 1;
     const { data, error } = await admin
       .from('user_activity_log')
-      .select('user_id,event_type,tool_name,created_at,metadata')
+      .select('user_id,event_type,tool_name,created_at,metadata,success')
       .in('user_id', ibmIds)
       .gte('created_at', sinceIso)
       .order('created_at', { ascending: false })
@@ -98,23 +98,38 @@ export default async function handler(req: any, res: any) {
     const activatedTotalUsers = new Set<string>();
     const toolEventUsers = new Map<string, Set<string>>();
     const toolEventCounts = new Map<string, number>();
+    let signupEvents = 0;
+    let loginEvents = 0;
+    let firstLoginEvents = 0;
+    let firstIdeaSavedEvents = 0;
     let upgradePromptViewed = 0;
     let upgradeClicked = 0;
     let checkoutStarted = 0;
     let checkoutCompleted = 0;
     let trialExpiredEvents = 0;
+    let errorEvents = 0;
+    const errorKinds = new Map<string, number>();
 
     for (const row of activity) {
       const eventType = String(row?.event_type || '').trim().toLowerCase();
       const uid = String(row?.user_id || '');
       if (!uid) continue;
 
+      if (eventType === 'signup') signupEvents += 1;
+      if (eventType === 'login') loginEvents += 1;
+      if (eventType === 'first_login') firstLoginEvents += 1;
       if (eventType === 'first_tool_used') activatedWindowUsers.add(uid);
+      if (eventType === 'first_idea_saved') firstIdeaSavedEvents += 1;
       if (eventType === 'upgrade_prompt_viewed') upgradePromptViewed += 1;
       if (eventType === 'upgrade_clicked') upgradeClicked += 1;
       if (eventType === 'checkout_started') checkoutStarted += 1;
       if (eventType === 'checkout_completed') checkoutCompleted += 1;
       if (eventType === 'trial_expired') trialExpiredEvents += 1;
+      if (eventType === 'error') {
+        errorEvents += 1;
+        const kind = String(row?.metadata?.error_kind || 'unknown');
+        errorKinds.set(kind, (errorKinds.get(kind) || 0) + 1);
+      }
 
       if (eventType === 'tool_used' || eventType === 'first_tool_used') {
         const tool = normalizeTool(row?.tool_name);
@@ -150,6 +165,15 @@ export default async function handler(req: any, res: any) {
       .sort((a, b) => (b.events - a.events) || (b.users - a.users) || a.tool.localeCompare(b.tool))
       .slice(0, 8);
 
+    const topErrorKinds = Array.from(errorKinds.entries()).map(([error_kind, events]) => ({ error_kind, events })).sort((a,b)=>b.events-a.events).slice(0,5);
+
+    const rates = {
+      signup_to_activation: signupsTotal > 0 ? activatedTotalUsers.size / signupsTotal : null,
+      prompt_to_click: upgradePromptViewed > 0 ? upgradeClicked / upgradePromptViewed : null,
+      click_to_checkout: upgradeClicked > 0 ? checkoutStarted / upgradeClicked : null,
+      checkout_to_paid: checkoutStarted > 0 ? checkoutCompleted / checkoutStarted : null,
+    };
+
     const recentConverted = users
       .filter((u: any) => isPaidMembership(u?.membership))
       .map((u: any) => ({
@@ -173,13 +197,20 @@ export default async function handler(req: any, res: any) {
         active_trial_current: activeTrialCurrent,
       },
       events: {
+        signup: signupEvents,
+        login: loginEvents,
+        first_login: firstLoginEvents,
+        first_idea_saved: firstIdeaSavedEvents,
         upgrade_prompt_viewed: upgradePromptViewed,
         upgrade_clicked: upgradeClicked,
         checkout_started: checkoutStarted,
         checkout_completed: checkoutCompleted,
         trial_expired: trialExpiredEvents,
+        error: errorEvents,
       },
+      rates,
       most_used_tools: mostUsedTools,
+      top_error_kinds: topErrorKinds,
       recent_converted: recentConverted,
     });
   } catch (e: any) {

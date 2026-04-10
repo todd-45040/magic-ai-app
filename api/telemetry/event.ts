@@ -5,6 +5,7 @@
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { getIpFromReq, hashIp, logUsageEvent } from '../../server/telemetry.js';
+import { getUserIbmContext, normalizeIbmMetadata, insertUserActivity } from '../_lib/ibmTelemetry.js';
 
 function parseBearer(req: any): string | null {
   const h = req?.headers?.authorization || req?.headers?.Authorization;
@@ -46,7 +47,7 @@ async function resolveUser(token: string | null): Promise<{ user_id: string | nu
 }
 
 function classifyActivityEvent(tool: string, action: string, outcome: string, errorCode?: string | null, metadata?: any): null | { event_type: 'tool_used' | 'error'; success: boolean; tool_name: string; metadata: any } {
-  const selectedTools = new Set(['effect_generator', 'patter_engine', 'director_mode', 'contract_generator', 'live_rehearsal']);
+  const selectedTools = new Set(['effect_generator', 'patter_engine', 'director_mode', 'contract_generator', 'live_rehearsal', 'visual_brainstorm', 'video_rehearsal', 'persona_simulator', 'show_planner', 'client_management']);
   if (!selectedTools.has(tool)) return null;
 
   const message = String(metadata?.message || '').toLowerCase();
@@ -106,6 +107,15 @@ export default async function handler(req: any, res: any) {
     const identity_key = user_id ? `user:${user_id}` : `ip:${ip_hash}`;
 
     const outcome = String(body.outcome || 'SUCCESS_NOT_CHARGED');
+    let ibmContext: Record<string, any> = {};
+    try {
+      const url = getEnv('SUPABASE_URL') || getEnv('VITE_SUPABASE_URL');
+      const key = getEnv('SUPABASE_SERVICE_ROLE_KEY');
+      if (url && key && user_id) {
+        const admin = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+        ibmContext = await getUserIbmContext(admin, user_id);
+      }
+    } catch {}
 
     await logUsageEvent({
       request_id,
@@ -137,26 +147,27 @@ export default async function handler(req: any, res: any) {
         const key = getEnv('SUPABASE_SERVICE_ROLE_KEY');
         if (url && key) {
           const admin = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-          await admin.from('user_activity_log').insert({
+          const mergedMetadata = normalizeIbmMetadata(activity.metadata, ibmContext);
+          await insertUserActivity(admin, {
             user_id,
             email: user.email,
             tool_name: activity.tool_name,
             event_type: activity.event_type,
             success: activity.success,
             duration_ms: Number.isFinite(Number(body?.metadata?.duration_ms)) ? Number(body.metadata.duration_ms) : null,
-            metadata: activity.metadata,
+            metadata: mergedMetadata,
           });
           if (activity.event_type === 'tool_used') {
             const { count } = await admin.from('user_activity_log').select('id', { count: 'exact', head: true }).eq('user_id', user_id).eq('event_type', 'first_tool_used');
             if (!count) {
-              await admin.from('user_activity_log').insert({
+              await insertUserActivity(admin, {
                 user_id,
                 email: user.email,
                 tool_name: activity.tool_name,
                 event_type: 'first_tool_used',
                 success: true,
                 duration_ms: null,
-                metadata: activity.metadata,
+                metadata: mergedMetadata,
               });
             }
           }

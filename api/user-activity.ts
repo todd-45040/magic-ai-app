@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
+import { getUserIbmContext, normalizeIbmMetadata, insertUserActivity } from './_lib/ibmTelemetry.js';
 
 function parseBearer(req: any): string | null {
   const h = req?.headers?.authorization || req?.headers?.Authorization;
@@ -60,6 +61,8 @@ export default async function handler(req: any, res: any) {
     const success = body.success == null ? true : Boolean(body.success);
     const duration_ms = Number.isFinite(Number(body.duration_ms)) ? Number(body.duration_ms) : null;
     const metadata = body && typeof body.metadata === 'object' && body.metadata !== null ? body.metadata : {};
+    const ibmContext = await getUserIbmContext(admin, user.id);
+    const mergedMetadata = normalizeIbmMetadata(metadata, ibmContext);
 
     const baseRow = {
       user_id: user.id,
@@ -68,7 +71,7 @@ export default async function handler(req: any, res: any) {
       event_type,
       success,
       duration_ms,
-      metadata,
+      metadata: mergedMetadata,
     };
 
     if (event_type === 'signup' || event_type === 'trial_expired' || event_type === 'checkout_completed') {
@@ -78,10 +81,10 @@ export default async function handler(req: any, res: any) {
         .eq('user_id', user.id)
         .eq('event_type', 'signup');
       if (!count) {
-        await admin.from('user_activity_log').insert(baseRow);
+        await insertUserActivity(admin, baseRow as any);
       }
     } else {
-      await admin.from('user_activity_log').insert(baseRow);
+      await insertUserActivity(admin, baseRow as any);
     }
 
     if (event_type === 'login') {
@@ -91,7 +94,7 @@ export default async function handler(req: any, res: any) {
         .eq('user_id', user.id)
         .eq('event_type', 'first_login');
       if (!count) {
-        await admin.from('user_activity_log').insert({ ...baseRow, event_type: 'first_login', tool_name: 'system' });
+        await insertUserActivity(admin, { ...baseRow, event_type: 'first_login', tool_name: 'system' } as any);
       }
     }
 
@@ -102,7 +105,7 @@ export default async function handler(req: any, res: any) {
         .eq('user_id', user.id)
         .eq('event_type', 'first_tool_used');
       if (!count) {
-        await admin.from('user_activity_log').insert({ ...baseRow, event_type: 'first_tool_used' });
+        await insertUserActivity(admin, { ...baseRow, event_type: 'first_tool_used' } as any);
       }
     }
 
@@ -113,7 +116,7 @@ export default async function handler(req: any, res: any) {
         .eq('user_id', user.id)
         .eq('event_type', 'first_idea_saved');
       if (!count) {
-        await admin.from('user_activity_log').insert({ ...baseRow, event_type: 'first_idea_saved' });
+        await insertUserActivity(admin, { ...baseRow, event_type: 'first_idea_saved' } as any);
       }
     }
 
