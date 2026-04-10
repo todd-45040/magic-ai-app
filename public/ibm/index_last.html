@@ -446,8 +446,16 @@
     }
 
     .form-grid .full { grid-column: 1 / -1; }
+    .form-grid label { grid-column: 1 / -1; }
 
-    input {
+    label {
+      display: block;
+      margin: 2px 0 6px;
+      font: 600 12px/1.2 Arial, Helvetica, sans-serif;
+      color: rgba(247,242,255,0.84);
+    }
+
+input {
       width: 100%;
       border: 1px solid var(--border);
       background: rgba(0,0,0,0.25);
@@ -648,7 +656,8 @@
               <input type="text" name="first_name" placeholder="First name" />
               <input type="text" name="last_name" placeholder="Last name" />
               <input class="full" type="email" name="email" placeholder="Email address" />
-              <input type="text" name="ibm_ring" placeholder="IBM Ring / Chapter (optional)" />
+              <label for="ibm_ring">IBM Ring / Chapter *</label>
+          <input id="ibm_ring" type="text" name="ibm_ring" placeholder="Enter your IBM Ring number" required />
               <input type="text" name="promo_code" value="IBM30" placeholder="Promo code: IBM30" />
             </form>
 
@@ -668,8 +677,14 @@
       var form = e.target;
       var emailInput = form.querySelector('input[name="email"]');
       var email = emailInput ? String(emailInput.value || '').trim() : '';
+      var ringInput = form.querySelector('input[name="ibm_ring"]');
+      var ibmRing = ringInput ? String(ringInput.value || '').trim() : '';
       if (!email) {
         if (emailInput) emailInput.focus();
+        return;
+      }
+      if (!ibmRing) {
+        if (ringInput) ringInput.focus();
         return;
       }
       window.location.href = '/signup?source=ibm&trial=30&email=' + encodeURIComponent(email);
