@@ -3057,7 +3057,7 @@ useEffect(() => {
       }
       if (plan === 'professional') {
         return {
-          live_audio_minutes: { limit: 180, remaining: 180, dailyLimit: 180, hidden: false },
+          live_audio_minutes: { limit: 300, remaining: 300, dailyLimit: 60, hidden: false },
           image_gen: { limit: 100, remaining: 100, hidden: false },
           identify: { limit: 100, remaining: 100, hidden: false },
           video_uploads: { limit: 6, remaining: 6, dailyLimit: 6, hidden: false },

@@ -77,7 +77,7 @@ export const BILLING_PLAN_CATALOG: Record<BillingPlanKey, BillingPlanDefinition>
   },
   professional: {
     key: 'professional', planId: 'professional', stripeLookupKey: 'professional_monthly', displayName: 'Professional', publicLabel: 'Professional', monthlyPriceCents: 2995, annualPriceCents: 29950, entitlementTier: 'professional',
-    monthlyLimits: { text_generations: 1000, image_generations: 100, live_rehearsal_minutes: 180, video_analysis_clips: 6, saved_shows: INFINITE_LIMIT, saved_ideas: INFINITE_LIMIT },
+    monthlyLimits: { text_generations: 1000, image_generations: 100, live_rehearsal_minutes: 300, video_analysis_clips: 6, saved_shows: INFINITE_LIMIT, saved_ideas: INFINITE_LIMIT },
     heavyToolLimits: { imageGenerationsMonthly: 200, videoAnalysisClipsMonthly: 50, liveRehearsalMinutesMonthly: 300, maxConcurrentLiveSessions: 2, maxReconnectAttemptsPerSession: 5, maxVideoUploadMb: 50, maxImageUploadMb: 10 },
     storageLimits: { savedShows: INFINITE_LIMIT, savedIdeas: INFINITE_LIMIT }, featureAccessMatrix: buildFeatureMatrix(PROFESSIONAL_FEATURES),
     allowedUpgrades: ['founder_professional'],
@@ -86,7 +86,7 @@ export const BILLING_PLAN_CATALOG: Record<BillingPlanKey, BillingPlanDefinition>
   },
   founder_professional: {
     key: 'founder_professional', planId: 'founder_professional', stripeLookupKey: 'founder_professional_monthly', displayName: 'Founder Professional', publicLabel: 'Founder Professional', monthlyPriceCents: 2995, annualPriceCents: 29950, entitlementTier: 'professional',
-    monthlyLimits: { text_generations: 1000, image_generations: 100, live_rehearsal_minutes: 180, video_analysis_clips: 6, saved_shows: INFINITE_LIMIT, saved_ideas: INFINITE_LIMIT },
+    monthlyLimits: { text_generations: 1000, image_generations: 100, live_rehearsal_minutes: 300, video_analysis_clips: 6, saved_shows: INFINITE_LIMIT, saved_ideas: INFINITE_LIMIT },
     heavyToolLimits: { imageGenerationsMonthly: 200, videoAnalysisClipsMonthly: 50, liveRehearsalMinutesMonthly: 300, maxConcurrentLiveSessions: 2, maxReconnectAttemptsPerSession: 5, maxVideoUploadMb: 50, maxImageUploadMb: 10 },
     storageLimits: { savedShows: INFINITE_LIMIT, savedIdeas: INFINITE_LIMIT }, featureAccessMatrix: buildFeatureMatrix(PROFESSIONAL_FEATURES),
     allowedUpgrades: [],
