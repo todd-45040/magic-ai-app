@@ -15,7 +15,7 @@ const DAILY_LIMITS: Record<CanonicalTier, Limits> = {
   expired: { image: 0, video_upload: 0, live_minutes: 0, identify: 0 },
   trial: { image: 2, video_upload: 1, live_minutes: 20, identify: 10 },
   amateur: { image: 8, video_upload: 1, live_minutes: 0, identify: 50 },
-  professional: { image: 100, video_upload: 6, live_minutes: 60, identify: 100 },
+  professional: { image: 100, video_upload: 6, live_minutes: 180, identify: 100 },
 };
 
 const ADMIN_LIMIT = 999999;

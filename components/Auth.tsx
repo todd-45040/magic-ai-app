@@ -255,7 +255,7 @@ const initialMode = (() => {
                       </li>
                       <li className="flex items-start gap-2">
                         <span className="mt-1 inline-block h-1.5 w-1.5 rounded-full bg-yellow-400/90" />
-                        <span><span className="font-semibold text-white">Up to 60 minutes per day</span> of rehearsal coaching</span>
+                        <span><span className="font-semibold text-white">10 minutes per day</span> of rehearsal coaching</span>
                       </li>
                       <li className="flex items-start gap-2">
                         <span className="mt-1 inline-block h-1.5 w-1.5 rounded-full bg-yellow-400/90" />

@@ -59,7 +59,7 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
       title: 'Included During Trial',
       accentClass: 'text-green-200',
       features: [
-        'Rehearsal coaching: up to 60 minutes per day',
+        'Rehearsal coaching: 10 minutes per day',
         '1 active show in Show Planner',
         'Image Generation: 2 during trial',
         'Video Rehearsal: 1 upload during trial',

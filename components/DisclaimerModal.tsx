@@ -46,7 +46,7 @@ const usageRows: UsageRow[] = [
         label: 'Live Rehearsal audio',
         free: '15 min/day, 90 min / 14 days',
         amateur: '45 min/day, 60 min/month',
-        professional: '60 min/day, 300 min/month',
+        professional: '180 min/day, 300 min/month',
         note: 'Live rehearsal is also controlled by plan access and feature availability.',
     },
     {

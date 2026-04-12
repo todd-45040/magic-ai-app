@@ -14,6 +14,8 @@ import BlockedPanel from './BlockedPanel';
 import { normalizeBlockedUx, type BlockedUx } from '../services/blockedUx';
 import { trackClientEvent } from '../services/telemetryClient';
 import { logUserActivity } from '../services/userActivityService';
+import { isActiveTrialUser } from '../services/membershipService';
+import { isIbmTrialUser } from '../services/trialMessaging';
 
 // ---- Debug instrumentation (enabled via ?debugRehearsal=1 or localStorage MAW_DEBUG_REHEARSAL=1) ----
 type DebugEvent = { ts: number; event: string; data?: any };
@@ -550,6 +552,8 @@ const trackLiveRehearsalEvent = (action: string, metadata?: Record<string, any>,
     });
 };
 
+const LIVE_REHEARSAL_SOFT_WARNING_MINUTES = 15;
+
 const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => void }> = ({ user, onReturnToStudio, onIdeaSaved, onOpenAngleRisk, onOpenPatterEngine, onOpenDirectorMode, onRequestUpgrade }) => {
     const [view, setView] = useState<'idle' | 'rehearsing' | 'reviewing'>('idle');
     const [status, setStatus] = useState<'idle' | 'connecting' | 'listening' | 'error'>('idle');
@@ -624,6 +628,76 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
     // Phase 6.5: show daily live rehearsal remaining (server-backed when available)
     const [dailyLive, setDailyLive] = useState<{ used: number; limit: number; remaining: number; source: 'server' | 'local' } | null>(null);
     const dailyLiveStartRemainingRef = useRef<number | null>(null);
+    const [limitReachedModal, setLimitReachedModal] = useState<{ used: number; limit: number } | null>(null);
+    const viewedUpgradePromptRef = useRef<string | null>(null);
+
+    const isIbmActiveTrial = isIbmTrialUser(user) && isActiveTrialUser(user);
+
+    const showLiveLimitReachedModal = (used: number, limit: number) => {
+        const normalizedUsed = Math.max(0, Math.round(Number(used || 0)));
+        const normalizedLimit = Math.max(0, Math.round(Number(limit || 0)));
+        setLimitReachedModal({ used: normalizedUsed, limit: normalizedLimit });
+        const key = `live_limit_reached:${normalizedUsed}/${normalizedLimit}`;
+        if (viewedUpgradePromptRef.current !== key) {
+            viewedUpgradePromptRef.current = key;
+            void logUserActivity({
+                tool_name: 'live_rehearsal',
+                event_type: 'upgrade_prompt_viewed',
+                success: true,
+                metadata: {
+                    placement: 'live_rehearsal_limit_modal',
+                    used_minutes: normalizedUsed,
+                    limit_minutes: normalizedLimit,
+                    source: isIbmActiveTrial ? 'ibm' : undefined,
+                    audience: isIbmActiveTrial ? 'ibm_trial' : 'standard',
+                },
+            });
+        }
+    };
+
+    const openUpgradeFromLiveLimit = () => {
+        void logUserActivity({
+            tool_name: 'live_rehearsal',
+            event_type: 'upgrade_clicked',
+            success: true,
+            metadata: {
+                placement: limitReachedModal ? 'live_rehearsal_limit_modal' : 'live_rehearsal_warning_banner',
+                used_minutes: limitReachedModal?.used ?? dailyLive?.used ?? null,
+                limit_minutes: limitReachedModal?.limit ?? dailyLive?.limit ?? null,
+                source: isIbmActiveTrial ? 'ibm' : undefined,
+                audience: isIbmActiveTrial ? 'ibm_trial' : 'standard',
+            },
+        });
+        onRequestUpgrade?.();
+    };
+
+    const updateLiveUsageWarning = (used: number, limit: number, remaining: number) => {
+        const normalizedUsed = Math.max(0, Math.round(Number(used || 0)));
+        const normalizedLimit = Math.max(0, Math.round(Number(limit || 0)));
+        const normalizedRemaining = Math.max(0, Math.round(Number(remaining || 0)));
+        if (normalizedLimit > 0 && normalizedRemaining <= LIVE_REHEARSAL_SOFT_WARNING_MINUTES && normalizedRemaining > 0) {
+            setUsageWarning(`You’ve used ${normalizedUsed} of ${normalizedLimit} live rehearsal minutes today. ${normalizedRemaining} minutes remaining — upgrade for uninterrupted rehearsal.`);
+            const key = `live_warning:${normalizedRemaining}`;
+            if (viewedUpgradePromptRef.current !== key) {
+                viewedUpgradePromptRef.current = key;
+                void logUserActivity({
+                    tool_name: 'live_rehearsal',
+                    event_type: 'upgrade_prompt_viewed',
+                    success: true,
+                    metadata: {
+                        placement: 'live_rehearsal_warning_banner',
+                        used_minutes: normalizedUsed,
+                        limit_minutes: normalizedLimit,
+                        remaining_minutes: normalizedRemaining,
+                        source: isIbmActiveTrial ? 'ibm' : undefined,
+                        audience: isIbmActiveTrial ? 'ibm_trial' : 'standard',
+                    },
+                });
+            }
+            return;
+        }
+        setUsageWarning(null);
+    };
 
     const refreshDailyLive = async () => {
         try {
@@ -631,6 +705,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             const daily = (s as any)?.quota?.live_audio_minutes?.daily;
             if ((s as any)?.ok && daily && Number(daily.limit ?? 0) > 0) {
                 setDailyLive({ used: Number(daily.used ?? 0), limit: Number(daily.limit ?? 0), remaining: Number(daily.remaining ?? 0), source: 'server' });
+                updateLiveUsageWarning(Number(daily.used ?? 0), Number(daily.limit ?? 0), Number(daily.remaining ?? 0));
                 return;
             }
         } catch {
@@ -639,6 +714,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         try {
             const cur = getUsage(user, 'live_minutes');
             setDailyLive({ used: Number(cur.used ?? 0), limit: Number(cur.limit ?? 0), remaining: Number(cur.remaining ?? 0), source: 'local' });
+            updateLiveUsageWarning(Number(cur.used ?? 0), Number(cur.limit ?? 0), Number(cur.remaining ?? 0));
         } catch {
             // ignore
         }
@@ -905,8 +981,9 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             const daily = (s as any)?.quota?.live_audio_minutes?.daily;
             if ((s as any)?.ok && daily && Number(daily.limit ?? 0) > 0) {
                 setDailyLive({ used: Number(daily.used ?? 0), limit: Number(daily.limit ?? 0), remaining: Number(daily.remaining ?? 0), source: 'server' });
+                updateLiveUsageWarning(Number(daily.used ?? 0), Number(daily.limit ?? 0), Number(daily.remaining ?? 0));
                 dailyLiveStartRemainingRef.current = Number(daily.remaining ?? 0);
-                setUsageWarning(Number(daily.remaining ?? 0) <= Math.max(1, Math.ceil(Number(daily.limit ?? 0) * 0.2)) ? `Heads up: you only have ${Number(daily.remaining ?? 0)} live rehearsal minutes remaining today.` : null);
+                updateLiveUsageWarning(Number(daily.used ?? 0), Number(daily.limit ?? 0), Number(daily.remaining ?? 0));
             }
 
             if ((s as any)?.ok && daily && Number(daily.limit ?? 0) > 0 && Number(daily.remaining ?? 0) <= 0) {
@@ -917,9 +994,8 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                     )
                 );
                 setStatus('error');
-                setErrorMessage(
-                    `Daily live rehearsal minutes limit reached (${Number(daily.used ?? 0)}/${Number(daily.limit ?? 0)} min). This is separate from the AI message limit. Upgrade to continue.`
-                );
+                setErrorMessage(`You’ve reached today’s live rehearsal limit (${Number(daily.used ?? 0)}/${Number(daily.limit ?? 0)} min).`);
+                showLiveLimitReachedModal(Number(daily.used ?? 0), Number(daily.limit ?? 0));
                 trackLiveRehearsalEvent('live_rehearsal_start_blocked', { source: 'server', used: Number(daily.used ?? 0), limit: Number(daily.limit ?? 0) }, { outcome: 'ERROR_UPSTREAM', http_status: 429, error_code: 'quota_exceeded', retryable: false });
                 return;
             }
@@ -928,8 +1004,9 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             try {
                 const cur = getUsage(user, 'live_minutes');
                 setDailyLive({ used: Number(cur.used ?? 0), limit: Number(cur.limit ?? 0), remaining: Number(cur.remaining ?? 0), source: 'local' });
+            updateLiveUsageWarning(Number(cur.used ?? 0), Number(cur.limit ?? 0), Number(cur.remaining ?? 0));
                 dailyLiveStartRemainingRef.current = Number(cur.remaining ?? 0);
-                setUsageWarning(getSoftLimitWarning(user, 'live_minutes'));
+                updateLiveUsageWarning(Number(cur.used ?? 0), Number(cur.limit ?? 0), Number(cur.remaining ?? 0));
                 if (cur.limit > 0 && cur.remaining <= 0) {
                     setBlockedUx(
                         normalizeBlockedUx(
@@ -938,9 +1015,8 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                         )
                     );
                     setStatus('error');
-                    setErrorMessage(
-                        `Daily live rehearsal minutes limit reached (${cur.used}/${cur.limit} min). This is separate from the AI message limit. Upgrade to continue.`
-                    );
+                    setErrorMessage(`You’ve reached today’s live rehearsal limit (${cur.used}/${cur.limit} min).`);
+                    showLiveLimitReachedModal(Number(cur.used ?? 0), Number(cur.limit ?? 0));
                     trackLiveRehearsalEvent('live_rehearsal_start_blocked', { source: 'local', used: Number(cur.used ?? 0), limit: Number(cur.limit ?? 0) }, { outcome: 'ERROR_UPSTREAM', http_status: 429, error_code: 'quota_exceeded', retryable: false });
                     return;
                 }
@@ -1405,13 +1481,14 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                         )
                     );
                     setStatus('error');
-                    setErrorMessage(res.error || 'You’ve reached today’s live rehearsal limit. Your minutes reset tomorrow.');
+                    setErrorMessage(res.error || 'You’ve reached today’s live rehearsal limit.');
+                    showLiveLimitReachedModal(Number(res.liveUsed ?? dailyLive?.used ?? 0), Number(res.liveLimit ?? dailyLive?.limit ?? 60));
                 }
             } catch {
                 // Fall back to local tracker if server is unavailable.
                 try {
                     consumeLiveMinutes(user, minutes);
-                    setUsageWarning(getSoftLimitWarning(user, 'live_minutes'));
+                    updateLiveUsageWarning(Number(cur.used ?? 0), Number(cur.limit ?? 0), Number(cur.remaining ?? 0));
                     void refreshDailyLive();
                 } catch {
                     // ignore
@@ -1634,7 +1711,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                             usageWarning={usageWarning}
                             resourceNotice={resourceNotice}
                             blockedUx={blockedUx}
-                            onUpgrade={onRequestUpgrade}
+                            onUpgrade={onRequestUpgrade ? openUpgradeFromLiveLimit : undefined}
                             onStart={handleStartSession}
                             elapsed={sessionElapsed}
                             markerCount={markerCount}
@@ -1751,10 +1828,79 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                     <span>{timer.duration}</span>
                 </div>
             )}
+            {limitReachedModal ? (
+                <LiveLimitReachedModal
+                    used={limitReachedModal.used}
+                    limit={limitReachedModal.limit}
+                    isIbmTrial={isIbmActiveTrial}
+                    onUpgrade={onRequestUpgrade ? openUpgradeFromLiveLimit : undefined}
+                    onClose={() => setLimitReachedModal(null)}
+                />
+            ) : null}
         </div>
     );
 };
 
+
+type LiveLimitReachedModalProps = {
+    used: number;
+    limit: number;
+    isIbmTrial: boolean;
+    onUpgrade?: () => void;
+    onClose: () => void;
+};
+
+const LiveLimitReachedModal: React.FC<LiveLimitReachedModalProps> = ({ used, limit, isIbmTrial, onUpgrade, onClose }) => {
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4 backdrop-blur-sm" role="dialog" aria-modal="true">
+            <div className="w-full max-w-xl rounded-3xl border border-amber-400/30 bg-slate-950 shadow-2xl shadow-amber-900/30">
+                <div className="border-b border-slate-800 px-6 py-5 sm:px-8">
+                    <div className="inline-flex items-center rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-amber-200">
+                        🎭 Live rehearsal
+                    </div>
+                    <h3 className="mt-4 text-2xl font-bold text-white sm:text-3xl">You’ve reached today’s rehearsal limit</h3>
+                    <p className="mt-3 text-slate-300">
+                        You’ve used your full {used} of {limit} minutes of AI rehearsal coaching today — great work.
+                    </p>
+                    <p className="mt-2 text-slate-400">
+                        Performers who rehearse consistently improve faster. Keep going with extended access.
+                    </p>
+                </div>
+                <div className="px-6 py-6 sm:px-8">
+                    <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                        <div className="text-sm font-semibold text-amber-100">Want to keep refining your performance?</div>
+                        <ul className="mt-3 space-y-2 text-sm text-slate-200">
+                            <li>• Continue live feedback on pacing and delivery</li>
+                            <li>• Practice full routines without interruption</li>
+                            <li>• Get sharper, faster before your next show</li>
+                        </ul>
+                    </div>
+                    <div className="mt-4 rounded-2xl border border-purple-500/20 bg-purple-500/10 p-4 text-sm text-purple-100">
+                        {isIbmTrial
+                            ? 'Your 30-day IBM trial already proved the value of Live Rehearsal. Upgrade to keep your momentum going after today’s limit.'
+                            : 'Continue refining your timing, clarity, and confidence without interruption.'}
+                    </div>
+                </div>
+                <div className="flex flex-col-reverse gap-3 border-t border-slate-800 px-6 py-5 sm:flex-row sm:justify-end sm:px-8">
+                    <button
+                        onClick={onClose}
+                        className="rounded-xl border border-slate-700 px-4 py-3 text-sm font-semibold text-slate-200 transition-colors hover:bg-slate-800"
+                    >
+                        Continue Tomorrow
+                    </button>
+                    {onUpgrade ? (
+                        <button
+                            onClick={onUpgrade}
+                            className="rounded-xl bg-amber-400 px-4 py-3 text-sm font-bold text-slate-950 transition-colors hover:bg-amber-300"
+                        >
+                            Unlock More Rehearsal Time
+                        </button>
+                    ) : null}
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const StatusIndicator: React.FC<{
     status: string,
@@ -1838,8 +1984,16 @@ const StatusIndicator: React.FC<{
                     {resourceNotice}
                 </div>
                 {status !== 'error' && usageWarning ? (
-                    <div className="mt-5 text-sm text-amber-200 bg-amber-900/20 border border-amber-700/40 rounded-md px-3 py-2">
-                        {usageWarning}
+                    <div className="mt-5 flex flex-col gap-3 rounded-md border border-amber-700/40 bg-amber-900/20 px-3 py-3 text-sm text-amber-100 md:flex-row md:items-center md:justify-between">
+                        <div>{usageWarning}</div>
+                        {onUpgrade ? (
+                            <button
+                                onClick={onUpgrade}
+                                className="inline-flex items-center justify-center rounded-lg bg-amber-400 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-amber-300 transition-colors"
+                            >
+                                Upgrade for uninterrupted rehearsal
+                            </button>
+                        ) : null}
                     </div>
                 ) : null}
 
