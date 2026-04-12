@@ -54,7 +54,7 @@ begin
 
   case v_effective_membership
     when 'professional' then
-      v_daily_limit := 60;
+      v_daily_limit := 180;
       v_monthly_default := 300;
     when 'amateur' then
       v_daily_limit := 45;
