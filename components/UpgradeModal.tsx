@@ -3,22 +3,289 @@ import { CheckIcon, WandIcon, ShieldIcon } from './icons';
 import { getFounderLockLabel, getUpgradeUxCopy, isFounderProtected } from '../services/upgradeUx';
 import type { BillingCycle } from '../services/planCatalog';
 import { BILLING_PLAN_CATALOG, formatPriceCents } from '../services/planCatalog';
-interface UpgradeModalProps { onClose: () => void; onUpgrade: (selection: { tier:'amateur'|'professional'; billingCycle?: BillingCycle; founderRequested?: boolean; }) => void; variant?: 'locked-tool'|'trial-expired'|'generic'; user?: any; }
-const Row: React.FC<{ children: React.ReactNode }> = ({ children }) => <li className="flex items-start gap-3"><CheckIcon className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" /><span className="text-slate-200">{children}</span></li>;
-const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, onUpgrade, variant='generic', user }) => {
-  const founderProtected = isFounderProtected(user); const founderLockLabel = getFounderLockLabel(user); const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly'); const founderPricingApplied = founderProtected;
-  const ux = getUpgradeUxCopy(variant === 'trial-expired' ? 'trial_exhausted' : founderProtected ? 'founder_protected' : 'locked_by_plan', { user, targetPlan: 'Professional', toolName: 'this feature' });
-  const title = variant === 'trial-expired' ? ux.title : variant === 'locked-tool' ? 'Locked by plan' : 'Choose your access level';
-  const subtitle = variant === 'trial-expired' ? ux.message : founderProtected ? 'Your founder pricing remains protected across upgrades, downgrades, cancellation, and reactivation.' : 'Every paid tier now supports monthly, yearly, and founder-aware checkout paths.';
-  const priceText = (tier:'amateur'|'professional') => { const key = founderPricingApplied ? (tier==='amateur' ? 'founder_amateur' : 'founder_professional') : tier; const plan = BILLING_PLAN_CATALOG[key]; return `${formatPriceCents(billingCycle === 'yearly' ? plan.annualPriceCents : plan.monthlyPriceCents)}${billingCycle === 'yearly' ? '/yr' : '/mo'}`; };
-  return <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-start sm:items-center justify-center p-4 sm:p-6 overflow-y-auto z-50 animate-fade-in" onClick={onClose} role="dialog" aria-modal="true"><div className="w-full max-w-4xl bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl shadow-purple-900/40 max-h-[calc(100vh-3rem)] overflow-y-auto" onClick={(e)=>e.stopPropagation()}>
-    <div className="sticky top-0 z-20 p-6 sm:p-8 text-center border-b border-slate-800 bg-slate-900/95 backdrop-blur"><WandIcon className="w-14 h-14 mx-auto mb-3 text-amber-300" /><h2 className="font-cinzel text-3xl font-bold text-white">{title}</h2><p className="text-slate-300 mt-2">{subtitle}</p><div className="mt-4 inline-flex items-center gap-2 text-xs text-slate-400 bg-slate-800/60 border border-slate-700 rounded-full px-3 py-1"><ShieldIcon className="w-4 h-4 text-emerald-300" /><span>Secure payments • Cancel anytime • Billing state syncs through verified webhooks</span></div></div>
-    <div className="p-8 pb-28">{founderProtected && <div className="mb-6 rounded-2xl border border-amber-300/35 bg-amber-500/10 px-5 py-4"><div className="flex flex-wrap items-center gap-2"><span className="text-[11px] uppercase tracking-wider text-amber-200/90 font-semibold">Founder Protected</span><span className="text-[11px] rounded-full border border-amber-300/30 px-2 py-0.5 text-amber-100">Rate locked for life</span></div><div className="mt-2 text-sm text-amber-100">Your founder pricing stays attached to your account across subscription changes and reactivation.</div><div className="mt-1 text-xs text-slate-300/90">Lock key: <span className="font-mono text-amber-200/90">{founderLockLabel}</span></div></div>}
-      <div className="mb-6 flex flex-wrap items-center justify-center gap-3"><button onClick={()=>setBillingCycle('monthly')} className={`rounded-xl px-4 py-2 text-sm font-semibold ${billingCycle==='monthly' ? 'bg-purple-600 text-white' : 'border border-slate-700 bg-slate-800/60 text-slate-300'}`}>Monthly</button><button onClick={()=>setBillingCycle('yearly')} className={`rounded-xl px-4 py-2 text-sm font-semibold ${billingCycle==='yearly' ? 'bg-purple-600 text-white' : 'border border-slate-700 bg-slate-800/60 text-slate-300'}`}>Yearly</button><div className={`rounded-xl px-4 py-2 text-sm font-semibold ${founderPricingApplied ? 'bg-amber-500/15 text-amber-200 border border-amber-400/30' : 'border border-slate-700 bg-slate-800/60 text-slate-300'}`}>{founderPricingApplied ? 'Founder pricing locked' : 'Founder pricing path unavailable'}</div></div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6"><div className="p-6 bg-slate-950/30 border border-slate-800 rounded-2xl flex flex-col"><div className="flex items-center justify-between"><h3 className="text-2xl font-bold text-slate-100 font-cinzel">14-Day Free Trial</h3><span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-800/70 border border-slate-700 text-slate-200">Trial</span></div><p className="text-slate-400 mt-2">Built for evaluation and first-week momentum, not long-term production use.</p><div className="mt-4"><div className="text-3xl font-bold text-white">$0</div><div className="text-sm text-slate-400">No credit card required</div></div><ul className="space-y-2 mt-5 mb-6 flex-1"><Row>Daily AI cap plus 14-day trial limits on selected tools</Row><Row>Basic idea generation and research access</Row><Row>Best for evaluation, not full production workflow after trial ends</Row></ul><button onClick={onClose} className="w-full py-3 px-4 bg-slate-800 hover:bg-slate-700 rounded-xl text-white font-bold transition-colors">{variant === 'trial-expired' ? 'Close' : 'Continue on current plan'}</button></div>
-      {(['amateur','professional'] as const).map((tier) => <div key={tier} className={`p-6 ${tier==='professional' ? 'bg-gradient-to-b from-amber-500/10 to-slate-950/40 border-2 border-amber-400/70' : 'bg-slate-950/40 border border-slate-700'} rounded-2xl flex flex-col`}><div className="flex items-start justify-between gap-3"><div><h3 className={`text-2xl font-bold font-cinzel ${tier==='professional' ? 'text-amber-200' : 'text-purple-200'}`}>{tier === 'amateur' ? 'Amateur' : 'Professional'}</h3><p className="text-slate-400 mt-2">{tier === 'amateur' ? 'For consistent rehearsal and show-building work.' : 'Full performance and business operating system access.'}</p></div><span className={`text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ${tier==='professional' ? 'bg-amber-500/15 border border-amber-400/40 text-amber-200' : 'bg-purple-500/15 border border-purple-400/30 text-purple-200'}`}>{founderPricingApplied ? 'Pricing locked' : tier==='professional' ? 'Best for Pros' : 'Upgrade Available'}</span></div><div className="mt-4"><div className="text-3xl font-bold text-white">{priceText(tier)}</div><div className="text-sm text-slate-400">{founderPricingApplied ? 'Your current pricing is protected from future increases.' : 'Standard public pricing path.'}</div></div><ul className="space-y-2 mt-5 mb-6 flex-1">{tier === 'amateur' ? <><Row>Higher monthly AI and image limits</Row><Row>Show Planner, Saved Ideas, and Search access</Row><Row>Available as monthly, yearly, founder monthly, and founder yearly</Row></> : <><Row>Highest monthly AI and heavy-tool capacity</Row><Row>Live Rehearsal, Video Analysis, and business tools</Row><Row>Available as monthly, yearly, founder monthly, and founder yearly</Row></>}</ul><button onClick={() => onUpgrade({ tier, billingCycle, founderRequested: founderPricingApplied })} className={`w-full py-3 px-4 rounded-xl font-bold transition-colors ${tier==='professional' ? 'bg-amber-500 hover:bg-amber-600 text-slate-900 font-extrabold' : 'bg-purple-600 hover:bg-purple-700 text-white'}`}>Upgrade to {tier === 'amateur' ? 'Amateur' : 'Professional'}</button></div>)}
-      </div><div className="mt-6 text-center text-xs text-slate-500">Normalized billing truth: 2 memberships × 4 checkout categories, all routed through the same billing endpoint.</div></div>
-    <div className="sticky bottom-0 z-20 border-t border-slate-800 bg-slate-900/95 backdrop-blur px-6 py-4"><div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between"><button onClick={onClose} className="text-slate-400 hover:text-white transition-colors text-sm font-semibold">Close</button><div className="grid grid-cols-1 sm:flex sm:flex-row gap-3 sm:justify-end sm:items-center w-full sm:w-auto"><button onClick={() => onUpgrade({ tier:'professional', billingCycle, founderRequested: founderPricingApplied })} className="order-1 sm:order-3 w-full sm:w-auto py-2.5 px-4 bg-amber-500/90 hover:bg-amber-500 rounded-xl text-slate-950 font-extrabold transition-colors">Upgrade to Professional</button><button onClick={() => onUpgrade({ tier:'amateur', billingCycle, founderRequested: founderPricingApplied })} className="order-2 sm:order-2 w-full sm:w-auto py-2.5 px-4 rounded-xl font-bold transition-colors border border-purple-400/40 text-purple-200 bg-slate-900/30 hover:bg-slate-800/60 sm:border-0 sm:text-white sm:bg-purple-700/80 sm:hover:bg-purple-700">Upgrade to Amateur</button>{variant !== 'trial-expired' && <button onClick={onClose} className="order-3 sm:order-1 w-full sm:w-auto py-2.5 px-4 bg-slate-800 hover:bg-slate-700 rounded-xl text-white font-bold transition-colors">Continue on current plan</button>}</div></div></div>
-  </div></div>;
+
+interface UpgradeModalProps {
+  onClose: () => void;
+  onUpgrade: (selection: {
+    tier: 'amateur' | 'professional';
+    billingCycle?: BillingCycle;
+    founderRequested?: boolean;
+  }) => void;
+  variant?: 'locked-tool' | 'trial-expired' | 'generic';
+  user?: any;
+}
+
+const Row: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <li className="flex items-start gap-3">
+    <CheckIcon className="mt-0.5 h-5 w-5 flex-shrink-0 text-green-400" />
+    <span className="text-slate-200">{children}</span>
+  </li>
+);
+
+const UpgradeModal: React.FC<UpgradeModalProps> = ({
+  onClose,
+  onUpgrade,
+  variant = 'generic',
+  user,
+}) => {
+  const founderProtected = isFounderProtected(user);
+  const founderLockLabel = getFounderLockLabel(user);
+  const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly');
+  const founderPricingApplied = founderProtected;
+
+  const ux = getUpgradeUxCopy(
+    variant === 'trial-expired'
+      ? 'trial_exhausted'
+      : founderProtected
+        ? 'founder_protected'
+        : 'locked_by_plan',
+    { user, targetPlan: 'Professional', toolName: 'this feature' },
+  );
+
+  const title =
+    variant === 'trial-expired'
+      ? ux.title
+      : variant === 'locked-tool'
+        ? 'Locked by plan'
+        : 'Choose your access level';
+
+  const subtitle =
+    variant === 'trial-expired'
+      ? ux.message
+      : founderProtected
+        ? 'Your founder pricing stays protected across upgrades, downgrades, cancellation, and reactivation.'
+        : 'Choose the plan that matches how often you rehearse, create, and run your shows.';
+
+  const priceText = (tier: 'amateur' | 'professional') => {
+    const key = founderPricingApplied
+      ? tier === 'amateur'
+        ? 'founder_amateur'
+        : 'founder_professional'
+      : tier;
+
+    const plan = BILLING_PLAN_CATALOG[key];
+    return `${formatPriceCents(
+      billingCycle === 'yearly' ? plan.annualPriceCents : plan.monthlyPriceCents,
+    )}${billingCycle === 'yearly' ? '/yr' : '/mo'}`;
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[200] flex items-start justify-center overflow-y-auto bg-slate-950/85 p-4 backdrop-blur-md sm:items-center sm:p-6"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        className="relative w-full max-w-5xl rounded-3xl border border-slate-700 bg-slate-900 shadow-2xl shadow-black/50"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={onClose}
+          className="absolute right-4 top-4 rounded-full border border-slate-700 bg-slate-800/90 px-3 py-1.5 text-sm font-semibold text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
+          aria-label="Close upgrade modal"
+        >
+          Close
+        </button>
+
+        <div className="border-b border-slate-800 px-6 pb-6 pt-8 text-center sm:px-8">
+          <WandIcon className="mx-auto mb-3 h-12 w-12 text-amber-300" />
+          <h2 className="font-cinzel text-3xl font-bold text-white">{title}</h2>
+          <p className="mx-auto mt-3 max-w-2xl text-slate-300">{subtitle}</p>
+          <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-800/60 px-3 py-1 text-xs text-slate-400">
+            <ShieldIcon className="h-4 w-4 text-emerald-300" />
+            <span>Secure payments • Cancel anytime • Billing syncs automatically</span>
+          </div>
+        </div>
+
+        <div className="px-6 py-6 sm:px-8 sm:py-8">
+          {founderProtected && (
+            <div className="mb-6 rounded-2xl border border-amber-300/35 bg-amber-500/10 px-5 py-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-200/90">
+                  Founder Protected
+                </span>
+                <span className="rounded-full border border-amber-300/30 px-2 py-0.5 text-[11px] text-amber-100">
+                  Rate locked for life
+                </span>
+              </div>
+              <div className="mt-2 text-sm text-amber-100">
+                Your founder pricing stays attached to your account across subscription changes and reactivation.
+              </div>
+              <div className="mt-1 text-xs text-slate-300/90">
+                Lock key: <span className="font-mono text-amber-200/90">{founderLockLabel}</span>
+              </div>
+            </div>
+          )}
+
+          <div className="mb-8 flex flex-wrap items-center justify-center gap-3">
+            <div className="inline-flex rounded-2xl border border-slate-700 bg-slate-950/50 p-1">
+              <button
+                onClick={() => setBillingCycle('monthly')}
+                className={`rounded-xl px-4 py-2 text-sm font-semibold transition-colors ${
+                  billingCycle === 'monthly'
+                    ? 'bg-purple-600 text-white'
+                    : 'text-slate-300 hover:bg-slate-800/80'
+                }`}
+              >
+                Monthly
+              </button>
+              <button
+                onClick={() => setBillingCycle('yearly')}
+                className={`rounded-xl px-4 py-2 text-sm font-semibold transition-colors ${
+                  billingCycle === 'yearly'
+                    ? 'bg-purple-600 text-white'
+                    : 'text-slate-300 hover:bg-slate-800/80'
+                }`}
+              >
+                Yearly
+              </button>
+            </div>
+            <div
+              className={`rounded-xl px-4 py-2 text-sm font-semibold ${
+                founderPricingApplied
+                  ? 'border border-amber-400/30 bg-amber-500/15 text-amber-200'
+                  : 'border border-slate-700 bg-slate-800/60 text-slate-300'
+              }`}
+            >
+              {founderPricingApplied ? 'Founder pricing locked' : 'Founder pricing unavailable'}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <div className="flex flex-col rounded-2xl border border-slate-800 bg-slate-950/30 p-6">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="font-cinzel text-2xl font-bold text-slate-100">14-Day Free Trial</h3>
+                <span className="rounded-full border border-slate-700 bg-slate-800/70 px-2.5 py-1 text-xs font-semibold text-slate-200">
+                  Trial
+                </span>
+              </div>
+              <p className="mt-2 text-slate-400">
+                Built for evaluation and first-week momentum, not long-term production use.
+              </p>
+              <div className="mt-4">
+                <div className="text-3xl font-bold text-white">$0</div>
+                <div className="text-sm text-slate-400">No credit card required</div>
+              </div>
+              <ul className="mb-6 mt-5 flex-1 space-y-2">
+                <Row>Daily AI cap plus 14-day trial limits on selected tools</Row>
+                <Row>Basic idea generation and research access</Row>
+                <Row>Best for evaluation, not full production workflow after trial ends</Row>
+              </ul>
+              <button
+                onClick={onClose}
+                className="w-full rounded-xl bg-slate-800 px-4 py-3 font-bold text-white transition-colors hover:bg-slate-700"
+              >
+                {variant === 'trial-expired' ? 'Close' : 'Continue on current plan'}
+              </button>
+            </div>
+
+            {(['amateur', 'professional'] as const).map((tier) => (
+              <div
+                key={tier}
+                className={`flex h-full flex-col rounded-2xl p-6 ${
+                  tier === 'professional'
+                    ? 'border-2 border-amber-400/70 bg-gradient-to-b from-amber-500/10 to-slate-950/40'
+                    : 'border border-slate-700 bg-slate-950/40'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3
+                      className={`font-cinzel text-2xl font-bold ${
+                        tier === 'professional' ? 'text-amber-200' : 'text-purple-200'
+                      }`}
+                    >
+                      {tier === 'amateur' ? 'Amateur' : 'Professional'}
+                    </h3>
+                    <p className="mt-2 text-slate-400">
+                      {tier === 'amateur'
+                        ? 'For consistent rehearsal and show-building work.'
+                        : 'Full performance and business operating system access.'}
+                    </p>
+                  </div>
+                  <span
+                    className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${
+                      tier === 'professional'
+                        ? 'border border-amber-400/40 bg-amber-500/15 text-amber-200'
+                        : 'border border-purple-400/30 bg-purple-500/15 text-purple-200'
+                    }`}
+                  >
+                    {founderPricingApplied
+                      ? 'Pricing locked'
+                      : tier === 'professional'
+                        ? 'Best for Pros'
+                        : 'Upgrade available'}
+                  </span>
+                </div>
+                <div className="mt-4">
+                  <div className="text-3xl font-bold text-white">{priceText(tier)}</div>
+                  <div className="text-sm text-slate-400">
+                    {founderPricingApplied
+                      ? 'Your current pricing is protected from future increases.'
+                      : 'Standard public pricing path.'}
+                  </div>
+                </div>
+                <ul className="mb-6 mt-5 flex-1 space-y-2">
+                  {tier === 'amateur' ? (
+                    <>
+                      <Row>Higher monthly AI and image limits</Row>
+                      <Row>Show Planner, Saved Ideas, and Search access</Row>
+                      <Row>Available as monthly and yearly billing</Row>
+                    </>
+                  ) : (
+                    <>
+                      <Row>Highest monthly AI and heavy-tool capacity</Row>
+                      <Row>Live Rehearsal, Video Analysis, and business tools</Row>
+                      <Row>Available as monthly and yearly billing</Row>
+                    </>
+                  )}
+                </ul>
+                <button
+                  onClick={() => onUpgrade({ tier, billingCycle, founderRequested: founderPricingApplied })}
+                  className={`mt-auto w-full rounded-xl px-4 py-3 font-bold transition-colors ${
+                    tier === 'professional'
+                      ? 'bg-amber-500 font-extrabold text-slate-900 hover:bg-amber-600'
+                      : 'bg-purple-600 text-white hover:bg-purple-700'
+                  }`}
+                >
+                  Upgrade to {tier === 'amateur' ? 'Amateur' : 'Professional'}
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-8 flex flex-col gap-3 border-t border-slate-800 pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-sm text-slate-400">
+              Pick a plan to continue without interruption, or close this panel and come back later.
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              {variant !== 'trial-expired' && (
+                <button
+                  onClick={onClose}
+                  className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 font-semibold text-white transition-colors hover:bg-slate-700"
+                >
+                  Continue on current plan
+                </button>
+              )}
+              <button
+                onClick={() =>
+                  onUpgrade({
+                    tier: 'professional',
+                    billingCycle,
+                    founderRequested: founderPricingApplied,
+                  })
+                }
+                className="rounded-xl bg-amber-500 px-4 py-3 font-extrabold text-slate-900 transition-colors hover:bg-amber-600"
+              >
+                Upgrade to Professional
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 };
+
 export default UpgradeModal;
