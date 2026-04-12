@@ -268,7 +268,7 @@ export function getUsageQuotaConfigForMembership(membership?: string | null): Us
     },
     dailyToolLimits: {
       live_audio_minutes:
-        billingPlanKey === 'professional' ? 180
+        billingPlanKey === 'professional' ? 60
         : billingPlanKey === 'amateur' ? 45
         : 10,
       video_uploads:
