@@ -1,6 +1,6 @@
 import type { User } from '../types';
 import { logUserActivity, type UserActivityEventType } from './userActivityService';
-import { getTrialPromptStage, isIbmTrialUser } from './trialMessaging';
+import { getPartnerTrialLabel, getTrialPromptStage, isPartnerTrialUser } from './trialMessaging';
 
 function getUserKey(user?: User | null): string {
   return String(user?.email || 'anonymous').trim().toLowerCase() || 'anonymous';
@@ -24,10 +24,12 @@ function markOnce(key: string): boolean {
 
 function baseMetadata(user?: User | null): Record<string, any> {
   const meta: Record<string, any> = {};
-  if (isIbmTrialUser(user)) {
-    meta.source = 'ibm';
-    meta.campaign = 'ibm-30day';
+  if (isPartnerTrialUser(user)) {
+    const source = String(user?.signupSource || '').toLowerCase() === 'sam' ? 'sam' : 'ibm';
+    meta.source = source;
+    meta.campaign = source === 'sam' ? 'sam_30day' : 'ibm-30day';
     meta.converted_from_trial = true;
+    meta.partner_label = getPartnerTrialLabel(user);
   }
   if (typeof user?.requestedTrialDays === 'number' && user.requestedTrialDays > 0) {
     meta.requested_trial_days = user.requestedTrialDays;
@@ -36,7 +38,7 @@ function baseMetadata(user?: User | null): Record<string, any> {
 }
 
 export function isIbmConversionCandidate(user?: User | null): boolean {
-  return isIbmTrialUser(user);
+  return isPartnerTrialUser(user);
 }
 
 export async function logIbmConversionEvent(

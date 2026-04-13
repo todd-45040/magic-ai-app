@@ -27,10 +27,13 @@ function getSignupContext() {
     const trial = String(params.get('trial') || '').trim();
     const email = String(params.get('email') || '').trim();
     const ibmRing = String(params.get('ibm_ring') || '').trim();
+    const samAssembly = String(params.get('sam') || '').trim();
     const isIbm = source === 'ibm' && trial === '30';
-    return { source, trial, email, ibmRing, isIbm };
+    const isSam = source === 'sam' && trial === '30';
+    const isPartner30Day = isIbm || isSam;
+    return { source, trial, email, ibmRing, samAssembly, isIbm, isSam, isPartner30Day };
   } catch {
-    return { source: '', trial: '', email: '', ibmRing: '', isIbm: false };
+    return { source: '', trial: '', email: '', ibmRing: '', samAssembly: '', isIbm: false, isSam: false, isPartner30Day: false };
   }
 }
 
@@ -74,15 +77,17 @@ const initialMode = (() => {
       : mode === 'signup'
       ? signupContext.isIbm
         ? 'Start Your 30-Day IBM Trial'
-        : 'Start Your 14-Day Free Trial'
+        : signupContext.isSam
+          ? 'Start Your 30-Day SAM Trial'
+          : 'Start Your 14-Day Free Trial'
       : 'Password Recovery';
 
   const subtitle =
     mode === 'login'
       ? 'Enter your credentials to open the Studio.'
       : mode === 'signup'
-      ? signupContext.isIbm
-        ? 'Create your account and unlock 30 days of IBM Partner trial access — no credit card required.'
+      ? signupContext.isPartner30Day
+        ? `Create your account and unlock 30 days of ${signupContext.isIbm ? 'IBM' : 'SAM'} Partner trial access — no credit card required.`
         : 'Create your account and start your 14-day trial workspace — no credit card required.'
       : 'We’ll email you a secure reset link.';
 
@@ -120,8 +125,9 @@ const initialMode = (() => {
         emailRedirectTo,
         data: {
           signup_source: signupContext.source || 'direct',
-          requested_trial_days: signupContext.isIbm ? 30 : 14,
+          requested_trial_days: signupContext.isPartner30Day ? 30 : 14,
           ...(signupContext.isIbm && signupContext.ibmRing ? { ibm_ring: signupContext.ibmRing } : {}),
+          ...(signupContext.isSam && signupContext.samAssembly ? { sam_assembly: signupContext.samAssembly } : {}),
         },
       },
     });
@@ -158,9 +164,11 @@ const initialMode = (() => {
           success: true,
           metadata: signupContext.isIbm
             ? { source: 'ibm', campaign: 'ibm-30day', requested_trial_days: 30, ...(signupContext.ibmRing ? { ibm_ring: signupContext.ibmRing } : {}) }
-            : { source: signupContext.source || 'direct', requested_trial_days: 14 },
+            : signupContext.isSam
+              ? { source: 'sam', campaign: 'sam_30day', requested_trial_days: 30, ...(signupContext.samAssembly ? { sam_assembly: signupContext.samAssembly } : {}) }
+              : { source: signupContext.source || 'direct', requested_trial_days: 14 },
         });
-        setMessage(signupContext.isIbm ? 'You’ve unlocked a 30-day Professional Trial (IBM Partner Access). Check your email if confirmation is required.' : 'Account created! Check your email if confirmation is required.');
+        setMessage(signupContext.isPartner30Day ? `You’ve unlocked a 30-day Professional Trial (${signupContext.isIbm ? 'IBM' : 'SAM'} Partner Access). Check your email if confirmation is required.` : 'Account created! Check your email if confirmation is required.');
         try { onLoginSuccess?.(); } catch {}
         try { onLogin?.({ email }); } catch {}
       } else {
@@ -239,7 +247,7 @@ const initialMode = (() => {
 <div className="mt-2 text-white text-xl font-semibold">{title}</div>
                 <div className="mt-1 text-white/65 text-sm text-center">{subtitle}</div>
 
-                {mode === 'signup' && signupContext.isIbm && (
+                {mode === 'signup' && signupContext.isPartner30Day && (
                   <div className="mt-4 w-full rounded-xl border border-yellow-300/20 bg-yellow-400/10 px-4 py-3 text-sm text-yellow-100">
                     IBM Partner Access detected. We’ll carry your 30-day trial source into signup.
                   </div>
@@ -247,11 +255,11 @@ const initialMode = (() => {
 
                 {mode === 'signup' && (
                   <div className="mt-4 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-                    <div className="text-xs font-semibold tracking-wide text-white/80">{signupContext.isIbm ? 'Your 30-day IBM trial includes' : 'Your 14-day trial includes'}</div>
+                    <div className="text-xs font-semibold tracking-wide text-white/80">{signupContext.isPartner30Day ? `Your 30-day ${signupContext.isIbm ? 'IBM' : 'SAM'} trial includes` : 'Your 14-day trial includes'}</div>
                     <ul className="mt-2 space-y-1.5 text-sm text-white/75">
                       <li className="flex items-start gap-2">
                         <span className="mt-1 inline-block h-1.5 w-1.5 rounded-full bg-yellow-400/90" />
-                        <span>{signupContext.isIbm ? <>IBM signup source captured for your extended trial</> : <>Save up to <span className="font-semibold text-white">10</span> ideas during trial</>}</span>
+                        <span>{signupContext.isPartner30Day ? <>{signupContext.isIbm ? 'IBM' : 'SAM'} signup source captured for your extended trial</> : <>Save up to <span className="font-semibold text-white">10</span> ideas during trial</>}</span>
                       </li>
                       <li className="flex items-start gap-2">
                         <span className="mt-1 inline-block h-1.5 w-1.5 rounded-full bg-yellow-400/90" />
@@ -271,7 +279,7 @@ const initialMode = (() => {
                       </li>
                       <li className="flex items-start gap-2">
                         <span className="mt-1 inline-block h-1.5 w-1.5 rounded-full bg-yellow-400/90" />
-                        <span>{signupContext.isIbm ? 'Extended 30-day IBM evaluation window' : 'Full Demo Mode access'}</span>
+                        <span>{signupContext.isPartner30Day ? `Extended 30-day ${signupContext.isIbm ? 'IBM' : 'SAM'} evaluation window` : 'Full Demo Mode access'}</span>
                       </li>
                     </ul>
                   </div>

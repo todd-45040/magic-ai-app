@@ -153,7 +153,7 @@ export const registerOrUpdateUser = async (user: User, uid: string): Promise<voi
     } else if (requestedExplicitTrial || existingActiveTrial) {
       membership = 'trial';
       if (!trialEndDate || !Number.isFinite(Number(trialEndDate))) {
-        const trialDays = requestedSource === 'ibm' && requestedTrialDays === 30 ? 30 : 14;
+        const trialDays = ((requestedSource === 'ibm' || requestedSource === 'sam') && requestedTrialDays === 30) ? 30 : 14;
         trialEndDate = Date.now() + trialDays * 24 * 60 * 60 * 1000;
       }
     } else {

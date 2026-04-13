@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Magic AI Wizard | SAM 30-Day Trial</title>
+  <meta name="description" content="Special 30-day Magic AI Wizard trial for Society of American Magicians members." />
+  <style>
+    :root {
+      --bg1: #120718;
+      --bg2: #1c0d2b;
+      --panel: rgba(255,255,255,0.06);
+      --border: rgba(255,255,255,0.12);
+      --text: #f7f2ff;
+      --muted: rgba(247,242,255,0.75);
+      --gold: #f2c55c;
+      --purple: #b26cff;
+      --shadow: 0 24px 60px rgba(0,0,0,0.36);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top, rgba(178,108,255,0.14), transparent 30%),
+        radial-gradient(circle at bottom right, rgba(242,197,92,0.10), transparent 24%),
+        linear-gradient(180deg, var(--bg1), var(--bg2) 42%, #09040d 100%);
+    }
+
+    a { color: inherit; text-decoration: none; }
+    img { max-width: 100%; display: block; }
+
+    .container {
+      width: min(1220px, calc(100% - 32px));
+      margin: 0 auto;
+    }
+
+    .content-column {
+      max-width: 700px;
+      margin-left: 0;
+      margin-right: auto;
+    }
+
+    .topbar {
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      padding: 14px 0;
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      backdrop-filter: blur(8px);
+      background: linear-gradient(180deg, rgba(18,7,24,0.86), rgba(18,7,24,0.58));
+    }
+
+    .topbar-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .brand-mark {
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.04);
+      padding: 4px;
+      object-fit: contain;
+    }
+
+    .brand-title {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      margin: 0;
+    }
+
+    .brand-sub {
+      margin: 2px 0 0;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .pill {
+      border: 1px solid rgba(242,197,92,0.35);
+      background: rgba(242,197,92,0.10);
+      color: #ffe6aa;
+      border-radius: 999px;
+      padding: 9px 13px;
+      font: 700 11px/1 Arial, Helvetica, sans-serif;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .hero {
+      padding: 18px 0 4px;
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.18fr) minmax(330px, 0.82fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .hero-title-block {
+      position: relative;
+      max-width: 700px;
+      min-width: 0;
+    }
+
+    .cta-row {
+      display: grid;
+      grid-template-columns: 320px minmax(0, 1fr);
+      gap: 20px;
+      align-items: stretch;
+      max-width: 1220px;
+      margin: 0 auto;
+    }
+
+    .cta-logo-panel {
+      border: 1px solid rgba(242,197,92,0.18);
+      background:
+        radial-gradient(circle at top left, rgba(242,197,92,0.22), transparent 42%),
+        radial-gradient(circle at bottom right, rgba(178,108,255,0.26), transparent 50%),
+        linear-gradient(135deg, rgba(242,197,92,0.10), rgba(178,108,255,0.14));
+      border-radius: 28px;
+      padding: 22px;
+      box-shadow:
+        0 30px 70px rgba(0,0,0,0.45),
+        0 0 40px rgba(178,108,255,0.12);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100%;
+    }
+
+    .cta-logo-inner {
+      width: 100%;
+      border: 1px solid rgba(255,255,255,0.16);
+      border-radius: 26px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04));
+      padding: 16px;
+      box-shadow: 0 24px 56px rgba(0,0,0,0.22);
+    }
+
+    .cta-logo-inner img {
+      width: 100%;
+      max-height: 260px;
+      border-radius: 16px;
+      object-fit: contain;
+      display: block;
+      margin: 0 auto;
+    }
+
+    .eyebrow {
+      display: inline-block;
+      margin-bottom: 12px;
+      border: 1px solid rgba(178,108,255,0.25);
+      background: rgba(178,108,255,0.10);
+      color: #efddff;
+      border-radius: 999px;
+      padding: 8px 12px;
+      font: 700 11px/1 Arial, Helvetica, sans-serif;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(50px, 6.2vw, 90px);
+      line-height: 0.9;
+      letter-spacing: -0.055em;
+      font-weight: 700;
+      max-width: 700px;
+    }
+
+    .gold { color: var(--gold); }
+
+    .hero-copy {
+      margin: 8px 0 0;
+      max-width: 700px;
+      font-size: clamp(16px, 1.5vw, 19px);
+      line-height: 1.42;
+      color: var(--muted);
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+      max-width: 700px;
+    }
+
+    .feature {
+      border: 1px solid var(--border);
+      background: var(--panel);
+      border-radius: 18px;
+      padding: 12px 14px;
+      font: 600 13px/1.35 Arial, Helvetica, sans-serif;
+      min-height: 50px;
+      box-shadow: var(--shadow);
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 16px;
+      padding: 12px 18px;
+      font: 700 13px/1 Arial, Helvetica, sans-serif;
+      transition: transform 0.15s ease, background 0.15s ease;
+    }
+
+    .btn:hover { transform: translateY(-1px); }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #FFD36B, #FFB347);
+      color: #120718;
+      box-shadow: 0 0 12px rgba(255,200,100,0.35), 0 16px 30px rgba(242,197,92,0.22);
+    }
+
+    .btn-secondary {
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.05);
+      color: var(--text);
+    }
+
+    .helper {
+      margin-top: 8px;
+      max-width: 700px;
+      font: 400 13px/1.45 Arial, Helvetica, sans-serif;
+      color: rgba(247,242,255,0.62);
+    }
+
+    .hero-side {
+      display: grid;
+      gap: 0;
+      align-content: start;
+      max-width: 455px;
+      width: 100%;
+      justify-self: end;
+    }
+
+    .panel {
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.04));
+      border-radius: 28px;
+      padding: 14px;
+      box-shadow: 0 30px 70px rgba(0,0,0,0.45);
+      backdrop-filter: blur(10px);
+    }
+
+    .ad-frame {
+      border-radius: 24px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(9,4,13,0.55);
+      min-height: 620px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px;
+      overflow: hidden;
+    }
+
+    .ad-image {
+      border-radius: 18px;
+      width: 100%;
+      height: auto;
+      max-height: 598px;
+      object-fit: contain;
+      object-position: top center;
+      box-shadow: 0 20px 48px rgba(0,0,0,0.32);
+    }
+
+    .section {
+      padding: 6px 0;
+    }
+
+    .section-head {
+      text-align: center;
+      margin-bottom: 10px;
+    }
+
+    .section-kicker {
+      font: 700 11px/1 Arial, Helvetica, sans-serif;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: #efddff;
+      opacity: 0.8;
+    }
+
+    .section-title {
+      margin: 8px auto 0;
+      max-width: 700px;
+      font-size: clamp(30px, 3.6vw, 46px);
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+    }
+
+    .benefit-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      align-items: stretch;
+      margin-top: 8px;
+    }
+
+    .benefit-card,
+    .info-card {
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      background: var(--panel);
+      padding: 22px;
+      min-height: 100%;
+    }
+
+    .benefit-card {
+      min-height: 120px;
+    }
+
+    .benefit-card h3,
+    .info-card h3 {
+      margin: 0;
+      font-size: 20px;
+      color: #ffe6aa;
+    }
+
+    .benefit-card p,
+    .info-card p {
+      margin: 8px 0 0;
+      font: 400 13px/1.55 Arial, Helvetica, sans-serif;
+      color: rgba(247,242,255,0.74);
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: minmax(0, 1.22fr) minmax(300px, 0.78fr);
+      gap: 16px;
+      align-items: stretch;
+    }
+
+    .info-card {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .app-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 16px;
+      flex: 1;
+    }
+
+    .small-card {
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: rgba(255,255,255,0.05);
+      padding: 22px;
+      min-height: 148px;
+    }
+
+    .small-card h4 {
+      margin: 0;
+      font: 700 15px/1.2 Arial, Helvetica, sans-serif;
+      color: #fff0c3;
+    }
+
+    .small-card p {
+      margin: 8px 0 0;
+      font: 400 14px/1.55 Arial, Helvetica, sans-serif;
+      color: rgba(247,242,255,0.74);
+    }
+
+    .support-card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.04));
+      justify-content: center;
+      text-align: left;
+      min-height: 100%;
+    }
+
+    .support-card p {
+      font-size: 14px;
+      line-height: 1.65;
+    }
+
+    .support-points {
+      display: grid;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .support-point {
+      border: 1px solid rgba(242,197,92,0.16);
+      background: rgba(242,197,92,0.07);
+      border-radius: 16px;
+      padding: 12px 14px;
+      font: 600 13px/1.45 Arial, Helvetica, sans-serif;
+      color: rgba(247,242,255,0.84);
+    }
+
+    .claim-wrap {
+      width: 100%;
+      max-width: none;
+      margin: 0;
+      border: 1px solid rgba(242,197,92,0.20);
+      background: linear-gradient(135deg, rgba(242,197,92,0.10), rgba(178,108,255,0.12));
+      border-radius: 28px;
+      padding: 20px 22px;
+      box-shadow: var(--shadow);
+    }
+
+    .claim-wrap .section-head { margin-bottom: 12px; }
+
+    .claim-copy {
+      max-width: 700px;
+      margin: 10px auto 0;
+      text-align: center;
+      font: 400 14px/1.55 Arial, Helvetica, sans-serif;
+      color: rgba(247,242,255,0.80);
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin: 16px auto 0;
+      max-width: 700px;
+    }
+
+    .form-grid .full { grid-column: 1 / -1; }
+    .form-grid label { grid-column: 1 / -1; }
+
+    input {
+      width: 100%;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(0,0,0,0.35);
+      color: var(--text);
+      border-radius: 16px;
+      padding: 12px 14px;
+      font: 400 14px/1.2 Arial, Helvetica, sans-serif;
+      outline: none;
+    }
+
+    input::placeholder { color: rgba(247,242,255,0.38); }
+
+    .form-foot {
+      max-width: 700px;
+      margin: 14px auto 0;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 16px;
+    }
+
+    .form-foot p {
+      margin: 0;
+      font: 400 13px/1.55 Arial, Helvetica, sans-serif;
+      color: rgba(247,242,255,0.60);
+    }
+
+    @media (max-width: 1100px) {
+      .hero-grid,
+      .two-col,
+      .benefit-grid { grid-template-columns: 1fr; }
+      .hero-side { max-width: 640px; justify-self: stretch; }
+    }
+
+    @media (max-width: 860px) {
+      .cta-row {
+        grid-template-columns: 1fr;
+      }
+
+      .cta-logo-panel {
+        max-width: 280px;
+        width: 100%;
+        margin: 0 auto;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .container { width: min(1220px, calc(100% - 20px)); }
+      .topbar-inner,
+      .form-foot,
+      .actions { align-items: stretch; }
+      .topbar-inner,
+      .form-foot { flex-direction: column; }
+      .feature-grid,
+      .form-grid,
+      .app-grid { grid-template-columns: 1fr; }
+
+      .content-column,
+      .claim-wrap,
+      .claim-copy,
+      .form-grid,
+      .form-foot,
+      .section-title,
+      .hero-copy,
+      .feature-grid,
+      .helper,
+      .cta-row {
+        max-width: 100%;
+      }
+      .form-grid .full { grid-column: auto; }
+      .pill { white-space: normal; text-align: center; }
+      h1 { font-size: 58px; line-height: 0.94; }
+      .section-title { font-size: 36px; }
+      .small-card,
+      .benefit-card { min-height: auto; }
+      .ad-frame {
+        min-height: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <div class="brand">
+        <img class="brand-mark" src="../favicon.ico" alt="Magic AI Wizard logo" />
+        <div>
+          <p class="brand-title">Magic AI Wizard</p>
+          <p class="brand-sub">Special offer for SAM members</p>
+        </div>
+      </div>
+      <div class="pill">30-Day SAM Trial</div>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="container hero-grid">
+        <div class="content-column">
+          <div class="hero-title-block">
+            <div class="eyebrow">Seen in M-U-M &amp; via SAM</div>
+            <h1>Stop practicing <span class="gold">to a silent mirror.</span></h1>
+          </div>
+
+          <p class="hero-copy">
+            Magic AI Wizard gives magicians real rehearsal feedback, smarter scripting tools, and practical business help—so you can improve your act before you ever step on stage.
+          </p>
+
+          <div class="feature-grid">
+            <div class="feature">✨ 30-day free trial for SAM members</div>
+            <div class="feature">✨ Scripts, planning, and business help</div>
+            <div class="feature">✨ Brainstorm new effects and patter faster</div>
+            <div class="feature">✨ Organize shows, tasks, and prep clearly</div>
+          </div>
+
+          <div class="actions">
+            <a class="btn btn-primary" href="#claim">Claim Your 30-Day Trial</a>
+            <a class="btn btn-secondary" href="#how-it-helps">See What It Helps You Do</a>
+          </div>
+
+          <p class="helper">Designed for SAM magicians who want better rehearsal, clearer thinking, and less admin friction.</p>
+        </div>
+
+        <div class="hero-side">
+          <div class="panel">
+            <div class="ad-frame">
+              <img class="ad-image" src="../sam-ad.png" alt="Magic AI Wizard SAM ad preview" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="how-it-helps" class="section">
+      <div class="container">
+        <div class="section-head content-column">
+          <div class="section-kicker">Why SAM members may care</div>
+          <h2 class="section-title">Built to help you improve your act and run it better</h2>
+        </div>
+
+        <div class="benefit-grid">
+          <div class="benefit-card"><h3>Create</h3><p>Generate patter, brainstorm effects, and develop stronger presentations faster.</p></div>
+          <div class="benefit-card"><h3>Refine</h3><p>Use rehearsal tools to hear where your delivery, clarity, or structure needs work.</p></div>
+          <div class="benefit-card"><h3>Rehearse</h3><p>Practice with guidance instead of guessing what an audience will feel.</p></div>
+          <div class="benefit-card"><h3>Run the Business</h3><p>Handle contracts, planning, and show organization with less friction.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container two-col">
+        <div class="info-card" style="background: rgba(0,0,0,0.22);">
+          <div>
+            <h3>How Magic AI Wizard helps SAM magicians</h3>
+            <p>One place to develop ideas, tighten your material, and stay organized between meetings, gigs, and rehearsals.</p>
+          </div>
+          <div class="app-grid">
+            <div class="small-card"><h4>For hobbyists</h4><p>Build confidence, organize ideas, and get better feedback before performing in public.</p></div>
+            <div class="small-card"><h4>For working performers</h4><p>Use the app as a practical assistant for rehearsal, planning, contracts, and faster prep.</p></div>
+            <div class="small-card"><h4>For SAM sharing</h4><p>A focused offer makes it easier to recommend through Assemblies, club channels, and member newsletters.</p></div>
+            <div class="small-card"><h4>For stronger routines</h4><p>Use scripting, structure, and rehearsal support together so you can improve the whole act—not just one trick.</p></div>
+          </div>
+        </div>
+
+        <div class="info-card support-card">
+          <div>
+            <h3>Built as a rehearsal and working assistant</h3>
+            <p>With the logo moved into the hero, this side panel now stays focused on the value of the platform instead of repeating the same branding lower on the page.</p>
+          </div>
+          <div class="support-points">
+            <div class="support-point">Sharper rehearsal feedback before you perform.</div>
+            <div class="support-point">Smarter scripting and structure for stronger routines.</div>
+            <div class="support-point">Cleaner planning, contracts, and business workflow in one place.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="claim" class="section">
+      <div class="container">
+        <div class="cta-row">
+          <div class="cta-logo-panel">
+            <div class="cta-logo-inner">
+              <img src="../magicaiwizard-logo.png" alt="Magicians' AI Wizard logo w/Text" />
+            </div>
+          </div>
+
+          <div class="claim-wrap">
+            <div class="section-head">
+              <div class="section-kicker" style="color:#ffe6aa;">SAM Member Offer</div>
+              <h2 class="section-title">Claim your 30-day free trial</h2>
+            </div>
+            <p class="claim-copy">
+              Use the SAM offer to explore Magic AI Wizard without pressure. The goal is simple: help you see whether better rehearsal feedback and stronger structure can improve your performance.
+            </p>
+
+            <form id="sam-trial-form" class="form-grid" action="#" method="post">
+              <input type="text" name="first_name" placeholder="First name" />
+              <input type="text" name="last_name" placeholder="Last name" />
+              <input class="full" type="email" name="email" placeholder="Email address" />
+              <label for="sam_assembly">SAM Assembly (optional)</label>
+              <input id="sam_assembly" type="text" name="sam" placeholder="Enter your SAM Assembly name or number" />
+              <input type="text" name="promo_code" value="SAM30" placeholder="Promo code: SAM30" />
+            </form>
+
+            <div class="form-foot">
+              <p>Connect this form to your signup flow and tag every lead with <strong>source = sam</strong>.</p>
+              <button class="btn btn-primary" type="submit" form="sam-trial-form">Start My 30-Day Trial</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    function handleSamTrialSubmit(e) {
+      e.preventDefault();
+      var form = e.target;
+      var emailInput = form.querySelector('input[name="email"]');
+      var email = emailInput ? String(emailInput.value || '').trim() : '';
+      var samInput = form.querySelector('input[name="sam"]');
+      var samAssembly = samInput ? String(samInput.value || '').trim() : '';
+      if (!email) {
+        if (emailInput) emailInput.focus();
+        return;
+      }
+      window.location.href = '/signup?source=sam&trial=30&email=' + encodeURIComponent(email) + '&sam=' + encodeURIComponent(samAssembly);
+    }
+    document.addEventListener('DOMContentLoaded', function () {
+      var form = document.getElementById('sam-trial-form');
+      if (form) form.addEventListener('submit', handleSamTrialSubmit);
+    });
+  </script>
+</body>
+</html>

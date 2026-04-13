@@ -267,7 +267,9 @@ function App() {
             ? requestedTrialDaysRaw
             : 14;
           const ibmRing = String(metadata?.ibm_ring || '').trim();
-          const initialTrialDays = signupSource === 'ibm' && requestedTrialDays === 30 ? 30 : 14;
+          const samAssembly = String(metadata?.sam_assembly || '').trim();
+          const isPartner30Day = (signupSource === 'ibm' || signupSource === 'sam') && requestedTrialDays === 30;
+          const initialTrialDays = isPartner30Day ? 30 : 14;
 
           let appUser: User = {
             email: sbUser.email,
@@ -279,6 +281,7 @@ function App() {
             signupSource: signupSource || 'direct',
             requestedTrialDays: initialTrialDays,
             ...(ibmRing ? { ibmRing } : {}),
+            ...(samAssembly ? { samAssembly } : {}),
           } as any;
 
           const profile = await getUserProfile(sbUser.id);
@@ -292,7 +295,9 @@ function App() {
               success: true,
               metadata: signupSource === 'ibm'
                 ? { source: 'ibm', campaign: 'ibm-30day', requested_trial_days: initialTrialDays, ...(ibmRing ? { ibm_ring: ibmRing } : {}) }
-                : { source: signupSource || 'direct', requested_trial_days: initialTrialDays },
+                : signupSource === 'sam'
+                  ? { source: 'sam', campaign: 'sam_30day', requested_trial_days: initialTrialDays, ...(samAssembly ? { sam_assembly: samAssembly } : {}) }
+                  : { source: signupSource || 'direct', requested_trial_days: initialTrialDays },
             });
           }
 

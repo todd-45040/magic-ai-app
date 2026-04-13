@@ -6,6 +6,10 @@
       "destination": "/signup/index.html"
     },
     {
+      "source": "/sam",
+      "destination": "/sam/index.html"
+    },
+    {
       "source": "/app",
       "destination": "/app/"
     },
