@@ -61,8 +61,10 @@ import MagicDictionary from './MagicDictionary';
 import AdminPanel from './AdminPanel';
 import AppSuggestionModal from './AppSuggestionModal';
 import BillingSettings from './BillingSettings';
+import TrialConversionBanner from './TrialConversionBanner';
 import { fetchUsageStatus, type UsageStatus } from '../services/usageStatusService';
 import { consume, getUsage } from '../services/usageTracker';
+import { logIbmConversionEvent, isIbmConversionCandidate } from '../services/ibmConversionTracking';
 
 interface AngleRiskFormProps {
     trickName: string;
@@ -4887,6 +4889,23 @@ const renderIntentSubnav = () => {
 
   const showFooter = activeView === 'chat';
 
+  const handleTrialConversionPrimaryAction = () => {
+    if (isIbmConversionCandidate(user)) {
+      void logIbmConversionEvent(user, 'upgrade_clicked', {
+        location: 'app',
+        active_view: activeView,
+        prompt_source: 'trial_conversion_banner',
+      });
+    }
+
+    if (isExpired) {
+      setIsUpgradeModalOpen(true);
+      return;
+    }
+
+    setActiveView('billing-settings');
+  };
+
   return (
     <div className="relative flex flex-col h-full rounded-lg border border-slate-800 shadow-2xl shadow-purple-900/20 overflow-hidden">
         {isUpgradeModalOpen && (
@@ -4979,6 +4998,7 @@ const renderIntentSubnav = () => {
             <AccountMenu user={user} onLogout={onLogout} onOpenBilling={() => setActiveView('billing-settings')} />
         </div>
       </header>
+      <TrialConversionBanner user={user} location="app" onPrimaryAction={handleTrialConversionPrimaryAction} />
 
       {/* Demo banner is handled globally by <DemoBanner /> to avoid stacked indicators in recordings. */}
 

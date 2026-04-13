@@ -55,7 +55,7 @@ export async function logIbmConversionEvent(
   });
 }
 
-export async function logTrialPromptViewed(user: User | null | undefined, location: 'dashboard' | 'billing'): Promise<void> {
+export async function logTrialPromptViewed(user: User | null | undefined, location: 'dashboard' | 'billing' | 'app' | 'app'): Promise<void> {
   if (!isIbmConversionCandidate(user)) return;
   const stage = getTrialPromptStage(user);
   if (!stage || stage === 'none') return;
@@ -64,7 +64,7 @@ export async function logTrialPromptViewed(user: User | null | undefined, locati
   await logIbmConversionEvent(user, 'upgrade_prompt_viewed', { stage, location });
 }
 
-export async function logTrialExpiredOnce(user: User | null | undefined, location: 'dashboard' | 'billing'): Promise<void> {
+export async function logTrialExpiredOnce(user: User | null | undefined, location: 'dashboard' | 'billing' | 'app' | 'app'): Promise<void> {
   if (!isIbmConversionCandidate(user)) return;
   const stage = getTrialPromptStage(user);
   if (stage !== 'expired') return;
