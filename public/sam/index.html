@@ -655,13 +655,12 @@
               <input type="text" name="first_name" placeholder="First name" />
               <input type="text" name="last_name" placeholder="Last name" />
               <input class="full" type="email" name="email" placeholder="Email address" />
-              <label for="sam_assembly">SAM Assembly (optional)</label>
-              <input id="sam_assembly" type="text" name="sam" placeholder="Enter your SAM Assembly name or number" />
+              <label for="sam_assembly">SAM Assembly Number *</label>
+              <input id="sam_assembly" type="text" name="sam" placeholder="Enter your SAM Assembly number" required />
               <input type="text" name="promo_code" value="SAM30" placeholder="Promo code: SAM30" />
             </form>
 
             <div class="form-foot">
-              <p>Connect this form to your signup flow and tag every lead with <strong>source = sam</strong>.</p>
               <button class="btn btn-primary" type="submit" form="sam-trial-form">Start My 30-Day Trial</button>
             </div>
           </div>
@@ -680,6 +679,11 @@
       var samAssembly = samInput ? String(samInput.value || '').trim() : '';
       if (!email) {
         if (emailInput) emailInput.focus();
+        return;
+      }
+      if (!samAssembly) {
+        if (samInput) samInput.focus();
+        alert('Please enter your SAM Assembly number.');
         return;
       }
       window.location.href = '/signup?source=sam&trial=30&email=' + encodeURIComponent(email) + '&sam=' + encodeURIComponent(samAssembly);
