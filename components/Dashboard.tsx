@@ -6,7 +6,7 @@ import { getPerformancesByShowId } from '../services/performanceService';
 import { supabase } from '../supabase';
 import { normalizeTier, getEffectiveMembershipTier, isActiveTrialUser } from '../services/membershipService';
 import { getTrialPromptCopy } from '../services/trialMessaging';
-import { logTrialExpiredOnce, logTrialPromptViewed } from '../services/ibmConversionTracking';
+import { logTrialExpiredOnce, logTrialPromptViewed, logUpgradeClickFromTrialPrompt } from '../services/ibmConversionTracking';
 import { RabbitIcon, ClockIcon, BookmarkIcon, WandIcon, MicrophoneIcon, StageCurtainsIcon, LightbulbIcon, UsersCogIcon, ChecklistIcon, FileTextIcon, ImageIcon, BookIcon, CustomizeIcon, DragHandleIcon, EyeIcon, EyeOffIcon, ChevronDownIcon } from './icons';
 
 interface DashboardProps {
@@ -539,7 +539,14 @@ const Dashboard: React.FC<DashboardProps> = ({ variant = 'full', user, shows, fe
                                 <div className="mt-1 text-sm text-white/75">{trialPrompt.message}</div>
                             </div>
                             <button
-                                onClick={() => onNavigate('billing-settings')}
+                                onClick={() => {
+                                    void logUpgradeClickFromTrialPrompt(user, 'dashboard', {
+                                        active_stage: trialPrompt.stage,
+                                        cta_text: trialPrompt.cta,
+                                        prompt_source: 'dashboard_home_prompt',
+                                    });
+                                    onNavigate('billing-settings');
+                                }}
                                 className={`inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold transition ${trialPrompt.stage === 'expired' ? 'bg-amber-500 text-slate-950 hover:bg-amber-400' : 'bg-purple-600 text-white hover:bg-purple-700'}`}
                             >
                                 {trialPrompt.cta}

@@ -25,6 +25,7 @@ import FounderSuccessPage from './components/FounderSuccessPage';
 import { isDemoEnabled, enableDemo, seedDemoData } from './services/demoSeedService';
 import { createCheckoutSession, fetchBillingStatus, resolveCheckoutLookupKey } from './services/billingClient';
 import { logIbmConversionEvent, isIbmConversionCandidate } from './services/ibmConversionTracking';
+import { getTrialPromptStage } from './services/trialMessaging';
 import { logUserActivity } from './services/userActivityService';
 
 const DISCLAIMER_ACKNOWLEDGED_KEY = 'magician_ai_disclaimer_acknowledged';
@@ -53,11 +54,15 @@ function App() {
       const lookupKey = resolveCheckoutLookupKey(normalized, billingStatus);
 
       if (isIbmConversionCandidate(user)) {
+        const promptStage = getTrialPromptStage(user);
         void logIbmConversionEvent(user, 'upgrade_clicked', {
           target_plan: normalized?.tier || 'professional',
           billing_cycle: normalized?.billingCycle || 'monthly',
           founder_requested: Boolean(normalized?.founderRequested),
           target_lookup_key: lookupKey,
+          stage: promptStage && promptStage !== 'none' ? promptStage : undefined,
+          location: 'billing_flow',
+          prompt_source: 'upgrade_entrypoint',
         });
       }
 
@@ -71,6 +76,8 @@ function App() {
             founder_requested: Boolean(normalized?.founderRequested),
             target_lookup_key: lookupKey,
             billing_action: result?.billingAction || 'checkout_session',
+            stage: (() => { const stage = getTrialPromptStage(user); return stage && stage !== 'none' ? stage : undefined; })(),
+            location: 'billing_flow',
           });
         }
         window.location.href = String(result.url);
@@ -85,6 +92,8 @@ function App() {
             founder_requested: Boolean(normalized?.founderRequested),
             target_lookup_key: lookupKey,
             billing_action: result?.billingAction || 'subscription_update',
+            stage: (() => { const stage = getTrialPromptStage(user); return stage && stage !== 'none' ? stage : undefined; })(),
+            location: 'billing_flow',
           });
         }
         alert(result?.message || 'Billing cycle updated successfully.');

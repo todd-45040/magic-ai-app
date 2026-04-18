@@ -72,3 +72,19 @@ export async function logTrialExpiredOnce(user: User | null | undefined, locatio
   if (!markOnce(key)) return;
   await logIbmConversionEvent(user, 'trial_expired', { location, stage: 'expired' });
 }
+
+
+export async function logUpgradeClickFromTrialPrompt(
+  user: User | null | undefined,
+  location: 'dashboard' | 'billing' | 'app',
+  metadata?: Record<string, any>,
+): Promise<void> {
+  if (!isIbmConversionCandidate(user)) return;
+  const stage = getTrialPromptStage(user);
+  await logIbmConversionEvent(user, 'upgrade_clicked', {
+    stage: stage && stage !== 'none' ? stage : undefined,
+    location,
+    prompt_source: 'trial_conversion_prompt',
+    ...(metadata || {}),
+  });
+}

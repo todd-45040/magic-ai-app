@@ -68,6 +68,9 @@ export default function AdminIbmDashboard() {
   const events = data?.events || {};
   const rates = data?.rates || {};
   const tools = Array.isArray(data?.most_used_tools) ? data.most_used_tools : [];
+  const promptStageBreakdown = data?.prompt_stage_breakdown || {};
+  const promptViewedByStage = promptStageBreakdown?.viewed || {};
+  const promptClickedByStage = promptStageBreakdown?.clicked || {};
   const recentConverted = Array.isArray(data?.recent_converted) ? data.recent_converted : [];
   const topErrors = Array.isArray(data?.top_error_kinds) ? data.top_error_kinds : [];
 
@@ -77,6 +80,8 @@ export default function AdminIbmDashboard() {
     checkoutStarted: num(events.checkout_started),
     checkoutCompleted: num(events.checkout_completed),
     firstIdeaSaved: num(events.first_idea_saved),
+    promptViewed: num(events.upgrade_prompt_viewed),
+    promptClicked: num(events.upgrade_clicked),
     conversionsTotal: num(summary.conversions_total),
     activeTrials: num(summary.active_trial_current),
     expired: num(summary.expired_users_current),
@@ -141,8 +146,8 @@ export default function AdminIbmDashboard() {
               <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
                 <KpiCard label="First Tool Used" value={num(events.first_tool_used)} sub={`Window signup→activation: ${pct(rates.window_signup_to_activation)}`} />
                 <KpiCard label="First Idea Saved" value={headline.firstIdeaSaved} sub={`Activation→save: ${pct(rates.activation_to_first_idea_saved)}`} />
-                <KpiCard label="Checkout Completed" value={headline.checkoutCompleted} sub={`Checkout→paid: ${pct(rates.checkout_to_paid)}`} />
-                <KpiCard label="Activation Rate" value={pct(rates.signup_to_activation)} sub={`Click→checkout: ${pct(rates.click_to_checkout)}`} />
+                <KpiCard label="Prompt Views" value={headline.promptViewed} sub={`Prompt→click: ${pct(rates.prompt_to_click)}`} />
+                <KpiCard label="Prompt Clicks" value={headline.promptClicked} sub={`Click→checkout: ${pct(rates.click_to_checkout)}`} />
               </div>
             </div>
 
@@ -158,6 +163,29 @@ export default function AdminIbmDashboard() {
                     <div className="mt-1 text-xs text-white/60">{String(row.membership || '—')}</div>
                     <div className="mt-1 text-xs text-white/50">Signed up {fmtDate(row.created_at)}</div>
                   </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <div className="text-sm uppercase tracking-[0.18em] text-white/55">Trial prompt views by stage</div>
+              <div className="mt-1 text-sm text-white/70">How often IBM trial prompts are seen at 7-day, 3-day, 1-day, and expired stages.</div>
+              <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+                {['7d','3d','1d','expired'].map((stage) => (
+                  <KpiCard key={`view-${stage}`} label={stage.toUpperCase()} value={num(promptViewedByStage?.[stage] || 0)} />
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <div className="text-sm uppercase tracking-[0.18em] text-white/55">Trial prompt clicks by stage</div>
+              <div className="mt-1 text-sm text-white/70">Which urgency window is actually moving IBM trial users toward upgrade.</div>
+              <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+                {['7d','3d','1d','expired'].map((stage) => (
+                  <KpiCard key={`click-${stage}`} label={stage.toUpperCase()} value={num(promptClickedByStage?.[stage] || 0)} />
                 ))}
               </div>
             </div>

@@ -79,7 +79,7 @@ export default async function handler(req: any, res: any) {
       return Number.isFinite(created) && created >= Date.parse(sinceIso);
     }).length;
 
-    const conversionsTotal = users.filter((u: any) => isPaidMembership(u?.membership)).length;
+    let conversionsTotal = 0;
     const activeTrialCurrent = users.filter((u: any) => {
       const t = Number(u?.trial_end_date || 0);
       return Number.isFinite(t) && t > now && !isPaidMembership(u?.membership);
@@ -102,6 +102,7 @@ export default async function handler(req: any, res: any) {
     let loginEvents = 0;
     let firstLoginEvents = 0;
     let firstToolUsedEvents = 0;
+    let trialStartedEvents = 0;
     let firstIdeaSavedEvents = 0;
     let upgradePromptViewed = 0;
     let upgradeClicked = 0;
@@ -110,6 +111,8 @@ export default async function handler(req: any, res: any) {
     let trialExpiredEvents = 0;
     let errorEvents = 0;
     const errorKinds = new Map<string, number>();
+    const promptViewedByStage = new Map<string, number>();
+    const upgradeClickedByStage = new Map<string, number>();
 
     for (const row of activity) {
       const eventType = String(row?.event_type || '').trim().toLowerCase();
@@ -119,13 +122,22 @@ export default async function handler(req: any, res: any) {
       if (eventType === 'signup') signupEvents += 1;
       if (eventType === 'login') loginEvents += 1;
       if (eventType === 'first_login') firstLoginEvents += 1;
+      if (eventType === 'trial_started') trialStartedEvents += 1;
       if (eventType === 'first_tool_used') {
         activatedWindowUsers.add(uid);
         firstToolUsedEvents += 1;
       }
       if (eventType === 'first_idea_saved') firstIdeaSavedEvents += 1;
-      if (eventType === 'upgrade_prompt_viewed') upgradePromptViewed += 1;
-      if (eventType === 'upgrade_clicked') upgradeClicked += 1;
+      if (eventType === 'upgrade_prompt_viewed') {
+        upgradePromptViewed += 1;
+        const stage = String(row?.metadata?.stage || 'unknown').trim().toLowerCase() || 'unknown';
+        promptViewedByStage.set(stage, (promptViewedByStage.get(stage) || 0) + 1);
+      }
+      if (eventType === 'upgrade_clicked') {
+        upgradeClicked += 1;
+        const stage = String(row?.metadata?.stage || row?.metadata?.active_stage || 'unknown').trim().toLowerCase() || 'unknown';
+        upgradeClickedByStage.set(stage, (upgradeClickedByStage.get(stage) || 0) + 1);
+      }
       if (eventType === 'checkout_started') checkoutStarted += 1;
       if (eventType === 'checkout_completed') checkoutCompleted += 1;
       if (eventType === 'trial_expired') trialExpiredEvents += 1;
@@ -144,6 +156,19 @@ export default async function handler(req: any, res: any) {
     }
 
     // total activated users across all time: prefer event log if present, otherwise current paid/trial-active users with activity unavailable won't count.
+    if (ibmIds.length > 0) {
+      const { count: paidConversionCount, error: paidConvErr } = await admin
+        .from('user_activity_log')
+        .select('id', { count: 'exact', head: true })
+        .in('user_id', ibmIds)
+        .eq('event_type', 'paid_conversion');
+      if (paidConvErr) {
+        console.warn('adminIbmFunnel paid_conversion query failed', paidConvErr);
+      } else {
+        conversionsTotal = Number(paidConversionCount || 0);
+      }
+    }
+
     if (ibmIds.length > 0) {
       const { data: allTimeFirstTool, error: ftErr } = await admin
         .from('user_activity_log')
@@ -175,10 +200,10 @@ export default async function handler(req: any, res: any) {
       signup_to_activation: signupsTotal > 0 ? activatedTotalUsers.size / signupsTotal : null,
       window_signup_to_activation: signupsWindow > 0 ? activatedWindowUsers.size / signupsWindow : null,
       activation_to_first_idea_saved: activatedWindowUsers.size > 0 ? firstIdeaSavedEvents / activatedWindowUsers.size : null,
-      trial_to_paid: activeTrialCurrent > 0 ? conversionsTotal / activeTrialCurrent : null,
+      trial_to_paid: trialStartedEvents > 0 ? conversionsTotal / trialStartedEvents : (activeTrialCurrent > 0 ? conversionsTotal / activeTrialCurrent : null),
       prompt_to_click: upgradePromptViewed > 0 ? upgradeClicked / upgradePromptViewed : null,
       click_to_checkout: upgradeClicked > 0 ? checkoutStarted / upgradeClicked : null,
-      checkout_to_paid: checkoutStarted > 0 ? checkoutCompleted / checkoutStarted : null,
+      checkout_to_paid: checkoutStarted > 0 ? conversionsTotal / checkoutStarted : null,
     };
 
     const recentConverted = users
@@ -207,6 +232,7 @@ export default async function handler(req: any, res: any) {
         signup: signupEvents,
         login: loginEvents,
         first_login: firstLoginEvents,
+        trial_started: trialStartedEvents,
         first_tool_used: firstToolUsedEvents,
         first_idea_saved: firstIdeaSavedEvents,
         upgrade_prompt_viewed: upgradePromptViewed,
@@ -217,6 +243,10 @@ export default async function handler(req: any, res: any) {
         error: errorEvents,
       },
       rates,
+      prompt_stage_breakdown: {
+        viewed: Object.fromEntries(promptViewedByStage.entries()),
+        clicked: Object.fromEntries(upgradeClickedByStage.entries()),
+      },
       most_used_tools: mostUsedTools,
       top_error_kinds: topErrorKinds,
       recent_converted: recentConverted,
