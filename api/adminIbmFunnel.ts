@@ -101,12 +101,12 @@ export default async function handler(req: any, res: any) {
     let signupEvents = 0;
     let loginEvents = 0;
     let firstLoginEvents = 0;
+    let firstToolUsedEvents = 0;
     let firstIdeaSavedEvents = 0;
     let upgradePromptViewed = 0;
     let upgradeClicked = 0;
     let checkoutStarted = 0;
     let checkoutCompleted = 0;
-    let trialStartedEvents = 0;
     let trialExpiredEvents = 0;
     let errorEvents = 0;
     const errorKinds = new Map<string, number>();
@@ -119,13 +119,15 @@ export default async function handler(req: any, res: any) {
       if (eventType === 'signup') signupEvents += 1;
       if (eventType === 'login') loginEvents += 1;
       if (eventType === 'first_login') firstLoginEvents += 1;
-      if (eventType === 'first_tool_used') activatedWindowUsers.add(uid);
+      if (eventType === 'first_tool_used') {
+        activatedWindowUsers.add(uid);
+        firstToolUsedEvents += 1;
+      }
       if (eventType === 'first_idea_saved') firstIdeaSavedEvents += 1;
       if (eventType === 'upgrade_prompt_viewed') upgradePromptViewed += 1;
       if (eventType === 'upgrade_clicked') upgradeClicked += 1;
       if (eventType === 'checkout_started') checkoutStarted += 1;
       if (eventType === 'checkout_completed') checkoutCompleted += 1;
-      if (eventType === 'trial_started') trialStartedEvents += 1;
       if (eventType === 'trial_expired') trialExpiredEvents += 1;
       if (eventType === 'error') {
         errorEvents += 1;
@@ -171,8 +173,9 @@ export default async function handler(req: any, res: any) {
 
     const rates = {
       signup_to_activation: signupsTotal > 0 ? activatedTotalUsers.size / signupsTotal : null,
-      signup_to_trial_started: signupsTotal > 0 ? trialStartedEvents / signupsTotal : null,
-      trial_started_to_paid: trialStartedEvents > 0 ? conversionsTotal / trialStartedEvents : null,
+      window_signup_to_activation: signupsWindow > 0 ? activatedWindowUsers.size / signupsWindow : null,
+      activation_to_first_idea_saved: activatedWindowUsers.size > 0 ? firstIdeaSavedEvents / activatedWindowUsers.size : null,
+      trial_to_paid: activeTrialCurrent > 0 ? conversionsTotal / activeTrialCurrent : null,
       prompt_to_click: upgradePromptViewed > 0 ? upgradeClicked / upgradePromptViewed : null,
       click_to_checkout: upgradeClicked > 0 ? checkoutStarted / upgradeClicked : null,
       checkout_to_paid: checkoutStarted > 0 ? checkoutCompleted / checkoutStarted : null,
@@ -204,8 +207,8 @@ export default async function handler(req: any, res: any) {
         signup: signupEvents,
         login: loginEvents,
         first_login: firstLoginEvents,
+        first_tool_used: firstToolUsedEvents,
         first_idea_saved: firstIdeaSavedEvents,
-        trial_started: trialStartedEvents,
         upgrade_prompt_viewed: upgradePromptViewed,
         upgrade_clicked: upgradeClicked,
         checkout_started: checkoutStarted,

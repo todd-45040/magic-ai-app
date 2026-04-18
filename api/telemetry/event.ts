@@ -47,23 +47,65 @@ async function resolveUser(token: string | null): Promise<{ user_id: string | nu
 }
 
 function classifyActivityEvent(tool: string, action: string, outcome: string, errorCode?: string | null, metadata?: any): null | { event_type: 'tool_used' | 'error'; success: boolean; tool_name: string; metadata: any } {
-  const selectedTools = new Set(['effect_generator', 'patter_engine', 'director_mode', 'contract_generator', 'live_rehearsal', 'visual_brainstorm', 'video_rehearsal', 'persona_simulator', 'show_planner', 'client_management']);
-  if (!selectedTools.has(tool)) return null;
+  const normalizedTool = String(tool || '').trim().toLowerCase();
+  const selectedTools = new Set([
+    'effect_generator',
+    'patter_engine',
+    'director_mode',
+    'contract_generator',
+    'live_rehearsal',
+    'visual_brainstorm',
+    'video_rehearsal',
+    'persona_simulator',
+    'show_planner',
+    'client_management',
+    'assistant_studio',
+    'angle_risk',
+    'illusion_blueprint',
+    'prop_generator',
+    'mentalism_assistant',
+  ]);
+  if (!selectedTools.has(normalizedTool)) return null;
 
   const message = String(metadata?.message || '').toLowerCase();
   const ec = String(errorCode || '').toLowerCase();
   const act = String(action || '').toLowerCase();
 
-  const isSuccess = new Set([
+  const exactSuccessActions = new Set([
     'effect_generate_success',
+    'effect_alternative_success',
+    'effect_save_success',
     'patter_generate_success',
+    'patter_save_success',
     'director_request_success',
+    'director_save_blueprint',
+    'director_create_show',
+    'director_send_to_show_planner',
     'contract_generated',
     'live_rehearsal_session_start',
     'live_rehearsal_take_complete',
-  ]).has(act);
+    'assistant_generate_success',
+    'assistant_save_plan',
+    'assistant_save_blueprint',
+    'angle_risk_analysis_success',
+    'angle_risk_analysis_saved',
+    'illusion_blueprint_success',
+    'illusion_blueprint_save_success',
+    'save_transcript',
+    'save_feedback',
+    'show_planner_handoff',
+    'followup_send',
+    'analyze_success',
+    'demo_analyze_success',
+    'visual_request_success',
+  ]);
 
-  if (isSuccess) return { event_type: 'tool_used', success: true, tool_name: tool, metadata: metadata || {} };
+  const isSuccess = exactSuccessActions.has(act)
+    || act.startsWith('effect_refine_') && act.endsWith('_success')
+    || act.startsWith('prop_') && act.endsWith('_success')
+    || act.startsWith('client_ai_') && act.endsWith('_generated');
+
+  if (isSuccess) return { event_type: 'tool_used', success: true, tool_name: normalizedTool, metadata: metadata || {} };
 
   const isError = act.endsWith('_error') || act.includes('blocked') || outcome === 'ERROR_UPSTREAM';
   if (!isError) return null;
@@ -72,7 +114,7 @@ function classifyActivityEvent(tool: string, action: string, outcome: string, er
   if (ec.includes('usage') || ec.includes('quota') || message.includes('limit reached') || message.includes('quota')) error_kind = 'usage_limit_hit';
   else if (ec.includes('timeout') || message.includes('timed out') || message.includes('timeout')) error_kind = 'timeout';
 
-  return { event_type: 'error', success: false, tool_name: tool, metadata: { ...(metadata || {}), error_kind } };
+  return { event_type: 'error', success: false, tool_name: normalizedTool, metadata: { ...(metadata || {}), error_kind } };
 }
 
 export default async function handler(req: any, res: any) {

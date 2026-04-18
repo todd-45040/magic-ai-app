@@ -216,7 +216,22 @@ export async function saveIdea(
   }
 
   if (error) throw error;
-  return mapRowToIdea(data as DbIdeaRow);
+  const savedIdea = mapRowToIdea(data as DbIdeaRow);
+  void logUserActivity({
+    tool_name: String(savedIdea.type || 'idea'),
+    event_type: 'idea_saved',
+    success: true,
+    metadata: {
+      idea_id: savedIdea.id,
+      idea_type: savedIdea.type,
+      title: savedIdea.title ?? null,
+      category: savedIdea.category ?? null,
+      tag_count: Array.isArray(savedIdea.tags) ? savedIdea.tags.length : 0,
+      source: 'idea_create',
+    },
+  });
+  return savedIdea;
+
 }
 
 /**
@@ -247,15 +262,16 @@ export async function updateIdea(id: string, updates: Partial<SavedIdea>): Promi
   if (error) throw error;
   const savedIdea = mapRowToIdea(data as DbIdeaRow);
   void logUserActivity({
-    tool_name: String(payload.type || 'idea'),
+    tool_name: String(savedIdea.type || 'idea'),
     event_type: 'idea_saved',
     success: true,
     metadata: {
       idea_id: savedIdea.id,
-      idea_type: payload.type,
-      title: payload.title ?? null,
-      category: payload.category ?? null,
-      tag_count: Array.isArray(payload.tags) ? payload.tags.length : 0,
+      idea_type: savedIdea.type,
+      title: savedIdea.title ?? null,
+      category: savedIdea.category ?? null,
+      tag_count: Array.isArray(savedIdea.tags) ? savedIdea.tags.length : 0,
+      source: 'idea_update',
     },
   });
   return savedIdea;
