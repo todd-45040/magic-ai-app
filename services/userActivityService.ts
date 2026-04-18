@@ -13,6 +13,7 @@ export type UserActivityEventType =
   | 'checkout_started'
   | 'checkout_completed'
   | 'paid_conversion'
+  | 'trial_started'
   | 'trial_expired'
   | 'error';
 

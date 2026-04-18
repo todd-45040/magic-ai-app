@@ -672,6 +672,34 @@ input {
   </main>
 
   <script>
+    function postIbmCampaignEvent(payload) {
+      return fetch('/api/ibmCampaignEvent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload || {})
+      }).catch(function () { return null; });
+    }
+
+    function buildIbmPayload(eventType, extra) {
+      var payload = {
+        event_type: eventType,
+        campaign: 'ibm-30day',
+        source: 'ibm',
+        page_path: window.location.pathname || '/ibm'
+      };
+      if (extra && typeof extra === 'object') {
+        for (var key in extra) {
+          if (Object.prototype.hasOwnProperty.call(extra, key)) payload[key] = extra[key];
+        }
+      }
+      return payload;
+    }
+
+    function goToIbmSignup(email, ibmRing) {
+      var target = '/signup?source=ibm&trial=30&email=' + encodeURIComponent(email) + '&ibm_ring=' + encodeURIComponent(ibmRing);
+      window.location.href = target;
+    }
+
     function handleIbmTrialSubmit(e) {
       e.preventDefault();
       var form = e.target;
@@ -687,11 +715,26 @@ input {
         if (ringInput) ringInput.focus();
         return;
       }
-      window.location.href = '/signup?source=ibm&trial=30&email=' + encodeURIComponent(email);
+
+      var payload = buildIbmPayload('ibm_trial_form_submit', { email: email, ibm_ring: ibmRing });
+      postIbmCampaignEvent(payload).finally(function () {
+        postIbmCampaignEvent(buildIbmPayload('ibm_signup_redirect', { email: email, ibm_ring: ibmRing }));
+        goToIbmSignup(email, ibmRing);
+      });
     }
+
     document.addEventListener('DOMContentLoaded', function () {
+      postIbmCampaignEvent(buildIbmPayload('ibm_landing_view'));
+
       var form = document.getElementById('ibm-trial-form');
       if (form) form.addEventListener('submit', handleIbmTrialSubmit);
+
+      var ctas = document.querySelectorAll('a.btn, button.btn');
+      ctas.forEach(function (el) {
+        el.addEventListener('click', function () {
+          postIbmCampaignEvent(buildIbmPayload('ibm_cta_click', { cta_text: String(el.textContent || '').trim() || null }));
+        });
+      });
     });
   </script>
 </body>

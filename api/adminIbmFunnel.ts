@@ -79,7 +79,7 @@ export default async function handler(req: any, res: any) {
       return Number.isFinite(created) && created >= Date.parse(sinceIso);
     }).length;
 
-    const conversionsTotal = users.filter((u: any) => isPaidMembership(u?.membership)).length;
+    let conversionsTotal = 0;
     const activeTrialCurrent = users.filter((u: any) => {
       const t = Number(u?.trial_end_date || 0);
       return Number.isFinite(t) && t > now && !isPaidMembership(u?.membership);
@@ -94,6 +94,20 @@ export default async function handler(req: any, res: any) {
       activity = await fetchAllUserActivity(admin, ibmIds, sinceIso);
     }
 
+    if (ibmIds.length > 0) {
+      const { count: paidConversionCount, error: paidConvErr } = await admin
+        .from('user_activity_log')
+        .select('id', { count: 'exact', head: true })
+        .in('user_id', ibmIds)
+        .eq('event_type', 'paid_conversion');
+
+      if (paidConvErr) {
+        console.warn('adminIbmFunnel paid_conversion query failed', paidConvErr);
+      } else {
+        conversionsTotal = Number(paidConversionCount || 0);
+      }
+    }
+
     const activatedWindowUsers = new Set<string>();
     const activatedTotalUsers = new Set<string>();
     const toolEventUsers = new Map<string, Set<string>>();
@@ -106,6 +120,7 @@ export default async function handler(req: any, res: any) {
     let upgradeClicked = 0;
     let checkoutStarted = 0;
     let checkoutCompleted = 0;
+    let trialStartedEvents = 0;
     let trialExpiredEvents = 0;
     let errorEvents = 0;
     const errorKinds = new Map<string, number>();
@@ -124,6 +139,7 @@ export default async function handler(req: any, res: any) {
       if (eventType === 'upgrade_clicked') upgradeClicked += 1;
       if (eventType === 'checkout_started') checkoutStarted += 1;
       if (eventType === 'checkout_completed') checkoutCompleted += 1;
+      if (eventType === 'trial_started') trialStartedEvents += 1;
       if (eventType === 'trial_expired') trialExpiredEvents += 1;
       if (eventType === 'error') {
         errorEvents += 1;
@@ -171,7 +187,7 @@ export default async function handler(req: any, res: any) {
       signup_to_activation: signupsTotal > 0 ? activatedTotalUsers.size / signupsTotal : null,
       prompt_to_click: upgradePromptViewed > 0 ? upgradeClicked / upgradePromptViewed : null,
       click_to_checkout: upgradeClicked > 0 ? checkoutStarted / upgradeClicked : null,
-      checkout_to_paid: checkoutStarted > 0 ? checkoutCompleted / checkoutStarted : null,
+      checkout_to_paid: checkoutStarted > 0 ? conversionsTotal / checkoutStarted : null,
     };
 
     const recentConverted = users
@@ -201,6 +217,7 @@ export default async function handler(req: any, res: any) {
         login: loginEvents,
         first_login: firstLoginEvents,
         first_idea_saved: firstIdeaSavedEvents,
+        trial_started: trialStartedEvents,
         upgrade_prompt_viewed: upgradePromptViewed,
         upgrade_clicked: upgradeClicked,
         checkout_started: checkoutStarted,
