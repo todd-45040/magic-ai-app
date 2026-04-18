@@ -661,9 +661,10 @@
               <input id="ibm_ring" type="text" name="ibm_ring" placeholder="Enter your IBM Ring number" required />
               <input type="text" name="promo_code" value="IBM30" placeholder="Promo code: IBM30" />
             </form>
+            <div id="ibm-form-notice" class="helper" style="display:none; margin-top:12px; color:#ffd8d8;"></div>
             <div class="form-foot">
               <p>Let Magicians' AI Wizard help you create new ideas and improve your performances...</p>
-              <button class="btn btn-primary" type="submit" form="ibm-trial-form">Start My 30-Day Trial</button>
+              <button id="ibm-submit-btn" class="btn btn-primary" type="submit" form="ibm-trial-form">Start My 30-Day Trial</button>
             </div>
           </div>
         </div>
@@ -672,26 +673,119 @@
   </main>
 
   <script>
+    function isValidEmail(email) {
+      return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(email || '').trim());
+    }
+
+    function showFormNotice(message) {
+      var el = document.getElementById('ibm-form-notice');
+      if (!el) {
+        if (message) window.alert(message);
+        return;
+      }
+      if (!message) {
+        el.style.display = 'none';
+        el.textContent = '';
+        return;
+      }
+      el.textContent = message;
+      el.style.display = 'block';
+    }
+
+    function getUtmMeta() {
+      try {
+        var params = new URLSearchParams(window.location.search);
+        return {
+          utm_source: params.get('utm_source') || '',
+          utm_medium: params.get('utm_medium') || '',
+          utm_campaign: params.get('utm_campaign') || '',
+          utm_content: params.get('utm_content') || '',
+          utm_term: params.get('utm_term') || ''
+        };
+      } catch (_err) {
+        return {};
+      }
+    }
+
+    function trackIbmEvent(eventType, payload) {
+      var body = Object.assign({
+        event_type: eventType,
+        campaign: 'ibm-30day',
+        source: 'ibm',
+        page_path: window.location.pathname,
+        meta: getUtmMeta()
+      }, payload || {});
+
+      return fetch('/api/ibmCampaignEvent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        keepalive: true
+      }).catch(function () { return null; });
+    }
+
+    function buildSignupUrl(email, ibmRing) {
+      var params = new URLSearchParams();
+      params.set('auth', 'signup');
+      params.set('source', 'ibm');
+      params.set('trial', '30');
+      params.set('email', email);
+      params.set('ibm_ring', ibmRing);
+      return '/signup?' + params.toString();
+    }
+
     function handleIbmTrialSubmit(e) {
       e.preventDefault();
+      showFormNotice('');
       var form = e.target;
       var emailInput = form.querySelector('input[name="email"]');
       var email = emailInput ? String(emailInput.value || '').trim() : '';
       var ringInput = form.querySelector('input[name="ibm_ring"]');
       var ibmRing = ringInput ? String(ringInput.value || '').trim() : '';
-      if (!email) {
+      var promoInput = form.querySelector('input[name="promo_code"]');
+      var promoCode = promoInput ? String(promoInput.value || '').trim() : 'IBM30';
+      var submitBtn = document.getElementById('ibm-submit-btn');
+
+      if (!email || !isValidEmail(email)) {
+        showFormNotice('Please enter a valid email address before starting your IBM trial.');
         if (emailInput) emailInput.focus();
         return;
       }
       if (!ibmRing) {
+        showFormNotice('Please enter your IBM Ring / Chapter so your 30-day partner trial can be tracked correctly.');
         if (ringInput) ringInput.focus();
         return;
       }
-      window.location.href = '/signup?source=ibm&trial=30&email=' + encodeURIComponent(email) + '&ibm_ring=' + encodeURIComponent(ibmRing);
+
+      if (submitBtn) submitBtn.setAttribute('disabled', 'disabled');
+
+      var payload = {
+        email: email,
+        ibm_ring: ibmRing,
+        promo_code: promoCode
+      };
+      var signupUrl = buildSignupUrl(email, ibmRing);
+
+      Promise.all([
+        trackIbmEvent('ibm_trial_form_submit', payload),
+        trackIbmEvent('ibm_signup_redirect', Object.assign({ redirect_to: signupUrl }, payload))
+      ]).finally(function () {
+        window.location.href = signupUrl;
+      });
     }
+
     document.addEventListener('DOMContentLoaded', function () {
       var form = document.getElementById('ibm-trial-form');
       if (form) form.addEventListener('submit', handleIbmTrialSubmit);
+
+      var ctas = document.querySelectorAll('a.btn-primary[href="#claim"], a.btn-secondary[href="#how-it-helps"]');
+      ctas.forEach(function (cta) {
+        cta.addEventListener('click', function () {
+          trackIbmEvent('ibm_cta_click', { cta_text: String(cta.textContent || '').trim() });
+        });
+      });
+
+      trackIbmEvent('ibm_landing_view', {});
     });
   </script>
 </body>

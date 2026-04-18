@@ -20,6 +20,8 @@ const normalizeUserRow = (row: any): User => {
     ...(row?.trial_end_date ? { trialEndDate: row.trial_end_date } : {}),
     ...(row?.signup_source ? { signupSource: row.signup_source } : {}),
     ...(typeof row?.requested_trial_days === 'number' ? { requestedTrialDays: row.requested_trial_days } : {}),
+    ...(row?.ibm_ring ? { ibmRing: row.ibm_ring } : {}),
+    ...(row?.sam_assembly ? { samAssembly: row.sam_assembly } : {}),
 
     // Founding Circle identity layer
     foundingCircleMember: Boolean(row?.founding_circle_member ?? false),
@@ -98,11 +100,11 @@ export const registerOrUpdateUser = async (user: User, uid: string): Promise<voi
     const email = user.email.toLowerCase();
 
     // Read existing row (if any) so we never downgrade a paid/admin account during auth hydration.
-    let existing: { membership?: string | null; is_admin?: boolean | null; trial_end_date?: any; signup_source?: string | null; requested_trial_days?: number | null } | null = null;
+    let existing: { membership?: string | null; is_admin?: boolean | null; trial_end_date?: any; signup_source?: string | null; requested_trial_days?: number | null; created_at?: string | null; ibm_ring?: string | null; sam_assembly?: string | null } | null = null;
     try {
       const { data: existingRow } = await supabase
         .from(USERS_TABLE)
-.select('membership,is_admin,trial_end_date,signup_source,requested_trial_days')
+.select('membership,is_admin,trial_end_date,signup_source,requested_trial_days,created_at,ibm_ring,sam_assembly')
         .eq('id', uid)
         .maybeSingle();
       existing = (existingRow as any) || null;
@@ -134,6 +136,13 @@ export const registerOrUpdateUser = async (user: User, uid: string): Promise<voi
     const requestedSource = String((user as any).signupSource ?? existing?.signup_source ?? '').trim().toLowerCase();
     const requestedTrialDaysRaw = Number((user as any).requestedTrialDays ?? existing?.requested_trial_days ?? 14);
     const requestedTrialDays = Number.isFinite(requestedTrialDaysRaw) && requestedTrialDaysRaw > 0 ? requestedTrialDaysRaw : 14;
+    const isPartner30DayTrial = (requestedSource === 'ibm' || requestedSource === 'sam') && requestedTrialDays === 30;
+    const existingCreatedAtMs = Date.parse(String(existing?.created_at || ''));
+    const anchoredPartnerTrialEndDate = isPartner30DayTrial && Number.isFinite(existingCreatedAtMs)
+      ? existingCreatedAtMs + 30 * 24 * 60 * 60 * 1000
+      : null;
+    const ibmRing = String((user as any).ibmRing ?? existing?.ibm_ring ?? '').trim() || null;
+    const samAssembly = String((user as any).samAssembly ?? existing?.sam_assembly ?? '').trim() || null;
 
     let trialEndDate: number | null =
       (user as any).trialEndDate ?? (typeof existing?.trial_end_date === 'number' ? existing?.trial_end_date : null);
@@ -150,10 +159,16 @@ export const registerOrUpdateUser = async (user: User, uid: string): Promise<voi
 
     if (paidOrPrivilegedTiers.includes(membership)) {
       // keep as-is
-    } else if (requestedExplicitTrial || existingActiveTrial) {
+    } else if (requestedExplicitTrial || existingActiveTrial || isPartner30DayTrial) {
       membership = 'trial';
+      if (typeof anchoredPartnerTrialEndDate === 'number' && Number.isFinite(anchoredPartnerTrialEndDate)) {
+        const currentTrialEnd = Number(trialEndDate || 0);
+        if (!Number.isFinite(currentTrialEnd) || Math.abs(currentTrialEnd - anchoredPartnerTrialEndDate) > 60 * 1000) {
+          trialEndDate = anchoredPartnerTrialEndDate;
+        }
+      }
       if (!trialEndDate || !Number.isFinite(Number(trialEndDate))) {
-        const trialDays = ((requestedSource === 'ibm' || requestedSource === 'sam') && requestedTrialDays === 30) ? 30 : 14;
+        const trialDays = isPartner30DayTrial ? 30 : 14;
         trialEndDate = Date.now() + trialDays * 24 * 60 * 60 * 1000;
       }
     } else {
@@ -171,15 +186,30 @@ export const registerOrUpdateUser = async (user: User, uid: string): Promise<voi
       trial_end_date: membership === 'trial' ? trialEndDate : null,
       signup_source: requestedSource || 'direct',
       requested_trial_days: membership === 'trial' ? requestedTrialDays : null,
+      ...(ibmRing ? { ibm_ring: ibmRing } : {}),
+      ...(samAssembly ? { sam_assembly: samAssembly } : {}),
     };
 
     let error = null as any;
-    ({ error } = await supabase.from(USERS_TABLE).upsert(row));
-    if (error && String(error?.message || '').toLowerCase().includes('signup_source')) {
-      const fallbackRow = { ...row };
-      delete fallbackRow.signup_source;
-      delete fallbackRow.requested_trial_days;
-      ({ error } = await supabase.from(USERS_TABLE).upsert(fallbackRow));
+    let upsertRow: any = { ...row };
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      ({ error } = await supabase.from(USERS_TABLE).upsert(upsertRow));
+      if (!error) break;
+      const msg = String(error?.message || '').toLowerCase();
+      if (msg.includes('signup_source') || msg.includes('requested_trial_days')) {
+        delete upsertRow.signup_source;
+        delete upsertRow.requested_trial_days;
+        continue;
+      }
+      if (msg.includes('ibm_ring')) {
+        delete upsertRow.ibm_ring;
+        continue;
+      }
+      if (msg.includes('sam_assembly')) {
+        delete upsertRow.sam_assembly;
+        continue;
+      }
+      break;
     }
     if (error) throw error;
   } catch (error) {
