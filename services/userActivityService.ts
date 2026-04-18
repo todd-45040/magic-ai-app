@@ -12,6 +12,7 @@ export type UserActivityEventType =
   | 'upgrade_clicked'
   | 'checkout_started'
   | 'checkout_completed'
+  | 'paid_conversion'
   | 'trial_expired'
   | 'error';
 

@@ -74,7 +74,7 @@ export default async function handler(req: any, res: any) {
       metadata: mergedMetadata,
     };
 
-    const dedupedEventTypes = new Set(['signup', 'trial_expired', 'checkout_completed']);
+    const dedupedEventTypes = new Set(['signup', 'trial_expired', 'checkout_completed', 'paid_conversion']);
     if (dedupedEventTypes.has(event_type)) {
       const { count } = await admin
         .from('user_activity_log')
