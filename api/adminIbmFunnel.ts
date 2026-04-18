@@ -79,7 +79,7 @@ export default async function handler(req: any, res: any) {
       return Number.isFinite(created) && created >= Date.parse(sinceIso);
     }).length;
 
-    let conversionsTotal = 0;
+    const conversionsTotal = users.filter((u: any) => isPaidMembership(u?.membership)).length;
     const activeTrialCurrent = users.filter((u: any) => {
       const t = Number(u?.trial_end_date || 0);
       return Number.isFinite(t) && t > now && !isPaidMembership(u?.membership);
@@ -92,20 +92,6 @@ export default async function handler(req: any, res: any) {
     let activity: any[] = [];
     if (ibmIds.length > 0) {
       activity = await fetchAllUserActivity(admin, ibmIds, sinceIso);
-    }
-
-    if (ibmIds.length > 0) {
-      const { count: paidConversionCount, error: paidConvErr } = await admin
-        .from('user_activity_log')
-        .select('id', { count: 'exact', head: true })
-        .in('user_id', ibmIds)
-        .eq('event_type', 'paid_conversion');
-
-      if (paidConvErr) {
-        console.warn('adminIbmFunnel paid_conversion query failed', paidConvErr);
-      } else {
-        conversionsTotal = Number(paidConversionCount || 0);
-      }
     }
 
     const activatedWindowUsers = new Set<string>();
@@ -185,9 +171,11 @@ export default async function handler(req: any, res: any) {
 
     const rates = {
       signup_to_activation: signupsTotal > 0 ? activatedTotalUsers.size / signupsTotal : null,
+      signup_to_trial_started: signupsTotal > 0 ? trialStartedEvents / signupsTotal : null,
+      trial_started_to_paid: trialStartedEvents > 0 ? conversionsTotal / trialStartedEvents : null,
       prompt_to_click: upgradePromptViewed > 0 ? upgradeClicked / upgradePromptViewed : null,
       click_to_checkout: upgradeClicked > 0 ? checkoutStarted / upgradeClicked : null,
-      checkout_to_paid: checkoutStarted > 0 ? conversionsTotal / checkoutStarted : null,
+      checkout_to_paid: checkoutStarted > 0 ? checkoutCompleted / checkoutStarted : null,
     };
 
     const recentConverted = users

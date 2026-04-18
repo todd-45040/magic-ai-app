@@ -135,8 +135,6 @@ export interface User {
   emailVerified?: boolean;
   signupSource?: string;
   requestedTrialDays?: number;
-  ibmRing?: string;
-  samAssembly?: string;
 
   // Founding Circle identity layer
   foundingCircleMember?: boolean;

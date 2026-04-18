@@ -74,6 +74,7 @@ export default function AdminIbmDashboard() {
   const headline = useMemo(() => ({
     signupsWindow: num(summary.signups_window),
     activatedWindow: num(summary.activated_users_window),
+    trialStarted: num(events.trial_started),
     checkoutStarted: num(events.checkout_started),
     checkoutCompleted: num(events.checkout_completed),
     conversionsTotal: num(summary.conversions_total),
@@ -122,9 +123,10 @@ export default function AdminIbmDashboard() {
 
       {!loading && data ? (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
             <KpiCard label={`Signups (${days}d)`} value={headline.signupsWindow} sub={`Total IBM signups: ${num(summary.signups_total)}`} />
             <KpiCard label={`Activated (${days}d)`} value={headline.activatedWindow} sub={`All-time activated: ${num(summary.activated_users_total)}`} />
+            <KpiCard label={`Trial Started (${days}d)`} value={headline.trialStarted} sub={`Signup→trial: ${pct(rates.signup_to_trial_started)}`} />
             <KpiCard label={`Checkout Started (${days}d)`} value={headline.checkoutStarted} sub={`Completed: ${headline.checkoutCompleted}`} />
             <KpiCard label="Paid Conversions" value={headline.conversionsTotal} sub={`Conversion rate: ${pct(summary.conversion_rate_total)}`} />
           </div>
@@ -137,8 +139,9 @@ export default function AdminIbmDashboard() {
                   <div className="mt-1 text-white/80 text-sm">Windowed activity for the selected IBM campaign timeframe.</div>
                 </div>
               </div>
-              <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-3">
                 <KpiCard label="Upgrade Clicked" value={num(events.upgrade_clicked)} sub={`Prompt viewed: ${num(events.upgrade_prompt_viewed)}`} />
+                <KpiCard label="Trial → Paid" value={pct(rates.trial_started_to_paid)} sub={`Trials started: ${headline.trialStarted}`} />
                 <KpiCard label="Checkout Completed" value={headline.checkoutCompleted} sub={`Checkout→paid: ${pct(rates.checkout_to_paid)}`} />
                 <KpiCard label="Active Trials" value={headline.activeTrials} sub={`Expired: ${headline.expired}`} />
                 <KpiCard label="Activation Rate" value={pct(rates.signup_to_activation)} sub={`Click→checkout: ${pct(rates.click_to_checkout)}`} />
