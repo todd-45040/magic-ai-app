@@ -404,11 +404,28 @@ function App() {
         }
         await refreshAllData(dispatch);
 
+        const isPaidMembership = (membership?: string | null) => {
+          const value = String(membership || '').trim().toLowerCase();
+          return value === 'amateur' || value === 'professional';
+        };
+
         if (isIbmConversionCandidate(refreshedUser || user)) {
-          void logIbmConversionEvent((refreshedUser || user) as any, 'checkout_completed', {
+          const conversionUser = (refreshedUser || user) as any;
+
+          await logIbmConversionEvent(conversionUser, 'checkout_completed', {
             session_id: sessionId,
             checkout_state: checkoutState,
           });
+
+          if (isPaidMembership(conversionUser?.membership)) {
+            await logIbmConversionEvent(conversionUser, 'paid_conversion', {
+              session_id: sessionId,
+              converted_membership: conversionUser?.membership,
+              source: 'ibm',
+              campaign: 'ibm-30day',
+              converted_from_trial: true,
+            });
+          }
         }
 
         params.delete('checkout');
