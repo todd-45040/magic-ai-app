@@ -10,6 +10,7 @@ import type { BillingPlanKey } from '../../services/planCatalog.js';
 import { resolvePlanKeyFromStripeRefs, resolveBillingPlan } from './planMapping.js';
 import { getOptionalEnv, getStripeWebhookSecrets, sanitizeStripeLogValue } from './stripeConfig.js';
 import { deriveFounderProtection } from './founderProtection.js';
+import { getUserIbmContext, insertUserActivity } from '../../api/_lib/ibmTelemetry.js';
 
 export type WebhookVerificationResult =
   | { ok: true; secretIndex: number }
@@ -744,6 +745,33 @@ async function cancelSubscriptionBestEffort(subscriptionId: string, reason: stri
   }
 }
 
+
+async function logIbmPaidConversionFromWebhook(admin: any, sync: any, event: any) {
+  const userId = String(sync?.userId || '').trim() || null;
+  const billingStatus = String(sync?.billingStatus || '').trim().toLowerCase();
+  if (!userId || billingStatus !== 'active') return;
+
+  const ibmContext = await getUserIbmContext(admin, userId);
+  const source = String(ibmContext?.source || '').trim().toLowerCase();
+  if (source !== 'ibm') return;
+
+  await insertUserActivity(admin, {
+    user_id: userId,
+    email: ibmContext?.email || null,
+    tool_name: 'system',
+    event_type: 'paid_conversion',
+    success: true,
+    metadata: {
+      source: 'ibm',
+      campaign: 'ibm-30day',
+      plan_key: sync?.planKey || null,
+      stripe_subscription_id: sync?.stripeSubscriptionId || null,
+      stripe_event_type: String(event?.type || '').trim() || null,
+      stripe_event_id: String(event?.id || '').trim() || null,
+    },
+  });
+}
+
 async function enforceFounderCapBestEffort(admin: any, event: any) {
   const object = event?.data?.object || {};
   const metadata = object?.metadata || {};
@@ -819,6 +847,7 @@ export async function processStripeWebhook(input: {
     }
 
     const sync = await syncFromEvent(admin, event);
+    await logIbmPaidConversionFromWebhook(admin, sync, event);
     const founderCap = await enforceFounderCapBestEffort(admin, event);
 
     await markBillingEventStatus(admin, billingEventId, 'processed', {
