@@ -3,7 +3,7 @@ import type { User } from '../types';
 import { BILLING_PLAN_CATALOG, formatPriceCents, resolveBillingPlanKey, type BillingCycle } from '../services/planCatalog';
 import { createPortalSession, fetchBillingStatus, type BillingStatusPayload } from '../services/billingClient';
 import { getTrialPromptCopy } from '../services/trialMessaging';
-import { logTrialExpiredOnce, logTrialPromptViewed, logUpgradeClickFromTrialPrompt } from '../services/ibmConversionTracking';
+import { logTrialExpiredOnce, logTrialPromptViewed } from '../services/ibmConversionTracking';
 
 interface BillingSettingsProps {
   user: User | null;
@@ -153,14 +153,7 @@ const founderLabel = useMemo(
               <div className="mt-1 text-sm text-white/80">{trialPrompt.message}</div>
             </div>
             <button
-              onClick={() => {
-                void logUpgradeClickFromTrialPrompt(user, 'billing', {
-                  active_stage: trialPrompt.stage,
-                  cta_text: trialPrompt.cta,
-                  prompt_source: 'billing_banner',
-                });
-                onUpgrade({ tier: 'professional', billingCycle, founderRequested: founderPricingApplied });
-              }}
+              onClick={() => onUpgrade({ tier: 'professional', billingCycle, founderRequested: founderPricingApplied })}
               className={`inline-flex items-center justify-center rounded-xl px-4 py-3 text-sm font-bold transition ${trialPrompt.stage === 'expired' ? 'bg-amber-500 text-slate-950 hover:bg-amber-400' : 'bg-purple-600 text-white hover:bg-purple-700'}`}
             >
               {trialPrompt.cta}

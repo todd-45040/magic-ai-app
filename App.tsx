@@ -25,7 +25,6 @@ import FounderSuccessPage from './components/FounderSuccessPage';
 import { isDemoEnabled, enableDemo, seedDemoData } from './services/demoSeedService';
 import { createCheckoutSession, fetchBillingStatus, resolveCheckoutLookupKey } from './services/billingClient';
 import { logIbmConversionEvent, isIbmConversionCandidate } from './services/ibmConversionTracking';
-import { getTrialPromptStage } from './services/trialMessaging';
 import { logUserActivity } from './services/userActivityService';
 
 const DISCLAIMER_ACKNOWLEDGED_KEY = 'magician_ai_disclaimer_acknowledged';
@@ -54,15 +53,11 @@ function App() {
       const lookupKey = resolveCheckoutLookupKey(normalized, billingStatus);
 
       if (isIbmConversionCandidate(user)) {
-        const promptStage = getTrialPromptStage(user);
         void logIbmConversionEvent(user, 'upgrade_clicked', {
           target_plan: normalized?.tier || 'professional',
           billing_cycle: normalized?.billingCycle || 'monthly',
           founder_requested: Boolean(normalized?.founderRequested),
           target_lookup_key: lookupKey,
-          stage: promptStage && promptStage !== 'none' ? promptStage : undefined,
-          location: 'billing_flow',
-          prompt_source: 'upgrade_entrypoint',
         });
       }
 
@@ -76,8 +71,6 @@ function App() {
             founder_requested: Boolean(normalized?.founderRequested),
             target_lookup_key: lookupKey,
             billing_action: result?.billingAction || 'checkout_session',
-            stage: (() => { const stage = getTrialPromptStage(user); return stage && stage !== 'none' ? stage : undefined; })(),
-            location: 'billing_flow',
           });
         }
         window.location.href = String(result.url);
@@ -92,8 +85,6 @@ function App() {
             founder_requested: Boolean(normalized?.founderRequested),
             target_lookup_key: lookupKey,
             billing_action: result?.billingAction || 'subscription_update',
-            stage: (() => { const stage = getTrialPromptStage(user); return stage && stage !== 'none' ? stage : undefined; })(),
-            location: 'billing_flow',
           });
         }
         alert(result?.message || 'Billing cycle updated successfully.');
@@ -297,16 +288,18 @@ function App() {
           const isNewProfile = !profile;
           if (profile) appUser = { ...appUser, ...profile };
 
+          const signupMetadata = signupSource === 'ibm'
+            ? { source: 'ibm', campaign: 'ibm-30day', requested_trial_days: initialTrialDays, ...(ibmRing ? { ibm_ring: ibmRing } : {}) }
+            : signupSource === 'sam'
+              ? { source: 'sam', campaign: 'sam_30day', requested_trial_days: initialTrialDays, ...(samAssembly ? { sam_assembly: samAssembly } : {}) }
+              : { source: signupSource || 'direct', requested_trial_days: initialTrialDays };
+
           if (isNewProfile) {
             void logUserActivity({
               tool_name: 'system',
               event_type: 'signup',
               success: true,
-              metadata: signupSource === 'ibm'
-                ? { source: 'ibm', campaign: 'ibm-30day', requested_trial_days: initialTrialDays, ...(ibmRing ? { ibm_ring: ibmRing } : {}) }
-                : signupSource === 'sam'
-                  ? { source: 'sam', campaign: 'sam_30day', requested_trial_days: initialTrialDays, ...(samAssembly ? { sam_assembly: samAssembly } : {}) }
-                  : { source: signupSource || 'direct', requested_trial_days: initialTrialDays },
+              metadata: signupMetadata,
             });
           }
 
@@ -319,6 +312,18 @@ function App() {
 
           await registerOrUpdateUser(appUser, sbUser.id);
           appUser = await checkAndUpdateUserTrialStatus(appUser, sbUser.id);
+
+          void logUserActivity({
+            tool_name: 'system',
+            event_type: 'login',
+            success: true,
+            metadata: {
+              ...signupMetadata,
+              auth_callback: isAuthCallbackFlow,
+              is_new_profile: isNewProfile,
+              membership: String(appUser?.membership || ''),
+            },
+          });
 
           setUser(appUser);
           refreshAllData(dispatch);

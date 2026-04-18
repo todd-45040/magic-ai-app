@@ -65,6 +65,7 @@ import TrialConversionBanner from './TrialConversionBanner';
 import { fetchUsageStatus, type UsageStatus } from '../services/usageStatusService';
 import { consume, getUsage } from '../services/usageTracker';
 import { logIbmConversionEvent, isIbmConversionCandidate } from '../services/ibmConversionTracking';
+import { logUserActivity } from '../services/userActivityService';
 
 interface AngleRiskFormProps {
     trickName: string;
@@ -2741,6 +2742,9 @@ const VIEW_TO_TAB_MAP: Record<MagicianView, MagicianTab> = {
 
 const MAGICIAN_STORAGE_key = 'magician_chat_history';
 const MAGICIAN_VIEW_STORAGE_KEY = 'magician_active_view';
+const FIRST_SESSION_ACTIVATION_STORAGE_KEY = 'maw_first_session_activation';
+const FIRST_SESSION_ACTIVATION_DISMISSED_KEY = 'maw_first_session_activation_dismissed';
+const FIRST_SESSION_EFFECT_GENERATOR_PRESET_KEY = 'maw_first_session_effect_generator_preset';
 
 const createChatMessage = (role: 'user' | 'model', text: string): ChatMessage => ({
     id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
@@ -2948,6 +2952,7 @@ useEffect(() => {
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
+  const [showFirstSessionActivation, setShowFirstSessionActivation] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -3008,6 +3013,9 @@ useEffect(() => {
   const isExpired = tier === 'expired' || isTrialExpired;
   const daysRemaining = getMembershipDaysRemaining(user);
   const tierLabel = formatTierLabel(tier);
+  const hasAnyIdeas = Array.isArray(ideas) && ideas.length > 0;
+  const hasAnyShows = Array.isArray(shows) && shows.length > 0;
+  const shouldShowFirstSessionActivation = isTrialActive && !isExpired && !hasAnyIdeas;
 
   // Access mapping
   const hasAmateurAccess = (['trial', 'amateur', 'professional', 'admin'].includes(tier) && !isExpired) as boolean;
@@ -3478,6 +3486,53 @@ useEffect(() => {
       setIsUpgradeModalOpen(true);
     }
   }, [isExpired]);
+
+  useEffect(() => {
+    const storageKey = `${FIRST_SESSION_ACTIVATION_DISMISSED_KEY}:${String(user?.email || 'guest').toLowerCase()}`;
+    const startedKey = `${FIRST_SESSION_ACTIVATION_STORAGE_KEY}:${String(user?.email || 'guest').toLowerCase()}`;
+    const shouldShow = shouldShowFirstSessionActivation && activeView === 'dashboard';
+    if (!shouldShow) {
+      setShowFirstSessionActivation(false);
+      return;
+    }
+    try {
+      const dismissed = localStorage.getItem(storageKey) === '1';
+      const alreadyStarted = localStorage.getItem(startedKey) === '1';
+      setShowFirstSessionActivation(!dismissed && !alreadyStarted);
+    } catch {
+      setShowFirstSessionActivation(true);
+    }
+  }, [activeView, shouldShowFirstSessionActivation, user?.email]);
+
+  const dismissFirstSessionActivation = () => {
+    const storageKey = `${FIRST_SESSION_ACTIVATION_DISMISSED_KEY}:${String(user?.email || 'guest').toLowerCase()}`;
+    try { localStorage.setItem(storageKey, '1'); } catch {}
+    setShowFirstSessionActivation(false);
+  };
+
+  const launchFirstSessionActivation = (target: 'effect-generator' | 'show-planner') => {
+    const startedKey = `${FIRST_SESSION_ACTIVATION_STORAGE_KEY}:${String(user?.email || 'guest').toLowerCase()}`;
+    try {
+      localStorage.setItem(startedKey, '1');
+      if (target === 'effect-generator') {
+        localStorage.setItem(FIRST_SESSION_EFFECT_GENERATOR_PRESET_KEY, '1');
+      }
+    } catch {}
+
+    void logUserActivity({
+      tool_name: target,
+      event_type: 'tool_used',
+      success: true,
+      metadata: {
+        entry_point: 'first_session_activation',
+        has_existing_show: hasAnyShows,
+        days_remaining: typeof daysRemaining === 'number' ? daysRemaining : null,
+      },
+    });
+
+    setShowFirstSessionActivation(false);
+    setActiveView(target);
+  };
   // Chat history is intentionally NOT persisted across reloads to avoid stale sessions / auto-resume issues.
   // (no persistence)
   
@@ -3785,6 +3840,9 @@ useEffect(() => {
   };
 
   const handleIdeaSaved = (message: string) => {
+    const startedKey = `${FIRST_SESSION_ACTIVATION_STORAGE_KEY}:${String(user?.email || 'guest').toLowerCase()}`;
+    try { localStorage.removeItem(startedKey); } catch {}
+
     showToast(message, {
       label: 'View Ideas',
       onClick: () => setActiveView('saved-ideas')
@@ -4251,6 +4309,19 @@ useEffect(() => {
     }
 
     setIntentWorkspaceOverride(null);
+
+    if (view !== 'dashboard') {
+      void logUserActivity({
+        tool_name: view,
+        event_type: 'tool_used',
+        success: true,
+        metadata: {
+          entry_point: 'navigation',
+          from_view: activeView,
+        },
+      });
+    }
+
     setActiveView(view);
   };
 
@@ -4451,6 +4522,41 @@ ${action.payload.content}`;
                 Welcome back, {user.name || (user.email ? user.email.split('@')[0] : 'magician')}.
               </p>
             </div>
+
+            {showFirstSessionActivation && (
+              <div className="px-4 md:px-6 mb-6">
+                <div className="relative overflow-hidden rounded-2xl border border-yellow-400/30 bg-gradient-to-br from-yellow-500/14 via-purple-500/10 to-transparent p-5 shadow-[0_0_30px_rgba(234,179,8,0.10)]">
+                  <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(250,204,21,0.18),transparent_35%)]" />
+                  <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div className="max-w-2xl">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-yellow-200/90">First-session quick start</p>
+                      <h2 className="mt-1 text-xl font-semibold text-white">Get your first win in under a minute.</h2>
+                      <p className="mt-2 text-sm leading-6 text-white/70">Start with the Effect Generator using a ready-made prompt, then save your favorite idea so your trial turns into a real working library.</p>
+                    </div>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <button
+                        onClick={() => launchFirstSessionActivation('effect-generator')}
+                        className="inline-flex items-center justify-center rounded-xl border border-yellow-400/30 bg-yellow-500/15 px-4 py-2 text-sm font-medium text-yellow-100 transition hover:bg-yellow-500/25 hover:text-white"
+                      >
+                        Start with Effect Generator
+                      </button>
+                      <button
+                        onClick={() => launchFirstSessionActivation('show-planner')}
+                        className="inline-flex items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white/85 transition hover:bg-white/10 hover:text-white"
+                      >
+                        Create My First Show Plan
+                      </button>
+                      <button
+                        onClick={dismissFirstSessionActivation}
+                        className="inline-flex items-center justify-center rounded-xl px-3 py-2 text-sm text-white/55 transition hover:text-white"
+                      >
+                        Not now
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Primary Action */}
             <div className="px-4 md:px-6 mb-6">

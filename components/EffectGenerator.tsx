@@ -141,6 +141,8 @@ interface EffectGeneratorProps {
     onIdeaSaved: () => void;
 }
 
+const FIRST_SESSION_EFFECT_GENERATOR_PRESET_KEY = 'maw_first_session_effect_generator_preset';
+
 const LoadingIndicator: React.FC = () => (
     <div className="flex flex-col items-center justify-center text-center p-8">
         <div className="relative">
@@ -167,6 +169,19 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
     'Visual Miracle' | 'Comedy Bit' | 'Mentalism' | 'Close-Up Practical' | 'Stage Expansion' | 'Social Media Piece' | 'Emotional Story Piece'
   >('Visual Miracle');
   const [difficulty, setDifficulty] = useState<'Self-Working' | 'Intermediate' | 'Advanced / Gimmick Allowed'>('Intermediate');
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(FIRST_SESSION_EFFECT_GENERATOR_PRESET_KEY) !== '1') return;
+      localStorage.removeItem(FIRST_SESSION_EFFECT_GENERATOR_PRESET_KEY);
+      setItems(['deck of cards', 'sharpie', 'borrowed bill', 'business card']);
+      setCreativeIntent('Close-Up Practical');
+      setDifficulty('Intermediate');
+      setExampleIndex(0);
+    } catch {
+      // ignore quick-start preset issues
+    }
+  }, []);
 
 const EFFECT_ENGINE_EXAMPLES: Array<{
   items: [string, string, string, string];

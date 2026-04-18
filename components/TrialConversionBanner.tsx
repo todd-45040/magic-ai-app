@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import type { User } from "../types";
 import { getTrialPromptCopy } from "../services/trialMessaging";
-import { logTrialExpiredOnce, logTrialPromptViewed, logUpgradeClickFromTrialPrompt } from "../services/ibmConversionTracking";
+import { logTrialExpiredOnce, logTrialPromptViewed } from "../services/ibmConversionTracking";
 
 interface TrialConversionBannerProps {
   user: User | null;
@@ -31,13 +31,7 @@ export default function TrialConversionBanner({ user, location = 'app', onPrimar
           <div className="mt-1 text-sm text-white/75">{trialPrompt.message}</div>
         </div>
         <button
-          onClick={() => {
-            void logUpgradeClickFromTrialPrompt(user, location, {
-              active_stage: trialPrompt.stage,
-              cta_text: trialPrompt.cta,
-            });
-            onPrimaryAction();
-          }}
+          onClick={onPrimaryAction}
           className={`inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold transition ${expired ? 'bg-amber-500 text-slate-950 hover:bg-amber-400' : 'bg-purple-600 text-white hover:bg-purple-700'}`}
         >
           {trialPrompt.cta}
