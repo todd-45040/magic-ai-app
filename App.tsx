@@ -261,15 +261,15 @@ function App() {
           }
 
           const metadata = (sbUser as any)?.user_metadata || {};
-          const signupSource = String(metadata?.signup_source || '').trim().toLowerCase();
-          const requestedTrialDaysRaw = Number(metadata?.requested_trial_days);
-          const requestedTrialDays = Number.isFinite(requestedTrialDaysRaw) && requestedTrialDaysRaw > 0
-            ? requestedTrialDaysRaw
+          const metadataSignupSource = String(metadata?.signup_source || '').trim().toLowerCase();
+          const metadataRequestedTrialDaysRaw = Number(metadata?.requested_trial_days);
+          const metadataRequestedTrialDays = Number.isFinite(metadataRequestedTrialDaysRaw) && metadataRequestedTrialDaysRaw > 0
+            ? metadataRequestedTrialDaysRaw
             : 14;
-          const ibmRing = String(metadata?.ibm_ring || '').trim();
-          const samAssembly = String(metadata?.sam_assembly || '').trim();
-          const isPartner30Day = (signupSource === 'ibm' || signupSource === 'sam') && requestedTrialDays === 30;
-          const initialTrialDays = isPartner30Day ? 30 : 14;
+          const metadataIbmRing = String(metadata?.ibm_ring || '').trim();
+          const metadataSamAssembly = String(metadata?.sam_assembly || '').trim();
+          const metadataIsPartner30Day = (metadataSignupSource === 'ibm' || metadataSignupSource === 'sam') && metadataRequestedTrialDays === 30;
+          const metadataInitialTrialDays = metadataIsPartner30Day ? 30 : 14;
 
           let appUser: User = {
             email: sbUser.email,
@@ -277,22 +277,40 @@ function App() {
             isAdmin: sbUser.email === ADMIN_EMAIL,
             generationCount: 0,
             lastResetDate: new Date().toISOString(),
-            trialEndDate: Date.now() + initialTrialDays * 24 * 60 * 60 * 1000,
-            signupSource: signupSource || 'direct',
-            requestedTrialDays: initialTrialDays,
-            ...(ibmRing ? { ibmRing } : {}),
-            ...(samAssembly ? { samAssembly } : {}),
+            trialEndDate: Date.now() + metadataInitialTrialDays * 24 * 60 * 60 * 1000,
+            signupSource: metadataSignupSource || 'direct',
+            requestedTrialDays: metadataInitialTrialDays,
+            ...(metadataIbmRing ? { ibmRing: metadataIbmRing } : {}),
+            ...(metadataSamAssembly ? { samAssembly: metadataSamAssembly } : {}),
           } as any;
 
           const profile = await getUserProfile(sbUser.id);
           const isNewProfile = !profile;
           if (profile) appUser = { ...appUser, ...profile };
 
-          const signupMetadata = signupSource === 'ibm'
-            ? { source: 'ibm', campaign: 'ibm-30day', requested_trial_days: initialTrialDays, ...(ibmRing ? { ibm_ring: ibmRing } : {}) }
-            : signupSource === 'sam'
-              ? { source: 'sam', campaign: 'sam_30day', requested_trial_days: initialTrialDays, ...(samAssembly ? { sam_assembly: samAssembly } : {}) }
-              : { source: signupSource || 'direct', requested_trial_days: initialTrialDays };
+          const normalizedSignupSource = String(appUser?.signupSource || metadataSignupSource || 'direct').trim().toLowerCase();
+          const normalizedRequestedTrialDaysRaw = Number(appUser?.requestedTrialDays ?? metadataRequestedTrialDays ?? 14);
+          const normalizedRequestedTrialDays = Number.isFinite(normalizedRequestedTrialDaysRaw) && normalizedRequestedTrialDaysRaw > 0
+            ? normalizedRequestedTrialDaysRaw
+            : 14;
+          const normalizedIbmRing = String(appUser?.ibmRing || metadataIbmRing || '').trim();
+          const normalizedSamAssembly = String(appUser?.samAssembly || metadataSamAssembly || '').trim();
+          const normalizedIsPartner30Day = (normalizedSignupSource === 'ibm' || normalizedSignupSource === 'sam') && normalizedRequestedTrialDays === 30;
+          const normalizedTrialDays = normalizedIsPartner30Day ? 30 : 14;
+
+          appUser = {
+            ...appUser,
+            signupSource: normalizedSignupSource || 'direct',
+            requestedTrialDays: normalizedTrialDays,
+            ...(normalizedIbmRing ? { ibmRing: normalizedIbmRing } : {}),
+            ...(normalizedSamAssembly ? { samAssembly: normalizedSamAssembly } : {}),
+          };
+
+          const signupMetadata = normalizedSignupSource === 'ibm'
+            ? { source: 'ibm', campaign: 'ibm-30day', requested_trial_days: normalizedTrialDays, ...(normalizedIbmRing ? { ibm_ring: normalizedIbmRing } : {}) }
+            : normalizedSignupSource === 'sam'
+              ? { source: 'sam', campaign: 'sam_30day', requested_trial_days: normalizedTrialDays, ...(normalizedSamAssembly ? { sam_assembly: normalizedSamAssembly } : {}) }
+              : { source: normalizedSignupSource || 'direct', requested_trial_days: normalizedTrialDays };
 
           if (isNewProfile) {
             void logUserActivity({
