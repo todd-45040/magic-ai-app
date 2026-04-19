@@ -10,8 +10,79 @@ import { getPartnerCampaign, getPartnerContext, getPartnerDetailType, normalizeP
 //     generation_count (int), last_reset_date (timestamptz/text), trial_end_date (bigint)
 const USERS_TABLE = 'users';
 
+
+type ExistingPartnerRow = {
+  membership?: string | null;
+  is_admin?: boolean | null;
+  trial_end_date?: any;
+  signup_source?: string | null;
+  requested_trial_days?: number | null;
+  ibm_ring?: string | null;
+  sam_assembly?: string | null;
+  partner_source?: string | null;
+  partner_campaign?: string | null;
+  partner_detail_type?: string | null;
+  partner_detail_value?: string | null;
+} | null;
+
+const asTrimmed = (value: unknown): string | null => {
+  const trimmed = String(value ?? '').trim();
+  return trimmed || null;
+};
+
+const resolvePartnerSourceWithFallback = (user: any, existing: ExistingPartnerRow) => {
+  return normalizePartnerSource(
+    existing?.partner_source
+    || existing?.signup_source
+    || user?.partnerSource
+    || user?.signupSource
+    || null,
+  );
+};
+
+const resolvePartnerDetailValueWithFallback = (user: any, existing: ExistingPartnerRow, partnerSource: 'ibm' | 'sam' | null) => {
+  return (
+    asTrimmed(existing?.partner_detail_value)
+    || (partnerSource === 'ibm' ? asTrimmed(existing?.ibm_ring) : partnerSource === 'sam' ? asTrimmed(existing?.sam_assembly) : null)
+    || asTrimmed(user?.partnerDetailValue)
+    || (partnerSource === 'ibm' ? asTrimmed(user?.ibmRing) : partnerSource === 'sam' ? asTrimmed(user?.samAssembly) : null)
+    || null
+  );
+};
+
+const resolvePartnerContextWithFallback = (user: any, existing: ExistingPartnerRow) => {
+  const partnerSource = resolvePartnerSourceWithFallback(user, existing);
+  const partnerCampaign =
+    asTrimmed(existing?.partner_campaign)
+    || getPartnerCampaign(partnerSource)
+    || asTrimmed(user?.partnerCampaign)
+    || null;
+  const partnerDetailType =
+    (asTrimmed(existing?.partner_detail_type) as any)
+    || getPartnerDetailType(partnerSource)
+    || (asTrimmed(user?.partnerDetailType) as any)
+    || null;
+  const partnerDetailValue = resolvePartnerDetailValueWithFallback(user, existing, partnerSource);
+
+  return {
+    partnerSource,
+    partnerCampaign,
+    partnerDetailType,
+    partnerDetailValue,
+  };
+};
+
 const normalizeUserRow = (row: any): User => {
   const email = (row?.email ?? '').toLowerCase();
+  const partnerContext = getPartnerContext({
+    signupSource: row?.partner_source || row?.signup_source || null,
+    partnerSource: row?.partner_source || null,
+    partnerCampaign: row?.partner_campaign || null,
+    partnerDetailType: row?.partner_detail_type || null,
+    partnerDetailValue: row?.partner_detail_value || null,
+    ibmRing: row?.ibm_ring || null,
+    samAssembly: row?.sam_assembly || null,
+  } as any);
   return {
     email,
     membership: (row?.membership ?? 'free') as Membership,
@@ -23,10 +94,10 @@ const normalizeUserRow = (row: any): User => {
     ...(typeof row?.requested_trial_days === 'number' ? { requestedTrialDays: row.requested_trial_days } : {}),
     ...(row?.ibm_ring ? { ibmRing: row.ibm_ring } : {}),
     ...(row?.sam_assembly ? { samAssembly: row.sam_assembly } : {}),
-    ...(normalizePartnerSource(row?.partner_source || row?.signup_source) ? { partnerSource: normalizePartnerSource(row?.partner_source || row?.signup_source) } : {}),
-    ...(String(row?.partner_campaign || getPartnerCampaign(normalizePartnerSource(row?.partner_source || row?.signup_source)) || '').trim() ? { partnerCampaign: String(row?.partner_campaign || getPartnerCampaign(normalizePartnerSource(row?.partner_source || row?.signup_source)) || '').trim() } : {}),
-    ...(String(row?.partner_detail_type || getPartnerDetailType(normalizePartnerSource(row?.partner_source || row?.signup_source)) || '').trim() ? { partnerDetailType: String(row?.partner_detail_type || getPartnerDetailType(normalizePartnerSource(row?.partner_source || row?.signup_source)) || '').trim() as any } : {}),
-    ...(String(row?.partner_detail_value || (normalizePartnerSource(row?.partner_source || row?.signup_source) === 'ibm' ? row?.ibm_ring : normalizePartnerSource(row?.partner_source || row?.signup_source) === 'sam' ? row?.sam_assembly : '') || '').trim() ? { partnerDetailValue: String(row?.partner_detail_value || (normalizePartnerSource(row?.partner_source || row?.signup_source) === 'ibm' ? row?.ibm_ring : normalizePartnerSource(row?.partner_source || row?.signup_source) === 'sam' ? row?.sam_assembly : '') || '').trim() } : {}),
+    ...(partnerContext.partnerSource ? { partnerSource: partnerContext.partnerSource } : {}),
+    ...(partnerContext.partnerCampaign ? { partnerCampaign: partnerContext.partnerCampaign } : {}),
+    ...(partnerContext.partnerDetailType ? { partnerDetailType: partnerContext.partnerDetailType as any } : {}),
+    ...(partnerContext.partnerDetailValue ? { partnerDetailValue: partnerContext.partnerDetailValue } : {}),
 
     // Founding Circle identity layer
     foundingCircleMember: Boolean(row?.founding_circle_member ?? false),
@@ -105,19 +176,7 @@ export const registerOrUpdateUser = async (user: User, uid: string): Promise<voi
     const email = user.email.toLowerCase();
 
     // Read existing row (if any) so we never downgrade a paid/admin account during auth hydration.
-    let existing: {
-      membership?: string | null;
-      is_admin?: boolean | null;
-      trial_end_date?: any;
-      signup_source?: string | null;
-      requested_trial_days?: number | null;
-      ibm_ring?: string | null;
-      sam_assembly?: string | null;
-      partner_source?: string | null;
-      partner_campaign?: string | null;
-      partner_detail_type?: string | null;
-      partner_detail_value?: string | null;
-    } | null = null;
+    let existing: ExistingPartnerRow = null;
     try {
       const { data: existingRow } = await supabase
         .from(USERS_TABLE)
@@ -155,15 +214,15 @@ export const registerOrUpdateUser = async (user: User, uid: string): Promise<voi
     const requestedTrialDays = Number.isFinite(requestedTrialDaysRaw) && requestedTrialDaysRaw > 0 ? requestedTrialDaysRaw : 14;
     const requestedIbmRing = String((user as any).ibmRing ?? existing?.ibm_ring ?? '').trim();
     const requestedSamAssembly = String((user as any).samAssembly ?? existing?.sam_assembly ?? '').trim();
-    const partnerContext = getPartnerContext({
+    const partnerContext = resolvePartnerContextWithFallback({
       signupSource: requestedSource,
       ibmRing: requestedIbmRing,
       samAssembly: requestedSamAssembly,
-      partnerSource: (user as any).partnerSource ?? existing?.partner_source ?? null,
-      partnerCampaign: (user as any).partnerCampaign ?? existing?.partner_campaign ?? null,
-      partnerDetailType: (user as any).partnerDetailType ?? existing?.partner_detail_type ?? null,
-      partnerDetailValue: (user as any).partnerDetailValue ?? existing?.partner_detail_value ?? null,
-    } as any);
+      partnerSource: (user as any).partnerSource ?? null,
+      partnerCampaign: (user as any).partnerCampaign ?? null,
+      partnerDetailType: (user as any).partnerDetailType ?? null,
+      partnerDetailValue: (user as any).partnerDetailValue ?? null,
+    } as any, existing);
 
     let trialEndDate: number | null =
       (user as any).trialEndDate ?? (typeof existing?.trial_end_date === 'number' ? existing?.trial_end_date : null);
@@ -183,7 +242,7 @@ export const registerOrUpdateUser = async (user: User, uid: string): Promise<voi
     } else if (requestedExplicitTrial || existingActiveTrial) {
       membership = 'trial';
       if (!trialEndDate || !Number.isFinite(Number(trialEndDate))) {
-        const trialDays = ((requestedSource === 'ibm' || requestedSource === 'sam') && requestedTrialDays === 30) ? 30 : 14;
+        const trialDays = ((partnerContext.partnerSource === 'ibm' || partnerContext.partnerSource === 'sam') && requestedTrialDays === 30) ? 30 : 14;
         trialEndDate = Date.now() + trialDays * 24 * 60 * 60 * 1000;
       }
     } else {
@@ -199,10 +258,10 @@ export const registerOrUpdateUser = async (user: User, uid: string): Promise<voi
       generation_count: typeof user.generationCount === 'number' ? user.generationCount : 0,
       last_reset_date: user.lastResetDate ?? new Date().toISOString(),
       trial_end_date: membership === 'trial' ? trialEndDate : null,
-      signup_source: requestedSource || 'direct',
+      signup_source: partnerContext.partnerSource || requestedSource || 'direct',
       requested_trial_days: membership === 'trial' ? requestedTrialDays : null,
-      ibm_ring: requestedIbmRing || null,
-      sam_assembly: requestedSamAssembly || null,
+      ibm_ring: (partnerContext.partnerSource === 'ibm' ? partnerContext.partnerDetailValue : requestedIbmRing) || null,
+      sam_assembly: (partnerContext.partnerSource === 'sam' ? partnerContext.partnerDetailValue : requestedSamAssembly) || null,
       partner_source: partnerContext.partnerSource || null,
       partner_campaign: partnerContext.partnerCampaign || null,
       partner_detail_type: partnerContext.partnerDetailType || null,

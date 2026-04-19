@@ -268,11 +268,7 @@ function App() {
             : 14;
           const metadataIbmRing = String(metadata?.ibm_ring || '').trim();
           const metadataSamAssembly = String(metadata?.sam_assembly || '').trim();
-          const metadataPartnerSource = normalizePartnerSource((metadata as any)?.partner_source || metadataSignupSource);
-          const metadataPartnerCampaign = String((metadata as any)?.partner_campaign || getPartnerCampaign(metadataPartnerSource) || '').trim();
-          const metadataPartnerDetailType = String((metadata as any)?.partner_detail_type || getPartnerDetailType(metadataPartnerSource) || '').trim();
-          const metadataPartnerDetailValue = String((metadata as any)?.partner_detail_value || metadataIbmRing || metadataSamAssembly || '').trim();
-          const metadataIsPartner30Day = Boolean(metadataPartnerSource) && metadataRequestedTrialDays === 30;
+          const metadataIsPartner30Day = (metadataSignupSource === 'ibm' || metadataSignupSource === 'sam') && metadataRequestedTrialDays === 30;
           const metadataInitialTrialDays = metadataIsPartner30Day ? 30 : 14;
 
           let appUser: User = {
@@ -286,10 +282,6 @@ function App() {
             requestedTrialDays: metadataInitialTrialDays,
             ...(metadataIbmRing ? { ibmRing: metadataIbmRing } : {}),
             ...(metadataSamAssembly ? { samAssembly: metadataSamAssembly } : {}),
-            ...(metadataPartnerSource ? { partnerSource: metadataPartnerSource } : {}),
-            ...(metadataPartnerCampaign ? { partnerCampaign: metadataPartnerCampaign } : {}),
-            ...(metadataPartnerDetailType ? { partnerDetailType: metadataPartnerDetailType as any } : {}),
-            ...(metadataPartnerDetailValue ? { partnerDetailValue: metadataPartnerDetailValue } : {}),
           } as any;
 
           const profile = await getUserProfile(sbUser.id);
