@@ -672,7 +672,7 @@
               <input type="text" name="last_name" placeholder="Last name" />
               <input class="full" type="email" name="email" placeholder="Email address" />
               <label for="sam_assembly">SAM Assembly Number *</label>
-              <input id="sam_assembly" type="text" name="sam" placeholder="Enter your SAM Assembly number" required />
+              <input id="sam_assembly" type="text" name="sam_assembly" placeholder="Enter your SAM Assembly number" required />
               <input type="text" name="promo_code" value="SAM30" placeholder="Promo code: SAM30" />
             </form>
 
@@ -689,13 +689,31 @@
   </main>
 
   <script>
+    function trackSamCampaignEvent(eventType, payload) {
+      try {
+        fetch('/api/samCampaignEvent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          keepalive: true,
+          body: JSON.stringify(Object.assign({
+            event_type: eventType,
+            source: 'sam',
+            campaign: 'sam-30day',
+            page_path: '/sam'
+          }, payload || {}))
+        }).catch(function () {});
+      } catch (err) {}
+    }
+
     function handleSamTrialSubmit(e) {
       e.preventDefault();
       var form = e.target;
       var emailInput = form.querySelector('input[name="email"]');
       var email = emailInput ? String(emailInput.value || '').trim() : '';
-      var samInput = form.querySelector('input[name="sam"]');
+      var samInput = form.querySelector('input[name="sam_assembly"]');
       var samAssembly = samInput ? String(samInput.value || '').trim() : '';
+      var promoInput = form.querySelector('input[name="promo_code"]');
+      var promoCode = promoInput ? String(promoInput.value || '').trim() : '';
       if (!email) {
         if (emailInput) emailInput.focus();
         return;
@@ -705,11 +723,34 @@
         alert('Please enter your SAM Assembly number.');
         return;
       }
-      window.location.href = '/signup?source=sam&trial=30&email=' + encodeURIComponent(email) + '&sam=' + encodeURIComponent(samAssembly);
+
+      trackSamCampaignEvent('sam_trial_form_submit', {
+        email: email,
+        sam_assembly: samAssembly,
+        promo_code: promoCode
+      });
+
+      trackSamCampaignEvent('sam_signup_redirect', {
+        email: email,
+        sam_assembly: samAssembly,
+        promo_code: promoCode
+      });
+
+      window.location.href = '/signup?source=sam&trial=30&campaign=sam-30day&email=' + encodeURIComponent(email) + '&sam_assembly=' + encodeURIComponent(samAssembly);
     }
+
     document.addEventListener('DOMContentLoaded', function () {
+      trackSamCampaignEvent('sam_landing_view');
+
       var form = document.getElementById('sam-trial-form');
       if (form) form.addEventListener('submit', handleSamTrialSubmit);
+
+      var ctaButtons = document.querySelectorAll('a[href="#claim"], button[form="sam-trial-form"]');
+      ctaButtons.forEach(function (el) {
+        el.addEventListener('click', function () {
+          trackSamCampaignEvent('sam_cta_click');
+        });
+      });
     });
   </script>
 </body>
