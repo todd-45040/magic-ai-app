@@ -164,7 +164,7 @@ export default async function handler(req: any, res: any) {
     }
 
     // total activated users across all time: prefer event log if present, otherwise current paid/trial-active users with activity unavailable won't count.
-    if (ibmIds.length > 0) {
+    if (partnerIds.length > 0) {
       const { data: allTimeFirstTool, error: ftErr } = await admin
         .from('user_activity_log')
         .select('user_id')
