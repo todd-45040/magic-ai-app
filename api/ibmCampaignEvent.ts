@@ -76,34 +76,31 @@ export default async function handler(req: any, res: any) {
     body = {};
   }
 
-  const eventType = cleanText(body?.event_name, 80) || cleanText(body?.event_type, 80) || 'partner_form_submit';
+  const eventType = cleanText(body?.event_type, 80) || 'partner_form_submit';
   if (!ALLOWED_EVENTS.has(eventType)) {
     return json(res, 400, { ok: false, error: 'INVALID_EVENT_TYPE' });
   }
 
-  const partnerSource = cleanText(body?.partner_source, 40) || cleanText(body?.source, 40) || 'ibm';
-  const partnerCampaign = cleanText(body?.partner_campaign, 80) || cleanText(body?.campaign, 80) || 'ibm-30day';
+  const campaign = cleanText(body?.campaign, 80) || 'ibm-30day';
+  const source = cleanText(body?.source, 40) || 'ibm';
   const email = normalizeEmail(body?.email || '') || null;
-  const partnerDetailValue = cleanText(body?.partner_detail_value, 80) || cleanText(body?.ibm_ring, 80);
+  const ibmRing = cleanText(body?.ibm_ring, 80);
   const promoCode = cleanText(body?.promo_code, 40);
   const pagePath = cleanText(body?.page_path, 240) || '/ibm';
   const userAgent = String(req?.headers?.['user-agent'] || '').slice(0, 500);
 
   const meta = body?.meta && typeof body.meta === 'object' ? { ...body.meta } : {};
   if (promoCode) meta.promo_code = promoCode;
-  if (!meta.campaign) meta.campaign = partnerCampaign;
-  if (!meta.source) meta.source = partnerSource;
-  if (!meta.partner_source) meta.partner_source = partnerSource;
-  if (!meta.partner_campaign) meta.partner_campaign = partnerCampaign;
-  if (!meta.partner_detail_value && partnerDetailValue) meta.partner_detail_value = partnerDetailValue;
+  if (!meta.campaign) meta.campaign = campaign;
+  if (!meta.source) meta.source = source;
 
   const payload: any = {
     event_type: eventType,
-    campaign: partnerCampaign,
-    source: partnerSource,
+    campaign,
+    source,
     email,
     email_lower: email,
-    ibm_ring: partnerDetailValue,
+    ibm_ring: ibmRing,
     page_path: pagePath,
     ip_hash: ipHash,
     user_agent: userAgent,

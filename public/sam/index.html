@@ -691,9 +691,9 @@
   <script>
     function sendPartnerEvent(eventType, payload) {
       var body = Object.assign({
-        event_name: eventType,
-        partner_source: 'sam',
-        partner_campaign: 'sam-30day',
+        event_type: eventType,
+        source: 'sam',
+        campaign: 'sam-30day',
         page_path: window.location.pathname || '/sam'
       }, payload || {});
       try {
@@ -721,7 +721,7 @@
       var detailInput = form.querySelector('input[name="sam_assembly"]');
       var detailValue = detailInput ? String(detailInput.value || '').trim() : '';
       var payload = { email: email };
-      if (detailValue) payload.partner_detail_value = detailValue;
+      if (detailValue) payload.sam_assembly = detailValue;
       return { emailInput: emailInput, detailInput: detailInput, email: email, detailValue: detailValue, payload: payload };
     }
 
