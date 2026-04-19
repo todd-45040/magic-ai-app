@@ -1,6 +1,7 @@
 import type { User } from '../types';
 import { logUserActivity, type UserActivityEventType } from './userActivityService';
 import { getPartnerTrialLabel, getTrialPromptStage, isPartnerTrialUser } from './trialMessaging';
+import { getPartnerMeta } from './partnerTrialService';
 
 function getUserKey(user?: User | null): string {
   return String(user?.email || 'anonymous').trim().toLowerCase() || 'anonymous';
@@ -25,9 +26,7 @@ function markOnce(key: string): boolean {
 function baseMetadata(user?: User | null): Record<string, any> {
   const meta: Record<string, any> = {};
   if (isPartnerTrialUser(user)) {
-    const source = String(user?.signupSource || '').toLowerCase() === 'sam' ? 'sam' : 'ibm';
-    meta.source = source;
-    meta.campaign = source === 'sam' ? 'sam-30day' : 'ibm-30day';
+    Object.assign(meta, getPartnerMeta(user || undefined));
     meta.converted_from_trial = true;
     meta.partner_label = getPartnerTrialLabel(user);
   }
@@ -37,8 +36,12 @@ function baseMetadata(user?: User | null): Record<string, any> {
   return meta;
 }
 
-export function isIbmConversionCandidate(user?: User | null): boolean {
+export function isPartnerConversionCandidate(user?: User | null): boolean {
   return isPartnerTrialUser(user);
+}
+
+export function isIbmConversionCandidate(user?: User | null): boolean {
+  return isPartnerConversionCandidate(user);
 }
 
 export async function logIbmConversionEvent(
@@ -46,7 +49,7 @@ export async function logIbmConversionEvent(
   eventType: UserActivityEventType,
   metadata?: Record<string, any>,
 ): Promise<void> {
-  if (!isIbmConversionCandidate(user)) return;
+  if (!isPartnerConversionCandidate(user)) return;
   await logUserActivity({
     tool_name: 'billing',
     event_type: eventType,
@@ -56,7 +59,7 @@ export async function logIbmConversionEvent(
 }
 
 export async function logTrialPromptViewed(user: User | null | undefined, location: 'dashboard' | 'billing' | 'app' | 'app'): Promise<void> {
-  if (!isIbmConversionCandidate(user)) return;
+  if (!isPartnerConversionCandidate(user)) return;
   const stage = getTrialPromptStage(user);
   if (!stage || stage === 'none') return;
   const key = safeStorageKey('upgrade_prompt_viewed', user, stage);
@@ -65,7 +68,7 @@ export async function logTrialPromptViewed(user: User | null | undefined, locati
 }
 
 export async function logTrialExpiredOnce(user: User | null | undefined, location: 'dashboard' | 'billing' | 'app' | 'app'): Promise<void> {
-  if (!isIbmConversionCandidate(user)) return;
+  if (!isPartnerConversionCandidate(user)) return;
   const stage = getTrialPromptStage(user);
   if (stage !== 'expired') return;
   const key = safeStorageKey('trial_expired', user);

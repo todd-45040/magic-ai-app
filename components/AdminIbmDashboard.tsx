@@ -73,7 +73,7 @@ export default function AdminIbmDashboard() {
     };
   }, [days, source]);
 
-  const campaignLabel = String(data?.campaign?.label || (source === 'sam' ? 'SAM' : source === 'all' ? 'All Partner' : 'IBM'));
+  const campaignLabel = String(data?.campaign?.label || (source === 'sam' ? 'SAM' : source === 'all' ? 'All Partners' : 'IBM'));
   const summary = data?.summary || {};
   const events = data?.events || {};
   const rates = data?.rates || {};
@@ -230,7 +230,7 @@ export default function AdminIbmDashboard() {
                   <tbody>
                     {topErrors.length === 0 ? (
                       <tr>
-                        <td colSpan={2} className="py-4 text-white/55">No IBM error events in this window.</td>
+                        <td colSpan={2} className="py-4 text-white/55">No partner error events in this window.</td>
                       </tr>
                     ) : topErrors.map((row: any) => (
                       <tr key={row.error_kind} className="border-b border-white/5 last:border-b-0">

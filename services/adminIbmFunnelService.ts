@@ -18,6 +18,6 @@ export async function fetchAdminIbmFunnel(days = 7, source: 'ibm' | 'sam' | 'all
   });
 
   const j = await r.json().catch(() => ({}));
-  if (!r.ok || !j?.ok) throw new Error(j?.error || 'Failed to load IBM funnel');
+  if (!r.ok || !j?.ok) throw new Error(j?.error || 'Failed to load partner funnel');
   return j;
 }

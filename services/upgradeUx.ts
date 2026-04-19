@@ -48,7 +48,7 @@ export function getUpgradeUxCopy(kind: UpgradeUxKind, opts?: {
     return {
       kind,
       badge: 'Trial Ended',
-      title: 'Your IBM Partner Access trial has ended',
+      title: 'Your partner access trial has ended',
       message: founderProtected
         ? 'Your founder protection remains intact. Choose a paid plan when you are ready and your locked founder pricing will still be honored.'
         : 'Your 30-day Professional Trial has ended. Choose a paid plan to keep your rehearsal tools, scripts, and show-planning workflow active.',

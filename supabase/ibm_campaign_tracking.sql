@@ -58,6 +58,18 @@ create index if not exists users_signup_source_idx
 create index if not exists users_ibm_ring_idx
   on public.users (ibm_ring);
 
+alter table public.users
+  add column if not exists partner_source text;
+alter table public.users
+  add column if not exists partner_campaign text;
+alter table public.users
+  add column if not exists partner_detail_type text;
+alter table public.users
+  add column if not exists partner_detail_value text;
+
+create index if not exists users_partner_source_idx
+  on public.users (partner_source);
+
 -- Query 1: IBM landing funnel by day
 -- select date_trunc('day', created_at) as day, event_type, count(*)
 -- from public.maw_campaign_events

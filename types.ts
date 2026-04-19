@@ -137,6 +137,10 @@ export interface User {
   requestedTrialDays?: number;
   ibmRing?: string;
   samAssembly?: string;
+  partnerSource?: 'ibm' | 'sam' | null;
+  partnerCampaign?: string | null;
+  partnerDetailType?: 'ibm_ring' | 'sam_assembly' | null;
+  partnerDetailValue?: string | null;
 
   // Founding Circle identity layer
   foundingCircleMember?: boolean;

@@ -23,7 +23,7 @@ function asSource(raw: any, fallback: AllowedSource = 'ibm'): AllowedSource {
 
 function campaignLabel(source: AllowedSource): string {
   if (source === 'sam') return 'SAM';
-  if (source === 'all') return 'All Partner';
+  if (source === 'all') return 'All Partners';
   return 'IBM';
 }
 

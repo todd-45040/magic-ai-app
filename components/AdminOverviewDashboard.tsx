@@ -113,7 +113,7 @@ export default function AdminOverviewDashboard({ onGoUsers, onGoLeads }: { onGoU
         setIbmFunnel(ibm);
       } catch (e: any) {
         setIbmFunnel(null);
-        setIbmFunnelErr(e?.message || 'Failed to load IBM funnel');
+        setIbmFunnelErr(e?.message || 'Failed to load partner funnel');
       }
     } catch (e: any) {
       setErr(e?.message || 'Failed to load');

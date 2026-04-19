@@ -1,4 +1,5 @@
 import { supabase } from '../supabase';
+import { getPartnerMeta } from './partnerTrialService';
 
 export type UserActivityEventType =
   | 'signup'
@@ -29,13 +30,11 @@ async function getDefaultActivityMetadata(): Promise<Record<string, any>> {
     const ibmRing = String(user?.user_metadata?.ibm_ring || '').trim();
     const samAssembly = String(user?.user_metadata?.sam_assembly || '').trim();
 
-    const meta: Record<string, any> = {};
-    if (source) meta.source = source;
-    if (source === 'ibm') meta.campaign = 'ibm-30day';
-    if (source === 'sam') meta.campaign = 'sam-30day';
+    const meta: Record<string, any> = {
+      ...getPartnerMeta({ signupSource: source, ibmRing, samAssembly } as any),
+    };
+    if (source && !meta.source) meta.source = source;
     if (requestedTrialDays) meta.requested_trial_days = requestedTrialDays;
-    if (ibmRing) meta.ibm_ring = ibmRing;
-    if (samAssembly) meta.sam_assembly = samAssembly;
     return meta;
   } catch {
     return {};

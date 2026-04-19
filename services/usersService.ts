@@ -1,6 +1,7 @@
 import { supabase } from '../supabase';
 import type { User, Membership } from '../types';
 import { ADMIN_EMAIL } from '../constants';
+import { getPartnerCampaign, getPartnerContext, getPartnerDetailType, normalizePartnerSource } from './partnerTrialService';
 
 // Supabase table names
 // - users: one row per authenticated user (id = auth.users.id)
@@ -22,6 +23,10 @@ const normalizeUserRow = (row: any): User => {
     ...(typeof row?.requested_trial_days === 'number' ? { requestedTrialDays: row.requested_trial_days } : {}),
     ...(row?.ibm_ring ? { ibmRing: row.ibm_ring } : {}),
     ...(row?.sam_assembly ? { samAssembly: row.sam_assembly } : {}),
+    ...(normalizePartnerSource(row?.partner_source || row?.signup_source) ? { partnerSource: normalizePartnerSource(row?.partner_source || row?.signup_source) } : {}),
+    ...(String(row?.partner_campaign || getPartnerCampaign(normalizePartnerSource(row?.partner_source || row?.signup_source)) || '').trim() ? { partnerCampaign: String(row?.partner_campaign || getPartnerCampaign(normalizePartnerSource(row?.partner_source || row?.signup_source)) || '').trim() } : {}),
+    ...(String(row?.partner_detail_type || getPartnerDetailType(normalizePartnerSource(row?.partner_source || row?.signup_source)) || '').trim() ? { partnerDetailType: String(row?.partner_detail_type || getPartnerDetailType(normalizePartnerSource(row?.partner_source || row?.signup_source)) || '').trim() as any } : {}),
+    ...(String(row?.partner_detail_value || (normalizePartnerSource(row?.partner_source || row?.signup_source) === 'ibm' ? row?.ibm_ring : normalizePartnerSource(row?.partner_source || row?.signup_source) === 'sam' ? row?.sam_assembly : '') || '').trim() ? { partnerDetailValue: String(row?.partner_detail_value || (normalizePartnerSource(row?.partner_source || row?.signup_source) === 'ibm' ? row?.ibm_ring : normalizePartnerSource(row?.partner_source || row?.signup_source) === 'sam' ? row?.sam_assembly : '') || '').trim() } : {}),
 
     // Founding Circle identity layer
     foundingCircleMember: Boolean(row?.founding_circle_member ?? false),
@@ -108,11 +113,15 @@ export const registerOrUpdateUser = async (user: User, uid: string): Promise<voi
       requested_trial_days?: number | null;
       ibm_ring?: string | null;
       sam_assembly?: string | null;
+      partner_source?: string | null;
+      partner_campaign?: string | null;
+      partner_detail_type?: string | null;
+      partner_detail_value?: string | null;
     } | null = null;
     try {
       const { data: existingRow } = await supabase
         .from(USERS_TABLE)
-.select('membership,is_admin,trial_end_date,signup_source,requested_trial_days,ibm_ring,sam_assembly')
+        .select('membership,is_admin,trial_end_date,signup_source,requested_trial_days,ibm_ring,sam_assembly,partner_source,partner_campaign,partner_detail_type,partner_detail_value')
         .eq('id', uid)
         .maybeSingle();
       existing = (existingRow as any) || null;
@@ -146,6 +155,15 @@ export const registerOrUpdateUser = async (user: User, uid: string): Promise<voi
     const requestedTrialDays = Number.isFinite(requestedTrialDaysRaw) && requestedTrialDaysRaw > 0 ? requestedTrialDaysRaw : 14;
     const requestedIbmRing = String((user as any).ibmRing ?? existing?.ibm_ring ?? '').trim();
     const requestedSamAssembly = String((user as any).samAssembly ?? existing?.sam_assembly ?? '').trim();
+    const partnerContext = getPartnerContext({
+      signupSource: requestedSource,
+      ibmRing: requestedIbmRing,
+      samAssembly: requestedSamAssembly,
+      partnerSource: (user as any).partnerSource ?? existing?.partner_source ?? null,
+      partnerCampaign: (user as any).partnerCampaign ?? existing?.partner_campaign ?? null,
+      partnerDetailType: (user as any).partnerDetailType ?? existing?.partner_detail_type ?? null,
+      partnerDetailValue: (user as any).partnerDetailValue ?? existing?.partner_detail_value ?? null,
+    } as any);
 
     let trialEndDate: number | null =
       (user as any).trialEndDate ?? (typeof existing?.trial_end_date === 'number' ? existing?.trial_end_date : null);
@@ -177,7 +195,7 @@ export const registerOrUpdateUser = async (user: User, uid: string): Promise<voi
       id: uid,
       email,
       membership,
-      is_admin: isAdmin, // critical: preserve admin flag from DB
+      is_admin: isAdmin,
       generation_count: typeof user.generationCount === 'number' ? user.generationCount : 0,
       last_reset_date: user.lastResetDate ?? new Date().toISOString(),
       trial_end_date: membership === 'trial' ? trialEndDate : null,
@@ -185,6 +203,10 @@ export const registerOrUpdateUser = async (user: User, uid: string): Promise<voi
       requested_trial_days: membership === 'trial' ? requestedTrialDays : null,
       ibm_ring: requestedIbmRing || null,
       sam_assembly: requestedSamAssembly || null,
+      partner_source: partnerContext.partnerSource || null,
+      partner_campaign: partnerContext.partnerCampaign || null,
+      partner_detail_type: partnerContext.partnerDetailType || null,
+      partner_detail_value: partnerContext.partnerDetailValue || null,
     };
 
     let error = null as any;
@@ -195,6 +217,10 @@ export const registerOrUpdateUser = async (user: User, uid: string): Promise<voi
       delete fallbackRow.requested_trial_days;
       delete fallbackRow.ibm_ring;
       delete fallbackRow.sam_assembly;
+      delete fallbackRow.partner_source;
+      delete fallbackRow.partner_campaign;
+      delete fallbackRow.partner_detail_type;
+      delete fallbackRow.partner_detail_value;
       ({ error } = await supabase.from(USERS_TABLE).upsert(fallbackRow));
     }
     if (error) throw error;

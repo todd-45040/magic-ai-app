@@ -295,7 +295,16 @@ function App() {
             : 14;
           const normalizedIbmRing = String(appUser?.ibmRing || metadataIbmRing || '').trim();
           const normalizedSamAssembly = String(appUser?.samAssembly || metadataSamAssembly || '').trim();
-          const normalizedIsPartner30Day = (normalizedSignupSource === 'ibm' || normalizedSignupSource === 'sam') && normalizedRequestedTrialDays === 30;
+          const partnerContext = getPartnerContext({
+            signupSource: normalizedSignupSource,
+            ibmRing: normalizedIbmRing,
+            samAssembly: normalizedSamAssembly,
+            partnerSource: (appUser as any)?.partnerSource || normalizePartnerSource(normalizedSignupSource),
+            partnerCampaign: (appUser as any)?.partnerCampaign || null,
+            partnerDetailType: (appUser as any)?.partnerDetailType || null,
+            partnerDetailValue: (appUser as any)?.partnerDetailValue || null,
+          } as any);
+          const normalizedIsPartner30Day = Boolean(partnerContext.partnerSource) && normalizedRequestedTrialDays === 30;
           const normalizedTrialDays = normalizedIsPartner30Day ? 30 : 14;
 
           appUser = {
@@ -304,13 +313,16 @@ function App() {
             requestedTrialDays: normalizedTrialDays,
             ...(normalizedIbmRing ? { ibmRing: normalizedIbmRing } : {}),
             ...(normalizedSamAssembly ? { samAssembly: normalizedSamAssembly } : {}),
+            ...(partnerContext.partnerSource ? { partnerSource: partnerContext.partnerSource } : {}),
+            ...(partnerContext.partnerCampaign ? { partnerCampaign: partnerContext.partnerCampaign } : {}),
+            ...(partnerContext.partnerDetailType ? { partnerDetailType: partnerContext.partnerDetailType } : {}),
+            ...(partnerContext.partnerDetailValue ? { partnerDetailValue: partnerContext.partnerDetailValue } : {}),
           };
 
-          const signupMetadata = normalizedSignupSource === 'ibm'
-            ? { source: 'ibm', campaign: 'ibm-30day', requested_trial_days: normalizedTrialDays, ...(normalizedIbmRing ? { ibm_ring: normalizedIbmRing } : {}) }
-            : normalizedSignupSource === 'sam'
-              ? { source: 'sam', campaign: 'sam-30day', requested_trial_days: normalizedTrialDays, ...(normalizedSamAssembly ? { sam_assembly: normalizedSamAssembly } : {}) }
-              : { source: normalizedSignupSource || 'direct', requested_trial_days: normalizedTrialDays };
+          const signupMetadata = {
+            ...(partnerContext.partnerSource ? getPartnerMeta(appUser) : { source: normalizedSignupSource || 'direct' }),
+            requested_trial_days: normalizedTrialDays,
+          };
 
           if (isNewProfile) {
             void logUserActivity({

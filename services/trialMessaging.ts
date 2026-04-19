@@ -1,23 +1,23 @@
 import type { User } from "../types";
 import { getEffectiveMembership, getMembershipDaysRemaining, hasExpiredTrial, isActiveTrialUser, normalizeTier } from "./membershipService";
+import { getPartnerContext } from './partnerTrialService';
 
 export type TrialPromptStage = 'none' | '7d' | '3d' | '1d' | 'expired';
 
 export function isPartnerTrialUser(user?: User | null): boolean {
-  const source = String(user?.signupSource || '').toLowerCase();
-  return source === 'ibm' || source === 'sam';
+  return Boolean(getPartnerContext(user).partnerSource);
 }
 
 export function isIbmTrialUser(user?: User | null): boolean {
-  return String(user?.signupSource || '').toLowerCase() === 'ibm';
+  return getPartnerContext(user).partnerSource === 'ibm';
 }
 
 export function getPartnerTrialLabel(user?: User | null): string {
-  return String(user?.signupSource || '').toLowerCase() === 'sam' ? 'SAM Partner Access' : 'IBM Partner Access';
+  return getPartnerContext(user).partnerSource === 'sam' ? 'SAM Partner Access' : 'IBM Partner Access';
 }
 
 export function getPartnerTrialBadgeLabel(user?: User | null): string {
-  return String(user?.signupSource || '').toLowerCase() === 'sam' ? 'SAM Partner Trial' : 'IBM Partner Trial';
+  return getPartnerContext(user).partnerSource === 'sam' ? 'SAM Partner Trial' : 'IBM Partner Trial';
 }
 
 export function getTrialPromptStage(user?: User | null): TrialPromptStage {
