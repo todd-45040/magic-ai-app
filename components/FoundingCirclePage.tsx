@@ -130,7 +130,7 @@ export default function FoundingCirclePage(props: { user: User | null; onBack: (
       const payload = {
         name: (name || '').trim() || null,
         email: finalEmail,
-        partner_source: attribution.bucket,
+        source: attribution.bucket,
         meta: {
           founding_circle: true,
           attribution_raw: attribution.raw,
@@ -142,7 +142,7 @@ export default function FoundingCirclePage(props: { user: User | null; onBack: (
           attribution_raw: attribution.raw,
           source_bucket: attribution.bucket,
         pricing_lock: PRICING_LOCK,
-        founding_partner_source: 'ADMC_2026',
+        founding_source: 'ADMC_2026',
         founding_bucket: 'admc_2026',
       };
 

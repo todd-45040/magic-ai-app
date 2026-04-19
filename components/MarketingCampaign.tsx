@@ -798,7 +798,7 @@ const handleCreateClientProposal = async () => {
         const { proposal, savedToIdeasFallback } = await createClientProposal({
             title,
             content: activeResult,
-            partner_source: {
+            source: {
                 showTitle,
                 targetAudience: liveAudiencesLabel,
                 performanceStyle: selectedStyles.join(', ') || 'Not specified',
@@ -833,7 +833,7 @@ const handleCreateBookingPitch = async () => {
         const { pitch, savedToIdeasFallback } = await createBookingPitch({
             title,
             content: activeResult,
-            partner_source: {
+            source: {
                 showTitle,
                 targetAudience: liveAudiencesLabel,
                 performanceStyle: selectedStyles.join(', ') || 'Not specified',
@@ -1211,7 +1211,7 @@ const handleCreateBookingPitch = async () => {
 
                                 <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
 									<p className={`text-sm font-semibold ${goldHeadingSmall}`}>ROI Projection</p>
-                                    <p className="mt-2 text-sm text-slate-300">Estimated bookings from partner_campaign:</p>
+                                    <p className="mt-2 text-sm text-slate-300">Estimated bookings from campaign:</p>
                                     <p className="mt-2 text-xl font-bold text-slate-100">{roiProjection}</p>
                                     <p className="mt-2 text-xs text-slate-400">Heuristic estimate based on campaign completeness + channel fit. Improve readiness to push the range upward.</p>
                                 </div>

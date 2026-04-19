@@ -80,7 +80,7 @@ export function createAdminClient() {
   return createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 }
 
-export async function logUsageEvent(event_name: UsageEvent): Promise<void> {
+export async function logUsageEvent(event: UsageEvent): Promise<void> {
   const admin = createAdminClient();
   if (!admin) return;
 

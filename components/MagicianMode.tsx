@@ -5003,7 +5003,7 @@ const renderIntentSubnav = () => {
       void logIbmConversionEvent(user, 'upgrade_clicked', {
         location: 'app',
         active_view: activeView,
-        prompt_partner_source: 'trial_conversion_banner',
+        prompt_source: 'trial_conversion_banner',
       });
     }
 

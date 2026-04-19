@@ -1788,7 +1788,7 @@ wauTrendWeekly12 = weeklyWau;
         .limit(50000);
 
       if (!fErr) {
-        const founderById = new Map<string, { partner_source: typeof segments[number] }>();
+        const founderById = new Map<string, { source: typeof segments[number] }>();
         const foundersTotalBySource: Record<string, number> = {};
         const foundersJoinedBySource: Record<string, number> = {};
         for (const s of segments) { foundersTotalBySource[s] = 0; foundersJoinedBySource[s] = 0; }
@@ -1802,7 +1802,7 @@ wauTrendWeekly12 = weeklyWau;
           foundersTotalBySource[seg] = (foundersTotalBySource[seg] || 0) + 1;
           const joinedAt = u?.founding_joined_at ? String(u.founding_joined_at) : null;
           if (joinedAt && joinedAt >= windowStartIso) foundersJoinedBySource[seg] = (foundersJoinedBySource[seg] || 0) + 1;
-          founderById.set(id, { partner_source: seg });
+          founderById.set(id, { source: seg });
         }
 
         // 2) Founder engagement by source (active founders + cost/events + top tools) over selected window
@@ -1923,14 +1923,14 @@ wauTrendWeekly12 = weeklyWau;
         founding.segmentation = {
           window_days: days,
           sources: segments,
-          founders_total_by_partner_source: foundersTotalBySource,
-          founders_joined_by_partner_source: foundersJoinedBySource,
-          engagement_by_partner_source: segments.map((s) => {
+          founders_total_by_source: foundersTotalBySource,
+          founders_joined_by_source: foundersJoinedBySource,
+          engagement_by_source: segments.map((s) => {
             const active = foundersActiveUsersBySource[s].size;
             const cost = Math.round(Number(foundersCostBySource[s] || 0) * 100) / 100;
             const events = foundersEventsBySource[s] || 0;
             return {
-              partner_source: s,
+              source: s,
               active_founders: active,
               total_cost_usd: cost,
               total_events: events,

@@ -965,7 +965,7 @@ export const generateNewsArticle = async (currentUser?: User): Promise<any> => {
     properties: {
       category: { type: Type.STRING },
       headline: { type: Type.STRING },
-      partner_source: { type: Type.STRING },
+      source: { type: Type.STRING },
       sourceUrl: { type: Type.STRING },
       summary: { type: Type.STRING },
       body: { type: Type.STRING },

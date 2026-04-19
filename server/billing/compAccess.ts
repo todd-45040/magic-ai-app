@@ -6,7 +6,7 @@ export type ActiveCompGrant = {
   startsAt: string;
   endsAt: string;
   status: string;
-  partner_source: string | null;
+  source: string | null;
   grantedBy: string | null;
   grantReason: string | null;
   email: string | null;
@@ -103,7 +103,7 @@ export async function findActiveCompGrant(admin: any, input: { userId?: string |
     startsAt,
     endsAt,
     status: String(best.status || 'active').trim() || 'active',
-    partner_source: String(best.source || '').trim() || null,
+    source: String(best.source || '').trim() || null,
     grantedBy: String(best.granted_by || '').trim() || null,
     grantReason: String(best.grant_reason || '').trim() || null,
     email: String(best.email || '').trim() || null,

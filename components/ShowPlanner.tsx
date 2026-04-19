@@ -528,7 +528,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
     const [expandedDuplicateGroups, setExpandedDuplicateGroups] = useState<Record<string, boolean>>({});
     const taskRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
 
-    const openShowDashboard = (show: Show, partner_source: 'planner_card' | 'active_hero' | 'deep_link' = 'planner_card') => {
+    const openShowDashboard = (show: Show, source: 'planner_card' | 'active_hero' | 'deep_link' = 'planner_card') => {
         setSelectedShow(show);
         const meta = buildPlannerMeta(show, clients, contractsMetaByShowId[show.id]);
         trackShowPlannerEvent('show_dashboard_opened', {
@@ -666,7 +666,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
             if (refreshedShow) {
                 const refreshedMeta = buildPlannerMeta(refreshedShow, clients, contractsMetaByShowId[refreshedShow.id]);
                 trackShowPlannerEvent('routine_added_to_show', {
-                    partner_source: 'manual_add',
+                    source: 'manual_add',
                     show_id: refreshedShow.id,
                     show_title: refreshedShow.title,
                     show_type: refreshedMeta.typeLabel.toLowerCase(),
@@ -706,7 +706,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
             if (newStatus === 'Completed' && refreshedShow) {
                 const refreshedMeta = buildPlannerMeta(refreshedShow, clients, contractsMetaByShowId[refreshedShow.id]);
                 trackShowPlannerEvent('task_completed', {
-                    partner_source: 'task_list',
+                    source: 'task_list',
                     show_id: refreshedShow.id,
                     show_title: refreshedShow.title,
                     show_type: refreshedMeta.typeLabel.toLowerCase(),
@@ -733,7 +733,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
             if (status === 'Completed' && refreshedShow) {
                 const refreshedMeta = buildPlannerMeta(refreshedShow, clients, contractsMetaByShowId[refreshedShow.id]);
                 trackShowPlannerEvent('task_completed', {
-                    partner_source: 'dashboard_checklist',
+                    source: 'dashboard_checklist',
                     show_id: refreshedShow.id,
                     show_title: refreshedShow.title,
                     show_type: refreshedMeta.typeLabel.toLowerCase(),
@@ -1238,7 +1238,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                     if (refreshedShow) {
                         const refreshedMeta = buildPlannerMeta(refreshedShow, clients, contractsMetaByShowId[refreshedShow.id]);
                         trackShowPlannerEvent('routine_added_to_show', {
-                            partner_source: 'ai_suggest_tasks',
+                            source: 'ai_suggest_tasks',
                             show_id: refreshedShow.id,
                             show_title: refreshedShow.title,
                             show_type: refreshedMeta.typeLabel.toLowerCase(),
@@ -1836,7 +1836,7 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                                                                 description: 'Performance fee from signed contract',
                                                                 amount: amt,
                                                                 date: new Date().toISOString().slice(0, 10),
-                                                                partner_source: 'contract',
+                                                                source: 'contract',
                                                                 contractId: activeContractId,
                                                                 kind: 'performance_fee'
                                                             };

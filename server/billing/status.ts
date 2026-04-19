@@ -98,7 +98,7 @@ type BillingTruthDebug = {
     accessState: string;
     renewalDate: string | null;
     currentBillingCycle: 'monthly' | 'yearly';
-    partner_source: 'database' | 'fallback' | 'stripe_live';
+    source: 'database' | 'fallback' | 'stripe_live';
   };
   mismatches: {
     planMismatch: boolean;
@@ -130,7 +130,7 @@ export type BillingStatusResponse = {
   stripeCustomerIdPresent: boolean;
   currentBillingCycle: 'monthly' | 'yearly';
   currentPriceId: string | null;
-  partner_source: 'database' | 'fallback' | 'stripe_live';
+  source: 'database' | 'fallback' | 'stripe_live';
   billingTruth: BillingTruthDebug;
   recentBillingEvents: BillingEventSnapshot[];
   validationChecks: BillingValidationChecks;
@@ -332,7 +332,7 @@ function buildBillingTruthDebug(input: {
     accessState: string;
     renewalDate: string | null;
     currentBillingCycle: 'monthly' | 'yearly';
-    partner_source: 'database' | 'fallback' | 'stripe_live';
+    source: 'database' | 'fallback' | 'stripe_live';
   };
 }): BillingTruthDebug {
   const dbSnapshot = {
@@ -648,7 +648,7 @@ export async function resolveBillingStatusForUser(admin: any, userId: string): P
     ?? 'monthly';
 
   const renewalDate = stripeSnapshot?.currentPeriodEnd || asIso(subscription?.current_period_end);
-  const partner_source: 'database' | 'fallback' | 'stripe_live' = stripeSnapshot?.id
+  const source: 'database' | 'fallback' | 'stripe_live' = stripeSnapshot?.id
     ? 'stripe_live'
     : (subscription || billingCustomer || usagePeriod || founderOverride ? 'database' : 'fallback');
 

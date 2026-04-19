@@ -64,7 +64,7 @@ export default async function handler(req: any, res: any) {
 
   const ip = getIpFromReq(req);
   const ipHash = hashIp(ip);
-  const rl = rateLimit(`sam-partner_campaign:${ipHash}`, { windowMs: 15 * 60 * 1000, max: 40 });
+  const rl = rateLimit(`sam-campaign:${ipHash}`, { windowMs: 15 * 60 * 1000, max: 40 });
   if (!rl.ok) {
     return json(res, 429, { ok: false, error: 'RATE_LIMITED' }, rateLimitHeaders(rl));
   }
@@ -76,31 +76,34 @@ export default async function handler(req: any, res: any) {
     body = {};
   }
 
-  const eventType = cleanText(body?.event_type, 80) || 'partner_form_submit';
+  const eventType = cleanText(body?.event_name, 80) || cleanText(body?.event_type, 80) || 'partner_form_submit';
   if (!ALLOWED_EVENTS.has(eventType)) {
     return json(res, 400, { ok: false, error: 'INVALID_EVENT_TYPE' });
   }
 
-  const campaign = cleanText(body?.campaign, 80) || 'sam-30day';
-  const source = cleanText(body?.source, 40) || 'sam';
+  const partnerSource = cleanText(body?.partner_source, 40) || cleanText(body?.source, 40) || 'sam';
+  const partnerCampaign = cleanText(body?.partner_campaign, 80) || cleanText(body?.campaign, 80) || 'sam-30day';
   const email = normalizeEmail(body?.email || '') || null;
-  const samAssembly = cleanText(body?.sam_assembly, 80);
+  const partnerDetailValue = cleanText(body?.partner_detail_value, 80) || cleanText(body?.sam_assembly, 80);
   const promoCode = cleanText(body?.promo_code, 40);
   const pagePath = cleanText(body?.page_path, 240) || '/sam';
   const userAgent = String(req?.headers?.['user-agent'] || '').slice(0, 500);
 
   const meta = body?.meta && typeof body.meta === 'object' ? { ...body.meta } : {};
   if (promoCode) meta.promo_code = promoCode;
-  if (!meta.campaign) meta.campaign = campaign;
-  if (!meta.source) meta.source = source;
+  if (!meta.campaign) meta.campaign = partnerCampaign;
+  if (!meta.source) meta.source = partnerSource;
+  if (!meta.partner_source) meta.partner_source = partnerSource;
+  if (!meta.partner_campaign) meta.partner_campaign = partnerCampaign;
+  if (!meta.partner_detail_value && partnerDetailValue) meta.partner_detail_value = partnerDetailValue;
 
   const payload: any = {
     event_type: eventType,
-    campaign,
-    source,
+    campaign: partnerCampaign,
+    source: partnerSource,
     email,
     email_lower: email,
-    partner_detail_value: samAssembly,
+    sam_assembly: partnerDetailValue,
     page_path: pagePath,
     ip_hash: ipHash,
     user_agent: userAgent,

@@ -21,13 +21,13 @@ function asSource(raw: any, fallback: AllowedSource = 'ibm'): AllowedSource {
   return (ALLOWED_SOURCES as readonly string[]).includes(s) ? (s as AllowedSource) : fallback;
 }
 
-function campaignLabel(partner_source: AllowedSource): string {
+function campaignLabel(source: AllowedSource): string {
   if (source === 'sam') return 'SAM';
   if (source === 'all') return 'All Partners';
   return 'IBM';
 }
 
-function sourceList(partner_source: AllowedSource): string[] {
+function sourceList(source: AllowedSource): string[] {
   if (source === 'all') return ['ibm', 'sam'];
   return [source];
 }
@@ -212,7 +212,7 @@ export default async function handler(req: any, res: any) {
 
     return res.status(200).json({
       ok: true,
-      partner_campaign: { source, label: campaignLabel(source), options: ALLOWED_SOURCES },
+      campaign: { source, label: campaignLabel(source), options: ALLOWED_SOURCES },
       window: { days, sinceIso, optionsDays: ALLOWED_WINDOWS },
       summary: {
         signups_window: signupsWindow,

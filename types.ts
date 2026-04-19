@@ -237,7 +237,7 @@ export interface Feedback {
 }
 
 export interface Transcription {
-    partner_source: 'user' | 'model';
+    source: 'user' | 'model';
     text: string;
     isFinal: boolean;
 }
@@ -262,7 +262,7 @@ export interface NewsArticle {
   id: string;
   category: NewsCategory;
   headline: string;
-  partner_source: string;
+  source: string;
   sourceUrl?: string;
   summary: string;
   body: string; 

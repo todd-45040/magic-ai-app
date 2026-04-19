@@ -9,7 +9,7 @@ type FeedbackRow = {
   id: string;
   created_at: string;
   received_at: string | null;
-  partner_source: string;
+  source: string;
   status: string;
   message_id: string | null;
   from_email: string;
@@ -45,7 +45,7 @@ export default async function handler(req: any, res: any) {
       const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
       const row = {
         received_at: body.received_at || null,
-        partner_source: body.source || 'manual',
+        source: body.source || 'manual',
         status: body.status || 'new',
         message_id: body.message_id || null,
         from_email: String(body.from_email || '').trim(),

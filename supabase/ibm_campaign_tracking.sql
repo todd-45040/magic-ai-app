@@ -9,6 +9,7 @@ create table if not exists public.maw_campaign_events (
   email text null,
   email_lower text null,
   ibm_ring text null,
+  sam_assembly text null,
   page_path text null,
   ip_hash text null,
   user_agent text null,
@@ -57,6 +58,8 @@ create index if not exists users_signup_source_idx
   on public.users (signup_source);
 create index if not exists users_ibm_ring_idx
   on public.users (ibm_ring);
+create index if not exists users_sam_assembly_idx
+  on public.users (sam_assembly);
 
 alter table public.users
   add column if not exists partner_source text;
@@ -104,3 +107,8 @@ create index if not exists users_partner_source_idx
 --   (select count(*) from ibm_users where membership in ('amateur','professional')) as paid_conversions,
 --   (select count(*) from ibm_users where membership = 'trial' and coalesce(trial_end_date,0) > (extract(epoch from now()) * 1000)) as active_trials,
 --   (select count(*) from ibm_users where membership = 'trial' and coalesce(trial_end_date,0) <= (extract(epoch from now()) * 1000)) as expired_trials;
+
+-- Shared partner telemetry contract (accepted at API boundary)
+-- event_name: partner_page_view | partner_cta_click | partner_form_submit | partner_signup_redirect
+-- payload keys: partner_source, partner_campaign, partner_detail_value
+-- Endpoints remain backward-compatible and still persist legacy source/campaign columns.

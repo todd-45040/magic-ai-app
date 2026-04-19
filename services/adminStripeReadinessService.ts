@@ -33,7 +33,7 @@ export async function manualFounderClaim(email: string): Promise<ManualFounderCl
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ email, founding_bucket: 'admc_2026', partner_source: 'backup_payment_link' }),
+    body: JSON.stringify({ email, founding_bucket: 'admc_2026', source: 'backup_payment_link' }),
   });
 
   const j = (await r.json().catch(() => ({}))) as any;

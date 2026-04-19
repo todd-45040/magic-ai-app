@@ -13,7 +13,7 @@ type SearchResult = {
   title: string
   content: string
   type: SearchResultType
-  partner_source: string
+  source: string
   date?: string | number
   normalizedDate?: number
   score: number
@@ -147,7 +147,7 @@ export default function GlobalSearch({
       tool: "global_search",
       action: "search_page_opened",
       metadata: {
-        partner_source: "GlobalSearch",
+        source: "GlobalSearch",
         launchSource: launchSource || "search-page",
         contentTypesEnabled: {
           ideas: showIdeas,
@@ -445,7 +445,7 @@ export default function GlobalSearch({
       title,
       content,
       type: "Idea",
-      partner_source: "ideas",
+      source: "ideas",
       date: rawDate,
       normalizedDate,
       score,
@@ -500,7 +500,7 @@ export default function GlobalSearch({
       title,
       content,
       type: "Show",
-      partner_source: "shows",
+      source: "shows",
       date: rawDate,
       normalizedDate,
       score,
@@ -567,7 +567,7 @@ export default function GlobalSearch({
       title,
       content,
       type: "Task",
-      partner_source: "tasks",
+      source: "tasks",
       date: rawDate,
       normalizedDate,
       score,
@@ -622,7 +622,7 @@ export default function GlobalSearch({
       title,
       content,
       type: "Feedback",
-      partner_source: "feedback",
+      source: "feedback",
       date: rawDate,
       normalizedDate,
       score,
@@ -871,7 +871,7 @@ export default function GlobalSearch({
       action: "search_result_opened",
       metadata: {
         type: result.type,
-        partner_source: result.source,
+        source: result.source,
         id: result.id,
         title: result.title,
         category: result.category || null,

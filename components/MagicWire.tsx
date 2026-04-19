@@ -14,7 +14,7 @@ type WireCard = {
   id: string;
   title: string;
   summary: string;
-  partner_source: string;
+  source: string;
   sourceUrl?: string | null;
   publishedAt?: string;
   when: string;
@@ -92,7 +92,7 @@ function inferType(item: MagicWireItem): string {
   return "news";
 }
 
-function inferTags(item: MagicWireItem, category: string, partner_source: string, type: string): string[] {
+function inferTags(item: MagicWireItem, category: string, source: string, type: string): string[] {
   const tags = new Set<string>();
 
   if (category) tags.add(category);
@@ -307,7 +307,7 @@ export default function MagicWire() {
     );
   };
 
-  const toggleSource = (partner_source: string) => {
+  const toggleSource = (source: string) => {
     setSelectedSources((prev) =>
       prev.includes(source) ? prev.filter((s) => s !== source) : [...prev, source]
     );
@@ -336,7 +336,7 @@ export default function MagicWire() {
           post_id: card.id,
           title: card.title,
           category: card.category,
-          partner_source: card.source,
+          source: card.source,
         },
       });
       return;
@@ -349,7 +349,7 @@ export default function MagicWire() {
       id: card.id,
       title: card.title,
       summary: card.summary,
-      partner_source: card.source,
+      source: card.source,
       sourceUrl: card.sourceUrl,
       publishedAt: card.publishedAt,
       category: card.category,
@@ -375,7 +375,7 @@ export default function MagicWire() {
         post_id: card.id,
         title: card.title,
         category: card.category,
-        partner_source: card.source,
+        source: card.source,
       },
     });
   };
@@ -393,7 +393,7 @@ export default function MagicWire() {
         post_id: card.id,
         title: card.title,
         category: card.category,
-        partner_source: card.source,
+        source: card.source,
         url: card.sourceUrl,
       },
     });
@@ -429,7 +429,7 @@ export default function MagicWire() {
             method: "native",
             post_id: card.id,
             title: card.title,
-            partner_source: card.source,
+            source: card.source,
           },
         });
       } else if (navigator.clipboard?.writeText) {
@@ -445,7 +445,7 @@ export default function MagicWire() {
             method: "clipboard",
             post_id: card.id,
             title: card.title,
-            partner_source: card.source,
+            source: card.source,
           },
         });
       } else {

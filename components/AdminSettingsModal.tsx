@@ -167,7 +167,7 @@ export default function AdminSettingsModal({ open, onClose }: { open: boolean; o
 
               <div style={{ marginTop: 10, fontSize: 12, opacity: 0.92 }}>
                 <div>
-                  <b>Provider:</b> {envSanity.provider.runtimeProvider} <span style={{ opacity: 0.8 }}>(partner_source: {envSanity.provider.source}{envSanity.provider.envOverrideActive ? ', AI_PROVIDER set' : ''})</span>
+                  <b>Provider:</b> {envSanity.provider.runtimeProvider} <span style={{ opacity: 0.8 }}>(source: {envSanity.provider.source}{envSanity.provider.envOverrideActive ? ', AI_PROVIDER set' : ''})</span>
                 </div>
                 <div style={{ marginTop: 4 }}>
                   <b>Stripe readiness:</b> {envSanity.readiness.stripeReady ? 'READY' : 'not ready'}{' '}

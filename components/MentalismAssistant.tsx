@@ -1321,7 +1321,7 @@ Output requirements:
                     title: `Mentalism Rehearsal — ${topic}`,
                     notes: lines.join('\n'),
                     createdAt: Date.now(),
-                    partner_source: 'mentalism',
+                    source: 'mentalism',
                 })
             );
 

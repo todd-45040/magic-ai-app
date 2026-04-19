@@ -137,7 +137,7 @@ const DemoTourBar: React.FC<Props> = ({ activeView, onNavigate }) => {
         body: JSON.stringify({
           name: name || null,
           email,
-          partner_source: 'demo_final_cta',
+          source: 'demo_final_cta',
           meta: {
             recordMode,
             demoIndex: state?.index ?? null,

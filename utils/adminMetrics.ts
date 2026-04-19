@@ -47,14 +47,14 @@ export const ADMIN_METRIC_DICTIONARY = {
   active_user: {
     name: 'Active user',
     definition: 'A user with ≥ 1 ai_usage_event in the selected time window.',
-    partner_source: 'ai_usage_events (distinct user_id)'
+    source: 'ai_usage_events (distinct user_id)'
   },
   activated_user: {
     name: 'Activated user',
     definition:
       'A user who uses any core tool within 24 hours of signup (activation).',
     core_tools: CORE_ACTIVATION_TOOLS,
-    partner_source: 'users.created_at + first ai_usage_event'
+    source: 'users.created_at + first ai_usage_event'
   },
   outcomes: {
     name: 'Outcome categories',

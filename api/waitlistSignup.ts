@@ -227,7 +227,7 @@ export default async function handler(req: any, res: any) {
             email,
             email_lower: email,
             name,
-            partner_source: foundingSource,
+            source: foundingSource,
             converted_to_user: Boolean(authedUserId),
             converted_user_id: authedUserId,
             founding_bucket: foundingBucket,
@@ -292,7 +292,7 @@ try {
           await admin
             .from('users')
             .update({
-              founding_partner_source: foundingSource,
+              founding_source: foundingSource,
               ...(pricingLock ? { pricing_lock: pricingLock } : {}),
             })
             .eq('id', authedUserId);
@@ -317,7 +317,7 @@ try {
       try {
         const now = Date.now();
         const mk = (hoursFromNow: number) => new Date(now + hoursFromNow * 60 * 60 * 1000).toISOString();
-        const basePayload = { name, email, founding_partner_source: foundingSource, pricing_lock: pricingLock, founding_bucket: foundingBucket || 'admc_2026' };
+        const basePayload = { name, email, founding_source: foundingSource, pricing_lock: pricingLock, founding_bucket: foundingBucket || 'admc_2026' };
 
         const queueRows = [
           { to_email: email, template_key: 'founding_welcome', send_at: mk(0), payload: basePayload },

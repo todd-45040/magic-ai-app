@@ -320,7 +320,7 @@ function App() {
           };
 
           const signupMetadata = {
-            ...(partnerContext.partnerSource ? getPartnerMeta(appUser) : { partner_source: normalizedSignupSource || 'direct' }),
+            ...(partnerContext.partnerSource ? getPartnerMeta(appUser) : { source: normalizedSignupSource || 'direct' }),
             requested_trial_days: normalizedTrialDays,
           };
 

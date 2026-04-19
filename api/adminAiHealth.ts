@@ -111,7 +111,7 @@ export default async function handler(req: any, res: any) {
     const envProvider = normProvider(process.env.AI_PROVIDER);
     const envOverrideActive = Boolean(envProvider);
     const runtimeProvider = await resolveProvider(req);
-    const partner_source: Source = envOverrideActive ? 'env' : dbProvider ? 'db' : 'default';
+    const source: Source = envOverrideActive ? 'env' : dbProvider ? 'db' : 'default';
 
     // last 60 minutes rollup
     const { data: ev60, error: ev60Err } = await auth.admin

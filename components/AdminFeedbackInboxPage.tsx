@@ -81,7 +81,7 @@ export default function AdminFeedbackInboxPage() {
         subject: addSubject.trim() || null,
         body_text: addBody.trim() || null,
         received_at: new Date().toISOString(),
-        partner_source: 'manual',
+        source: 'manual',
         status: 'new',
       });
       setShowAdd(false);

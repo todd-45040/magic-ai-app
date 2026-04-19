@@ -11,7 +11,7 @@ export type AdminAiStatusSource = 'db' | 'env' | 'default';
 export interface AdminAiStatus {
   defaultProvider: AdminAIProvider;
   runtimeProvider: AdminAIProvider;
-  partner_source: AdminAiStatusSource;
+  source: AdminAiStatusSource;
   envOverrideActive: boolean;
   tool_support?: Array<{
     tool: string;
@@ -40,7 +40,7 @@ export interface AdminEnvSanity {
     runtimeProvider: AdminAIProvider;
     dbDefaultProvider: AdminAIProvider;
     envOverrideActive: boolean;
-    partner_source: 'env' | 'db';
+    source: 'env' | 'db';
     envOverrideValue: AdminAIProvider | null;
   };
   readiness: {

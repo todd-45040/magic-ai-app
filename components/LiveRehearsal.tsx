@@ -16,7 +16,7 @@ import { trackClientEvent } from '../services/telemetryClient';
 import { logUserActivity } from '../services/userActivityService';
 
 // ---- Debug instrumentation (enabled via ?debugRehearsal=1 or localStorage MAW_DEBUG_REHEARSAL=1) ----
-type DebugEvent = { ts: number; event_name: string; data?: any };
+type DebugEvent = { ts: number; event: string; data?: any };
 
 function isDebugEnabled(): boolean {
   try {
@@ -28,7 +28,7 @@ function isDebugEnabled(): boolean {
   }
 }
 
-function pushDebug(event_name: string, data?: any) {
+function pushDebug(event: string, data?: any) {
   try {
     const w = window as any;
     if (!w.__REHEARSAL_DEBUG__) {
@@ -622,7 +622,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
     const hasLiveTake = takes.some((take) => !isDemoTakeEntry(take));
 
     // Phase 6.5: show daily live rehearsal remaining (server-backed when available)
-    const [dailyLive, setDailyLive] = useState<{ used: number; limit: number; remaining: number; partner_source: 'server' | 'local' } | null>(null);
+    const [dailyLive, setDailyLive] = useState<{ used: number; limit: number; remaining: number; source: 'server' | 'local' } | null>(null);
     const dailyLiveStartRemainingRef = useRef<number | null>(null);
 
     const refreshDailyLive = async () => {
@@ -630,7 +630,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             const s = await fetchUsageStatus();
             const daily = (s as any)?.quota?.live_audio_minutes?.daily;
             if ((s as any)?.ok && daily && Number(daily.limit ?? 0) > 0) {
-                setDailyLive({ used: Number(daily.used ?? 0), limit: Number(daily.limit ?? 0), remaining: Number(daily.remaining ?? 0), partner_source: 'server' });
+                setDailyLive({ used: Number(daily.used ?? 0), limit: Number(daily.limit ?? 0), remaining: Number(daily.remaining ?? 0), source: 'server' });
                 return;
             }
         } catch {
@@ -638,7 +638,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         }
         try {
             const cur = getUsage(user, 'live_minutes');
-            setDailyLive({ used: Number(cur.used ?? 0), limit: Number(cur.limit ?? 0), remaining: Number(cur.remaining ?? 0), partner_source: 'local' });
+            setDailyLive({ used: Number(cur.used ?? 0), limit: Number(cur.limit ?? 0), remaining: Number(cur.remaining ?? 0), source: 'local' });
         } catch {
             // ignore
         }
@@ -904,7 +904,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             const s = await fetchUsageStatus();
             const daily = (s as any)?.quota?.live_audio_minutes?.daily;
             if ((s as any)?.ok && daily && Number(daily.limit ?? 0) > 0) {
-                setDailyLive({ used: Number(daily.used ?? 0), limit: Number(daily.limit ?? 0), remaining: Number(daily.remaining ?? 0), partner_source: 'server' });
+                setDailyLive({ used: Number(daily.used ?? 0), limit: Number(daily.limit ?? 0), remaining: Number(daily.remaining ?? 0), source: 'server' });
                 dailyLiveStartRemainingRef.current = Number(daily.remaining ?? 0);
                 setUsageWarning(Number(daily.remaining ?? 0) <= Math.max(1, Math.ceil(Number(daily.limit ?? 0) * 0.2)) ? `Heads up: you only have ${Number(daily.remaining ?? 0)} live rehearsal minutes remaining today.` : null);
             }
@@ -920,14 +920,14 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 setErrorMessage(
                     `Daily live rehearsal minutes limit reached (${Number(daily.used ?? 0)}/${Number(daily.limit ?? 0)} min). This is separate from the AI message limit. Upgrade to continue.`
                 );
-                trackLiveRehearsalEvent('live_rehearsal_start_blocked', { partner_source: 'server', used: Number(daily.used ?? 0), limit: Number(daily.limit ?? 0) }, { outcome: 'ERROR_UPSTREAM', http_status: 429, error_code: 'quota_exceeded', retryable: false });
+                trackLiveRehearsalEvent('live_rehearsal_start_blocked', { source: 'server', used: Number(daily.used ?? 0), limit: Number(daily.limit ?? 0) }, { outcome: 'ERROR_UPSTREAM', http_status: 429, error_code: 'quota_exceeded', retryable: false });
                 return;
             }
         } catch {
             // If server usage is unavailable, fall back to the existing local tracker.
             try {
                 const cur = getUsage(user, 'live_minutes');
-                setDailyLive({ used: Number(cur.used ?? 0), limit: Number(cur.limit ?? 0), remaining: Number(cur.remaining ?? 0), partner_source: 'local' });
+                setDailyLive({ used: Number(cur.used ?? 0), limit: Number(cur.limit ?? 0), remaining: Number(cur.remaining ?? 0), source: 'local' });
                 dailyLiveStartRemainingRef.current = Number(cur.remaining ?? 0);
                 setUsageWarning(getSoftLimitWarning(user, 'live_minutes'));
                 if (cur.limit > 0 && cur.remaining <= 0) {
@@ -941,7 +941,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                     setErrorMessage(
                         `Daily live rehearsal minutes limit reached (${cur.used}/${cur.limit} min). This is separate from the AI message limit. Upgrade to continue.`
                     );
-                    trackLiveRehearsalEvent('live_rehearsal_start_blocked', { partner_source: 'local', used: Number(cur.used ?? 0), limit: Number(cur.limit ?? 0) }, { outcome: 'ERROR_UPSTREAM', http_status: 429, error_code: 'quota_exceeded', retryable: false });
+                    trackLiveRehearsalEvent('live_rehearsal_start_blocked', { source: 'local', used: Number(cur.used ?? 0), limit: Number(cur.limit ?? 0) }, { outcome: 'ERROR_UPSTREAM', http_status: 429, error_code: 'quota_exceeded', retryable: false });
                     return;
                 }
             } catch {
@@ -1018,7 +1018,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             
             // FIX: Create input audio context with the stream's native sample rate to avoid mismatches.
             const inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-            let partner_source: MediaStreamAudioSourceNode | null = null;
+            let source: MediaStreamAudioSourceNode | null = null;
             let scriptProcessor: ScriptProcessorNode | null = null;
             let zeroGain: GainNode | null = null;
 
@@ -1216,7 +1216,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                     const updatedLast = { ...last, text: last.text + text };
                     return [...prev.slice(0, -1), updatedLast];
                 }
-                return [...prev, { partner_source: 'user', text, isFinal: false }];
+                return [...prev, { source: 'user', text, isFinal: false }];
             });
         }
         if (message.serverContent?.outputTranscription) {
@@ -1227,7 +1227,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                     const updatedLast = { ...last, text: last.text + text };
                     return [...prev.slice(0, -1), updatedLast];
                 }
-                return [...prev, { partner_source: 'model', text, isFinal: false }];
+                return [...prev, { source: 'model', text, isFinal: false }];
             });
         }
         if (message.serverContent?.turnComplete) {
@@ -1340,16 +1340,16 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             });
 
             if (res.ok && transcript) {
-                void logUserActivity({ tool_name: 'live_rehearsal', event_type: 'tool_used', success: true, duration_ms: Date.now() - transcribeStartedAt, metadata: { partner_source: 'transcribe', transcript_length: transcript.length } });
-                const finalHistory: Transcription[] = [{ partner_source: 'user', text: transcript, isFinal: true } as any];
+                void logUserActivity({ tool_name: 'live_rehearsal', event_type: 'tool_used', success: true, duration_ms: Date.now() - transcribeStartedAt, metadata: { source: 'transcribe', transcript_length: transcript.length } });
+                const finalHistory: Transcription[] = [{ source: 'user', text: transcript, isFinal: true } as any];
                 setTranscriptionHistory(finalHistory);
                 return finalHistory;
             }
             if (!res.ok) {
-                void logUserActivity({ tool_name: 'live_rehearsal', event_type: 'error', success: false, duration_ms: Date.now() - transcribeStartedAt, metadata: { partner_source: 'transcribe', message: json?.error ? String(json.error) : `HTTP ${res.status}`, error_kind: /quota|limit/i.test(String(json?.error || '')) ? 'usage_limit_hit' : /timeout/i.test(String(json?.error || '')) ? 'timeout' : 'ai_failure', status: res.status } });
+                void logUserActivity({ tool_name: 'live_rehearsal', event_type: 'error', success: false, duration_ms: Date.now() - transcribeStartedAt, metadata: { source: 'transcribe', message: json?.error ? String(json.error) : `HTTP ${res.status}`, error_kind: /quota|limit/i.test(String(json?.error || '')) ? 'usage_limit_hit' : /timeout/i.test(String(json?.error || '')) ? 'timeout' : 'ai_failure', status: res.status } });
             }
         } catch (err: any) {
-            void logUserActivity({ tool_name: 'live_rehearsal', event_type: 'error', success: false, duration_ms: Date.now() - transcribeStartedAt, metadata: { partner_source: 'transcribe', message: String(err?.message || err), error_kind: /timeout/i.test(String(err?.message || err)) ? 'timeout' : 'ai_failure' } });
+            void logUserActivity({ tool_name: 'live_rehearsal', event_type: 'error', success: false, duration_ms: Date.now() - transcribeStartedAt, metadata: { source: 'transcribe', message: String(err?.message || err), error_kind: /timeout/i.test(String(err?.message || err)) ? 'timeout' : 'ai_failure' } });
             pushDebug('transcribe_error', { message: String(err?.message || err) });
             try {
                 (window as any).__REHEARSAL_TRANSCRIBE__ = { status: 0, ok: false, error: String(err?.message || err), len: 0, preview: '', ts: Date.now() };
@@ -1510,7 +1510,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         const durationSeconds = demoDurationSeconds || DEMO_DURATION_SECONDS;
         const startedAt = now - durationSeconds * 1000;
         const markers = buildDemoMarkers(startedAt);
-        const demoTranscript = [{ partner_source: 'user', text: script, isFinal: true }] as Transcription[];
+        const demoTranscript = [{ source: 'user', text: script, isFinal: true }] as Transcription[];
 
         setTakes((prev) => {
             const incomingDemoTake = { takeNumber: 1, startedAt, endedAt: now, transcript: demoTranscript, markers } as any;
@@ -1976,7 +1976,7 @@ const RehearsalHistory: React.FC = () => {
                         const combined: Transcription[] = [];
                         for (const take of obj.takes) {
                             const n = Number(take?.takeNumber ?? 0) || combined.length + 1;
-                            combined.push({ partner_source: 'model', text: `— Take ${n} —`, isFinal: true } as any);
+                            combined.push({ source: 'model', text: `— Take ${n} —`, isFinal: true } as any);
                             if (Array.isArray(take?.transcript)) {
                                 for (const seg of take.transcript) combined.push(seg as any);
                             }
@@ -1991,7 +1991,7 @@ const RehearsalHistory: React.FC = () => {
                     if (typeof obj?.notes === 'string') notes = obj.notes;
                 } catch {
                     const t = String(r.content || '').trim();
-                    transcript = t ? ([{ partner_source: 'user', text: t, isFinal: true }] as any) : [];
+                    transcript = t ? ([{ source: 'user', text: t, isFinal: true }] as any) : [];
                     latestTake = { transcript };
                 }
                 const metrics = buildRehearsalMetrics(latestTake?.transcript || transcript, latestTake?.startedAt, latestTake?.endedAt);
@@ -2657,7 +2657,7 @@ const buildAngleRiskPrefill = (take: { transcript?: Transcription[]; markers?: S
     ].filter(Boolean);
     return {
         version: 1,
-        partner_source: 'live-rehearsal',
+        source: 'live-rehearsal',
         routineName: sessionTitle || 'Live Rehearsal Routine',
         focusText: focusBits.join('\n\n'),
         routineSteps: steps,
@@ -2678,7 +2678,7 @@ const buildPatterPrefill = (take: { transcript?: Transcription[]; markers?: Segm
     ].filter(Boolean);
     return {
         version: 1,
-        partner_source: 'live-rehearsal',
+        source: 'live-rehearsal',
         effectDescription: descriptionParts.join('\n\n'),
         selectedTones: ['Storytelling', 'Mysterious'],
         createdAt: Date.now(),
@@ -2696,7 +2696,7 @@ const buildDirectorPrefill = (take: { transcript?: Transcription[]; markers?: Se
     ].filter(Boolean);
     return {
         version: 1,
-        partner_source: 'live-rehearsal',
+        source: 'live-rehearsal',
         showTitle: sessionTitle || 'Live Rehearsal Routine',
         theme: 'Refine this rehearsed routine into a stronger show segment with better arc, transitions, and audience clarity.',
         constraintNotes: constraintBits.join('\n\n'),
