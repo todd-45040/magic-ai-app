@@ -32,6 +32,16 @@ function sourceList(source: AllowedSource): string[] {
   return [source];
 }
 
+function normalizePartnerSource(raw: any): 'ibm' | 'sam' | null {
+  const s = String(raw || '').trim().toLowerCase();
+  if (s === 'ibm' || s === 'sam') return s;
+  return null;
+}
+
+function resolvePartnerSource(user: any): 'ibm' | 'sam' | null {
+  return normalizePartnerSource(user?.partner_source) || normalizePartnerSource(user?.signup_source);
+}
+
 function isPaidMembership(raw: any): boolean {
   const v = String(raw || '').trim().toLowerCase();
   return v === 'amateur' || v === 'professional';
@@ -83,14 +93,17 @@ export default async function handler(req: any, res: any) {
     const sources = sourceList(source);
     const { data: partnerUsers, error: userErr } = await admin
       .from('users')
-      .select('id,email,membership,trial_end_date,created_at,signup_source')
-      .in('signup_source', sources)
+      .select('id,email,membership,trial_end_date,created_at,partner_source,signup_source')
       .order('created_at', { ascending: false })
       .limit(5000);
 
     if (userErr) return res.status(500).json({ ok: false, error: `Failed to load ${campaignLabel(source)} users`, details: userErr });
 
-    const users = Array.isArray(partnerUsers) ? partnerUsers : [];
+    const users = (Array.isArray(partnerUsers) ? partnerUsers : []).filter((user: any) => {
+      const resolvedSource = resolvePartnerSource(user);
+      if (source === 'all') return sources.includes(String(resolvedSource || ''));
+      return resolvedSource === source;
+    });
     const partnerIds = users.map((u: any) => u.id).filter(Boolean);
 
     const signupsTotal = users.length;
