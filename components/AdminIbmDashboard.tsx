@@ -162,7 +162,7 @@ export default function AdminIbmDashboard() {
                 </div>
               </div>
               <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-                <KpiCard label="First Tool Used" value={num(events.first_tool_used)} sub={`Window signup→activation: ${pct(rates.window_signup_to_activation)}`} />
+                <KpiCard label="First Tool Used" value={num(events.first_tool_use ?? events.first_tool_used)} sub={`Window signup→activation: ${pct(rates.window_signup_to_activation)}`} />
                 <KpiCard label="First Idea Saved" value={headline.firstIdeaSaved} sub={`Activation→save: ${pct(rates.activation_to_first_idea_saved)}`} />
                 <KpiCard label="Checkout Completed" value={headline.checkoutCompleted} sub={`Checkout→paid: ${pct(rates.checkout_to_paid)}`} />
                 <KpiCard label="Activation Rate" value={pct(rates.signup_to_activation)} sub={`Click→checkout: ${pct(rates.click_to_checkout)}`} />

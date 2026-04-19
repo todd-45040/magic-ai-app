@@ -45,7 +45,7 @@ export function hasExpiredTrial(user?: User | null): boolean {
   return tier === 'trial' && typeof user.trialEndDate === 'number' && Number.isFinite(user.trialEndDate) && user.trialEndDate <= Date.now();
 }
 
-export function getEffectiveMembershipTier(user?: User | null): CanonicalTier {
+export function getEffectiveMembership(user?: User | null): CanonicalTier {
   if (!user) return 'free';
   const tier = normalizeTier(user.membership);
   if (tier === 'admin' || tier === 'professional' || tier === 'amateur') {
@@ -55,6 +55,10 @@ export function getEffectiveMembershipTier(user?: User | null): CanonicalTier {
     return 'professional';
   }
   return 'free';
+}
+
+export function getEffectiveMembershipTier(user?: User | null): CanonicalTier {
+  return getEffectiveMembership(user);
 }
 
 export function isPaidTier(tier: CanonicalTier): boolean {

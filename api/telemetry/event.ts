@@ -200,8 +200,17 @@ export default async function handler(req: any, res: any) {
             metadata: mergedMetadata,
           });
           if (activity.event_type === 'tool_used') {
-            const { count } = await admin.from('user_activity_log').select('id', { count: 'exact', head: true }).eq('user_id', user_id).eq('event_type', 'first_tool_used');
+            const { count } = await admin.from('user_activity_log').select('id', { count: 'exact', head: true }).eq('user_id', user_id).in('event_type', ['first_tool_use', 'first_tool_used']);
             if (!count) {
+              await insertUserActivity(admin, {
+                user_id,
+                email: user.email,
+                tool_name: activity.tool_name,
+                event_type: 'first_tool_use',
+                success: true,
+                duration_ms: null,
+                metadata: mergedMetadata,
+              });
               await insertUserActivity(admin, {
                 user_id,
                 email: user.email,

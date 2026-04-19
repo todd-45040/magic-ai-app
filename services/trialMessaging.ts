@@ -1,5 +1,5 @@
 import type { User } from "../types";
-import { getMembershipDaysRemaining, hasExpiredTrial, isActiveTrialUser } from "./membershipService";
+import { getEffectiveMembership, getMembershipDaysRemaining, hasExpiredTrial, isActiveTrialUser, normalizeTier } from "./membershipService";
 
 export type TrialPromptStage = 'none' | '7d' | '3d' | '1d' | 'expired';
 
@@ -22,6 +22,7 @@ export function getPartnerTrialBadgeLabel(user?: User | null): string {
 
 export function getTrialPromptStage(user?: User | null): TrialPromptStage {
   if (!user || !isPartnerTrialUser(user)) return 'none';
+  if (getEffectiveMembership(user) === 'professional' && normalizeTier(user.membership) !== 'trial') return 'none';
   if (hasExpiredTrial(user)) return 'expired';
   if (!isActiveTrialUser(user)) return 'none';
   const days = getMembershipDaysRemaining(user);

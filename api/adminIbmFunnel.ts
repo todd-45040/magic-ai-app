@@ -155,7 +155,7 @@ export default async function handler(req: any, res: any) {
         errorKinds.set(kind, (errorKinds.get(kind) || 0) + 1);
       }
 
-      if (eventType === 'tool_used' || eventType === 'first_tool_used') {
+      if (eventType === 'tool_used' || eventType === 'first_tool_use' || eventType === 'first_tool_used') {
         const tool = normalizeTool(row?.tool_name);
         if (!toolEventUsers.has(tool)) toolEventUsers.set(tool, new Set());
         toolEventUsers.get(tool)!.add(uid);
@@ -169,10 +169,10 @@ export default async function handler(req: any, res: any) {
         .from('user_activity_log')
         .select('user_id')
         .in('user_id', partnerIds)
-        .eq('event_type', 'first_tool_used')
+        .in('event_type', ['first_tool_use', 'first_tool_used'])
         .limit(5000);
       if (ftErr) {
-        console.warn('adminIbmFunnel first_tool_used query failed', ftErr);
+        console.warn('adminIbmFunnel first tool query failed', ftErr);
       } else {
         for (const row of allTimeFirstTool || []) {
           if (row?.user_id) activatedTotalUsers.add(String(row.user_id));
@@ -228,6 +228,7 @@ export default async function handler(req: any, res: any) {
         signup: signupEvents,
         login: loginEvents,
         first_login: firstLoginEvents,
+        first_tool_use: firstToolUsedEvents,
         first_tool_used: firstToolUsedEvents,
         first_idea_saved: firstIdeaSavedEvents,
         upgrade_prompt_viewed: upgradePromptViewed,

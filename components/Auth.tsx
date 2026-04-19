@@ -249,7 +249,7 @@ const initialMode = (() => {
 
                 {mode === 'signup' && signupContext.isPartner30Day && (
                   <div className="mt-4 w-full rounded-xl border border-yellow-300/20 bg-yellow-400/10 px-4 py-3 text-sm text-yellow-100">
-                    IBM Partner Access detected. We’ll carry your 30-day trial source into signup.
+                    {signupContext.isIbm ? 'IBM' : 'SAM'} Partner Access detected. We’ll carry your 30-day trial source into signup.
                   </div>
                 )}
 

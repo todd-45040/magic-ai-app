@@ -74,7 +74,7 @@ export default async function handler(req: any, res: any) {
       metadata: mergedMetadata,
     };
 
-    const dedupedEventTypes = new Set(['signup', 'trial_expired', 'checkout_completed', 'paid_conversion']);
+    const dedupedEventTypes = new Set(['signup', 'trial_started', 'trial_expired', 'checkout_completed', 'paid_conversion']);
     if (dedupedEventTypes.has(event_type)) {
       const { count } = await admin
         .from('user_activity_log')
@@ -104,9 +104,21 @@ export default async function handler(req: any, res: any) {
         .from('user_activity_log')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', user.id)
-        .eq('event_type', 'first_tool_used');
+        .in('event_type', ['first_tool_use', 'first_tool_used']);
       if (!count) {
+        await insertUserActivity(admin, { ...baseRow, event_type: 'first_tool_use' } as any);
         await insertUserActivity(admin, { ...baseRow, event_type: 'first_tool_used' } as any);
+      }
+    }
+
+    if (event_type === 'signup' && ['ibm', 'sam'].includes(String((mergedMetadata || {}).source || '').toLowerCase())) {
+      const { count } = await admin
+        .from('user_activity_log')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('event_type', 'trial_started');
+      if (!count) {
+        await insertUserActivity(admin, { ...baseRow, event_type: 'trial_started', tool_name: 'system' } as any);
       }
     }
 

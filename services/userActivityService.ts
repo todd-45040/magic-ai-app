@@ -5,6 +5,7 @@ export type UserActivityEventType =
   | 'login'
   | 'first_login'
   | 'tool_used'
+  | 'first_tool_use'
   | 'first_tool_used'
   | 'idea_saved'
   | 'first_idea_saved'
@@ -13,6 +14,7 @@ export type UserActivityEventType =
   | 'checkout_started'
   | 'checkout_completed'
   | 'paid_conversion'
+  | 'trial_started'
   | 'trial_expired'
   | 'error';
 

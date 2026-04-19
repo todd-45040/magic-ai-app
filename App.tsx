@@ -319,6 +319,14 @@ function App() {
               success: true,
               metadata: signupMetadata,
             });
+            if (normalizedIsPartner30Day) {
+              void logUserActivity({
+                tool_name: 'system',
+                event_type: 'trial_started',
+                success: true,
+                metadata: signupMetadata,
+              });
+            }
           }
 
           // If reconciliation ran, the DB row may have just been upgraded.
@@ -453,8 +461,6 @@ function App() {
             await logIbmConversionEvent(conversionUser, 'paid_conversion', {
               session_id: sessionId,
               converted_membership: conversionUser?.membership,
-              source: 'ibm',
-              campaign: 'ibm-30day',
               converted_from_trial: true,
             });
           }
