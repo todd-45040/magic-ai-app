@@ -1,3 +1,7 @@
+
+export function getCanonicalPartnerSource(user: any): string | null {
+  return user?.partnerSource || user?.signupSource || null;
+}
 import type { User } from '../types';
 
 export type PartnerSource = 'ibm' | 'sam';
