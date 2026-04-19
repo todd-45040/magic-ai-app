@@ -27,7 +27,7 @@ function getSignupContext() {
     const trial = String(params.get('trial') || '').trim();
     const email = String(params.get('email') || '').trim();
     const ibmRing = String(params.get('ibm_ring') || '').trim();
-    const samAssembly = String(params.get('sam_assembly') || params.get('sam') || '').trim();
+    const samAssembly = String(params.get('sam') || '').trim();
     const isIbm = source === 'ibm' && trial === '30';
     const isSam = source === 'sam' && trial === '30';
     const isPartner30Day = isIbm || isSam;
@@ -165,7 +165,7 @@ const initialMode = (() => {
           metadata: signupContext.isIbm
             ? { source: 'ibm', campaign: 'ibm-30day', requested_trial_days: 30, ...(signupContext.ibmRing ? { ibm_ring: signupContext.ibmRing } : {}) }
             : signupContext.isSam
-              ? { source: 'sam', campaign: 'sam-30day', requested_trial_days: 30, ...(signupContext.samAssembly ? { sam_assembly: signupContext.samAssembly } : {}) }
+              ? { source: 'sam', campaign: 'sam_30day', requested_trial_days: 30, ...(signupContext.samAssembly ? { sam_assembly: signupContext.samAssembly } : {}) }
               : { source: signupContext.source || 'direct', requested_trial_days: 14 },
         });
         setMessage(signupContext.isPartner30Day ? `You’ve unlocked a 30-day Professional Trial (${signupContext.isIbm ? 'IBM' : 'SAM'} Partner Access). Check your email if confirmation is required.` : 'Account created! Check your email if confirmation is required.');

@@ -20,8 +20,6 @@ const normalizeUserRow = (row: any): User => {
     ...(row?.trial_end_date ? { trialEndDate: row.trial_end_date } : {}),
     ...(row?.signup_source ? { signupSource: row.signup_source } : {}),
     ...(typeof row?.requested_trial_days === 'number' ? { requestedTrialDays: row.requested_trial_days } : {}),
-    ...(row?.ibm_ring ? { ibmRing: row.ibm_ring } : {}),
-    ...(row?.sam_assembly ? { samAssembly: row.sam_assembly } : {}),
 
     // Founding Circle identity layer
     foundingCircleMember: Boolean(row?.founding_circle_member ?? false),
@@ -100,11 +98,11 @@ export const registerOrUpdateUser = async (user: User, uid: string): Promise<voi
     const email = user.email.toLowerCase();
 
     // Read existing row (if any) so we never downgrade a paid/admin account during auth hydration.
-    let existing: { membership?: string | null; is_admin?: boolean | null; trial_end_date?: any; signup_source?: string | null; requested_trial_days?: number | null; ibm_ring?: string | null; sam_assembly?: string | null } | null = null;
+    let existing: { membership?: string | null; is_admin?: boolean | null; trial_end_date?: any; signup_source?: string | null; requested_trial_days?: number | null } | null = null;
     try {
       const { data: existingRow } = await supabase
         .from(USERS_TABLE)
-.select('membership,is_admin,trial_end_date,signup_source,requested_trial_days,ibm_ring,sam_assembly')
+.select('membership,is_admin,trial_end_date,signup_source,requested_trial_days')
         .eq('id', uid)
         .maybeSingle();
       existing = (existingRow as any) || null;
@@ -136,8 +134,6 @@ export const registerOrUpdateUser = async (user: User, uid: string): Promise<voi
     const requestedSource = String((user as any).signupSource ?? existing?.signup_source ?? '').trim().toLowerCase();
     const requestedTrialDaysRaw = Number((user as any).requestedTrialDays ?? existing?.requested_trial_days ?? 14);
     const requestedTrialDays = Number.isFinite(requestedTrialDaysRaw) && requestedTrialDaysRaw > 0 ? requestedTrialDaysRaw : 14;
-    const ibmRing = String((user as any).ibmRing ?? existing?.ibm_ring ?? '').trim();
-    const samAssembly = String((user as any).samAssembly ?? existing?.sam_assembly ?? '').trim();
 
     let trialEndDate: number | null =
       (user as any).trialEndDate ?? (typeof existing?.trial_end_date === 'number' ? existing?.trial_end_date : null);
@@ -175,8 +171,6 @@ export const registerOrUpdateUser = async (user: User, uid: string): Promise<voi
       trial_end_date: membership === 'trial' ? trialEndDate : null,
       signup_source: requestedSource || 'direct',
       requested_trial_days: membership === 'trial' ? requestedTrialDays : null,
-      ibm_ring: ibmRing || null,
-      sam_assembly: samAssembly || null,
     };
 
     let error = null as any;
@@ -185,8 +179,6 @@ export const registerOrUpdateUser = async (user: User, uid: string): Promise<voi
       const fallbackRow = { ...row };
       delete fallbackRow.signup_source;
       delete fallbackRow.requested_trial_days;
-      delete fallbackRow.ibm_ring;
-      delete fallbackRow.sam_assembly;
       ({ error } = await supabase.from(USERS_TABLE).upsert(fallbackRow));
     }
     if (error) throw error;

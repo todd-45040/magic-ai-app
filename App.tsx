@@ -291,7 +291,7 @@ function App() {
           const signupMetadata = signupSource === 'ibm'
             ? { source: 'ibm', campaign: 'ibm-30day', requested_trial_days: initialTrialDays, ...(ibmRing ? { ibm_ring: ibmRing } : {}) }
             : signupSource === 'sam'
-              ? { source: 'sam', campaign: 'sam-30day', requested_trial_days: initialTrialDays, ...(samAssembly ? { sam_assembly: samAssembly } : {}) }
+              ? { source: 'sam', campaign: 'sam_30day', requested_trial_days: initialTrialDays, ...(samAssembly ? { sam_assembly: samAssembly } : {}) }
               : { source: signupSource || 'direct', requested_trial_days: initialTrialDays };
 
           if (isNewProfile) {

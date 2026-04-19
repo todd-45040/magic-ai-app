@@ -62,6 +62,7 @@ import AdminPanel from './AdminPanel';
 import AppSuggestionModal from './AppSuggestionModal';
 import BillingSettings from './BillingSettings';
 import TrialConversionBanner from './TrialConversionBanner';
+import { getPartnerTrialBadgeLabel, isPartnerTrialUser } from '../services/trialMessaging';
 import { fetchUsageStatus, type UsageStatus } from '../services/usageStatusService';
 import { consume, getUsage } from '../services/usageTracker';
 import { logIbmConversionEvent, isIbmConversionCandidate } from '../services/ibmConversionTracking';
@@ -3009,6 +3010,8 @@ useEffect(() => {
     console.warn('tier missing in MagicianMode');
   }
   const isTrialActive = isActiveTrialUser(user);
+  const isPartnerTrial = isPartnerTrialUser(user);
+  const partnerTrialBadgeLabel = isPartnerTrial ? getPartnerTrialBadgeLabel(user) : null;
   const isTrialExpired = tier === 'trial' && user.trialEndDate ? user.trialEndDate <= Date.now() : false;
   const isExpired = tier === 'expired' || isTrialExpired;
   const daysRemaining = getMembershipDaysRemaining(user);
@@ -5057,6 +5060,12 @@ const renderIntentSubnav = () => {
               <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full border border-amber-400/25 bg-amber-500/10">
                 <StarIcon className="w-3.5 h-3.5 text-[#E6C77A]" aria-hidden="true" />
                 <span className="text-xs font-semibold tracking-wide text-amber-200">Founding Circle</span>
+              </div>
+            )}
+            {isTrialActive && isPartnerTrial && partnerTrialBadgeLabel && (
+              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full border border-fuchsia-400/30 bg-fuchsia-500/10">
+                <span className="h-2 w-2 rounded-full bg-fuchsia-300 shadow-[0_0_10px_rgba(232,121,249,0.9)]" aria-hidden="true" />
+                <span className="text-xs font-semibold tracking-wide text-fuchsia-200">{partnerTrialBadgeLabel}</span>
               </div>
             )}
             {(daysRemaining != null || tier !== 'trial') && (

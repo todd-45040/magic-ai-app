@@ -16,6 +16,10 @@ export function getPartnerTrialLabel(user?: User | null): string {
   return String(user?.signupSource || '').toLowerCase() === 'sam' ? 'SAM Partner Access' : 'IBM Partner Access';
 }
 
+export function getPartnerTrialBadgeLabel(user?: User | null): string {
+  return String(user?.signupSource || '').toLowerCase() === 'sam' ? 'SAM Partner Trial' : 'IBM Partner Trial';
+}
+
 export function getTrialPromptStage(user?: User | null): TrialPromptStage {
   if (!user || !isPartnerTrialUser(user)) return 'none';
   if (hasExpiredTrial(user)) return 'expired';
