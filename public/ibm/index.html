@@ -675,8 +675,8 @@
     function sendPartnerEvent(eventType, payload) {
       var body = Object.assign({
         event_type: eventType,
-        source: 'ibm',
-        campaign: 'ibm-30day',
+        partner_source: 'ibm',
+        partner_campaign: 'ibm-30day',
         page_path: window.location.pathname || '/ibm'
       }, payload || {});
       try {

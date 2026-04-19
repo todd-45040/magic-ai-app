@@ -3,7 +3,7 @@ type WireItem = {
   headline: string;
   summary: string;
   body: string;
-  source: string;
+  partner_source: string;
   sourceUrl: string | null;
   publishedAt?: string;
 };
@@ -90,7 +90,7 @@ function cleanTextFromRss(raw: string): string {
   return decodedTwice.trim();
 }
 
-function parseFeed(xml: string, source: string, category: string): WireItem[] {
+function parseFeed(xml: string, partner_source: string, category: string): WireItem[] {
   const { blocks } = pickBlocks(xml);
   if (!blocks.length) return [];
 
@@ -175,20 +175,20 @@ export default async function handler(req: any, res: any) {
     if (cached) return sendJson(res, 200, cached.slice(0, count));
 
     // (These are the reliable feeds you’re using now)
-    const feeds: { url: string; source: string; category: string }[] = [
+    const feeds: { url: string; partner_source: string; category: string }[] = [
       {
         url: "https://news.google.com/rss/search?q=magic+trick+magician&hl=en-US&gl=US&ceid=US:en",
-        source: "Google News",
+        partner_source: "Google News",
         category: "Magic News",
       },
       {
         url: "https://news.google.com/rss/search?q=illusionist+show&hl=en-US&gl=US&ceid=US:en",
-        source: "Google News",
+        partner_source: "Google News",
         category: "Shows & Events",
       },
       {
         url: "https://www.reddit.com/r/MagicTricks/.rss",
-        source: "Reddit r/MagicTricks",
+        partner_source: "Reddit r/MagicTricks",
         category: "Community",
       },
     ];
@@ -222,7 +222,7 @@ export default async function handler(req: any, res: any) {
         headline: "Magic Wire is refreshing sources",
         summary: "If a source throttles requests, try refresh again in a minute.",
         body: "If a source throttles requests, try refresh again in a minute.",
-        source: "Magic AI Wizard",
+        partner_source: "Magic AI Wizard",
         sourceUrl: "https://www.magicaiwizard.com/app/",
       },
     ];

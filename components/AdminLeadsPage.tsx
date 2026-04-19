@@ -44,7 +44,7 @@ export default function AdminLeadsPage() {
     setLoading(true);
     setErr(null);
     try {
-      const r = await fetchAdminWaitlistLeads({ source: 'admc', days, limit: 500, offset: 0 });
+      const r = await fetchAdminWaitlistLeads({ partner_source: 'admc', days, limit: 500, offset: 0 });
       setRows(r?.rows || []);
       setCount(typeof r?.count === 'number' ? r.count : null);
     } catch (e: any) {
@@ -86,13 +86,13 @@ const exportRows = useMemo(() => {
         created_at: r?.created_at || '',
         name: r?.name || '',
         email: r?.email || '',
-        source: r?.source || '',
+        partner_source: r?.source || '',
         performer_type: m?.performer_type || m?.type || '',
         page: m?.page || '',
         ref: m?.ref || '',
-        utm_source: utm?.utm_source || '',
+        utm_partner_source: utm?.utm_source || '',
         utm_medium: utm?.utm_medium || '',
-        utm_campaign: utm?.utm_campaign || '',
+        utm_partner_campaign: utm?.utm_campaign || '',
         utm_content: utm?.utm_content || '',
         utm_term: utm?.utm_term || '',
       };

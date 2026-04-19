@@ -16,7 +16,7 @@ export type MagicWireSavedPost = {
   id: string;
   title: string;
   summary: string;
-  source: string;
+  partner_source: string;
   sourceUrl?: string | null;
   publishedAt?: string;
   category: string;

@@ -208,7 +208,7 @@ function normalizeStatusFromEvent(eventType: string, object: any): string {
   return String(object?.status || object?.subscription_status || '').trim() || 'unknown';
 }
 
-function buildEventSummary(event: any) {
+function buildEventSummary(event_name: any) {
   const object = event?.data?.object || {};
   const metadata = object?.metadata || {};
   const firstPrice = object?.items?.data?.[0]?.price || object?.lines?.data?.[0]?.price || object?.plan || null;
@@ -248,7 +248,7 @@ async function findExistingBillingEvent(admin: any, stripeEventId: string) {
   return data || null;
 }
 
-async function insertBillingEventReceipt(admin: any, event: any, requestId: string | null, verifiedSecretSlot: number) {
+async function insertBillingEventReceipt(admin: any, event_name: any, requestId: string | null, verifiedSecretSlot: number) {
   const object = event?.data?.object || {};
   const metadata = object?.metadata || {};
   const stripeEventId = String(event?.id || '').trim();
@@ -276,7 +276,7 @@ async function insertBillingEventReceipt(admin: any, event: any, requestId: stri
         stripe_customer_id: stripeCustomerId,
         stripe_subscription_id: stripeSubscriptionId,
         event_type: String(event?.type || 'unknown'),
-        event_source: 'stripe',
+        event_partner_source: 'stripe',
         event_status: 'received',
         payload,
         event_created_at: safeIsoFromUnixSeconds(event?.created),
@@ -293,7 +293,7 @@ async function insertBillingEventReceipt(admin: any, event: any, requestId: stri
 }
 
 
-async function mirrorWebhookHealthEvent(admin: any, event: any, requestId: string | null, signaturePresent: boolean) {
+async function mirrorWebhookHealthEvent(admin: any, event_name: any, requestId: string | null, signaturePresent: boolean) {
   const stripeEventId = String(event?.id || '').trim();
   if (!stripeEventId) return;
 
@@ -636,7 +636,7 @@ async function resolveUserIdForBillingEvent(admin: any, params: {
   return null;
 }
 
-async function syncFromEvent(admin: any, event: any) {
+async function syncFromEvent(admin: any, event_name: any) {
   const eventType = String(event?.type || '').trim();
   const object = event?.data?.object || {};
   const metadata = object?.metadata || {};
@@ -746,7 +746,7 @@ async function cancelSubscriptionBestEffort(subscriptionId: string, reason: stri
 }
 
 
-async function logIbmPaidConversionFromWebhook(admin: any, sync: any, event: any) {
+async function logIbmPaidConversionFromWebhook(admin: any, sync: any, event_name: any) {
   const userId = String(sync?.userId || '').trim() || null;
   const billingStatus = String(sync?.billingStatus || '').trim().toLowerCase();
   if (!userId || billingStatus !== 'active') return;
@@ -762,8 +762,8 @@ async function logIbmPaidConversionFromWebhook(admin: any, sync: any, event: any
     event_type: 'paid_conversion',
     success: true,
     metadata: {
-      source: 'ibm',
-      campaign: 'ibm-30day',
+      partner_source: 'ibm',
+      partner_campaign: 'ibm-30day',
       plan_key: sync?.planKey || null,
       stripe_subscription_id: sync?.stripeSubscriptionId || null,
       stripe_event_type: String(event?.type || '').trim() || null,
@@ -772,7 +772,7 @@ async function logIbmPaidConversionFromWebhook(admin: any, sync: any, event: any
   });
 }
 
-async function enforceFounderCapBestEffort(admin: any, event: any) {
+async function enforceFounderCapBestEffort(admin: any, event_name: any) {
   const object = event?.data?.object || {};
   const metadata = object?.metadata || {};
   const founderLike = normalizeBool(metadata?.founding_member) || Boolean(String(metadata?.pricing_lock || '').trim()) || Boolean(String(metadata?.founder_offer || '').trim());
@@ -809,7 +809,7 @@ export async function processStripeWebhook(input: {
     return { ok: false, received: false, error: verification.reason };
   }
 
-  let event: any;
+  let event_name: any;
   try {
     event = JSON.parse(input.rawBody.toString('utf8') || '{}');
   } catch {

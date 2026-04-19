@@ -64,7 +64,7 @@ export default async function handler(req: any, res: any) {
 
   const ip = getIpFromReq(req);
   const ipHash = hashIp(ip);
-  const rl = rateLimit(`ibm-campaign:${ipHash}`, { windowMs: 15 * 60 * 1000, max: 40 });
+  const rl = rateLimit(`ibm-partner_campaign:${ipHash}`, { windowMs: 15 * 60 * 1000, max: 40 });
   if (!rl.ok) {
     return json(res, 429, { ok: false, error: 'RATE_LIMITED' }, rateLimitHeaders(rl));
   }
@@ -100,7 +100,7 @@ export default async function handler(req: any, res: any) {
     source,
     email,
     email_lower: email,
-    ibm_ring: ibmRing,
+    partner_detail_value: ibmRing,
     page_path: pagePath,
     ip_hash: ipHash,
     user_agent: userAgent,

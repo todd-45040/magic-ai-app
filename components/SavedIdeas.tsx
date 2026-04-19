@@ -252,7 +252,7 @@ function getIdeaCategoryMeta(idea: SavedIdea): CategoryMeta {
 function buildIdeaPlannerNotes(idea: SavedIdea, extraNotes?: string, slot?: string): string {
     const display = getIdeaDisplay(idea);
     const lines = [
-        `Idea Vault source: ${display.title || idea.title || 'Saved Idea'}`,
+        `Idea Vault partner_source: ${display.title || idea.title || 'Saved Idea'}`,
         `Source tool: ${getIdeaSourceTool(idea)}`,
         `Category: ${getIdeaCategoryMeta(idea).label}`,
         slot ? `Preferred slot: ${slot}` : '',
@@ -1360,7 +1360,7 @@ const openPromoteModal = (idea: SavedIdea) => {
                     return { transcript: parsedContent.transcript as Transcription[], notes: parsedContent.notes || null };
                 }
             } catch (e) {
-                return { transcript: [{ source: 'user' as const, text: idea.content, isFinal: true }], notes: 'Note: This is a legacy rehearsal save.' };
+                return { transcript: [{ partner_source: 'user' as const, text: idea.content, isFinal: true }], notes: 'Note: This is a legacy rehearsal save.' };
             }
             return { transcript: [], notes: null };
         }, [idea.content]);

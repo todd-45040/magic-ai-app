@@ -102,7 +102,7 @@ export default function AdminOverviewDashboard({ onGoUsers, onGoLeads }: { onGoU
         setAiHealthErr(e?.message || 'Failed to load AI health');
       }
       try {
-        const l = await fetchAdminWaitlistLeads({ source: 'admc', days, limit: 0, offset: 0 });
+        const l = await fetchAdminWaitlistLeads({ partner_source: 'admc', days, limit: 0, offset: 0 });
         setAdmcLeads(typeof l?.count === 'number' ? l.count : null);
       } catch {
         setAdmcLeads(null);

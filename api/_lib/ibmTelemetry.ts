@@ -35,8 +35,8 @@ export async function getUserIbmContext(admin: any, userId: string | null | unde
     return {
       is_ibm: resolvedSource === 'ibm',
       is_sam: resolvedSource === 'sam',
-      source: resolvedSource,
-      campaign: resolvedSource === 'sam' ? 'sam-30day' : 'ibm-30day',
+      partner_source: resolvedSource,
+      partner_campaign: resolvedSource === 'sam' ? 'sam-30day' : 'ibm-30day',
       requested_trial_days: Number((data as any).requested_trial_days || 0) || 30,
       membership: (data as any).membership || null,
       trial_end_date: Number((data as any).trial_end_date || 0) || null,

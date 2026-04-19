@@ -33,7 +33,7 @@ function getSignupContext() {
     const isPartner30Day = isIbm || isSam;
     return { source, trial, email, ibmRing, samAssembly, isIbm, isSam, isPartner30Day };
   } catch {
-    return { source: '', trial: '', email: '', ibmRing: '', samAssembly: '', isIbm: false, isSam: false, isPartner30Day: false };
+    return { partner_source: '', trial: '', email: '', ibmRing: '', samAssembly: '', isIbm: false, isSam: false, isPartner30Day: false };
   }
 }
 
@@ -124,10 +124,10 @@ const initialMode = (() => {
       options: {
         emailRedirectTo,
         data: {
-          signup_source: signupContext.source || 'direct',
+          signup_partner_source: signupContext.source || 'direct',
           requested_trial_days: signupContext.isPartner30Day ? 30 : 14,
-          ...(signupContext.isIbm && signupContext.ibmRing ? { ibm_ring: signupContext.ibmRing } : {}),
-          ...(signupContext.isSam && signupContext.samAssembly ? { sam_assembly: signupContext.samAssembly } : {}),
+          ...(signupContext.isIbm && signupContext.ibmRing ? { partner_detail_value: signupContext.ibmRing } : {}),
+          ...(signupContext.isSam && signupContext.samAssembly ? { partner_detail_value: signupContext.samAssembly } : {}),
         },
       },
     });
@@ -152,7 +152,7 @@ const initialMode = (() => {
     try {
       if (mode === 'login') {
         await doLogin();
-        void logUserActivity({ tool_name: 'system', event_type: 'login', success: true, metadata: { source: 'auth_login' } });
+        void logUserActivity({ tool_name: 'system', event_type: 'login', success: true, metadata: { partner_source: 'auth_login' } });
         setMessage('Welcome back — loading your Studio…');
         try { onLoginSuccess?.(); } catch {}
         try { onLogin?.({ email }); } catch {}
@@ -163,10 +163,10 @@ const initialMode = (() => {
           event_type: 'signup',
           success: true,
           metadata: signupContext.isIbm
-            ? { source: 'ibm', campaign: 'ibm-30day', requested_trial_days: 30, ...(signupContext.ibmRing ? { ibm_ring: signupContext.ibmRing } : {}) }
+            ? { partner_source: 'ibm', partner_campaign: 'ibm-30day', requested_trial_days: 30, ...(signupContext.ibmRing ? { partner_detail_value: signupContext.ibmRing } : {}) }
             : signupContext.isSam
-              ? { source: 'sam', campaign: 'sam-30day', requested_trial_days: 30, ...(signupContext.samAssembly ? { sam_assembly: signupContext.samAssembly } : {}) }
-              : { source: signupContext.source || 'direct', requested_trial_days: 14 },
+              ? { partner_source: 'sam', partner_campaign: 'sam-30day', requested_trial_days: 30, ...(signupContext.samAssembly ? { partner_detail_value: signupContext.samAssembly } : {}) }
+              : { partner_source: signupContext.source || 'direct', requested_trial_days: 14 },
         });
         setMessage(signupContext.isPartner30Day ? `You’ve unlocked a 30-day Professional Trial (${signupContext.isIbm ? 'IBM' : 'SAM'} Partner Access). Check your email if confirmation is required.` : 'Account created! Check your email if confirmation is required.');
         try { onLoginSuccess?.(); } catch {}

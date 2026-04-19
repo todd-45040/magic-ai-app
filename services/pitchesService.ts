@@ -18,7 +18,7 @@ type DbRow = {
   user_id: string;
   title: string | null;
   content: string;
-  source: any | null;
+  partner_source: any | null;
   created_at: string | null;
 };
 
@@ -37,7 +37,7 @@ function mapRow(row: DbRow): BookingPitch {
     title: row.title ?? 'Untitled Pitch',
     content: row.content,
     createdAt: Number.isFinite(ts) ? ts : Date.now(),
-    source: row.source ?? undefined,
+    partner_source: row.source ?? undefined,
   };
 }
 
@@ -66,7 +66,7 @@ export async function createBookingPitch(input: {
       user_id: userId,
       title: input.title,
       content: input.content,
-      source: input.source ?? null,
+      partner_source: input.source ?? null,
     })
     .select('*')
     .single();
@@ -93,7 +93,7 @@ export async function createBookingPitch(input: {
         title: input.title,
         content: input.content,
         createdAt: idea.timestamp,
-        source: input.source,
+        partner_source: input.source,
       },
       savedToIdeasFallback: true,
     };

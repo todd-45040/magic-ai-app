@@ -4,7 +4,7 @@ export type FounderFeedback = {
   id: string;
   created_at: string;
   received_at: string | null;
-  source: string;
+  partner_source: string;
   status: string;
   message_id: string | null;
   from_email: string;

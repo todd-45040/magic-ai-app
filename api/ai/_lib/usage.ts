@@ -87,7 +87,7 @@ async function safeLogQuotaHitActivity(admin: any, input: {
     event_type: 'quota_hit',
     success: false,
     metadata: {
-      source: 'server_quota_enforcement',
+      partner_source: 'server_quota_enforcement',
       reason: input.reason ?? null,
       membership: input.membership ?? null,
       remaining_daily: input.remainingDaily ?? null,

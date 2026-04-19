@@ -227,7 +227,7 @@ export async function saveIdea(
       title: savedIdea.title ?? null,
       category: savedIdea.category ?? null,
       tag_count: Array.isArray(savedIdea.tags) ? savedIdea.tags.length : 0,
-      source: 'idea_create',
+      partner_source: 'idea_create',
     },
   });
   return savedIdea;
@@ -271,7 +271,7 @@ export async function updateIdea(id: string, updates: Partial<SavedIdea>): Promi
       title: savedIdea.title ?? null,
       category: savedIdea.category ?? null,
       tag_count: Array.isArray(savedIdea.tags) ? savedIdea.tags.length : 0,
-      source: 'idea_update',
+      partner_source: 'idea_update',
     },
   });
   return savedIdea;

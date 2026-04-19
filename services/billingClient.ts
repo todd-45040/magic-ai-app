@@ -109,7 +109,7 @@ export type BillingTruthDebug = {
     accessState: string;
     renewalDate: string | null;
     currentBillingCycle: BillingCycle;
-    source: 'database' | 'fallback' | 'stripe_live';
+    partner_source: 'database' | 'fallback' | 'stripe_live';
   };
   mismatches: {
     planMismatch: boolean;
@@ -124,7 +124,7 @@ export type BillingTruthDebug = {
 };
 
 export type BillingStatusPayload = {
-  ok:true; planKey:BillingPlanKey; billingStatus:string; accessState:string; renewalDate:string|null; cancelAtPeriodEnd:boolean; founderProtected:boolean; founderLockedPlan:BillingPlanKey|null; founderLockedPriceCents:number|null; usagePeriodStart:string|null; usagePeriodEnd:string|null; upgradeTargets:BillingPlanKey[]; stripeConfigured:boolean; billingCustomerExists:boolean; stripeCustomerIdPresent:boolean; currentBillingCycle: BillingCycle; currentPriceId: string | null; source:'database'|'fallback'|'stripe_live'; billingTruth: BillingTruthDebug; recentBillingEvents: BillingEventSnapshot[]; validationChecks: BillingValidationChecks; validationGuide: BillingValidationGuide; billingReadiness:{ expectedWebhookPath:string; expectedWebhookUrl:string; missingEnvKeys:string[]; configuredPriceKeys:string[]; missingPriceKeys:string[]; hasPublishableKey:boolean; hasWebhookSecret:boolean; hasServerSecretKey:boolean; };
+  ok:true; planKey:BillingPlanKey; billingStatus:string; accessState:string; renewalDate:string|null; cancelAtPeriodEnd:boolean; founderProtected:boolean; founderLockedPlan:BillingPlanKey|null; founderLockedPriceCents:number|null; usagePeriodStart:string|null; usagePeriodEnd:string|null; upgradeTargets:BillingPlanKey[]; stripeConfigured:boolean; billingCustomerExists:boolean; stripeCustomerIdPresent:boolean; currentBillingCycle: BillingCycle; currentPriceId: string | null; partner_source:'database'|'fallback'|'stripe_live'; billingTruth: BillingTruthDebug; recentBillingEvents: BillingEventSnapshot[]; validationChecks: BillingValidationChecks; validationGuide: BillingValidationGuide; billingReadiness:{ expectedWebhookPath:string; expectedWebhookUrl:string; missingEnvKeys:string[]; configuredPriceKeys:string[]; missingPriceKeys:string[]; hasPublishableKey:boolean; hasWebhookSecret:boolean; hasServerSecretKey:boolean; };
 };
 export type BillingCheckoutPayload = { ok:boolean; mode?:'placeholder'; stripeConfigured:boolean; message?:string; targetPlanKey?:BillingPlanKey; targetLookupKey?:BillingCheckoutLookupKey; successUrl?:string; cancelUrl?:string; url?:string; cycleSwitchApplied?: boolean; billingAction?: 'subscription_update' | 'checkout_session'; subscriptionId?: string; };
 export type BillingPortalPayload = { ok:boolean; mode?:'placeholder'; stripeConfigured:boolean; billingCustomerExists?:boolean; message?:string; returnUrl?:string; url?:string; };

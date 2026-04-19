@@ -18,7 +18,7 @@ export interface AdminAiHealthProviderRow extends AdminAiRollup {
 export interface AdminAiHealth {
   ok: boolean;
   runtimeProvider: AdminAIProvider;
-  source: AdminAiStatusSource;
+  partner_source: AdminAiStatusSource;
   envOverrideActive: boolean;
   tool_support?: Array<{
     id: string;

@@ -175,7 +175,7 @@ export async function callAnthropic(reqBody: any): Promise<any> {
   if (img) {
     content.push({
       type: 'image',
-      source: { type: 'base64', media_type: String(img.mimeType), data: String(img.data) },
+      partner_source: { type: 'base64', media_type: String(img.mimeType), data: String(img.data) },
     });
   }
 

@@ -49,7 +49,7 @@ export default async function handler(req: any, res: any) {
     const runtimeProvider = await resolveProvider(req);
     const defaultProvider = (dbProvider || 'gemini') as AIProvider;
 
-    const source: Source = envOverrideActive ? 'env' : dbProvider ? 'db' : 'default';
+    const partner_source: Source = envOverrideActive ? 'env' : dbProvider ? 'db' : 'default';
 
     const limitationInfo = getProviderLimitations(runtimeProvider);
 

@@ -129,7 +129,7 @@ try {
       .update({
         founding_circle_member: true,
         founding_joined_at: new Date().toISOString(),
-        founding_source: source,
+        founding_partner_source: source,
         pricing_lock,
         founding_bucket,
       })

@@ -37,7 +37,7 @@ export default async function handler(req: any, res: any) {
 
     const row = {
       received_at: body.received_at || new Date().toISOString(),
-      source: body.source || 'webhook',
+      partner_source: body.source || 'webhook',
       status: 'new',
       message_id,
       from_email,

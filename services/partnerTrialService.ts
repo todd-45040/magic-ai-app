@@ -1,7 +1,3 @@
-
-export function getCanonicalPartnerSource(user: any): string | null {
-  return user?.partnerSource || user?.signupSource || null;
-}
 import type { User } from '../types';
 
 export type PartnerSource = 'ibm' | 'sam';
@@ -20,13 +16,13 @@ export function normalizePartnerSource(raw: any): PartnerSource | null {
   return null;
 }
 
-export function getPartnerCampaign(source: PartnerSource | null | undefined): string | null {
+export function getPartnerCampaign(partner_source: PartnerSource | null | undefined): string | null {
   if (source === 'ibm') return 'ibm-30day';
   if (source === 'sam') return 'sam-30day';
   return null;
 }
 
-export function getPartnerDetailType(source: PartnerSource | null | undefined): PartnerDetailType | null {
+export function getPartnerDetailType(partner_source: PartnerSource | null | undefined): PartnerDetailType | null {
   if (source === 'ibm') return 'ibm_ring';
   if (source === 'sam') return 'sam_assembly';
   return null;

@@ -5,7 +5,7 @@ async function getAccessToken(): Promise<string | null> {
   return data.session?.access_token ?? null;
 }
 
-export async function fetchAdminIbmFunnel(days = 7, source: 'ibm' | 'sam' | 'all' = 'ibm'): Promise<any> {
+export async function fetchAdminIbmFunnel(days = 7, partner_source: 'ibm' | 'sam' | 'all' = 'ibm'): Promise<any> {
   const token = await getAccessToken();
   if (!token) throw new Error('Not authenticated');
 
