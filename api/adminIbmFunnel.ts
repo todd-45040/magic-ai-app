@@ -83,8 +83,8 @@ export default async function handler(req: any, res: any) {
     const sources = sourceList(source);
     const { data: partnerUsers, error: userErr } = await admin
       .from('users')
-      .select('id,email,membership,trial_end_date,created_at,partner_source,signup_source')
-      .in('partner_source', sources)
+      .select('id,email,membership,trial_end_date,created_at,signup_source')
+      .in('signup_source', sources)
       .order('created_at', { ascending: false })
       .limit(5000);
 

@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { supabase } from '../supabase';
 import { logUserActivity } from '../services/userActivityService';
+import { getPartnerCampaign, getPartnerDetailType, normalizePartnerSource } from '../services/partnerTrialService';
 
 type AuthMode = 'login' | 'signup' | 'reset';
 
@@ -23,17 +24,47 @@ function getAppBasePath(): string {
 function getSignupContext() {
   try {
     const params = new URLSearchParams(window.location.search);
-    const source = String(params.get('source') || '').trim().toLowerCase();
+    const rawSource = String(params.get('source') || '').trim();
+    const partnerSource = normalizePartnerSource(rawSource);
     const trial = String(params.get('trial') || '').trim();
     const email = String(params.get('email') || '').trim();
     const ibmRing = String(params.get('ibm_ring') || '').trim();
     const samAssembly = String(params.get('sam_assembly') || params.get('sam') || '').trim();
-    const isIbm = source === 'ibm' && trial === '30';
-    const isSam = source === 'sam' && trial === '30';
-    const isPartner30Day = isIbm || isSam;
-    return { source, trial, email, ibmRing, samAssembly, isIbm, isSam, isPartner30Day };
+    const partnerCampaign = getPartnerCampaign(partnerSource);
+    const partnerDetailType = getPartnerDetailType(partnerSource);
+    const partnerDetailValue = ibmRing || samAssembly || '';
+    const isIbm = partnerSource === 'ibm' && trial === '30';
+    const isSam = partnerSource === 'sam' && trial === '30';
+    const isPartner30Day = Boolean(partnerSource) && trial === '30';
+    return {
+      source: partnerSource || String(rawSource || '').trim().toLowerCase(),
+      partnerSource,
+      partnerCampaign,
+      partnerDetailType,
+      partnerDetailValue,
+      trial,
+      email,
+      ibmRing,
+      samAssembly,
+      isIbm,
+      isSam,
+      isPartner30Day,
+    };
   } catch {
-    return { source: '', trial: '', email: '', ibmRing: '', samAssembly: '', isIbm: false, isSam: false, isPartner30Day: false };
+    return {
+      source: '',
+      partnerSource: null,
+      partnerCampaign: null,
+      partnerDetailType: null,
+      partnerDetailValue: '',
+      trial: '',
+      email: '',
+      ibmRing: '',
+      samAssembly: '',
+      isIbm: false,
+      isSam: false,
+      isPartner30Day: false,
+    };
   }
 }
 
@@ -124,8 +155,12 @@ const initialMode = (() => {
       options: {
         emailRedirectTo,
         data: {
-          signup_source: signupContext.source || 'direct',
+          signup_source: signupContext.partnerSource || signupContext.source || 'direct',
           requested_trial_days: signupContext.isPartner30Day ? 30 : 14,
+          ...(signupContext.partnerSource ? { partner_source: signupContext.partnerSource } : {}),
+          ...(signupContext.partnerCampaign ? { partner_campaign: signupContext.partnerCampaign } : {}),
+          ...(signupContext.partnerDetailType ? { partner_detail_type: signupContext.partnerDetailType } : {}),
+          ...(signupContext.partnerDetailValue ? { partner_detail_value: signupContext.partnerDetailValue } : {}),
           ...(signupContext.isIbm && signupContext.ibmRing ? { ibm_ring: signupContext.ibmRing } : {}),
           ...(signupContext.isSam && signupContext.samAssembly ? { sam_assembly: signupContext.samAssembly } : {}),
         },
@@ -162,11 +197,16 @@ const initialMode = (() => {
           tool_name: 'system',
           event_type: 'signup',
           success: true,
-          metadata: signupContext.isIbm
-            ? { source: 'ibm', campaign: 'ibm-30day', requested_trial_days: 30, ...(signupContext.ibmRing ? { ibm_ring: signupContext.ibmRing } : {}) }
-            : signupContext.isSam
-              ? { source: 'sam', campaign: 'sam-30day', requested_trial_days: 30, ...(signupContext.samAssembly ? { sam_assembly: signupContext.samAssembly } : {}) }
-              : { source: signupContext.source || 'direct', requested_trial_days: 14 },
+          metadata: signupContext.partnerSource
+            ? {
+                source: signupContext.partnerSource,
+                campaign: signupContext.partnerCampaign || undefined,
+                requested_trial_days: 30,
+                ...(signupContext.partnerDetailValue ? { partner_detail_value: signupContext.partnerDetailValue } : {}),
+                ...(signupContext.isIbm && signupContext.ibmRing ? { ibm_ring: signupContext.ibmRing } : {}),
+                ...(signupContext.isSam && signupContext.samAssembly ? { sam_assembly: signupContext.samAssembly } : {}),
+              }
+            : { source: signupContext.source || 'direct', requested_trial_days: 14 },
         });
         setMessage(signupContext.isPartner30Day ? `You’ve unlocked a 30-day Professional Trial (${signupContext.isIbm ? 'IBM' : 'SAM'} Partner Access). Check your email if confirmation is required.` : 'Account created! Check your email if confirmation is required.');
         try { onLoginSuccess?.(); } catch {}
