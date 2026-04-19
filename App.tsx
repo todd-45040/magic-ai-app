@@ -309,7 +309,7 @@ function App() {
           const signupMetadata = normalizedSignupSource === 'ibm'
             ? { source: 'ibm', campaign: 'ibm-30day', requested_trial_days: normalizedTrialDays, ...(normalizedIbmRing ? { ibm_ring: normalizedIbmRing } : {}) }
             : normalizedSignupSource === 'sam'
-              ? { source: 'sam', campaign: 'sam_30day', requested_trial_days: normalizedTrialDays, ...(normalizedSamAssembly ? { sam_assembly: normalizedSamAssembly } : {}) }
+              ? { source: 'sam', campaign: 'sam-30day', requested_trial_days: normalizedTrialDays, ...(normalizedSamAssembly ? { sam_assembly: normalizedSamAssembly } : {}) }
               : { source: normalizedSignupSource || 'direct', requested_trial_days: normalizedTrialDays };
 
           if (isNewProfile) {

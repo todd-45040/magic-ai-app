@@ -49,7 +49,7 @@ function cleanText(value: any, max = 120): string | null {
   return s ? s.slice(0, max) : null;
 }
 
-const ALLOWED_EVENTS = new Set(['sam_landing_view', 'sam_cta_click', 'sam_trial_form_submit', 'sam_signup_redirect']);
+const ALLOWED_EVENTS = new Set(['partner_page_view', 'partner_cta_click', 'partner_form_submit', 'partner_signup_redirect']);
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
@@ -76,7 +76,7 @@ export default async function handler(req: any, res: any) {
     body = {};
   }
 
-  const eventType = cleanText(body?.event_type, 80) || 'sam_trial_form_submit';
+  const eventType = cleanText(body?.event_type, 80) || 'partner_form_submit';
   if (!ALLOWED_EVENTS.has(eventType)) {
     return json(res, 400, { ok: false, error: 'INVALID_EVENT_TYPE' });
   }

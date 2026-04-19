@@ -672,26 +672,82 @@
   </main>
 
   <script>
-    function handleIbmTrialSubmit(e) {
-      e.preventDefault();
-      var form = e.target;
+    function sendPartnerEvent(eventType, payload) {
+      var body = Object.assign({
+        event_type: eventType,
+        source: 'ibm',
+        campaign: 'ibm-30day',
+        page_path: window.location.pathname || '/ibm'
+      }, payload || {});
+      try {
+        var json = JSON.stringify(body);
+        if (navigator.sendBeacon) {
+          var blob = new Blob([json], { type: 'application/json' });
+          navigator.sendBeacon('/api/ibmCampaignEvent', blob);
+          return;
+        }
+        fetch('/api/ibmCampaignEvent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: json,
+          keepalive: true,
+          credentials: 'same-origin'
+        }).catch(function () {});
+      } catch (err) {
+        // Never block the landing page on telemetry
+      }
+    }
+
+    function getPartnerFormValues(form) {
       var emailInput = form.querySelector('input[name="email"]');
       var email = emailInput ? String(emailInput.value || '').trim() : '';
-      var ringInput = form.querySelector('input[name="ibm_ring"]');
-      var ibmRing = ringInput ? String(ringInput.value || '').trim() : '';
-      if (!email) {
-        if (emailInput) emailInput.focus();
-        return;
-      }
-      if (!ibmRing) {
-        if (ringInput) ringInput.focus();
-        return;
-      }
-      window.location.href = '/signup?source=ibm&trial=30&email=' + encodeURIComponent(email) + '&ibm_ring=' + encodeURIComponent(ibmRing);
+      var detailInput = form.querySelector('input[name="ibm_ring"]');
+      var detailValue = detailInput ? String(detailInput.value || '').trim() : '';
+      var payload = { email: email };
+      if (detailValue) payload.ibm_ring = detailValue;
+      return { emailInput: emailInput, detailInput: detailInput, email: email, detailValue: detailValue, payload: payload };
     }
+
+    function handleIBMTrialSubmit(e) {
+      e.preventDefault();
+      var form = e.target;
+      var values = getPartnerFormValues(form);
+      if (!values.email) {
+        if (values.emailInput) values.emailInput.focus();
+        return;
+      }
+      if (!values.detailValue) {
+        if (values.detailInput) values.detailInput.focus();
+        
+        return;
+      }
+      sendPartnerEvent('partner_form_submit', values.payload);
+      sendPartnerEvent('partner_signup_redirect', values.payload);
+      window.location.href = '/signup?source=ibm&trial=30&email=' + encodeURIComponent(values.email) + '&ibm_ring=' + encodeURIComponent(values.detailValue);
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
+      sendPartnerEvent('partner_page_view');
+
+      var heroCta = document.querySelector('a.btn.btn-primary[href="#claim"]');
+      if (heroCta) {
+        heroCta.addEventListener('click', function () {
+          sendPartnerEvent('partner_cta_click', { placement: 'hero' });
+        });
+      }
+
+      var submitCta = document.querySelector('button[form="ibm-trial-form"]');
+      if (submitCta) {
+        submitCta.addEventListener('click', function () {
+          var form = document.getElementById('ibm-trial-form');
+          if (!form) return;
+          var values = getPartnerFormValues(form);
+          sendPartnerEvent('partner_cta_click', Object.assign({ placement: 'form' }, values.payload));
+        });
+      }
+
       var form = document.getElementById('ibm-trial-form');
-      if (form) form.addEventListener('submit', handleIbmTrialSubmit);
+      if (form) form.addEventListener('submit', handleIBMTrialSubmit);
     });
   </script>
 </body>

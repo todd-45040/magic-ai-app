@@ -78,7 +78,7 @@ create index if not exists users_ibm_ring_idx
 -- from public.maw_campaign_events e
 -- left join public.users u on lower(u.email) = e.email_lower
 -- where e.campaign = 'ibm-30day'
---   and e.event_type = 'ibm_trial_form_submit'
+--   and e.event_type = 'partner_form_submit'
 -- group by e.email_lower, u.created_at, u.signup_source, u.requested_trial_days, u.trial_end_date, u.membership, u.ibm_ring
 -- order by first_submit_at desc;
 
@@ -87,7 +87,7 @@ create index if not exists users_ibm_ring_idx
 --   select * from public.users where signup_source = 'ibm'
 -- )
 -- select
---   (select count(*) from public.maw_campaign_events where campaign = 'ibm-30day' and event_type = 'ibm_trial_form_submit') as landing_submits,
+--   (select count(*) from public.maw_campaign_events where campaign = 'ibm-30day' and event_type = 'partner_form_submit') as landing_submits,
 --   (select count(*) from ibm_users) as ibm_signups,
 --   (select count(*) from ibm_users where membership in ('amateur','professional')) as paid_conversions,
 --   (select count(*) from ibm_users where membership = 'trial' and coalesce(trial_end_date,0) > (extract(epoch from now()) * 1000)) as active_trials,

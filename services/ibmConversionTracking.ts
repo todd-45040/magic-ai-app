@@ -27,7 +27,7 @@ function baseMetadata(user?: User | null): Record<string, any> {
   if (isPartnerTrialUser(user)) {
     const source = String(user?.signupSource || '').toLowerCase() === 'sam' ? 'sam' : 'ibm';
     meta.source = source;
-    meta.campaign = source === 'sam' ? 'sam_30day' : 'ibm-30day';
+    meta.campaign = source === 'sam' ? 'sam-30day' : 'ibm-30day';
     meta.converted_from_trial = true;
     meta.partner_label = getPartnerTrialLabel(user);
   }

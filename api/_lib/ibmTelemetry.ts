@@ -1,6 +1,6 @@
 export function isIbmLikeSource(raw: any): boolean {
   const s = String(raw || '').trim().toLowerCase();
-  return s === 'ibm' || s === 'ibm-30day' || s === 'ibm_30day' || s === 'sam' || s === 'sam-30day' || s === 'sam_30day';
+  return s === 'ibm' || s === 'ibm-30day' || s === 'ibm_30day' || s === 'sam' || s === 'sam-30day' || s === 'sam-30day';
 }
 
 export function normalizeIbmMetadata(metadata: any = {}, extras: Record<string, any> = {}): Record<string, any> {
@@ -9,7 +9,7 @@ export function normalizeIbmMetadata(metadata: any = {}, extras: Record<string, 
   if (isIbmLikeSource(source) || extras.is_ibm === true) {
     const resolvedSource = String(source || extras.source || '').trim().toLowerCase() === 'sam' || extras.is_sam === true ? 'sam' : 'ibm';
     base.source = resolvedSource;
-    if (!base.campaign) base.campaign = resolvedSource === 'sam' ? 'sam_30day' : 'ibm-30day';
+    if (!base.campaign) base.campaign = resolvedSource === 'sam' ? 'sam-30day' : 'ibm-30day';
     if (extras.requested_trial_days && !base.requested_trial_days) base.requested_trial_days = extras.requested_trial_days;
   }
   for (const [k, v] of Object.entries(extras || {})) {
@@ -36,7 +36,7 @@ export async function getUserIbmContext(admin: any, userId: string | null | unde
       is_ibm: resolvedSource === 'ibm',
       is_sam: resolvedSource === 'sam',
       source: resolvedSource,
-      campaign: resolvedSource === 'sam' ? 'sam_30day' : 'ibm-30day',
+      campaign: resolvedSource === 'sam' ? 'sam-30day' : 'ibm-30day',
       requested_trial_days: Number((data as any).requested_trial_days || 0) || 30,
       membership: (data as any).membership || null,
       trial_end_date: Number((data as any).trial_end_date || 0) || null,

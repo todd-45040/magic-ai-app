@@ -30,7 +30,7 @@ async function getDefaultActivityMetadata(): Promise<Record<string, any>> {
     const meta: Record<string, any> = {};
     if (source) meta.source = source;
     if (source === 'ibm') meta.campaign = 'ibm-30day';
-    if (source === 'sam') meta.campaign = 'sam_30day';
+    if (source === 'sam') meta.campaign = 'sam-30day';
     if (requestedTrialDays) meta.requested_trial_days = requestedTrialDays;
     if (ibmRing) meta.ibm_ring = ibmRing;
     if (samAssembly) meta.sam_assembly = samAssembly;
