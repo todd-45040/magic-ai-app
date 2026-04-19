@@ -49,6 +49,16 @@ function cleanText(value: any, max = 120): string | null {
   return s ? s.slice(0, max) : null;
 }
 
+function normalizePartnerSource(source: any): 'ibm' | 'sam' | null {
+  const s = cleanText(source, 40)?.toLowerCase();
+  if (s === 'ibm' || s === 'sam') return s;
+  return null;
+}
+
+function getPartnerCampaign(source: 'ibm' | 'sam' | null): string | null {
+  return source ? `${source}-30day` : null;
+}
+
 const ALLOWED_EVENTS = new Set(['partner_page_view', 'partner_cta_click', 'partner_form_submit', 'partner_signup_redirect']);
 
 export default async function handler(req: any, res: any) {
@@ -76,31 +86,37 @@ export default async function handler(req: any, res: any) {
     body = {};
   }
 
-  const eventType = cleanText(body?.event_type, 80) || 'partner_form_submit';
-  if (!ALLOWED_EVENTS.has(eventType)) {
+  const eventName = cleanText(body?.event_name, 80) || cleanText(body?.event_type, 80) || 'partner_form_submit';
+  if (!ALLOWED_EVENTS.has(eventName)) {
     return json(res, 400, { ok: false, error: 'INVALID_EVENT_TYPE' });
   }
 
-  const campaign = cleanText(body?.campaign, 80) || 'sam-30day';
-  const source = cleanText(body?.source, 40) || 'sam';
+  const partnerSource = normalizePartnerSource(body?.partner_source) || normalizePartnerSource(body?.source) || 'sam';
+  const partnerCampaign = cleanText(body?.partner_campaign, 80) || cleanText(body?.campaign, 80) || getPartnerCampaign(partnerSource) || 'sam-30day';
+  const partnerDetailValue = cleanText(body?.partner_detail_value, 120) || cleanText(body?.ibm_ring, 120) || cleanText(body?.sam_assembly, 120);
   const email = normalizeEmail(body?.email || '') || null;
-  const samAssembly = cleanText(body?.sam_assembly, 80);
   const promoCode = cleanText(body?.promo_code, 40);
   const pagePath = cleanText(body?.page_path, 240) || '/sam';
   const userAgent = String(req?.headers?.['user-agent'] || '').slice(0, 500);
 
   const meta = body?.meta && typeof body.meta === 'object' ? { ...body.meta } : {};
   if (promoCode) meta.promo_code = promoCode;
-  if (!meta.campaign) meta.campaign = campaign;
-  if (!meta.source) meta.source = source;
+  if (!meta.campaign) meta.campaign = partnerCampaign;
+  if (!meta.source) meta.source = partnerSource;
+  if (!meta.event_name) meta.event_name = eventName;
+  if (!meta.partner_source) meta.partner_source = partnerSource;
+  if (!meta.partner_campaign) meta.partner_campaign = partnerCampaign;
+  if (partnerDetailValue && !meta.partner_detail_value) meta.partner_detail_value = partnerDetailValue;
+  if (partnerSource === 'ibm' && partnerDetailValue && !meta.ibm_ring) meta.ibm_ring = partnerDetailValue;
+  if (partnerSource === 'sam' && partnerDetailValue && !meta.sam_assembly) meta.sam_assembly = partnerDetailValue;
 
   const payload: any = {
-    event_type: eventType,
-    campaign,
-    source,
+    event_type: eventName,
+    campaign: partnerCampaign,
+    source: partnerSource,
     email,
     email_lower: email,
-    sam_assembly: samAssembly,
+    ibm_ring: partnerSource === 'ibm' ? partnerDetailValue : null,
     page_path: pagePath,
     ip_hash: ipHash,
     user_agent: userAgent,
