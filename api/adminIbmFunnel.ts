@@ -2,6 +2,8 @@ import { requireSupabaseAuth } from './_auth.js';
 
 const ALLOWED_WINDOWS = [1, 7, 30, 90] as const;
 type AllowedWindowDays = typeof ALLOWED_WINDOWS[number];
+const ALLOWED_SOURCES = ['ibm', 'sam', 'all'] as const;
+type AllowedSource = typeof ALLOWED_SOURCES[number];
 
 function asDays(raw: any, fallback: AllowedWindowDays = 7): AllowedWindowDays {
   const n = Number(raw);
@@ -12,6 +14,22 @@ function asDays(raw: any, fallback: AllowedWindowDays = 7): AllowedWindowDays {
 
 function isoDaysAgo(days: number): string {
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+}
+
+function asSource(raw: any, fallback: AllowedSource = 'ibm'): AllowedSource {
+  const s = String(raw || '').trim().toLowerCase();
+  return (ALLOWED_SOURCES as readonly string[]).includes(s) ? (s as AllowedSource) : fallback;
+}
+
+function campaignLabel(source: AllowedSource): string {
+  if (source === 'sam') return 'SAM';
+  if (source === 'all') return 'All Partner';
+  return 'IBM';
+}
+
+function sourceList(source: AllowedSource): string[] {
+  if (source === 'all') return ['ibm', 'sam'];
+  return [source];
 }
 
 function isPaidMembership(raw: any): boolean {
@@ -29,7 +47,7 @@ function normalizeTool(raw: any): string {
   return lower;
 }
 
-async function fetchAllUserActivity(admin: any, ibmIds: string[], sinceIso: string) {
+async function fetchAllUserActivity(admin: any, partnerIds: string[], sinceIso: string) {
   const rows: any[] = [];
   const pageSize = 1000;
   for (let start = 0; start < 10000; start += pageSize) {
@@ -37,7 +55,7 @@ async function fetchAllUserActivity(admin: any, ibmIds: string[], sinceIso: stri
     const { data, error } = await admin
       .from('user_activity_log')
       .select('user_id,event_type,tool_name,created_at,metadata,success')
-      .in('user_id', ibmIds)
+      .in('user_id', partnerIds)
       .gte('created_at', sinceIso)
       .order('created_at', { ascending: false })
       .range(start, end);
@@ -58,20 +76,22 @@ export default async function handler(req: any, res: any) {
     if (!me?.is_admin) return res.status(403).json({ ok: false, error: 'Forbidden' });
 
     const days = asDays(req?.query?.days, 7);
+    const source = asSource(req?.query?.source, 'ibm');
     const sinceIso = isoDaysAgo(days);
     const now = Date.now();
 
-    const { data: ibmUsers, error: userErr } = await admin
+    const sources = sourceList(source);
+    const { data: partnerUsers, error: userErr } = await admin
       .from('users')
       .select('id,email,membership,trial_end_date,created_at,signup_source')
-      .eq('signup_source', 'ibm')
+      .in('signup_source', sources)
       .order('created_at', { ascending: false })
       .limit(5000);
 
-    if (userErr) return res.status(500).json({ ok: false, error: 'Failed to load IBM users', details: userErr });
+    if (userErr) return res.status(500).json({ ok: false, error: `Failed to load ${campaignLabel(source)} users`, details: userErr });
 
-    const users = Array.isArray(ibmUsers) ? ibmUsers : [];
-    const ibmIds = users.map((u: any) => u.id).filter(Boolean);
+    const users = Array.isArray(partnerUsers) ? partnerUsers : [];
+    const partnerIds = users.map((u: any) => u.id).filter(Boolean);
 
     const signupsTotal = users.length;
     const signupsWindow = users.filter((u: any) => {
@@ -90,8 +110,8 @@ export default async function handler(req: any, res: any) {
     }).length;
 
     let activity: any[] = [];
-    if (ibmIds.length > 0) {
-      activity = await fetchAllUserActivity(admin, ibmIds, sinceIso);
+    if (partnerIds.length > 0) {
+      activity = await fetchAllUserActivity(admin, partnerIds, sinceIso);
     }
 
     const activatedWindowUsers = new Set<string>();
@@ -148,7 +168,7 @@ export default async function handler(req: any, res: any) {
       const { data: allTimeFirstTool, error: ftErr } = await admin
         .from('user_activity_log')
         .select('user_id')
-        .in('user_id', ibmIds)
+        .in('user_id', partnerIds)
         .eq('event_type', 'first_tool_used')
         .limit(5000);
       if (ftErr) {
@@ -192,6 +212,7 @@ export default async function handler(req: any, res: any) {
 
     return res.status(200).json({
       ok: true,
+      campaign: { source, label: campaignLabel(source), options: ALLOWED_SOURCES },
       window: { days, sinceIso, optionsDays: ALLOWED_WINDOWS },
       summary: {
         signups_window: signupsWindow,

@@ -71,6 +71,7 @@ export default function AdminOverviewDashboard({ onGoUsers, onGoLeads }: { onGoU
   const [admcLeads, setAdmcLeads] = useState<number | null>(null);
   const [founderCounts, setFounderCounts] = useState<any>(null);
   const [founderCountsErr, setFounderCountsErr] = useState<string | null>(null);
+  const [partnerFunnelSource, setPartnerFunnelSource] = useState<'all' | 'ibm' | 'sam'>('all');
   const [ibmFunnel, setIbmFunnel] = useState<any>(null);
   const [ibmFunnelErr, setIbmFunnelErr] = useState<string | null>(null);
 
@@ -108,7 +109,7 @@ export default function AdminOverviewDashboard({ onGoUsers, onGoLeads }: { onGoU
       }
       try {
         setIbmFunnelErr(null);
-        const ibm = await fetchAdminIbmFunnel(days);
+        const ibm = await fetchAdminIbmFunnel(days, partnerFunnelSource);
         setIbmFunnel(ibm);
       } catch (e: any) {
         setIbmFunnel(null);
@@ -125,7 +126,7 @@ export default function AdminOverviewDashboard({ onGoUsers, onGoLeads }: { onGoU
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [days]);
+  }, [days, partnerFunnelSource]);
 
 
   // Phase 9 — Founders allocation widget (ADMC / Reserve / Total)
@@ -177,7 +178,7 @@ export default function AdminOverviewDashboard({ onGoUsers, onGoLeads }: { onGoU
 
 
 
-  }, [days]);
+  }, [days, partnerFunnelSource]);
 
 // Env sanity (server) — booth-week debugging helper
 useEffect(() => {
@@ -498,10 +499,28 @@ const kUsers = data?.users || {};
       <div className="rounded-2xl border border-sky-400/20 bg-sky-500/5 p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-sm font-semibold text-sky-100">IBM Funnel Reporting</div>
-            <div className="text-xs text-white/60 mt-1">Measure IBM signups, activation, expirations, conversions, and tool adoption.</div>
+            <div className="text-sm font-semibold text-sky-100">Partner Funnel Reporting</div>
+            <div className="text-xs text-white/60 mt-1">Measure IBM, SAM, or all partner signups, activation, expirations, conversions, and tool adoption.</div>
+            <div className="mt-3 flex items-center gap-1 rounded-full bg-black/20 border border-white/10 p-1 w-fit">
+              {[
+                { value: 'all', label: 'All' },
+                { value: 'ibm', label: 'IBM' },
+                { value: 'sam', label: 'SAM' },
+              ].map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setPartnerFunnelSource(opt.value as any)}
+                  className={`px-3 py-1 rounded-full text-xs transition ${partnerFunnelSource === opt.value ? 'bg-white/10 text-white' : 'text-white/70 hover:text-white'}`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="text-xs text-white/60">Window: {WINDOW_OPTIONS.find((w) => w.days === days)?.label || `${days}d`}</div>
+          <div className="text-xs text-white/60">
+            {String(ibmFunnel?.campaign?.label || (partnerFunnelSource === 'sam' ? 'SAM' : partnerFunnelSource === 'ibm' ? 'IBM' : 'All Partner'))} • {WINDOW_OPTIONS.find((w) => w.days === days)?.label || `${days}d`}
+          </div>
         </div>
 
         {ibmFunnelErr ? (
@@ -512,47 +531,47 @@ const kUsers = data?.users || {};
 
         <div className="mt-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
           <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-            <div className="text-xs text-white/60">IBM signups</div>
+            <div className="text-xs text-white/60">Partner signups</div>
             <div className="mt-1 text-2xl font-extrabold text-white">{Number(ibmFunnel?.summary?.signups_window ?? 0).toLocaleString()}</div>
-            <div className="text-[11px] text-white/50 mt-1">Total IBM users: {Number(ibmFunnel?.summary?.signups_total ?? 0).toLocaleString()}</div>
+            <div className="text-[11px] text-white/50 mt-1">Total selected users: {Number(ibmFunnel?.summary?.signups_total ?? 0).toLocaleString()}</div>
           </div>
           <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-            <div className="text-xs text-white/60">IBM activated users</div>
+            <div className="text-xs text-white/60">Partner activated users</div>
             <div className="mt-1 text-2xl font-extrabold text-white">{Number(ibmFunnel?.summary?.activated_users_window ?? 0).toLocaleString()}</div>
             <div className="text-[11px] text-white/50 mt-1">Total activated: {Number(ibmFunnel?.summary?.activated_users_total ?? 0).toLocaleString()}</div>
           </div>
           <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-            <div className="text-xs text-white/60">IBM expired users</div>
+            <div className="text-xs text-white/60">Partner expired users</div>
             <div className="mt-1 text-2xl font-extrabold text-white">{Number(ibmFunnel?.summary?.expired_users_current ?? 0).toLocaleString()}</div>
-            <div className="text-[11px] text-white/50 mt-1">Current expired, unpaid IBM users</div>
+            <div className="text-[11px] text-white/50 mt-1">Current expired, unpaid selected users</div>
           </div>
           <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-            <div className="text-xs text-white/60">IBM conversions</div>
+            <div className="text-xs text-white/60">Partner conversions</div>
             <div className="mt-1 text-2xl font-extrabold text-white">{Number(ibmFunnel?.summary?.conversions_total ?? 0).toLocaleString()}</div>
             <div className="text-[11px] text-white/50 mt-1">Conv. rate: {pct(ibmFunnel?.summary?.conversion_rate_total, 0)}</div>
           </div>
           <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-            <div className="text-xs text-white/60">IBM active trials</div>
+            <div className="text-xs text-white/60">Partner active trials</div>
             <div className="mt-1 text-2xl font-extrabold text-white">{Number(ibmFunnel?.summary?.active_trial_current ?? 0).toLocaleString()}</div>
-            <div className="text-[11px] text-white/50 mt-1">Current IBM users still evaluating</div>
+            <div className="text-[11px] text-white/50 mt-1">Current selected users still evaluating</div>
           </div>
         </div>
 
         <div className="mt-4 grid grid-cols-1 xl:grid-cols-3 gap-4">
           <div className="rounded-xl border border-white/10 bg-white/5 p-3 xl:col-span-2">
             <div className="flex items-center justify-between gap-2">
-              <div className="font-semibold text-white">IBM most-used tools</div>
+              <div className="font-semibold text-white">Partner most-used tools</div>
               <div className="text-xs text-white/50">By event volume in selected window</div>
             </div>
             <div className="mt-3 space-y-2">
               {(ibmFunnel?.most_used_tools || []).length === 0 ? (
-                <div className="text-sm text-white/60">No IBM tool data yet for this window.</div>
+                <div className="text-sm text-white/60">No tool data yet for this partner selection.</div>
               ) : (
                 (ibmFunnel?.most_used_tools || []).map((row: any) => (
                   <div key={row.tool} className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-black/20 px-3 py-2">
                     <div>
                       <div className="text-sm font-medium text-white">{row.tool}</div>
-                      <div className="text-[11px] text-white/50">{Number(row.users || 0).toLocaleString()} IBM users</div>
+                      <div className="text-[11px] text-white/50">{Number(row.users || 0).toLocaleString()} selected users</div>
                     </div>
                     <div className="text-right">
                       <div className="text-sm font-semibold text-white">{Number(row.events || 0).toLocaleString()} events</div>
@@ -564,7 +583,7 @@ const kUsers = data?.users || {};
           </div>
 
           <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-            <div className="font-semibold text-white">IBM conversion events</div>
+            <div className="font-semibold text-white">Partner conversion events</div>
             <div className="mt-3 space-y-2 text-sm">
               <div className="flex items-center justify-between"><span className="text-white/70">Upgrade prompts viewed</span><span className="font-semibold text-white">{Number(ibmFunnel?.events?.upgrade_prompt_viewed ?? 0).toLocaleString()}</span></div>
               <div className="flex items-center justify-between"><span className="text-white/70">Upgrade clicks</span><span className="font-semibold text-white">{Number(ibmFunnel?.events?.upgrade_clicked ?? 0).toLocaleString()}</span></div>

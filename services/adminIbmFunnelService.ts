@@ -5,11 +5,11 @@ async function getAccessToken(): Promise<string | null> {
   return data.session?.access_token ?? null;
 }
 
-export async function fetchAdminIbmFunnel(days = 7): Promise<any> {
+export async function fetchAdminIbmFunnel(days = 7, source: 'ibm' | 'sam' | 'all' = 'ibm'): Promise<any> {
   const token = await getAccessToken();
   if (!token) throw new Error('Not authenticated');
 
-  const r = await fetch(`/api/adminIbmFunnel?days=${encodeURIComponent(String(days))}`, {
+  const r = await fetch(`/api/adminIbmFunnel?days=${encodeURIComponent(String(days))}&source=${encodeURIComponent(source)}`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',

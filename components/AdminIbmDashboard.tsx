@@ -8,6 +8,14 @@ const WINDOW_OPTIONS = [
   { days: 90, label: '90d' },
 ];
 
+const CAMPAIGN_OPTIONS = [
+  { value: 'all', label: 'All' },
+  { value: 'ibm', label: 'IBM' },
+  { value: 'sam', label: 'SAM' },
+] as const;
+
+type CampaignSource = (typeof CAMPAIGN_OPTIONS)[number]['value'];
+
 function pct(n: any, digits = 1) {
   const v = Number(n);
   if (!Number.isFinite(v)) return '—';
@@ -37,6 +45,7 @@ function KpiCard({ label, value, sub }: { label: string; value: any; sub?: strin
 
 export default function AdminIbmDashboard() {
   const [days, setDays] = useState<number>(30);
+  const [source, setSource] = useState<CampaignSource>('all');
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,12 +56,12 @@ export default function AdminIbmDashboard() {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetchAdminIbmFunnel(days);
+        const res = await fetchAdminIbmFunnel(days, source);
         if (alive) setData(res);
       } catch (e: any) {
         if (alive) {
           setData(null);
-          setError(e?.message || 'Failed to load IBM dashboard');
+          setError(e?.message || 'Failed to load partner dashboard');
         }
       } finally {
         if (alive) setLoading(false);
@@ -62,8 +71,9 @@ export default function AdminIbmDashboard() {
     return () => {
       alive = false;
     };
-  }, [days]);
+  }, [days, source]);
 
+  const campaignLabel = String(data?.campaign?.label || (source === 'sam' ? 'SAM' : source === 'all' ? 'All Partner' : 'IBM'));
   const summary = data?.summary || {};
   const events = data?.events || {};
   const rates = data?.rates || {};
@@ -86,11 +96,24 @@ export default function AdminIbmDashboard() {
     <div className="p-4 md:p-5 space-y-5">
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
         <div>
-          <div className="text-lg font-semibold text-amber-200">IBM Campaign Dashboard</div>
-          <div className="text-sm text-white/70">Dedicated view of IBM signups, activation, checkout behavior, and paid conversions.</div>
+          <div className="text-lg font-semibold text-amber-200">Partner Campaign Dashboard</div>
+          <div className="text-sm text-white/70">Compare IBM, SAM, or all partner campaigns across signups, activation, checkout behavior, and paid conversions.</div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1 rounded-full bg-black/20 border border-white/10 p-1">
+            {CAMPAIGN_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setSource(opt.value)}
+                className={`px-3 py-1.5 rounded-full text-sm transition ${source === opt.value ? 'bg-amber-400/15 text-amber-100 border border-amber-300/20' : 'text-white/70 hover:text-white'}`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
           <div className="flex items-center gap-1 rounded-full bg-black/20 border border-white/10 p-1">
             {WINDOW_OPTIONS.map((opt) => (
               <button
@@ -118,16 +141,16 @@ export default function AdminIbmDashboard() {
       ) : null}
 
       {loading && !data ? (
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-5 text-white/70">Loading IBM dashboard…</div>
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-5 text-white/70">Loading partner dashboard…</div>
       ) : null}
 
       {!loading && data ? (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-            <KpiCard label={`Signups (${days}d)`} value={headline.signupsWindow} sub={`Total IBM signups: ${num(summary.signups_total)}`} />
-            <KpiCard label={`Activated (${days}d)`} value={headline.activatedWindow} sub={`All-time activated: ${num(summary.activated_users_total)}`} />
-            <KpiCard label={`Checkout Started (${days}d)`} value={headline.checkoutStarted} sub={`Completed: ${headline.checkoutCompleted}`} />
-            <KpiCard label="Paid Conversions" value={headline.conversionsTotal} sub={`Conversion rate: ${pct(summary.conversion_rate_total)}`} />
+            <KpiCard label={`${campaignLabel} Signups (${days}d)`} value={headline.signupsWindow} sub={`Total ${campaignLabel} signups: ${num(summary.signups_total)}`} />
+            <KpiCard label={`${campaignLabel} Activated (${days}d)`} value={headline.activatedWindow} sub={`All-time activated: ${num(summary.activated_users_total)}`} />
+            <KpiCard label={`${campaignLabel} Checkout Started (${days}d)`} value={headline.checkoutStarted} sub={`Completed: ${headline.checkoutCompleted}`} />
+            <KpiCard label={`${campaignLabel} Paid Conversions`} value={headline.conversionsTotal} sub={`Conversion rate: ${pct(summary.conversion_rate_total)}`} />
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -135,7 +158,7 @@ export default function AdminIbmDashboard() {
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <div className="text-sm uppercase tracking-[0.18em] text-white/55">Funnel snapshot</div>
-                  <div className="mt-1 text-white/80 text-sm">Windowed activity for the selected IBM campaign timeframe.</div>
+                  <div className="mt-1 text-white/80 text-sm">Windowed activity for the selected partner campaign timeframe.</div>
                 </div>
               </div>
               <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -148,10 +171,10 @@ export default function AdminIbmDashboard() {
 
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
               <div className="text-sm uppercase tracking-[0.18em] text-white/55">Recent conversions</div>
-              <div className="mt-1 text-sm text-white/70">Most recent IBM users currently on a paid plan.</div>
+              <div className="mt-1 text-sm text-white/70">Most recent selected-campaign users currently on a paid plan.</div>
               <div className="mt-4 space-y-3">
                 {recentConverted.length === 0 ? (
-                  <div className="text-sm text-white/55">No converted IBM users yet.</div>
+                  <div className="text-sm text-white/55">No converted users yet for this campaign.</div>
                 ) : recentConverted.map((row: any, idx: number) => (
                   <div key={`${row.email || 'user'}-${idx}`} className="rounded-xl border border-white/10 bg-black/20 p-3">
                     <div className="text-sm font-medium text-white truncate">{row.email || '—'}</div>
@@ -166,7 +189,7 @@ export default function AdminIbmDashboard() {
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
               <div className="text-sm uppercase tracking-[0.18em] text-white/55">Most used tools</div>
-              <div className="mt-1 text-sm text-white/70">IBM users' most active tools in the selected window.</div>
+              <div className="mt-1 text-sm text-white/70">Selected campaign users' most active tools in the current window.</div>
               <div className="mt-4 overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="text-white/55">
@@ -195,7 +218,7 @@ export default function AdminIbmDashboard() {
 
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
               <div className="text-sm uppercase tracking-[0.18em] text-white/55">Top error kinds</div>
-              <div className="mt-1 text-sm text-white/70">Error telemetry tied to IBM users in the selected window.</div>
+              <div className="mt-1 text-sm text-white/70">Error telemetry tied to the selected campaign in the current window.</div>
               <div className="mt-4 overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="text-white/55">

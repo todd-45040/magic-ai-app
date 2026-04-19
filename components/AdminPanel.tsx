@@ -21,7 +21,7 @@ import {
 export default function AdminPanel({ user }: { user: User }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [metricOpen, setMetricOpen] = useState(false);
-  const [tab, setTab] = useState<'overview' | 'ibm' | 'users' | 'leads' | 'telemetry' | 'feedback' | 'stripe' | 'testimonials' | 'founder_inbox'>('overview');
+  const [tab, setTab] = useState<'overview' | 'campaigns' | 'users' | 'leads' | 'telemetry' | 'feedback' | 'stripe' | 'testimonials' | 'founder_inbox'>('overview');
 
   // App Feedback state
   const [statusFilter, setStatusFilter] = useState<SuggestionStatus | 'all'>('new');
@@ -93,10 +93,10 @@ export default function AdminPanel({ user }: { user: User }) {
               </button>
               <button
                 type="button"
-                onClick={() => setTab('ibm')}
-                className={`px-3 py-1.5 rounded-full text-sm transition ${tab === 'ibm' ? 'bg-white/10 text-white' : 'text-white/70 hover:text-white'}`}
+                onClick={() => setTab('campaigns')}
+                className={`px-3 py-1.5 rounded-full text-sm transition ${tab === 'campaigns' ? 'bg-white/10 text-white' : 'text-white/70 hover:text-white'}`}
               >
-                IBM
+                Campaigns
               </button>
               <button
                 type="button"
@@ -177,7 +177,7 @@ export default function AdminPanel({ user }: { user: User }) {
       <div className="flex-1 overflow-y-auto">
         {tab === 'overview' ? (
           <AdminOverviewDashboard onGoUsers={() => setTab('users')} onGoLeads={() => setTab('leads')} />
-        ) : tab === 'ibm' ? (
+        ) : tab === 'campaigns' ? (
           <AdminIbmDashboard />
         ) : tab === 'users' ? (
           <AdminUsersPage />
