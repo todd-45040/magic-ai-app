@@ -32,13 +32,6 @@ function sourceList(source: AllowedSource): string[] {
   return [source];
 }
 
-function buildPartnerSourceOrFilter(source: AllowedSource): string {
-  if (source === 'all') {
-    return 'partner_source.in.(ibm,sam),and(partner_source.is.null,signup_source.in.(ibm,sam))';
-  }
-  return `partner_source.eq.${source},and(partner_source.is.null,signup_source.eq.${source})`;
-}
-
 function isPaidMembership(raw: any): boolean {
   const v = String(raw || '').trim().toLowerCase();
   return v === 'amateur' || v === 'professional';
@@ -90,39 +83,28 @@ export default async function handler(req: any, res: any) {
     const sources = sourceList(source);
     const { data: partnerUsers, error: userErr } = await admin
       .from('users')
-      .select('id,email,membership,trial_end_date,created_at,signup_source,partner_source,partner_campaign,partner_detail_type,partner_detail_value')
-      .or(buildPartnerSourceOrFilter(source))
+      .select('id,email,membership,trial_end_date,created_at,signup_source')
+      .in('signup_source', sources)
       .order('created_at', { ascending: false })
       .limit(5000);
 
     if (userErr) return res.status(500).json({ ok: false, error: `Failed to load ${campaignLabel(source)} users`, details: userErr });
 
     const users = Array.isArray(partnerUsers) ? partnerUsers : [];
-    const normalizedUsers = users
-      .map((user: any) => {
-        const normalized_source = String(user?.partner_source || user?.signup_source || '').trim().toLowerCase() || null;
-        return {
-          ...user,
-          normalized_source,
-        };
-      })
-      .filter((user: any) => user?.normalized_source && sources.includes(user.normalized_source));
+    const partnerIds = users.map((u: any) => u.id).filter(Boolean);
 
-    const partnerIds = normalizedUsers.map((u: any) => u.id).filter(Boolean);
-    const isActiveTrial = (user: any) => {
-      const t = Number(user?.trial_end_date || 0);
-      return Number.isFinite(t) && t > now;
-    };
-
-    const signupsTotal = normalizedUsers.length;
-    const signupsWindow = normalizedUsers.filter((u: any) => {
+    const signupsTotal = users.length;
+    const signupsWindow = users.filter((u: any) => {
       const created = Date.parse(String(u?.created_at || ''));
       return Number.isFinite(created) && created >= Date.parse(sinceIso);
     }).length;
 
-    const conversionsTotal = normalizedUsers.filter((u: any) => isPaidMembership(u?.membership)).length;
-    const activeTrialCurrent = normalizedUsers.filter((u: any) => isActiveTrial(u) && !isPaidMembership(u?.membership)).length;
-    const expiredUsersCurrent = normalizedUsers.filter((u: any) => {
+    const conversionsTotal = users.filter((u: any) => isPaidMembership(u?.membership)).length;
+    const activeTrialCurrent = users.filter((u: any) => {
+      const t = Number(u?.trial_end_date || 0);
+      return Number.isFinite(t) && t > now && !isPaidMembership(u?.membership);
+    }).length;
+    const expiredUsersCurrent = users.filter((u: any) => {
       const t = Number(u?.trial_end_date || 0);
       return Number.isFinite(t) && t > 0 && t <= now && !isPaidMembership(u?.membership);
     }).length;
@@ -219,7 +201,7 @@ export default async function handler(req: any, res: any) {
       checkout_to_paid: checkoutStarted > 0 ? checkoutCompleted / checkoutStarted : null,
     };
 
-    const recentConverted = normalizedUsers
+    const recentConverted = users
       .filter((u: any) => isPaidMembership(u?.membership))
       .map((u: any) => ({
         email: u?.email || '—',
@@ -241,7 +223,6 @@ export default async function handler(req: any, res: any) {
         conversions_total: conversionsTotal,
         conversion_rate_total: signupsTotal > 0 ? conversionsTotal / signupsTotal : null,
         active_trial_current: activeTrialCurrent,
-        normalized_source_coverage: signupsTotal > 0 ? normalizedUsers.filter((u: any) => !!u?.partner_source).length / signupsTotal : null,
       },
       events: {
         signup: signupEvents,

@@ -8,6 +8,7 @@ import ActivationProgress from './ActivationProgress';
 type Props = {
   user?: User | null;
   onNavigate: (view: string) => void;
+  onDismiss?: () => void;
 };
 
 const FIRST_WIN_SYSTEM = `You are Magic AI Wizard — the operating system for professional magicians.
@@ -21,9 +22,11 @@ Rules:
 - Keep it tight and usable: structured sections, no fluff.
 `;
 
-function buildFirstRoutinePrompt() {
+function buildFirstRoutinePrompt(objects: string, style: string) {
   return [
-    'Create a professional 3–5 minute magic routine suitable for a general audience (parlor or small stage).',
+    `Create a professional 3–5 minute magic routine suitable for a general audience (parlor or small stage).`,
+    `Preferred props / objects: ${objects}.`,
+    `Performance style: ${style}.`,
     'Return the routine in this structure:',
     '',
     'TITLE:',
@@ -39,13 +42,17 @@ function buildFirstRoutinePrompt() {
   ].join('\n');
 }
 
-export default function FirstWinGate({ user, onNavigate }: Props) {
+export default function FirstWinGate({ user, onNavigate, onDismiss }: Props) {
   const dispatch = useAppDispatch();
   const { ideas, shows } = useAppState();
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdIdeaId, setCreatedIdeaId] = useState<string | null>(null);
+  const [selectedObjects, setSelectedObjects] = useState('Everyday objects');
+  const [selectedStyle, setSelectedStyle] = useState('Visual');
+  const objectOptions = ['Cards', 'Coins', 'Everyday objects', 'Mentalism'];
+  const styleOptions = ['Funny', 'Mysterious', 'Mind-reading', 'Visual'];
 
   const hasActivated = useMemo(() => (ideas?.length ?? 0) > 0 || (shows?.length ?? 0) > 0, [ideas, shows]);
 
@@ -53,7 +60,7 @@ export default function FirstWinGate({ user, onNavigate }: Props) {
     setError(null);
     setBusy(true);
     try {
-      const prompt = buildFirstRoutinePrompt();
+      const prompt = buildFirstRoutinePrompt(selectedObjects, selectedStyle);
       const text = await generateResponse(prompt, FIRST_WIN_SYSTEM, user ?? undefined);
       if (!text || String(text).toLowerCase().startsWith('error:')) {
         throw new Error('The AI didn\'t respond this time. Please try again.');
@@ -62,9 +69,9 @@ export default function FirstWinGate({ user, onNavigate }: Props) {
       // Critical activation move: auto-save the first routine.
       const saved = await saveIdea({
         type: 'text',
-        title: 'My First Routine',
+        title: `My First ${selectedStyle} Routine`,
         content: String(text).trim(),
-        tags: ['first-win'],
+        tags: ['first-win', selectedObjects.toLowerCase().replace(/[^a-z0-9]+/g, '-'), selectedStyle.toLowerCase().replace(/[^a-z0-9]+/g, '-')],
       } as any);
 
       setCreatedIdeaId(saved?.id ?? null);
@@ -100,54 +107,89 @@ export default function FirstWinGate({ user, onNavigate }: Props) {
               </p>
             </div>
 
-            <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-3">
-              <button
-                onClick={runFirstRoutine}
-                disabled={busy}
-                className="group rounded-2xl border border-purple-400/20 bg-purple-500/15 px-4 py-4 text-left transition hover:bg-purple-500/25 hover:border-purple-400/35 focus:outline-none focus:ring-2 focus:ring-purple-500/40 disabled:opacity-60"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-white">🎩 Build a new routine</p>
-                    <p className="mt-1 text-sm text-white/60">One-click routine generator + auto-save.</p>
-                  </div>
-                  <span className="text-xs text-white/55 group-hover:text-white/80">Start →</span>
+            <div className="mt-6 grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-6">
+              <div className="rounded-2xl border border-purple-400/20 bg-purple-500/10 p-5">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-purple-100/80">Step 1</p>
+                <h2 className="mt-2 text-lg font-semibold text-white">What objects do you like to perform with?</h2>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {objectOptions.map((option) => (
+                    <button
+                      key={option}
+                      onClick={() => setSelectedObjects(option)}
+                      className={`rounded-full border px-3 py-2 text-sm transition ${selectedObjects === option ? 'border-yellow-400/40 bg-yellow-500/15 text-yellow-50' : 'border-white/10 bg-white/[0.03] text-white/75 hover:bg-white/[0.06] hover:text-white'}`}
+                    >
+                      {option}
+                    </button>
+                  ))}
                 </div>
-              </button>
 
-              <button
-                onClick={() => onNavigate('show-planner')}
-                className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-4 text-left transition hover:bg-white/[0.04] hover:border-white/15 focus:outline-none focus:ring-2 focus:ring-white/20"
-              >
-                <p className="text-sm font-semibold text-white">🗂 Plan a show</p>
-                <p className="mt-1 text-sm text-white/60">Start a show plan and tasks.</p>
-              </button>
+                <p className="mt-6 text-xs font-semibold uppercase tracking-[0.16em] text-purple-100/80">Step 2</p>
+                <h2 className="mt-2 text-lg font-semibold text-white">What style fits you best?</h2>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {styleOptions.map((option) => (
+                    <button
+                      key={option}
+                      onClick={() => setSelectedStyle(option)}
+                      className={`rounded-full border px-3 py-2 text-sm transition ${selectedStyle === option ? 'border-yellow-400/40 bg-yellow-500/15 text-yellow-50' : 'border-white/10 bg-white/[0.03] text-white/75 hover:bg-white/[0.06] hover:text-white'}`}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
 
-              <button
-                onClick={() => onNavigate('live-rehearsal')}
-                className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-4 text-left transition hover:bg-white/[0.04] hover:border-white/15 focus:outline-none focus:ring-2 focus:ring-white/20"
-              >
-                <p className="text-sm font-semibold text-white">🎤 Rehearse a script</p>
-                <p className="mt-1 text-sm text-white/60">Jump into Live Rehearsal coaching.</p>
-              </button>
+                <div className="mt-6 flex flex-wrap gap-3">
+                  <button
+                    onClick={runFirstRoutine}
+                    disabled={busy}
+                    className="rounded-2xl border border-yellow-400/30 bg-yellow-500/15 px-4 py-3 text-sm font-semibold text-yellow-50 transition hover:bg-yellow-500/25 disabled:opacity-60"
+                  >
+                    ✨ Generate My First Effect
+                  </button>
+                  <button
+                    onClick={() => onNavigate('show-planner')}
+                    className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-white/80 transition hover:bg-white/[0.06]"
+                  >
+                    🗂 Start with Show Planner
+                  </button>
+                  {onDismiss && (
+                    <button
+                      onClick={onDismiss}
+                      className="rounded-2xl px-2 py-3 text-sm text-white/55 transition hover:text-white"
+                    >
+                      Not now
+                    </button>
+                  )}
+                </div>
+              </div>
 
-              <button
-                onClick={() => onNavigate('show-planner')}
-                className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-4 text-left transition hover:bg-white/[0.04] hover:border-white/15 focus:outline-none focus:ring-2 focus:ring-white/20"
-              >
-                <p className="text-sm font-semibold text-white">💼 Manage a gig</p>
-                <p className="mt-1 text-sm text-white/60">Clients, tasks, and show logistics.</p>
-              </button>
-            </div>
+              <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-yellow-100/80">Your quick win</p>
+                <h3 className="mt-2 text-lg font-semibold text-white">We’ll build something you can actually use.</h3>
+                <div className="mt-4 space-y-3 text-sm text-white/65">
+                  <div className="rounded-xl border border-white/8 bg-black/20 p-3">
+                    <div className="text-white font-medium">Objects</div>
+                    <div className="mt-1">{selectedObjects}</div>
+                  </div>
+                  <div className="rounded-xl border border-white/8 bg-black/20 p-3">
+                    <div className="text-white font-medium">Style</div>
+                    <div className="mt-1">{selectedStyle}</div>
+                  </div>
+                  <div className="rounded-xl border border-emerald-400/15 bg-emerald-500/10 p-3">
+                    <div className="text-white font-medium">What happens next</div>
+                    <div className="mt-1">You’ll get a performance-ready routine with beats, key lines, and stage directions — then it saves automatically to Saved Ideas.</div>
+                  </div>
+                </div>
 
-            <div className="mt-4">
-              <ActivationProgress />
+                <div className="mt-4">
+                  <ActivationProgress />
+                </div>
+              </div>
             </div>
 
             {busy && (
               <div className="mt-6 rounded-2xl border border-purple-400/20 bg-purple-500/10 p-4">
                 <p className="text-sm font-semibold text-white">Generating your first professional routine…</p>
-                <p className="mt-1 text-sm text-white/65">This usually takes 10–15 seconds.</p>
+                <p className="mt-1 text-sm text-white/65">This usually takes 10–15 seconds. We’re tailoring it for {selectedObjects.toLowerCase()} in a {selectedStyle.toLowerCase()} style.</p>
               </div>
             )}
 

@@ -62,6 +62,7 @@ import AdminPanel from './AdminPanel';
 import AppSuggestionModal from './AppSuggestionModal';
 import BillingSettings from './BillingSettings';
 import TrialConversionBanner from './TrialConversionBanner';
+import FirstWinGate from './FirstWinGate';
 import { getPartnerTrialBadgeLabel, isPartnerTrialUser } from '../services/trialMessaging';
 import { fetchUsageStatus, type UsageStatus } from '../services/usageStatusService';
 import { consume, getUsage } from '../services/usageTracker';
@@ -4509,6 +4510,15 @@ ${action.payload.content}`;
           if (intentWorkspaceOverride === 'rehearse' || intentWorkspaceOverride === 'manage') {
             return renderLockedIntentWorkspace(intentWorkspaceOverride);
           }
+          if (showFirstSessionActivation) {
+            return (
+              <FirstWinGate
+                user={user}
+                onNavigate={(view) => setActiveView(view as any)}
+                onDismiss={dismissFirstSessionActivation}
+              />
+            );
+          }
           return (
             <>
             <div className="px-4 md:px-6 pt-6">
@@ -4525,41 +4535,6 @@ ${action.payload.content}`;
                 Welcome back, {user.name || (user.email ? user.email.split('@')[0] : 'magician')}.
               </p>
             </div>
-
-            {showFirstSessionActivation && (
-              <div className="px-4 md:px-6 mb-6">
-                <div className="relative overflow-hidden rounded-2xl border border-yellow-400/30 bg-gradient-to-br from-yellow-500/14 via-purple-500/10 to-transparent p-5 shadow-[0_0_30px_rgba(234,179,8,0.10)]">
-                  <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(250,204,21,0.18),transparent_35%)]" />
-                  <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                    <div className="max-w-2xl">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-yellow-200/90">First-session quick start</p>
-                      <h2 className="mt-1 text-xl font-semibold text-white">Get your first win in under a minute.</h2>
-                      <p className="mt-2 text-sm leading-6 text-white/70">Start with the Effect Generator using a ready-made prompt, then save your favorite idea so your trial turns into a real working library.</p>
-                    </div>
-                    <div className="flex flex-col gap-2 sm:flex-row">
-                      <button
-                        onClick={() => launchFirstSessionActivation('effect-generator')}
-                        className="inline-flex items-center justify-center rounded-xl border border-yellow-400/30 bg-yellow-500/15 px-4 py-2 text-sm font-medium text-yellow-100 transition hover:bg-yellow-500/25 hover:text-white"
-                      >
-                        Start with Effect Generator
-                      </button>
-                      <button
-                        onClick={() => launchFirstSessionActivation('show-planner')}
-                        className="inline-flex items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white/85 transition hover:bg-white/10 hover:text-white"
-                      >
-                        Create My First Show Plan
-                      </button>
-                      <button
-                        onClick={dismissFirstSessionActivation}
-                        className="inline-flex items-center justify-center rounded-xl px-3 py-2 text-sm text-white/55 transition hover:text-white"
-                      >
-                        Not now
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* Primary Action */}
             <div className="px-4 md:px-6 mb-6">
