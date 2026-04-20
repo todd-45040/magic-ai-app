@@ -1,6 +1,6 @@
 import { supabase } from '../supabase';
 import type { User, Membership } from '../types';
-import { ADMIN_EMAIL } from '../constants';
+import { isAdminEmail } from '../constants';
 import { getPartnerCampaign, getPartnerContext, getPartnerDetailType, normalizePartnerSource } from './partnerTrialService';
 
 // Supabase table names
@@ -86,7 +86,7 @@ const normalizeUserRow = (row: any): User => {
   return {
     email,
     membership: (row?.membership ?? 'free') as Membership,
-    isAdmin: typeof row?.is_admin === 'boolean' ? row.is_admin : email === ADMIN_EMAIL,
+    isAdmin: typeof row?.is_admin === 'boolean' ? row.is_admin : isAdminEmail(email),
     generationCount: typeof row?.generation_count === 'number' ? row.generation_count : 0,
     lastResetDate: row?.last_reset_date ?? new Date().toISOString(),
     ...(row?.trial_end_date ? { trialEndDate: row.trial_end_date } : {}),
@@ -191,7 +191,7 @@ export const registerOrUpdateUser = async (user: User, uid: string): Promise<voi
     const existingMembership = String(existing?.membership ?? '').toLowerCase();
     const requestedMembership = String((user as any).membership ?? 'free').toLowerCase() as Membership;
 
-    const requestedIsAdmin = Boolean((user as any).isAdmin) || email === ADMIN_EMAIL;
+    const requestedIsAdmin = Boolean((user as any).isAdmin) || isAdminEmail(email);
     const existingIsAdmin = Boolean(existing?.is_admin) || existingMembership === 'admin';
     const isAdmin = requestedIsAdmin || existingIsAdmin;
 
@@ -332,7 +332,7 @@ export const addUser = async (email: string, membership: Membership): Promise<Us
     const newUser: User = {
       email: lower,
       membership,
-      isAdmin: lower === ADMIN_EMAIL,
+      isAdmin: isAdminEmail(lower),
       generationCount: 0,
       lastResetDate: new Date().toISOString()
     };

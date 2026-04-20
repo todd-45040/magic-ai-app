@@ -113,6 +113,10 @@ const initialMode = (() => {
   async function doLogin() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
+
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) throw sessionError;
+    if (!sessionData?.session) throw new Error('Session not established after login');
   }
 
   async function doSignup() {
@@ -155,7 +159,6 @@ const initialMode = (() => {
         void logUserActivity({ tool_name: 'system', event_type: 'login', success: true, metadata: { source: 'auth_login' } });
         setMessage('Welcome back — loading your Studio…');
         try { onLoginSuccess?.(); } catch {}
-        try { onLogin?.({ email }); } catch {}
       } else if (mode === 'signup') {
         await doSignup();
         void logUserActivity({
@@ -170,7 +173,6 @@ const initialMode = (() => {
         });
         setMessage(signupContext.isPartner30Day ? `You’ve unlocked a 30-day Professional Trial (${signupContext.isIbm ? 'IBM' : 'SAM'} Partner Access). Check your email if confirmation is required.` : 'Account created! Check your email if confirmation is required.');
         try { onLoginSuccess?.(); } catch {}
-        try { onLogin?.({ email }); } catch {}
       } else {
         await doReset();
         setMessage('If an account exists for that email, a reset link has been sent.');

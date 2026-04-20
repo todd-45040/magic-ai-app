@@ -1,0 +1,11 @@
+{
+  "patch": "login hardening",
+  "source_zip": "magic-ai-app-main(89).zip",
+  "generated_at": "20260420-034701",
+  "changes": [
+    "removed optimistic login handoff",
+    "forced post-login session fetch",
+    "suppressed stale null-session bounce",
+    "added multi-email admin recognition"
+  ]
+}

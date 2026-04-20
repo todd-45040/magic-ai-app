@@ -29,7 +29,9 @@ import {
     TutorIcon
 } from './components/icons';
 
-export const ADMIN_EMAIL = 'admin@magicaiwizard.com';
+export const ADMIN_EMAILS = ['admin@magicaiwizard.com', 'todssmartphone@gmail.com'];
+export const ADMIN_EMAIL = ADMIN_EMAILS[0];
+export const isAdminEmail = (email?: string | null) => ADMIN_EMAILS.includes(String(email || '').trim().toLowerCase());
 // Keep this in sync with your current git benchmark/tag so the UI + SW cache are coherent.
 export const APP_VERSION = 'v1.0.13';
 
@@ -1336,3 +1338,5 @@ export const MAGIC_TECHNIQUE_TERMS: MagicTechniqueTerm[] = [
   },
 ];
 
+
+export const LOGIN_HARDENING_BUILD = '20260420-034701';

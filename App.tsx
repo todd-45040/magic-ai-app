@@ -8,7 +8,7 @@ import {
   getUserProfile,
   reconcileFoundingLead,
 } from './services/usersService';
-import { ADMIN_EMAIL, APP_VERSION } from './constants';
+import { APP_VERSION, isAdminEmail } from './constants';
 import { useAppDispatch, refreshAllData } from './store';
 import ModeSelector from './components/ModeSelector';
 import Auth from './components/Auth';
@@ -44,6 +44,7 @@ function App() {
 
   const dispatch = useAppDispatch();
   const loggingOutRef = useRef(false);
+  const loginInProgressRef = useRef(false);
   const checkoutSyncRef = useRef<string | null>(null);
 
   const handleUpgrade = async (selection: any, options?: any) => {
@@ -272,7 +273,7 @@ function App() {
           let appUser: User = {
             email: sbUser.email,
             membership: 'trial',
-            isAdmin: sbUser.email === ADMIN_EMAIL,
+            isAdmin: isAdminEmail(sbUser.email),
             generationCount: 0,
             lastResetDate: new Date().toISOString(),
             trialEndDate: Date.now() + metadataInitialTrialDays * 24 * 60 * 60 * 1000,
@@ -361,6 +362,7 @@ function App() {
             },
           });
 
+          loginInProgressRef.current = false;
           setUser(appUser);
           refreshAllData(dispatch);
 
@@ -375,12 +377,20 @@ function App() {
 
           if (isAuthCallbackFlow) cleanupAuthCallbackUrl();
         } else {
+          if (loginInProgressRef.current) {
+            setAuthLoading(true);
+            return;
+          }
           setUser(null);
           setMode(prev => (prev === 'magician' ? 'selection' : prev));
           if (isAuthCallbackFlow) cleanupAuthCallbackUrl();
         }
       } catch (error) {
         console.error('Auth sync error:', error);
+        if (loginInProgressRef.current) {
+          setAuthLoading(true);
+          return;
+        }
         setUser(null);
         setMode('selection');
       } finally {
@@ -406,7 +416,9 @@ function App() {
     // Without this, a successful login can leave the user stuck on the Auth screen until reload.
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN') loginInProgressRef.current = true;
+      if (event === 'SIGNED_OUT') loginInProgressRef.current = false;
       void applySessionToState(session);
     });
 
@@ -573,12 +585,8 @@ function App() {
       case 'auth':
         return (
           <Auth
-            onLogin={(u) => {
-              // Optimistically set the user so the UI feels instant.
-              // The onAuthStateChange handler will hydrate the full profile and route correctly.
-              setUser(u);
-            }}
             onLoginSuccess={() => {
+              loginInProgressRef.current = true;
               setAuthLoading(true);
             }}
             onBack={() => setMode('selection')}
