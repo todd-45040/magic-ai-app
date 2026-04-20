@@ -230,7 +230,7 @@ function App() {
       setMode('auth');
       setAuthLoading(false);
       window.clearTimeout(loadingTimeout);
-      return;
+      // removed return to allow auth hydration
     }
 
     if (modeParam === 'auth-callback') {
@@ -519,7 +519,8 @@ function App() {
     if (mode === 'magician' && user) {
       return (
         <MagicianMode
-          onBack={() => setMode('selection')}
+          onLoginSuccess={() => setAuthLoading(true)}
+  onBack={() => setMode('selection')}
           user={user}
           onUpgrade={handleUpgrade as any}
           onLogout={async () => {
@@ -535,12 +536,14 @@ function App() {
 
     switch (mode) {
       case 'about':
-        return <About onBack={() => setMode('selection')} />;
+        return <About onLoginSuccess={() => setAuthLoading(true)}
+  onBack={() => setMode('selection')} />;
       case 'founding-circle':
         return (
           <FoundingCirclePage
             user={user}
-            onBack={() => setMode('selection')}
+            onLoginSuccess={() => setAuthLoading(true)}
+  onBack={() => setMode('selection')}
             onJoined={async () => {
               try {
                 const { data } = await supabase.auth.getSession();
@@ -556,7 +559,8 @@ function App() {
         return (
           <FounderSuccessPage
             user={user}
-            onBack={() => setMode('selection')}
+            onLoginSuccess={() => setAuthLoading(true)}
+  onBack={() => setMode('selection')}
             onStartIdea={() => {
               try { localStorage.setItem('magician_active_view', 'effect-generator'); } catch {}
               setMode('magician');
@@ -571,7 +575,8 @@ function App() {
           />
         );
       case 'audience':
-        return <AudienceMode onBack={() => setMode('selection')} />;
+        return <AudienceMode onLoginSuccess={() => setAuthLoading(true)}
+  onBack={() => setMode('selection')} />;
       case 'auth':
         return (
           <Auth
@@ -580,7 +585,8 @@ function App() {
               // The onAuthStateChange handler will hydrate the full profile and route correctly.
               setUser(u);
             }}
-            onBack={() => setMode('selection')}
+            onLoginSuccess={() => setAuthLoading(true)}
+  onBack={() => setMode('selection')}
           />
         );
       default:
