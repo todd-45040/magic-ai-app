@@ -37,12 +37,9 @@ const DisclaimerModalAny = DisclaimerModal as any;
 const AppSuggestionModalAny = AppSuggestionModal as any;
 
 function App() {
-
   const urlParams = new URLSearchParams(window.location.search);
-  const isSignupFlow =
-    urlParams.get('mode') === 'auth' &&
-    urlParams.get('auth') === 'signup';
-
+  const isSignupFlow = urlParams.get('mode')==='auth' && urlParams.get('auth')==='signup';
+  const signupLockRef = { current: isSignupFlow };
   const [mode, setMode] = useState<Mode>('selection');
   const [user, setUser] = useState<User | null>(null);
   const [isDisclaimerOpen, setIsDisclaimerOpen] = useState(false);
@@ -424,7 +421,12 @@ function App() {
     // Without this, a successful login can leave the user stuck on the Auth screen until reload.
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (signupLockRef.current) {
+        if (session) await supabase.auth.signOut();
+        setMode('auth');
+        return;
+      }
       if (event === 'SIGNED_IN') loginInProgressRef.current = true;
       if (event === 'SIGNED_OUT') loginInProgressRef.current = false;
       void applySessionToState(session);
