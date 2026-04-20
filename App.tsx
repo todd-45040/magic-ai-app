@@ -1,4 +1,4 @@
-// LOGIN FIX BUILD: 20260420-041056
+// PARTNER IMPORT FIX BUILD: 20260420-042528
 import React, { useEffect, useRef, useState } from 'react';
 import { supabase, isSupabaseConfigValid } from './supabase';
 import type { Mode, User } from './types';
@@ -27,6 +27,7 @@ import { isDemoEnabled, enableDemo, seedDemoData } from './services/demoSeedServ
 import { createCheckoutSession, fetchBillingStatus, resolveCheckoutLookupKey } from './services/billingClient';
 import { logIbmConversionEvent, isIbmConversionCandidate } from './services/ibmConversionTracking';
 import { logUserActivity } from './services/userActivityService';
+import { getPartnerContext, normalizePartnerSource, getPartnerMeta } from './services/partnerTrialService';
 
 const DISCLAIMER_ACKNOWLEDGED_KEY = 'magician_ai_disclaimer_acknowledged';
 

@@ -1,11 +1,10 @@
 {
-  "patch": "login hard-refresh fallback",
-  "generated_at": "20260420-041056",
+  "patch": "partner import auth hydration fix",
+  "generated_at": "20260420-042528",
   "source_zip": "magic-ai-app-main(90).zip",
   "changes": [
-    "confirmed session fetch after password login",
-    "hard-refresh fallback to root after successful login",
-    "console logging for auth form errors",
-    "build marker added to Auth screen text"
+    "added App.tsx import for getPartnerContext",
+    "added App.tsx import for normalizePartnerSource",
+    "added App.tsx import for getPartnerMeta"
   ]
 }
