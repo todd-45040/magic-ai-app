@@ -37,6 +37,12 @@ const DisclaimerModalAny = DisclaimerModal as any;
 const AppSuggestionModalAny = AppSuggestionModal as any;
 
 function App() {
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const isSignupFlow =
+    urlParams.get('mode') === 'auth' &&
+    urlParams.get('auth') === 'signup';
+
   const [mode, setMode] = useState<Mode>('selection');
   const [user, setUser] = useState<User | null>(null);
   const [isDisclaimerOpen, setIsDisclaimerOpen] = useState(false);
