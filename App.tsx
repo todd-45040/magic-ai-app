@@ -1,3 +1,4 @@
+// LOGIN FIX BUILD: 20260420-041056
 import React, { useEffect, useRef, useState } from 'react';
 import { supabase, isSupabaseConfigValid } from './supabase';
 import type { Mode, User } from './types';

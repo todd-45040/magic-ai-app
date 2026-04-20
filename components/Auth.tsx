@@ -159,6 +159,16 @@ const initialMode = (() => {
         void logUserActivity({ tool_name: 'system', event_type: 'login', success: true, metadata: { source: 'auth_login' } });
         setMessage('Welcome back — loading your Studio…');
         try { onLoginSuccess?.(); } catch {}
+
+        // Hard-refresh fallback:
+        // If the in-app auth listener lags or misses the transition,
+        // a confirmed session should still enter the Studio after reload.
+        const base = getAppBasePath();
+        window.setTimeout(() => {
+          try {
+            window.location.assign(`${window.location.origin}${base}/`);
+          } catch {}
+        }, 250);
       } else if (mode === 'signup') {
         await doSignup();
         void logUserActivity({
@@ -179,6 +189,7 @@ const initialMode = (() => {
       }
     } catch (err: any) {
       setError(formatAuthError(err, mode));
+      console.error('Auth form error:', err);
     } finally {
       setIsLoading(false);
     }

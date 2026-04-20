@@ -1,11 +1,11 @@
 {
-  "patch": "login hardening",
-  "source_zip": "magic-ai-app-main(89).zip",
-  "generated_at": "20260420-034701",
+  "patch": "login hard-refresh fallback",
+  "generated_at": "20260420-041056",
+  "source_zip": "magic-ai-app-main(90).zip",
   "changes": [
-    "removed optimistic login handoff",
-    "forced post-login session fetch",
-    "suppressed stale null-session bounce",
-    "added multi-email admin recognition"
+    "confirmed session fetch after password login",
+    "hard-refresh fallback to root after successful login",
+    "console logging for auth form errors",
+    "build marker added to Auth screen text"
   ]
 }
