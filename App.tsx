@@ -37,9 +37,6 @@ const DisclaimerModalAny = DisclaimerModal as any;
 const AppSuggestionModalAny = AppSuggestionModal as any;
 
 function App() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const isSignupFlow = urlParams.get('mode')==='auth' && urlParams.get('auth')==='signup';
-  const signupLockRef = { current: isSignupFlow };
   const [mode, setMode] = useState<Mode>('selection');
   const [user, setUser] = useState<User | null>(null);
   const [isDisclaimerOpen, setIsDisclaimerOpen] = useState(false);
@@ -51,6 +48,7 @@ function App() {
   const loggingOutRef = useRef(false);
   const loginInProgressRef = useRef(false);
   const checkoutSyncRef = useRef<string | null>(null);
+  const suppressSignupSessionRef = useRef(false);
 
   const handleUpgrade = async (selection: any, options?: any) => {
     try {
@@ -112,6 +110,7 @@ function App() {
 
     const urlParams = new URLSearchParams(window.location.search);
     const modeParam = urlParams.get('mode');
+    const isExplicitSignupFlow = modeParam === 'auth' && urlParams.get('auth') === 'signup';
     const perfId = urlParams.get('performanceId');
     const showIdParam = urlParams.get('showId');
     const tokenParam = urlParams.get('token');
@@ -234,7 +233,10 @@ function App() {
 
     if (modeParam === 'auth') {
       setMode('auth');
+      suppressSignupSessionRef.current = isExplicitSignupFlow && !isAuthCallbackFlow;
       // Keep bootstrapping auth so session hydration and auth listeners still run.
+    } else {
+      suppressSignupSessionRef.current = false;
     }
 
     if (modeParam === 'auth-callback') {
@@ -251,6 +253,17 @@ function App() {
       if (loggingOutRef.current) return;
 
       try {
+        if (suppressSignupSessionRef.current && !isAuthCallbackFlow) {
+          if (session?.user) {
+            await supabase.auth.signOut();
+          }
+          loginInProgressRef.current = false;
+          setUser(null);
+          setMode('auth');
+          setAuthLoading(false);
+          window.clearTimeout(loadingTimeout);
+          return;
+        }
         const sbUser = session?.user ?? null;
 
         if (sbUser?.email) {
@@ -421,10 +434,13 @@ function App() {
     // Without this, a successful login can leave the user stuck on the Auth screen until reload.
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (signupLockRef.current) {
-        if (session) await supabase.auth.signOut();
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (suppressSignupSessionRef.current && !isAuthCallbackFlow) {
+        loginInProgressRef.current = false;
+        setUser(null);
         setMode('auth');
+        setAuthLoading(false);
+        window.clearTimeout(loadingTimeout);
         return;
       }
       if (event === 'SIGNED_IN') loginInProgressRef.current = true;

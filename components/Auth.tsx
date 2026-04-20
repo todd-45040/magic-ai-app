@@ -122,7 +122,7 @@ const initialMode = (() => {
   async function doSignup() {
     const base = getAppBasePath();
     const emailRedirectTo = `${window.location.origin}${base}/?mode=auth-callback`;
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -136,6 +136,7 @@ const initialMode = (() => {
       },
     });
     if (error) throw error;
+    return Boolean(data?.session);
   }
 
   async function doReset() {
@@ -160,7 +161,7 @@ const initialMode = (() => {
         setMessage('Welcome back — loading your Studio…');
         try { onLoginSuccess?.(); } catch {}
       } else if (mode === 'signup') {
-        await doSignup();
+        const signupEstablishedSession = await doSignup();
         void logUserActivity({
           tool_name: 'system',
           event_type: 'signup',
@@ -171,8 +172,14 @@ const initialMode = (() => {
               ? { source: 'sam', campaign: 'sam-30day', requested_trial_days: 30, ...(signupContext.samAssembly ? { sam_assembly: signupContext.samAssembly } : {}) }
               : { source: signupContext.source || 'direct', requested_trial_days: 14 },
         });
-        setMessage(signupContext.isPartner30Day ? `You’ve unlocked a 30-day Professional Trial (${signupContext.isIbm ? 'IBM' : 'SAM'} Partner Access). Check your email if confirmation is required.` : 'Account created! Check your email if confirmation is required.');
-        try { onLoginSuccess?.(); } catch {}
+        setMessage(
+          signupContext.isPartner30Day
+            ? `You’ve unlocked a 30-day Professional Trial (${signupContext.isIbm ? 'IBM' : 'SAM'} Partner Access). Check your email to confirm your account before logging in.`
+            : 'Account created! Check your email to confirm your account before logging in.'
+        );
+        if (signupEstablishedSession) {
+          try { onLoginSuccess?.(); } catch {}
+        }
       } else {
         await doReset();
         setMessage('If an account exists for that email, a reset link has been sent.');
