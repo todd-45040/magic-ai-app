@@ -28,9 +28,12 @@ const LoadingIndicator: React.FC<{ statusText?: string }> = ({ statusText }) => 
 );
 
 function extractGeminiText(data: any): string {
-  const parts = data?.candidates?.[0]?.content?.parts;
-  if (Array.isArray(parts)) return parts.map((p: any) => p?.text || "").join("");
-  return data?.text || data?.output || "";
+  const source = data?.data ?? data;
+  const parts = source?.candidates?.[0]?.content?.parts;
+  if (Array.isArray(parts)) {
+    return parts.map((p: any) => p?.text || "").join("").trim();
+  }
+  return String(source?.text || source?.output || "").trim();
 }
 
 const PatterEngine: React.FC<PatterEngineProps> = ({ user: _user, onIdeaSaved }) => {
@@ -167,7 +170,7 @@ Tones: ${tones}`;
         throw new Error(raw || `Request failed (${res.status})`);
       }
 
-      const text = extractGeminiText(payload);
+      const text = extractGeminiText(payload?.data ?? payload);
 
       if (!res.ok) {
         throw new Error(text || payload?.error || `Request failed (${res.status})`);
