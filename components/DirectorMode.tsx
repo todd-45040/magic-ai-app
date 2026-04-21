@@ -9,7 +9,6 @@ import { trackClientEvent } from '../services/telemetryClient';
 import { DIRECTOR_MODE_SYSTEM_INSTRUCTION, MAGIC_DICTIONARY_TERMS } from '../constants';
 import type { DirectorModeBlueprint } from '../types';
 import { WandIcon, SaveIcon, CheckIcon, ChecklistIcon } from './icons';
-import { generateStructuredResponse } from '../services/geminiService';
 
 
 interface DirectorModeProps {
@@ -184,6 +183,112 @@ const blueprintToOutline = (bp: DirectorModeBlueprint, opts?: { fullDetail?: boo
     });
 
     return lines.join('\n');
+};
+
+
+const normalizeDirectorText = (value: unknown, fallback = ''): string => {
+    if (typeof value === 'string') return value.trim();
+    if (value == null) return fallback;
+    return String(value).trim();
+};
+
+const normalizeDirectorNumber = (value: unknown, fallback = 0): number => {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+};
+
+const normalizeDirectorStringArray = (value: unknown): string[] => {
+    if (!Array.isArray(value)) return [];
+    return value.map((item) => normalizeDirectorText(item)).filter(Boolean);
+};
+
+const normalizeDirectorBlueprint = (
+    raw: any,
+    opts: { speedMode: 'fast' | 'full'; fallbackShowLength: number; fallbackTitle?: string; fallbackAudience?: string; fallbackVenue?: string; fallbackTone?: string; fallbackPersona?: string; }
+): DirectorModeBlueprint => {
+    const normalizedShowLength = Math.max(1, normalizeDirectorNumber(raw?.show_length_minutes, opts.fallbackShowLength || 30));
+    const segments = Array.isArray(raw?.segments) ? raw.segments : [];
+    const normalizedSegments = segments.map((seg: any) => ({
+        title: normalizeDirectorText(seg?.title, 'Untitled Segment'),
+        purpose: normalizeDirectorText(seg?.purpose, 'middle'),
+        duration_estimate_minutes: Math.max(1, normalizeDirectorNumber(seg?.duration_estimate_minutes, 1)),
+        audience_interaction_level: normalizeDirectorText(seg?.audience_interaction_level, 'medium').toLowerCase(),
+        props_required: normalizeDirectorStringArray(seg?.props_required),
+        transition_notes: normalizeDirectorText(seg?.transition_notes, 'Keep the pacing smooth into the next effect.'),
+        ...(opts.speedMode === 'full' ? {
+            beats: normalizeDirectorStringArray(seg?.beats).slice(0, 6),
+            patter_hook: normalizeDirectorText(seg?.patter_hook),
+            blocking_notes: normalizeDirectorText(seg?.blocking_notes),
+            volunteer_management: normalizeDirectorText(seg?.volunteer_management),
+            music_lighting: normalizeDirectorText(seg?.music_lighting),
+        } : {}),
+    }));
+
+    return {
+        show_title: normalizeDirectorText(raw?.show_title, opts.fallbackTitle || 'Untitled Show'),
+        show_length_minutes: normalizedShowLength,
+        audience_type: normalizeDirectorText(raw?.audience_type, opts.fallbackAudience || 'General audience'),
+        venue_type: normalizeDirectorText(raw?.venue_type, opts.fallbackVenue || 'General venue'),
+        tone: normalizeDirectorText(raw?.tone, opts.fallbackTone || 'Balanced'),
+        performer_persona: normalizeDirectorText(raw?.performer_persona, opts.fallbackPersona || 'Confident magician'),
+        constraints: {
+            props_owned: normalizeDirectorStringArray(raw?.constraints?.props_owned),
+            reset_time: normalizeDirectorText(raw?.constraints?.reset_time),
+            skill_level: normalizeDirectorText(raw?.constraints?.skill_level),
+            notes: normalizeDirectorText(raw?.constraints?.notes),
+        },
+        segments: normalizedSegments,
+    } as DirectorModeBlueprint;
+};
+
+const requestDirectorBlueprint = async (args: {
+    prompt: string;
+    systemInstruction: string;
+    responseSchema: any;
+    maxOutputTokens: number;
+    speedMode: 'fast' | 'full';
+    fallbackShowLength: number;
+    fallbackTitle?: string;
+    fallbackAudience?: string;
+    fallbackVenue?: string;
+    fallbackTone?: string;
+    fallbackPersona?: string;
+}): Promise<DirectorModeBlueprint> => {
+    const response = await fetch(`/api/ai/json?ts=${Date.now()}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            messages: [{ role: 'user', content: args.prompt }],
+            config: {
+                systemInstruction: args.systemInstruction,
+                responseSchema: args.responseSchema,
+                maxOutputTokens: args.maxOutputTokens,
+            },
+        }),
+    });
+
+    let payload: any = null;
+    try {
+        payload = await response.json();
+    } catch {
+        payload = null;
+    }
+
+    if (!response.ok || payload?.ok === false) {
+        const msg = payload?.message || payload?.error || `Director request failed (${response.status})`;
+        throw new Error(String(msg));
+    }
+
+    const parsed = payload?.json ?? payload?.data?.json ?? payload?.data ?? payload;
+    return normalizeDirectorBlueprint(parsed, {
+        speedMode: args.speedMode,
+        fallbackShowLength: args.fallbackShowLength,
+        fallbackTitle: args.fallbackTitle,
+        fallbackAudience: args.fallbackAudience,
+        fallbackVenue: args.fallbackVenue,
+        fallbackTone: args.fallbackTone,
+        fallbackPersona: args.fallbackPersona,
+    });
 };
 
 
@@ -805,13 +910,19 @@ ${speedConstraints}
 `;
 try {
           const startedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-          const resultJson = await generateStructuredResponse(
+          const resultJson = await requestDirectorBlueprint({
             prompt,
-            DIRECTOR_MODE_SYSTEM_INSTRUCTION,
-            speedMode === 'fast' ? directorResponseSchemaFast : directorResponseSchemaFull,
-            undefined,
-            { maxOutputTokens: speedMode === 'fast' ? 900 : 4096, speedMode }
-          );
+            systemInstruction: DIRECTOR_MODE_SYSTEM_INSTRUCTION,
+            responseSchema: speedMode === 'fast' ? directorResponseSchemaFast : directorResponseSchemaFull,
+            maxOutputTokens: speedMode === 'fast' ? 900 : 4096,
+            speedMode,
+            fallbackShowLength: Number(showLength),
+            fallbackTitle: showTitle.trim() || 'Untitled Show',
+            fallbackAudience: computedAudience,
+            fallbackVenue: venueType,
+            fallbackTone: tone || theme || 'Balanced',
+            fallbackPersona: performerPersona,
+          });
           const endedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
           const elapsedMs = Math.max(0, Math.round((endedAt as number) - (startedAt as number)));
           setGenTimingMs(prev => ({ ...prev, [speedMode]: elapsedMs } as any));
@@ -1158,13 +1269,19 @@ ${speedConstraints}
 `;
         try {
             const startedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-            const resultJson = await generateStructuredResponse(
-                refinePrompt,
-                DIRECTOR_MODE_SYSTEM_INSTRUCTION,
-                speedMode === 'fast' ? directorResponseSchemaFast : directorResponseSchemaFull,
-                undefined,
-                { maxOutputTokens: speedMode === 'fast' ? 900 : 4096, speedMode }
-            );
+            const resultJson = await requestDirectorBlueprint({
+                prompt: refinePrompt,
+                systemInstruction: DIRECTOR_MODE_SYSTEM_INSTRUCTION,
+                responseSchema: speedMode === 'fast' ? directorResponseSchemaFast : directorResponseSchemaFull,
+                maxOutputTokens: speedMode === 'fast' ? 900 : 4096,
+                speedMode,
+                fallbackShowLength: Number(showLength),
+                fallbackTitle: showTitle.trim() || active?.show_title || 'Untitled Show',
+                fallbackAudience: computedAudience || active?.audience_type,
+                fallbackVenue: venueType || active?.venue_type,
+                fallbackTone: tone || theme || active?.tone || 'Balanced',
+                fallbackPersona: performerPersona || active?.performer_persona,
+            });
             const next = resultJson as DirectorModeBlueprint;
             const vId = makeId();
             const diffHint = computeDiffHint(active, next, instruction);
