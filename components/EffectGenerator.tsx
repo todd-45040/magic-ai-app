@@ -27,12 +27,12 @@ const normalize = (s: string) => String(s ?? '').replace(/\r\n/g, '\n').trim();
 
 
 const EFFECTS_RESPONSE_SCHEMA = {
-  type: Type.OBJECT,
+  type: "object",
   properties: {
     effects: {
-      type: Type.ARRAY,
+      type: "array",
       items: {
-        type: Type.OBJECT,
+        type: "object",
         properties: {
           name: { type: Type.STRING },
           premise: { type: Type.STRING },
