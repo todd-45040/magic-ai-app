@@ -1,4 +1,4 @@
-import { requireSupabaseAuth } from './_auth.js';
+import { requireAdmin } from './_auth.js';
 import { ADMIN_WINDOW_OPTIONS_DAYS, adminWindowLabel, isoDaysAgo, parseAdminWindowDays } from './_adminWindow.js';
 
 function clampInt(n: any, def = 50, min = 1, max = 500) {
@@ -37,15 +37,10 @@ function isUndefinedColumn(err: any): boolean {
 
 export default async function handler(req: any, res: any) {
   try {
-    const auth = await requireSupabaseAuth(req);
+    const auth = await requireAdmin(req);
     if (!auth.ok) return res.status(auth.status).json({ ok: false, error: auth.error });
 
-    const { admin, userId } = auth as any;
-
-    // Admin-only gate
-    const { data: me, error: meErr } = await admin.from('users').select('id,is_admin').eq('id', userId).maybeSingle();
-    if (meErr) return res.status(500).json({ ok: false, error: 'Admin check failed', details: meErr });
-    if (!me?.is_admin) return res.status(403).json({ ok: false, error: 'Forbidden' });
+    const { admin } = auth as any;
 
     const limit = clampInt(req?.query?.limit ?? 50, 50, 1, 200);
     const offset = clampInt(req?.query?.offset ?? 0, 0, 0, 500000);

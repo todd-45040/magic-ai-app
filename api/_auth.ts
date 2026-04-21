@@ -4,6 +4,7 @@ export type SupabaseAuthOk = {
   ok: true;
   token: string;
   userId: string;
+  email?: string;
   // Supabase Admin client (service role). Use ONLY on server.
   admin: any;
 };
@@ -15,7 +16,10 @@ export type SupabaseAuthFail = {
 };
 
 export function getBearerToken(req: any): string | null {
-  const h = req?.headers?.authorization || req?.headers?.Authorization;
+  const headers: any = req?.headers;
+  const h = typeof headers?.get === 'function'
+    ? (headers.get('authorization') || headers.get('Authorization'))
+    : (headers?.authorization || headers?.Authorization || headers?.AUTHORIZATION);
   if (!h || typeof h !== 'string') return null;
   const m = h.match(/^Bearer\s+(.+)$/i);
   return m ? m[1].trim() : null;
@@ -51,5 +55,28 @@ export async function requireSupabaseAuth(req: any): Promise<SupabaseAuthOk | Su
     return { ok: false, status: 401, error: 'Unauthorized' };
   }
 
-  return { ok: true, token, userId: data.user.id, admin };
+  return { ok: true, token, userId: data.user.id, email: data.user.email, admin };
 }
+
+export async function requireAdmin(req: any): Promise<SupabaseAuthOk | SupabaseAuthFail> {
+  const auth = await requireSupabaseAuth(req);
+  if (!auth.ok) return auth;
+
+  try {
+    const { data, error } = await auth.admin
+      .from('users')
+      .select('is_admin,email')
+      .eq('id', auth.userId)
+      .maybeSingle();
+
+    if (!error && data?.is_admin) return auth;
+
+    const adminEmail = process.env.ADMIN_EMAIL;
+    if (adminEmail && auth.email && auth.email.toLowerCase() === adminEmail.toLowerCase()) return auth;
+
+    return { ok: false, status: 403, error: 'Forbidden' };
+  } catch {
+    return { ok: false, status: 403, error: 'Forbidden' };
+  }
+}
+

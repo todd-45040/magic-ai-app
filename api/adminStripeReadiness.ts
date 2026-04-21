@@ -1,4 +1,4 @@
-import { requireSupabaseAuth } from './_auth';
+import { requireAdmin } from './_auth';
 import { getStripeEnvironmentReport } from '../server/billing/stripeConfig.js';
 
 function hasEnv(name: string): boolean {
@@ -51,7 +51,7 @@ function pickPriceId(tier: Tier, billing: Billing, founderLocked: boolean): { pr
 }
 
 export default async function handler(req: any, res: any) {
-  const auth = await requireSupabaseAuth(req);
+  const auth = await requireAdmin(req);
   if (!auth.ok) return res.status(auth.status).json(auth);
 
   const admin = auth.admin;

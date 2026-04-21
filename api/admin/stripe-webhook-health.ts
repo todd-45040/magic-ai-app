@@ -1,3 +1,5 @@
+import { requireAdmin } from '../../lib/server/auth/index.js';
+
 import { createClient } from '@supabase/supabase-js';
 
 function getEnv(name: string): string | null {
@@ -5,7 +7,9 @@ function getEnv(name: string): string | null {
   return v && String(v).trim() ? String(v).trim() : null;
 }
 
-export default async function handler(_req: any, res: any) {
+export default async function handler(req: any, res: any) {
+  const auth = await requireAdmin(req as any);
+  if (!auth.ok) return res.status(auth.status).json({ ok: false, error: auth.error });
   try {
     const webhookSecret = getEnv('STRIPE_WEBHOOK_SECRET');
     const signature_verification_active = Boolean(webhookSecret); // our webhook verifies signature when secret is set
