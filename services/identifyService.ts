@@ -64,7 +64,12 @@ export async function identifyTrickFromImageServer(
     "- presentationIdeas (array of 3-6 bullets; performance-safe)\n" +
     "- angleRiskNotes (array of 3-6 bullets; sightlines/reset/handling cautions; NO exposure)\n" +
     "- variations (array of 3-6 bullets; alternate plots/presentations; performance-safe)\n" +
-    "- videoQueries (array of exactly 3 concise YouTube search queries, NO URLs: first 2 should aim to find specific performance videos, 3rd can be broader).";
+    "- videoQueries (array of exactly 3 concise YouTube search queries, NO URLs)\n" +
+    "For videoQueries, follow this exact pattern:\n" +
+    "1. query 1 = a narrow query likely to find ONE specific performance video of this trick\n" +
+    "2. query 2 = a different narrow query likely to find an alternate specific performance video\n" +
+    "3. query 3 = a broader query meant for general YouTube search results\n" +
+    "Do NOT make all three queries broad. The first two should try to surface direct performance videos. The third should be exploratory.";
 
   // Optional: pass user id for rate limiting (best effort)
   const result = await aiIdentify<{ text: string }>(dataUrl, prompt);
@@ -144,11 +149,13 @@ export async function identifyTrickFromImageServer(
     queries[2] || fallbackQueries[2],
   ].slice(0, 3);
 
+  const makeYoutubeSearchUrl = (query: string) => `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+
   let videos: Video[] = [];
   try {
     const yt = await postJson<any>("/api/videoSearch", {
       queries: queriesToUse,
-      maxResultsPerQuery: 5,
+      maxResultsPerQuery: 4,
       safeSearch: "strict",
     });
 
@@ -168,63 +175,85 @@ export async function identifyTrickFromImageServer(
       .filter((v: Video) => v.title && v.url && /youtube\.com\/watch|youtu\.be\//i.test(v.url));
 
     const used = new Set<string>();
-    const preferred: Video[] = [];
+    const specificRefs: TrickPerformanceReference[] = [];
 
-    const firstSpecific = normalized.find((v: Video) => v.sourceQueryIndex === 0);
-    const secondSpecific = normalized.find(
-      (v: Video) => v.sourceQueryIndex === 1 && v.url !== firstSpecific?.url
-    );
+    const pickForQuery = (queryIndex: number) =>
+      normalized.find((candidate: Video) => {
+        if (candidate.sourceQueryIndex !== queryIndex) return false;
+        if (!candidate.url || used.has(candidate.url)) return false;
+        return true;
+      });
 
-    if (firstSpecific) preferred.push(firstSpecific);
-    if (secondSpecific) preferred.push(secondSpecific);
-
-    for (const candidate of normalized) {
-      if (!preferred.find((p) => p.url === candidate.url)) {
-        preferred.push(candidate);
+    for (const queryIndex of [0, 1]) {
+      const preferred = pickForQuery(queryIndex);
+      if (preferred?.url) {
+        used.add(preferred.url);
+        specificRefs.push({
+          title: preferred.title,
+          url: preferred.url,
+          kind: 'specific',
+          platform: 'youtube',
+          channelTitle: preferred.channelTitle,
+          videoId: preferred.videoId,
+        });
       }
     }
 
-    const specificRefs: TrickPerformanceReference[] = [];
-    for (const candidate of preferred) {
-      if (!candidate?.url || used.has(candidate.url)) continue;
-      used.add(candidate.url);
+    if (specificRefs.length < 2) {
+      for (const candidate of normalized) {
+        if (!candidate?.url || used.has(candidate.url)) continue;
+        used.add(candidate.url);
+        specificRefs.push({
+          title: candidate.title,
+          url: candidate.url,
+          kind: 'specific',
+          platform: 'youtube',
+          channelTitle: candidate.channelTitle,
+          videoId: candidate.videoId,
+        });
+        if (specificRefs.length >= 2) break;
+      }
+    }
+
+    const specificQuery1 = queriesToUse[0] || `${trickName} magician live performance`;
+    const specificQuery2 = queriesToUse[1] || `${trickName} magic routine performance`;
+    while (specificRefs.length < 2) {
+      const fallbackQuery = specificRefs.length === 0 ? specificQuery1 : specificQuery2;
+      const label = specificRefs.length === 0 ? 'Watch performances on YouTube' : 'Watch alternate performances on YouTube';
       specificRefs.push({
-        title: candidate.title,
-        url: candidate.url,
+        title: `${label}: ${fallbackQuery}`,
+        url: makeYoutubeSearchUrl(fallbackQuery),
         kind: 'specific',
         platform: 'youtube',
-        channelTitle: candidate.channelTitle,
-        videoId: candidate.videoId,
       });
-      if (specificRefs.length >= 2) break;
     }
 
     const broadQuery = queriesToUse[2] || queriesToUse[0] || `${trickName} magic performance`;
     const searchRef: TrickPerformanceReference = {
       title: `Explore on YouTube: ${broadQuery}`,
-      url: `https://www.youtube.com/results?search_query=${encodeURIComponent(broadQuery)}`,
+      url: makeYoutubeSearchUrl(broadQuery),
       kind: 'search',
       platform: 'youtube',
     };
 
-    videos = [...specificRefs, searchRef];
+    videos = [...specificRefs.slice(0, 2), searchRef];
   } catch {
     videos = [
       {
         title: `Watch performances on YouTube: ${queriesToUse[0]}`,
-        url: `https://www.youtube.com/results?search_query=${encodeURIComponent(queriesToUse[0])}`,
-        kind: 'search',
+        url: makeYoutubeSearchUrl(queriesToUse[0]),
+        kind: 'specific',
         platform: 'youtube',
       },
       {
         title: `Watch alternate performances on YouTube: ${queriesToUse[1]}`,
-        url: `https://www.youtube.com/results?search_query=${encodeURIComponent(queriesToUse[1])}`,
-        kind: 'search',
+        url: makeYoutubeSearchUrl(queriesToUse[1]),
+        kind: 'specific',
         platform: 'youtube',
       },
       {
         title: `Explore on YouTube: ${queriesToUse[2]}`,
-        url: `https://www.youtube.com/results?search_query=${encodeURIComponent(queriesToUse[2])}`,
+        url: makeYoutubeSearchUrl(queriesToUse[2]),
         kind: 'search',
         platform: 'youtube',
       },

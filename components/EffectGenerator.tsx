@@ -1,6 +1,6 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { generateStructuredResponse } from '../services/geminiService';
+import { generateResponse, generateStructuredResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
 import { EFFECT_GENERATOR_SYSTEM_INSTRUCTION } from '../constants';
 import { LightbulbIcon, WandIcon, SaveIcon, CheckIcon, CopyIcon, ShareIcon } from './icons';
@@ -27,22 +27,21 @@ const normalize = (s: string) => String(s ?? '').replace(/\r\n/g, '\n').trim();
 
 
 const EFFECTS_RESPONSE_SCHEMA = {
-  type: 'object',
+  type: "object",
   properties: {
     effects: {
-      type: 'array',
-      description: 'Exactly 3 complete, performance-ready magic effects.',
+      type: "array",
       items: {
-        type: 'object',
+        type: "object",
         properties: {
-          name: { type: 'string', description: 'A compelling, marketable title for the routine.' },
-          premise: { type: 'string', description: 'A detailed theatrical premise and hook written in at least 3 sentences.' },
-          experience: { type: 'string', description: 'A vivid audience-view description written in at least 4 sentences.' },
-          methodOverview: { type: 'string', description: 'A high-level method direction without exposure, written in at least 3 sentences.' },
-          performanceNotes: { type: 'string', description: 'Practical staging, timing, psychology, and audience management notes written in at least 4 sentences.' },
-          secretHint: { type: 'string', description: 'A brief but useful non-exposing hint that points the magician in the right direction.' },
-          ideaStrength: { type: 'string', description: 'Must be exactly one of: Strong Concept, Needs Work, Experimental.' },
-          buildCost: { type: 'string', description: 'Must be exactly one of: Low, Medium, High.' },
+          name: { type: Type.STRING },
+          premise: { type: Type.STRING },
+          experience: { type: Type.STRING },
+          methodOverview: { type: Type.STRING },
+          performanceNotes: { type: Type.STRING },
+          secretHint: { type: Type.STRING },
+          ideaStrength: { type: Type.STRING },
+          buildCost: { type: Type.STRING },
         },
         required: ['name', 'premise', 'experience', 'methodOverview', 'performanceNotes', 'secretHint', 'ideaStrength', 'buildCost'],
       },
@@ -51,84 +50,8 @@ const EFFECTS_RESPONSE_SCHEMA = {
   required: ['effects'],
 };
 
-
-const expandIfTooShort = (text: string, minLength = 220): string => {
-  const value = normalize(text);
-  if (!value) return '';
-  if (value.length >= minLength) return value;
-  const additions = [
-    ' Add clearer theatrical framing, stronger audience management, and more deliberate pacing so the routine feels fuller in real performance.',
-    ' Think about how the reveal lands emotionally, how the spectator is positioned, and how the transitions can be slowed down to heighten conviction.',
-  ];
-  let expanded = value;
-  for (const addition of additions) {
-    if (expanded.length >= minLength) break;
-    expanded = `${expanded}${addition}`;
-  }
-  return expanded;
-};
-
-const sanitizeEffect = (input: any, index: number): ParsedEffect => {
-  const ideaStrengthRaw = normalize(input?.ideaStrength ?? input?.idea_strength);
-  const buildCostRaw = normalize(input?.buildCost ?? input?.build_cost);
-
-  const ideaStrength: ParsedEffect['ideaStrength'] =
-    ideaStrengthRaw === 'Strong Concept' || ideaStrengthRaw === 'Needs Work' || ideaStrengthRaw === 'Experimental'
-      ? ideaStrengthRaw
-      : ideaStrengthRaw.toLowerCase().includes('strong')
-        ? 'Strong Concept'
-        : ideaStrengthRaw.toLowerCase().includes('need')
-          ? 'Needs Work'
-          : ideaStrengthRaw.toLowerCase().includes('experimental')
-            ? 'Experimental'
-            : '';
-
-  const buildCost: ParsedEffect['buildCost'] =
-    buildCostRaw === 'Low' || buildCostRaw === 'Medium' || buildCostRaw === 'High'
-      ? buildCostRaw
-      : buildCostRaw.toLowerCase().includes('low')
-        ? 'Low'
-        : buildCostRaw.toLowerCase().includes('medium')
-          ? 'Medium'
-          : buildCostRaw.toLowerCase().includes('high')
-            ? 'High'
-            : '';
-
-  return {
-    name: normalize(input?.name) || `Effect ${index + 1}`,
-    premise: expandIfTooShort(input?.premise, 260),
-    experience: expandIfTooShort(input?.experience, 420),
-    methodOverview: expandIfTooShort(input?.methodOverview ?? input?.method_overview, 260),
-    performanceNotes: expandIfTooShort(input?.performanceNotes ?? input?.performance_notes, 420),
-    secretHint: expandIfTooShort(input?.secretHint ?? input?.secret_hint, 100),
-    ideaStrength,
-    buildCost,
-  };
-};
-
-const normalizeEffectsPayload = (payload: any): ParsedEffect[] => {
-  const rawEffects = Array.isArray(payload)
-    ? payload
-    : Array.isArray(payload?.effects)
-      ? payload.effects
-      : Array.isArray(payload?.data?.effects)
-        ? payload.data.effects
-        : [];
-
-  const sanitized = rawEffects
-    .filter(Boolean)
-    .map((effect, index) => sanitizeEffect(effect, index))
-    .slice(0, 3);
-
-  while (sanitized.length < 3) {
-    sanitized.push(sanitizeEffect({}, sanitized.length));
-  }
-
-  return sanitized;
-};
-
 const stringifyStructuredEffects = (payload: any): string => {
-  const effects = normalizeEffectsPayload(payload);
+  const effects = Array.isArray(payload) ? payload : Array.isArray(payload?.effects) ? payload.effects : [];
   return JSON.stringify({ effects }, null, 2);
 };
 
@@ -155,11 +78,26 @@ const parseEffectsFromJson = (raw: string): ParsedEffect[] => {
 
   try {
     const parsed: any = JSON.parse(jsonText);
-    const effects = normalizeEffectsPayload(parsed);
+    const effects: any[] = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray(parsed?.effects)
+        ? parsed.effects
+        : Array.isArray(parsed?.data?.effects)
+          ? parsed.data.effects
+          : [];
 
     if (!effects.length) return [];
 
-    return effects;
+    return effects.map((e: any) => ({
+      name: normalize(e?.name) || 'Untitled Effect',
+      premise: normalize(e?.premise),
+      experience: normalize(e?.experience),
+      methodOverview: normalize(e?.methodOverview ?? e?.method_overview ?? ''),
+      performanceNotes: normalize(e?.performanceNotes ?? e?.performance_notes ?? ''),
+      secretHint: normalize(e?.secretHint ?? e?.secret_hint ?? ''),
+      ideaStrength: (normalize(e?.ideaStrength ?? e?.idea_strength) as any) || '',
+      buildCost: (normalize(e?.buildCost ?? e?.build_cost) as any) || '',
+    }));
   } catch {
     return [];
   }
@@ -519,17 +457,7 @@ const EFFECT_ENGINE_EXAMPLES: Array<{
     return () => window.clearTimeout(t);
   }, [displayIdeas]);
 
-  const parsedEffects = useMemo(() => {
-    if (!ideas) return [];
-    try {
-      return parseEffectsFromMarkdown(ideas);
-    } catch (err) {
-      console.error('Effect parsing failed:', err);
-      return [];
-    }
-  }, [ideas]);
-
-  const safeParsedEffects = useMemo(() => normalizeEffectsPayload({ effects: parsedEffects }), [parsedEffects]);
+  const parsedEffects = useMemo(() => (ideas ? parseEffectsFromMarkdown(ideas) : []), [ideas]);
 
   const handleItemChange = (index: number, value: string) => {
     const newItems = [...items];
@@ -594,22 +522,13 @@ const handleTryExample = () => {
     const itemList = validItems.join(', ');
     // Phase 1: steer generations with intent + practicality constraints.
     const prompt = [
-      `You are a professional creative consultant for magicians designing polished, performance-ready routines.`,
       `Generate magic effect ideas using the following items: ${itemList}.`,
       `Creative intent: ${creativeIntent}.`,
       `Difficulty level: ${difficulty}.`,
       `Return exactly 3 effect concepts (no more, no less).`,
       `Return them as structured JSON using the requested schema.`,
       `For each effect include: name, premise, experience, methodOverview, performanceNotes, secretHint, ideaStrength, buildCost.`,
-      `Each effect must feel like a real routine a magician could develop, not a brief sketch.`,
-      `Write with specificity, theatricality, and practical performance thinking.`,
-      `premise should be 3-5 sentences that clearly explain the dramatic hook and presentation frame.`,
-      `experience should be 4-7 sentences describing what spectators see, feel, and remember moment by moment.`,
-      `methodOverview should be 3-5 sentences of high-level method direction WITHOUT revealing secrets or mechanics in a way that exposes the effect.`,
-      `performanceNotes should be 4-7 sentences with practical notes on pacing, volunteer management, blocking, psychology, resets, and staging.`,
-      `secretHint should be short but helpful, giving the magician a non-exposing nudge toward the working principle.`,
-      `Do not use bullet points. Do not be vague. Do not summarize too aggressively.`,
-      `Make the ideas practical for real performance while still sounding imaginative and polished.`,
+      `Make the ideas practical for real performance. Keep each field concise but complete.`,
       `ideaStrength must be one of: Strong Concept, Needs Work, Experimental.`,
       `buildCost must be one of: Low, Medium, High.`,
     ].join(' ');
@@ -627,16 +546,15 @@ const handleTryExample = () => {
                 'X-Demo-Tool': 'effect_engine',
                 'X-Demo-Scenario': demoScenario,
               },
-              maxOutputTokens: 3800,
+              maxOutputTokens: 2200,
               speedMode: opts?.fast ? 'fast' : 'full',
             }
           : {
-              maxOutputTokens: 3800,
+              maxOutputTokens: 2200,
               speedMode: opts?.fast ? 'fast' : 'full',
             }
       );
-      const normalizedEffects = normalizeEffectsPayload(structured);
-      const response = stringifyStructuredEffects({ effects: normalizedEffects });
+      const response = stringifyStructuredEffects(structured);
       setIdeas(response);
 
       // Phase 4: simulated reveal delay in demo mode (800–1200ms) to make recordings feel cinematic.
@@ -685,34 +603,31 @@ const handleTryExample = () => {
     const lastOutput = String(ideas).slice(0, 1500);
 
     const prompt = [
-      `You are a professional creative consultant for magicians designing polished, performance-ready routines.`,
       `Generate NEW magic effect ideas using the following items: ${itemList}.`,
       `Creative intent: ${creativeIntent}.`,
       `Difficulty level: ${difficulty}.`,
-      `IMPORTANT: The previous output is shown below. Your new concepts must be meaningfully different in premise, structure, emotional texture, and method direction.`,
-      `Avoid reusing the same title, premise, beats, reveals, or gimmick approach. Do not paraphrase the same idea — create genuinely new ones.`,
+      `IMPORTANT: The previous output is shown below. Your new concept must be meaningfully different (new premise, new structure, new method direction).`,
+      `Avoid reusing the same title, premise, beats, or gimmick approach. Do not paraphrase the same idea — create a different one.`,
       `Return exactly 3 effect concepts (no more, no less).`,
-      `Return them as structured JSON using the requested schema.`,
-      `For each effect include: name, premise, experience, methodOverview, performanceNotes, secretHint, ideaStrength, buildCost.`,
-      `Each effect must feel like a real routine a magician could develop, not a brief sketch.`,
-      `premise should be 3-5 sentences that clearly explain the dramatic hook and presentation frame.`,
-      `experience should be 4-7 sentences describing what spectators see, feel, and remember moment by moment.`,
-      `methodOverview should be 3-5 sentences of high-level method direction WITHOUT revealing secrets or mechanics in a way that exposes the effect.`,
-      `performanceNotes should be 4-7 sentences with practical notes on pacing, volunteer management, blocking, psychology, resets, and staging.`,
-      `secretHint should be short but helpful, giving the magician a non-exposing nudge toward the working principle.`,
-      `Do not use bullet points. Do not be vague. Do not summarize too aggressively.`,
-      `ideaStrength must be one of: Strong Concept, Needs Work, Experimental.`,
-      `buildCost must be one of: Low, Medium, High.`,
-      `PREVIOUS OUTPUT (for avoidance):
-${lastOutput}`
+      `Use this exact structure for EACH effect:`,
+      `### [Effect Name]`,
+      `**Premise:** ...`,
+      `**The Experience:** ...`,
+      `**Method Overview:** ...`,
+      `**Performance Notes:** ...`,
+      `**The Secret Hint:** ...`,
+      `**Idea Strength:** Strong Concept / Needs Work / Experimental`,
+      `**Estimated Build Cost:** Low / Medium / High`,
+      `Keep each section concise: 2–4 sentences max.`,
+      `PREVIOUS OUTPUT (for avoidance):\n${lastOutput}`
     ].join(' ');
 
     try {
-      const structured = await generateStructuredResponse(
+      const response = await generateResponse(
         prompt,
         EFFECT_GENERATOR_SYSTEM_INSTRUCTION,
-        EFFECTS_RESPONSE_SCHEMA,
         currentUser || { email: '', membership: 'free', generationCount: 0, lastResetDate: '' },
+        undefined,
         demoActive
           ? {
               extraHeaders: {
@@ -720,15 +635,9 @@ ${lastOutput}`
                 'X-Demo-Tool': 'effect_engine',
                 'X-Demo-Scenario': demoScenario,
               },
-              maxOutputTokens: 3800,
             }
-          : {
-              maxOutputTokens: 3800,
-            }
+          : undefined
       );
-
-      const normalizedEffects = normalizeEffectsPayload(structured);
-      const response = stringifyStructuredEffects({ effects: normalizedEffects });
 
       setIdeas(response);
 
@@ -760,7 +669,7 @@ ${lastOutput}`
 
     // Prefer a meaningful title when the output includes parsed headings.
     const defaultTitle = cleanItems.length ? `Effect Engine: ${cleanItems.slice(0, 2).join(' + ')}${cleanItems.length > 2 ? '…' : ''}` : 'Effect Engine Idea';
-    const headingTitle = safeParsedEffects?.[0]?.name?.trim();
+    const headingTitle = parsedEffects?.[0]?.name?.trim();
     const title = headingTitle ? `Effect: ${headingTitle}` : defaultTitle;
 
     const tags = [
@@ -851,11 +760,11 @@ ${lastOutput}`
     void trackClientEvent({ tool: 'effect_generator', action: `effect_refine_${mode}_start`, metadata: { creativeIntent, difficulty } });
 
     try {
-      const structured = await generateStructuredResponse(
+      const response = await generateResponse(
         prompt,
         EFFECT_GENERATOR_SYSTEM_INSTRUCTION,
-        EFFECTS_RESPONSE_SCHEMA,
         currentUser || { email: '', membership: 'free', generationCount: 0, lastResetDate: '' },
+        undefined,
         demoActive
           ? {
               extraHeaders: {
@@ -863,15 +772,9 @@ ${lastOutput}`
                 'X-Demo-Tool': 'effect_engine',
                 'X-Demo-Scenario': demoScenario,
               },
-              maxOutputTokens: 3800,
             }
-          : {
-              maxOutputTokens: 3800,
-            }
+          : undefined
       );
-
-      const normalizedEffects = normalizeEffectsPayload(structured);
-      const response = stringifyStructuredEffects({ effects: normalizedEffects });
 
       setIdeas(response);
       if (demoActive) {
@@ -934,7 +837,7 @@ ${lastOutput}`
       return;
     }
 
-    const effects = safeParsedEffects;
+    const effects = parsedEffects;
     const effect = effects[taskEffectIndex] || effects[0];
     const cleanItems = items.map((i) => i.trim()).filter(Boolean);
     const itemList = cleanItems.join(', ');
@@ -1002,7 +905,7 @@ ${lastOutput}`
       return;
     }
 
-    const effects = safeParsedEffects;
+    const effects = parsedEffects;
     const effect = effects[selectedEffectIndex];
     if (!effect) {
       setError('Could not parse an effect from the output. Try generating again.');
@@ -1204,9 +1107,9 @@ ${lastOutput}`
                           - Demo: show structured cards for the parsed effects (more cinematic and scannable).
                         */}
                         <div className={`transition-opacity duration-700 ${revealReady ? 'opacity-100' : 'opacity-0'}`}>
-                          {safeParsedEffects.length ? (
+                          {parsedEffects.length ? (
                             <div className="space-y-4">
-                              {safeParsedEffects.map((ef, idx) => {
+                              {parsedEffects.map((ef, idx) => {
                                 const strength = ef.ideaStrength;
                                 const cost = ef.buildCost;
                                 const strengthStyle =
@@ -1479,11 +1382,11 @@ ${lastOutput}`
                                 onChange={(e) => setSelectedEffectIndex(Number(e.target.value))}
                                 className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500"
                               >
-                                {safeParsedEffects.map((ef, idx) => (
+                                {(parsedEffects.length ? parsedEffects : [{ name: 'Effect 1', premise: '', experience: '', methodOverview: '', performanceNotes: '', secretHint: '', ideaStrength: '', buildCost: '' }]).map((ef, idx) => (
                                   <option key={idx} value={idx}>{idx + 1}. {ef.name || `Effect ${idx + 1}`}</option>
                                 ))}
                               </select>
-                              {safeParsedEffects.length === 0 ? (
+                              {parsedEffects.length === 0 ? (
                                 <p className="text-xs text-slate-500 mt-1">Could not parse effect headings. Import will still try the first effect.</p>
                               ) : null}
                             </div>
@@ -1541,11 +1444,11 @@ ${lastOutput}`
                                 onChange={(e) => setTaskEffectIndex(Number(e.target.value))}
                                 className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500"
                               >
-                                {safeParsedEffects.map((ef, idx) => (
+                                {(parsedEffects.length ? parsedEffects : [{ name: 'Effect 1', premise: '', experience: '', methodOverview: '', performanceNotes: '', secretHint: '', ideaStrength: '', buildCost: '' }]).map((ef, idx) => (
                                   <option key={idx} value={idx}>{idx + 1}. {ef.name || `Effect ${idx + 1}`}</option>
                                 ))}
                               </select>
-                              {safeParsedEffects.length === 0 ? (
+                              {parsedEffects.length === 0 ? (
                                 <p className="text-xs text-slate-500 mt-1">Could not parse effect headings. Task will still use the first effect.</p>
                               ) : null}
 

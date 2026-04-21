@@ -1031,7 +1031,7 @@ const IdentifyTab: React.FC<{
                                   ? index === 0
                                     ? "▶ Watch Performance"
                                     : "▶ Watch Alternate Performance"
-                                  : "Explore more";
+                                  : "🔎 Explore More";
 
                               const thumbSrc =
                                 video.videoId && video.platform === "youtube"
