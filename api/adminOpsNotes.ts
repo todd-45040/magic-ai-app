@@ -16,7 +16,7 @@ export default async function handler(req: any, res: any) {
     const auth = await requireAdmin(req);
     if (!auth.ok) return res.status(auth.status).json({ ok: false, error: auth.error });
 
-    const { admin } = auth as any;
+    const { admin, userId } = auth as any;
 
     if (req.method === 'GET') {
       const entity_type = String(req?.query?.entity_type ?? '').trim();
