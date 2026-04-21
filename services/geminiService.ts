@@ -429,7 +429,7 @@ export const generateResponse = async (
   };
 
   try {
-    const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 2 });
+    const result = await postJson<any>('/api/ai/chat', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 2 });
     return extractText(result);
   } catch (error: any) {
     console.error('AI Error:', error);
@@ -457,7 +457,7 @@ export const generateResponseWithParts = async (
   };
 
   try {
-    const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 2 });
+    const result = await postJson<any>('/api/ai/chat', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 2 });
     return extractText(result);
   } catch (error: any) {
     console.error('AI Error:', error);
@@ -485,7 +485,7 @@ export const generateStructuredResponse = async (
     },
   };
 
-  const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 2 });
+  const result = await postJson<any>('/api/ai/json', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 2 });
   const text = extractText(result);
 
   const looksTruncated = (raw: string, errMsg: string) => {
@@ -542,7 +542,7 @@ export const generateStructuredResponse = async (
       },
     };
 
-    const retryResult = await postJson<any>('/api/generate', retryBody, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 1 });
+    const retryResult = await postJson<any>('/api/ai/json', retryBody, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 1 });
     const retryText = extractText(retryResult);
 
     try {
@@ -592,7 +592,7 @@ export const generateStructuredResponse = async (
           },
         };
 
-        const shorterResult = await postJson<any>('/api/generate', shorterBody, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 1 });
+        const shorterResult = await postJson<any>('/api/ai/json', shorterBody, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 1 });
         const shorterText = extractText(shorterResult);
         try {
           return safeJsonParse(shorterText || '{}');
@@ -636,7 +636,7 @@ export const generateStructuredResponse = async (
         },
       };
 
-      const fallbackResult = await postJson<any>('/api/generate', fallbackBody, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 1 });
+      const fallbackResult = await postJson<any>('/api/ai/json', fallbackBody, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 1 });
       const fallbackText = extractText(fallbackResult);
       try {
         return safeJsonParse(fallbackText || '{}');
@@ -690,7 +690,7 @@ export const identifyTrickFromImage = async (
     },
   };
 
-  const result = await postJson<any>('/api/generate', body, currentUser);
+  const result = await postJson<any>('/api/ai/json', body, currentUser);
   const text = extractText(result);
   const parsed = JSON.parse(text || '{}') as any;
 
