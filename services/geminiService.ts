@@ -860,7 +860,12 @@ export const generateImage = async (
   }
 
   // Try common response shapes
-  const img = result?.generatedImages?.[0] || result?.images?.[0] || result?.data?.[0];
+  const img =
+    result?.generatedImages?.[0] ||
+    result?.images?.[0] ||
+    result?.data?.generatedImages?.[0] ||
+    result?.data?.images?.[0] ||
+    result?.data?.[0];
   const base64 =
     img?.image?.imageBytes ||
     img?.imageBytes ||
@@ -899,7 +904,12 @@ export const generateImages = async (
     throw new Error(normalizeAiUserFacingError(error));
   }
 
-  const imgs = result?.generatedImages || result?.images || result?.data;
+  const imgs =
+    result?.generatedImages ||
+    result?.images ||
+    result?.data?.generatedImages ||
+    result?.data?.images ||
+    result?.data;
   if (!Array.isArray(imgs) || imgs.length === 0) {
     throw new Error('No image data returned from /api/generate-images.');
   }
@@ -946,7 +956,12 @@ export const editImageWithPrompt = async (
   }
 
   // Try common response shapes
-  const img = result?.generatedImages?.[0] || result?.images?.[0] || result?.data?.[0];
+  const img =
+    result?.generatedImages?.[0] ||
+    result?.images?.[0] ||
+    result?.data?.generatedImages?.[0] ||
+    result?.data?.images?.[0] ||
+    result?.data?.[0];
   const base64 =
     img?.image?.imageBytes ||
     img?.imageBytes ||

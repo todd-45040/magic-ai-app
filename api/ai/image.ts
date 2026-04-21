@@ -119,6 +119,7 @@ export default async function handler(req: any, res: any) {
     const provider = await resolveProvider(req);
     const body = req.body || {};
     const { aspectRatio = '1:1' } = body;
+    const requestedCount = Math.max(1, Math.min(4, Math.floor(Number(body.count) || 1)));
 
     // Canonical input: messages[]; derive prompt if prompt is missing.
     const prompt =
@@ -189,7 +190,7 @@ export default async function handler(req: any, res: any) {
         model: 'imagen-4.0-generate-001',
         prompt,
         config: {
-          numberOfImages: 1,
+          numberOfImages: requestedCount,
           outputMimeType: 'image/jpeg',
           aspectRatio,
         },

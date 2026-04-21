@@ -539,24 +539,12 @@ const AudienceMode: React.FC<AudienceModeProps> = ({ onBack }) => {
                              <div>
                                 <h3 className="font-cinzel text-lg text-slate-300 mb-2">Example Performances</h3>
                                 <div className="space-y-2">
-                                    {identificationResult.videoExamples.map((video, index) => {
-                                        const actionLabel =
-                                            video.kind === 'specific'
-                                                ? index === 0
-                                                    ? 'Watch Performance'
-                                                    : 'Watch Alternate'
-                                                : 'Explore More';
-
-                                        return (
-                                            <a key={index} href={video.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-2 bg-slate-700/50 hover:bg-sky-900/50 rounded-md transition-colors">
-                                                <VideoIcon className="w-6 h-6 text-sky-400 flex-shrink-0"/>
-                                                <div className="min-w-0">
-                                                    <div className="text-[11px] uppercase tracking-wide text-sky-300">{actionLabel}</div>
-                                                    <span className="block text-slate-200 text-sm truncate">{video.title}</span>
-                                                </div>
-                                            </a>
-                                        );
-                                    })}
+                                    {identificationResult.videoExamples.map((video, index) => (
+                                        <a key={index} href={video.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-2 bg-slate-700/50 hover:bg-sky-900/50 rounded-md transition-colors">
+                                            <VideoIcon className="w-6 h-6 text-sky-400 flex-shrink-0"/>
+                                            <span className="text-slate-200 text-sm truncate">{video.title}</span>
+                                        </a>
+                                    ))}
                                 </div>
                              </div>
                            )}
