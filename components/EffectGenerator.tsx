@@ -1,6 +1,6 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { generateResponse } from '../services/geminiService';
+import { generateResponse, generateStructuredResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
 import { EFFECT_GENERATOR_SYSTEM_INSTRUCTION } from '../constants';
 import { LightbulbIcon, WandIcon, SaveIcon, CheckIcon, CopyIcon, ShareIcon } from './icons';
@@ -24,6 +24,36 @@ type ParsedEffect = {
 };
 
 const normalize = (s: string) => String(s ?? '').replace(/\r\n/g, '\n').trim();
+
+
+const EFFECTS_RESPONSE_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    effects: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          name: { type: Type.STRING },
+          premise: { type: Type.STRING },
+          experience: { type: Type.STRING },
+          methodOverview: { type: Type.STRING },
+          performanceNotes: { type: Type.STRING },
+          secretHint: { type: Type.STRING },
+          ideaStrength: { type: Type.STRING },
+          buildCost: { type: Type.STRING },
+        },
+        required: ['name', 'premise', 'experience', 'methodOverview', 'performanceNotes', 'secretHint', 'ideaStrength', 'buildCost'],
+      },
+    },
+  },
+  required: ['effects'],
+};
+
+const stringifyStructuredEffects = (payload: any): string => {
+  const effects = Array.isArray(payload) ? payload : Array.isArray(payload?.effects) ? payload.effects : [];
+  return JSON.stringify({ effects }, null, 2);
+};
 
 // If the model returns JSON (or JSON fenced in ```), parse it and map to ParsedEffect so we can render clean cards.
 const parseEffectsFromJson = (raw: string): ParsedEffect[] => {
@@ -492,30 +522,23 @@ const handleTryExample = () => {
     const itemList = validItems.join(', ');
     // Phase 1: steer generations with intent + practicality constraints.
     const prompt = [
-      ...(opts?.fast ? [`Return exactly 2 effect concepts (no more, no less).`, `Keep each section to 1–2 sentences max.`, `Skip Method Overview and Secret Hint entirely.`] : []),
       `Generate magic effect ideas using the following items: ${itemList}.`,
       `Creative intent: ${creativeIntent}.`,
       `Difficulty level: ${difficulty}.`,
       `Return exactly 3 effect concepts (no more, no less).`,
-      `Use this exact structure for EACH effect:`,
-      `### [Effect Name]`,
-      `**Premise:** ...`,
-      `**The Experience:** ...`,
-      `**Method Overview:** ...`,
-      `**Performance Notes:** ...`,
-      `**The Secret Hint:** ...`,
-      `**Idea Strength:** Strong Concept / Needs Work / Experimental`,
-      `**Estimated Build Cost:** Low / Medium / High`,
-      `Make the ideas practical for real performance. Keep each section concise: 2–4 sentences max.`,
+      `Return them as structured JSON using the requested schema.`,
+      `For each effect include: name, premise, experience, methodOverview, performanceNotes, secretHint, ideaStrength, buildCost.`,
+      `Make the ideas practical for real performance. Keep each field concise but complete.`,
+      `ideaStrength must be one of: Strong Concept, Needs Work, Experimental.`,
+      `buildCost must be one of: Low, Medium, High.`,
     ].join(' ');
     
     try {
-      // FIX: pass currentUser as the 3rd argument to generateResponse
-      const response = await generateResponse(
+      const structured = await generateStructuredResponse(
         prompt,
         EFFECT_GENERATOR_SYSTEM_INSTRUCTION,
+        EFFECTS_RESPONSE_SCHEMA,
         currentUser || { email: '', membership: 'free', generationCount: 0, lastResetDate: '' },
-        undefined,
         demoActive
           ? {
               extraHeaders: {
@@ -523,9 +546,15 @@ const handleTryExample = () => {
                 'X-Demo-Tool': 'effect_engine',
                 'X-Demo-Scenario': demoScenario,
               },
+              maxOutputTokens: 2200,
+              speedMode: opts?.fast ? 'fast' : 'full',
             }
-          : undefined
+          : {
+              maxOutputTokens: 2200,
+              speedMode: opts?.fast ? 'fast' : 'full',
+            }
       );
+      const response = stringifyStructuredEffects(structured);
       setIdeas(response);
 
       // Phase 4: simulated reveal delay in demo mode (800–1200ms) to make recordings feel cinematic.
