@@ -82,19 +82,42 @@ const PatterEngine: React.FC<PatterEngineProps> = ({ user: _user, onIdeaSaved })
 
   const buildPrompt = (desc: string, tonesList: string[]) => {
     const tones = tonesList.join(", ");
-    // Hard caps for speed/reliability (prevents ADMC booth timeouts)
-    return `Generate performance-ready patter for the effect below.
+    return `You are a professional magician and script writer.
 
-Constraints:
-- Provide EXACTLY 2 variations (Variation A and Variation B)
-- Each variation: 6–10 beats (concise, stage-ready lines)
-- Include quick volunteer/audience management notes (1–2 lines) if applicable
-- Keep total output under ~900 words
-- No preamble or explanation — jump straight into Variation A
+Write TWO complete performance-ready patter scripts for the following effect.
 
-Effect: ${desc}
+Effect:
+${desc}
 
-Tones: ${tones}`;
+Tone(s):
+${tones}
+
+REQUIREMENTS:
+- Each variation must be a FULL SCRIPT, not bullet points
+- Write exactly as a magician would speak on stage
+- Include natural dialogue, audience interaction lines, pauses, pacing, and clear transitions between phases
+- Include humor, tension, wonder, or emotional beats based on the selected tone(s)
+- Give each script a strong opening hook, a build in the middle, a climax, and a memorable callback or ending
+- Make each variation feel polished, performable, and distinct from the other
+- Each variation should feel like 2–4 minutes of spoken performance
+- Keep the total response compact enough for the app to render cleanly, but rich enough to feel like a real routine
+
+STRUCTURE:
+Variation A
+[full script]
+
+Variation B
+[full script]
+
+STYLE RULES:
+- DO NOT write bullet points
+- DO NOT summarize
+- DO NOT explain the method
+- DO NOT describe what the magician is doing mechanically unless it is part of the spoken presentation
+- Write only the performer's spoken script plus light stage directions in parentheses when truly helpful
+- No preamble before Variation A
+
+Return plain text.`;
   };
 
   const handleToneToggle = (tone: string) => {
