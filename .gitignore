@@ -28,3 +28,15 @@ yarn-error.log*
 *.njsproj
 *.sln
 *.sw?
+
+
+# Security / secret hygiene
+.env*
+!.env.example
+*.backup
+*.bak
+*.tmp
+*.temp
+
+# Local Vercel metadata and snapshots
+.vercel/
