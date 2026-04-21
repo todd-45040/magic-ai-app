@@ -74,6 +74,34 @@ async function fetchAllAnalyticsEvents(admin: any, sources: string[], sinceIso: 
   return rows;
 }
 
+
+function pctOrNull(numerator: number, denominator: number): number | null {
+  return denominator > 0 ? numerator / denominator : null;
+}
+
+function buildFunnel(signupsWindow: number, activatedWindow: number, firstIdeaSavedEvents: number, upgradePromptViewed: number, upgradeClicked: number, checkoutStarted: number, checkoutCompleted: number) {
+  const stages = [
+    { key: 'signups', label: 'Signups', count: signupsWindow },
+    { key: 'activated', label: 'Activated', count: activatedWindow },
+    { key: 'idea_saved', label: 'First Idea Saved', count: firstIdeaSavedEvents },
+    { key: 'prompt_viewed', label: 'Upgrade Prompt Viewed', count: upgradePromptViewed },
+    { key: 'upgrade_clicked', label: 'Upgrade Clicked', count: upgradeClicked },
+    { key: 'checkout_started', label: 'Checkout Started', count: checkoutStarted },
+    { key: 'checkout_completed', label: 'Checkout Completed', count: checkoutCompleted },
+  ];
+
+  return stages.map((stage, index) => {
+    const prev = index > 0 ? stages[index - 1] : null;
+    return {
+      ...stage,
+      conversion_from_previous: prev ? pctOrNull(stage.count, prev.count) : null,
+      conversion_from_start: pctOrNull(stage.count, stages[0].count),
+      dropoff_count_from_previous: prev ? Math.max(prev.count - stage.count, 0) : 0,
+      dropoff_rate_from_previous: prev ? pctOrNull(Math.max(prev.count - stage.count, 0), prev.count) : null,
+    };
+  });
+}
+
 function buildActivationMetrics(rows: any[]) {
   const viewed = new Set<string>();
   const started = new Set<string>();
@@ -103,112 +131,6 @@ function buildActivationMetrics(rows: any[]) {
     total_activations: saved.size,
     activation_rate: viewed.size > 0 ? saved.size / viewed.size : null,
   };
-}
-
-
-
-type TrendRow = {
-  day: string;
-  signups: number;
-  activation_viewed: number;
-  activation_started: number;
-  activation_generated: number;
-  first_idea_saved: number;
-  activation_completed: number;
-  checkout_started: number;
-  checkout_completed: number;
-};
-
-function isoDay(value: any): string | null {
-  const ts = Date.parse(String(value || ''));
-  if (!Number.isFinite(ts)) return null;
-  return new Date(ts).toISOString().slice(0, 10);
-}
-
-function buildDailyTrend(users: any[], activityRows: any[], activationRows: any[], days: number): TrendRow[] {
-  const out: TrendRow[] = [];
-  const byDay = new Map<string, TrendRow>();
-  for (let offset = days - 1; offset >= 0; offset -= 1) {
-    const d = new Date();
-    d.setUTCHours(0, 0, 0, 0);
-    d.setUTCDate(d.getUTCDate() - offset);
-    const key = d.toISOString().slice(0, 10);
-    const row: TrendRow = {
-      day: key,
-      signups: 0,
-      activation_viewed: 0,
-      activation_started: 0,
-      activation_generated: 0,
-      first_idea_saved: 0,
-      activation_completed: 0,
-      checkout_started: 0,
-      checkout_completed: 0,
-    };
-    byDay.set(key, row);
-    out.push(row);
-  }
-
-  for (const user of users || []) {
-    const key = isoDay(user?.created_at);
-    if (!key || !byDay.has(key)) continue;
-    byDay.get(key)!.signups += 1;
-  }
-
-  for (const row of activationRows || []) {
-    const key = isoDay(row?.created_at);
-    if (!key || !byDay.has(key)) continue;
-    const eventName = String(row?.event_name || '').trim().toLowerCase();
-    const target = byDay.get(key)!;
-    if (eventName === 'activation_viewed') target.activation_viewed += 1;
-    if (eventName === 'activation_started') target.activation_started += 1;
-    if (eventName === 'activation_generate_clicked') target.activation_generated += 1;
-    if (eventName === 'first_idea_saved') target.first_idea_saved += 1;
-    if (eventName === 'activation_completed') target.activation_completed += 1;
-  }
-
-  for (const row of activityRows || []) {
-    const key = isoDay(row?.created_at);
-    if (!key || !byDay.has(key)) continue;
-    const eventType = String(row?.event_type || '').trim().toLowerCase();
-    const target = byDay.get(key)!;
-    if (eventType === 'checkout_started') target.checkout_started += 1;
-    if (eventType === 'checkout_completed') target.checkout_completed += 1;
-  }
-
-  return out;
-}
-
-function buildUpgradeTiming(rows: any[]) {
-  const STAGES = ['7d', '3d', '1d', 'expired'] as const;
-  const summary = Object.fromEntries(STAGES.map((stage) => [stage, {
-    prompt_viewed: 0,
-    clicked: 0,
-    checkout_started: 0,
-    checkout_completed: 0,
-    trial_expired: 0,
-  }])) as Record<string, { prompt_viewed: number; clicked: number; checkout_started: number; checkout_completed: number; trial_expired: number }>;
-
-  for (const row of rows || []) {
-    const eventType = String(row?.event_type || '').trim().toLowerCase();
-    const stage = String(row?.metadata?.stage || '').trim().toLowerCase();
-    if (!STAGES.includes(stage as any)) continue;
-    const target = summary[stage];
-    if (eventType === 'upgrade_prompt_viewed') target.prompt_viewed += 1;
-    if (eventType === 'upgrade_clicked') target.clicked += 1;
-    if (eventType === 'checkout_started') target.checkout_started += 1;
-    if (eventType === 'checkout_completed') target.checkout_completed += 1;
-    if (eventType === 'trial_expired') target.trial_expired += 1;
-  }
-
-  const stages = STAGES.map((stage) => ({
-    stage,
-    ...summary[stage],
-    prompt_to_click_rate: summary[stage].prompt_viewed > 0 ? summary[stage].clicked / summary[stage].prompt_viewed : null,
-    click_to_checkout_rate: summary[stage].clicked > 0 ? summary[stage].checkout_started / summary[stage].clicked : null,
-    checkout_to_paid_rate: summary[stage].checkout_started > 0 ? summary[stage].checkout_completed / summary[stage].checkout_started : null,
-  }));
-
-  return { stages };
 }
 
 async function fetchAllUserActivity(admin: any, partnerIds: string[], sinceIso: string) {
@@ -373,8 +295,19 @@ export default async function handler(req: any, res: any) {
       prompt_to_click: upgradePromptViewed > 0 ? upgradeClicked / upgradePromptViewed : null,
       click_to_checkout: upgradeClicked > 0 ? checkoutStarted / upgradeClicked : null,
       checkout_to_paid: checkoutStarted > 0 ? checkoutCompleted / checkoutStarted : null,
+      signup_to_checkout_started: signupsWindow > 0 ? checkoutStarted / signupsWindow : null,
+      signup_to_checkout_completed: signupsWindow > 0 ? checkoutCompleted / signupsWindow : null,
     };
 
+    const funnel = buildFunnel(
+      signupsWindow,
+      activatedWindowUsers.size,
+      firstIdeaSavedEvents,
+      upgradePromptViewed,
+      upgradeClicked,
+      checkoutStarted,
+      checkoutCompleted,
+    );
 
     let ibmActivationAnalytics: any[] = [];
     let samActivationAnalytics: any[] = [];
@@ -393,9 +326,6 @@ export default async function handler(req: any, res: any) {
       ibm: buildActivationMetrics(ibmActivationAnalytics),
       sam: buildActivationMetrics(samActivationAnalytics),
     };
-
-    const dailyActivationTrend = buildDailyTrend(users, activity, activationAnalytics, days);
-    const upgradeTiming = buildUpgradeTiming(activity);
 
     const recentConverted = users
       .filter((u: any) => isPaidMembership(u?.membership))
@@ -422,8 +352,6 @@ export default async function handler(req: any, res: any) {
       },
       activation_metrics: activationMetrics,
       partner_activation_view: activationPartnerView,
-      daily_activation_trend: dailyActivationTrend,
-      upgrade_timing: upgradeTiming,
       events: {
         signup: signupEvents,
         login: loginEvents,
@@ -439,6 +367,7 @@ export default async function handler(req: any, res: any) {
         error: errorEvents,
       },
       rates,
+      funnel,
       most_used_tools: mostUsedTools,
       top_error_kinds: topErrorKinds,
       recent_converted: recentConverted,
