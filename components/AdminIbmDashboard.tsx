@@ -81,6 +81,10 @@ export default function AdminIbmDashboard() {
   const recentConverted = Array.isArray(data?.recent_converted) ? data.recent_converted : [];
   const topErrors = Array.isArray(data?.top_error_kinds) ? data.top_error_kinds : [];
 
+  const activationMetrics = data?.activation_metrics || {};
+  const activationCounts = activationMetrics?.counts || {};
+  const partnerActivationView = data?.partner_activation_view || {};
+
   const headline = useMemo(() => ({
     signupsWindow: num(summary.signups_window),
     activatedWindow: num(summary.activated_users_window),
@@ -151,6 +155,45 @@ export default function AdminIbmDashboard() {
             <KpiCard label={`${campaignLabel} Activated (${days}d)`} value={headline.activatedWindow} sub={`All-time activated: ${num(summary.activated_users_total)}`} />
             <KpiCard label={`${campaignLabel} Checkout Started (${days}d)`} value={headline.checkoutStarted} sub={`Completed: ${headline.checkoutCompleted}`} />
             <KpiCard label={`${campaignLabel} Paid Conversions`} value={headline.conversionsTotal} sub={`Conversion rate: ${pct(summary.conversion_rate_total)}`} />
+          </div>
+
+
+          <div className="rounded-2xl border border-emerald-400/15 bg-emerald-500/5 p-4">
+            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+              <div>
+                <div className="text-sm uppercase tracking-[0.18em] text-emerald-200/80">Activation metrics</div>
+                <div className="mt-1 text-sm text-white/75">Telemetry-based activation view for the selected window.</div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-0 lg:min-w-[320px]">
+                <KpiCard label="Activation Rate" value={pct(activationMetrics.activation_rate)} sub="First idea saved ÷ activation viewed" />
+                <KpiCard label="Total Activations" value={num(activationMetrics.total_activations)} sub="Distinct users who saved their first idea" />
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-3">
+              <KpiCard label="Viewed" value={num(activationCounts.viewed)} />
+              <KpiCard label="Started" value={num(activationCounts.started)} />
+              <KpiCard label="Generated" value={num(activationCounts.generated)} />
+              <KpiCard label="Saved" value={num(activationCounts.saved)} />
+              <KpiCard label="Completed" value={num(activationCounts.completed)} />
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                <div className="text-xs uppercase tracking-[0.18em] text-white/55">IBM activation rate</div>
+                <div className="mt-2 text-2xl font-semibold text-white">{pct(partnerActivationView?.ibm?.activation_rate)}</div>
+                <div className="mt-1 text-xs text-white/60">
+                  {num(partnerActivationView?.ibm?.total_activations)} activations • {num(partnerActivationView?.ibm?.counts?.viewed)} viewed
+                </div>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                <div className="text-xs uppercase tracking-[0.18em] text-white/55">SAM activation rate</div>
+                <div className="mt-2 text-2xl font-semibold text-white">{pct(partnerActivationView?.sam?.activation_rate)}</div>
+                <div className="mt-1 text-xs text-white/60">
+                  {num(partnerActivationView?.sam?.total_activations)} activations • {num(partnerActivationView?.sam?.counts?.viewed)} viewed
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">

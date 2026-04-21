@@ -47,6 +47,64 @@ function normalizeTool(raw: any): string {
   return lower;
 }
 
+
+async function fetchAllAnalyticsEvents(admin: any, sources: string[], sinceIso: string) {
+  const rows: any[] = [];
+  const pageSize = 1000;
+  for (let start = 0; start < 10000; start += pageSize) {
+    const end = start + pageSize - 1;
+    let query = admin
+      .from('analytics_events')
+      .select('user_id,event_name,event_payload,partner_source,created_at')
+      .gte('created_at', sinceIso)
+      .order('created_at', { ascending: false })
+      .range(start, end);
+
+    if (sources.length === 1) {
+      query = query.eq('partner_source', sources[0]);
+    } else {
+      query = query.in('partner_source', sources);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    if (Array.isArray(data) && data.length > 0) rows.push(...data);
+    if (!data || data.length < pageSize) break;
+  }
+  return rows;
+}
+
+function buildActivationMetrics(rows: any[]) {
+  const viewed = new Set<string>();
+  const started = new Set<string>();
+  const generated = new Set<string>();
+  const saved = new Set<string>();
+  const completed = new Set<string>();
+
+  for (const row of rows || []) {
+    const userId = String(row?.user_id || '').trim();
+    if (!userId) continue;
+    const eventName = String(row?.event_name || '').trim().toLowerCase();
+    if (eventName === 'activation_viewed') viewed.add(userId);
+    if (eventName === 'activation_started') started.add(userId);
+    if (eventName === 'activation_generate_clicked') generated.add(userId);
+    if (eventName === 'first_idea_saved') saved.add(userId);
+    if (eventName === 'activation_completed') completed.add(userId);
+  }
+
+  return {
+    counts: {
+      viewed: viewed.size,
+      started: started.size,
+      generated: generated.size,
+      saved: saved.size,
+      completed: completed.size,
+    },
+    total_activations: saved.size,
+    activation_rate: viewed.size > 0 ? saved.size / viewed.size : null,
+  };
+}
+
 async function fetchAllUserActivity(admin: any, partnerIds: string[], sinceIso: string) {
   const rows: any[] = [];
   const pageSize = 1000;
@@ -113,6 +171,16 @@ export default async function handler(req: any, res: any) {
     if (partnerIds.length > 0) {
       activity = await fetchAllUserActivity(admin, partnerIds, sinceIso);
     }
+
+    let activationAnalytics: any[] = [];
+    try {
+      activationAnalytics = await fetchAllAnalyticsEvents(admin, sources, sinceIso);
+    } catch (analyticsErr) {
+      console.error('adminIbmFunnel analytics_events load failed', analyticsErr);
+      activationAnalytics = [];
+    }
+
+    const activationMetrics = buildActivationMetrics(activationAnalytics);
 
     const activatedWindowUsers = new Set<string>();
     const activatedTotalUsers = new Set<string>();
@@ -201,6 +269,25 @@ export default async function handler(req: any, res: any) {
       checkout_to_paid: checkoutStarted > 0 ? checkoutCompleted / checkoutStarted : null,
     };
 
+
+    let ibmActivationAnalytics: any[] = [];
+    let samActivationAnalytics: any[] = [];
+    try {
+      [ibmActivationAnalytics, samActivationAnalytics] = await Promise.all([
+        fetchAllAnalyticsEvents(admin, ['ibm'], sinceIso),
+        fetchAllAnalyticsEvents(admin, ['sam'], sinceIso),
+      ]);
+    } catch (partnerActivationErr) {
+      console.error('adminIbmFunnel partner activation load failed', partnerActivationErr);
+      ibmActivationAnalytics = [];
+      samActivationAnalytics = [];
+    }
+
+    const activationPartnerView = {
+      ibm: buildActivationMetrics(ibmActivationAnalytics),
+      sam: buildActivationMetrics(samActivationAnalytics),
+    };
+
     const recentConverted = users
       .filter((u: any) => isPaidMembership(u?.membership))
       .map((u: any) => ({
@@ -224,6 +311,8 @@ export default async function handler(req: any, res: any) {
         conversion_rate_total: signupsTotal > 0 ? conversionsTotal / signupsTotal : null,
         active_trial_current: activeTrialCurrent,
       },
+      activation_metrics: activationMetrics,
+      partner_activation_view: activationPartnerView,
       events: {
         signup: signupEvents,
         login: loginEvents,
