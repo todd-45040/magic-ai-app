@@ -1,3 +1,4 @@
+import { markLegacyRoute } from './_lib/legacyRoute.js';
 // Image editing proxy endpoint.
 //
 // Important note:
@@ -28,6 +29,7 @@ function extractGeminiText(result: any): string {
 }
 
 export default async function handler(request: any, response: any) {
+  markLegacyRoute(response, '/api/ai/image-edit');
   try {
     if (request.method !== 'POST') {
       return response.status(405).json({ error: 'Method not allowed' });

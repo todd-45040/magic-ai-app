@@ -15,12 +15,30 @@ if (typeof window !== 'undefined') {
   };
 }
 
-// Chainable mock for Supabase to prevent crashes during development/preview without keys
+const isConfigValid =
+  !!supabaseUrl &&
+  !!supabaseAnonKey &&
+  supabaseUrl !== 'undefined' &&
+  supabaseAnonKey !== 'undefined' &&
+  supabaseUrl !== '' &&
+  supabaseAnonKey !== '';
+
+const isLocalBrowserDev =
+  typeof window !== 'undefined' &&
+  (import.meta.env.DEV || /^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname));
+
+const failFastMessage =
+  'Supabase client configuration is missing. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY. In deployed environments this now fails fast instead of silently falling back to a mock client.';
+
+// Exported so the app/UI can gracefully disable auth/cloud features when env vars are missing in local development only.
+export const isSupabaseConfigValid = isConfigValid;
+
+// Chainable mock for local development only
 const mockSupabase = {
   from: () => ({
-    select: () => ({ 
-      eq: () => ({ 
-        order: () => Promise.resolve({ data: [], error: null }), 
+    select: () => ({
+      eq: () => ({
+        order: () => Promise.resolve({ data: [], error: null }),
         single: () => Promise.resolve({ data: null, error: null }),
         limit: () => Promise.resolve({ data: [], error: null })
       }),
@@ -34,19 +52,19 @@ const mockSupabase = {
   auth: {
     getUser: () => Promise.resolve({ data: { user: null }, error: null }),
     getSession: () => Promise.resolve({ data: { session: null }, error: null }),
-    signInWithPassword: () => Promise.resolve({ data: {}, error: new Error("Supabase not configured. Ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in your environment variables.") }),
-    signUp: () => Promise.resolve({ data: {}, error: new Error("Supabase not configured") }),
+    signInWithPassword: () => Promise.resolve({ data: {}, error: new Error(failFastMessage) }),
+    signUp: () => Promise.resolve({ data: {}, error: new Error(failFastMessage) }),
     signOut: () => Promise.resolve({ error: null }),
-    resetPasswordForEmail: () => Promise.resolve({ error: new Error("Supabase not configured") }),
+    resetPasswordForEmail: () => Promise.resolve({ error: new Error(failFastMessage) }),
     onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
   },
   rpc: () => Promise.resolve({ error: null })
 } as any;
 
-const isConfigValid = !!supabaseUrl && !!supabaseAnonKey && supabaseUrl !== "undefined" && supabaseUrl !== "";
-
-// Exported so the app/UI can gracefully disable auth/cloud features when env vars are missing.
-export const isSupabaseConfigValid = isConfigValid;
+if (!isConfigValid && typeof window !== 'undefined' && !isLocalBrowserDev) {
+  console.error(failFastMessage);
+  throw new Error(failFastMessage);
+}
 
 export const supabase = isConfigValid
   ? createClient(supabaseUrl, supabaseAnonKey, {
@@ -60,6 +78,6 @@ export const supabase = isConfigValid
     })
   : mockSupabase;
 
-if (!isConfigValid) {
-  console.warn("⚠️ Supabase configuration is missing. Cloud features will be disabled. Check your .env file or hosting provider settings.");
+if (!isConfigValid && isLocalBrowserDev) {
+  console.warn('⚠️ Supabase configuration is missing in local development. Mock client enabled for local-only resilience.');
 }

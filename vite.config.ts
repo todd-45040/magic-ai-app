@@ -35,6 +35,20 @@ export default defineConfig(({ mode }) => {
           main: resolve(__dirname, "index.html"),
           app: resolve(__dirname, "app/index.html"),
         },
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('@supabase')) return 'vendor-supabase';
+              if (id.includes('@stripe')) return 'vendor-stripe';
+              if (id.includes('@google/genai')) return 'vendor-genai';
+              if (id.includes('react')) return 'vendor-react';
+              return 'vendor';
+            }
+            if (id.includes('/components/Admin')) return 'admin';
+            if (id.includes('/components/LiveRehearsal') || id.includes('/components/VideoRehearsal') || id.includes('/services/geminiService')) return 'studio';
+            if (id.includes('/components/Auth') || id.includes('/services/billingClient') || id.includes('/components/FoundingCirclePage')) return 'auth-billing';
+          },
+        },
       },
     },
 

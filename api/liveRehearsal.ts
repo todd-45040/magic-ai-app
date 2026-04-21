@@ -1,9 +1,11 @@
+import { markLegacyRoute } from './_lib/legacyRoute.js';
 import { GoogleGenAI } from '@google/genai';
 import { enforceLiveMinutes } from '../server/usage.js';
 import { resolveProvider, callOpenAI, callAnthropic } from '../lib/server/providers/index.js';
 import { getGoogleAiApiKey } from '../server/gemini.js';
 
 export default async function handler(request: any, response: any) {
+  markLegacyRoute(response, '/api/ai/live-rehearsal');
   if (request.method !== 'POST') {
     return response.status(405).json({ error: 'Method not allowed' });
   }

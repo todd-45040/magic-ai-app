@@ -1,3 +1,4 @@
+import { markLegacyRoute } from './_lib/legacyRoute.js';
 import { GoogleGenAI } from '@google/genai';
 import { enforceAiUsage } from '../server/usage.js';
 import { getGoogleAiApiKey } from '../server/gemini.js';
@@ -74,6 +75,7 @@ async function generateWithFallback(
 }
 
 export default async function handler(req: any, res: any) {
+  markLegacyRoute(res, '/api/ai/transcribe');
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
     return;
