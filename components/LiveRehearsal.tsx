@@ -12,6 +12,7 @@ import { MAGICIAN_LIVE_REHEARSAL_SYSTEM_INSTRUCTION, LIVE_REHEARSAL_TOOLS } from
 import { BackIcon, MicrophoneIcon, StopIcon, SaveIcon, WandIcon, TrashIcon, TimerIcon, ChevronDownIcon, CheckIcon, LightbulbIcon } from './icons';
 import BlockedPanel from './BlockedPanel';
 import { normalizeBlockedUx, type BlockedUx } from '../services/blockedUx';
+import { logEvent } from '../services/analyticsService';
 import { trackClientEvent } from '../services/telemetryClient';
 import { logUserActivity } from '../services/userActivityService';
 
@@ -921,6 +922,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                     `Daily live rehearsal minutes limit reached (${Number(daily.used ?? 0)}/${Number(daily.limit ?? 0)} min). This is separate from the AI message limit. Upgrade to continue.`
                 );
                 trackLiveRehearsalEvent('live_rehearsal_start_blocked', { source: 'server', used: Number(daily.used ?? 0), limit: Number(daily.limit ?? 0) }, { outcome: 'ERROR_UPSTREAM', http_status: 429, error_code: 'quota_exceeded', retryable: false });
+                void logEvent('limit_hit_ai_generation', { source: 'live_rehearsal_start', feature: 'live_rehearsal', limit_scope: 'daily', quota_source: 'server' });
                 return;
             }
         } catch {
@@ -942,6 +944,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                         `Daily live rehearsal minutes limit reached (${cur.used}/${cur.limit} min). This is separate from the AI message limit. Upgrade to continue.`
                     );
                     trackLiveRehearsalEvent('live_rehearsal_start_blocked', { source: 'local', used: Number(cur.used ?? 0), limit: Number(cur.limit ?? 0) }, { outcome: 'ERROR_UPSTREAM', http_status: 429, error_code: 'quota_exceeded', retryable: false });
+                    void logEvent('limit_hit_ai_generation', { source: 'live_rehearsal_start', feature: 'live_rehearsal', limit_scope: 'daily', quota_source: 'local' });
                     return;
                 }
             } catch {
@@ -1141,7 +1144,12 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             errorOccurred.current = true;
             try {
                 const blocked = normalizeBlockedUx(error, { toolName: 'Live Rehearsal (Audio)' });
-                if (blocked.showUpgrade || blocked.retryable) setBlockedUx(blocked);
+                if (blocked.showUpgrade || blocked.retryable) {
+                    setBlockedUx(blocked);
+                    if (blocked.showUpgrade) {
+                        void logEvent('limit_hit_ai_generation', { source: 'live_rehearsal_error', feature: 'live_rehearsal' });
+                    }
+                }
             } catch {
                 // ignore
             }

@@ -68,6 +68,7 @@ import { fetchUsageStatus, type UsageStatus } from '../services/usageStatusServi
 import { consume, getUsage } from '../services/usageTracker';
 import { logIbmConversionEvent, isIbmConversionCandidate } from '../services/ibmConversionTracking';
 import { logUserActivity } from '../services/userActivityService';
+import { logEvent } from '../services/analyticsService';
 
 interface AngleRiskFormProps {
     trickName: string;
@@ -3611,8 +3612,34 @@ useEffect(() => {
     setEffectToInnovate('');
   };
 
+  const logLockedFeatureClick = (feature: string, extra: Record<string, unknown> = {}) => {
+    void logEvent('locked_feature_clicked', {
+      feature,
+      active_view: activeView,
+      ...extra,
+    });
+  };
+
+  const logLimitHitAiGeneration = (source: string, extra: Record<string, unknown> = {}) => {
+    void logEvent('limit_hit_ai_generation', {
+      source,
+      active_view: activeView,
+      ...extra,
+    });
+  };
+
+  const maybeLogHighIntentUser = (nextIdeaCount: number, source: string) => {
+    if (nextIdeaCount !== 5) return;
+    void logEvent('high_intent_user', {
+      idea_count: nextIdeaCount,
+      source,
+      active_view: activeView,
+    });
+  };
+
   const handleSendWithHistory = async (messageText: string, baseHistory: ChatMessage[]) => {
     if (isExpired) {
+      logLockedFeatureClick('trial_expired', { source: 'handle_prompt_click' });
       setIsUpgradeModalOpen(true);
       return;
     }
@@ -3645,6 +3672,16 @@ useEffect(() => {
           retryable: Boolean(anyErr?.retryable),
         });
 
+      try {
+        const blocked = normalizeBlockedUx(err, { toolName: 'AI Generation', user });
+        if (blocked.showUpgrade) {
+          logLimitHitAiGeneration('handle_send_with_history', {
+            http_status: Number(anyErr?.status || 0) || undefined,
+            error_code: String(anyErr?.code || anyErr?.error_code || ''),
+          });
+        }
+      } catch {}
+
       console.error('Error in handleSendWithHistory:', err);
       setMessages(prev => [...prev, createChatMessage('model', friendlyAiError)]);
     } finally {
@@ -3672,6 +3709,7 @@ useEffect(() => {
 
   const handleSend = async (prompt?: string) => {
     if (isExpired) {
+      logLockedFeatureClick('trial_expired', { source: 'handle_send_with_history' });
       setIsUpgradeModalOpen(true);
       return;
     }
@@ -3741,6 +3779,7 @@ useEffect(() => {
     
     const promptAccess = getPromptAccess(user, prompt.title);
     if (promptAccess.state === 'locked') {
+        logLockedFeatureClick(prompt.title, { source: 'prompt_click' });
         setIsUpgradeModalOpen(true);
         return;
     }
@@ -3846,6 +3885,9 @@ useEffect(() => {
   const handleIdeaSaved = (message: string) => {
     const startedKey = `${FIRST_SESSION_ACTIVATION_STORAGE_KEY}:${String(user?.email || 'guest').toLowerCase()}`;
     try { localStorage.removeItem(startedKey); } catch {}
+
+    const nextIdeaCount = Number(Array.isArray(ideas) ? ideas.length : 0) + 1;
+    maybeLogHighIntentUser(nextIdeaCount, 'idea_saved');
 
     showToast(message, {
       label: 'View Ideas',
@@ -4219,10 +4261,12 @@ useEffect(() => {
 
   const handleTabClick = (tab: MagicianTab) => {
     if (tab === 'show-planner' && isAccessLocked('show-planner')) {
+        logLockedFeatureClick('show_planner', { source: 'tab_click' });
         setIsUpgradeModalOpen(true);
         return;
     }
      if (tab === 'magic-dictionary' && isAccessLocked('magic-dictionary')) {
+        logLockedFeatureClick('magic_dictionary', { source: 'tab_click' });
         setIsUpgradeModalOpen(true);
         return;
     }
@@ -4280,12 +4324,14 @@ useEffect(() => {
 
   const handleNavigate = (view: MagicianView) => {
     if (isExpired) {
+      logLockedFeatureClick('trial_expired', { source: 'navigate', requested_view: view });
       setIsUpgradeModalOpen(true);
       return;
     }
 
     const access = getViewAccess(view);
     if (access?.state === 'locked') {
+      logLockedFeatureClick(String(view).replace(/-/g, '_'), { source: 'navigate', requested_view: view });
       setIsUpgradeModalOpen(true);
       return;
     }
@@ -4634,13 +4680,13 @@ ${action.payload.content}`;
               onOpenAngleRisk={() => setActiveView('angle-risk')}
               onOpenPatterEngine={() => setActiveView('patter-engine')}
               onOpenDirectorMode={() => setActiveView('director-mode')}
-              onRequestUpgrade={() => setIsUpgradeModalOpen(true)}
+              onRequestUpgrade={() => { logLockedFeatureClick('live_rehearsal', { source: 'component_upgrade_request' }); setIsUpgradeModalOpen(true); }}
               onReset={handleResetIdentifyTrick}
             />
           );
         case 'video-rehearsal': return <VideoRehearsal onIdeaSaved={() => handleIdeaSaved('Video analysis saved!')} user={user} />;
         case 'angle-risk': return <AngleRiskAnalysis user={user} onIdeaSaved={() => handleIdeaSaved('Angle/Risk analysis saved!')} />;
-        case 'visual-brainstorm': return <VisualBrainstorm onIdeaSaved={() => handleIdeaSaved('Image idea saved!')} user={user} onRequestUpgrade={() => setIsUpgradeModalOpen(true)} />;
+        case 'visual-brainstorm': return <VisualBrainstorm onIdeaSaved={() => handleIdeaSaved('Image idea saved!')} user={user} onRequestUpgrade={() => { logLockedFeatureClick('visual_brainstorm', { source: 'component_upgrade_request' }); setIsUpgradeModalOpen(true); }} />;
         case 'saved-ideas': return <SavedIdeas onAiSpark={handleAiSpark} initialIdeaId={initialIdeaId || undefined} />;
         case 'prop-checklists': return <PropGenerator user={user} onIdeaSaved={() => handleIdeaSaved('Prop concept saved!')} onNavigateShowPlanner={() => setActiveView('show-planner')} onNavigateDirectorMode={() => setActiveView('director-mode')} />;
         case 'show-planner': return <ShowPlanner user={user} clients={clients} onNavigateToAnalytics={handleNavigateToAnalytics} initialShowId={initialShowId} initialTaskId={initialTaskId} />;
@@ -4708,7 +4754,7 @@ ${action.payload.content}`;
             <MagicDictionary
               onAiSpark={handleAiSpark}
               membership={user?.membership}
-              onRequestUpgrade={() => setIsUpgradeModalOpen(true)}
+              onRequestUpgrade={() => { logLockedFeatureClick('magic_dictionary', { source: 'component_upgrade_request' }); setIsUpgradeModalOpen(true); }}
             />
           );
         case 'billing-settings':
@@ -4762,7 +4808,7 @@ ${action.payload.content}`;
               onRefine={handleIdentifyRefine}
               refining={identifyRefining}
               lastRefine={identifyLastRefine}
-              onRequestUpgrade={() => setIsUpgradeModalOpen(true)}
+              onRequestUpgrade={() => { logLockedFeatureClick('identify_trick', { source: 'component_upgrade_request' }); setIsUpgradeModalOpen(true); }}
             />
           );
         case 'publications': return <PublicationsTab />;
@@ -5120,7 +5166,7 @@ const renderIntentSubnav = () => {
           <UsageLimitsCard
             usageSnapshot={usageSnapshot}
             error={usageSnapshotError}
-            onRequestUpgrade={() => setIsUpgradeModalOpen(true)}
+            onRequestUpgrade={() => { logLockedFeatureClick('usage_limits_card', { source: 'component_upgrade_request' }); setIsUpgradeModalOpen(true); }}
           />
         </div>
       )}
