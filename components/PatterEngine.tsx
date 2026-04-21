@@ -146,7 +146,14 @@ Tones: ${tones}`;
             Authorization: `Bearer ${token}`,
           },
           signal: controller.signal,
-          body: JSON.stringify({ prompt: buildPrompt(desc, tones) }),
+          body: JSON.stringify({
+            messages: [
+              {
+                role: "user",
+                content: buildPrompt(desc, tones),
+              },
+            ],
+          }),
         });
       } finally {
         window.clearTimeout(abortTimer);
