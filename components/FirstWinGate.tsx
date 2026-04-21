@@ -60,6 +60,8 @@ export default function FirstWinGate({ user, onNavigate, onDismiss }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdIdeaId, setCreatedIdeaId] = useState<string | null>(null);
+  const [createdIdeaTitle, setCreatedIdeaTitle] = useState<string>('');
+  const [createdIdeaContent, setCreatedIdeaContent] = useState<string>('');
   const [selectedObjects, setSelectedObjects] = useState('Everyday objects');
   const [selectedStyle, setSelectedStyle] = useState('Visual');
   const hasLoggedViewRef = useRef(false);
@@ -112,6 +114,59 @@ export default function FirstWinGate({ user, onNavigate, onDismiss }: Props) {
     onDismiss?.();
   };
 
+  const handlePostActivationRefine = () => {
+    void logEvent('post_activation_refine_clicked', {
+      idea_id: createdIdeaId,
+      magic_type: selectedObjects,
+      style: selectedStyle,
+    });
+    if (createdIdeaId) {
+      openSpecificIdea(createdIdeaId);
+      return;
+    }
+    onNavigate('saved-ideas');
+  };
+
+  const handlePostActivationRoutine = () => {
+    void logEvent('post_activation_routine_clicked', {
+      idea_id: createdIdeaId,
+      magic_type: selectedObjects,
+      style: selectedStyle,
+    });
+
+    if (typeof window !== 'undefined') {
+      try {
+        const title = (createdIdeaTitle || `My First ${selectedStyle} Routine`).trim();
+        const content = (createdIdeaContent || '').trim();
+        localStorage.setItem('maw_director_mode_prefill_v1', JSON.stringify({
+          version: 1,
+          showTitle: title,
+          theme: selectedStyle,
+          constraintNotes: content
+            ? `Build a fuller routine from this saved activation idea:\n\n${content}`
+            : `Build a fuller routine from my saved ${selectedStyle.toLowerCase()} activation idea using ${selectedObjects.toLowerCase()}.`,
+          tone: selectedStyle,
+          sourceIdeaId: createdIdeaId,
+          source: 'first-win-gate',
+          ts: Date.now(),
+        }));
+      } catch {
+        // ignore prefill errors
+      }
+    }
+
+    onNavigate('director-mode');
+  };
+
+  const handlePostActivationAddToShow = () => {
+    void logEvent('post_activation_add_to_show', {
+      idea_id: createdIdeaId,
+      magic_type: selectedObjects,
+      style: selectedStyle,
+    });
+    onNavigate('show-planner');
+  };
+
   const runFirstRoutine = async () => {
     logActivationStarted();
     void logEvent('activation_generate_clicked', {
@@ -137,15 +192,20 @@ export default function FirstWinGate({ user, onNavigate, onDismiss }: Props) {
       });
 
       // Critical activation move: auto-save the first routine.
+      const ideaTitle = `My First ${selectedStyle} Routine`;
+      const ideaContent = String(text).trim();
+
       const saved = await saveIdea({
         type: 'text',
-        title: `My First ${selectedStyle} Routine`,
-        content: String(text).trim(),
+        title: ideaTitle,
+        content: ideaContent,
         tags: ['first-win', selectedObjects.toLowerCase().replace(/[^a-z0-9]+/g, '-'), selectedStyle.toLowerCase().replace(/[^a-z0-9]+/g, '-')],
       } as any);
 
       const savedIdeaId = saved?.id ?? null;
       setCreatedIdeaId(savedIdeaId);
+      setCreatedIdeaTitle(saved?.title ?? ideaTitle);
+      setCreatedIdeaContent(saved?.content ?? ideaContent);
 
       if (savedIdeaId && !hasLoggedFirstIdeaSavedRef.current) {
         hasLoggedFirstIdeaSavedRef.current = true;
@@ -332,16 +392,28 @@ export default function FirstWinGate({ user, onNavigate, onDismiss }: Props) {
                 <p className="mt-1 text-sm text-white/70">Your routine is ready. Open it now, add it to a show, or generate another.</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button
-                    onClick={() => createdIdeaId && openSpecificIdea(createdIdeaId)}
+                    onClick={handlePostActivationRefine}
                     className="rounded-xl border border-emerald-400/25 bg-emerald-500/15 px-3 py-2 text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/25"
                   >
-                    ✨ Open My New Effect
+                    🔧 Refine This Idea
                   </button>
                   <button
-                    onClick={() => onNavigate('show-planner')}
+                    onClick={handlePostActivationRoutine}
                     className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-medium text-white/80 transition hover:bg-white/[0.05]"
                   >
-                    📅 Add to a Show
+                    🎭 Turn Into Routine
+                  </button>
+                  <button
+                    onClick={handlePostActivationAddToShow}
+                    className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-medium text-white/80 transition hover:bg-white/[0.05]"
+                  >
+                    📋 Add to Show Planner
+                  </button>
+                  <button
+                    onClick={() => createdIdeaId && openSpecificIdea(createdIdeaId)}
+                    className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-medium text-white/80 transition hover:bg-white/[0.05]"
+                  >
+                    ✨ Open My New Effect
                   </button>
                   <button
                     onClick={runFirstRoutine}
