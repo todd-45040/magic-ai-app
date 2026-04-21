@@ -60,6 +60,18 @@ function extractText(result: any): string {
   }
 }
 
+
+
+function tryExtractStructuredJson(result: any): any | null {
+  const parsed = result?.response?.parsed ?? result?.parsed ?? null;
+  if (parsed && typeof parsed === 'object') return parsed;
+
+  const directJson = result?.response?.json ?? result?.json ?? null;
+  if (directJson && typeof directJson === 'object') return directJson;
+
+  return null;
+}
+
 // Accept OpenAI-style messages as canonical input and adapt for Gemini when needed.
 function messagesToGeminiContents(messages: any[]): any[] {
   if (!Array.isArray(messages)) return [];
@@ -134,6 +146,17 @@ export default async function handler(req: any, res: any) {
     const body = req.body || {};
     const { model, config } = body;
 
+    const responseSchema = config?.responseSchema;
+    if (!responseSchema || typeof responseSchema !== 'object') {
+      return jsonError(res, 400, {
+        ok: false,
+        error_code: 'BAD_REQUEST',
+        message: 'Missing required structured output schema: provide config.responseSchema.',
+        retryable: false,
+        ...(isPreviewEnv() ? { details: { hint: 'Send { config: { responseSchema: { ... } } }' } } : {}),
+      });
+    }
+
     // Canonical input: messages[]; for Gemini we must provide `contents`.
     const messages = body.messages;
     let contents = body.contents;
@@ -171,19 +194,22 @@ export default async function handler(req: any, res: any) {
       const { GoogleGenAI } = await import('@google/genai');
       const ai = new GoogleGenAI({ apiKey });
       return ai.models.generateContent({
-        model: model || 'gemini-3-pro-preview',
+        model: model || 'gemini-2.5-flash',
         contents,
         config: {
           ...config,
           responseMimeType: 'application/json',
+          responseSchema,
+          temperature: typeof config?.temperature === 'number' ? config.temperature : 0.2,
         },
       });
     };
 
     const result = await withTimeout(run(), TIMEOUT_MS, 'TIMEOUT');
+    const directStructured = tryExtractStructuredJson(result);
     const rawText = extractText(result);
 
-    let parsed: any;
+    let parsed: any = directStructured;
     // --- Robust JSON recovery (booth reliability)
     // Providers occasionally return "JSON" with:
     // - extra wrapper text
@@ -284,7 +310,7 @@ export default async function handler(req: any, res: any) {
       }
     };
 
-    parsed = tryParse(rawText);
+    if (parsed == null) parsed = tryParse(rawText);
 
     if (parsed == null) {
       // One automatic repair retry (rare, but dramatically improves booth reliability)
@@ -311,9 +337,9 @@ export default async function handler(req: any, res: any) {
         const { GoogleGenAI } = await import('@google/genai');
         const ai = new GoogleGenAI({ apiKey });
         return ai.models.generateContent({
-          model: model || 'gemini-3-pro-preview',
+          model: model || 'gemini-2.5-flash',
           contents: repairContents,
-          config: { ...config, responseMimeType: 'application/json', maxOutputTokens: 1400 },
+          config: { ...config, responseMimeType: 'application/json', responseSchema, maxOutputTokens: 1400, temperature: 0 },
         });
       };
 
