@@ -42,6 +42,16 @@ function buildFirstRoutinePrompt(objects: string, style: string) {
   ].join('\n');
 }
 
+function openSpecificIdea(ideaId: string) {
+  if (typeof window === 'undefined' || !ideaId) return;
+  window.dispatchEvent(new CustomEvent('maw:navigate', {
+    detail: {
+      view: 'saved-ideas',
+      primaryId: ideaId,
+    },
+  }));
+}
+
 export default function FirstWinGate({ user, onNavigate, onDismiss }: Props) {
   const dispatch = useAppDispatch();
   const { ideas, shows } = useAppState();
@@ -51,6 +61,8 @@ export default function FirstWinGate({ user, onNavigate, onDismiss }: Props) {
   const [createdIdeaId, setCreatedIdeaId] = useState<string | null>(null);
   const [selectedObjects, setSelectedObjects] = useState('Everyday objects');
   const [selectedStyle, setSelectedStyle] = useState('Visual');
+
+  const busyMessage = `Building your first effect for ${selectedObjects.toLowerCase()} in a ${selectedStyle.toLowerCase()} style…`; 
   const objectOptions = [
     'Cards',
     'Coins',
@@ -110,13 +122,21 @@ export default function FirstWinGate({ user, onNavigate, onDismiss }: Props) {
       <div className="mx-auto max-w-4xl">
         <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] p-6 md:p-8">
           {onDismiss && (
-            <button
-              onClick={onDismiss}
-              aria-label="Close activation screen"
-              className="absolute right-4 top-4 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-black/20 text-white/65 transition hover:bg-white/[0.08] hover:text-white"
-            >
-              ✕
-            </button>
+            <div className="absolute right-4 top-4 z-10 flex items-center gap-2">
+              <button
+                onClick={onDismiss}
+                className="inline-flex items-center rounded-full border border-white/10 bg-black/35 px-3 py-2 text-xs font-medium text-white/80 transition hover:bg-white/[0.08] hover:text-white"
+              >
+                Skip for now
+              </button>
+              <button
+                onClick={onDismiss}
+                aria-label="Close activation screen"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-black/35 text-white/80 transition hover:bg-white/[0.08] hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
           )}
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-purple-500/10 via-transparent to-yellow-500/5" />
           <div className="relative">
@@ -167,7 +187,7 @@ export default function FirstWinGate({ user, onNavigate, onDismiss }: Props) {
                     disabled={busy}
                     className="rounded-2xl border border-yellow-400/30 bg-yellow-500/15 px-4 py-3 text-sm font-semibold text-yellow-50 transition hover:bg-yellow-500/25 disabled:opacity-60"
                   >
-                    ✨ Generate My First Effect
+                    {busy ? 'Working on your effect…' : '✨ Generate My First Effect'}
                   </button>
                   <button
                     onClick={() => onNavigate('show-planner')}
@@ -181,7 +201,7 @@ export default function FirstWinGate({ user, onNavigate, onDismiss }: Props) {
                         onClick={onDismiss}
                         className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-white/80 transition hover:bg-white/[0.06]"
                       >
-                        Close
+                        Close setup
                       </button>
                       <button
                         onClick={onDismiss}
@@ -208,7 +228,7 @@ export default function FirstWinGate({ user, onNavigate, onDismiss }: Props) {
                   </div>
                   <div className="rounded-xl border border-emerald-400/15 bg-emerald-500/10 p-3">
                     <div className="text-white font-medium">What happens next</div>
-                    <div className="mt-1">You’ll get a performance-ready routine with beats, key lines, and stage directions — then it saves automatically to Saved Ideas. You can close this screen any time.</div>
+                    <div className="mt-1">You’ll get a performance-ready routine with beats, key lines, and stage directions — then it saves automatically and opens directly so you can read it right away. You can close this screen any time.</div>
                   </div>
                 </div>
 
@@ -220,8 +240,14 @@ export default function FirstWinGate({ user, onNavigate, onDismiss }: Props) {
 
             {busy && (
               <div className="mt-6 rounded-2xl border border-purple-400/20 bg-purple-500/10 p-4">
-                <p className="text-sm font-semibold text-white">Generating your first professional routine…</p>
-                <p className="mt-1 text-sm text-white/65">This usually takes 10–15 seconds. We’re tailoring it for {selectedObjects.toLowerCase()} in a {selectedStyle.toLowerCase()} style.</p>
+                <div className="flex items-start gap-4">
+                  <div className="mt-0.5 h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-yellow-300" />
+                  <div>
+                    <p className="text-sm font-semibold text-white">Generating your first professional routine…</p>
+                    <p className="mt-1 text-sm text-white/65">This usually takes 10–15 seconds.</p>
+                    <p className="mt-2 text-sm text-yellow-100/90">{busyMessage}</p>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -234,13 +260,13 @@ export default function FirstWinGate({ user, onNavigate, onDismiss }: Props) {
             {createdIdeaId && !busy && (
               <div className="mt-6 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4">
                 <p className="text-sm font-semibold text-emerald-100">🎉 Your first routine is ready — and saved.</p>
-                <p className="mt-1 text-sm text-white/70">Next: edit it, add it to a show, or generate another.</p>
+                <p className="mt-1 text-sm text-white/70">Your routine is ready. Open it now, add it to a show, or generate another.</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button
-                    onClick={() => onNavigate('saved-ideas')}
+                    onClick={() => createdIdeaId && openSpecificIdea(createdIdeaId)}
                     className="rounded-xl border border-emerald-400/25 bg-emerald-500/15 px-3 py-2 text-sm font-medium text-emerald-50 transition hover:bg-emerald-500/25"
                   >
-                    ✏ Open Saved Ideas
+                    ✨ Open My New Effect
                   </button>
                   <button
                     onClick={() => onNavigate('show-planner')}
@@ -259,9 +285,22 @@ export default function FirstWinGate({ user, onNavigate, onDismiss }: Props) {
                       onClick={onDismiss}
                       className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-medium text-white/80 transition hover:bg-white/[0.05]"
                     >
-                      Close
+                      Close setup
                     </button>
                   )}
+                </div>
+              </div>
+            )}
+            {busy && (
+              <div className="absolute inset-0 z-20 flex items-center justify-center rounded-3xl bg-slate-950/45 backdrop-blur-[2px]">
+                <div className="rounded-2xl border border-white/10 bg-slate-950/80 px-5 py-4 shadow-2xl">
+                  <div className="flex items-center gap-3">
+                    <div className="h-7 w-7 animate-spin rounded-full border-2 border-white/20 border-t-yellow-300" />
+                    <div>
+                      <div className="text-sm font-semibold text-white">Magic AI Wizard is building your effect</div>
+                      <div className="text-xs text-white/65">Please keep this window open for a moment.</div>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
