@@ -9,6 +9,7 @@ import { trackClientEvent } from '../services/telemetryClient';
 import { DIRECTOR_MODE_SYSTEM_INSTRUCTION, MAGIC_DICTIONARY_TERMS } from '../constants';
 import type { DirectorModeBlueprint } from '../types';
 import { WandIcon, SaveIcon, CheckIcon, ChecklistIcon } from './icons';
+import { generateStructuredResponse } from '../services/geminiService';
 
 
 interface DirectorModeProps {
@@ -149,9 +150,14 @@ const blueprintToOutline = (bp: DirectorModeBlueprint, opts?: { fullDetail?: boo
                 ? ((seg as any).beats as string[]).filter(Boolean)
                 : t.beats;
             const audienceMoment = (seg as any).audience_moment || t.audienceMoment;
+            const objective = (seg as any).segment_objective;
+            const experience = (seg as any).audience_experience;
+            const performance = (seg as any).performance_details;
             const volunteer = (seg as any).volunteer_management || t.volunteer;
             const patter = (seg as any).patter_hook || t.patter;
             const blocking = (seg as any).blocking_notes;
+            const psychology = (seg as any).psychology_notes;
+            const contingency = (seg as any).contingency_plan;
             const music = (seg as any).music_lighting;
 
             if (beats.length) {
@@ -159,12 +165,32 @@ const blueprintToOutline = (bp: DirectorModeBlueprint, opts?: { fullDetail?: boo
                 beats.slice(0, 6).forEach((b) => lines.push(`• ${b}`));
                 lines.push('');
             }
+            if (objective) {
+                lines.push(`Segment objective: ${objective}`);
+                lines.push('');
+            }
+            if (experience) {
+                lines.push(`Audience experience: ${experience}`);
+                lines.push('');
+            }
+            if (performance) {
+                lines.push(`Performance details: ${performance}`);
+                lines.push('');
+            }
             if (audienceMoment) {
                 lines.push(`Audience moment: ${audienceMoment}`);
                 lines.push('');
             }
+            if (psychology) {
+                lines.push(`Psychology: ${psychology}`);
+                lines.push('');
+            }
             if (volunteer) {
                 lines.push(`Volunteer management: ${volunteer}`);
+                lines.push('');
+            }
+            if (contingency) {
+                lines.push(`Contingency plan: ${contingency}`);
                 lines.push('');
             }
             if (patter) {
@@ -183,112 +209,6 @@ const blueprintToOutline = (bp: DirectorModeBlueprint, opts?: { fullDetail?: boo
     });
 
     return lines.join('\n');
-};
-
-
-const normalizeDirectorText = (value: unknown, fallback = ''): string => {
-    if (typeof value === 'string') return value.trim();
-    if (value == null) return fallback;
-    return String(value).trim();
-};
-
-const normalizeDirectorNumber = (value: unknown, fallback = 0): number => {
-    const n = Number(value);
-    return Number.isFinite(n) ? n : fallback;
-};
-
-const normalizeDirectorStringArray = (value: unknown): string[] => {
-    if (!Array.isArray(value)) return [];
-    return value.map((item) => normalizeDirectorText(item)).filter(Boolean);
-};
-
-const normalizeDirectorBlueprint = (
-    raw: any,
-    opts: { speedMode: 'fast' | 'full'; fallbackShowLength: number; fallbackTitle?: string; fallbackAudience?: string; fallbackVenue?: string; fallbackTone?: string; fallbackPersona?: string; }
-): DirectorModeBlueprint => {
-    const normalizedShowLength = Math.max(1, normalizeDirectorNumber(raw?.show_length_minutes, opts.fallbackShowLength || 30));
-    const segments = Array.isArray(raw?.segments) ? raw.segments : [];
-    const normalizedSegments = segments.map((seg: any) => ({
-        title: normalizeDirectorText(seg?.title, 'Untitled Segment'),
-        purpose: normalizeDirectorText(seg?.purpose, 'middle'),
-        duration_estimate_minutes: Math.max(1, normalizeDirectorNumber(seg?.duration_estimate_minutes, 1)),
-        audience_interaction_level: normalizeDirectorText(seg?.audience_interaction_level, 'medium').toLowerCase(),
-        props_required: normalizeDirectorStringArray(seg?.props_required),
-        transition_notes: normalizeDirectorText(seg?.transition_notes, 'Keep the pacing smooth into the next effect.'),
-        ...(opts.speedMode === 'full' ? {
-            beats: normalizeDirectorStringArray(seg?.beats).slice(0, 6),
-            patter_hook: normalizeDirectorText(seg?.patter_hook),
-            blocking_notes: normalizeDirectorText(seg?.blocking_notes),
-            volunteer_management: normalizeDirectorText(seg?.volunteer_management),
-            music_lighting: normalizeDirectorText(seg?.music_lighting),
-        } : {}),
-    }));
-
-    return {
-        show_title: normalizeDirectorText(raw?.show_title, opts.fallbackTitle || 'Untitled Show'),
-        show_length_minutes: normalizedShowLength,
-        audience_type: normalizeDirectorText(raw?.audience_type, opts.fallbackAudience || 'General audience'),
-        venue_type: normalizeDirectorText(raw?.venue_type, opts.fallbackVenue || 'General venue'),
-        tone: normalizeDirectorText(raw?.tone, opts.fallbackTone || 'Balanced'),
-        performer_persona: normalizeDirectorText(raw?.performer_persona, opts.fallbackPersona || 'Confident magician'),
-        constraints: {
-            props_owned: normalizeDirectorStringArray(raw?.constraints?.props_owned),
-            reset_time: normalizeDirectorText(raw?.constraints?.reset_time),
-            skill_level: normalizeDirectorText(raw?.constraints?.skill_level),
-            notes: normalizeDirectorText(raw?.constraints?.notes),
-        },
-        segments: normalizedSegments,
-    } as DirectorModeBlueprint;
-};
-
-const requestDirectorBlueprint = async (args: {
-    prompt: string;
-    systemInstruction: string;
-    responseSchema: any;
-    maxOutputTokens: number;
-    speedMode: 'fast' | 'full';
-    fallbackShowLength: number;
-    fallbackTitle?: string;
-    fallbackAudience?: string;
-    fallbackVenue?: string;
-    fallbackTone?: string;
-    fallbackPersona?: string;
-}): Promise<DirectorModeBlueprint> => {
-    const response = await fetch(`/api/ai/json?ts=${Date.now()}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            messages: [{ role: 'user', content: args.prompt }],
-            config: {
-                systemInstruction: args.systemInstruction,
-                responseSchema: args.responseSchema,
-                maxOutputTokens: args.maxOutputTokens,
-            },
-        }),
-    });
-
-    let payload: any = null;
-    try {
-        payload = await response.json();
-    } catch {
-        payload = null;
-    }
-
-    if (!response.ok || payload?.ok === false) {
-        const msg = payload?.message || payload?.error || `Director request failed (${response.status})`;
-        throw new Error(String(msg));
-    }
-
-    const parsed = payload?.json ?? payload?.data?.json ?? payload?.data ?? payload;
-    return normalizeDirectorBlueprint(parsed, {
-        speedMode: args.speedMode,
-        fallbackShowLength: args.fallbackShowLength,
-        fallbackTitle: args.fallbackTitle,
-        fallbackAudience: args.fallbackAudience,
-        fallbackVenue: args.fallbackVenue,
-        fallbackTone: args.fallbackTone,
-        fallbackPersona: args.fallbackPersona,
-    });
 };
 
 
@@ -758,11 +678,16 @@ const dictionaryLinks = useMemo(() => {
         ...baseSegmentSchema,
         properties: {
             ...(baseSegmentSchema as any).properties,
-            beats: { type: Type.ARRAY, items: { type: Type.STRING } },
-            patter_hook: { type: Type.STRING },
-            blocking_notes: { type: Type.STRING },
-            volunteer_management: { type: Type.STRING },
-            music_lighting: { type: Type.STRING },
+            beats: { type: Type.ARRAY, items: { type: Type.STRING }, description: '2-5 concise beat labels or micro-moments for this segment' },
+            segment_objective: { type: Type.STRING, description: '2-4 sentences explaining why this segment exists and what it must accomplish dramatically' },
+            audience_experience: { type: Type.STRING, description: '2-4 sentences describing what the audience should feel, think, and remember during this segment' },
+            performance_details: { type: Type.STRING, description: '3-6 sentences of actionable directing notes including pacing, interaction, staging, and escalation' },
+            patter_hook: { type: Type.STRING, description: '2-4 sentences of opening lines, callback language, or presentational framing' },
+            blocking_notes: { type: Type.STRING, description: '2-4 sentences on movement, positioning, volunteer placement, sightlines, and prop handling' },
+            psychology_notes: { type: Type.STRING, description: '2-4 sentences on tension, attention control, framing, and misdirection strategy without exposure' },
+            volunteer_management: { type: Type.STRING, description: '1-3 sentences on how to select, manage, and release volunteers, or an empty string if not needed' },
+            contingency_plan: { type: Type.STRING, description: '2-4 sentences on how to recover if pacing, props, or audience interaction go off-plan' },
+            music_lighting: { type: Type.STRING, description: '1-3 sentences on soundtrack, silence, cueing, or lighting mood, or an empty string if not needed' },
         },
         // FULL requires the rich fields (volunteer/music can be empty strings if not applicable)
         required: [
@@ -773,9 +698,14 @@ const dictionaryLinks = useMemo(() => {
             'props_required',
             'transition_notes',
             'beats',
+            'segment_objective',
+            'audience_experience',
+            'performance_details',
             'patter_hook',
             'blocking_notes',
+            'psychology_notes',
             'volunteer_management',
+            'contingency_plan',
             'music_lighting',
         ],
     };
@@ -874,15 +804,43 @@ const dictionaryLinks = useMemo(() => {
               : 6;
 
         const speedConstraints = speedMode === 'fast'
-          ? `\nSpeed mode: FAST (demo-optimized)\n- Return EXACTLY 3 segments total: opener, middle, closer (one each).\n- transition_notes: MAX 1 sentence per segment.\n- props_required: MAX 3 items per segment.\n- Keep titles short (<= 6 words).\n- Keep text tight and punchy.\n- IMPORTANT: Do NOT include any extra fields beyond the FAST schema (no beats, patter_hook, blocking_notes, volunteer_management, music_lighting).`
-          : `\nSpeed mode: FULL (richer)\n- Return EXACTLY ${fullSegmentsTarget} segments total (not fewer).\n- Must include exactly 1 opener and 1 closer.\n- All remaining segments must be purpose: middle.\n- Each segment MUST include these FULL-only fields (schema-required):\n  - beats: array of 2–4 short "moments" (strings)\n  - patter_hook: 1–2 sentences\n  - blocking_notes: 1–2 sentences (stage movement / handling)\n  - volunteer_management: short line (or empty string if not needed)\n  - music_lighting: short line (or empty string if not needed)\n- Make purpose STRONGER and more specific (an actionable intent, not generic).\n- transition_notes: 2 sentences (when possible), practical and non-exposure.\n- props_required: keep practical (up to ~6 items when needed).`;
+          ? `
+Speed mode: FAST (demo-optimized)
+- Return EXACTLY 3 segments total: opener, middle, closer (one each).
+- transition_notes: MAX 1 sentence per segment.
+- props_required: MAX 3 items per segment.
+- Keep titles short (<= 6 words).
+- Keep text tight and punchy.
+- IMPORTANT: Do NOT include any extra fields beyond the FAST schema (no beats, patter_hook, blocking_notes, volunteer_management, music_lighting).`
+          : `
+Speed mode: FULL (director-grade, verbose)
+- Return EXACTLY ${fullSegmentsTarget} segments total (not fewer).
+- Must include exactly 1 opener and 1 closer.
+- All remaining segments must be purpose: middle.
+- The blueprint should feel like a real rehearsable production, not a thin outline.
+- Each segment MUST include these FULL-only fields (schema-required):
+  - beats: array of 3–5 short "moments" (strings)
+  - segment_objective: 2–4 sentences on why the segment exists and what it must accomplish
+  - audience_experience: 2–4 sentences on what the audience feels, thinks, and remembers
+  - performance_details: 3–6 sentences of practical directing notes, pacing, interaction, staging, and escalation
+  - patter_hook: 2–4 sentences of spoken framing, callback language, or premise lines
+  - blocking_notes: 2–4 sentences on movement, sightlines, volunteer placement, and prop handling
+  - psychology_notes: 2–4 sentences on tension, attention control, and misdirection framing without exposure
+  - volunteer_management: 1–3 sentences (or empty string if not needed)
+  - contingency_plan: 2–4 sentences for recovery if pacing, props, or interaction go off-plan
+  - music_lighting: 1–3 sentences (or empty string if not needed)
+- transition_notes: write 2–4 sentences, practical and non-exposure, showing exactly how the segment flows into the next one.
+- props_required: keep practical (up to ~6 items when needed).
+- Make every segment varied, specific, and performance-ready.
+- Favor vivid, actionable direction over generic summary lines.`;
 
         const prompt = `
 Please generate a show blueprint in STRICT JSON matching the provided schema.
 IMPORTANT: Keep ALL string values single-line (no raw line breaks). If you must represent a line break, use the literal sequence \\n inside the string.
 
-The blueprint must be practical, stage-ready, and non-exposure (no secrets).
-Keep it structured and concise.
+The blueprint must be practical, stage-ready, non-exposure (no secrets), and rich enough that a performer could rehearse from it.
+Keep it structured, but not thin.
+Write vivid, actionable details inside the JSON fields rather than generic summaries.
 
 Inputs:
 ${titleLine}
@@ -905,24 +863,19 @@ Hard requirements:
 - Sum of duration_estimate_minutes across segments MUST equal show_length_minutes exactly.
 - Use audience_interaction_level: low/medium/high.
 - props_required should be a list of props needed for that segment (can be empty).
-- transition_notes should be short, actionable cues between segments.
+- Do not be vague. Every segment should contain concrete presentational direction.
+- Build variety across the show: contrast energy, intimacy, surprise, and emotional texture.
 ${speedConstraints}
 `;
 try {
           const startedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-          const resultJson = await requestDirectorBlueprint({
+          const resultJson = await generateStructuredResponse(
             prompt,
-            systemInstruction: DIRECTOR_MODE_SYSTEM_INSTRUCTION,
-            responseSchema: speedMode === 'fast' ? directorResponseSchemaFast : directorResponseSchemaFull,
-            maxOutputTokens: speedMode === 'fast' ? 900 : 4096,
-            speedMode,
-            fallbackShowLength: Number(showLength),
-            fallbackTitle: showTitle.trim() || 'Untitled Show',
-            fallbackAudience: computedAudience,
-            fallbackVenue: venueType,
-            fallbackTone: tone || theme || 'Balanced',
-            fallbackPersona: performerPersona,
-          });
+            DIRECTOR_MODE_SYSTEM_INSTRUCTION,
+            speedMode === 'fast' ? directorResponseSchemaFast : directorResponseSchemaFull,
+            undefined,
+            { maxOutputTokens: speedMode === 'fast' ? 900 : 4096, speedMode }
+          );
           const endedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
           const elapsedMs = Math.max(0, Math.round((endedAt as number) - (startedAt as number)));
           setGenTimingMs(prev => ({ ...prev, [speedMode]: elapsedMs } as any));
@@ -1246,8 +1199,35 @@ try {
               : 6;
 
         const speedConstraints = speedMode === 'fast'
-          ? `\nSpeed mode: FAST (demo-optimized)\n- Return EXACTLY 3 segments total: opener, middle, closer (one each).\n- transition_notes: MAX 1 sentence per segment.\n- props_required: MAX 3 items per segment.\n- Keep titles short (<= 6 words).\n- Keep text tight and punchy.\n- IMPORTANT: Do NOT include any extra fields beyond the FAST schema (no beats, patter_hook, blocking_notes, volunteer_management, music_lighting).`
-          : `\nSpeed mode: FULL (richer)\n- Return EXACTLY ${fullSegmentsTarget} segments total (not fewer).\n- Must include exactly 1 opener and 1 closer.\n- All remaining segments must be purpose: middle.\n- Each segment MUST include these FULL-only fields (schema-required):\n  - beats: array of 2–4 short "moments" (strings)\n  - patter_hook: 1–2 sentences\n  - blocking_notes: 1–2 sentences (stage movement / handling)\n  - volunteer_management: short line (or empty string if not needed)\n  - music_lighting: short line (or empty string if not needed)\n- Make purpose STRONGER and more specific (an actionable intent, not generic).\n- transition_notes: 2 sentences (when possible), practical and non-exposure.\n- props_required: keep practical (up to ~6 items when needed).`;
+          ? `
+Speed mode: FAST (demo-optimized)
+- Return EXACTLY 3 segments total: opener, middle, closer (one each).
+- transition_notes: MAX 1 sentence per segment.
+- props_required: MAX 3 items per segment.
+- Keep titles short (<= 6 words).
+- Keep text tight and punchy.
+- IMPORTANT: Do NOT include any extra fields beyond the FAST schema (no beats, patter_hook, blocking_notes, volunteer_management, music_lighting).`
+          : `
+Speed mode: FULL (director-grade, verbose)
+- Return EXACTLY ${fullSegmentsTarget} segments total (not fewer).
+- Must include exactly 1 opener and 1 closer.
+- All remaining segments must be purpose: middle.
+- The blueprint should feel like a real rehearsable production, not a thin outline.
+- Each segment MUST include these FULL-only fields (schema-required):
+  - beats: array of 3–5 short "moments" (strings)
+  - segment_objective: 2–4 sentences on why the segment exists and what it must accomplish
+  - audience_experience: 2–4 sentences on what the audience feels, thinks, and remembers
+  - performance_details: 3–6 sentences of practical directing notes, pacing, interaction, staging, and escalation
+  - patter_hook: 2–4 sentences of spoken framing, callback language, or premise lines
+  - blocking_notes: 2–4 sentences on movement, sightlines, volunteer placement, and prop handling
+  - psychology_notes: 2–4 sentences on tension, attention control, and misdirection framing without exposure
+  - volunteer_management: 1–3 sentences (or empty string if not needed)
+  - contingency_plan: 2–4 sentences for recovery if pacing, props, or interaction go off-plan
+  - music_lighting: 1–3 sentences (or empty string if not needed)
+- transition_notes: write 2–4 sentences, practical and non-exposure, showing exactly how the segment flows into the next one.
+- props_required: keep practical (up to ~6 items when needed).
+- Make every segment varied, specific, and performance-ready.
+- Favor vivid, actionable direction over generic summary lines.`;
 
         const refinePrompt = `
 You are refining an EXISTING show blueprint.
@@ -1269,19 +1249,13 @@ ${speedConstraints}
 `;
         try {
             const startedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-            const resultJson = await requestDirectorBlueprint({
-                prompt: refinePrompt,
-                systemInstruction: DIRECTOR_MODE_SYSTEM_INSTRUCTION,
-                responseSchema: speedMode === 'fast' ? directorResponseSchemaFast : directorResponseSchemaFull,
-                maxOutputTokens: speedMode === 'fast' ? 900 : 4096,
-                speedMode,
-                fallbackShowLength: Number(showLength),
-                fallbackTitle: showTitle.trim() || active?.show_title || 'Untitled Show',
-                fallbackAudience: computedAudience || active?.audience_type,
-                fallbackVenue: venueType || active?.venue_type,
-                fallbackTone: tone || theme || active?.tone || 'Balanced',
-                fallbackPersona: performerPersona || active?.performer_persona,
-            });
+            const resultJson = await generateStructuredResponse(
+                refinePrompt,
+                DIRECTOR_MODE_SYSTEM_INSTRUCTION,
+                speedMode === 'fast' ? directorResponseSchemaFast : directorResponseSchemaFull,
+                undefined,
+                { maxOutputTokens: speedMode === 'fast' ? 900 : 4096, speedMode }
+            );
             const next = resultJson as DirectorModeBlueprint;
             const vId = makeId();
             const diffHint = computeDiffHint(active, next, instruction);
@@ -1927,9 +1901,14 @@ ${speedConstraints}
                                                                 {Array.isArray(seg.beats) && seg.beats.length ? (
                                                                     <p><span className="text-slate-500">Beats:</span> {seg.beats.join(' • ')}</p>
                                                                 ) : null}
+                                                                {seg.segment_objective ? <p><span className="text-slate-500">Objective:</span> {seg.segment_objective}</p> : null}
+                                                                {seg.audience_experience ? <p><span className="text-slate-500">Audience experience:</span> {seg.audience_experience}</p> : null}
+                                                                {seg.performance_details ? <p><span className="text-slate-500">Performance details:</span> {seg.performance_details}</p> : null}
                                                                 {seg.patter_hook ? <p><span className="text-slate-500">Patter hook:</span> {seg.patter_hook}</p> : null}
                                                                 {seg.blocking_notes ? <p><span className="text-slate-500">Blocking:</span> {seg.blocking_notes}</p> : null}
+                                                                {seg.psychology_notes ? <p><span className="text-slate-500">Psychology:</span> {seg.psychology_notes}</p> : null}
                                                                 {seg.volunteer_management ? <p><span className="text-slate-500">Volunteer:</span> {seg.volunteer_management}</p> : null}
+                                                                {seg.contingency_plan ? <p><span className="text-slate-500">Contingency:</span> {seg.contingency_plan}</p> : null}
                                                                 {seg.music_lighting ? <p><span className="text-slate-500">Music/lighting:</span> {seg.music_lighting}</p> : null}
                                                             </div>
                                                         ) : null}
