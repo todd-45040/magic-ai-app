@@ -849,7 +849,7 @@ const IdentifyTab: React.FC<{
     lastRefine: string | null;
     onRequestUpgrade: () => void;
     onReset: () => void;
-}> = ({ imagePreview, identificationResult, isIdentifying, identificationError, identificationBlocked, identifySaved, identifySaving, identifyIsStrong, fileInputRef, handleImageUpload, handleIdentifyClick, onSave, onAddToShow, onConvertToTask, onCopy, onShare, onToggleStrong, onRefine, refining, lastRefine, onRequestUpgrade, onReset }) => (
+}> = ({ identifyInputNonce, imagePreview, identificationResult, isIdentifying, identificationError, identificationBlocked, identifySaved, identifySaving, identifyIsStrong, fileInputRef, handleImageUpload, handleIdentifyClick, onSave, onAddToShow, onConvertToTask, onCopy, onShare, onToggleStrong, onRefine, refining, lastRefine, onRequestUpgrade, onReset }) => (
     <div className="flex-1 overflow-y-auto p-4 md:p-6">
         <div className="animate-fade-in max-w-2xl mx-auto">
             <h2 className="text-xl font-bold text-slate-300 leading-tight">Identify a Trick</h2>
