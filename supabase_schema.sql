@@ -1,7 +1,17 @@
--- Magic AI Wizard (Supabase) - minimal schema
--- Run these in the Supabase SQL editor.
+-- Magic AI Wizard (Supabase) - bootstrap schema only
+--
+-- IMPORTANT:
+-- This file is no longer the complete production schema for the app.
+-- It remains as a minimal bootstrap reference for the earliest local/dev tables.
+--
+-- For the current operational schema map, see:
+--   docs/SUPABASE_SCHEMA_CURRENT.md
+-- and the phase/migration SQL files under:
+--   /supabase
+--   /supabase/migrations
+--
+-- Run these in the Supabase SQL editor only when you want the minimal bootstrap layer.
 
--- 1) Users profile table
 create table if not exists public.users (
   id uuid primary key references auth.users (id) on delete cascade,
   email text unique,

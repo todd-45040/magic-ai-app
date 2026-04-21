@@ -1,10 +1,5 @@
-import { supabase } from '../supabase';
+import { adminJson } from './adminApi';
 import { snapAdminWindowDays } from '../utils/adminMetrics';
-
-async function getAccessToken(): Promise<string | null> {
-  const { data } = await supabase.auth.getSession();
-  return data.session?.access_token ?? null;
-}
 
 export type WatchlistResponse = {
   window: any;
@@ -14,23 +9,9 @@ export type WatchlistResponse = {
 };
 
 export async function fetchAdminWatchlist(params: { days?: number } = {}): Promise<WatchlistResponse> {
-  const token = await getAccessToken();
-  if (!token) throw new Error('Not authenticated');
-
   const qs = new URLSearchParams();
   if (params.days != null) qs.set('days', String(snapAdminWindowDays(params.days, 7)));
-
-  const r = await fetch(`/api/adminWatchlist?${qs.toString()}`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok || !j?.ok) throw new Error(j?.error || 'Failed to load watchlist');
-  return j as WatchlistResponse;
+  return adminJson<WatchlistResponse>(`/api/adminWatchlist?${qs.toString()}`, {}, 'Failed to load watchlist');
 }
 
 export type OpsNoteRow = {
@@ -44,41 +25,23 @@ export type OpsNoteRow = {
 
 export async function fetchAdminOpsNotes(params: { entity_type: string; entity_id: string; limit?: number }):
   Promise<{ ok: true; notes: OpsNoteRow[] } | { ok: false; error: string }> {
-  const token = await getAccessToken();
-  if (!token) throw new Error('Not authenticated');
-
   const qs = new URLSearchParams();
   qs.set('entity_type', params.entity_type);
   qs.set('entity_id', params.entity_id);
   if (params.limit != null) qs.set('limit', String(params.limit));
 
-  const r = await fetch(`/api/adminOpsNotes?${qs.toString()}`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  const j = await r.json().catch(() => ({}));
-  // This endpoint may return ok:false if the table isn't installed yet.
-  return j;
+  try {
+    return await adminJson<{ ok: true; notes: OpsNoteRow[] }>(`/api/adminOpsNotes?${qs.toString()}`, {}, 'Failed to load ops notes');
+  } catch (error: any) {
+    return { ok: false, error: error?.message || 'Failed to load ops notes' };
+  }
 }
 
 export async function addAdminOpsNote(payload: { entity_type: string; entity_id: string; note: string }):
   Promise<{ ok: true; note: OpsNoteRow } | { ok: false; error: string }> {
-  const token = await getAccessToken();
-  if (!token) throw new Error('Not authenticated');
-
-  const r = await fetch(`/api/adminOpsNotes`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(payload),
-  });
-
-  const j = await r.json().catch(() => ({}));
-  return j;
+  try {
+    return await adminJson<{ ok: true; note: OpsNoteRow }>(`/api/adminOpsNotes`, { method: 'POST', body: JSON.stringify(payload) }, 'Failed to add ops note');
+  } catch (error: any) {
+    return { ok: false, error: error?.message || 'Failed to add ops note' };
+  }
 }

@@ -1,4 +1,4 @@
-import { supabase } from '../supabase';
+import { adminJson } from './adminApi';
 
 export type AdminAIProvider = 'gemini' | 'openai' | 'anthropic';
 
@@ -78,60 +78,18 @@ export interface AdminEnvSanity {
   };
 }
 
-async function getAccessToken(): Promise<string | null> {
-  const { data } = await supabase.auth.getSession();
-  return data.session?.access_token ?? null;
-}
-
 export async function fetchAdminSettings(): Promise<AdminSettings> {
-  const token = await getAccessToken();
-  if (!token) throw new Error('Not authenticated');
-
-  const res = await fetch('/api/adminSettings', {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
-  const text = await res.text();
-  if (!res.ok) throw new Error(text || `Request failed (${res.status})`);
-  return JSON.parse(text) as AdminSettings;
+  return adminJson<AdminSettings>('/api/adminSettings', {}, 'Failed to load admin settings');
 }
 
 export async function saveAdminSettings(settings: AdminSettings): Promise<void> {
-  const token = await getAccessToken();
-  if (!token) throw new Error('Not authenticated');
-
-  const res = await fetch('/api/adminSettings', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify(settings),
-  });
-
-  const text = await res.text();
-  if (!res.ok) throw new Error(text || `Request failed (${res.status})`);
+  await adminJson('/api/adminSettings', { method: 'POST', body: JSON.stringify(settings) }, 'Failed to save admin settings');
 }
 
 export async function fetchAdminAiStatus(): Promise<AdminAiStatus> {
-  const token = await getAccessToken();
-  if (!token) throw new Error('Not authenticated');
-
-  const res = await fetch('/api/adminAiStatus', {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
-  const text = await res.text();
-  if (!res.ok) throw new Error(text || `Request failed (${res.status})`);
-  return JSON.parse(text) as AdminAiStatus;
+  return adminJson<AdminAiStatus>('/api/adminAiStatus', {}, 'Failed to load admin AI status');
 }
 
 export async function fetchAdminEnvSanity(): Promise<AdminEnvSanity> {
-  const token = await getAccessToken();
-  if (!token) throw new Error('Not authenticated');
-
-  const res = await fetch('/api/adminEnvSanity', {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
-  const text = await res.text();
-  if (!res.ok) throw new Error(text || `Request failed (${res.status})`);
-  return JSON.parse(text) as AdminEnvSanity;
+  return adminJson<AdminEnvSanity>('/api/adminEnvSanity', {}, 'Failed to load admin environment sanity');
 }

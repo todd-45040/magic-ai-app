@@ -1,10 +1,5 @@
-import { supabase } from '../supabase';
+import { adminJson } from './adminApi';
 import { snapAdminWindowDays } from '../utils/adminMetrics';
-
-async function getAccessToken(): Promise<string | null> {
-  const { data } = await supabase.auth.getSession();
-  return data.session?.access_token ?? null;
-}
 
 export type AdminUserRow = {
   id: string;
@@ -28,9 +23,6 @@ export async function fetchAdminUsers(params: {
   include_lifetime?: boolean;
   founders_only?: boolean;
 }): Promise<{ window: any; paging: any; users: AdminUserRow[] }> {
-  const token = await getAccessToken();
-  if (!token) throw new Error('Not authenticated');
-
   const qs = new URLSearchParams();
   if (params.plan) qs.set('plan', params.plan);
   if (params.q) qs.set('q', params.q);
@@ -41,15 +33,6 @@ export async function fetchAdminUsers(params: {
   if (params.include_lifetime) qs.set('lifetime', '1');
   if (params.founders_only) qs.set('founders', '1');
 
-  const r = await fetch(`/api/adminUsers?${qs.toString()}`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok || !j?.ok) throw new Error(j?.error || 'Failed to load admin users');
+  const j = await adminJson<any>(`/api/adminUsers?${qs.toString()}`, {}, 'Failed to load admin users');
   return { window: j.window, paging: j.paging, users: j.users };
 }

@@ -1,4 +1,4 @@
-import { supabase } from '../supabase';
+import { adminJson } from './adminApi';
 
 export type AdminAIProvider = 'gemini' | 'openai' | 'anthropic';
 export type AdminAiStatusSource = 'db' | 'env' | 'default';
@@ -58,20 +58,6 @@ export interface AdminAiHealth {
   }>;
 }
 
-async function getAccessToken(): Promise<string | null> {
-  const { data } = await supabase.auth.getSession();
-  return data.session?.access_token ?? null;
-}
-
 export async function fetchAdminAiHealth(days: number): Promise<AdminAiHealth> {
-  const token = await getAccessToken();
-  if (!token) throw new Error('Not authenticated');
-
-  const res = await fetch(`/api/adminAiHealth?days=${encodeURIComponent(String(days))}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
-  const text = await res.text();
-  if (!res.ok) throw new Error(text || `Request failed (${res.status})`);
-  return JSON.parse(text) as AdminAiHealth;
+  return adminJson<AdminAiHealth>(`/api/adminAiHealth?days=${encodeURIComponent(String(days))}`, {}, 'Failed to load admin AI health');
 }

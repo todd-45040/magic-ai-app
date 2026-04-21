@@ -1,4 +1,4 @@
-import { supabase } from '../supabase';
+import { adminJson } from './adminApi';
 
 export type FounderFeedback = {
   id: string;
@@ -15,41 +15,23 @@ export type FounderFeedback = {
   meta: any | null;
 };
 
-async function authHeader(): Promise<Record<string, string>> {
-  const { data } = await supabase.auth.getSession();
-  const token = data?.session?.access_token;
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
 export async function listFounderFeedback(opts?: { limit?: number; status?: 'new' | 'archived' | 'all' }): Promise<FounderFeedback[]> {
   const limit = opts?.limit ?? 200;
   const status = opts?.status ?? 'new';
-  const headers = await authHeader();
-  const res = await fetch(`/api/adminFounderFeedback?limit=${encodeURIComponent(String(limit))}&status=${encodeURIComponent(status)}`, { headers });
-  const json = await res.json();
-  if (!json.ok) throw new Error(json.error || 'Failed to load feedback');
+  const json = await adminJson<any>(`/api/adminFounderFeedback?limit=${encodeURIComponent(String(limit))}&status=${encodeURIComponent(status)}`, {}, 'Failed to load feedback');
   return json.rows as FounderFeedback[];
 }
 
 export async function createFounderFeedback(row: Partial<FounderFeedback> & { from_email: string }): Promise<FounderFeedback> {
-  const headers = { ...(await authHeader()), 'Content-Type': 'application/json' };
-  const res = await fetch('/api/adminFounderFeedback', { method: 'POST', headers, body: JSON.stringify(row) });
-  const json = await res.json();
-  if (!json.ok) throw new Error(json.error || 'Failed to create feedback');
+  const json = await adminJson<any>('/api/adminFounderFeedback', { method: 'POST', body: JSON.stringify(row) }, 'Failed to create feedback');
   return json.row as FounderFeedback;
 }
 
 export async function updateFounderFeedback(id: string, patch: Partial<FounderFeedback>): Promise<FounderFeedback> {
-  const headers = { ...(await authHeader()), 'Content-Type': 'application/json' };
-  const res = await fetch('/api/adminFounderFeedback', { method: 'PATCH', headers, body: JSON.stringify({ id, ...patch }) });
-  const json = await res.json();
-  if (!json.ok) throw new Error(json.error || 'Failed to update feedback');
+  const json = await adminJson<any>('/api/adminFounderFeedback', { method: 'PATCH', body: JSON.stringify({ id, ...patch }) }, 'Failed to update feedback');
   return json.row as FounderFeedback;
 }
 
 export async function deleteFounderFeedback(id: string): Promise<void> {
-  const headers = await authHeader();
-  const res = await fetch(`/api/adminFounderFeedback?id=${encodeURIComponent(id)}`, { method: 'DELETE', headers });
-  const json = await res.json();
-  if (!json.ok) throw new Error(json.error || 'Failed to delete feedback');
+  await adminJson(`/api/adminFounderFeedback?id=${encodeURIComponent(id)}`, { method: 'DELETE' }, 'Failed to delete feedback');
 }

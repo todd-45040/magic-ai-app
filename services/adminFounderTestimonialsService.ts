@@ -1,4 +1,4 @@
-import { supabase } from '../supabase';
+import { adminJson } from './adminApi';
 
 export type FounderTestimonial = {
   id: string;
@@ -14,51 +14,25 @@ export type FounderTestimonial = {
   featured_at: string | null;
 };
 
-async function authHeaders() {
-  const { data } = await supabase.auth.getSession();
-  const token = data?.session?.access_token;
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
 export async function fetchFounderTestimonials(params?: { limit?: number; published?: 'all' | 'true' | 'false' }) {
-  const headers = await authHeaders();
   const qs = new URLSearchParams();
   if (params?.limit) qs.set('limit', String(params.limit));
   if (params?.published && params.published !== 'all') qs.set('published', params.published);
 
-  const r = await fetch(`/api/adminFounderTestimonials?${qs.toString()}`, { headers });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok || !j?.ok) throw new Error(j?.error || `Request failed (${r.status})`);
+  const j = await adminJson<any>(`/api/adminFounderTestimonials?${qs.toString()}`, {}, 'Failed to load founder testimonials');
   return (j.testimonials || []) as FounderTestimonial[];
 }
 
 export async function createFounderTestimonial(input: Partial<FounderTestimonial>) {
-  const headers = await authHeaders();
-  const r = await fetch('/api/adminFounderTestimonials', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...headers },
-    body: JSON.stringify(input),
-  });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok || !j?.ok) throw new Error(j?.error || `Request failed (${r.status})`);
+  const j = await adminJson<any>('/api/adminFounderTestimonials', { method: 'POST', body: JSON.stringify(input) }, 'Failed to create founder testimonial');
   return String(j.id || '');
 }
 
 export async function updateFounderTestimonial(id: string, patch: Partial<FounderTestimonial>) {
-  const headers = await authHeaders();
-  const r = await fetch('/api/adminFounderTestimonials', {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...headers },
-    body: JSON.stringify({ id, ...patch }),
-  });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok || !j?.ok) throw new Error(j?.error || `Request failed (${r.status})`);
+  await adminJson('/api/adminFounderTestimonials', { method: 'PATCH', body: JSON.stringify({ id, ...patch }) }, 'Failed to update founder testimonial');
 }
 
 export async function deleteFounderTestimonial(id: string) {
-  const headers = await authHeaders();
   const qs = new URLSearchParams({ id });
-  const r = await fetch(`/api/adminFounderTestimonials?${qs.toString()}`, { method: 'DELETE', headers });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok || !j?.ok) throw new Error(j?.error || `Request failed (${r.status})`);
+  await adminJson(`/api/adminFounderTestimonials?${qs.toString()}`, { method: 'DELETE' }, 'Failed to delete founder testimonial');
 }
