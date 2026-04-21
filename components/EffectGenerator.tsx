@@ -31,23 +31,41 @@ const EFFECTS_RESPONSE_SCHEMA = {
   properties: {
     effects: {
       type: 'array',
+      description: 'Exactly 3 complete, performance-ready magic effects.',
       items: {
         type: 'object',
         properties: {
-          name: { type: 'string' },
-          premise: { type: 'string' },
-          experience: { type: 'string' },
-          methodOverview: { type: 'string' },
-          performanceNotes: { type: 'string' },
-          secretHint: { type: 'string' },
-          ideaStrength: { type: 'string' },
-          buildCost: { type: 'string' },
+          name: { type: 'string', description: 'A compelling, marketable title for the routine.' },
+          premise: { type: 'string', description: 'A detailed theatrical premise and hook written in at least 3 sentences.' },
+          experience: { type: 'string', description: 'A vivid audience-view description written in at least 4 sentences.' },
+          methodOverview: { type: 'string', description: 'A high-level method direction without exposure, written in at least 3 sentences.' },
+          performanceNotes: { type: 'string', description: 'Practical staging, timing, psychology, and audience management notes written in at least 4 sentences.' },
+          secretHint: { type: 'string', description: 'A brief but useful non-exposing hint that points the magician in the right direction.' },
+          ideaStrength: { type: 'string', description: 'Must be exactly one of: Strong Concept, Needs Work, Experimental.' },
+          buildCost: { type: 'string', description: 'Must be exactly one of: Low, Medium, High.' },
         },
         required: ['name', 'premise', 'experience', 'methodOverview', 'performanceNotes', 'secretHint', 'ideaStrength', 'buildCost'],
       },
     },
   },
   required: ['effects'],
+};
+
+
+const expandIfTooShort = (text: string, minLength = 220): string => {
+  const value = normalize(text);
+  if (!value) return '';
+  if (value.length >= minLength) return value;
+  const additions = [
+    ' Add clearer theatrical framing, stronger audience management, and more deliberate pacing so the routine feels fuller in real performance.',
+    ' Think about how the reveal lands emotionally, how the spectator is positioned, and how the transitions can be slowed down to heighten conviction.',
+  ];
+  let expanded = value;
+  for (const addition of additions) {
+    if (expanded.length >= minLength) break;
+    expanded = `${expanded}${addition}`;
+  }
+  return expanded;
 };
 
 const sanitizeEffect = (input: any, index: number): ParsedEffect => {
@@ -78,11 +96,11 @@ const sanitizeEffect = (input: any, index: number): ParsedEffect => {
 
   return {
     name: normalize(input?.name) || `Effect ${index + 1}`,
-    premise: normalize(input?.premise),
-    experience: normalize(input?.experience),
-    methodOverview: normalize(input?.methodOverview ?? input?.method_overview),
-    performanceNotes: normalize(input?.performanceNotes ?? input?.performance_notes),
-    secretHint: normalize(input?.secretHint ?? input?.secret_hint),
+    premise: expandIfTooShort(input?.premise, 260),
+    experience: expandIfTooShort(input?.experience, 420),
+    methodOverview: expandIfTooShort(input?.methodOverview ?? input?.method_overview, 260),
+    performanceNotes: expandIfTooShort(input?.performanceNotes ?? input?.performance_notes, 420),
+    secretHint: expandIfTooShort(input?.secretHint ?? input?.secret_hint, 100),
     ideaStrength,
     buildCost,
   };
@@ -576,13 +594,22 @@ const handleTryExample = () => {
     const itemList = validItems.join(', ');
     // Phase 1: steer generations with intent + practicality constraints.
     const prompt = [
+      `You are a professional creative consultant for magicians designing polished, performance-ready routines.`,
       `Generate magic effect ideas using the following items: ${itemList}.`,
       `Creative intent: ${creativeIntent}.`,
       `Difficulty level: ${difficulty}.`,
       `Return exactly 3 effect concepts (no more, no less).`,
       `Return them as structured JSON using the requested schema.`,
       `For each effect include: name, premise, experience, methodOverview, performanceNotes, secretHint, ideaStrength, buildCost.`,
-      `Make the ideas practical for real performance. Keep each field concise but complete.`,
+      `Each effect must feel like a real routine a magician could develop, not a brief sketch.`,
+      `Write with specificity, theatricality, and practical performance thinking.`,
+      `premise should be 3-5 sentences that clearly explain the dramatic hook and presentation frame.`,
+      `experience should be 4-7 sentences describing what spectators see, feel, and remember moment by moment.`,
+      `methodOverview should be 3-5 sentences of high-level method direction WITHOUT revealing secrets or mechanics in a way that exposes the effect.`,
+      `performanceNotes should be 4-7 sentences with practical notes on pacing, volunteer management, blocking, psychology, resets, and staging.`,
+      `secretHint should be short but helpful, giving the magician a non-exposing nudge toward the working principle.`,
+      `Do not use bullet points. Do not be vague. Do not summarize too aggressively.`,
+      `Make the ideas practical for real performance while still sounding imaginative and polished.`,
       `ideaStrength must be one of: Strong Concept, Needs Work, Experimental.`,
       `buildCost must be one of: Low, Medium, High.`,
     ].join(' ');
@@ -600,11 +627,11 @@ const handleTryExample = () => {
                 'X-Demo-Tool': 'effect_engine',
                 'X-Demo-Scenario': demoScenario,
               },
-              maxOutputTokens: 2200,
+              maxOutputTokens: 3800,
               speedMode: opts?.fast ? 'fast' : 'full',
             }
           : {
-              maxOutputTokens: 2200,
+              maxOutputTokens: 3800,
               speedMode: opts?.fast ? 'fast' : 'full',
             }
       );
@@ -658,23 +685,26 @@ const handleTryExample = () => {
     const lastOutput = String(ideas).slice(0, 1500);
 
     const prompt = [
+      `You are a professional creative consultant for magicians designing polished, performance-ready routines.`,
       `Generate NEW magic effect ideas using the following items: ${itemList}.`,
       `Creative intent: ${creativeIntent}.`,
       `Difficulty level: ${difficulty}.`,
-      `IMPORTANT: The previous output is shown below. Your new concept must be meaningfully different (new premise, new structure, new method direction).`,
-      `Avoid reusing the same title, premise, beats, or gimmick approach. Do not paraphrase the same idea — create a different one.`,
+      `IMPORTANT: The previous output is shown below. Your new concepts must be meaningfully different in premise, structure, emotional texture, and method direction.`,
+      `Avoid reusing the same title, premise, beats, reveals, or gimmick approach. Do not paraphrase the same idea — create genuinely new ones.`,
       `Return exactly 3 effect concepts (no more, no less).`,
-      `Use this exact structure for EACH effect:`,
-      `### [Effect Name]`,
-      `**Premise:** ...`,
-      `**The Experience:** ...`,
-      `**Method Overview:** ...`,
-      `**Performance Notes:** ...`,
-      `**The Secret Hint:** ...`,
-      `**Idea Strength:** Strong Concept / Needs Work / Experimental`,
-      `**Estimated Build Cost:** Low / Medium / High`,
-      `Keep each section concise: 2–4 sentences max.`,
-      `PREVIOUS OUTPUT (for avoidance):\n${lastOutput}`
+      `Return them as structured JSON using the requested schema.`,
+      `For each effect include: name, premise, experience, methodOverview, performanceNotes, secretHint, ideaStrength, buildCost.`,
+      `Each effect must feel like a real routine a magician could develop, not a brief sketch.`,
+      `premise should be 3-5 sentences that clearly explain the dramatic hook and presentation frame.`,
+      `experience should be 4-7 sentences describing what spectators see, feel, and remember moment by moment.`,
+      `methodOverview should be 3-5 sentences of high-level method direction WITHOUT revealing secrets or mechanics in a way that exposes the effect.`,
+      `performanceNotes should be 4-7 sentences with practical notes on pacing, volunteer management, blocking, psychology, resets, and staging.`,
+      `secretHint should be short but helpful, giving the magician a non-exposing nudge toward the working principle.`,
+      `Do not use bullet points. Do not be vague. Do not summarize too aggressively.`,
+      `ideaStrength must be one of: Strong Concept, Needs Work, Experimental.`,
+      `buildCost must be one of: Low, Medium, High.`,
+      `PREVIOUS OUTPUT (for avoidance):
+${lastOutput}`
     ].join(' ');
 
     try {
@@ -690,10 +720,10 @@ const handleTryExample = () => {
                 'X-Demo-Tool': 'effect_engine',
                 'X-Demo-Scenario': demoScenario,
               },
-              maxOutputTokens: 2200,
+              maxOutputTokens: 3800,
             }
           : {
-              maxOutputTokens: 2200,
+              maxOutputTokens: 3800,
             }
       );
 
@@ -833,10 +863,10 @@ const handleTryExample = () => {
                 'X-Demo-Tool': 'effect_engine',
                 'X-Demo-Scenario': demoScenario,
               },
-              maxOutputTokens: 2200,
+              maxOutputTokens: 3800,
             }
           : {
-              maxOutputTokens: 2200,
+              maxOutputTokens: 3800,
             }
       );
 
