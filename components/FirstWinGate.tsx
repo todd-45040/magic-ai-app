@@ -1,9 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { User } from '../types';
 import { generateResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
 import { refreshAllData, useAppDispatch, useAppState } from '../store';
 import ActivationProgress from './ActivationProgress';
+import { logEvent } from '../services/analyticsService';
 
 type Props = {
   user?: User | null;
@@ -61,6 +62,10 @@ export default function FirstWinGate({ user, onNavigate, onDismiss }: Props) {
   const [createdIdeaId, setCreatedIdeaId] = useState<string | null>(null);
   const [selectedObjects, setSelectedObjects] = useState('Everyday objects');
   const [selectedStyle, setSelectedStyle] = useState('Visual');
+  const hasLoggedViewRef = useRef(false);
+  const hasStartedRef = useRef(false);
+  const hasLoggedFirstIdeaSavedRef = useRef(false);
+  const hasLoggedActivationCompletedRef = useRef(false);
 
   const busyMessage = `Building your first effect for ${selectedObjects.toLowerCase()} in a ${selectedStyle.toLowerCase()} style…`; 
   const objectOptions = [
@@ -83,15 +88,53 @@ export default function FirstWinGate({ user, onNavigate, onDismiss }: Props) {
 
   const hasActivated = useMemo(() => (ideas?.length ?? 0) > 0 || (shows?.length ?? 0) > 0, [ideas, shows]);
 
+  useEffect(() => {
+    if (hasLoggedViewRef.current) return;
+    hasLoggedViewRef.current = true;
+    void logEvent('activation_viewed');
+  }, []);
+
+  const logActivationStarted = () => {
+    if (hasStartedRef.current) return;
+    hasStartedRef.current = true;
+    void logEvent('activation_started', {
+      magic_type: selectedObjects,
+      style: selectedStyle,
+    });
+  };
+
+  const handleDismiss = () => {
+    void logEvent('activation_skipped', {
+      magic_type: selectedObjects,
+      style: selectedStyle,
+      created_idea_id: createdIdeaId,
+    });
+    onDismiss?.();
+  };
+
   const runFirstRoutine = async () => {
+    logActivationStarted();
+    void logEvent('activation_generate_clicked', {
+      magic_type: selectedObjects,
+      style: selectedStyle,
+    });
+
     setError(null);
     setBusy(true);
+    const startedAt = Date.now();
+
     try {
       const prompt = buildFirstRoutinePrompt(selectedObjects, selectedStyle);
       const text = await generateResponse(prompt, FIRST_WIN_SYSTEM, user ?? undefined);
       if (!text || String(text).toLowerCase().startsWith('error:')) {
         throw new Error('The AI didn\'t respond this time. Please try again.');
       }
+
+      void logEvent('activation_effect_generated', {
+        magic_type: selectedObjects,
+        style: selectedStyle,
+        duration_ms: Date.now() - startedAt,
+      });
 
       // Critical activation move: auto-save the first routine.
       const saved = await saveIdea({
@@ -101,7 +144,27 @@ export default function FirstWinGate({ user, onNavigate, onDismiss }: Props) {
         tags: ['first-win', selectedObjects.toLowerCase().replace(/[^a-z0-9]+/g, '-'), selectedStyle.toLowerCase().replace(/[^a-z0-9]+/g, '-')],
       } as any);
 
-      setCreatedIdeaId(saved?.id ?? null);
+      const savedIdeaId = saved?.id ?? null;
+      setCreatedIdeaId(savedIdeaId);
+
+      if (savedIdeaId && !hasLoggedFirstIdeaSavedRef.current) {
+        hasLoggedFirstIdeaSavedRef.current = true;
+        void logEvent('first_idea_saved', {
+          idea_id: savedIdeaId,
+          magic_type: selectedObjects,
+          style: selectedStyle,
+        });
+      }
+
+      if (savedIdeaId && !hasLoggedActivationCompletedRef.current) {
+        hasLoggedActivationCompletedRef.current = true;
+        void logEvent('activation_completed', {
+          idea_id: savedIdeaId,
+          magic_type: selectedObjects,
+          style: selectedStyle,
+        });
+      }
+
       await refreshAllData(dispatch);
     } catch (e: any) {
       const msg = String(e?.message ?? 'We’re warming up the magic engine. Try again in a few seconds.');
@@ -124,13 +187,13 @@ export default function FirstWinGate({ user, onNavigate, onDismiss }: Props) {
           {onDismiss && (
             <div className="absolute right-4 top-4 z-10 flex items-center gap-2">
               <button
-                onClick={onDismiss}
+                onClick={handleDismiss}
                 className="inline-flex items-center rounded-full border border-white/10 bg-black/35 px-3 py-2 text-xs font-medium text-white/80 transition hover:bg-white/[0.08] hover:text-white"
               >
                 Skip for now
               </button>
               <button
-                onClick={onDismiss}
+                onClick={handleDismiss}
                 aria-label="Close activation screen"
                 className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-black/35 text-white/80 transition hover:bg-white/[0.08] hover:text-white"
               >
@@ -159,7 +222,10 @@ export default function FirstWinGate({ user, onNavigate, onDismiss }: Props) {
                   {objectOptions.map((option) => (
                     <button
                       key={option}
-                      onClick={() => setSelectedObjects(option)}
+                      onClick={() => {
+                        logActivationStarted();
+                        setSelectedObjects(option);
+                      }}
                       className={`rounded-full border px-3 py-2 text-sm transition ${selectedObjects === option ? 'border-yellow-400/40 bg-yellow-500/15 text-yellow-50' : 'border-white/10 bg-white/[0.03] text-white/75 hover:bg-white/[0.06] hover:text-white'}`}
                     >
                       {option}
@@ -173,7 +239,10 @@ export default function FirstWinGate({ user, onNavigate, onDismiss }: Props) {
                   {styleOptions.map((option) => (
                     <button
                       key={option}
-                      onClick={() => setSelectedStyle(option)}
+                      onClick={() => {
+                        logActivationStarted();
+                        setSelectedStyle(option);
+                      }}
                       className={`rounded-full border px-3 py-2 text-sm transition ${selectedStyle === option ? 'border-yellow-400/40 bg-yellow-500/15 text-yellow-50' : 'border-white/10 bg-white/[0.03] text-white/75 hover:bg-white/[0.06] hover:text-white'}`}
                     >
                       {option}
@@ -198,13 +267,13 @@ export default function FirstWinGate({ user, onNavigate, onDismiss }: Props) {
                   {onDismiss && (
                     <>
                       <button
-                        onClick={onDismiss}
+                        onClick={handleDismiss}
                         className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-white/80 transition hover:bg-white/[0.06]"
                       >
                         Close setup
                       </button>
                       <button
-                        onClick={onDismiss}
+                        onClick={handleDismiss}
                         className="rounded-2xl px-2 py-3 text-sm text-white/55 transition hover:text-white"
                       >
                         Not now
@@ -282,7 +351,7 @@ export default function FirstWinGate({ user, onNavigate, onDismiss }: Props) {
                   </button>
                   {onDismiss && (
                     <button
-                      onClick={onDismiss}
+                      onClick={handleDismiss}
                       className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-medium text-white/80 transition hover:bg-white/[0.05]"
                     >
                       Close setup
