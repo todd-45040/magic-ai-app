@@ -393,11 +393,17 @@ async function postJson<T>(
 
 
 function extractText(result: any): string {
-  // SDK usually exposes `.text` (client-side). Your serverless function returns the raw result.
-  if (typeof result?.text === 'string' && result.text.trim()) return result.text;
+  const payload = result?.data ?? result;
+
+  // SDK usually exposes `.text` (client-side). Some provider wrappers also return { text } directly.
+  if (typeof payload?.text === 'string' && payload.text.trim()) return payload.text;
+  if (typeof payload?.response?.text === 'function') {
+    const viaFn = payload.response.text();
+    if (typeof viaFn === 'string' && viaFn.trim()) return viaFn;
+  }
 
   // Try common candidate path
-  const parts = result?.candidates?.[0]?.content?.parts;
+  const parts = payload?.candidates?.[0]?.content?.parts;
   if (Array.isArray(parts)) {
     const joined = parts
       .map((p: any) => p?.text)
@@ -423,13 +429,13 @@ export const generateResponse = async (
   })) || [];
 
   const body: GeminiGenerateBody = {
-    model: 'gemini-3-pro-preview',
+    model: 'gemini-2.5-flash',
     contents: [...apiHistory, { role: 'user', parts: [{ text: prompt }] }],
     config: { systemInstruction },
   };
 
   try {
-    const result = await postJson<any>('/api/ai/chat', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 2 });
+    const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 2 });
     return extractText(result);
   } catch (error: any) {
     console.error('AI Error:', error);
@@ -451,13 +457,13 @@ export const generateResponseWithParts = async (
   })) || [];
 
   const body: GeminiGenerateBody = {
-    model: 'gemini-3-pro-preview',
+    model: 'gemini-2.5-flash',
     contents: [...apiHistory, { role: 'user', parts }],
     config: { systemInstruction },
   };
 
   try {
-    const result = await postJson<any>('/api/ai/chat', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 2 });
+    const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 2 });
     return extractText(result);
   } catch (error: any) {
     console.error('AI Error:', error);
@@ -485,7 +491,7 @@ export const generateStructuredResponse = async (
     },
   };
 
-  const result = await postJson<any>('/api/ai/json', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 2 });
+  const result = await postJson<any>('/api/generate', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 2 });
   const text = extractText(result);
 
   const looksTruncated = (raw: string, errMsg: string) => {
@@ -542,7 +548,7 @@ export const generateStructuredResponse = async (
       },
     };
 
-    const retryResult = await postJson<any>('/api/ai/json', retryBody, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 1 });
+    const retryResult = await postJson<any>('/api/generate', retryBody, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 1 });
     const retryText = extractText(retryResult);
 
     try {
@@ -592,7 +598,7 @@ export const generateStructuredResponse = async (
           },
         };
 
-        const shorterResult = await postJson<any>('/api/ai/json', shorterBody, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 1 });
+        const shorterResult = await postJson<any>('/api/generate', shorterBody, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 1 });
         const shorterText = extractText(shorterResult);
         try {
           return safeJsonParse(shorterText || '{}');
@@ -636,7 +642,7 @@ export const generateStructuredResponse = async (
         },
       };
 
-      const fallbackResult = await postJson<any>('/api/ai/json', fallbackBody, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 1 });
+      const fallbackResult = await postJson<any>('/api/generate', fallbackBody, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 1 });
       const fallbackText = extractText(fallbackResult);
       try {
         return safeJsonParse(fallbackText || '{}');
@@ -690,7 +696,7 @@ export const identifyTrickFromImage = async (
     },
   };
 
-  const result = await postJson<any>('/api/ai/json', body, currentUser);
+  const result = await postJson<any>('/api/generate', body, currentUser);
   const text = extractText(result);
   const parsed = JSON.parse(text || '{}') as any;
 

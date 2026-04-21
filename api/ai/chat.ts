@@ -20,7 +20,7 @@ import { applyUsageHeaders, bestEffortIncrementAiUsage, guardAiUsage } from './_
 import { getGoogleAiApiKey } from '../../server/gemini.js';
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024; // ~2MB
-const TIMEOUT_MS = 25_000;
+const TIMEOUT_MS = 55_000;
 
 
 
@@ -145,7 +145,7 @@ export default async function handler(req: any, res: any) {
       const { GoogleGenAI } = await import('@google/genai');
       const ai = new GoogleGenAI({ apiKey });
       return ai.models.generateContent({
-        model: model || 'gemini-3-pro-preview',
+        model: model || 'gemini-2.5-flash',
         contents,
         config: {
           ...config,
