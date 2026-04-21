@@ -51,8 +51,23 @@ export default function FirstWinGate({ user, onNavigate, onDismiss }: Props) {
   const [createdIdeaId, setCreatedIdeaId] = useState<string | null>(null);
   const [selectedObjects, setSelectedObjects] = useState('Everyday objects');
   const [selectedStyle, setSelectedStyle] = useState('Visual');
-  const objectOptions = ['Cards', 'Coins', 'Everyday objects', 'Mentalism'];
-  const styleOptions = ['Funny', 'Mysterious', 'Mind-reading', 'Visual'];
+  const objectOptions = [
+    'Cards',
+    'Coins',
+    'Everyday objects',
+    'Mentalism',
+    'Rope',
+    'Silks',
+    'Linking Rings',
+    'Comedy Magic',
+    'Kids Show Magic',
+    'Close-up Magic',
+    'Parlor Magic',
+    'Stage Magic',
+    'Gospel Magic',
+    'Mind Reading',
+  ];
+  const styleOptions = ['Funny', 'Mysterious', 'Mind-reading', 'Visual', 'Story-driven', 'High-energy'];
 
   const hasActivated = useMemo(() => (ideas?.length ?? 0) > 0 || (shows?.length ?? 0) > 0, [ideas, shows]);
 
@@ -94,6 +109,15 @@ export default function FirstWinGate({ user, onNavigate, onDismiss }: Props) {
     <div className="px-4 md:px-6 py-6">
       <div className="mx-auto max-w-4xl">
         <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] p-6 md:p-8">
+          {onDismiss && (
+            <button
+              onClick={onDismiss}
+              aria-label="Close activation screen"
+              className="absolute right-4 top-4 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-black/20 text-white/65 transition hover:bg-white/[0.08] hover:text-white"
+            >
+              ✕
+            </button>
+          )}
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-purple-500/10 via-transparent to-yellow-500/5" />
           <div className="relative">
             <div className="flex flex-col gap-3">
@@ -101,7 +125,7 @@ export default function FirstWinGate({ user, onNavigate, onDismiss }: Props) {
                 ✨ First Win
                 <span className="text-yellow-100/70">under 90 seconds</span>
               </p>
-              <h1 className="text-2xl md:text-3xl font-semibold text-white">What are you working on today?</h1>
+              <h1 className="text-2xl md:text-3xl font-semibold text-white">What kind of magic do you want to create today?</h1>
               <p className="text-sm md:text-base text-white/65 max-w-2xl">
                 Pick one. We’ll generate something real and save it to your workspace — so you leave with momentum, not tabs.
               </p>
@@ -110,7 +134,7 @@ export default function FirstWinGate({ user, onNavigate, onDismiss }: Props) {
             <div className="mt-6 grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-6">
               <div className="rounded-2xl border border-purple-400/20 bg-purple-500/10 p-5">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-purple-100/80">Step 1</p>
-                <h2 className="mt-2 text-lg font-semibold text-white">What objects do you like to perform with?</h2>
+                <h2 className="mt-2 text-lg font-semibold text-white">Choose your magic category or favorite props</h2>
                 <div className="mt-4 flex flex-wrap gap-2">
                   {objectOptions.map((option) => (
                     <button
@@ -152,12 +176,20 @@ export default function FirstWinGate({ user, onNavigate, onDismiss }: Props) {
                     🗂 Start with Show Planner
                   </button>
                   {onDismiss && (
-                    <button
-                      onClick={onDismiss}
-                      className="rounded-2xl px-2 py-3 text-sm text-white/55 transition hover:text-white"
-                    >
-                      Not now
-                    </button>
+                    <>
+                      <button
+                        onClick={onDismiss}
+                        className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-white/80 transition hover:bg-white/[0.06]"
+                      >
+                        Close
+                      </button>
+                      <button
+                        onClick={onDismiss}
+                        className="rounded-2xl px-2 py-3 text-sm text-white/55 transition hover:text-white"
+                      >
+                        Not now
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
@@ -176,7 +208,7 @@ export default function FirstWinGate({ user, onNavigate, onDismiss }: Props) {
                   </div>
                   <div className="rounded-xl border border-emerald-400/15 bg-emerald-500/10 p-3">
                     <div className="text-white font-medium">What happens next</div>
-                    <div className="mt-1">You’ll get a performance-ready routine with beats, key lines, and stage directions — then it saves automatically to Saved Ideas.</div>
+                    <div className="mt-1">You’ll get a performance-ready routine with beats, key lines, and stage directions — then it saves automatically to Saved Ideas. You can close this screen any time.</div>
                   </div>
                 </div>
 
@@ -222,6 +254,14 @@ export default function FirstWinGate({ user, onNavigate, onDismiss }: Props) {
                   >
                     ➕ Generate Another
                   </button>
+                  {onDismiss && (
+                    <button
+                      onClick={onDismiss}
+                      className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-medium text-white/80 transition hover:bg-white/[0.05]"
+                    >
+                      Close
+                    </button>
+                  )}
                 </div>
               </div>
             )}
