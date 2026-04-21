@@ -33,6 +33,49 @@ function num(v: any) {
   return Number.isFinite(n) ? n.toLocaleString() : '—';
 }
 
+
+function stageLabel(stage: string) {
+  if (stage === 'expired') return 'Expired';
+  return `${stage} left`;
+}
+
+function maxValue(rows: any[], keys: string[]) {
+  return rows.reduce((max: number, row: any) => {
+    const value = keys.reduce((sum, key) => sum + Number(row?.[key] || 0), 0);
+    return Math.max(max, value);
+  }, 0);
+}
+
+function TrendBars({ rows }: { rows: any[] }) {
+  const max = Math.max(maxValue(rows, ['signups', 'first_idea_saved', 'checkout_completed']), 1);
+  return (
+    <div className="mt-4">
+      <div className="flex items-end gap-2 h-44">
+        {rows.map((row: any) => {
+          const signupHeight = Math.max(8, Math.round((Number(row?.signups || 0) / max) * 160));
+          const activationHeight = Math.max(8, Math.round((Number(row?.first_idea_saved || 0) / max) * 160));
+          const checkoutHeight = Math.max(8, Math.round((Number(row?.checkout_completed || 0) / max) * 160));
+          return (
+            <div key={row.day} className="flex-1 min-w-0">
+              <div className="h-40 flex items-end justify-center gap-1 rounded-xl border border-white/5 bg-black/15 px-1 pb-2">
+                <div className="w-2 rounded-full bg-sky-300/75" style={{ height: `${signupHeight}px` }} title={`Signups: ${row.signups}`} />
+                <div className="w-2 rounded-full bg-emerald-300/80" style={{ height: `${activationHeight}px` }} title={`Saved ideas: ${row.first_idea_saved}`} />
+                <div className="w-2 rounded-full bg-amber-300/80" style={{ height: `${checkoutHeight}px` }} title={`Paid checkouts: ${row.checkout_completed}`} />
+              </div>
+              <div className="mt-2 text-center text-[10px] text-white/55">{String(row.day || '').slice(5)}</div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-white/65">
+        <div className="flex items-center gap-2"><span className="inline-block h-2.5 w-2.5 rounded-full bg-sky-300/75" />Signups</div>
+        <div className="flex items-center gap-2"><span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-300/80" />Saved first idea</div>
+        <div className="flex items-center gap-2"><span className="inline-block h-2.5 w-2.5 rounded-full bg-amber-300/80" />Checkout completed</div>
+      </div>
+    </div>
+  );
+}
+
 function KpiCard({ label, value, sub }: { label: string; value: any; sub?: string }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
@@ -84,6 +127,8 @@ export default function AdminIbmDashboard() {
   const activationMetrics = data?.activation_metrics || {};
   const activationCounts = activationMetrics?.counts || {};
   const partnerActivationView = data?.partner_activation_view || {};
+  const dailyActivationTrend = Array.isArray(data?.daily_activation_trend) ? data.daily_activation_trend : [];
+  const upgradeTimingStages = Array.isArray(data?.upgrade_timing?.stages) ? data.upgrade_timing.stages : [];
 
   const headline = useMemo(() => ({
     signupsWindow: num(summary.signups_window),
@@ -228,6 +273,44 @@ export default function AdminIbmDashboard() {
               </div>
             </div>
           </div>
+
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <div className="text-sm uppercase tracking-[0.18em] text-white/55">Daily activation trend</div>
+              <div className="mt-1 text-sm text-white/70">Tracks signups, first ideas saved, and completed checkout events across the selected window.</div>
+              {dailyActivationTrend.length === 0 ? (
+                <div className="mt-4 text-sm text-white/55">No trend data in this window.</div>
+              ) : (
+                <TrendBars rows={dailyActivationTrend} />
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <div className="text-sm uppercase tracking-[0.18em] text-white/55">Upgrade timing system</div>
+              <div className="mt-1 text-sm text-white/70">Shows which reminder stage is creating momentum toward checkout.</div>
+              <div className="mt-4 space-y-3">
+                {upgradeTimingStages.length === 0 ? (
+                  <div className="text-sm text-white/55">No upgrade timing data in this window.</div>
+                ) : upgradeTimingStages.map((row: any) => (
+                  <div key={row.stage} className="rounded-xl border border-white/10 bg-black/20 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-sm font-medium text-white">{stageLabel(String(row.stage || ''))}</div>
+                      <div className="text-xs text-white/55">Prompt→click {pct(row.prompt_to_click_rate)} • Checkout→paid {pct(row.checkout_to_paid_rate)}</div>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
+                      <div className="rounded-lg bg-white/5 px-2 py-2 text-white/75"><span className="block text-white/45">Viewed</span>{num(row.prompt_viewed)}</div>
+                      <div className="rounded-lg bg-white/5 px-2 py-2 text-white/75"><span className="block text-white/45">Clicked</span>{num(row.clicked)}</div>
+                      <div className="rounded-lg bg-white/5 px-2 py-2 text-white/75"><span className="block text-white/45">Checkout</span>{num(row.checkout_started)}</div>
+                      <div className="rounded-lg bg-white/5 px-2 py-2 text-white/75"><span className="block text-white/45">Paid</span>{num(row.checkout_completed)}</div>
+                      <div className="rounded-lg bg-white/5 px-2 py-2 text-white/75"><span className="block text-white/45">Expired</span>{num(row.trial_expired)}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
