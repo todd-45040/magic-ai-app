@@ -75,16 +75,158 @@ const parseEffectsFromJson = (raw: string): ParsedEffect[] => {
 
 
 // Best-effort parser for the Effect Engine markdown output.
-// Supports headings like "### 1. The Safehouse" and sections like **Premise:**, **The Experience:**
+// Supports clean headings, JSON, and also the messy fallback where the model numbers each field line.
 const parseEffectsFromMarkdown = (markdown: string): ParsedEffect[] => {
   const text = normalize(markdown);
   if (!text) return [];
-  // Some providers return structured JSON. If so, render it cleanly instead of showing raw braces.
   const fromJson = parseEffectsFromJson(text);
   if (fromJson.length) return fromJson;
 
+  const stripLinePrefix = (line: string) =>
+    normalize(line)
+      .replace(/^#{1,4}\s*/, '')
+      .replace(/^#?\s*\d{1,2}\s*[\).:\-]?\s*/, '')
+      .trim();
 
-  const headingRe = /^(?:#{1,4}\s*)?#?\s*(\d{1,2})\s*[\).:\-]?\s+(.+)$/gm;
+  const parseSequentialLabeledEffects = (source: string): ParsedEffect[] => {
+    const lines = source.split('\n');
+    const effects: ParsedEffect[] = [];
+    let current: ParsedEffect | null = null;
+    let activeSection: keyof ParsedEffect | null = null;
+
+    const pushCurrent = () => {
+      if (!current) return;
+      const hasContent = [current.name, current.premise, current.experience, current.methodOverview, current.performanceNotes, current.secretHint].some(Boolean);
+      if (hasContent) effects.push({ ...current });
+    };
+
+    const ensureCurrent = () => {
+      if (!current) {
+        current = {
+          name: 'Untitled Effect',
+          premise: '',
+          experience: '',
+          methodOverview: '',
+          performanceNotes: '',
+          secretHint: '',
+          ideaStrength: '',
+          buildCost: '',
+        };
+      }
+    };
+
+    const setSection = (section: keyof ParsedEffect, value: string) => {
+      ensureCurrent();
+      if (!current) return;
+      if (section === 'ideaStrength') {
+        const raw = value.toLowerCase();
+        current.ideaStrength = raw.includes('strong') ? 'Strong Concept' : raw.includes('experimental') ? 'Experimental' : raw.includes('need') ? 'Needs Work' : '';
+      } else if (section === 'buildCost') {
+        const raw = value.toLowerCase();
+        current.buildCost = raw.includes('low') ? 'Low' : raw.includes('high') ? 'High' : raw.includes('medium') ? 'Medium' : '';
+      } else {
+        const prev = normalize(current[section] as string);
+        current[section] = normalize(prev ? `${prev}\n${value}` : value) as any;
+      }
+      activeSection = section;
+    };
+
+    const sectionPatterns: Array<[RegExp, keyof ParsedEffect]> = [
+      [/^\*\*?\s*Premise\s*\*\*?\s*:?\s*(.*)$/i, 'premise'],
+      [/^Premise\s*:?\s*(.*)$/i, 'premise'],
+      [/^\*\*?\s*The Experience\s*\*\*?\s*:?\s*(.*)$/i, 'experience'],
+      [/^\*\*?\s*Experience\s*\*\*?\s*:?\s*(.*)$/i, 'experience'],
+      [/^Experience\s*:?\s*(.*)$/i, 'experience'],
+      [/^\*\*?\s*Method Overview\s*\*\*?\s*:?\s*(.*)$/i, 'methodOverview'],
+      [/^\*\*?\s*Method\s*\*\*?\s*:?\s*(.*)$/i, 'methodOverview'],
+      [/^Method(?: Overview)?\s*:?\s*(.*)$/i, 'methodOverview'],
+      [/^\*\*?\s*Performance Notes\s*\*\*?\s*:?\s*(.*)$/i, 'performanceNotes'],
+      [/^\*\*?\s*Notes\s*\*\*?\s*:?\s*(.*)$/i, 'performanceNotes'],
+      [/^Performance Notes\s*:?\s*(.*)$/i, 'performanceNotes'],
+      [/^Notes\s*:?\s*(.*)$/i, 'performanceNotes'],
+      [/^\*\*?\s*The Secret Hint\s*\*\*?\s*:?\s*(.*)$/i, 'secretHint'],
+      [/^\*\*?\s*Secret Hint\s*\*\*?\s*:?\s*(.*)$/i, 'secretHint'],
+      [/^\*\*?\s*Secret\s*\*\*?\s*:?\s*(.*)$/i, 'secretHint'],
+      [/^The Secret Hint\s*:?\s*(.*)$/i, 'secretHint'],
+      [/^Secret Hint\s*:?\s*(.*)$/i, 'secretHint'],
+      [/^Secret\s*:?\s*(.*)$/i, 'secretHint'],
+      [/^\*\*?\s*Idea Strength\s*\*\*?\s*:?\s*(.*)$/i, 'ideaStrength'],
+      [/^\*\*?\s*Strength\s*\*\*?\s*:?\s*(.*)$/i, 'ideaStrength'],
+      [/^Idea Strength\s*:?\s*(.*)$/i, 'ideaStrength'],
+      [/^Strength\s*:?\s*(.*)$/i, 'ideaStrength'],
+      [/^\*\*?\s*Estimated Build Cost\s*\*\*?\s*:?\s*(.*)$/i, 'buildCost'],
+      [/^\*\*?\s*Build Cost\s*\*\*?\s*:?\s*(.*)$/i, 'buildCost'],
+      [/^\*\*?\s*Cost\s*\*\*?\s*:?\s*(.*)$/i, 'buildCost'],
+      [/^Estimated Build Cost\s*:?\s*(.*)$/i, 'buildCost'],
+      [/^Build Cost\s*:?\s*(.*)$/i, 'buildCost'],
+      [/^Cost\s*:?\s*(.*)$/i, 'buildCost'],
+    ];
+
+    for (const rawLine of lines) {
+      const line = stripLinePrefix(rawLine);
+      if (!line) continue;
+
+      const effectNameMatch = line.match(/^\*\*?\s*Effect Name\s*\*\*?\s*:?\s*(.+)$/i) || line.match(/^Effect Name\s*:?\s*(.+)$/i);
+      if (effectNameMatch) {
+        pushCurrent();
+        current = {
+          name: normalize(effectNameMatch[1]) || 'Untitled Effect',
+          premise: '',
+          experience: '',
+          methodOverview: '',
+          performanceNotes: '',
+          secretHint: '',
+          ideaStrength: '',
+          buildCost: '',
+        };
+        activeSection = null;
+        continue;
+      }
+
+      if (rawLine.trim().startsWith('#')) {
+        const cleanHeading = line.match(/^(?:Effect\s+\d+\s*[:-]\s*)?(.+)$/i)?.[1] ?? line;
+        if (!/^(Premise|The Experience|Experience|Method Overview|Method|Performance Notes|Notes|The Secret Hint|Secret Hint|Secret|Idea Strength|Strength|Estimated Build Cost|Build Cost|Cost)$/i.test(cleanHeading)) {
+          pushCurrent();
+          current = {
+            name: normalize(cleanHeading),
+            premise: '',
+            experience: '',
+            methodOverview: '',
+            performanceNotes: '',
+            secretHint: '',
+            ideaStrength: '',
+            buildCost: '',
+          };
+          activeSection = null;
+          continue;
+        }
+      }
+
+      let matched = false;
+      for (const [pattern, section] of sectionPatterns) {
+        const mm = line.match(pattern);
+        if (mm) {
+          setSection(section, normalize(mm[1] ?? ''));
+          matched = true;
+          break;
+        }
+      }
+      if (matched) continue;
+
+      if (activeSection && current) {
+        const prev = normalize(current[activeSection] as string);
+        current[activeSection] = normalize(prev ? `${prev}\n${line}` : line) as any;
+      }
+    }
+
+    pushCurrent();
+    return effects.filter((e) => e.name || e.premise || e.experience || e.methodOverview || e.performanceNotes || e.secretHint);
+  };
+
+  const sequentialEffects = parseSequentialLabeledEffects(text);
+  if (sequentialEffects.length) return sequentialEffects;
+
+  const headingRe = /^(?:#{1,4}\s*)?(?!#?\s*\d{1,2}\s*[\).:\-]?\s*\*\*?(?:Premise|The Experience|Experience|Method Overview|Method|Performance Notes|Notes|The Secret Hint|Secret Hint|Secret|Idea Strength|Strength|Estimated Build Cost|Build Cost|Cost)\b)#?\s*(\d{1,2})\s*[\).:\-]?\s+(.+)$/gm;
   const headings: Array<{ index: number; name: string }> = [];
   let m: RegExpExecArray | null;
   while ((m = headingRe.exec(text))) {
@@ -92,23 +234,18 @@ const parseEffectsFromMarkdown = (markdown: string): ParsedEffect[] => {
   }
   if (headings.length === 0) return [];
 
-const getSection = (block: string, label: string) => {
-  // Capture from either **Label:** (colon may be inside OR outside the bold) OR plain "Label:".
-  // Examples seen from server/model:
-  //   **Premise:** ...
-  //   **Premise**: ...
-  //   Premise: ...
-  const boldRe = new RegExp(
-    `\\*\\*${label}\\s*:?\\s*\\*\\*\\s*:?\\s*([\\s\\S]*?)(?=\\n\\*\\*[^*]+\\*\\*\\s*:|\\n(?:#{1,4}\\s*)?#?\\s*\\d{1,2}\\s*[\\).:\\-]?\\s+|$)`,
-    'i'
-  );
-  const plainRe = new RegExp(
-    `(?:^|\\n)${label}\\s*:\\s*([\\s\\S]*?)(?=\\n[A-Z][A-Za-z \\-/]{2,30}\\s*:|\\n(?:#{1,4}\\s*)?#?\\s*\\d{1,2}\\s*[\\).:\\-]?\\s+|$)`,
-    'i'
-  );
-  const mm = boldRe.exec(block) || plainRe.exec(block);
-  return normalize(mm?.[1] ?? '');
-};
+  const getSection = (block: string, label: string) => {
+    const boldRe = new RegExp(
+      `\\*\\*${label}\\s*:?\\s*\\*\\*\\s*:?\\s*([\\s\\S]*?)(?=\\n\\*\\*[^*]+\\*\\*\\s*:|\\n(?:#{1,4}\\s*)?#?\\s*\\d{1,2}\\s*[\\).:\\-]?\\s+|$)`,
+      'i'
+    );
+    const plainRe = new RegExp(
+      `(?:^|\\n)${label}\\s*:\\s*([\\s\\S]*?)(?=\\n[A-Z][A-Za-z \\-/]{2,30}\\s*:|\\n(?:#{1,4}\\s*)?#?\\s*\\d{1,2}\\s*[\\).:\\-]?\\s+|$)`,
+      'i'
+    );
+    const mm = boldRe.exec(block) || plainRe.exec(block);
+    return normalize(mm?.[1] ?? '');
+  };
 
   const effects: ParsedEffect[] = [];
   for (let i = 0; i < headings.length; i++) {
@@ -118,7 +255,6 @@ const getSection = (block: string, label: string) => {
 
     const name = headings[i].name;
     const premise = getSection(block, 'Premise');
-    // some outputs use "The Experience" exactly
     const experience = getSection(block, 'The Experience') || getSection(block, 'Experience');
     const methodOverview = getSection(block, 'Method Overview') || getSection(block, 'Method');
     const performanceNotes = getSection(block, 'Performance Notes') || getSection(block, 'Notes');
@@ -360,8 +496,17 @@ const handleTryExample = () => {
       `Generate magic effect ideas using the following items: ${itemList}.`,
       `Creative intent: ${creativeIntent}.`,
       `Difficulty level: ${difficulty}.`,
-      `Make the ideas practical for real performance and clearly structured (Premise, The Experience, Method Overview, Performance Notes, Secret Hint).`,
-      `Add a short self-assessment at the end of each effect: Idea Strength (Strong Concept / Needs Work / Experimental) and Estimated Build Cost (Low / Medium / High).`,
+      `Return exactly 3 effect concepts (no more, no less).`,
+      `Use this exact structure for EACH effect:`,
+      `### [Effect Name]`,
+      `**Premise:** ...`,
+      `**The Experience:** ...`,
+      `**Method Overview:** ...`,
+      `**Performance Notes:** ...`,
+      `**The Secret Hint:** ...`,
+      `**Idea Strength:** Strong Concept / Needs Work / Experimental`,
+      `**Estimated Build Cost:** Low / Medium / High`,
+      `Make the ideas practical for real performance. Keep each section concise: 2–4 sentences max.`,
     ].join(' ');
     
     try {
@@ -434,8 +579,17 @@ const handleTryExample = () => {
       `Difficulty level: ${difficulty}.`,
       `IMPORTANT: The previous output is shown below. Your new concept must be meaningfully different (new premise, new structure, new method direction).`,
       `Avoid reusing the same title, premise, beats, or gimmick approach. Do not paraphrase the same idea — create a different one.`,
-      `Format the ideas clearly (Premise, The Experience, Method Overview, Performance Notes, Secret Hint).`,
-      `Add a short self-assessment at the end of each effect: Idea Strength (Strong Concept / Needs Work / Experimental) and Estimated Build Cost (Low / Medium / High).`,
+      `Return exactly 3 effect concepts (no more, no less).`,
+      `Use this exact structure for EACH effect:`,
+      `### [Effect Name]`,
+      `**Premise:** ...`,
+      `**The Experience:** ...`,
+      `**Method Overview:** ...`,
+      `**Performance Notes:** ...`,
+      `**The Secret Hint:** ...`,
+      `**Idea Strength:** Strong Concept / Needs Work / Experimental`,
+      `**Estimated Build Cost:** Low / Medium / High`,
+      `Keep each section concise: 2–4 sentences max.`,
       `PREVIOUS OUTPUT (for avoidance):\n${lastOutput}`
     ].join(' ');
 
