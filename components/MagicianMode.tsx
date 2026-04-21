@@ -825,6 +825,7 @@ const ExpandableText: React.FC<{ text: string; limit?: number; className?: strin
 };
 
 const IdentifyTab: React.FC<{
+    identifyInputNonce: number;
     imageFile: File | null;
     imagePreview: string | null;
     identificationResult: TrickIdentificationResult | null;
@@ -848,12 +849,12 @@ const IdentifyTab: React.FC<{
     lastRefine: string | null;
     onRequestUpgrade: () => void;
     onReset: () => void;
-}> = ({ imagePreview, identificationResult, isIdentifying, identificationError, identificationBlocked, identifySaved, identifySaving, identifyIsStrong, fileInputRef, handleImageUpload, handleIdentifyClick, onSave, onAddToShow, onConvertToTask, onCopy, onShare, onToggleStrong, onRefine, refining, lastRefine, onRequestUpgrade, onReset }) => (
+}> = ({ identifyInputNonce, imagePreview, identificationResult, isIdentifying, identificationError, identificationBlocked, identifySaved, identifySaving, identifyIsStrong, fileInputRef, handleImageUpload, handleIdentifyClick, onSave, onAddToShow, onConvertToTask, onCopy, onShare, onToggleStrong, onRefine, refining, lastRefine, onRequestUpgrade, onReset }) => (
     <div className="flex-1 overflow-y-auto p-4 md:p-6">
         <div className="animate-fade-in max-w-2xl mx-auto">
             <h2 className="text-xl font-bold text-slate-300 leading-tight">Identify a Trick</h2>
             <p className="mt-2 mb-4 text-slate-400">Research an effect you've seen. Upload a picture, and the AI will try to identify it and find performance examples.</p>
-            <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" />
+            <input key={identifyInputNonce} type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" />
             {!imagePreview ? (
                  <button onClick={() => fileInputRef.current?.click()} className="w-full flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-600 rounded-lg hover:bg-slate-800/50 hover:border-purple-500 transition-colors">
                     <ImageIcon className="w-12 h-12 text-slate-500 mb-2"/>
@@ -874,7 +875,7 @@ const IdentifyTab: React.FC<{
                         </button>
                         {(identificationResult || identificationError || identificationBlocked) ? (
                           <button
-                            onClick={onReset}
+                            onClick={() => { onReset(); window.setTimeout(() => fileInputRef.current?.click(), 0); }}
                             disabled={isIdentifying || refining}
                             className="w-full py-2 px-4 border border-slate-600 bg-slate-900/40 hover:bg-slate-800/50 rounded-md text-slate-200 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           >
@@ -1031,7 +1032,7 @@ const IdentifyTab: React.FC<{
                                   ? index === 0
                                     ? "▶ Watch Performance"
                                     : "▶ Watch Alternate Performance"
-                                  : "Explore more";
+                                  : "🔎 Explore More";
 
                               const thumbSrc =
                                 video.videoId && video.platform === "youtube"
@@ -2973,6 +2974,7 @@ useEffect(() => {
   const [effectToInnovate, setEffectToInnovate] = useState('');
 
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [identifyInputNonce, setIdentifyInputNonce] = useState(0);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [identificationResult, setIdentificationResult] = useState<TrickIdentificationResult | null>(null);
   const [isIdentifying, setIsIdentifying] = useState(false);
@@ -3910,6 +3912,7 @@ useEffect(() => {
   }
 
   const handleResetIdentifyTrick = () => {
+    setIdentifyInputNonce((n) => n + 1);
     setImageFile(null);
     setImagePreview(null);
     setIdentificationResult(null);
@@ -3924,7 +3927,9 @@ useEffect(() => {
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-    void trackClientEvent({ tool: 'IdentifyTrick', action: 'identify_reset' });
+    try {
+      void trackClientEvent({ tool: 'IdentifyTrick', action: 'identify_reset' });
+    } catch {}
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -4787,6 +4792,7 @@ ${action.payload.content}`;
         case 'identify':
           return (
             <IdentifyTab
+              identifyInputNonce={identifyInputNonce}
               imageFile={imageFile}
               imagePreview={imagePreview}
               identificationResult={identificationResult}
