@@ -654,6 +654,63 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         takes: Take[];
     };
 
+    const hydrateSavedSession = (session: {
+        ideaId?: string | null;
+        title?: string;
+        notes?: string;
+        takes?: Take[];
+        selectedTake?: number;
+    }) => {
+        const normalizedTakes = Array.isArray(session?.takes) ? session.takes.filter(Boolean) : [];
+        if (normalizedTakes.length === 0) {
+            setErrorMessage('This saved rehearsal session does not contain any takes to review.');
+            return;
+        }
+
+        const nextTitle = typeof session?.title === 'string' && session.title.trim()
+            ? session.title.trim()
+            : `Live Rehearsal Session - ${new Date().toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`;
+        const nextNotes = typeof session?.notes === 'string' ? session.notes : '';
+        const requestedIndex = typeof session?.selectedTake === 'number' ? session.selectedTake : normalizedTakes.length - 1;
+        const nextSelectedTake = Math.max(0, Math.min(requestedIndex, normalizedTakes.length - 1));
+
+        setSessionIdeaId(session?.ideaId ?? null);
+        setSessionTitle(nextTitle);
+        setSessionNotes(nextNotes);
+        setTakes(normalizedTakes);
+        setSelectedTake(nextSelectedTake);
+        setDemoScript('');
+        setDemoDurationSeconds(0);
+        setDemoMarkers([]);
+        setTranscriptionHistory([]);
+        setCurrentMarkers(normalizedTakes[nextSelectedTake]?.markers ?? []);
+        setMarkerCount((normalizedTakes[nextSelectedTake]?.markers ?? []).length);
+        currentTakeUserTranscriptTextRef.current = '';
+        pcmChunksRef.current = [];
+        setErrorMessage('');
+        setBlockedUx(null);
+        setStatus('idle');
+        setSessionElapsed('0:00');
+        setView('reviewing');
+
+        persistDraft({
+            ideaId: session?.ideaId ?? null,
+            title: nextTitle,
+            notes: nextNotes,
+            takes: normalizedTakes,
+            selectedTake: nextSelectedTake,
+        });
+
+        window.setTimeout(() => {
+            try {
+                const el = document.getElementById('live-rehearsal-review-anchor');
+                el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } catch {
+                // ignore
+            }
+        }, 80);
+    };
+
     const [sessionIdeaId, setSessionIdeaId] = useState<string | null>(null);
     const [sessionTitle, setSessionTitle] = useState<string>(() => `Live Rehearsal Session - ${new Date().toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`);
     const [sessionNotes, setSessionNotes] = useState<string>('');
@@ -764,14 +821,13 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             if (!parsed || parsed.version !== 2) return;
             if (!Array.isArray(parsed.takes) || parsed.takes.length === 0) return;
 
-            setSessionIdeaId(parsed.ideaId ?? null);
-            setSessionTitle(typeof parsed.title === 'string' && parsed.title.trim() ? parsed.title : sessionTitle);
-            setSessionNotes(typeof parsed.notes === 'string' ? parsed.notes : '');
-            setTakes(parsed.takes);
-            const idx = typeof parsed.selectedTake === 'number' ? parsed.selectedTake : parsed.takes.length - 1;
-            setSelectedTake(Math.max(0, Math.min(idx, parsed.takes.length - 1)));
-            setView('reviewing');
-            setStatus('idle');
+            hydrateSavedSession({
+                ideaId: parsed.ideaId ?? null,
+                title: typeof parsed.title === 'string' ? parsed.title : '',
+                notes: typeof parsed.notes === 'string' ? parsed.notes : '',
+                takes: parsed.takes,
+                selectedTake: typeof parsed.selectedTake === 'number' ? parsed.selectedTake : parsed.takes.length - 1,
+            });
         } catch {
             // ignore
         }
@@ -2009,7 +2065,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
 
                         {view === 'idle' && status !== 'connecting' && (
                             <div className="w-full max-w-3xl mx-auto">
-                                <RehearsalHistory />
+                                <RehearsalHistory onOpenSession={hydrateSavedSession} />
                             </div>
                         )}
                     </div>
@@ -2261,9 +2317,13 @@ type RehearsalHistoryItem = {
     sessionLengthLabel: string;
     confidenceScore: number;
     markerLabels: string[];
+    takes: { takeNumber: number; startedAt: number; endedAt: number; transcript: Transcription[]; markers?: SegmentMarker[] }[];
+    selectedTake: number;
 };
 
-const RehearsalHistory: React.FC = () => {
+const RehearsalHistory: React.FC<{
+    onOpenSession: (session: { ideaId?: string | null; title?: string; notes?: string; takes?: { takeNumber: number; startedAt: number; endedAt: number; transcript: Transcription[]; markers?: SegmentMarker[] }[]; selectedTake?: number; }) => void;
+}> = ({ onOpenSession }) => {
     const [expanded, setExpanded] = useState(true);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string>('');
@@ -2278,6 +2338,8 @@ const RehearsalHistory: React.FC = () => {
                 const createdAt = new Date(r.timestamp).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
                 let transcript: Transcription[] = [];
                 let notes = '';
+                let takes: { takeNumber: number; startedAt: number; endedAt: number; transcript: Transcription[]; markers?: SegmentMarker[] }[] = [];
+                let selectedTake = 0;
                 let latestTake: { startedAt?: number; endedAt?: number; transcript?: Transcription[]; markers?: SegmentMarker[] } | null = null;
                 let totalDurationMs = 0;
                 let markerLabels: string[] = [];
@@ -2289,18 +2351,21 @@ const RehearsalHistory: React.FC = () => {
                     }
                     if (Array.isArray(obj?.takes)) {
                         const combined: Transcription[] = [];
-                        for (const take of obj.takes) {
-                            const n = Number(take?.takeNumber ?? 0) || combined.length + 1;
-                            combined.push({ source: 'model', text: `— Take ${n} —`, isFinal: true } as any);
-                            if (Array.isArray(take?.transcript)) {
-                                for (const seg of take.transcript) combined.push(seg as any);
-                            }
-                            const startedAt = Number(take?.startedAt ?? 0) || 0;
-                            const endedAt = Number(take?.endedAt ?? 0) || 0;
-                            if (startedAt && endedAt && endedAt > startedAt) totalDurationMs += (endedAt - startedAt);
+                        takes = obj.takes.map((take: any, idx: number) => ({
+                            takeNumber: Number(take?.takeNumber ?? 0) || idx + 1,
+                            startedAt: Number(take?.startedAt ?? 0) || 0,
+                            endedAt: Number(take?.endedAt ?? 0) || 0,
+                            transcript: Array.isArray(take?.transcript) ? take.transcript : [],
+                            markers: Array.isArray(take?.markers) ? take.markers : [],
+                        }));
+                        for (const take of takes) {
+                            combined.push({ source: 'model', text: `— Take ${take.takeNumber} —`, isFinal: true } as any);
+                            for (const seg of take.transcript) combined.push(seg as any);
+                            if (take.startedAt && take.endedAt && take.endedAt > take.startedAt) totalDurationMs += (take.endedAt - take.startedAt);
                         }
                         transcript = combined;
-                        latestTake = obj.takes[obj.takes.length - 1] || null;
+                        selectedTake = typeof obj?.selectedTake === 'number' ? Math.max(0, Math.min(obj.selectedTake, Math.max(0, takes.length - 1))) : Math.max(0, takes.length - 1);
+                        latestTake = takes[selectedTake] || takes[takes.length - 1] || null;
                         markerLabels = Array.isArray(latestTake?.markers) ? latestTake!.markers!.map((m: any) => String(m?.label || '')).filter(Boolean) : [];
                     }
                     if (typeof obj?.notes === 'string') notes = obj.notes;
@@ -2320,6 +2385,8 @@ const RehearsalHistory: React.FC = () => {
                     sessionLengthLabel: sessionLengthLabel === '0:00' ? '0:45' : sessionLengthLabel,
                     confidenceScore: metrics.confidenceScore,
                     markerLabels,
+                    takes,
+                    selectedTake,
                 };
             });
             setItems(parsed);
@@ -2421,9 +2488,20 @@ const RehearsalHistory: React.FC = () => {
                                     ) : null}
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <div className="px-3 py-1.5 rounded-md border border-slate-700 bg-slate-900/40 text-slate-300 text-sm font-semibold">
+                                    <button
+                                        type="button"
+                                        onClick={() => onOpenSession({
+                                            ideaId: it.id,
+                                            title: it.title,
+                                            notes: it.notes,
+                                            takes: it.takes,
+                                            selectedTake: it.selectedTake,
+                                        })}
+                                        disabled={(it.takes?.length ?? 0) === 0}
+                                        className="px-3 py-1.5 rounded-md border border-slate-700 bg-slate-900/40 text-slate-300 text-sm font-semibold hover:bg-slate-800/70 hover:text-slate-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
                                         Review saved session
-                                    </div>
+                                    </button>
                                 </div>
                             </div>
                         ))}
