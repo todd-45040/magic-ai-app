@@ -1,14 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 // NOTE: This project does not depend on react-router-dom. Navigation is handled
 // by the parent App shell (props callback) and/or a simple location redirect.
-import { LiveServerMessage, FunctionCall } from '@google/genai';
-import { startLiveSession, decode, decodeAudioData, type LiveSession, normalizeAiUserFacingError, getHighCostToolNotice } from '../services/geminiService';
+import { normalizeAiUserFacingError, getHighCostToolNotice } from '../services/geminiService';
 import { saveIdea, updateIdea, getRehearsalSessions } from '../services/ideasService';
 import type { Transcription, TimerState, User } from '../types';
-import { canConsume, getUsage, consumeLiveMinutes, getSoftLimitWarning } from '../services/usageTracker';
+import { getUsage, consumeLiveMinutes, getSoftLimitWarning } from '../services/usageTracker';
 import { consumeLiveMinutesServer, emitLiveUsageUpdate } from '../services/liveMinutesService';
 import { fetchUsageStatus } from '../services/usageStatusService';
-import { MAGICIAN_LIVE_REHEARSAL_SYSTEM_INSTRUCTION, LIVE_REHEARSAL_TOOLS } from '../constants';
 import { BackIcon, MicrophoneIcon, StopIcon, SaveIcon, WandIcon, TrashIcon, TimerIcon, ChevronDownIcon, CheckIcon, LightbulbIcon } from './icons';
 import BlockedPanel from './BlockedPanel';
 import { normalizeBlockedUx, type BlockedUx } from '../services/blockedUx';
@@ -61,34 +59,6 @@ interface LiveRehearsalProps {
 }
 
 // Helper functions for audio processing, moved from geminiService
-type GeminiBlob = {
-  data: string;
-  mimeType: string;
-};
-
-function encode(bytes: Uint8Array): string {
-  let binary = '';
-  const len = bytes.byteLength;
-  for (let i = 0; i < len; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
-}
-
-function createBlob(data: Float32Array): GeminiBlob {
-  const l = data.length;
-  const int16 = new Int16Array(l);
-  for (let i = 0; i < l; i++) {
-    // Clamp to [-1, 1] and use asymmetric scaling to avoid overflow/wrap distortion.
-    const s = Math.max(-1, Math.min(1, data[i]));
-    int16[i] = s < 0 ? s * 32768 : s * 32767;
-  }
-  return {
-    data: encode(new Uint8Array(int16.buffer)),
-    mimeType: 'audio/pcm;rate=16000',
-  };
-}
-
 function buildWavBlobFromFloat32(chunks: Float32Array[], sampleRate = 16000): Blob | null {
   if (!Array.isArray(chunks) || chunks.length === 0) return null;
 
@@ -601,15 +571,12 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
     const [transcriptionHistory, setTranscriptionHistory] = useState<Transcription[]>([]);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     
-    const sessionRef = useRef<LiveSession | null>(null);
-    const sessionPromiseRef = useRef<Promise<LiveSession> | null>(null);
     const cleanupMicStreamRef = useRef<(() => void) | null>(null);
     const inputAudioContextRef = useRef<AudioContext | null>(null);
     const inputSourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
     const inputProcessorNodeRef = useRef<ScriptProcessorNode | null>(null);
     const inputZeroGainRef = useRef<GainNode | null>(null);
     const activeTakeIdRef = useRef(0);
-    const errorOccurred = useRef(false);
 
     // Ground-truth recording (for server-side transcription fallback)
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -619,10 +586,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
     const pcmSampleRateRef = useRef<number>(16000);
 
     // Audio playback refs
-    const outputAudioContextRef = useRef<AudioContext | null>(null);
-    const outputNodeRef = useRef<GainNode | null>(null);
-    const sourcesRef = useRef(new Set<AudioBufferSourceNode>());
-    const nextStartTimeRef = useRef(0);
     
     // Timer state and refs
     const [timer, setTimer] = useState<TimerState>({ startTime: null, duration: null, isRunning: false });
@@ -859,15 +822,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         setErrorMessage('');
         setBlockedUx(null);
 
-        try {
-            for (const source of sourcesRef.current.values()) {
-                try { source.stop(); } catch {}
-            }
-            sourcesRef.current.clear();
-            nextStartTimeRef.current = 0;
-        } catch {
-            // ignore
-        }
 
         pushDebug('take_state_reset', {
             reason,
@@ -948,15 +902,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         mediaRecorderRef.current = null;
 
         try {
-            if (sessionRef.current) {
-                sessionRef.current.close();
-                sessionRef.current = null;
-            }
-        } catch {
-            // ignore
-        }
-
-        try {
             if (cleanupMicStreamRef.current) {
                 cleanupMicStreamRef.current();
                 cleanupMicStreamRef.current = null;
@@ -966,18 +911,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         }
 
         await cleanupInputAudioChain('safe_cleanup_session');
-
-        try {
-            if (outputAudioContextRef.current) {
-                const ctx = outputAudioContextRef.current;
-                outputAudioContextRef.current = null;
-                if ((ctx as any).state !== 'closed') {
-                    await ctx.close().catch(() => void 0);
-                }
-            }
-        } catch {
-            // ignore
-        }
 
         try {
             if (timerIntervalRef.current) {
@@ -1006,7 +939,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             // ignore
         }
 
-        sessionPromiseRef.current = null;
         recordedChunksRef.current = [];
         recordedMimeTypeRef.current = 'audio/webm';
         pcmChunksRef.current = [];
@@ -1014,15 +946,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         transcriptionHistoryRef.current = [];
         currentTakeUserTranscriptTextRef.current = '';
 
-        try {
-            for (const source of sourcesRef.current.values()) {
-                try { source.stop(); } catch {}
-            }
-            sourcesRef.current.clear();
-            nextStartTimeRef.current = 0;
-        } catch {
-            // ignore
-        }
 
         sessionStartRef.current = null;
         setTimer({ startTime: null, duration: null, isRunning: false });
@@ -1138,7 +1061,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             clearInterval(sessionElapsedIntervalRef.current);
             sessionElapsedIntervalRef.current = null;
         }
-        errorOccurred.current = false;
         try {
             // FIX: Request audio without a specific sample rate to ensure compatibility.
             // The audio will be resampled later if needed.
@@ -1156,8 +1078,8 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 constraints: stream.getAudioTracks()[0]?.getConstraints?.(),
             });
 
-            // Start a parallel MediaRecorder capture so we can always transcribe server-side
-            // even when Live inputTranscription doesn't come through.
+            // Start a local MediaRecorder capture so every take has a server-transcribable
+            // post-stop audio source.
             try {
                 const preferred = 'audio/webm;codecs=opus';
                 const mimeType = (window as any).MediaRecorder?.isTypeSupported?.(preferred)
@@ -1196,147 +1118,102 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 // continue; Live session can still work without this
             }
 
-            // Setup output audio context
-            const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-            outputAudioContextRef.current = audioCtx;
-            outputNodeRef.current = audioCtx.createGain();
-            outputNodeRef.current.connect(audioCtx.destination);
-            
-            // FIX: Create input audio context with the stream's native sample rate to avoid mismatches.
+            // Create input audio context with the stream's native sample rate.
+            // This backbone is local-capture only: we collect audio locally and
+            // transcribe once after stop via /api/transcribe.
             const inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
             inputAudioContextRef.current = inputAudioContext;
             inputSourceNodeRef.current = null;
             inputProcessorNodeRef.current = null;
             inputZeroGainRef.current = null;
 
-            const sessionPromise = startLiveSession(
-                MAGICIAN_LIVE_REHEARSAL_SYSTEM_INSTRUCTION,
-                {
-                    onopen: () => { 
-                        // Setup microphone streaming once the connection is open
-                        const source = inputAudioContext.createMediaStreamSource(stream);
-                        const scriptProcessor = inputAudioContext.createScriptProcessor(4096, 1, 1);
+            const source = inputAudioContext.createMediaStreamSource(stream);
+            const scriptProcessor = inputAudioContext.createScriptProcessor(4096, 1, 1);
 
-                        inputSourceNodeRef.current = source;
-                        inputProcessorNodeRef.current = scriptProcessor;
+            inputSourceNodeRef.current = source;
+            inputProcessorNodeRef.current = scriptProcessor;
 
-                        // FIX: Implement audio resampling within the audio processor
-                        // to convert the microphone's native sample rate to the 16000Hz required by the API.
-                        const thisTakeId = activeTakeIdRef.current;
-                        scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
-                            if (thisTakeId !== activeTakeIdRef.current) {
-                                pushDebug('stale_audio_callback_ignored', {
-                                    thisTakeId,
-                                    activeTakeId: activeTakeIdRef.current,
-                                });
-                                return;
-                            }
-                            const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
-                            const inputSampleRate = inputAudioContext.sampleRate;
-                            const outputSampleRate = 16000;
+            const thisTakeId = activeTakeIdRef.current;
+            scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
+                if (thisTakeId !== activeTakeIdRef.current) {
+                    pushDebug('stale_audio_callback_ignored', {
+                        thisTakeId,
+                        activeTakeId: activeTakeIdRef.current,
+                    });
+                    return;
+                }
 
-                            let resampledData = inputData;
-                            if (inputSampleRate !== outputSampleRate) {
-                                const sampleRateRatio = inputSampleRate / outputSampleRate;
-                                const newLength = Math.round(inputData.length / sampleRateRatio);
-                                resampledData = new Float32Array(newLength);
-                                let offsetResult = 0;
-                                let offsetBuffer = 0;
-                                while (offsetResult < newLength) {
-                                    const nextOffsetBuffer = Math.round((offsetResult + 1) * sampleRateRatio);
-                                    let accum = 0, count = 0;
-                                    for (let i = offsetBuffer; i < nextOffsetBuffer && i < inputData.length; i++) {
-                                        accum += inputData[i];
-                                        count++;
-                                    }
-                                    resampledData[offsetResult] = count > 0 ? accum / count : 0;
-                                    offsetResult++;
-                                    offsetBuffer = nextOffsetBuffer;
-                                }
-                            }
+                const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
+                const inputSampleRate = inputAudioContext.sampleRate;
+                const outputSampleRate = 16000;
 
-                            pcmChunksRef.current.push(new Float32Array(resampledData));
-                            pcmSampleRateRef.current = outputSampleRate;
-
-                            const pcmBlob = createBlob(resampledData);
-                            // Use the session promise to send data, preventing race conditions
-                            sessionPromise.then((session) => {
-                                session.sendRealtimeInput({ media: pcmBlob });
-                            });
-                        };
-
-                        source.connect(scriptProcessor);
-                        // Keep the ScriptProcessorNode alive without routing audible audio to speakers.
-                        const zeroGain = inputAudioContext.createGain();
-                        zeroGain.gain.value = 0;
-                        inputZeroGainRef.current = zeroGain;
-                        scriptProcessor.connect(zeroGain);
-                        zeroGain.connect(inputAudioContext.destination);
-
-                        currentTakeStartRef.current = Date.now();
-                        if (sessionElapsedIntervalRef.current) {
-                            clearInterval(sessionElapsedIntervalRef.current);
+                let resampledData = inputData;
+                if (inputSampleRate !== outputSampleRate) {
+                    const sampleRateRatio = inputSampleRate / outputSampleRate;
+                    const newLength = Math.round(inputData.length / sampleRateRatio);
+                    resampledData = new Float32Array(newLength);
+                    let offsetResult = 0;
+                    let offsetBuffer = 0;
+                    while (offsetResult < newLength) {
+                        const nextOffsetBuffer = Math.round((offsetResult + 1) * sampleRateRatio);
+                        let accum = 0, count = 0;
+                        for (let i = offsetBuffer; i < nextOffsetBuffer && i < inputData.length; i++) {
+                            accum += inputData[i];
+                            count++;
                         }
-                        sessionElapsedIntervalRef.current = window.setInterval(() => {
-                            const startedAt = currentTakeStartRef.current;
-                            setSessionElapsed(startedAt ? formatElapsed(Date.now() - startedAt) : '0:00');
-                        }, 250);
+                        resampledData[offsetResult] = count > 0 ? accum / count : 0;
+                        offsetResult++;
+                        offsetBuffer = nextOffsetBuffer;
+                    }
+                }
 
-                        setStatus('listening');
-                        setView('rehearsing');
-                        trackLiveRehearsalEvent('live_rehearsal_session_start', {
-                            mode: 'live',
-                            daily_remaining: dailyLiveStartRemainingRef.current,
-                        }, { outcome: 'ALLOWED' });
+                pcmChunksRef.current.push(new Float32Array(resampledData));
+                pcmSampleRateRef.current = outputSampleRate;
+            };
 
-                        // Start usage timer
-                        sessionStartRef.current = Date.now();
-                        if (usageIntervalRef.current) {
-                            clearInterval(usageIntervalRef.current);
-                        }
-                        usageIntervalRef.current = window.setInterval(() => {
-                            const start = sessionStartRef.current;
-                            if (!start) return;
-                            const elapsedMin = (Date.now() - start) / 60000;
-                            const startRemaining = dailyLiveStartRemainingRef.current;
-                            // When elapsed session time reaches remaining daily minutes (at session start), stop.
-                            if (startRemaining != null && startRemaining > 0 && elapsedMin >= startRemaining) {
-                                void handleStopRehearsal('Daily live rehearsal minutes reached. Upgrade to continue.');
-                            }
-                        }, 5000);
-                    },
-                    onmessage: handleServerMessage,
-                    onerror: async (e) => {
-                        console.error('Live session error:', e);
-                        errorOccurred.current = true;
-                        setErrorMessage(normalizeAiUserFacingError(e));
-                        await safeCleanupSession();
-                        trackLiveRehearsalEvent('live_rehearsal_session_error', { phase: 'live_session', has_transcript: transcriptionHistoryRef.current.length > 0 }, { outcome: 'ERROR_UPSTREAM', error_code: 'live_session_error', retryable: true });
-                        setStatus('error');
-                        setView(transcriptionHistoryRef.current.length > 0 ? 'rehearsing' : 'idle');
-                    },
-                    onclose: () => {
-                        if (!errorOccurred.current) {
-                           // A clean close (e.g., user stops talking) should go to the review screen
-                           setStatus('idle');
-                           setView('reviewing');
-                        }
-                    },
-                },
-                LIVE_REHEARSAL_TOOLS
-            );
-            
-            sessionPromiseRef.current = sessionPromise;
-            sessionRef.current = await sessionPromise;
+            source.connect(scriptProcessor);
+            const zeroGain = inputAudioContext.createGain();
+            zeroGain.gain.value = 0;
+            inputZeroGainRef.current = zeroGain;
+            scriptProcessor.connect(zeroGain);
+            zeroGain.connect(inputAudioContext.destination);
 
-            // Define the cleanup function for all audio resources
+            currentTakeStartRef.current = Date.now();
+            if (sessionElapsedIntervalRef.current) {
+                clearInterval(sessionElapsedIntervalRef.current);
+            }
+            sessionElapsedIntervalRef.current = window.setInterval(() => {
+                const startedAt = currentTakeStartRef.current;
+                setSessionElapsed(startedAt ? formatElapsed(Date.now() - startedAt) : '0:00');
+            }, 250);
+
+            setStatus('listening');
+            setView('rehearsing');
+            trackLiveRehearsalEvent('live_rehearsal_session_start', {
+                mode: 'local_record_post_stop_transcribe',
+                daily_remaining: dailyLiveStartRemainingRef.current,
+            }, { outcome: 'ALLOWED' });
+
+            sessionStartRef.current = Date.now();
+            if (usageIntervalRef.current) {
+                clearInterval(usageIntervalRef.current);
+            }
+            usageIntervalRef.current = window.setInterval(() => {
+                const start = sessionStartRef.current;
+                if (!start) return;
+                const elapsedMin = (Date.now() - start) / 60000;
+                const startRemaining = dailyLiveStartRemainingRef.current;
+                if (startRemaining != null && startRemaining > 0 && elapsedMin >= startRemaining) {
+                    void handleStopRehearsal('Daily live rehearsal minutes reached. Upgrade to continue.');
+                }
+            }, 5000);
+
             cleanupMicStreamRef.current = () => {
                 stream.getTracks().forEach(track => track.stop());
             };
 
         } catch (error: any) {
             console.error('Failed to start session or get microphone:', error);
-            errorOccurred.current = true;
             try {
                 const blocked = normalizeBlockedUx(error, { toolName: 'Live Rehearsal (Audio)' });
                 if (blocked.showUpgrade || blocked.retryable) {
@@ -1368,120 +1245,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         }
     };
     
-    const handleToolCall = (fc: FunctionCall) => {
-        let result: any;
-        switch(fc.name) {
-            case 'startTimer':
-                if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-                setTimer({ startTime: Date.now(), duration: '00:00.0', isRunning: true });
-                timerIntervalRef.current = window.setInterval(() => {
-                    setTimer(prev => {
-                        if (!prev.startTime) return prev;
-                        const elapsed = Date.now() - prev.startTime;
-                        const totalSeconds = Math.floor(elapsed / 1000);
-                        const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
-                        const seconds = (totalSeconds % 60).toString().padStart(2, '0');
-                        const tenths = Math.floor((elapsed % 1000) / 100);
-                        return { ...prev, duration: `${minutes}:${seconds}.${tenths}` };
-                    });
-                }, 100);
-                result = { result: "Timer started successfully." };
-                break;
-            case 'stopTimer':
-                if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-                const finalDuration = timer.duration;
-                setTimer(prev => ({ ...prev, isRunning: false, duration: finalDuration }));
-                result = { result: `Timer stopped. The final duration was ${finalDuration}.` };
-                break;
-            default:
-                result = { error: "Unknown function." };
-        }
-        
-        sessionPromiseRef.current?.then((session) => {
-            session.sendToolResponse({
-                functionResponses: { id: fc.id, name: fc.name, response: result }
-            });
-        });
-    };
-
-    const handleServerMessage = async (message: LiveServerMessage) => {
-        if (message.toolCall) {
-            for (const fc of message.toolCall.functionCalls) {
-                handleToolCall(fc);
-            }
-        }
-
-        if (message.serverContent?.inputTranscription) {
-            const text = message.serverContent.inputTranscription.text;
-            setTranscriptionHistory(prev => {
-                const last = prev[prev.length - 1];
-                const next = last?.source === 'user' && !last.isFinal
-                    ? [...prev.slice(0, -1), { ...last, text: last.text + text }]
-                    : [...prev, { source: 'user', text, isFinal: false }];
-                transcriptionHistoryRef.current = next;
-                currentTakeUserTranscriptTextRef.current = next
-                    .filter((t) => t?.source === 'user')
-                    .map((t) => String(t?.text || ''))
-                    .join(' ')
-                    .replace(/\s+/g, ' ')
-                    .trim();
-                return next;
-            });
-        }
-        if (message.serverContent?.outputTranscription) {
-            const text = message.serverContent.outputTranscription.text;
-            setTranscriptionHistory(prev => {
-                const last = prev[prev.length - 1];
-                const next = last?.source === 'model' && !last.isFinal
-                    ? [...prev.slice(0, -1), { ...last, text: last.text + text }]
-                    : [...prev, { source: 'model', text, isFinal: false }];
-                transcriptionHistoryRef.current = next;
-                return next;
-            });
-        }
-        if (message.serverContent?.turnComplete) {
-            setTranscriptionHistory(prev => {
-                const next = prev.map(t => ({ ...t, isFinal: true }));
-                transcriptionHistoryRef.current = next;
-                currentTakeUserTranscriptTextRef.current = next
-                    .filter((t) => t?.source === 'user')
-                    .map((t) => String(t?.text || ''))
-                    .join(' ')
-                    .replace(/\s+/g, ' ')
-                    .trim();
-                return next;
-            });
-        }
-
-        // Some model turns include multiple parts (text + audio). Scan all parts for inline audio.
-        const parts = message.serverContent?.modelTurn?.parts || [];
-        const audioPart = parts.find((p: any) => {
-            const mime = String(p?.inlineData?.mimeType || '');
-            return Boolean(p?.inlineData?.data) && mime.startsWith('audio/');
-        });
-        const base64Audio = audioPart?.inlineData?.data;
-        if (base64Audio && outputAudioContextRef.current && outputNodeRef.current) {
-            const ctx = outputAudioContextRef.current;
-            nextStartTimeRef.current = Math.max(nextStartTimeRef.current, ctx.currentTime);
-            const audioBuffer = await decodeAudioData(decode(base64Audio), ctx, 24000, 1);
-            const source = ctx.createBufferSource();
-            source.buffer = audioBuffer;
-            source.connect(outputNodeRef.current);
-            source.addEventListener('ended', () => sourcesRef.current.delete(source));
-            source.start(nextStartTimeRef.current);
-            nextStartTimeRef.current += audioBuffer.duration;
-            sourcesRef.current.add(source);
-        }
-
-        if (message.serverContent?.interrupted) {
-            for (const source of sourcesRef.current.values()) {
-                source.stop();
-                sourcesRef.current.delete(source);
-            }
-            nextStartTimeRef.current = 0;
-        }
-    };
-
     const getUserText = (items: Transcription[]) =>
         items
             .filter((t) => t.source === 'user')
@@ -1574,15 +1337,11 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         audioSource: TakeAudioSnapshot['chosenSource'];
         audioBytes: number;
     }> => {
-        const currentHistory = Array.isArray(transcriptionHistoryRef.current) ? transcriptionHistoryRef.current : [];
-        const normalizedCurrent = normalizeTranscript(currentHistory);
-        const currentUserText = getFinalUserTranscriptText(normalizedCurrent);
-        const hasFinalUserSegment = normalizedCurrent.some((t) => t.source === 'user' && t.isFinal);
+        const fallbackText = String(currentTakeUserTranscriptTextRef.current || '').trim();
 
         pushDebug('transcribe_audio_sources', {
             takeId: snapshot.takeId,
-            liveLen: currentUserText.length,
-            hasFinalUserSegment,
+            fallbackLen: fallbackText.length,
             pcmChunkCount: snapshot.pcmChunks.length,
             pcmBlobBytes: snapshot.pcmBytes,
             pcmSampleRate: snapshot.pcmSampleRate,
@@ -1594,34 +1353,20 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             chosenMimeType: snapshot.chosenMimeType,
         });
 
-        if (hasFinalUserSegment && currentUserText) {
-            pushDebug('transcribe_skipped', {
-                reason: 'final_live_user_transcript_present',
-                len: currentUserText.length,
-                takeId: snapshot.takeId,
-            });
-            return {
-                transcript: normalizedCurrent,
-                audioSource: snapshot.chosenSource,
-                audioBytes: snapshot.chosenBytes,
-            };
-        }
-
         if (!snapshot.chosenBlob || snapshot.chosenBytes < 1024) {
             pushDebug('transcribe_skipped', {
                 reason: 'no_audio_chunks',
                 takeId: snapshot.takeId,
                 chunks: snapshot.recorderChunks.length,
                 bytes: snapshot.chosenBytes,
-                liveLen: currentUserText.length,
-                hasFinalUserSegment,
+                fallbackLen: fallbackText.length,
             });
 
             return {
-                transcript: currentUserText
-                    ? ([{ source: 'user', text: currentUserText, isFinal: true }] as any)
+                transcript: fallbackText
+                    ? ([{ source: 'user', text: fallbackText, isFinal: true }] as any)
                     : [],
-                transcriptionError: currentUserText ? undefined : 'no_audio_captured',
+                transcriptionError: fallbackText ? undefined : 'no_audio_captured',
                 audioSource: snapshot.chosenSource,
                 audioBytes: snapshot.chosenBytes,
             };
@@ -1654,8 +1399,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             bytes: snapshot.chosenBlob.size,
             mimeType: snapshot.chosenBlob.type,
             base64Len: audioBase64.length,
-            liveLen: currentUserText.length,
-            hasFinalUserSegment,
+            fallbackLen: fallbackText.length,
         });
 
         const transcribeStartedAt = Date.now();
@@ -1695,7 +1439,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 status: res.status,
                 ok: res.ok,
                 serverLen: serverTranscript.length,
-                liveLen: currentUserText.length,
+                fallbackLen: fallbackText.length,
                 error: json?.error ? String(json.error).slice(0, 200) : '',
             });
 
@@ -1711,25 +1455,18 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                     },
                 });
 
-                const winner =
-                    serverTranscript.length >= currentUserText.length
-                        ? serverTranscript
-                        : currentUserText;
+                const finalHistory: Transcription[] = [
+                    { source: 'user', text: serverTranscript, isFinal: true } as any,
+                ];
+                transcriptionHistoryRef.current = finalHistory;
+                currentTakeUserTranscriptTextRef.current = serverTranscript;
+                setTranscriptionHistory(finalHistory);
 
-                if (winner) {
-                    const finalHistory: Transcription[] = [
-                        { source: 'user', text: winner, isFinal: true } as any,
-                    ];
-                    transcriptionHistoryRef.current = finalHistory;
-                    currentTakeUserTranscriptTextRef.current = winner;
-                    setTranscriptionHistory(finalHistory);
-
-                    return {
-                        transcript: finalHistory,
-                        audioSource: snapshot.chosenSource,
-                        audioBytes: snapshot.chosenBytes,
-                    };
-                }
+                return {
+                    transcript: finalHistory,
+                    audioSource: snapshot.chosenSource,
+                    audioBytes: snapshot.chosenBytes,
+                };
             }
 
             if (!res.ok) {
@@ -1751,8 +1488,8 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 });
             }
 
-            const fallbackTranscript = currentUserText
-                ? ([{ source: 'user', text: currentUserText, isFinal: true }] as any)
+            const fallbackTranscript = fallbackText
+                ? ([{ source: 'user', text: fallbackText, isFinal: true }] as any)
                 : [];
 
             return {
@@ -1795,8 +1532,8 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             }
 
             return {
-                transcript: currentUserText
-                    ? ([{ source: 'user', text: currentUserText, isFinal: true }] as any)
+                transcript: fallbackText
+                    ? ([{ source: 'user', text: fallbackText, isFinal: true }] as any)
                     : [],
                 transcriptionError: String(err?.message || err),
                 audioSource: snapshot.chosenSource,
