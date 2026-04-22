@@ -33,7 +33,7 @@ export const ADMIN_EMAILS = ['admin@magicaiwizard.com', 'todssmartphone@gmail.co
 export const ADMIN_EMAIL = ADMIN_EMAILS[0];
 export const isAdminEmail = (email?: string | null) => ADMIN_EMAILS.includes(String(email || '').trim().toLowerCase());
 // Keep this in sync with your current git benchmark/tag so the UI + SW cache are coherent.
-export const APP_VERSION = 'v1.0.9.1';
+export const APP_VERSION = 'v1.0.9.5';
 
 // Add GUEST_USER for Audience Mode services
 export const GUEST_USER: User = {
