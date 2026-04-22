@@ -1298,6 +1298,21 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             .join(' ')
             .trim();
 
+    const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+    const normalizeTranscript = (items: Transcription[]): Transcription[] =>
+        (items || [])
+            .filter((t) => t && typeof t.text === 'string' && t.text.trim().length > 0)
+            .map((t) => ({ ...t, text: String(t.text).trim() }));
+
+    const getFinalUserTranscriptText = (items: Transcription[]) =>
+        normalizeTranscript(items)
+            .filter((t) => t.source === 'user')
+            .map((t) => t.text)
+            .join(' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+
     /**
      * Ensure we have a usable USER transcript for the take.
      *
@@ -1307,26 +1322,34 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
      */
     const transcribeOnServerIfNeeded = async (): Promise<Transcription[]> => {
         const currentHistory = Array.isArray(transcriptionHistoryRef.current) ? transcriptionHistoryRef.current : [];
-        // Prefer the current take text ref because React state/ref timing can lag at stop time.
-        const existingText = String(currentTakeUserTranscriptTextRef.current || '').trim();
-        const existing = existingText || getUserText(currentHistory);
-        if (existing) {
-            pushDebug('transcribe_skipped', { reason: 'existing_user_transcript', len: existing.length });
-            if (currentHistory.length) {
-                return currentHistory;
-            }
-            return [{ source: 'user', text: existing, isFinal: true } as any];
-        }
+        const normalizedCurrent = normalizeTranscript(currentHistory);
+        const currentUserText = getFinalUserTranscriptText(normalizedCurrent);
+        const hasFinalUserSegment = normalizedCurrent.some((t) => t.source === 'user' && t.isFinal);
 
         const chunks = recordedChunksRef.current;
         const mimeType = (recordedMimeTypeRef.current || 'audio/webm').split(';')[0];
         const bytes = chunks.reduce((sum: number, c: any) => sum + (c?.size || 0), 0);
 
+        if (hasFinalUserSegment && currentUserText) {
+            pushDebug('transcribe_skipped', {
+                reason: 'final_live_user_transcript_present',
+                len: currentUserText.length,
+            });
+            return normalizedCurrent;
+        }
+
         if (!chunks.length || bytes < 1024) {
-            pushDebug('transcribe_skipped', { reason: 'no_audio_chunks', chunks: chunks.length, bytes });
-            if (currentHistory.length) return currentHistory;
-            const fallbackText = String(currentTakeUserTranscriptTextRef.current || '').trim();
-            return fallbackText ? ([{ source: 'user', text: fallbackText, isFinal: true }] as any) : [];
+            pushDebug('transcribe_skipped', {
+                reason: 'no_audio_chunks',
+                chunks: chunks.length,
+                bytes,
+                liveLen: currentUserText.length,
+                hasFinalUserSegment,
+            });
+
+            return currentUserText
+                ? ([{ source: 'user', text: currentUserText, isFinal: true }] as any)
+                : [];
         }
 
         const blob = new Blob(chunks, { type: mimeType });
@@ -1341,7 +1364,13 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         pushDebug('audio_finalized', { chunks: chunks.length, bytes: blob.size, type: blob.type });
 
         const audioBase64 = await blobToBase64(blob);
-        pushDebug('transcribe_request', { bytes: blob.size, mimeType: blob.type, base64Len: audioBase64.length });
+        pushDebug('transcribe_request', {
+            bytes: blob.size,
+            mimeType: blob.type,
+            base64Len: audioBase64.length,
+            liveLen: currentUserText.length,
+            hasFinalUserSegment,
+        });
 
         const transcribeStartedAt = Date.now();
         try {
@@ -1355,32 +1384,40 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 body: JSON.stringify({ audioBase64, mimeType: blob.type }),
             });
             const json = await res.json().catch(() => ({}));
-            const transcript = String(json?.transcript || '').trim();
+            const serverTranscript = String(json?.transcript || '').trim();
 
             const w = window as any;
             w.__REHEARSAL_TRANSCRIBE__ = {
                 status: res.status,
                 ok: res.ok,
                 error: json?.error ? String(json.error) : '',
-                len: transcript.length,
-                preview: transcript.slice(0, 160),
+                len: serverTranscript.length,
+                preview: serverTranscript.slice(0, 160),
                 ts: Date.now(),
             };
 
             pushDebug('transcribe_response', {
                 status: res.status,
                 ok: res.ok,
-                len: transcript.length,
+                serverLen: serverTranscript.length,
+                liveLen: currentUserText.length,
                 error: json?.error ? String(json.error).slice(0, 200) : '',
             });
 
-            if (res.ok && transcript) {
-                void logUserActivity({ tool_name: 'live_rehearsal', event_type: 'tool_used', success: true, duration_ms: Date.now() - transcribeStartedAt, metadata: { source: 'transcribe', transcript_length: transcript.length } });
-                const finalHistory: Transcription[] = [{ source: 'user', text: transcript, isFinal: true } as any];
-                transcriptionHistoryRef.current = finalHistory;
-                currentTakeUserTranscriptTextRef.current = transcript;
-                setTranscriptionHistory(finalHistory);
-                return finalHistory;
+            if (res.ok && serverTranscript) {
+                void logUserActivity({ tool_name: 'live_rehearsal', event_type: 'tool_used', success: true, duration_ms: Date.now() - transcribeStartedAt, metadata: { source: 'transcribe', transcript_length: serverTranscript.length } });
+
+                const winner = serverTranscript.length >= currentUserText.length
+                    ? serverTranscript
+                    : currentUserText;
+
+                if (winner) {
+                    const finalHistory: Transcription[] = [{ source: 'user', text: winner, isFinal: true } as any];
+                    transcriptionHistoryRef.current = finalHistory;
+                    currentTakeUserTranscriptTextRef.current = winner;
+                    setTranscriptionHistory(finalHistory);
+                    return finalHistory;
+                }
             }
             if (!res.ok) {
                 void logUserActivity({ tool_name: 'live_rehearsal', event_type: 'error', success: false, duration_ms: Date.now() - transcribeStartedAt, metadata: { source: 'transcribe', message: json?.error ? String(json.error) : `HTTP ${res.status}`, error_kind: /quota|limit/i.test(String(json?.error || '')) ? 'usage_limit_hit' : /timeout/i.test(String(json?.error || '')) ? 'timeout' : 'ai_failure', status: res.status } });
@@ -1395,10 +1432,9 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             }
         }
 
-        const latest = Array.isArray(transcriptionHistoryRef.current) ? transcriptionHistoryRef.current : [];
-        if (latest.length) return latest;
-        const fallbackText = String(currentTakeUserTranscriptTextRef.current || '').trim();
-        return fallbackText ? ([{ source: 'user', text: fallbackText, isFinal: true }] as any) : [];
+        return currentUserText
+            ? ([{ source: 'user', text: currentUserText, isFinal: true }] as any)
+            : [];
     };
 
     const stopRecorderAndFlush = async () => {
@@ -1464,26 +1500,21 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         // Stop recording and flush last chunks BEFORE we tear down tracks.
         await stopRecorderAndFlush();
 
+        // Give late inputTranscription / turnComplete events a brief chance to land.
+        await wait(350);
+
         // Try to transcribe server-side if Live inputTranscription didn't arrive.
         // Use the returned transcript immediately (do not rely on state/ref sync).
         const finalizedHistory = await transcribeOnServerIfNeeded();
 
-        // Finalize this take from one explicit object and never let empty transcript data
-        // overwrite an existing non-empty transcript for the same take slot.
+        // Finalize this take from one resolved transcript source.
         let completedTake: any = null;
         try {
-            const currentHistory = Array.isArray(transcriptionHistoryRef.current) ? transcriptionHistoryRef.current : [];
-            const all = Array.isArray(finalizedHistory) && finalizedHistory.length ? finalizedHistory : currentHistory;
-            const sanitized = all
-                .filter((t) => t && typeof t.text === 'string' && t.text.trim().length > 0)
-                .map((t) => ({ ...t, text: String(t.text).trim() }));
-            const userOnly = sanitized.filter((t) => t?.source === 'user');
+            const resolvedTranscript = normalizeTranscript(finalizedHistory);
             const fallbackText = String(currentTakeUserTranscriptTextRef.current || '').trim();
-            const takeTranscript = userOnly.length
-                ? userOnly
-                : sanitized.length
-                    ? sanitized
-                    : (fallbackText ? ([{ source: 'user', text: fallbackText, isFinal: true }] as any) : []);
+            const takeTranscript = resolvedTranscript.length > 0
+                ? resolvedTranscript
+                : (fallbackText ? ([{ source: 'user', text: fallbackText, isFinal: true }] as any) : []);
 
             const startedAt = currentTakeStartRef.current ?? Date.now();
             const endedAt = Date.now();
@@ -1503,6 +1534,14 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             selectedTakeRef.current = nextSelectedTake;
             setTakes(nextTakes as any);
             setSelectedTake(nextSelectedTake);
+
+            pushDebug('finalized_take', {
+                takeNumber,
+                transcriptLen: getFinalUserTranscriptText(takeTranscript).length,
+                transcriptPreview: getFinalUserTranscriptText(takeTranscript).slice(0, 120),
+                takesCount: nextTakes.length,
+                selectedTake: nextSelectedTake,
+            });
         } catch {
             // ignore
         } finally {
