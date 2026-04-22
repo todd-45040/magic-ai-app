@@ -1565,6 +1565,9 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 ? pcmBlob
                 : mediaRecorderBlob;
 
+        const mediaRecorderValid = Boolean(mediaRecorderBlob) && durationMs >= MIN_TRANSCRIBE_AUDIO_DURATION_MS;
+        const pcmValid = Boolean(pcmBlob) && durationMs >= MIN_TRANSCRIBE_AUDIO_DURATION_MS && (pcmBlob?.size || 0) >= MIN_TRANSCRIBE_AUDIO_BYTES;
+
         const chosenBlob = preferredBlob || fallbackBlob || null;
 
         const chosenSource =
@@ -1595,29 +1598,40 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             isValidForTranscription,
         };
 
-        pushDebug('take_audio_snapshot', {
-            takeId,
+        traceTakeEvent(takeId, 'snapshot_created', {
             createdAt,
             startedAt,
             durationMs,
             pcmChunkCount: snapshot.pcmChunks.length,
             pcmBlobBytes: snapshot.pcmBytes,
             pcmSampleRate: snapshot.pcmSampleRate,
+            pcmValid,
             recorderChunkCount: snapshot.recorderChunks.length,
             recorderBytes: snapshot.recorderBytes,
             recorderMimeType: snapshot.recorderMimeType,
+            mediaRecorderValid,
             chosenSource: snapshot.chosenSource,
             chosenBytes: snapshot.chosenBytes,
             chosenMimeType: snapshot.chosenMimeType,
             isValidForTranscription: snapshot.isValidForTranscription,
             forcedSource: FORCE_TRANSCRIBE_SOURCE,
+            preferredSource: FORCE_TRANSCRIBE_SOURCE,
+            fallbackSource: FORCE_TRANSCRIBE_SOURCE === 'media_recorder' ? 'pcm_wav' : 'media_recorder',
+            sourceComparison: {
+                mediaRecorderBytes: snapshot.recorderBytes,
+                mediaRecorderValid,
+                pcmBytes: snapshot.pcmBytes,
+                pcmValid,
+            },
         });
 
         console.log('[AUDIO DEBUG]', {
             takeId,
             durationMs,
             pcmBytes: snapshot.pcmBytes,
+            pcmValid,
             mediaRecorderBytes: snapshot.recorderBytes,
+            mediaRecorderValid,
             chosenSource: snapshot.chosenSource,
             chosenBytes: snapshot.chosenBytes,
             chosenMimeType: snapshot.chosenMimeType,
@@ -1641,8 +1655,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         const currentUserText = getFinalUserTranscriptText(normalizedCurrent);
         const hasFinalUserSegment = normalizedCurrent.some((t) => t.source === 'user' && t.isFinal);
 
-        pushDebug('transcribe_audio_sources', {
-            takeId: snapshot.takeId,
+        traceTakeEvent(snapshot.takeId, 'transcribe_source_evaluation', {
             liveLen: currentUserText.length,
             hasFinalUserSegment,
             pcmChunkCount: snapshot.pcmChunks.length,
@@ -1657,10 +1670,10 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         });
 
         if (hasFinalUserSegment && currentUserText) {
-            pushDebug('transcribe_skipped', {
+            traceTakeEvent(snapshot.takeId, 'transcribe_decision', {
+                willCall: false,
                 reason: 'final_live_user_transcript_present',
                 len: currentUserText.length,
-                takeId: snapshot.takeId,
             });
             return {
                 transcript: normalizedCurrent,
@@ -1670,9 +1683,9 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         }
 
         if (!snapshot.chosenBlob || !snapshot.isValidForTranscription) {
-            pushDebug('transcribe_skipped', {
+            traceTakeEvent(snapshot.takeId, 'transcribe_decision', {
+                willCall: false,
                 reason: !snapshot.chosenBlob ? 'no_audio_chunks' : 'audio_below_minimum_quality_gate',
-                takeId: snapshot.takeId,
                 durationMs: snapshot.durationMs,
                 chosenBytes: snapshot.chosenBytes,
                 minDurationMs: MIN_TRANSCRIBE_AUDIO_DURATION_MS,
@@ -1704,8 +1717,15 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             // ignore
         }
 
-        pushDebug('audio_finalized', {
-            takeId: snapshot.takeId,
+        traceTakeEvent(snapshot.takeId, 'transcribe_decision', {
+            willCall: true,
+            reason: 'audio_snapshot_ready',
+            chosenSource: snapshot.chosenSource,
+            chosenBytes: snapshot.chosenBytes,
+            durationMs: snapshot.durationMs,
+        });
+
+        traceTakeEvent(snapshot.takeId, 'audio_finalized', {
             chunks: snapshot.recorderChunks.length,
             bytes: snapshot.chosenBlob.size,
             type: snapshot.chosenBlob.type,
@@ -1714,8 +1734,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
 
         const audioBase64 = await blobToBase64(snapshot.chosenBlob);
 
-        pushDebug('transcribe_request', {
-            takeId: snapshot.takeId,
+        traceTakeEvent(snapshot.takeId, 'transcribe_request_started', {
             bytes: snapshot.chosenBlob.size,
             mimeType: snapshot.chosenBlob.type,
             base64Len: audioBase64.length,
@@ -1746,8 +1765,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 });
                 const json = await res.json().catch(() => ({}));
                 const serverTranscript = String(json?.transcript || '').trim();
-                pushDebug('transcribe_attempt', {
-                    takeId: snapshot.takeId,
+                traceTakeEvent(snapshot.takeId, 'transcribe_attempt', {
                     attempt,
                     status: res.status,
                     ok: res.ok,
@@ -1779,8 +1797,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 // ignore
             }
 
-            pushDebug('transcribe_response', {
-                takeId: snapshot.takeId,
+            traceTakeEvent(snapshot.takeId, 'transcribe_response_received', {
                 status: res.status,
                 ok: res.ok,
                 serverLen: serverTranscript.length,
@@ -1865,9 +1882,12 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 },
             });
 
-            pushDebug('transcribe_error', {
-                takeId: snapshot.takeId,
-                message: String(err?.message || err),
+            traceTakeEvent(snapshot.takeId, 'transcribe_response_received', {
+                status: 0,
+                ok: false,
+                serverLen: 0,
+                liveLen: currentUserText.length,
+                error: String(err?.message || err),
             });
 
             try {
@@ -1919,7 +1939,13 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
 
     const stopRecorderAndFlush = async () => {
         const recorder = mediaRecorderRef.current;
-        if (!recorder || recorder.state === 'inactive') return;
+        const takeId = activeTakeIdRef.current;
+        if (!recorder || recorder.state === 'inactive') {
+            traceTakeEvent(takeId, 'media_recorder_stop_skipped', {
+                reason: !recorder ? 'no_recorder' : 'already_inactive',
+            });
+            return;
+        }
         try {
             recorder.requestData?.();
         } catch {
@@ -1929,6 +1955,10 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         await new Promise<void>((resolve) => {
             const onStop = () => {
                 recorder.removeEventListener('stop', onStop);
+                traceTakeEvent(takeId, 'media_recorder_stop_received', {
+                    finalChunkCount: recordedChunksRef.current.length,
+                    finalBytes: recordedChunksRef.current.reduce((sum: number, c: any) => sum + (c?.size || 0), 0),
+                });
                 resolve();
             };
             recorder.addEventListener('stop', onStop);
@@ -1942,6 +1972,15 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
     };
 
     const handleStopRehearsal = async (reason?: string) => {
+        const takeId = activeTakeIdRef.current;
+        traceTakeEvent(takeId, 'stop_requested', {
+            reason: reason || '',
+            status,
+            view,
+            currentTranscriptLen: currentTakeUserTranscriptTextRef.current.length,
+            pcmChunkCount: pcmChunksRef.current.length,
+            recorderChunkCount: recordedChunksRef.current.length,
+        });
         setIsAnalyzing(true);
         // Record minutes used for the current session.
         const start = sessionStartRef.current;
@@ -2036,8 +2075,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             setTakes(nextTakes as any);
             setSelectedTake(nextSelectedTake);
 
-            pushDebug('finalized_take', {
-                takeId: audioSnapshot.takeId,
+            traceTakeEvent(audioSnapshot.takeId, 'take_finalize_complete', {
                 takeNumber,
                 transcriptLen: getFinalUserTranscriptText(takeTranscript).length,
                 transcriptPreview: getFinalUserTranscriptText(takeTranscript).slice(0, 120),
@@ -2046,6 +2084,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 audioSource: finalizedTake.audioSource,
                 audioBytes: finalizedTake.audioBytes,
                 transcriptionError: finalizedTake.transcriptionError || '',
+                renderedReviewTarget: nextSelectedTake,
             });
         } catch {
             // ignore
@@ -2066,6 +2105,10 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         });
 
         await safeCleanupSession();
+        traceTakeEvent(takeId, 'take_review_open', {
+            selectedTake: Math.max(0, takesRef.current.length - 1),
+            totalTakes: takesRef.current.length,
+        });
         openReviewForTake(Math.max(0, takesRef.current.length - 1));
     };
     
