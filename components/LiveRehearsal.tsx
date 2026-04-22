@@ -89,6 +89,46 @@ function createBlob(data: Float32Array): GeminiBlob {
   };
 }
 
+function buildWavBlobFromFloat32(chunks: Float32Array[], sampleRate = 16000): Blob | null {
+  if (!Array.isArray(chunks) || chunks.length === 0) return null;
+
+  const totalSamples = chunks.reduce((sum, chunk) => sum + (chunk?.length || 0), 0);
+  if (!totalSamples) return null;
+
+  const pcm16 = new Int16Array(totalSamples);
+  let offset = 0;
+  for (const chunk of chunks) {
+    for (let i = 0; i < chunk.length; i++) {
+      const s = Math.max(-1, Math.min(1, chunk[i]));
+      pcm16[offset++] = s < 0 ? s * 32768 : s * 32767;
+    }
+  }
+
+  const dataSize = pcm16.byteLength;
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buffer);
+
+  const writeString = (off: number, value: string) => {
+    for (let i = 0; i < value.length; i++) view.setUint8(off + i, value.charCodeAt(i));
+  };
+
+  writeString(0, 'RIFF');
+  view.setUint32(4, 36 + dataSize, true);
+  writeString(8, 'WAVE');
+  writeString(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeString(36, 'data');
+  view.setUint32(40, dataSize, true);
+
+  new Int16Array(buffer, 44).set(pcm16);
+  return new Blob([buffer], { type: 'audio/wav' });
+}
 
 
 
@@ -570,6 +610,8 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const recordedChunksRef = useRef<BlobPart[]>([]);
     const recordedMimeTypeRef = useRef<string>('audio/webm');
+    const pcmChunksRef = useRef<Float32Array[]>([]);
+    const pcmSampleRateRef = useRef<number>(16000);
 
     // Audio playback refs
     const outputAudioContextRef = useRef<AudioContext | null>(null);
@@ -957,6 +999,8 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         transcriptionHistoryRef.current = [];
         currentTakeUserTranscriptTextRef.current = '';
         currentTakeUserTranscriptTextRef.current = '';
+        pcmChunksRef.current = [];
+        pcmSampleRateRef.current = 16000;
         setTranscriptionHistory([]);
         setMarkerCount(0);
         setCurrentMarkers([]);
@@ -1063,6 +1107,9 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                                     offsetBuffer = nextOffsetBuffer;
                                 }
                             }
+
+                            pcmChunksRef.current.push(new Float32Array(resampledData));
+                            pcmSampleRateRef.current = outputSampleRate;
 
                             const pcmBlob = createBlob(resampledData);
                             // Use the session promise to send data, preventing race conditions
@@ -1326,9 +1373,17 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         const currentUserText = getFinalUserTranscriptText(normalizedCurrent);
         const hasFinalUserSegment = normalizedCurrent.some((t) => t.source === 'user' && t.isFinal);
 
-        const chunks = recordedChunksRef.current;
-        const mimeType = (recordedMimeTypeRef.current || 'audio/webm').split(';')[0];
-        const bytes = chunks.reduce((sum: number, c: any) => sum + (c?.size || 0), 0);
+        const pcmBlob = buildWavBlobFromFloat32(pcmChunksRef.current, pcmSampleRateRef.current || 16000);
+        const recorderChunks = recordedChunksRef.current;
+        const recorderMimeType = (recordedMimeTypeRef.current || 'audio/webm').split(';')[0];
+        const recorderBytes = recorderChunks.reduce((sum: number, c: any) => sum + (c?.size || 0), 0);
+        const blob = pcmBlob && pcmBlob.size >= 1024
+            ? pcmBlob
+            : (recorderChunks.length && recorderBytes >= 1024
+                ? new Blob(recorderChunks, { type: recorderMimeType })
+                : null);
+        const mimeType = blob?.type || recorderMimeType;
+        const bytes = blob?.size || recorderBytes;
 
         if (hasFinalUserSegment && currentUserText) {
             pushDebug('transcribe_skipped', {
@@ -1338,10 +1393,10 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             return normalizedCurrent;
         }
 
-        if (!chunks.length || bytes < 1024) {
+        if (!blob || bytes < 1024) {
             pushDebug('transcribe_skipped', {
                 reason: 'no_audio_chunks',
-                chunks: chunks.length,
+                chunks: recorderChunks.length,
                 bytes,
                 liveLen: currentUserText.length,
                 hasFinalUserSegment,
@@ -1352,7 +1407,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 : [];
         }
 
-        const blob = new Blob(chunks, { type: mimeType });
         try {
             const w = window as any;
             w.__REHEARSAL_AUDIO__ = { size: blob.size, type: blob.type, ts: Date.now() };
@@ -1361,7 +1415,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             // ignore
         }
 
-        pushDebug('audio_finalized', { chunks: chunks.length, bytes: blob.size, type: blob.type });
+        pushDebug('audio_finalized', { chunks: recorderChunks.length, bytes: blob.size, type: blob.type, source: pcmBlob && blob === pcmBlob ? 'pcm_wav' : 'media_recorder' });
 
         const audioBase64 = await blobToBase64(blob);
         pushDebug('transcribe_request', {
@@ -1587,6 +1641,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         setErrorMessage('');
         setBlockedUx(null);
         currentTakeUserTranscriptTextRef.current = '';
+        pcmChunksRef.current = [];
         setTranscriptionHistory([]);
         setTakes([]);
         setSelectedTake(0);
@@ -1639,6 +1694,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         setMarkerCount(markers.length);
         setCurrentMarkers([]);
         currentTakeUserTranscriptTextRef.current = '';
+        pcmChunksRef.current = [];
         setTranscriptionHistory([]);
         setErrorMessage('');
         setBlockedUx(null);
@@ -1710,6 +1766,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                         setDemoDurationSeconds(0);
                         setDemoMarkers([]);
                         currentTakeUserTranscriptTextRef.current = '';
+        pcmChunksRef.current = [];
         setTranscriptionHistory([]);
                         setErrorMessage('');
                         setStatus('idle');
@@ -1754,6 +1811,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                                 setSessionNotes('');
                                 clearDraft();
                                 currentTakeUserTranscriptTextRef.current = '';
+        pcmChunksRef.current = [];
         setTranscriptionHistory([]);
                                 setErrorMessage('');
                                 setBlockedUx(null);
