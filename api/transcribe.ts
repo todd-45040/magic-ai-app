@@ -25,31 +25,6 @@ function friendlyTransientMessage(): string {
   return 'AI temporarily unavailable. Please try again in a moment.';
 }
 
-
-function extractTranscriptText(raw: unknown): string {
-  const result = raw as any;
-  try {
-    const t1 = typeof result?.response?.text === 'function' ? result.response.text() : '';
-    if (typeof t1 === 'string' && t1.trim()) return t1.trim();
-  } catch {
-    // ignore
-  }
-
-  const t2 = result?.text;
-  if (typeof t2 === 'string' && t2.trim()) return t2.trim();
-
-  const t3 = result?.output_text;
-  if (typeof t3 === 'string' && t3.trim()) return t3.trim();
-
-  const parts = result?.candidates?.[0]?.content?.parts;
-  const joined = Array.isArray(parts)
-    ? parts.map((p: any) => p?.text).filter(Boolean).join(' ').trim()
-    : '';
-  if (joined) return joined;
-
-  return '';
-}
-
 function buildUsageErrorResponse(usage: Awaited<ReturnType<typeof enforceAiUsage>>) {
   return {
     error: usage.error || 'AI usage limit reached.',
@@ -160,20 +135,7 @@ export default async function handler(req: any, res: any) {
       ],
     });
 
-    const text = extractTranscriptText(result);
-    const resultAny = result as any;
-
-    if (!text) {
-      console.warn('Transcribe returned empty text despite successful provider response.', {
-        hasResponseTextFn: typeof resultAny?.response?.text === 'function',
-        hasDirectText: typeof resultAny?.text === 'string' && resultAny.text.length > 0,
-        hasOutputText: typeof resultAny?.output_text === 'string' && resultAny.output_text.length > 0,
-        candidatePartCount: Array.isArray(resultAny?.candidates?.[0]?.content?.parts)
-          ? resultAny.candidates[0].content.parts.length
-          : 0,
-      });
-    }
-
+    const text = (result.text || '').trim();
     applyUsageHeaders(res, usage);
     res.status(200).json({ transcript: text });
   } catch (err: any) {

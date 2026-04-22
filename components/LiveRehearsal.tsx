@@ -43,16 +43,6 @@ function pushDebug(event: string, data?: any) {
   }
 }
 
-
-function sumChunkBytes(chunks: ArrayLike<any> | null | undefined): number {
-  if (!chunks || typeof chunks.length !== 'number') return 0;
-  let total = 0;
-  for (let i = 0; i < chunks.length; i++) {
-    total += Number((chunks[i] as any)?.size || 0);
-  }
-  return total;
-}
-
 async function blobToBase64(blob: Blob): Promise<string> {
   const buf = await blob.arrayBuffer();
   const bytes = new Uint8Array(buf);
@@ -614,6 +604,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
     const sessionRef = useRef<LiveSession | null>(null);
     const sessionPromiseRef = useRef<Promise<LiveSession> | null>(null);
     const cleanupMicStreamRef = useRef<(() => void) | null>(null);
+    const cleanupInputAudioChainRef = useRef<(() => Promise<void> | void) | null>(null);
     const errorOccurred = useRef(false);
 
     // Ground-truth recording (for server-side transcription fallback)
@@ -826,6 +817,58 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
 
     const transcriptEndRef = useRef<HTMLDivElement>(null);
 
+    const hardResetTakeState = (reason: string) => {
+        recordedChunksRef.current = [];
+        recordedMimeTypeRef.current = 'audio/webm';
+        pcmChunksRef.current = [];
+        pcmSampleRateRef.current = 16000;
+
+        transcriptionHistoryRef.current = [];
+        currentTakeUserTranscriptTextRef.current = '';
+
+        setTranscriptionHistory([]);
+        setMarkerCount(0);
+        setCurrentMarkers([]);
+        currentTakeStartRef.current = null;
+        setSessionElapsed('0:00');
+        setErrorMessage('');
+        setBlockedUx(null);
+
+        try {
+            for (const source of sourcesRef.current.values()) {
+                try { source.stop(); } catch {}
+            }
+            sourcesRef.current.clear();
+            nextStartTimeRef.current = 0;
+        } catch {
+            // ignore
+        }
+
+        pushDebug('take_state_reset', {
+            reason,
+            existingTakes: takesRef.current.length,
+        });
+    };
+
+    const cleanupInputAudioChain = async (reason: string) => {
+        pushDebug('cleanup_input_audio_chain_start', {
+            reason,
+            hasCleanup: !!cleanupInputAudioChainRef.current,
+        });
+
+        try {
+            if (cleanupInputAudioChainRef.current) {
+                await cleanupInputAudioChainRef.current();
+            }
+        } catch {
+            // ignore
+        } finally {
+            cleanupInputAudioChainRef.current = null;
+        }
+
+        pushDebug('cleanup_input_audio_chain_done', { reason });
+    };
+
     useEffect(() => {
         transcriptionHistoryRef.current = transcriptionHistory;
         transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -860,6 +903,8 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         } catch {
             // ignore
         }
+
+        await cleanupInputAudioChain('safe_cleanup_session');
 
         try {
             if (outputAudioContextRef.current) {
@@ -896,6 +941,24 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 clearInterval(usageIntervalRef.current);
                 usageIntervalRef.current = null;
             }
+        } catch {
+            // ignore
+        }
+
+        sessionPromiseRef.current = null;
+        recordedChunksRef.current = [];
+        recordedMimeTypeRef.current = 'audio/webm';
+        pcmChunksRef.current = [];
+        pcmSampleRateRef.current = 16000;
+        transcriptionHistoryRef.current = [];
+        currentTakeUserTranscriptTextRef.current = '';
+
+        try {
+            for (const source of sourcesRef.current.values()) {
+                try { source.stop(); } catch {}
+            }
+            sourcesRef.current.clear();
+            nextStartTimeRef.current = 0;
         } catch {
             // ignore
         }
@@ -939,6 +1002,10 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
 
     const handleStartSession = async () => {
         setBlockedUx(null);
+
+        await safeCleanupSession();
+        await cleanupInputAudioChain('before_new_take');
+        hardResetTakeState('before_new_take');
 
         // Group 1 stabilization: if the current review state only contains a demo take,
         // clear it before starting a real live recording so the first live take is always Take 1.
@@ -1006,16 +1073,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         }
         setStatus('connecting');
         setErrorMessage('');
-        transcriptionHistoryRef.current = [];
-        currentTakeUserTranscriptTextRef.current = '';
-        currentTakeUserTranscriptTextRef.current = '';
-        pcmChunksRef.current = [];
-        pcmSampleRateRef.current = 16000;
-        setTranscriptionHistory([]);
-        setMarkerCount(0);
-        setCurrentMarkers([]);
-        currentTakeStartRef.current = null;
-        setSessionElapsed('0:00');
         if (sessionElapsedIntervalRef.current) {
             clearInterval(sessionElapsedIntervalRef.current);
             sessionElapsedIntervalRef.current = null;
@@ -1049,15 +1106,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
                 recordedMimeTypeRef.current = mimeType || recorder.mimeType || 'audio/webm';
                 recorder.ondataavailable = (e) => {
-                    if (e.data && e.data.size > 0) {
-                        recordedChunksRef.current.push(e.data);
-                    }
-                    pushDebug('media_recorder_chunk', {
-                        chunkSize: Number(e?.data?.size || 0),
-                        chunkType: String(e?.data?.type || recorder.mimeType || recordedMimeTypeRef.current || ''),
-                        chunkCount: recordedChunksRef.current.length,
-                        totalBytes: sumChunkBytes(recordedChunksRef.current),
-                    });
+                    if (e.data && e.data.size > 0) recordedChunksRef.current.push(e.data);
                 };
                 recorder.onerror = (e: any) => {
                     pushDebug('media_recorder_error', { message: String(e?.error?.message || e?.message || e) });
@@ -1068,7 +1117,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 recorder.onstop = () => {
                     pushDebug('media_recorder_stop', {
                         chunks: recordedChunksRef.current.length,
-                        bytes: sumChunkBytes(recordedChunksRef.current),
+                        bytes: recordedChunksRef.current.reduce((sum: number, c: any) => sum + (c?.size || 0), 0),
                     });
                 };
                 mediaRecorderRef.current = recorder;
@@ -1087,18 +1136,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             
             // FIX: Create input audio context with the stream's native sample rate to avoid mismatches.
             const inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-            if (audioCtx.state === 'suspended') {
-                await audioCtx.resume();
-            }
-            if (inputAudioContext.state === 'suspended') {
-                await inputAudioContext.resume();
-            }
-            pushDebug('audio_contexts_ready', {
-                outputState: audioCtx.state,
-                outputSampleRate: audioCtx.sampleRate,
-                inputState: inputAudioContext.state,
-                inputSampleRate: inputAudioContext.sampleRate,
-            });
             let source: MediaStreamAudioSourceNode | null = null;
             let scriptProcessor: ScriptProcessorNode | null = null;
             let zeroGain: GainNode | null = null;
@@ -1214,10 +1251,19 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             // Define the cleanup function for all audio resources
             cleanupMicStreamRef.current = () => {
                 stream.getTracks().forEach(track => track.stop());
-                if(scriptProcessor) scriptProcessor.disconnect();
-                if(zeroGain) zeroGain.disconnect();
-                if(source) source.disconnect();
-                if(inputAudioContext.state !== 'closed') inputAudioContext.close();
+            };
+
+            cleanupInputAudioChainRef.current = async () => {
+                try { if (scriptProcessor) scriptProcessor.disconnect(); } catch {}
+                try { if (zeroGain) zeroGain.disconnect(); } catch {}
+                try { if (source) source.disconnect(); } catch {}
+                try {
+                    if (inputAudioContext.state !== 'closed') {
+                        await inputAudioContext.close().catch(() => void 0);
+                    }
+                } catch {
+                    // ignore
+                }
             };
 
         } catch (error: any) {
@@ -1414,20 +1460,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 : null);
         const mimeType = blob?.type || recorderMimeType;
         const bytes = blob?.size || recorderBytes;
-
-        pushDebug('transcribe_audio_sources', {
-            liveLen: currentUserText.length,
-            hasFinalUserSegment,
-            pcmChunkCount: pcmChunksRef.current.length,
-            pcmBlobBytes: pcmBlob?.size || 0,
-            pcmSampleRate: pcmSampleRateRef.current || 16000,
-            recorderChunkCount: recorderChunks.length,
-            recorderBytes,
-            recorderMimeType,
-            chosenSource: pcmBlob && blob === pcmBlob ? 'pcm_wav' : blob ? 'media_recorder' : 'none',
-            chosenBytes: bytes,
-            chosenMimeType: mimeType,
-        });
 
         if (hasFinalUserSegment && currentUserText) {
             pushDebug('transcribe_skipped', {
