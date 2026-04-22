@@ -1968,7 +1968,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                         settledChunkCount: recordedChunksRef.current.length,
                         settledBytes: recordedChunksRef.current.reduce((sum: number, c: any) => sum + (c?.size || 0), 0),
                     });
-                    resolve();
+                    window.setTimeout(() => resolve(), 0);
                 }, 0);
             };
 
@@ -2266,7 +2266,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             }
         } catch (err) {
             console.error('Header action failed:', err);
-            setErrorMessage('Something went wrong. Please refresh and try again.');
+            setErrorMessage(String(err?.message || err || 'Unknown stop error'));
             setStatus('error');
             setView('rehearsing');
         }
