@@ -1221,26 +1221,30 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             const text = message.serverContent.inputTranscription.text;
             setTranscriptionHistory(prev => {
                 const last = prev[prev.length - 1];
-                if (last?.source === 'user' && !last.isFinal) {
-                    const updatedLast = { ...last, text: last.text + text };
-                    return [...prev.slice(0, -1), updatedLast];
-                }
-                return [...prev, { source: 'user', text, isFinal: false }];
+                const next = last?.source === 'user' && !last.isFinal
+                    ? [...prev.slice(0, -1), { ...last, text: last.text + text }]
+                    : [...prev, { source: 'user', text, isFinal: false }];
+                transcriptionHistoryRef.current = next;
+                return next;
             });
         }
         if (message.serverContent?.outputTranscription) {
             const text = message.serverContent.outputTranscription.text;
             setTranscriptionHistory(prev => {
                 const last = prev[prev.length - 1];
-                if (last?.source === 'model' && !last.isFinal) {
-                    const updatedLast = { ...last, text: last.text + text };
-                    return [...prev.slice(0, -1), updatedLast];
-                }
-                return [...prev, { source: 'model', text, isFinal: false }];
+                const next = last?.source === 'model' && !last.isFinal
+                    ? [...prev.slice(0, -1), { ...last, text: last.text + text }]
+                    : [...prev, { source: 'model', text, isFinal: false }];
+                transcriptionHistoryRef.current = next;
+                return next;
             });
         }
         if (message.serverContent?.turnComplete) {
-            setTranscriptionHistory(prev => prev.map(t => ({...t, isFinal: true})));
+            setTranscriptionHistory(prev => {
+                const next = prev.map(t => ({ ...t, isFinal: true }));
+                transcriptionHistoryRef.current = next;
+                return next;
+            });
         }
 
         // Some model turns include multiple parts (text + audio). Scan all parts for inline audio.
@@ -1449,12 +1453,23 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             // store whatever we have so the take isn't "empty".
             const refHistory = Array.isArray(transcriptionHistoryRef.current) ? transcriptionHistoryRef.current : [];
             const all = Array.isArray(finalizedHistory) && finalizedHistory.length ? finalizedHistory : refHistory;
-            const userOnly = all.filter((t) => t?.source === 'user');
-            const takeTranscript = userOnly.length ? userOnly : all;
+            const userOnly = all.filter((t) => t?.source === 'user' && String(t?.text || '').trim());
+            const modelOnly = all.filter((t) => t?.source === 'model' && String(t?.text || '').trim());
+            const takeTranscript = userOnly.length
+                ? userOnly
+                : (modelOnly.length ? modelOnly : all.filter((t) => String(t?.text || '').trim()));
             const startedAt = currentTakeStartRef.current ?? Date.now();
             const endedAt = Date.now();
             const takeNumber = (takesRef.current?.length ?? 0) + 1;
             completedTake = { takeNumber, startedAt, endedAt, transcript: takeTranscript, markers: currentMarkers } as any;
+            if (!completedTake.transcript?.length) {
+                pushDebug('take_finalize_empty_transcript', {
+                    chunks: recordedChunksRef.current.length,
+                    bytes: recordedChunksRef.current.reduce((sum: number, c: any) => sum + (c?.size || 0), 0),
+                    refItems: refHistory.length,
+                    finalizedItems: Array.isArray(finalizedHistory) ? finalizedHistory.length : 0,
+                });
+            }
             const nextTakes = [...(takesRef.current ?? []), completedTake];
             takesRef.current = nextTakes as any;
             setTakes(nextTakes as any);
