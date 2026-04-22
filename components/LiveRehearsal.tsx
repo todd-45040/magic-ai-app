@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 // NOTE: This project does not depend on react-router-dom. Navigation is handled
 // by the parent App shell (props callback) and/or a simple location redirect.
-import { normalizeAiUserFacingError, getHighCostToolNotice } from '../services/geminiService';
+import { LiveServerMessage, FunctionCall } from '@google/genai';
+import { startLiveSession, decode, decodeAudioData, type LiveSession, normalizeAiUserFacingError, getHighCostToolNotice } from '../services/geminiService';
 import { saveIdea, updateIdea, getRehearsalSessions } from '../services/ideasService';
 import type { Transcription, TimerState, User } from '../types';
-import { getUsage, consumeLiveMinutes, getSoftLimitWarning } from '../services/usageTracker';
+import { canConsume, getUsage, consumeLiveMinutes, getSoftLimitWarning } from '../services/usageTracker';
 import { consumeLiveMinutesServer, emitLiveUsageUpdate } from '../services/liveMinutesService';
 import { fetchUsageStatus } from '../services/usageStatusService';
+import { MAGICIAN_LIVE_REHEARSAL_SYSTEM_INSTRUCTION, LIVE_REHEARSAL_TOOLS } from '../constants';
 import { BackIcon, MicrophoneIcon, StopIcon, SaveIcon, WandIcon, TrashIcon, TimerIcon, ChevronDownIcon, CheckIcon, LightbulbIcon } from './icons';
 import BlockedPanel from './BlockedPanel';
 import { normalizeBlockedUx, type BlockedUx } from '../services/blockedUx';
@@ -59,6 +61,34 @@ interface LiveRehearsalProps {
 }
 
 // Helper functions for audio processing, moved from geminiService
+type GeminiBlob = {
+  data: string;
+  mimeType: string;
+};
+
+function encode(bytes: Uint8Array): string {
+  let binary = '';
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+function createBlob(data: Float32Array): GeminiBlob {
+  const l = data.length;
+  const int16 = new Int16Array(l);
+  for (let i = 0; i < l; i++) {
+    // Clamp to [-1, 1] and use asymmetric scaling to avoid overflow/wrap distortion.
+    const s = Math.max(-1, Math.min(1, data[i]));
+    int16[i] = s < 0 ? s * 32768 : s * 32767;
+  }
+  return {
+    data: encode(new Uint8Array(int16.buffer)),
+    mimeType: 'audio/pcm;rate=16000',
+  };
+}
+
 function buildWavBlobFromFloat32(chunks: Float32Array[], sampleRate = 16000): Blob | null {
   if (!Array.isArray(chunks) || chunks.length === 0) return null;
 
@@ -101,6 +131,15 @@ function buildWavBlobFromFloat32(chunks: Float32Array[], sampleRate = 16000): Bl
 }
 
 
+
+
+const MIN_TRANSCRIBE_AUDIO_BYTES = 8_000;
+const MIN_TRANSCRIBE_AUDIO_DURATION_MS = 1_200;
+const EMPTY_TRANSCRIPT_RETRY_MIN_CHARS = 8;
+const AUDIO_WARMUP_MS = 400;
+const FORCE_TRANSCRIBE_SOURCE: 'media_recorder' | 'pcm_wav' = 'media_recorder';
+
+const delay = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 
 const DEMO_SCRIPT = `Good evening, everyone. I want to try a quick experiment in attention.
 In a moment, I'll ask you to remember one simple detail, and I want you to trust your first impression.
@@ -571,12 +610,15 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
     const [transcriptionHistory, setTranscriptionHistory] = useState<Transcription[]>([]);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     
+    const sessionRef = useRef<LiveSession | null>(null);
+    const sessionPromiseRef = useRef<Promise<LiveSession> | null>(null);
     const cleanupMicStreamRef = useRef<(() => void) | null>(null);
     const inputAudioContextRef = useRef<AudioContext | null>(null);
     const inputSourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
     const inputProcessorNodeRef = useRef<ScriptProcessorNode | null>(null);
     const inputZeroGainRef = useRef<GainNode | null>(null);
     const activeTakeIdRef = useRef(0);
+    const errorOccurred = useRef(false);
 
     // Ground-truth recording (for server-side transcription fallback)
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -586,6 +628,10 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
     const pcmSampleRateRef = useRef<number>(16000);
 
     // Audio playback refs
+    const outputAudioContextRef = useRef<AudioContext | null>(null);
+    const outputNodeRef = useRef<GainNode | null>(null);
+    const sourcesRef = useRef(new Set<AudioBufferSourceNode>());
+    const nextStartTimeRef = useRef(0);
     
     // Timer state and refs
     const [timer, setTimer] = useState<TimerState>({ startTime: null, duration: null, isRunning: false });
@@ -616,6 +662,8 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
     type TakeAudioSnapshot = {
         takeId: number;
         createdAt: number;
+        startedAt: number | null;
+        durationMs: number;
         recorderChunks: BlobPart[];
         recorderMimeType: string;
         recorderBytes: number;
@@ -627,6 +675,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         chosenMimeType: string;
         chosenBytes: number;
         chosenSource: 'pcm_wav' | 'media_recorder' | 'none';
+        isValidForTranscription: boolean;
     };
 
     type RehearsalSessionContentV2 = {
@@ -693,6 +742,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
     useEffect(() => { selectedTakeRef.current = selectedTake; }, [selectedTake]);
 
     const currentTakeStartRef = useRef<number | null>(null);
+    const pcmDiscardUntilRef = useRef<number>(0);
     const transcriptionHistoryRef = useRef<Transcription[]>([]);
     const currentTakeUserTranscriptTextRef = useRef<string>('');
 
@@ -822,6 +872,15 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         setErrorMessage('');
         setBlockedUx(null);
 
+        try {
+            for (const source of sourcesRef.current.values()) {
+                try { source.stop(); } catch {}
+            }
+            sourcesRef.current.clear();
+            nextStartTimeRef.current = 0;
+        } catch {
+            // ignore
+        }
 
         pushDebug('take_state_reset', {
             reason,
@@ -902,6 +961,15 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         mediaRecorderRef.current = null;
 
         try {
+            if (sessionRef.current) {
+                sessionRef.current.close();
+                sessionRef.current = null;
+            }
+        } catch {
+            // ignore
+        }
+
+        try {
             if (cleanupMicStreamRef.current) {
                 cleanupMicStreamRef.current();
                 cleanupMicStreamRef.current = null;
@@ -911,6 +979,18 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         }
 
         await cleanupInputAudioChain('safe_cleanup_session');
+
+        try {
+            if (outputAudioContextRef.current) {
+                const ctx = outputAudioContextRef.current;
+                outputAudioContextRef.current = null;
+                if ((ctx as any).state !== 'closed') {
+                    await ctx.close().catch(() => void 0);
+                }
+            }
+        } catch {
+            // ignore
+        }
 
         try {
             if (timerIntervalRef.current) {
@@ -939,6 +1019,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             // ignore
         }
 
+        sessionPromiseRef.current = null;
         recordedChunksRef.current = [];
         recordedMimeTypeRef.current = 'audio/webm';
         pcmChunksRef.current = [];
@@ -946,6 +1027,15 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         transcriptionHistoryRef.current = [];
         currentTakeUserTranscriptTextRef.current = '';
 
+        try {
+            for (const source of sourcesRef.current.values()) {
+                try { source.stop(); } catch {}
+            }
+            sourcesRef.current.clear();
+            nextStartTimeRef.current = 0;
+        } catch {
+            // ignore
+        }
 
         sessionStartRef.current = null;
         setTimer({ startTime: null, duration: null, isRunning: false });
@@ -1061,6 +1151,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             clearInterval(sessionElapsedIntervalRef.current);
             sessionElapsedIntervalRef.current = null;
         }
+        errorOccurred.current = false;
         try {
             // FIX: Request audio without a specific sample rate to ensure compatibility.
             // The audio will be resampled later if needed.
@@ -1078,8 +1169,8 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 constraints: stream.getAudioTracks()[0]?.getConstraints?.(),
             });
 
-            // Start a local MediaRecorder capture so every take has a server-transcribable
-            // post-stop audio source.
+            // Start a parallel MediaRecorder capture so we can always transcribe server-side
+            // even when Live inputTranscription doesn't come through.
             try {
                 const preferred = 'audio/webm;codecs=opus';
                 const mimeType = (window as any).MediaRecorder?.isTypeSupported?.(preferred)
@@ -1118,102 +1209,164 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 // continue; Live session can still work without this
             }
 
-            // Create input audio context with the stream's native sample rate.
-            // This backbone is local-capture only: we collect audio locally and
-            // transcribe once after stop via /api/transcribe.
+            // Setup output audio context
+            const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+            outputAudioContextRef.current = audioCtx;
+            outputNodeRef.current = audioCtx.createGain();
+            outputNodeRef.current.connect(audioCtx.destination);
+            
+            // FIX: Create input audio context with the stream's native sample rate to avoid mismatches.
             const inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
             inputAudioContextRef.current = inputAudioContext;
             inputSourceNodeRef.current = null;
             inputProcessorNodeRef.current = null;
             inputZeroGainRef.current = null;
 
-            const source = inputAudioContext.createMediaStreamSource(stream);
-            const scriptProcessor = inputAudioContext.createScriptProcessor(4096, 1, 1);
+            const sessionPromise = startLiveSession(
+                MAGICIAN_LIVE_REHEARSAL_SYSTEM_INSTRUCTION,
+                {
+                    onopen: async () => { 
+                        // Setup microphone streaming once the connection is open
+                        const source = inputAudioContext.createMediaStreamSource(stream);
+                        const scriptProcessor = inputAudioContext.createScriptProcessor(4096, 1, 1);
 
-            inputSourceNodeRef.current = source;
-            inputProcessorNodeRef.current = scriptProcessor;
+                        inputSourceNodeRef.current = source;
+                        inputProcessorNodeRef.current = scriptProcessor;
 
-            const thisTakeId = activeTakeIdRef.current;
-            scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
-                if (thisTakeId !== activeTakeIdRef.current) {
-                    pushDebug('stale_audio_callback_ignored', {
-                        thisTakeId,
-                        activeTakeId: activeTakeIdRef.current,
-                    });
-                    return;
-                }
+                        // FIX: Implement audio resampling within the audio processor
+                        // to convert the microphone's native sample rate to the 16000Hz required by the API.
+                        const thisTakeId = activeTakeIdRef.current;
+                        scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
+                            if (thisTakeId !== activeTakeIdRef.current) {
+                                pushDebug('stale_audio_callback_ignored', {
+                                    thisTakeId,
+                                    activeTakeId: activeTakeIdRef.current,
+                                });
+                                return;
+                            }
+                            if (Date.now() < pcmDiscardUntilRef.current) {
+                                return;
+                            }
+                            const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
+                            const inputSampleRate = inputAudioContext.sampleRate;
+                            const outputSampleRate = 16000;
 
-                const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
-                const inputSampleRate = inputAudioContext.sampleRate;
-                const outputSampleRate = 16000;
+                            let resampledData = inputData;
+                            if (inputSampleRate !== outputSampleRate) {
+                                const sampleRateRatio = inputSampleRate / outputSampleRate;
+                                const newLength = Math.round(inputData.length / sampleRateRatio);
+                                resampledData = new Float32Array(newLength);
+                                let offsetResult = 0;
+                                let offsetBuffer = 0;
+                                while (offsetResult < newLength) {
+                                    const nextOffsetBuffer = Math.round((offsetResult + 1) * sampleRateRatio);
+                                    let accum = 0, count = 0;
+                                    for (let i = offsetBuffer; i < nextOffsetBuffer && i < inputData.length; i++) {
+                                        accum += inputData[i];
+                                        count++;
+                                    }
+                                    resampledData[offsetResult] = count > 0 ? accum / count : 0;
+                                    offsetResult++;
+                                    offsetBuffer = nextOffsetBuffer;
+                                }
+                            }
 
-                let resampledData = inputData;
-                if (inputSampleRate !== outputSampleRate) {
-                    const sampleRateRatio = inputSampleRate / outputSampleRate;
-                    const newLength = Math.round(inputData.length / sampleRateRatio);
-                    resampledData = new Float32Array(newLength);
-                    let offsetResult = 0;
-                    let offsetBuffer = 0;
-                    while (offsetResult < newLength) {
-                        const nextOffsetBuffer = Math.round((offsetResult + 1) * sampleRateRatio);
-                        let accum = 0, count = 0;
-                        for (let i = offsetBuffer; i < nextOffsetBuffer && i < inputData.length; i++) {
-                            accum += inputData[i];
-                            count++;
+                            pcmChunksRef.current.push(new Float32Array(resampledData));
+                            pcmSampleRateRef.current = outputSampleRate;
+
+                            const pcmBlob = createBlob(resampledData);
+                            // This currently resolves to a no-op shim in the production baseline,
+                            // but we keep the call shape intact so the component remains forward-compatible.
+                            sessionPromise.then((session) => {
+                                session.sendRealtimeInput({ media: pcmBlob });
+                            });
+                        };
+
+                        source.connect(scriptProcessor);
+                        // Keep the ScriptProcessorNode alive without routing audible audio to speakers.
+                        const zeroGain = inputAudioContext.createGain();
+                        zeroGain.gain.value = 0;
+                        inputZeroGainRef.current = zeroGain;
+                        scriptProcessor.connect(zeroGain);
+                        zeroGain.connect(inputAudioContext.destination);
+
+                        try {
+                            await inputAudioContext.resume();
+                        } catch {
+                            // ignore
                         }
-                        resampledData[offsetResult] = count > 0 ? accum / count : 0;
-                        offsetResult++;
-                        offsetBuffer = nextOffsetBuffer;
-                    }
-                }
+                        pcmDiscardUntilRef.current = Date.now() + AUDIO_WARMUP_MS;
+                        pushDebug('audio_warmup_start', {
+                            takeId: activeTakeIdRef.current,
+                            warmupMs: AUDIO_WARMUP_MS,
+                            inputSampleRate: inputAudioContext.sampleRate,
+                        });
+                        await delay(AUDIO_WARMUP_MS);
 
-                pcmChunksRef.current.push(new Float32Array(resampledData));
-                pcmSampleRateRef.current = outputSampleRate;
-            };
+                        currentTakeStartRef.current = Date.now();
+                        if (sessionElapsedIntervalRef.current) {
+                            clearInterval(sessionElapsedIntervalRef.current);
+                        }
+                        sessionElapsedIntervalRef.current = window.setInterval(() => {
+                            const startedAt = currentTakeStartRef.current;
+                            setSessionElapsed(startedAt ? formatElapsed(Date.now() - startedAt) : '0:00');
+                        }, 250);
 
-            source.connect(scriptProcessor);
-            const zeroGain = inputAudioContext.createGain();
-            zeroGain.gain.value = 0;
-            inputZeroGainRef.current = zeroGain;
-            scriptProcessor.connect(zeroGain);
-            zeroGain.connect(inputAudioContext.destination);
+                        setStatus('listening');
+                        setView('rehearsing');
+                        trackLiveRehearsalEvent('live_rehearsal_session_start', {
+                            mode: 'live',
+                            daily_remaining: dailyLiveStartRemainingRef.current,
+                        }, { outcome: 'ALLOWED' });
 
-            currentTakeStartRef.current = Date.now();
-            if (sessionElapsedIntervalRef.current) {
-                clearInterval(sessionElapsedIntervalRef.current);
-            }
-            sessionElapsedIntervalRef.current = window.setInterval(() => {
-                const startedAt = currentTakeStartRef.current;
-                setSessionElapsed(startedAt ? formatElapsed(Date.now() - startedAt) : '0:00');
-            }, 250);
+                        // Start usage timer
+                        sessionStartRef.current = Date.now();
+                        if (usageIntervalRef.current) {
+                            clearInterval(usageIntervalRef.current);
+                        }
+                        usageIntervalRef.current = window.setInterval(() => {
+                            const start = sessionStartRef.current;
+                            if (!start) return;
+                            const elapsedMin = (Date.now() - start) / 60000;
+                            const startRemaining = dailyLiveStartRemainingRef.current;
+                            // When elapsed session time reaches remaining daily minutes (at session start), stop.
+                            if (startRemaining != null && startRemaining > 0 && elapsedMin >= startRemaining) {
+                                void handleStopRehearsal('Daily live rehearsal minutes reached. Upgrade to continue.');
+                            }
+                        }, 5000);
+                    },
+                    onmessage: handleServerMessage,
+                    onerror: async (e) => {
+                        console.error('Live session error:', e);
+                        errorOccurred.current = true;
+                        setErrorMessage(normalizeAiUserFacingError(e));
+                        await safeCleanupSession();
+                        trackLiveRehearsalEvent('live_rehearsal_session_error', { phase: 'live_session', has_transcript: transcriptionHistoryRef.current.length > 0 }, { outcome: 'ERROR_UPSTREAM', error_code: 'live_session_error', retryable: true });
+                        setStatus('error');
+                        setView(transcriptionHistoryRef.current.length > 0 ? 'rehearsing' : 'idle');
+                    },
+                    onclose: () => {
+                        if (!errorOccurred.current) {
+                           // A clean close (e.g., user stops talking) should go to the review screen
+                           setStatus('idle');
+                           setView('reviewing');
+                        }
+                    },
+                },
+                LIVE_REHEARSAL_TOOLS
+            );
+            
+            sessionPromiseRef.current = sessionPromise;
+            sessionRef.current = await sessionPromise;
 
-            setStatus('listening');
-            setView('rehearsing');
-            trackLiveRehearsalEvent('live_rehearsal_session_start', {
-                mode: 'local_record_post_stop_transcribe',
-                daily_remaining: dailyLiveStartRemainingRef.current,
-            }, { outcome: 'ALLOWED' });
-
-            sessionStartRef.current = Date.now();
-            if (usageIntervalRef.current) {
-                clearInterval(usageIntervalRef.current);
-            }
-            usageIntervalRef.current = window.setInterval(() => {
-                const start = sessionStartRef.current;
-                if (!start) return;
-                const elapsedMin = (Date.now() - start) / 60000;
-                const startRemaining = dailyLiveStartRemainingRef.current;
-                if (startRemaining != null && startRemaining > 0 && elapsedMin >= startRemaining) {
-                    void handleStopRehearsal('Daily live rehearsal minutes reached. Upgrade to continue.');
-                }
-            }, 5000);
-
+            // Define the cleanup function for all audio resources
             cleanupMicStreamRef.current = () => {
                 stream.getTracks().forEach(track => track.stop());
             };
 
         } catch (error: any) {
             console.error('Failed to start session or get microphone:', error);
+            errorOccurred.current = true;
             try {
                 const blocked = normalizeBlockedUx(error, { toolName: 'Live Rehearsal (Audio)' });
                 if (blocked.showUpgrade || blocked.retryable) {
@@ -1245,6 +1398,120 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         }
     };
     
+    const handleToolCall = (fc: FunctionCall) => {
+        let result: any;
+        switch(fc.name) {
+            case 'startTimer':
+                if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+                setTimer({ startTime: Date.now(), duration: '00:00.0', isRunning: true });
+                timerIntervalRef.current = window.setInterval(() => {
+                    setTimer(prev => {
+                        if (!prev.startTime) return prev;
+                        const elapsed = Date.now() - prev.startTime;
+                        const totalSeconds = Math.floor(elapsed / 1000);
+                        const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
+                        const seconds = (totalSeconds % 60).toString().padStart(2, '0');
+                        const tenths = Math.floor((elapsed % 1000) / 100);
+                        return { ...prev, duration: `${minutes}:${seconds}.${tenths}` };
+                    });
+                }, 100);
+                result = { result: "Timer started successfully." };
+                break;
+            case 'stopTimer':
+                if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+                const finalDuration = timer.duration;
+                setTimer(prev => ({ ...prev, isRunning: false, duration: finalDuration }));
+                result = { result: `Timer stopped. The final duration was ${finalDuration}.` };
+                break;
+            default:
+                result = { error: "Unknown function." };
+        }
+        
+        sessionPromiseRef.current?.then((session) => {
+            session.sendToolResponse({
+                functionResponses: { id: fc.id, name: fc.name, response: result }
+            });
+        });
+    };
+
+    const handleServerMessage = async (message: LiveServerMessage) => {
+        if (message.toolCall) {
+            for (const fc of message.toolCall.functionCalls) {
+                handleToolCall(fc);
+            }
+        }
+
+        if (message.serverContent?.inputTranscription) {
+            const text = message.serverContent.inputTranscription.text;
+            setTranscriptionHistory(prev => {
+                const last = prev[prev.length - 1];
+                const next = last?.source === 'user' && !last.isFinal
+                    ? [...prev.slice(0, -1), { ...last, text: last.text + text }]
+                    : [...prev, { source: 'user', text, isFinal: false }];
+                transcriptionHistoryRef.current = next;
+                currentTakeUserTranscriptTextRef.current = next
+                    .filter((t) => t?.source === 'user')
+                    .map((t) => String(t?.text || ''))
+                    .join(' ')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+                return next;
+            });
+        }
+        if (message.serverContent?.outputTranscription) {
+            const text = message.serverContent.outputTranscription.text;
+            setTranscriptionHistory(prev => {
+                const last = prev[prev.length - 1];
+                const next = last?.source === 'model' && !last.isFinal
+                    ? [...prev.slice(0, -1), { ...last, text: last.text + text }]
+                    : [...prev, { source: 'model', text, isFinal: false }];
+                transcriptionHistoryRef.current = next;
+                return next;
+            });
+        }
+        if (message.serverContent?.turnComplete) {
+            setTranscriptionHistory(prev => {
+                const next = prev.map(t => ({ ...t, isFinal: true }));
+                transcriptionHistoryRef.current = next;
+                currentTakeUserTranscriptTextRef.current = next
+                    .filter((t) => t?.source === 'user')
+                    .map((t) => String(t?.text || ''))
+                    .join(' ')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+                return next;
+            });
+        }
+
+        // Some model turns include multiple parts (text + audio). Scan all parts for inline audio.
+        const parts = message.serverContent?.modelTurn?.parts || [];
+        const audioPart = parts.find((p: any) => {
+            const mime = String(p?.inlineData?.mimeType || '');
+            return Boolean(p?.inlineData?.data) && mime.startsWith('audio/');
+        });
+        const base64Audio = audioPart?.inlineData?.data;
+        if (base64Audio && outputAudioContextRef.current && outputNodeRef.current) {
+            const ctx = outputAudioContextRef.current;
+            nextStartTimeRef.current = Math.max(nextStartTimeRef.current, ctx.currentTime);
+            const audioBuffer = await decodeAudioData(decode(base64Audio), ctx, 24000, 1);
+            const source = ctx.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(outputNodeRef.current);
+            source.addEventListener('ended', () => sourcesRef.current.delete(source));
+            source.start(nextStartTimeRef.current);
+            nextStartTimeRef.current += audioBuffer.duration;
+            sourcesRef.current.add(source);
+        }
+
+        if (message.serverContent?.interrupted) {
+            for (const source of sourcesRef.current.values()) {
+                source.stop();
+                sourcesRef.current.delete(source);
+            }
+            nextStartTimeRef.current = 0;
+        }
+    };
+
     const getUserText = (items: Transcription[]) =>
         items
             .filter((t) => t.source === 'user')
@@ -1268,6 +1535,8 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
     const captureTakeSnapshot = (): TakeAudioSnapshot => {
         const takeId = activeTakeIdRef.current;
         const createdAt = Date.now();
+        const startedAt = currentTakeStartRef.current;
+        const durationMs = startedAt ? Math.max(0, createdAt - startedAt) : 0;
 
         const recorderChunks = Array.isArray(recordedChunksRef.current)
             ? [...recordedChunksRef.current]
@@ -1282,23 +1551,36 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         const pcmBlob = buildWavBlobFromFloat32(pcmChunks, pcmSampleRate);
 
         const mediaRecorderBlob =
-            recorderChunks.length && recorderBytes >= 1024
+            recorderChunks.length && recorderBytes >= MIN_TRANSCRIBE_AUDIO_BYTES
                 ? new Blob(recorderChunks, { type: recorderMimeType })
                 : null;
 
-        const chosenBlob =
-            pcmBlob && pcmBlob.size >= 1024
+        const preferredBlob =
+            FORCE_TRANSCRIBE_SOURCE === 'media_recorder'
+                ? mediaRecorderBlob
+                : pcmBlob;
+
+        const fallbackBlob =
+            FORCE_TRANSCRIBE_SOURCE === 'media_recorder'
                 ? pcmBlob
                 : mediaRecorderBlob;
 
+        const chosenBlob = preferredBlob || fallbackBlob || null;
+
         const chosenSource =
-            pcmBlob && chosenBlob === pcmBlob
+            chosenBlob === pcmBlob && pcmBlob
                 ? 'pcm_wav'
-                : (chosenBlob ? 'media_recorder' : 'none');
+                : (chosenBlob === mediaRecorderBlob && mediaRecorderBlob ? 'media_recorder' : 'none');
+
+        const chosenBytes = chosenBlob?.size || 0;
+        const isValidForTranscription =
+            durationMs >= MIN_TRANSCRIBE_AUDIO_DURATION_MS && chosenBytes >= MIN_TRANSCRIBE_AUDIO_BYTES;
 
         const snapshot: TakeAudioSnapshot = {
             takeId,
             createdAt,
+            startedAt,
+            durationMs,
             recorderChunks,
             recorderMimeType,
             recorderBytes,
@@ -1308,13 +1590,16 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             pcmBytes: pcmBlob?.size || 0,
             chosenBlob,
             chosenMimeType: chosenBlob?.type || recorderMimeType,
-            chosenBytes: chosenBlob?.size || 0,
+            chosenBytes,
             chosenSource,
+            isValidForTranscription,
         };
 
         pushDebug('take_audio_snapshot', {
             takeId,
             createdAt,
+            startedAt,
+            durationMs,
             pcmChunkCount: snapshot.pcmChunks.length,
             pcmBlobBytes: snapshot.pcmBytes,
             pcmSampleRate: snapshot.pcmSampleRate,
@@ -1324,6 +1609,20 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             chosenSource: snapshot.chosenSource,
             chosenBytes: snapshot.chosenBytes,
             chosenMimeType: snapshot.chosenMimeType,
+            isValidForTranscription: snapshot.isValidForTranscription,
+            forcedSource: FORCE_TRANSCRIBE_SOURCE,
+        });
+
+        console.log('[AUDIO DEBUG]', {
+            takeId,
+            durationMs,
+            pcmBytes: snapshot.pcmBytes,
+            mediaRecorderBytes: snapshot.recorderBytes,
+            chosenSource: snapshot.chosenSource,
+            chosenBytes: snapshot.chosenBytes,
+            chosenMimeType: snapshot.chosenMimeType,
+            isValidForTranscription: snapshot.isValidForTranscription,
+            forcedSource: FORCE_TRANSCRIBE_SOURCE,
         });
 
         return snapshot;
@@ -1337,11 +1636,15 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         audioSource: TakeAudioSnapshot['chosenSource'];
         audioBytes: number;
     }> => {
-        const fallbackText = String(currentTakeUserTranscriptTextRef.current || '').trim();
+        const currentHistory = Array.isArray(transcriptionHistoryRef.current) ? transcriptionHistoryRef.current : [];
+        const normalizedCurrent = normalizeTranscript(currentHistory);
+        const currentUserText = getFinalUserTranscriptText(normalizedCurrent);
+        const hasFinalUserSegment = normalizedCurrent.some((t) => t.source === 'user' && t.isFinal);
 
         pushDebug('transcribe_audio_sources', {
             takeId: snapshot.takeId,
-            fallbackLen: fallbackText.length,
+            liveLen: currentUserText.length,
+            hasFinalUserSegment,
             pcmChunkCount: snapshot.pcmChunks.length,
             pcmBlobBytes: snapshot.pcmBytes,
             pcmSampleRate: snapshot.pcmSampleRate,
@@ -1353,20 +1656,37 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             chosenMimeType: snapshot.chosenMimeType,
         });
 
-        if (!snapshot.chosenBlob || snapshot.chosenBytes < 1024) {
+        if (hasFinalUserSegment && currentUserText) {
             pushDebug('transcribe_skipped', {
-                reason: 'no_audio_chunks',
+                reason: 'final_live_user_transcript_present',
+                len: currentUserText.length,
                 takeId: snapshot.takeId,
+            });
+            return {
+                transcript: normalizedCurrent,
+                audioSource: snapshot.chosenSource,
+                audioBytes: snapshot.chosenBytes,
+            };
+        }
+
+        if (!snapshot.chosenBlob || !snapshot.isValidForTranscription) {
+            pushDebug('transcribe_skipped', {
+                reason: !snapshot.chosenBlob ? 'no_audio_chunks' : 'audio_below_minimum_quality_gate',
+                takeId: snapshot.takeId,
+                durationMs: snapshot.durationMs,
+                chosenBytes: snapshot.chosenBytes,
+                minDurationMs: MIN_TRANSCRIBE_AUDIO_DURATION_MS,
+                minBytes: MIN_TRANSCRIBE_AUDIO_BYTES,
                 chunks: snapshot.recorderChunks.length,
-                bytes: snapshot.chosenBytes,
-                fallbackLen: fallbackText.length,
+                liveLen: currentUserText.length,
+                hasFinalUserSegment,
             });
 
             return {
-                transcript: fallbackText
-                    ? ([{ source: 'user', text: fallbackText, isFinal: true }] as any)
+                transcript: currentUserText
+                    ? ([{ source: 'user', text: currentUserText, isFinal: true }] as any)
                     : [],
-                transcriptionError: fallbackText ? undefined : 'no_audio_captured',
+                transcriptionError: currentUserText ? undefined : (!snapshot.chosenBlob ? 'no_audio_captured' : 'audio_below_minimum_quality_gate'),
                 audioSource: snapshot.chosenSource,
                 audioBytes: snapshot.chosenBytes,
             };
@@ -1399,27 +1719,52 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             bytes: snapshot.chosenBlob.size,
             mimeType: snapshot.chosenBlob.type,
             base64Len: audioBase64.length,
-            fallbackLen: fallbackText.length,
+            liveLen: currentUserText.length,
+            hasFinalUserSegment,
+            durationMs: snapshot.durationMs,
+            chosenSource: snapshot.chosenSource,
         });
 
         const transcribeStartedAt = Date.now();
 
         try {
             const { getBearerToken } = await import('../services/usageStatusService');
-            const res = await fetch('/api/transcribe', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: await getBearerToken(),
-                },
-                body: JSON.stringify({
-                    audioBase64,
-                    mimeType: snapshot.chosenBlob.type,
-                }),
+            const authHeader = await getBearerToken();
+            const requestBody = JSON.stringify({
+                audioBase64,
+                mimeType: snapshot.chosenBlob.type,
             });
 
-            const json = await res.json().catch(() => ({}));
-            const serverTranscript = String(json?.transcript || '').trim();
+            const requestTranscription = async (attempt: number) => {
+                const res = await fetch('/api/transcribe', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: authHeader,
+                    },
+                    body: requestBody,
+                });
+                const json = await res.json().catch(() => ({}));
+                const serverTranscript = String(json?.transcript || '').trim();
+                pushDebug('transcribe_attempt', {
+                    takeId: snapshot.takeId,
+                    attempt,
+                    status: res.status,
+                    ok: res.ok,
+                    transcriptLen: serverTranscript.length,
+                    error: json?.error ? String(json.error).slice(0, 200) : '',
+                });
+                return { res, json, serverTranscript };
+            };
+
+            let { res, json, serverTranscript } = await requestTranscription(1);
+            if (res.ok && serverTranscript.length < EMPTY_TRANSCRIPT_RETRY_MIN_CHARS) {
+                await delay(350);
+                const retry = await requestTranscription(2);
+                if (retry.serverTranscript.length > serverTranscript.length || (!serverTranscript && retry.res.ok)) {
+                    ({ res, json, serverTranscript } = retry);
+                }
+            }
 
             try {
                 (window as any).__REHEARSAL_TRANSCRIBE__ = {
@@ -1439,7 +1784,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 status: res.status,
                 ok: res.ok,
                 serverLen: serverTranscript.length,
-                fallbackLen: fallbackText.length,
+                liveLen: currentUserText.length,
                 error: json?.error ? String(json.error).slice(0, 200) : '',
             });
 
@@ -1455,18 +1800,25 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                     },
                 });
 
-                const finalHistory: Transcription[] = [
-                    { source: 'user', text: serverTranscript, isFinal: true } as any,
-                ];
-                transcriptionHistoryRef.current = finalHistory;
-                currentTakeUserTranscriptTextRef.current = serverTranscript;
-                setTranscriptionHistory(finalHistory);
+                const winner =
+                    serverTranscript.length >= currentUserText.length
+                        ? serverTranscript
+                        : currentUserText;
 
-                return {
-                    transcript: finalHistory,
-                    audioSource: snapshot.chosenSource,
-                    audioBytes: snapshot.chosenBytes,
-                };
+                if (winner) {
+                    const finalHistory: Transcription[] = [
+                        { source: 'user', text: winner, isFinal: true } as any,
+                    ];
+                    transcriptionHistoryRef.current = finalHistory;
+                    currentTakeUserTranscriptTextRef.current = winner;
+                    setTranscriptionHistory(finalHistory);
+
+                    return {
+                        transcript: finalHistory,
+                        audioSource: snapshot.chosenSource,
+                        audioBytes: snapshot.chosenBytes,
+                    };
+                }
             }
 
             if (!res.ok) {
@@ -1488,8 +1840,8 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 });
             }
 
-            const fallbackTranscript = fallbackText
-                ? ([{ source: 'user', text: fallbackText, isFinal: true }] as any)
+            const fallbackTranscript = currentUserText
+                ? ([{ source: 'user', text: currentUserText, isFinal: true }] as any)
                 : [];
 
             return {
@@ -1532,8 +1884,8 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             }
 
             return {
-                transcript: fallbackText
-                    ? ([{ source: 'user', text: fallbackText, isFinal: true }] as any)
+                transcript: currentUserText
+                    ? ([{ source: 'user', text: currentUserText, isFinal: true }] as any)
                     : [],
                 transcriptionError: String(err?.message || err),
                 audioSource: snapshot.chosenSource,
