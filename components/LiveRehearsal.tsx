@@ -1114,6 +1114,28 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 // ignore
             }
         }
+
+        // Phase 2: require a real authenticated session before allowing a take to start.
+        try {
+            const { getBearerToken } = await import('../services/usageStatusService');
+            const bearerToken = await getBearerToken();
+            const authMode: 'authenticated' | 'guest' = bearerToken === 'Bearer guest' ? 'guest' : 'authenticated';
+            pushDebug('start_rehearsal_bearer_mode', { authMode });
+            if (authMode === 'guest') {
+                setStatus('error');
+                setIsAnalyzing(false);
+                setErrorMessage('Please log in again before starting Live Rehearsal. Your session is not authenticated.');
+                pushDebug('start_rehearsal_blocked_missing_auth', { authMode });
+                return;
+            }
+        } catch (err: any) {
+            setStatus('error');
+            setIsAnalyzing(false);
+            setErrorMessage('Unable to verify your login session. Please refresh and log in again before starting Live Rehearsal.');
+            pushDebug('start_rehearsal_auth_check_failed', { message: String(err?.message || err) });
+            return;
+        }
+
         setStatus('connecting');
         setErrorMessage('');
         if (sessionElapsedIntervalRef.current) {
@@ -1583,6 +1605,27 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 hasFinalUserSegment,
                 liveLen: currentUserText.length,
             });
+
+            // Phase 2: re-check auth immediately before server transcription.
+            if (authMode === 'guest') {
+                const failureBody = 'Missing authenticated bearer token before /api/transcribe';
+                pushDebug('transcribe_failure_detail', {
+                    status: 401,
+                    authMode,
+                    body: failureBody,
+                });
+                if (!currentUserText) {
+                    transcribeFailureRef.current = {
+                        message: 'Transcription failed because your session is not authenticated. Please log in again and retry.',
+                        status: 401,
+                        body: failureBody,
+                        authMode,
+                    };
+                }
+                return currentUserText
+                    ? ([{ source: 'user', text: currentUserText, isFinal: true }] as any)
+                    : [];
+            }
 
             const res = await fetch('/api/transcribe', {
                 method: 'POST',
