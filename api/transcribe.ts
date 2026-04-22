@@ -26,9 +26,10 @@ function friendlyTransientMessage(): string {
 }
 
 
-function extractTranscriptText(result: any): string {
+function extractTranscriptText(raw: unknown): string {
+  const result = raw as any;
   try {
-    const t1 = result?.response?.text?.();
+    const t1 = typeof result?.response?.text === 'function' ? result.response.text() : '';
     if (typeof t1 === 'string' && t1.trim()) return t1.trim();
   } catch {
     // ignore
@@ -160,14 +161,15 @@ export default async function handler(req: any, res: any) {
     });
 
     const text = extractTranscriptText(result);
+    const resultAny = result as any;
 
     if (!text) {
       console.warn('Transcribe returned empty text despite successful provider response.', {
-        hasResponseTextFn: typeof result?.response?.text === 'function',
-        hasDirectText: typeof result?.text === 'string' && result.text.length > 0,
-        hasOutputText: typeof result?.output_text === 'string' && result.output_text.length > 0,
-        candidatePartCount: Array.isArray(result?.candidates?.[0]?.content?.parts)
-          ? result.candidates[0].content.parts.length
+        hasResponseTextFn: typeof resultAny?.response?.text === 'function',
+        hasDirectText: typeof resultAny?.text === 'string' && resultAny.text.length > 0,
+        hasOutputText: typeof resultAny?.output_text === 'string' && resultAny.output_text.length > 0,
+        candidatePartCount: Array.isArray(resultAny?.candidates?.[0]?.content?.parts)
+          ? resultAny.candidates[0].content.parts.length
           : 0,
       });
     }
