@@ -43,6 +43,16 @@ function pushDebug(event: string, data?: any) {
   }
 }
 
+
+function sumChunkBytes(chunks: ArrayLike<any> | null | undefined): number {
+  if (!chunks || typeof chunks.length !== 'number') return 0;
+  let total = 0;
+  for (let i = 0; i < chunks.length; i++) {
+    total += Number((chunks[i] as any)?.size || 0);
+  }
+  return total;
+}
+
 async function blobToBase64(blob: Blob): Promise<string> {
   const buf = await blob.arrayBuffer();
   const bytes = new Uint8Array(buf);
@@ -1039,7 +1049,15 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
                 recordedMimeTypeRef.current = mimeType || recorder.mimeType || 'audio/webm';
                 recorder.ondataavailable = (e) => {
-                    if (e.data && e.data.size > 0) recordedChunksRef.current.push(e.data);
+                    if (e.data && e.data.size > 0) {
+                        recordedChunksRef.current.push(e.data);
+                    }
+                    pushDebug('media_recorder_chunk', {
+                        chunkSize: Number(e?.data?.size || 0),
+                        chunkType: String(e?.data?.type || recorder.mimeType || recordedMimeTypeRef.current || ''),
+                        chunkCount: recordedChunksRef.current.length,
+                        totalBytes: sumChunkBytes(recordedChunksRef.current),
+                    });
                 };
                 recorder.onerror = (e: any) => {
                     pushDebug('media_recorder_error', { message: String(e?.error?.message || e?.message || e) });
@@ -1050,7 +1068,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 recorder.onstop = () => {
                     pushDebug('media_recorder_stop', {
                         chunks: recordedChunksRef.current.length,
-                        bytes: recordedChunksRef.current.reduce((sum: number, c: any) => sum + (c?.size || 0), 0),
+                        bytes: sumChunkBytes(recordedChunksRef.current),
                     });
                 };
                 mediaRecorderRef.current = recorder;
@@ -1069,6 +1087,18 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             
             // FIX: Create input audio context with the stream's native sample rate to avoid mismatches.
             const inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+            if (audioCtx.state === 'suspended') {
+                await audioCtx.resume();
+            }
+            if (inputAudioContext.state === 'suspended') {
+                await inputAudioContext.resume();
+            }
+            pushDebug('audio_contexts_ready', {
+                outputState: audioCtx.state,
+                outputSampleRate: audioCtx.sampleRate,
+                inputState: inputAudioContext.state,
+                inputSampleRate: inputAudioContext.sampleRate,
+            });
             let source: MediaStreamAudioSourceNode | null = null;
             let scriptProcessor: ScriptProcessorNode | null = null;
             let zeroGain: GainNode | null = null;
@@ -1384,6 +1414,20 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 : null);
         const mimeType = blob?.type || recorderMimeType;
         const bytes = blob?.size || recorderBytes;
+
+        pushDebug('transcribe_audio_sources', {
+            liveLen: currentUserText.length,
+            hasFinalUserSegment,
+            pcmChunkCount: pcmChunksRef.current.length,
+            pcmBlobBytes: pcmBlob?.size || 0,
+            pcmSampleRate: pcmSampleRateRef.current || 16000,
+            recorderChunkCount: recorderChunks.length,
+            recorderBytes,
+            recorderMimeType,
+            chosenSource: pcmBlob && blob === pcmBlob ? 'pcm_wav' : blob ? 'media_recorder' : 'none',
+            chosenBytes: bytes,
+            chosenMimeType: mimeType,
+        });
 
         if (hasFinalUserSegment && currentUserText) {
             pushDebug('transcribe_skipped', {
