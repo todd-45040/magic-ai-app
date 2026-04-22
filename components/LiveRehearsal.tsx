@@ -953,6 +953,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         }
         setStatus('connecting');
         setErrorMessage('');
+        transcriptionHistoryRef.current = [];
         setTranscriptionHistory([]);
         setMarkerCount(0);
         setCurrentMarkers([]);
@@ -1220,29 +1221,29 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             const text = message.serverContent.inputTranscription.text;
             setTranscriptionHistory(prev => {
                 const last = prev[prev.length - 1];
-                const next = (last?.source === 'user' && !last.isFinal)
+                const next = last?.source === 'user' && !last.isFinal
                     ? [...prev.slice(0, -1), { ...last, text: last.text + text }]
                     : [...prev, { source: 'user', text, isFinal: false }];
-                transcriptionHistoryRef.current = next as Transcription[];
-                return next as Transcription[];
+                transcriptionHistoryRef.current = next;
+                return next;
             });
         }
         if (message.serverContent?.outputTranscription) {
             const text = message.serverContent.outputTranscription.text;
             setTranscriptionHistory(prev => {
                 const last = prev[prev.length - 1];
-                const next = (last?.source === 'model' && !last.isFinal)
+                const next = last?.source === 'model' && !last.isFinal
                     ? [...prev.slice(0, -1), { ...last, text: last.text + text }]
                     : [...prev, { source: 'model', text, isFinal: false }];
-                transcriptionHistoryRef.current = next as Transcription[];
-                return next as Transcription[];
+                transcriptionHistoryRef.current = next;
+                return next;
             });
         }
         if (message.serverContent?.turnComplete) {
             setTranscriptionHistory(prev => {
                 const next = prev.map(t => ({ ...t, isFinal: true }));
-                transcriptionHistoryRef.current = next as Transcription[];
-                return next as Transcription[];
+                transcriptionHistoryRef.current = next;
+                return next;
             });
         }
 
@@ -1290,14 +1291,12 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
      * after this function.
      */
     const transcribeOnServerIfNeeded = async (): Promise<Transcription[]> => {
+        const currentHistory = Array.isArray(transcriptionHistoryRef.current) ? transcriptionHistoryRef.current : [];
         // Only attempt server transcription if we already have user transcript.
-        const snapshot = Array.isArray(transcriptionHistoryRef.current)
-            ? transcriptionHistoryRef.current
-            : (Array.isArray(transcriptionHistory) ? transcriptionHistory : []);
-        const existing = getUserText(snapshot);
+        const existing = getUserText(currentHistory);
         if (existing) {
             pushDebug('transcribe_skipped', { reason: 'existing_user_transcript', len: existing.length });
-            return snapshot;
+            return currentHistory;
         }
 
         const chunks = recordedChunksRef.current;
@@ -1306,9 +1305,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
 
         if (!chunks.length || bytes < 1024) {
             pushDebug('transcribe_skipped', { reason: 'no_audio_chunks', chunks: chunks.length, bytes });
-            return Array.isArray(transcriptionHistoryRef.current)
-            ? transcriptionHistoryRef.current
-            : (Array.isArray(transcriptionHistory) ? transcriptionHistory : []);
+            return Array.isArray(transcriptionHistory) ? transcriptionHistory : [];
         }
 
         const blob = new Blob(chunks, { type: mimeType });
@@ -1376,7 +1373,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             }
         }
 
-        return Array.isArray(transcriptionHistory) ? transcriptionHistory : [];
+        return Array.isArray(transcriptionHistoryRef.current) ? transcriptionHistoryRef.current : [];
     };
 
     const stopRecorderAndFlush = async () => {
@@ -1446,26 +1443,44 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         // Use the returned transcript immediately (do not rely on state/ref sync).
         const finalizedHistory = await transcribeOnServerIfNeeded();
 
-        // Finalize this take
+        // Finalize this take from one explicit object and never let empty transcript data
+        // overwrite an existing non-empty transcript for the same take slot.
+        let completedTake: any = null;
         try {
-            // Prefer storing only USER transcript. But if we have none (e.g., transcription failed),
-            // store whatever we have so the take isn't "empty".
-            const all = Array.isArray(finalizedHistory) ? finalizedHistory : [];
-            const userOnly = all.filter((t) => t?.source === 'user');
-            const takeTranscript = userOnly.length ? userOnly : all;
+            const currentHistory = Array.isArray(transcriptionHistoryRef.current) ? transcriptionHistoryRef.current : [];
+            const all = Array.isArray(finalizedHistory) && finalizedHistory.length ? finalizedHistory : currentHistory;
+            const sanitized = all
+                .filter((t) => t && typeof t.text === 'string' && t.text.trim().length > 0)
+                .map((t) => ({ ...t, text: String(t.text).trim() }));
+            const userOnly = sanitized.filter((t) => t?.source === 'user');
+            const fallbackExisting = takesRef.current?.[takesRef.current.length - 1]?.transcript;
+            const previousNonEmpty = Array.isArray(fallbackExisting) && fallbackExisting.some((t: any) => typeof t?.text === 'string' && t.text.trim())
+                ? fallbackExisting
+                : [];
+            const takeTranscript = userOnly.length
+                ? userOnly
+                : sanitized.length
+                    ? sanitized
+                    : previousNonEmpty;
+
             const startedAt = currentTakeStartRef.current ?? Date.now();
             const endedAt = Date.now();
-            const completedTake = {
-                takeNumber: (takesRef.current?.length ?? 0) + 1,
+            const takeNumber = (takesRef.current?.length ?? 0) + 1;
+            const finalizedTake = {
+                takeNumber,
                 startedAt,
                 endedAt,
                 transcript: takeTranscript,
                 markers: currentMarkers,
             } as any;
-            const nextTakes = [...(takesRef.current ?? []), completedTake] as any;
+
+            const nextTakes = [...(takesRef.current ?? []), finalizedTake];
+            completedTake = finalizedTake;
             takesRef.current = nextTakes;
-            setTakes(nextTakes);
-            setSelectedTake(Math.max(0, nextTakes.length - 1));
+            const nextSelectedTake = Math.max(0, nextTakes.length - 1);
+            selectedTakeRef.current = nextSelectedTake;
+            setTakes(nextTakes as any);
+            setSelectedTake(nextSelectedTake);
         } catch {
             // ignore
         } finally {
@@ -1473,7 +1488,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             setCurrentMarkers([]);
         }
 
-        const completedTake = takesRef.current[takesRef.current.length - 1];
+        completedTake = completedTake ?? takesRef.current[takesRef.current.length - 1];
         trackLiveRehearsalEvent('live_rehearsal_take_complete', {
             mode: isDemoTranscript(completedTake?.transcript) ? 'demo' : 'live',
             take_number: completedTake?.takeNumber ?? takesRef.current.length,
