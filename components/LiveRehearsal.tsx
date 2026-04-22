@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, {
+  await hardResetTakeState();
+ useState, useEffect, useRef } from 'react';
 // NOTE: This project does not depend on react-router-dom. Navigation is handled
 // by the parent App shell (props callback) and/or a simple location redirect.
 import { LiveServerMessage, FunctionCall } from '@google/genai';
@@ -15,6 +17,37 @@ import { normalizeBlockedUx, type BlockedUx } from '../services/blockedUx';
 import { logEvent } from '../services/analyticsService';
 import { trackClientEvent } from '../services/telemetryClient';
 import { logUserActivity } from '../services/userActivityService';
+
+/* ===== HARD RESET PATCH (v2) ===== */
+const cleanupInputAudioChain = async () => {
+  try { inputProcessorRef.current?.disconnect?.(); } catch {}
+  try { inputSourceRef.current?.disconnect?.(); } catch {}
+  try { inputZeroGainRef.current?.disconnect?.(); } catch {}
+  try { await inputAudioContextRef.current?.close?.(); } catch {}
+
+  inputProcessorRef.current = null;
+  inputSourceRef.current = null;
+  inputZeroGainRef.current = null;
+  inputAudioContextRef.current = null;
+};
+
+const hardResetTakeState = async () => {
+  traceTakeEvent(activeTakeIdRef.current || 'pre_take', 'hard_reset_take_state_begin', {
+    recordedChunkCount: recordedChunksRef.current?.length || 0,
+    pcmChunkCount: pcmChunksRef.current?.length || 0,
+  });
+
+  recordedChunksRef.current = [];
+  pcmChunksRef.current = [];
+  await cleanupInputAudioChain();
+
+  traceTakeEvent(activeTakeIdRef.current || 'pre_take', 'hard_reset_take_state_complete', {
+    recordedChunkCount: recordedChunksRef.current?.length || 0,
+    pcmChunkCount: pcmChunksRef.current?.length || 0,
+  });
+};
+/* ===== END PATCH ===== */
+
 
 
 // --- TRACE HELPER (added) ---
@@ -1979,49 +2012,20 @@ traceTakeEvent(activeTakeIdRef.current, 'pcm_snapshot_stats', {
         }
 
         await new Promise<void>((resolve) => {
-            let settled = false;
-            let finish = () => {
-                if (settled) return;
-                settled = true;
+            const onStop = () => {
                 recorder.removeEventListener('stop', onStop);
                 traceTakeEvent(takeId, 'media_recorder_stop_received', {
                     finalChunkCount: recordedChunksRef.current.length,
                     finalBytes: recordedChunksRef.current.reduce((sum: number, c: any) => sum + (c?.size || 0), 0),
                 });
-                window.setTimeout(() => {
-                    traceTakeEvent(takeId, 'media_recorder_stop_settled', {
-                        settledChunkCount: recordedChunksRef.current.length,
-                        settledBytes: recordedChunksRef.current.reduce((sum: number, c: any) => sum + (c?.size || 0), 0),
-                    });
-                    resolve();
-                }, 0);
+                resolve();
             };
-
-            const onStop = () => {
-                finish();
-            };
-
             recorder.addEventListener('stop', onStop);
-
-            const timeoutId = window.setTimeout(() => {
-                traceTakeEvent(takeId, 'media_recorder_stop_timeout_fallback', {
-                    recorderState: recorder.state,
-                    chunkCount: recordedChunksRef.current.length,
-                    bytes: recordedChunksRef.current.reduce((sum: number, c: any) => sum + (c?.size || 0), 0),
-                });
-                finish();
-            }, 1500);
-
-            const originalFinish = finish;
-            finish = () => {
-                window.clearTimeout(timeoutId);
-                originalFinish();
-            };
-
             try {
                 recorder.stop();
             } catch {
-                finish();
+                recorder.removeEventListener('stop', onStop);
+                resolve();
             }
         });
     };
