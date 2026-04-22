@@ -1509,7 +1509,11 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             .trim();
 
     /**
-     * Ensure we have a usable USER transcript for the take.
+     * Resolve a usable USER transcript for the take.
+     *
+     * In this build, server-side `/api/transcribe` is the primary transcript
+     * source. Live `inputTranscription` is treated only as a fallback signal,
+     * not as the dependable backbone for finalized take text.
      *
      * IMPORTANT: React state updates are async. Callers should use the returned
      * value rather than reading `transcriptionHistoryRef.current` immediately
@@ -1554,11 +1558,10 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         });
 
         if (hasFinalUserSegment && currentUserText) {
-            pushDebug('transcribe_skipped', {
-                reason: 'final_live_user_transcript_present',
+            pushDebug('transcribe_live_fallback_available', {
+                reason: 'final_live_user_transcript_present_but_server_is_primary',
                 len: currentUserText.length,
             });
-            return normalizedCurrent;
         }
 
         if (!blob || bytes < 1024) {
@@ -1671,6 +1674,11 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                     : currentUserText;
 
                 if (winner) {
+                    pushDebug('transcript_primary_resolved', {
+                        source: serverTranscript.length >= currentUserText.length ? 'server_transcribe' : 'live_fallback_longer',
+                        serverLen: serverTranscript.length,
+                        liveLen: currentUserText.length,
+                    });
                     const finalHistory: Transcription[] = [{ source: 'user', text: winner, isFinal: true } as any];
                     transcriptionHistoryRef.current = finalHistory;
                     currentTakeUserTranscriptTextRef.current = winner;
@@ -1713,9 +1721,15 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             }
         }
 
-        return currentUserText
-            ? ([{ source: 'user', text: currentUserText, isFinal: true }] as any)
-            : [];
+        if (currentUserText) {
+            pushDebug('transcript_primary_resolved', {
+                source: 'live_fallback_after_server_failure',
+                serverLen: 0,
+                liveLen: currentUserText.length,
+            });
+            return [{ source: 'user', text: currentUserText, isFinal: true }] as any;
+        }
+        return [];
     };
 
     const stopRecorderAndFlush = async () => {
@@ -1781,11 +1795,12 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         // Stop recording and flush last chunks BEFORE we tear down tracks.
         await stopRecorderAndFlush();
 
-        // Give late inputTranscription / turnComplete events a brief chance to land.
-        await wait(350);
+        // Do not wait on late Live `inputTranscription` events here. In this build,
+        // server-side transcription is the primary finalized transcript source.
+        await wait(50);
 
-        // Try to transcribe server-side if Live inputTranscription didn't arrive.
-        // Use the returned transcript immediately (do not rely on state/ref sync).
+        // Resolve the finalized transcript from the primary server path first,
+        // using any Live text only as a fallback if server transcription fails.
         const finalizedHistory = await transcribeOnServerIfNeeded();
 
         if ((!finalizedHistory || finalizedHistory.length === 0) && transcribeFailureRef.current) {
