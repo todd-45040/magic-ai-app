@@ -1149,6 +1149,13 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 recordedMimeTypeRef.current = mimeType || recorder.mimeType || 'audio/webm';
                 recorder.ondataavailable = (e) => {
                     if (e.data && e.data.size > 0) recordedChunksRef.current.push(e.data);
+                    pushDebug('media_recorder_chunk', {
+                        takeId: activeTakeIdRef.current,
+                        chunkSize: Number(e?.data?.size || 0),
+                        chunkType: String(e?.data?.type || recorder.mimeType || recordedMimeTypeRef.current || ''),
+                        chunkCount: recordedChunksRef.current.length,
+                        totalBytes: recordedChunksRef.current.reduce((sum: number, c: any) => sum + (c?.size || 0), 0),
+                    });
                 };
                 recorder.onerror = (e: any) => {
                     pushDebug('media_recorder_error', { message: String(e?.error?.message || e?.message || e) });
@@ -1502,6 +1509,25 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 : null);
         const mimeType = blob?.type || recorderMimeType;
         const bytes = blob?.size || recorderBytes;
+        const chosenSource =
+            pcmBlob && blob === pcmBlob
+                ? 'pcm_wav'
+                : (blob ? 'media_recorder' : 'none');
+
+        pushDebug('transcribe_audio_sources', {
+            takeId: activeTakeIdRef.current,
+            liveLen: currentUserText.length,
+            hasFinalUserSegment,
+            pcmChunkCount: pcmChunksRef.current.length,
+            pcmBlobBytes: pcmBlob?.size || 0,
+            pcmSampleRate: pcmSampleRateRef.current || 16000,
+            recorderChunkCount: recorderChunks.length,
+            recorderBytes,
+            recorderMimeType,
+            chosenSource,
+            chosenBytes: blob?.size || 0,
+            chosenMimeType: blob?.type || '',
+        });
 
         if (hasFinalUserSegment && currentUserText) {
             pushDebug('transcribe_skipped', {
@@ -1691,6 +1717,16 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             const startedAt = currentTakeStartRef.current ?? Date.now();
             const endedAt = Date.now();
             const takeNumber = (takesRef.current?.length ?? 0) + 1;
+
+            pushDebug('take_transcript_before_save', {
+                takeId: activeTakeIdRef.current,
+                takeNumber,
+                resolvedTranscriptLen: getFinalUserTranscriptText(resolvedTranscript).length,
+                fallbackTextLen: fallbackText.length,
+                finalTranscriptLen: getFinalUserTranscriptText(takeTranscript).length,
+                finalTranscriptPreview: getFinalUserTranscriptText(takeTranscript).slice(0, 120),
+            });
+
             const finalizedTake = {
                 takeNumber,
                 startedAt,
