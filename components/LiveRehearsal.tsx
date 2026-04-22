@@ -820,6 +820,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
     const usageIntervalRef = useRef<number | null>(null);
 
     const transcriptEndRef = useRef<HTMLDivElement>(null);
+    const transcribeFailureRef = useRef<{ message: string; status?: number; body?: string; authMode?: 'authenticated' | 'guest' } | null>(null);
 
     const hardResetTakeState = (reason: string) => {
         activeTakeIdRef.current += 1;
@@ -1493,6 +1494,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
      * after this function.
      */
     const transcribeOnServerIfNeeded = async (): Promise<Transcription[]> => {
+        transcribeFailureRef.current = null;
         const currentHistory = Array.isArray(transcriptionHistoryRef.current) ? transcriptionHistoryRef.current : [];
         const normalizedCurrent = normalizeTranscript(currentHistory);
         const currentUserText = getFinalUserTranscriptText(normalizedCurrent);
@@ -1573,15 +1575,30 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         const transcribeStartedAt = Date.now();
         try {
             const { getBearerToken } = await import('../services/usageStatusService');
+            const bearerToken = await getBearerToken();
+            const authMode: 'authenticated' | 'guest' = bearerToken === 'Bearer guest' ? 'guest' : 'authenticated';
+
+            pushDebug('transcribe_bearer_mode', {
+                authMode,
+                hasFinalUserSegment,
+                liveLen: currentUserText.length,
+            });
+
             const res = await fetch('/api/transcribe', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    Authorization: await getBearerToken(),
+                    Authorization: bearerToken,
                 },
                 body: JSON.stringify({ audioBase64, mimeType: blob.type }),
             });
-            const json = await res.json().catch(() => ({}));
+            const responseText = await res.text();
+            let json: any = {};
+            try {
+                json = responseText ? JSON.parse(responseText) : {};
+            } catch {
+                json = { raw: responseText };
+            }
             const serverTranscript = String(json?.transcript || '').trim();
 
             const w = window as any;
@@ -1599,6 +1616,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 ok: res.ok,
                 serverLen: serverTranscript.length,
                 liveLen: currentUserText.length,
+                authMode,
                 error: json?.error ? String(json.error).slice(0, 200) : '',
             });
 
@@ -1618,9 +1636,31 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 }
             }
             if (!res.ok) {
+                const failureBody = responseText ? String(responseText).slice(0, 500) : '';
+                pushDebug('transcribe_failure_detail', {
+                    status: res.status,
+                    authMode,
+                    body: failureBody,
+                });
+                if (!currentUserText) {
+                    transcribeFailureRef.current = {
+                        message: authMode === 'guest' || res.status === 401
+                            ? 'Transcription failed because your session is not authenticated. Please log in again and retry.'
+                            : 'Server transcription failed. Please try again.',
+                        status: res.status,
+                        body: failureBody,
+                        authMode,
+                    };
+                }
                 void logUserActivity({ tool_name: 'live_rehearsal', event_type: 'error', success: false, duration_ms: Date.now() - transcribeStartedAt, metadata: { source: 'transcribe', message: json?.error ? String(json.error) : `HTTP ${res.status}`, error_kind: /quota|limit/i.test(String(json?.error || '')) ? 'usage_limit_hit' : /timeout/i.test(String(json?.error || '')) ? 'timeout' : 'ai_failure', status: res.status } });
             }
         } catch (err: any) {
+            if (!currentUserText) {
+                transcribeFailureRef.current = {
+                    message: 'Server transcription failed. Please try again.',
+                    body: String(err?.message || err),
+                };
+            }
             void logUserActivity({ tool_name: 'live_rehearsal', event_type: 'error', success: false, duration_ms: Date.now() - transcribeStartedAt, metadata: { source: 'transcribe', message: String(err?.message || err), error_kind: /timeout/i.test(String(err?.message || err)) ? 'timeout' : 'ai_failure' } });
             pushDebug('transcribe_error', { message: String(err?.message || err) });
             try {
@@ -1704,6 +1744,20 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         // Try to transcribe server-side if Live inputTranscription didn't arrive.
         // Use the returned transcript immediately (do not rely on state/ref sync).
         const finalizedHistory = await transcribeOnServerIfNeeded();
+
+        if ((!finalizedHistory || finalizedHistory.length === 0) && transcribeFailureRef.current) {
+            const failure = transcribeFailureRef.current;
+            setStatus('error');
+            setErrorMessage(failure.message);
+            pushDebug('transcribe_finalize_blocked', {
+                status: failure.status || 0,
+                authMode: failure.authMode || 'unknown',
+                body: (failure.body || '').slice(0, 300),
+            });
+            await safeCleanupSession();
+            setIsAnalyzing(false);
+            return;
+        }
 
         // Finalize this take from one resolved transcript source.
         let completedTake: any = null;
@@ -2475,6 +2529,7 @@ const ReviewView: React.FC<{
     onOpenDirectorMode,
 }) => {
     const transcriptEndRef = useRef<HTMLDivElement>(null);
+    const transcribeFailureRef = useRef<{ message: string; status?: number; body?: string; authMode?: 'authenticated' | 'guest' } | null>(null);
     const [saveError, setSaveError] = useState<string>('');
     const [saveSuccess, setSaveSuccess] = useState<string>('');
     const [isSaving, setIsSaving] = useState(false);
