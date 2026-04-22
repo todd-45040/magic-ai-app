@@ -1618,6 +1618,11 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             chosenSource,
             isValidForTranscription,
         };
+traceTakeEvent(activeTakeIdRef.current, 'pcm_snapshot_stats', {
+  pcmChunkCount: pcmChunksRef.current?.length || 0,
+  approxBytes: pcmChunksRef.current?.reduce((s, c) => s + (c?.length || 0), 0) || 0,
+});
+
 
         traceTakeEvent(takeId, 'snapshot_created', {
             createdAt,
