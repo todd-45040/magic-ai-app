@@ -776,12 +776,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
 
     useEffect(() => {
         transcriptionHistoryRef.current = transcriptionHistory;
-        const userText = transcriptionHistory
-            .filter((t) => t?.source === 'user' && typeof t.text === 'string')
-            .map((t) => t.text)
-            .join(' ')
-            .trim();
-        currentTakeUserTranscriptTextRef.current = userText;
         transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [transcriptionHistory]);
 
@@ -961,6 +955,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         setStatus('connecting');
         setErrorMessage('');
         transcriptionHistoryRef.current = [];
+        currentTakeUserTranscriptTextRef.current = '';
         currentTakeUserTranscriptTextRef.current = '';
         setTranscriptionHistory([]);
         setMarkerCount(0);
@@ -1234,9 +1229,10 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                     : [...prev, { source: 'user', text, isFinal: false }];
                 transcriptionHistoryRef.current = next;
                 currentTakeUserTranscriptTextRef.current = next
-                    .filter((t) => t?.source === 'user' && typeof t.text === 'string')
-                    .map((t) => t.text)
+                    .filter((t) => t?.source === 'user')
+                    .map((t) => String(t?.text || ''))
                     .join(' ')
+                    .replace(/\s+/g, ' ')
                     .trim();
                 return next;
             });
@@ -1257,9 +1253,10 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 const next = prev.map(t => ({ ...t, isFinal: true }));
                 transcriptionHistoryRef.current = next;
                 currentTakeUserTranscriptTextRef.current = next
-                    .filter((t) => t?.source === 'user' && typeof t.text === 'string')
-                    .map((t) => t.text)
+                    .filter((t) => t?.source === 'user')
+                    .map((t) => String(t?.text || ''))
                     .join(' ')
+                    .replace(/\s+/g, ' ')
                     .trim();
                 return next;
             });
@@ -1310,11 +1307,15 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
      */
     const transcribeOnServerIfNeeded = async (): Promise<Transcription[]> => {
         const currentHistory = Array.isArray(transcriptionHistoryRef.current) ? transcriptionHistoryRef.current : [];
-        // Only attempt server transcription if we already have user transcript.
-        const existing = getUserText(currentHistory);
+        // Prefer the current take text ref because React state/ref timing can lag at stop time.
+        const existingText = String(currentTakeUserTranscriptTextRef.current || '').trim();
+        const existing = existingText || getUserText(currentHistory);
         if (existing) {
             pushDebug('transcribe_skipped', { reason: 'existing_user_transcript', len: existing.length });
-            return currentHistory;
+            if (currentHistory.length) {
+                return currentHistory;
+            }
+            return [{ source: 'user', text: existing, isFinal: true } as any];
         }
 
         const chunks = recordedChunksRef.current;
@@ -1322,12 +1323,10 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         const bytes = chunks.reduce((sum: number, c: any) => sum + (c?.size || 0), 0);
 
         if (!chunks.length || bytes < 1024) {
-            pushDebug('transcribe_skipped', { reason: 'no_audio_chunks', chunks: chunks.length, bytes, currentUserTextLen: currentTakeUserTranscriptTextRef.current.length });
+            pushDebug('transcribe_skipped', { reason: 'no_audio_chunks', chunks: chunks.length, bytes });
             if (currentHistory.length) return currentHistory;
-            if (currentTakeUserTranscriptTextRef.current.trim()) {
-                return [{ source: 'user', text: currentTakeUserTranscriptTextRef.current.trim(), isFinal: true } as any];
-            }
-            return [];
+            const fallbackText = String(currentTakeUserTranscriptTextRef.current || '').trim();
+            return fallbackText ? ([{ source: 'user', text: fallbackText, isFinal: true }] as any) : [];
         }
 
         const blob = new Blob(chunks, { type: mimeType });
@@ -1396,13 +1395,10 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             }
         }
 
-        if (Array.isArray(transcriptionHistoryRef.current) && transcriptionHistoryRef.current.length) {
-            return transcriptionHistoryRef.current;
-        }
-        if (currentTakeUserTranscriptTextRef.current.trim()) {
-            return [{ source: 'user', text: currentTakeUserTranscriptTextRef.current.trim(), isFinal: true } as any];
-        }
-        return [];
+        const latest = Array.isArray(transcriptionHistoryRef.current) ? transcriptionHistoryRef.current : [];
+        if (latest.length) return latest;
+        const fallbackText = String(currentTakeUserTranscriptTextRef.current || '').trim();
+        return fallbackText ? ([{ source: 'user', text: fallbackText, isFinal: true }] as any) : [];
     };
 
     const stopRecorderAndFlush = async () => {
@@ -1482,14 +1478,12 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 .filter((t) => t && typeof t.text === 'string' && t.text.trim().length > 0)
                 .map((t) => ({ ...t, text: String(t.text).trim() }));
             const userOnly = sanitized.filter((t) => t?.source === 'user');
-            const currentTakeText = currentTakeUserTranscriptTextRef.current.trim();
+            const fallbackText = String(currentTakeUserTranscriptTextRef.current || '').trim();
             const takeTranscript = userOnly.length
                 ? userOnly
                 : sanitized.length
                     ? sanitized
-                    : currentTakeText
-                        ? [{ source: 'user', text: currentTakeText, isFinal: true } as any]
-                        : [];
+                    : (fallbackText ? ([{ source: 'user', text: fallbackText, isFinal: true }] as any) : []);
 
             const startedAt = currentTakeStartRef.current ?? Date.now();
             const endedAt = Date.now();
@@ -1553,6 +1547,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         setStatus('idle');
         setErrorMessage('');
         setBlockedUx(null);
+        currentTakeUserTranscriptTextRef.current = '';
         setTranscriptionHistory([]);
         setTakes([]);
         setSelectedTake(0);
@@ -1604,6 +1599,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         });
         setMarkerCount(markers.length);
         setCurrentMarkers([]);
+        currentTakeUserTranscriptTextRef.current = '';
         setTranscriptionHistory([]);
         setErrorMessage('');
         setBlockedUx(null);
@@ -1675,7 +1671,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                         setDemoDurationSeconds(0);
                         setDemoMarkers([]);
                         currentTakeUserTranscriptTextRef.current = '';
-                        setTranscriptionHistory([]);
+        setTranscriptionHistory([]);
                         setErrorMessage('');
                         setStatus('idle');
                         setView('idle');
@@ -1719,8 +1715,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                                 setSessionNotes('');
                                 clearDraft();
                                 currentTakeUserTranscriptTextRef.current = '';
-                                currentTakeUserTranscriptTextRef.current = '';
-                                setTranscriptionHistory([]);
+        setTranscriptionHistory([]);
                                 setErrorMessage('');
                                 setBlockedUx(null);
                                 setStatus('idle');
