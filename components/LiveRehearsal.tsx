@@ -654,6 +654,63 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         takes: Take[];
     };
 
+    const hydrateSavedSession = (session: {
+        ideaId?: string | null;
+        title?: string;
+        notes?: string;
+        takes?: Take[];
+        selectedTake?: number;
+    }) => {
+        const normalizedTakes = Array.isArray(session?.takes) ? session.takes.filter(Boolean) : [];
+        if (normalizedTakes.length === 0) {
+            setErrorMessage('This saved rehearsal session does not contain any takes to review.');
+            return;
+        }
+
+        const nextTitle = typeof session?.title === 'string' && session.title.trim()
+            ? session.title.trim()
+            : `Live Rehearsal Session - ${new Date().toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`;
+        const nextNotes = typeof session?.notes === 'string' ? session.notes : '';
+        const requestedIndex = typeof session?.selectedTake === 'number' ? session.selectedTake : normalizedTakes.length - 1;
+        const nextSelectedTake = Math.max(0, Math.min(requestedIndex, normalizedTakes.length - 1));
+
+        setSessionIdeaId(session?.ideaId ?? null);
+        setSessionTitle(nextTitle);
+        setSessionNotes(nextNotes);
+        setTakes(normalizedTakes);
+        setSelectedTake(nextSelectedTake);
+        setDemoScript('');
+        setDemoDurationSeconds(0);
+        setDemoMarkers([]);
+        setTranscriptionHistory([]);
+        setCurrentMarkers(normalizedTakes[nextSelectedTake]?.markers ?? []);
+        setMarkerCount((normalizedTakes[nextSelectedTake]?.markers ?? []).length);
+        currentTakeUserTranscriptTextRef.current = '';
+        pcmChunksRef.current = [];
+        setErrorMessage('');
+        setBlockedUx(null);
+        setStatus('idle');
+        setSessionElapsed('0:00');
+        setView('reviewing');
+
+        persistDraft({
+            ideaId: session?.ideaId ?? null,
+            title: nextTitle,
+            notes: nextNotes,
+            takes: normalizedTakes,
+            selectedTake: nextSelectedTake,
+        });
+
+        window.setTimeout(() => {
+            try {
+                const el = document.getElementById('live-rehearsal-review-anchor');
+                el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } catch {
+                // ignore
+            }
+        }, 80);
+    };
+
     const [sessionIdeaId, setSessionIdeaId] = useState<string | null>(null);
     const [sessionTitle, setSessionTitle] = useState<string>(() => `Live Rehearsal Session - ${new Date().toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`);
     const [sessionNotes, setSessionNotes] = useState<string>('');
@@ -764,14 +821,13 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             if (!parsed || parsed.version !== 2) return;
             if (!Array.isArray(parsed.takes) || parsed.takes.length === 0) return;
 
-            setSessionIdeaId(parsed.ideaId ?? null);
-            setSessionTitle(typeof parsed.title === 'string' && parsed.title.trim() ? parsed.title : sessionTitle);
-            setSessionNotes(typeof parsed.notes === 'string' ? parsed.notes : '');
-            setTakes(parsed.takes);
-            const idx = typeof parsed.selectedTake === 'number' ? parsed.selectedTake : parsed.takes.length - 1;
-            setSelectedTake(Math.max(0, Math.min(idx, parsed.takes.length - 1)));
-            setView('reviewing');
-            setStatus('idle');
+            hydrateSavedSession({
+                ideaId: parsed.ideaId ?? null,
+                title: typeof parsed.title === 'string' ? parsed.title : '',
+                notes: typeof parsed.notes === 'string' ? parsed.notes : '',
+                takes: parsed.takes,
+                selectedTake: typeof parsed.selectedTake === 'number' ? parsed.selectedTake : parsed.takes.length - 1,
+            });
         } catch {
             // ignore
         }
@@ -820,7 +876,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
     const usageIntervalRef = useRef<number | null>(null);
 
     const transcriptEndRef = useRef<HTMLDivElement>(null);
-    const transcribeFailureRef = useRef<{ message: string; status?: number; body?: string; authMode?: 'authenticated' | 'guest' } | null>(null);
 
     const hardResetTakeState = (reason: string) => {
         activeTakeIdRef.current += 1;
@@ -1114,28 +1169,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 // ignore
             }
         }
-
-        // Phase 2: require a real authenticated session before allowing a take to start.
-        try {
-            const { getBearerToken } = await import('../services/usageStatusService');
-            const bearerToken = await getBearerToken();
-            const authMode: 'authenticated' | 'guest' = bearerToken === 'Bearer guest' ? 'guest' : 'authenticated';
-            pushDebug('start_rehearsal_bearer_mode', { authMode });
-            if (authMode === 'guest') {
-                setStatus('error');
-                setIsAnalyzing(false);
-                setErrorMessage('Please log in again before starting Live Rehearsal. Your session is not authenticated.');
-                pushDebug('start_rehearsal_blocked_missing_auth', { authMode });
-                return;
-            }
-        } catch (err: any) {
-            setStatus('error');
-            setIsAnalyzing(false);
-            setErrorMessage('Unable to verify your login session. Please refresh and log in again before starting Live Rehearsal.');
-            pushDebug('start_rehearsal_auth_check_failed', { message: String(err?.message || err) });
-            return;
-        }
-
         setStatus('connecting');
         setErrorMessage('');
         if (sessionElapsedIntervalRef.current) {
@@ -1509,18 +1542,13 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             .trim();
 
     /**
-     * Resolve a usable USER transcript for the take.
-     *
-     * In this build, server-side `/api/transcribe` is the primary transcript
-     * source. Live `inputTranscription` is treated only as a fallback signal,
-     * not as the dependable backbone for finalized take text.
+     * Ensure we have a usable USER transcript for the take.
      *
      * IMPORTANT: React state updates are async. Callers should use the returned
      * value rather than reading `transcriptionHistoryRef.current` immediately
      * after this function.
      */
     const transcribeOnServerIfNeeded = async (): Promise<Transcription[]> => {
-        transcribeFailureRef.current = null;
         const currentHistory = Array.isArray(transcriptionHistoryRef.current) ? transcriptionHistoryRef.current : [];
         const normalizedCurrent = normalizeTranscript(currentHistory);
         const currentUserText = getFinalUserTranscriptText(normalizedCurrent);
@@ -1558,10 +1586,11 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         });
 
         if (hasFinalUserSegment && currentUserText) {
-            pushDebug('transcribe_live_fallback_available', {
-                reason: 'final_live_user_transcript_present_but_server_is_primary',
+            pushDebug('transcribe_skipped', {
+                reason: 'final_live_user_transcript_present',
                 len: currentUserText.length,
             });
+            return normalizedCurrent;
         }
 
         if (!blob || bytes < 1024) {
@@ -1600,51 +1629,15 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         const transcribeStartedAt = Date.now();
         try {
             const { getBearerToken } = await import('../services/usageStatusService');
-            const bearerToken = await getBearerToken();
-            const authMode: 'authenticated' | 'guest' = bearerToken === 'Bearer guest' ? 'guest' : 'authenticated';
-
-            pushDebug('transcribe_bearer_mode', {
-                authMode,
-                hasFinalUserSegment,
-                liveLen: currentUserText.length,
-            });
-
-            // Phase 2: re-check auth immediately before server transcription.
-            if (authMode === 'guest') {
-                const failureBody = 'Missing authenticated bearer token before /api/transcribe';
-                pushDebug('transcribe_failure_detail', {
-                    status: 401,
-                    authMode,
-                    body: failureBody,
-                });
-                if (!currentUserText) {
-                    transcribeFailureRef.current = {
-                        message: 'Transcription failed because your session is not authenticated. Please log in again and retry.',
-                        status: 401,
-                        body: failureBody,
-                        authMode,
-                    };
-                }
-                return currentUserText
-                    ? ([{ source: 'user', text: currentUserText, isFinal: true }] as any)
-                    : [];
-            }
-
             const res = await fetch('/api/transcribe', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    Authorization: bearerToken,
+                    Authorization: await getBearerToken(),
                 },
                 body: JSON.stringify({ audioBase64, mimeType: blob.type }),
             });
-            const responseText = await res.text();
-            let json: any = {};
-            try {
-                json = responseText ? JSON.parse(responseText) : {};
-            } catch {
-                json = { raw: responseText };
-            }
+            const json = await res.json().catch(() => ({}));
             const serverTranscript = String(json?.transcript || '').trim();
 
             const w = window as any;
@@ -1662,7 +1655,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 ok: res.ok,
                 serverLen: serverTranscript.length,
                 liveLen: currentUserText.length,
-                authMode,
                 error: json?.error ? String(json.error).slice(0, 200) : '',
             });
 
@@ -1674,11 +1666,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                     : currentUserText;
 
                 if (winner) {
-                    pushDebug('transcript_primary_resolved', {
-                        source: serverTranscript.length >= currentUserText.length ? 'server_transcribe' : 'live_fallback_longer',
-                        serverLen: serverTranscript.length,
-                        liveLen: currentUserText.length,
-                    });
                     const finalHistory: Transcription[] = [{ source: 'user', text: winner, isFinal: true } as any];
                     transcriptionHistoryRef.current = finalHistory;
                     currentTakeUserTranscriptTextRef.current = winner;
@@ -1687,31 +1674,9 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 }
             }
             if (!res.ok) {
-                const failureBody = responseText ? String(responseText).slice(0, 500) : '';
-                pushDebug('transcribe_failure_detail', {
-                    status: res.status,
-                    authMode,
-                    body: failureBody,
-                });
-                if (!currentUserText) {
-                    transcribeFailureRef.current = {
-                        message: authMode === 'guest' || res.status === 401
-                            ? 'Transcription failed because your session is not authenticated. Please log in again and retry.'
-                            : 'Server transcription failed. Please try again.',
-                        status: res.status,
-                        body: failureBody,
-                        authMode,
-                    };
-                }
                 void logUserActivity({ tool_name: 'live_rehearsal', event_type: 'error', success: false, duration_ms: Date.now() - transcribeStartedAt, metadata: { source: 'transcribe', message: json?.error ? String(json.error) : `HTTP ${res.status}`, error_kind: /quota|limit/i.test(String(json?.error || '')) ? 'usage_limit_hit' : /timeout/i.test(String(json?.error || '')) ? 'timeout' : 'ai_failure', status: res.status } });
             }
         } catch (err: any) {
-            if (!currentUserText) {
-                transcribeFailureRef.current = {
-                    message: 'Server transcription failed. Please try again.',
-                    body: String(err?.message || err),
-                };
-            }
             void logUserActivity({ tool_name: 'live_rehearsal', event_type: 'error', success: false, duration_ms: Date.now() - transcribeStartedAt, metadata: { source: 'transcribe', message: String(err?.message || err), error_kind: /timeout/i.test(String(err?.message || err)) ? 'timeout' : 'ai_failure' } });
             pushDebug('transcribe_error', { message: String(err?.message || err) });
             try {
@@ -1721,15 +1686,9 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             }
         }
 
-        if (currentUserText) {
-            pushDebug('transcript_primary_resolved', {
-                source: 'live_fallback_after_server_failure',
-                serverLen: 0,
-                liveLen: currentUserText.length,
-            });
-            return [{ source: 'user', text: currentUserText, isFinal: true }] as any;
-        }
-        return [];
+        return currentUserText
+            ? ([{ source: 'user', text: currentUserText, isFinal: true }] as any)
+            : [];
     };
 
     const stopRecorderAndFlush = async () => {
@@ -1795,27 +1754,12 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         // Stop recording and flush last chunks BEFORE we tear down tracks.
         await stopRecorderAndFlush();
 
-        // Do not wait on late Live `inputTranscription` events here. In this build,
-        // server-side transcription is the primary finalized transcript source.
-        await wait(50);
+        // Give late inputTranscription / turnComplete events a brief chance to land.
+        await wait(350);
 
-        // Resolve the finalized transcript from the primary server path first,
-        // using any Live text only as a fallback if server transcription fails.
+        // Try to transcribe server-side if Live inputTranscription didn't arrive.
+        // Use the returned transcript immediately (do not rely on state/ref sync).
         const finalizedHistory = await transcribeOnServerIfNeeded();
-
-        if ((!finalizedHistory || finalizedHistory.length === 0) && transcribeFailureRef.current) {
-            const failure = transcribeFailureRef.current;
-            setStatus('error');
-            setErrorMessage(failure.message);
-            pushDebug('transcribe_finalize_blocked', {
-                status: failure.status || 0,
-                authMode: failure.authMode || 'unknown',
-                body: (failure.body || '').slice(0, 300),
-            });
-            await safeCleanupSession();
-            setIsAnalyzing(false);
-            return;
-        }
 
         // Finalize this take from one resolved transcript source.
         let completedTake: any = null;
@@ -1825,6 +1769,37 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             const takeTranscript = resolvedTranscript.length > 0
                 ? resolvedTranscript
                 : (fallbackText ? ([{ source: 'user', text: fallbackText, isFinal: true }] as any) : []);
+
+            const transcribeMeta = (() => {
+                try {
+                    return (window as any).__REHEARSAL_TRANSCRIBE__ || null;
+                } catch {
+                    return null;
+                }
+            })();
+            const emptyTranscript = getFinalUserTranscriptText(takeTranscript).trim().length === 0;
+            const takeTranscriptionError = emptyTranscript
+                ? (() => {
+                    const rawError = String(transcribeMeta?.error || '').trim();
+                    if (/unauthorized|not authenticated|auth|login|token|401/i.test(rawError) || transcribeMeta?.status === 401) {
+                        return 'Transcription failed because your session is not authenticated. Please log in again and retry.';
+                    }
+                    if (rawError) {
+                        return `Server transcription failed. ${rawError}`;
+                    }
+                    return 'Server transcription failed. Please try again.';
+                })()
+                : '';
+
+            if (takeTranscriptionError) {
+                setErrorMessage(takeTranscriptionError);
+                pushDebug('take_finalized_without_transcript', {
+                    takeId: activeTakeIdRef.current,
+                    reason: takeTranscriptionError,
+                    transcribeStatus: transcribeMeta?.status ?? null,
+                    transcribeOk: transcribeMeta?.ok ?? null,
+                });
+            }
 
             const startedAt = currentTakeStartRef.current ?? Date.now();
             const endedAt = Date.now();
@@ -1837,6 +1812,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 fallbackTextLen: fallbackText.length,
                 finalTranscriptLen: getFinalUserTranscriptText(takeTranscript).length,
                 finalTranscriptPreview: getFinalUserTranscriptText(takeTranscript).slice(0, 120),
+                transcriptionError: takeTranscriptionError || '',
             });
 
             const finalizedTake = {
@@ -1845,6 +1821,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 endedAt,
                 transcript: takeTranscript,
                 markers: currentMarkers,
+                transcriptionError: takeTranscriptionError || undefined,
             } as any;
 
             const nextTakes = [...(takesRef.current ?? []), finalizedTake];
@@ -2121,7 +2098,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
 
                         {view === 'idle' && status !== 'connecting' && (
                             <div className="w-full max-w-3xl mx-auto">
-                                <RehearsalHistory />
+                                <RehearsalHistory onOpenSession={hydrateSavedSession} />
                             </div>
                         )}
                     </div>
@@ -2373,9 +2350,13 @@ type RehearsalHistoryItem = {
     sessionLengthLabel: string;
     confidenceScore: number;
     markerLabels: string[];
+    takes: { takeNumber: number; startedAt: number; endedAt: number; transcript: Transcription[]; markers?: SegmentMarker[] }[];
+    selectedTake: number;
 };
 
-const RehearsalHistory: React.FC = () => {
+const RehearsalHistory: React.FC<{
+    onOpenSession: (session: { ideaId?: string | null; title?: string; notes?: string; takes?: { takeNumber: number; startedAt: number; endedAt: number; transcript: Transcription[]; markers?: SegmentMarker[] }[]; selectedTake?: number; }) => void;
+}> = ({ onOpenSession }) => {
     const [expanded, setExpanded] = useState(true);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string>('');
@@ -2390,6 +2371,8 @@ const RehearsalHistory: React.FC = () => {
                 const createdAt = new Date(r.timestamp).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
                 let transcript: Transcription[] = [];
                 let notes = '';
+                let takes: { takeNumber: number; startedAt: number; endedAt: number; transcript: Transcription[]; markers?: SegmentMarker[] }[] = [];
+                let selectedTake = 0;
                 let latestTake: { startedAt?: number; endedAt?: number; transcript?: Transcription[]; markers?: SegmentMarker[] } | null = null;
                 let totalDurationMs = 0;
                 let markerLabels: string[] = [];
@@ -2401,18 +2384,21 @@ const RehearsalHistory: React.FC = () => {
                     }
                     if (Array.isArray(obj?.takes)) {
                         const combined: Transcription[] = [];
-                        for (const take of obj.takes) {
-                            const n = Number(take?.takeNumber ?? 0) || combined.length + 1;
-                            combined.push({ source: 'model', text: `— Take ${n} —`, isFinal: true } as any);
-                            if (Array.isArray(take?.transcript)) {
-                                for (const seg of take.transcript) combined.push(seg as any);
-                            }
-                            const startedAt = Number(take?.startedAt ?? 0) || 0;
-                            const endedAt = Number(take?.endedAt ?? 0) || 0;
-                            if (startedAt && endedAt && endedAt > startedAt) totalDurationMs += (endedAt - startedAt);
+                        takes = obj.takes.map((take: any, idx: number) => ({
+                            takeNumber: Number(take?.takeNumber ?? 0) || idx + 1,
+                            startedAt: Number(take?.startedAt ?? 0) || 0,
+                            endedAt: Number(take?.endedAt ?? 0) || 0,
+                            transcript: Array.isArray(take?.transcript) ? take.transcript : [],
+                            markers: Array.isArray(take?.markers) ? take.markers : [],
+                        }));
+                        for (const take of takes) {
+                            combined.push({ source: 'model', text: `— Take ${take.takeNumber} —`, isFinal: true } as any);
+                            for (const seg of take.transcript) combined.push(seg as any);
+                            if (take.startedAt && take.endedAt && take.endedAt > take.startedAt) totalDurationMs += (take.endedAt - take.startedAt);
                         }
                         transcript = combined;
-                        latestTake = obj.takes[obj.takes.length - 1] || null;
+                        selectedTake = typeof obj?.selectedTake === 'number' ? Math.max(0, Math.min(obj.selectedTake, Math.max(0, takes.length - 1))) : Math.max(0, takes.length - 1);
+                        latestTake = takes[selectedTake] || takes[takes.length - 1] || null;
                         markerLabels = Array.isArray(latestTake?.markers) ? latestTake!.markers!.map((m: any) => String(m?.label || '')).filter(Boolean) : [];
                     }
                     if (typeof obj?.notes === 'string') notes = obj.notes;
@@ -2432,6 +2418,8 @@ const RehearsalHistory: React.FC = () => {
                     sessionLengthLabel: sessionLengthLabel === '0:00' ? '0:45' : sessionLengthLabel,
                     confidenceScore: metrics.confidenceScore,
                     markerLabels,
+                    takes,
+                    selectedTake,
                 };
             });
             setItems(parsed);
@@ -2533,9 +2521,20 @@ const RehearsalHistory: React.FC = () => {
                                     ) : null}
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <div className="px-3 py-1.5 rounded-md border border-slate-700 bg-slate-900/40 text-slate-300 text-sm font-semibold">
+                                    <button
+                                        type="button"
+                                        onClick={() => onOpenSession({
+                                            ideaId: it.id,
+                                            title: it.title,
+                                            notes: it.notes,
+                                            takes: it.takes,
+                                            selectedTake: it.selectedTake,
+                                        })}
+                                        disabled={(it.takes?.length ?? 0) === 0}
+                                        className="px-3 py-1.5 rounded-md border border-slate-700 bg-slate-900/40 text-slate-300 text-sm font-semibold hover:bg-slate-800/70 hover:text-slate-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
                                         Review saved session
-                                    </div>
+                                    </button>
                                 </div>
                             </div>
                         ))}
@@ -2587,7 +2586,6 @@ const ReviewView: React.FC<{
     onOpenDirectorMode,
 }) => {
     const transcriptEndRef = useRef<HTMLDivElement>(null);
-    const transcribeFailureRef = useRef<{ message: string; status?: number; body?: string; authMode?: 'authenticated' | 'guest' } | null>(null);
     const [saveError, setSaveError] = useState<string>('');
     const [saveSuccess, setSaveSuccess] = useState<string>('');
     const [isSaving, setIsSaving] = useState(false);
@@ -3010,23 +3008,32 @@ const ReviewView: React.FC<{
                         </div>
                     </div>
 
-                    {current?.transcript?.length ? (
-                        <div className="space-y-4">
-                            {current.transcript.map((t, i) => (
-                                <div key={i} className={`flex flex-col ${t.source === 'user' ? 'items-end' : 'items-start'}`}>
-                                    <span className="text-xs text-slate-400 px-2 mb-0.5 font-semibold">
-                                        {t.source === 'user' ? 'You' : 'AI Coach'}
-                                    </span>
-                                    <p className={`max-w-xl px-4 py-2 rounded-lg ${t.source === 'user' ? 'bg-purple-800 text-white' : 'bg-slate-700 text-slate-200'}`}>
-                                        {t.text}
-                                    </p>
-                                </div>
-                            ))}
-                            <div ref={transcriptEndRef} />
-                        </div>
-                    ) : (
-                        <div className="text-slate-400">No transcript for this take.</div>
-                    )}
+                    <div className="space-y-4">
+                        {(current as any)?.transcriptionError ? (
+                            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                                <div className="font-semibold mb-1">Transcription issue</div>
+                                <div>{(current as any).transcriptionError}</div>
+                            </div>
+                        ) : null}
+
+                        {current?.transcript?.length ? (
+                            <div className="space-y-4">
+                                {current.transcript.map((t, i) => (
+                                    <div key={i} className={`flex flex-col ${t.source === 'user' ? 'items-end' : 'items-start'}`}>
+                                        <span className="text-xs text-slate-400 px-2 mb-0.5 font-semibold">
+                                            {t.source === 'user' ? 'You' : 'AI Coach'}
+                                        </span>
+                                        <p className={`max-w-xl px-4 py-2 rounded-lg ${t.source === 'user' ? 'bg-purple-800 text-white' : 'bg-slate-700 text-slate-200'}`}>
+                                            {t.text}
+                                        </p>
+                                    </div>
+                                ))}
+                                <div ref={transcriptEndRef} />
+                            </div>
+                        ) : (
+                            <div className="text-slate-400">No transcript for this take.</div>
+                        )}
+                    </div>
                 </div>
             </div>
 
