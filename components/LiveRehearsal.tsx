@@ -1453,15 +1453,11 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 .filter((t) => t && typeof t.text === 'string' && t.text.trim().length > 0)
                 .map((t) => ({ ...t, text: String(t.text).trim() }));
             const userOnly = sanitized.filter((t) => t?.source === 'user');
-            const fallbackExisting = takesRef.current?.[takesRef.current.length - 1]?.transcript;
-            const previousNonEmpty = Array.isArray(fallbackExisting) && fallbackExisting.some((t: any) => typeof t?.text === 'string' && t.text.trim())
-                ? fallbackExisting
-                : [];
             const takeTranscript = userOnly.length
                 ? userOnly
                 : sanitized.length
                     ? sanitized
-                    : previousNonEmpty;
+                    : [];
 
             const startedAt = currentTakeStartRef.current ?? Date.now();
             const endedAt = Date.now();
