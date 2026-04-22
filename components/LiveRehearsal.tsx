@@ -139,6 +139,26 @@ const EMPTY_TRANSCRIPT_RETRY_MIN_CHARS = 8;
 const AUDIO_WARMUP_MS = 400;
 const FORCE_TRANSCRIBE_SOURCE: 'media_recorder' | 'pcm_wav' = 'pcm_wav';
 
+
+const traceTakeEvent = (takeId: string, event: string, data?: any) => {
+  try {
+    const payload = { takeId, ...(data || {}) };
+    console.log('[TRACE]', {
+      takeId,
+      event,
+      t: performance.now(),
+      ...(data || {}),
+    });
+
+    if (typeof pushDebug === 'function') {
+      pushDebug(event, payload);
+    }
+  } catch {
+    // ignore trace failures
+  }
+};
+
+
 const delay = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 
 const DEMO_SCRIPT = `Good evening, everyone. I want to try a quick experiment in attention.
@@ -1968,7 +1988,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                         settledChunkCount: recordedChunksRef.current.length,
                         settledBytes: recordedChunksRef.current.reduce((sum: number, c: any) => sum + (c?.size || 0), 0),
                     });
-                    window.setTimeout(() => resolve(), 0);
+                    resolve();
                 }, 0);
             };
 
@@ -2266,7 +2286,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             }
         } catch (err) {
             console.error('Header action failed:', err);
-            setErrorMessage(String(err?.message || err || 'Unknown stop error'));
+            setErrorMessage('Something went wrong. Please refresh and try again.');
             setStatus('error');
             setView('rehearsing');
         }
