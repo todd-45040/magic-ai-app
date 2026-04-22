@@ -25,6 +25,18 @@ function friendlyTransientMessage(): string {
   return 'AI temporarily unavailable. Please try again in a moment.';
 }
 
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isTransientStatus(status: number): boolean {
+  return [500, 502, 503, 504].includes(status);
+}
+
+function classifyErrorReason(err: any): 'timeout' | 'upstream_ai_failure' {
+  return String(err?.message || '').startsWith('TIMEOUT_') ? 'timeout' : 'upstream_ai_failure';
+}
+
 function buildUsageErrorResponse(usage: Awaited<ReturnType<typeof enforceAiUsage>>) {
   return {
     error: usage.error || 'AI usage limit reached.',
@@ -83,7 +95,7 @@ export default async function handler(req: any, res: any) {
 
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ') || authHeader.trim() === 'Bearer guest') {
-    res.status(401).json({ error: 'Unauthorized. Please log in.' });
+    res.status(401).json({ error: 'Unauthorized. Please log in.', reason: 'auth_failure', retryable: false });
     return;
   }
 
@@ -94,7 +106,7 @@ export default async function handler(req: any, res: any) {
 
   const apiKey = getApiKey();
   if (!apiKey) {
-    res.status(500).json({ error: 'Missing Gemini API key (server)' });
+    res.status(500).json({ error: 'Missing Gemini API key (server)', reason: 'server_config', retryable: false });
     return;
   }
 
@@ -102,7 +114,7 @@ export default async function handler(req: any, res: any) {
   const audioBase64 = body.audioBase64;
   const mimeType = body.mimeType || 'audio/wav';
   if (!audioBase64) {
-    res.status(400).json({ error: 'Missing audioBase64' });
+    res.status(400).json({ error: 'Missing audioBase64', reason: 'invalid_request', retryable: false });
     return;
   }
 
@@ -110,39 +122,90 @@ export default async function handler(req: any, res: any) {
     body.prompt ||
     'Transcribe the spoken words in this audio. Return ONLY the transcript text. Do not add commentary.';
 
-  try {
-    const ai = new GoogleGenAI({ apiKey });
-    const preferred = getModel();
-    // Try preferred model first, then common modern fallbacks.
-    const modelFallbacks = Array.from(
-      new Set([preferred, 'gemini-2.5-flash', 'gemini-2.0-flash'])
-    );
+  const ai = new GoogleGenAI({ apiKey });
+  const preferred = getModel();
+  // Try preferred model first, then common modern fallbacks.
+  const modelFallbacks = Array.from(
+    new Set([preferred, 'gemini-2.5-flash', 'gemini-2.0-flash'])
+  );
 
-    const result = await generateWithFallback(ai, modelFallbacks, {
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            { text: prompt },
-            {
-              inlineData: {
-                mimeType,
-                data: audioBase64,
+  const maxAttempts = 2;
+  let lastErr: any = null;
+  let lastReason: 'timeout' | 'upstream_ai_failure' = 'upstream_ai_failure';
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      console.log('[TRANSCRIBE DEBUG] request', {
+        model: preferred,
+        modelFallbacks,
+        mimeType,
+        audioBytes: Math.floor((audioBase64.length * 3) / 4),
+        audioBase64Length: audioBase64.length,
+        attempt,
+      });
+
+      const result = await generateWithFallback(ai, modelFallbacks, {
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { text: prompt },
+              {
+                inlineData: {
+                  mimeType,
+                  data: audioBase64,
+                },
               },
-            },
-          ],
-        },
-      ],
-    });
+            ],
+          },
+        ],
+      });
 
-    const text = (result.text || '').trim();
-    applyUsageHeaders(res, usage);
-    res.status(200).json({ transcript: text });
-  } catch (err: any) {
-    console.error('Transcribe error:', err);
-    if (String(err?.message || '').startsWith('TIMEOUT_')) {
-      return res.status(504).json({ error: friendlyTransientMessage() });
+      const text = (result.text || '').trim();
+      console.log('[TRANSCRIBE DEBUG] response', {
+        attempt,
+        transcriptLength: text.length,
+        emptyTranscript: text.length === 0,
+      });
+
+      if (!text) {
+        applyUsageHeaders(res, usage);
+        return res.status(502).json({
+          error: 'Transcription produced no text.',
+          reason: 'empty_transcript',
+          attempt,
+          retryable: false,
+        });
+      }
+
+      applyUsageHeaders(res, usage);
+      return res.status(200).json({ transcript: text, reason: 'ok', attempt });
+    } catch (err: any) {
+      lastErr = err;
+      lastReason = classifyErrorReason(err);
+      const transient = lastReason === 'timeout' || isTransientStatus(Number(err?.status || 0));
+      console.error('[TRANSCRIBE DEBUG] attempt_failed', {
+        attempt,
+        reason: lastReason,
+        transient,
+        status: Number(err?.status || 0) || null,
+        message: String(err?.message || err),
+      });
+      if (attempt < maxAttempts && transient) {
+        await delay(400);
+        continue;
+      }
+      break;
     }
-    return res.status(500).json({ error: friendlyTransientMessage() });
   }
+
+  const status = lastReason === 'timeout' ? 504 : 502;
+  return res.status(status).json({
+    error: friendlyTransientMessage(),
+    reason: lastReason,
+    attempt: maxAttempts,
+    retryable: true,
+    detail: String(lastErr?.message || lastErr || '').slice(0, 300),
+  });
 }
+

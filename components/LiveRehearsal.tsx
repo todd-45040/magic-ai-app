@@ -654,63 +654,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         takes: Take[];
     };
 
-    const hydrateSavedSession = (session: {
-        ideaId?: string | null;
-        title?: string;
-        notes?: string;
-        takes?: Take[];
-        selectedTake?: number;
-    }) => {
-        const normalizedTakes = Array.isArray(session?.takes) ? session.takes.filter(Boolean) : [];
-        if (normalizedTakes.length === 0) {
-            setErrorMessage('This saved rehearsal session does not contain any takes to review.');
-            return;
-        }
-
-        const nextTitle = typeof session?.title === 'string' && session.title.trim()
-            ? session.title.trim()
-            : `Live Rehearsal Session - ${new Date().toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`;
-        const nextNotes = typeof session?.notes === 'string' ? session.notes : '';
-        const requestedIndex = typeof session?.selectedTake === 'number' ? session.selectedTake : normalizedTakes.length - 1;
-        const nextSelectedTake = Math.max(0, Math.min(requestedIndex, normalizedTakes.length - 1));
-
-        setSessionIdeaId(session?.ideaId ?? null);
-        setSessionTitle(nextTitle);
-        setSessionNotes(nextNotes);
-        setTakes(normalizedTakes);
-        setSelectedTake(nextSelectedTake);
-        setDemoScript('');
-        setDemoDurationSeconds(0);
-        setDemoMarkers([]);
-        setTranscriptionHistory([]);
-        setCurrentMarkers(normalizedTakes[nextSelectedTake]?.markers ?? []);
-        setMarkerCount((normalizedTakes[nextSelectedTake]?.markers ?? []).length);
-        currentTakeUserTranscriptTextRef.current = '';
-        pcmChunksRef.current = [];
-        setErrorMessage('');
-        setBlockedUx(null);
-        setStatus('idle');
-        setSessionElapsed('0:00');
-        setView('reviewing');
-
-        persistDraft({
-            ideaId: session?.ideaId ?? null,
-            title: nextTitle,
-            notes: nextNotes,
-            takes: normalizedTakes,
-            selectedTake: nextSelectedTake,
-        });
-
-        window.setTimeout(() => {
-            try {
-                const el = document.getElementById('live-rehearsal-review-anchor');
-                el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            } catch {
-                // ignore
-            }
-        }, 80);
-    };
-
     const [sessionIdeaId, setSessionIdeaId] = useState<string | null>(null);
     const [sessionTitle, setSessionTitle] = useState<string>(() => `Live Rehearsal Session - ${new Date().toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`);
     const [sessionNotes, setSessionNotes] = useState<string>('');
@@ -821,13 +764,14 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             if (!parsed || parsed.version !== 2) return;
             if (!Array.isArray(parsed.takes) || parsed.takes.length === 0) return;
 
-            hydrateSavedSession({
-                ideaId: parsed.ideaId ?? null,
-                title: typeof parsed.title === 'string' ? parsed.title : '',
-                notes: typeof parsed.notes === 'string' ? parsed.notes : '',
-                takes: parsed.takes,
-                selectedTake: typeof parsed.selectedTake === 'number' ? parsed.selectedTake : parsed.takes.length - 1,
-            });
+            setSessionIdeaId(parsed.ideaId ?? null);
+            setSessionTitle(typeof parsed.title === 'string' && parsed.title.trim() ? parsed.title : sessionTitle);
+            setSessionNotes(typeof parsed.notes === 'string' ? parsed.notes : '');
+            setTakes(parsed.takes);
+            const idx = typeof parsed.selectedTake === 'number' ? parsed.selectedTake : parsed.takes.length - 1;
+            setSelectedTake(Math.max(0, Math.min(idx, parsed.takes.length - 1)));
+            setView('reviewing');
+            setStatus('idle');
         } catch {
             // ignore
         }
@@ -1629,22 +1573,47 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         const transcribeStartedAt = Date.now();
         try {
             const { getBearerToken } = await import('../services/usageStatusService');
-            const res = await fetch('/api/transcribe', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: await getBearerToken(),
-                },
-                body: JSON.stringify({ audioBase64, mimeType: blob.type }),
-            });
-            const json = await res.json().catch(() => ({}));
-            const serverTranscript = String(json?.transcript || '').trim();
+            const authorization = await getBearerToken();
+
+            const attemptTranscribe = async (attempt: number) => {
+                pushDebug('transcribe_request_attempt', {
+                    attempt,
+                    bytes: blob.size,
+                    mimeType: blob.type,
+                    liveLen: currentUserText.length,
+                });
+                const res = await fetch('/api/transcribe', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: authorization,
+                    },
+                    body: JSON.stringify({ audioBase64, mimeType: blob.type }),
+                });
+                const json = await res.json().catch(() => ({}));
+                return { res, json, serverTranscript: String(json?.transcript || '').trim() };
+            };
+
+            let attempt = 1;
+            let { res, json, serverTranscript } = await attemptTranscribe(attempt);
+
+            if (!res.ok && [500, 502, 503, 504].includes(res.status)) {
+                pushDebug('transcribe_client_retry', {
+                    firstStatus: res.status,
+                    firstReason: json?.reason ? String(json.reason) : '',
+                });
+                await new Promise((resolve) => setTimeout(resolve, 400));
+                attempt = 2;
+                ({ res, json, serverTranscript } = await attemptTranscribe(attempt));
+            }
 
             const w = window as any;
             w.__REHEARSAL_TRANSCRIBE__ = {
                 status: res.status,
                 ok: res.ok,
                 error: json?.error ? String(json.error) : '',
+                reason: json?.reason ? String(json.reason) : '',
+                attempt,
                 len: serverTranscript.length,
                 preview: serverTranscript.slice(0, 160),
                 ts: Date.now(),
@@ -1653,13 +1622,15 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             pushDebug('transcribe_response', {
                 status: res.status,
                 ok: res.ok,
+                reason: json?.reason ? String(json.reason) : '',
+                attempt,
                 serverLen: serverTranscript.length,
                 liveLen: currentUserText.length,
                 error: json?.error ? String(json.error).slice(0, 200) : '',
             });
 
             if (res.ok && serverTranscript) {
-                void logUserActivity({ tool_name: 'live_rehearsal', event_type: 'tool_used', success: true, duration_ms: Date.now() - transcribeStartedAt, metadata: { source: 'transcribe', transcript_length: serverTranscript.length } });
+                void logUserActivity({ tool_name: 'live_rehearsal', event_type: 'tool_used', success: true, duration_ms: Date.now() - transcribeStartedAt, metadata: { source: 'transcribe', transcript_length: serverTranscript.length, attempt } });
 
                 const winner = serverTranscript.length >= currentUserText.length
                     ? serverTranscript
@@ -1674,7 +1645,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 }
             }
             if (!res.ok) {
-                void logUserActivity({ tool_name: 'live_rehearsal', event_type: 'error', success: false, duration_ms: Date.now() - transcribeStartedAt, metadata: { source: 'transcribe', message: json?.error ? String(json.error) : `HTTP ${res.status}`, error_kind: /quota|limit/i.test(String(json?.error || '')) ? 'usage_limit_hit' : /timeout/i.test(String(json?.error || '')) ? 'timeout' : 'ai_failure', status: res.status } });
+                void logUserActivity({ tool_name: 'live_rehearsal', event_type: 'error', success: false, duration_ms: Date.now() - transcribeStartedAt, metadata: { source: 'transcribe', message: json?.error ? String(json.error) : `HTTP ${res.status}`, reason: json?.reason ? String(json.reason) : '', attempt, error_kind: /quota|limit/i.test(String(json?.error || '')) ? 'usage_limit_hit' : /timeout/i.test(String(json?.reason || json?.error || '')) ? 'timeout' : 'ai_failure', status: res.status } });
             }
         } catch (err: any) {
             void logUserActivity({ tool_name: 'live_rehearsal', event_type: 'error', success: false, duration_ms: Date.now() - transcribeStartedAt, metadata: { source: 'transcribe', message: String(err?.message || err), error_kind: /timeout/i.test(String(err?.message || err)) ? 'timeout' : 'ai_failure' } });
@@ -1770,37 +1741,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 ? resolvedTranscript
                 : (fallbackText ? ([{ source: 'user', text: fallbackText, isFinal: true }] as any) : []);
 
-            const transcribeMeta = (() => {
-                try {
-                    return (window as any).__REHEARSAL_TRANSCRIBE__ || null;
-                } catch {
-                    return null;
-                }
-            })();
-            const emptyTranscript = getFinalUserTranscriptText(takeTranscript).trim().length === 0;
-            const takeTranscriptionError = emptyTranscript
-                ? (() => {
-                    const rawError = String(transcribeMeta?.error || '').trim();
-                    if (/unauthorized|not authenticated|auth|login|token|401/i.test(rawError) || transcribeMeta?.status === 401) {
-                        return 'Transcription failed because your session is not authenticated. Please log in again and retry.';
-                    }
-                    if (rawError) {
-                        return `Server transcription failed. ${rawError}`;
-                    }
-                    return 'Server transcription failed. Please try again.';
-                })()
-                : '';
-
-            if (takeTranscriptionError) {
-                setErrorMessage(takeTranscriptionError);
-                pushDebug('take_finalized_without_transcript', {
-                    takeId: activeTakeIdRef.current,
-                    reason: takeTranscriptionError,
-                    transcribeStatus: transcribeMeta?.status ?? null,
-                    transcribeOk: transcribeMeta?.ok ?? null,
-                });
-            }
-
             const startedAt = currentTakeStartRef.current ?? Date.now();
             const endedAt = Date.now();
             const takeNumber = (takesRef.current?.length ?? 0) + 1;
@@ -1812,7 +1752,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 fallbackTextLen: fallbackText.length,
                 finalTranscriptLen: getFinalUserTranscriptText(takeTranscript).length,
                 finalTranscriptPreview: getFinalUserTranscriptText(takeTranscript).slice(0, 120),
-                transcriptionError: takeTranscriptionError || '',
             });
 
             const finalizedTake = {
@@ -1821,7 +1760,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 endedAt,
                 transcript: takeTranscript,
                 markers: currentMarkers,
-                transcriptionError: takeTranscriptionError || undefined,
             } as any;
 
             const nextTakes = [...(takesRef.current ?? []), finalizedTake];
@@ -2098,7 +2036,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
 
                         {view === 'idle' && status !== 'connecting' && (
                             <div className="w-full max-w-3xl mx-auto">
-                                <RehearsalHistory onOpenSession={hydrateSavedSession} />
+                                <RehearsalHistory />
                             </div>
                         )}
                     </div>
@@ -2350,13 +2288,9 @@ type RehearsalHistoryItem = {
     sessionLengthLabel: string;
     confidenceScore: number;
     markerLabels: string[];
-    takes: { takeNumber: number; startedAt: number; endedAt: number; transcript: Transcription[]; markers?: SegmentMarker[] }[];
-    selectedTake: number;
 };
 
-const RehearsalHistory: React.FC<{
-    onOpenSession: (session: { ideaId?: string | null; title?: string; notes?: string; takes?: { takeNumber: number; startedAt: number; endedAt: number; transcript: Transcription[]; markers?: SegmentMarker[] }[]; selectedTake?: number; }) => void;
-}> = ({ onOpenSession }) => {
+const RehearsalHistory: React.FC = () => {
     const [expanded, setExpanded] = useState(true);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string>('');
@@ -2371,8 +2305,6 @@ const RehearsalHistory: React.FC<{
                 const createdAt = new Date(r.timestamp).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
                 let transcript: Transcription[] = [];
                 let notes = '';
-                let takes: { takeNumber: number; startedAt: number; endedAt: number; transcript: Transcription[]; markers?: SegmentMarker[] }[] = [];
-                let selectedTake = 0;
                 let latestTake: { startedAt?: number; endedAt?: number; transcript?: Transcription[]; markers?: SegmentMarker[] } | null = null;
                 let totalDurationMs = 0;
                 let markerLabels: string[] = [];
@@ -2384,21 +2316,18 @@ const RehearsalHistory: React.FC<{
                     }
                     if (Array.isArray(obj?.takes)) {
                         const combined: Transcription[] = [];
-                        takes = obj.takes.map((take: any, idx: number) => ({
-                            takeNumber: Number(take?.takeNumber ?? 0) || idx + 1,
-                            startedAt: Number(take?.startedAt ?? 0) || 0,
-                            endedAt: Number(take?.endedAt ?? 0) || 0,
-                            transcript: Array.isArray(take?.transcript) ? take.transcript : [],
-                            markers: Array.isArray(take?.markers) ? take.markers : [],
-                        }));
-                        for (const take of takes) {
-                            combined.push({ source: 'model', text: `— Take ${take.takeNumber} —`, isFinal: true } as any);
-                            for (const seg of take.transcript) combined.push(seg as any);
-                            if (take.startedAt && take.endedAt && take.endedAt > take.startedAt) totalDurationMs += (take.endedAt - take.startedAt);
+                        for (const take of obj.takes) {
+                            const n = Number(take?.takeNumber ?? 0) || combined.length + 1;
+                            combined.push({ source: 'model', text: `— Take ${n} —`, isFinal: true } as any);
+                            if (Array.isArray(take?.transcript)) {
+                                for (const seg of take.transcript) combined.push(seg as any);
+                            }
+                            const startedAt = Number(take?.startedAt ?? 0) || 0;
+                            const endedAt = Number(take?.endedAt ?? 0) || 0;
+                            if (startedAt && endedAt && endedAt > startedAt) totalDurationMs += (endedAt - startedAt);
                         }
                         transcript = combined;
-                        selectedTake = typeof obj?.selectedTake === 'number' ? Math.max(0, Math.min(obj.selectedTake, Math.max(0, takes.length - 1))) : Math.max(0, takes.length - 1);
-                        latestTake = takes[selectedTake] || takes[takes.length - 1] || null;
+                        latestTake = obj.takes[obj.takes.length - 1] || null;
                         markerLabels = Array.isArray(latestTake?.markers) ? latestTake!.markers!.map((m: any) => String(m?.label || '')).filter(Boolean) : [];
                     }
                     if (typeof obj?.notes === 'string') notes = obj.notes;
@@ -2418,8 +2347,6 @@ const RehearsalHistory: React.FC<{
                     sessionLengthLabel: sessionLengthLabel === '0:00' ? '0:45' : sessionLengthLabel,
                     confidenceScore: metrics.confidenceScore,
                     markerLabels,
-                    takes,
-                    selectedTake,
                 };
             });
             setItems(parsed);
@@ -2521,20 +2448,9 @@ const RehearsalHistory: React.FC<{
                                     ) : null}
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => onOpenSession({
-                                            ideaId: it.id,
-                                            title: it.title,
-                                            notes: it.notes,
-                                            takes: it.takes,
-                                            selectedTake: it.selectedTake,
-                                        })}
-                                        disabled={(it.takes?.length ?? 0) === 0}
-                                        className="px-3 py-1.5 rounded-md border border-slate-700 bg-slate-900/40 text-slate-300 text-sm font-semibold hover:bg-slate-800/70 hover:text-slate-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
+                                    <div className="px-3 py-1.5 rounded-md border border-slate-700 bg-slate-900/40 text-slate-300 text-sm font-semibold">
                                         Review saved session
-                                    </button>
+                                    </div>
                                 </div>
                             </div>
                         ))}
@@ -3008,32 +2924,23 @@ const ReviewView: React.FC<{
                         </div>
                     </div>
 
-                    <div className="space-y-4">
-                        {(current as any)?.transcriptionError ? (
-                            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-                                <div className="font-semibold mb-1">Transcription issue</div>
-                                <div>{(current as any).transcriptionError}</div>
-                            </div>
-                        ) : null}
-
-                        {current?.transcript?.length ? (
-                            <div className="space-y-4">
-                                {current.transcript.map((t, i) => (
-                                    <div key={i} className={`flex flex-col ${t.source === 'user' ? 'items-end' : 'items-start'}`}>
-                                        <span className="text-xs text-slate-400 px-2 mb-0.5 font-semibold">
-                                            {t.source === 'user' ? 'You' : 'AI Coach'}
-                                        </span>
-                                        <p className={`max-w-xl px-4 py-2 rounded-lg ${t.source === 'user' ? 'bg-purple-800 text-white' : 'bg-slate-700 text-slate-200'}`}>
-                                            {t.text}
-                                        </p>
-                                    </div>
-                                ))}
-                                <div ref={transcriptEndRef} />
-                            </div>
-                        ) : (
-                            <div className="text-slate-400">No transcript for this take.</div>
-                        )}
-                    </div>
+                    {current?.transcript?.length ? (
+                        <div className="space-y-4">
+                            {current.transcript.map((t, i) => (
+                                <div key={i} className={`flex flex-col ${t.source === 'user' ? 'items-end' : 'items-start'}`}>
+                                    <span className="text-xs text-slate-400 px-2 mb-0.5 font-semibold">
+                                        {t.source === 'user' ? 'You' : 'AI Coach'}
+                                    </span>
+                                    <p className={`max-w-xl px-4 py-2 rounded-lg ${t.source === 'user' ? 'bg-purple-800 text-white' : 'bg-slate-700 text-slate-200'}`}>
+                                        {t.text}
+                                    </p>
+                                </div>
+                            ))}
+                            <div ref={transcriptEndRef} />
+                        </div>
+                    ) : (
+                        <div className="text-slate-400">No transcript for this take.</div>
+                    )}
                 </div>
             </div>
 
