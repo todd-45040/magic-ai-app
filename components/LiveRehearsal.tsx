@@ -651,17 +651,19 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
     };
 
     type TakeAudioSnapshot = {
+        takeId: number;
+        createdAt: number;
+        recorderChunks: BlobPart[];
+        recorderMimeType: string;
+        recorderBytes: number;
         pcmChunks: Float32Array[];
         pcmSampleRate: number;
-        recordedChunks: BlobPart[];
-        recordedMimeType: string;
         pcmBlob: Blob | null;
-        recorderBlob: Blob | null;
+        pcmBytes: number;
         chosenBlob: Blob | null;
-        chosenSource: 'pcm_wav' | 'media_recorder' | 'none';
-        pcmBlobBytes: number;
-        recorderBytes: number;
+        chosenMimeType: string;
         chosenBytes: number;
+        chosenSource: 'pcm_wav' | 'media_recorder' | 'none';
     };
 
     type RehearsalSessionContentV2 = {
@@ -1487,8 +1489,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             .join(' ')
             .trim();
 
-    const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
-
     const normalizeTranscript = (items: Transcription[]): Transcription[] =>
         (items || [])
             .filter((t) => t && typeof t.text === 'string' && t.text.trim().length > 0)
@@ -1502,130 +1502,164 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             .replace(/\s+/g, ' ')
             .trim();
 
-    const createTakeAudioSnapshot = (): TakeAudioSnapshot => {
-        const pcmChunks = (pcmChunksRef.current || []).map((chunk) => new Float32Array(chunk));
+    const captureTakeSnapshot = (): TakeAudioSnapshot => {
+        const takeId = activeTakeIdRef.current;
+        const createdAt = Date.now();
+
+        const recorderChunks = Array.isArray(recordedChunksRef.current)
+            ? [...recordedChunksRef.current]
+            : [];
+        const recorderMimeType = (recordedMimeTypeRef.current || 'audio/webm').split(';')[0];
+        const recorderBytes = recorderChunks.reduce((sum: number, c: any) => sum + (c?.size || 0), 0);
+
+        const pcmChunks = Array.isArray(pcmChunksRef.current)
+            ? pcmChunksRef.current.map((chunk) => new Float32Array(chunk))
+            : [];
         const pcmSampleRate = pcmSampleRateRef.current || 16000;
-        const recordedChunks = [...(recordedChunksRef.current || [])];
-        const recordedMimeType = (recordedMimeTypeRef.current || 'audio/webm').split(';')[0];
         const pcmBlob = buildWavBlobFromFloat32(pcmChunks, pcmSampleRate);
-        const recorderBytes = recordedChunks.reduce((sum: number, c: any) => sum + (c?.size || 0), 0);
-        const recorderBlob = recordedChunks.length && recorderBytes >= 1024
-            ? new Blob(recordedChunks, { type: recordedMimeType })
-            : null;
-        const chosenBlob = pcmBlob && pcmBlob.size >= 1024 ? pcmBlob : recorderBlob;
-        const chosenSource: 'pcm_wav' | 'media_recorder' | 'none' = pcmBlob && chosenBlob === pcmBlob
-            ? 'pcm_wav'
-            : (chosenBlob ? 'media_recorder' : 'none');
+
+        const mediaRecorderBlob =
+            recorderChunks.length && recorderBytes >= 1024
+                ? new Blob(recorderChunks, { type: recorderMimeType })
+                : null;
+
+        const chosenBlob =
+            pcmBlob && pcmBlob.size >= 1024
+                ? pcmBlob
+                : mediaRecorderBlob;
+
+        const chosenSource =
+            pcmBlob && chosenBlob === pcmBlob
+                ? 'pcm_wav'
+                : (chosenBlob ? 'media_recorder' : 'none');
+
         const snapshot: TakeAudioSnapshot = {
+            takeId,
+            createdAt,
+            recorderChunks,
+            recorderMimeType,
+            recorderBytes,
             pcmChunks,
             pcmSampleRate,
-            recordedChunks,
-            recordedMimeType,
             pcmBlob,
-            recorderBlob,
+            pcmBytes: pcmBlob?.size || 0,
             chosenBlob,
-            chosenSource,
-            pcmBlobBytes: pcmBlob?.size || 0,
-            recorderBytes,
+            chosenMimeType: chosenBlob?.type || recorderMimeType,
             chosenBytes: chosenBlob?.size || 0,
+            chosenSource,
         };
 
         pushDebug('take_audio_snapshot', {
-            takeId: activeTakeIdRef.current,
+            takeId,
+            createdAt,
             pcmChunkCount: snapshot.pcmChunks.length,
-            pcmBlobBytes: snapshot.pcmBlobBytes,
+            pcmBlobBytes: snapshot.pcmBytes,
             pcmSampleRate: snapshot.pcmSampleRate,
-            recorderChunkCount: snapshot.recordedChunks.length,
+            recorderChunkCount: snapshot.recorderChunks.length,
             recorderBytes: snapshot.recorderBytes,
-            recorderMimeType: snapshot.recordedMimeType,
+            recorderMimeType: snapshot.recorderMimeType,
             chosenSource: snapshot.chosenSource,
             chosenBytes: snapshot.chosenBytes,
-            chosenMimeType: snapshot.chosenBlob?.type || '',
+            chosenMimeType: snapshot.chosenMimeType,
         });
 
         return snapshot;
     };
 
-    /**
-     * Ensure we have a usable USER transcript for the take.
-     *
-     * IMPORTANT: React state updates are async. Callers should use the returned
-     * value rather than reading `transcriptionHistoryRef.current` immediately
-     * after this function.
-     */
-    const transcribeOnServerIfNeeded = async (audioSnapshot?: TakeAudioSnapshot): Promise<Transcription[]> => {
+    const transcribeFromSnapshot = async (
+        snapshot: TakeAudioSnapshot
+    ): Promise<{
+        transcript: Transcription[];
+        transcriptionError?: string;
+        audioSource: TakeAudioSnapshot['chosenSource'];
+        audioBytes: number;
+    }> => {
         const currentHistory = Array.isArray(transcriptionHistoryRef.current) ? transcriptionHistoryRef.current : [];
         const normalizedCurrent = normalizeTranscript(currentHistory);
         const currentUserText = getFinalUserTranscriptText(normalizedCurrent);
         const hasFinalUserSegment = normalizedCurrent.some((t) => t.source === 'user' && t.isFinal);
 
-        const snapshot = audioSnapshot ?? createTakeAudioSnapshot();
-        const pcmBlob = snapshot.pcmBlob;
-        const recorderChunks = snapshot.recordedChunks;
-        const recorderMimeType = snapshot.recordedMimeType;
-        const recorderBytes = snapshot.recorderBytes;
-        const blob = snapshot.chosenBlob;
-        const mimeType = blob?.type || recorderMimeType;
-        const bytes = snapshot.chosenBytes || recorderBytes;
-        const chosenSource = snapshot.chosenSource;
-
         pushDebug('transcribe_audio_sources', {
-            takeId: activeTakeIdRef.current,
+            takeId: snapshot.takeId,
             liveLen: currentUserText.length,
             hasFinalUserSegment,
             pcmChunkCount: snapshot.pcmChunks.length,
-            pcmBlobBytes: snapshot.pcmBlobBytes,
+            pcmBlobBytes: snapshot.pcmBytes,
             pcmSampleRate: snapshot.pcmSampleRate,
-            recorderChunkCount: recorderChunks.length,
-            recorderBytes,
-            recorderMimeType,
-            chosenSource,
+            recorderChunkCount: snapshot.recorderChunks.length,
+            recorderBytes: snapshot.recorderBytes,
+            recorderMimeType: snapshot.recorderMimeType,
+            chosenSource: snapshot.chosenSource,
             chosenBytes: snapshot.chosenBytes,
-            chosenMimeType: blob?.type || '',
+            chosenMimeType: snapshot.chosenMimeType,
         });
 
         if (hasFinalUserSegment && currentUserText) {
             pushDebug('transcribe_skipped', {
                 reason: 'final_live_user_transcript_present',
                 len: currentUserText.length,
+                takeId: snapshot.takeId,
             });
-            return normalizedCurrent;
+            return {
+                transcript: normalizedCurrent,
+                audioSource: snapshot.chosenSource,
+                audioBytes: snapshot.chosenBytes,
+            };
         }
 
-        if (!blob || bytes < 1024) {
+        if (!snapshot.chosenBlob || snapshot.chosenBytes < 1024) {
             pushDebug('transcribe_skipped', {
                 reason: 'no_audio_chunks',
-                chunks: recorderChunks.length,
-                bytes,
+                takeId: snapshot.takeId,
+                chunks: snapshot.recorderChunks.length,
+                bytes: snapshot.chosenBytes,
                 liveLen: currentUserText.length,
                 hasFinalUserSegment,
             });
 
-            return currentUserText
-                ? ([{ source: 'user', text: currentUserText, isFinal: true }] as any)
-                : [];
+            return {
+                transcript: currentUserText
+                    ? ([{ source: 'user', text: currentUserText, isFinal: true }] as any)
+                    : [],
+                transcriptionError: currentUserText ? undefined : 'no_audio_captured',
+                audioSource: snapshot.chosenSource,
+                audioBytes: snapshot.chosenBytes,
+            };
         }
 
         try {
             const w = window as any;
-            w.__REHEARSAL_AUDIO__ = { size: blob.size, type: blob.type, ts: Date.now() };
-            w.__REHEARSAL_AUDIO_URL__ = URL.createObjectURL(blob);
+            w.__REHEARSAL_AUDIO__ = {
+                size: snapshot.chosenBlob.size,
+                type: snapshot.chosenBlob.type,
+                ts: Date.now(),
+            };
+            w.__REHEARSAL_AUDIO_URL__ = URL.createObjectURL(snapshot.chosenBlob);
         } catch {
             // ignore
         }
 
-        pushDebug('audio_finalized', { chunks: recorderChunks.length, bytes: blob.size, type: blob.type, source: chosenSource });
+        pushDebug('audio_finalized', {
+            takeId: snapshot.takeId,
+            chunks: snapshot.recorderChunks.length,
+            bytes: snapshot.chosenBlob.size,
+            type: snapshot.chosenBlob.type,
+            source: snapshot.chosenSource,
+        });
 
-        const audioBase64 = await blobToBase64(blob);
+        const audioBase64 = await blobToBase64(snapshot.chosenBlob);
+
         pushDebug('transcribe_request', {
-            bytes: blob.size,
-            mimeType: blob.type,
+            takeId: snapshot.takeId,
+            bytes: snapshot.chosenBlob.size,
+            mimeType: snapshot.chosenBlob.type,
             base64Len: audioBase64.length,
             liveLen: currentUserText.length,
             hasFinalUserSegment,
         });
 
         const transcribeStartedAt = Date.now();
+
         try {
             const { getBearerToken } = await import('../services/usageStatusService');
             const res = await fetch('/api/transcribe', {
@@ -1634,22 +1668,30 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                     'Content-Type': 'application/json',
                     Authorization: await getBearerToken(),
                 },
-                body: JSON.stringify({ audioBase64, mimeType: blob.type }),
+                body: JSON.stringify({
+                    audioBase64,
+                    mimeType: snapshot.chosenBlob.type,
+                }),
             });
+
             const json = await res.json().catch(() => ({}));
             const serverTranscript = String(json?.transcript || '').trim();
 
-            const w = window as any;
-            w.__REHEARSAL_TRANSCRIBE__ = {
-                status: res.status,
-                ok: res.ok,
-                error: json?.error ? String(json.error) : '',
-                len: serverTranscript.length,
-                preview: serverTranscript.slice(0, 160),
-                ts: Date.now(),
-            };
+            try {
+                (window as any).__REHEARSAL_TRANSCRIBE__ = {
+                    status: res.status,
+                    ok: res.ok,
+                    error: json?.error ? String(json.error) : '',
+                    len: serverTranscript.length,
+                    preview: serverTranscript.slice(0, 160),
+                    ts: Date.now(),
+                };
+            } catch {
+                // ignore
+            }
 
             pushDebug('transcribe_response', {
+                takeId: snapshot.takeId,
                 status: res.status,
                 ok: res.ok,
                 serverLen: serverTranscript.length,
@@ -1658,37 +1700,133 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             });
 
             if (res.ok && serverTranscript) {
-                void logUserActivity({ tool_name: 'live_rehearsal', event_type: 'tool_used', success: true, duration_ms: Date.now() - transcribeStartedAt, metadata: { source: 'transcribe', transcript_length: serverTranscript.length } });
+                void logUserActivity({
+                    tool_name: 'live_rehearsal',
+                    event_type: 'tool_used',
+                    success: true,
+                    duration_ms: Date.now() - transcribeStartedAt,
+                    metadata: {
+                        source: 'transcribe',
+                        transcript_length: serverTranscript.length,
+                    },
+                });
 
-                const winner = serverTranscript.length >= currentUserText.length
-                    ? serverTranscript
-                    : currentUserText;
+                const winner =
+                    serverTranscript.length >= currentUserText.length
+                        ? serverTranscript
+                        : currentUserText;
 
                 if (winner) {
-                    const finalHistory: Transcription[] = [{ source: 'user', text: winner, isFinal: true } as any];
+                    const finalHistory: Transcription[] = [
+                        { source: 'user', text: winner, isFinal: true } as any,
+                    ];
                     transcriptionHistoryRef.current = finalHistory;
                     currentTakeUserTranscriptTextRef.current = winner;
                     setTranscriptionHistory(finalHistory);
-                    return finalHistory;
+
+                    return {
+                        transcript: finalHistory,
+                        audioSource: snapshot.chosenSource,
+                        audioBytes: snapshot.chosenBytes,
+                    };
                 }
             }
+
             if (!res.ok) {
-                void logUserActivity({ tool_name: 'live_rehearsal', event_type: 'error', success: false, duration_ms: Date.now() - transcribeStartedAt, metadata: { source: 'transcribe', message: json?.error ? String(json.error) : `HTTP ${res.status}`, error_kind: /quota|limit/i.test(String(json?.error || '')) ? 'usage_limit_hit' : /timeout/i.test(String(json?.error || '')) ? 'timeout' : 'ai_failure', status: res.status } });
+                void logUserActivity({
+                    tool_name: 'live_rehearsal',
+                    event_type: 'error',
+                    success: false,
+                    duration_ms: Date.now() - transcribeStartedAt,
+                    metadata: {
+                        source: 'transcribe',
+                        message: json?.error ? String(json.error) : `HTTP ${res.status}`,
+                        error_kind: /quota|limit/i.test(String(json?.error || ''))
+                            ? 'usage_limit_hit'
+                            : /timeout/i.test(String(json?.error || ''))
+                                ? 'timeout'
+                                : 'ai_failure',
+                        status: res.status,
+                    },
+                });
             }
+
+            const fallbackTranscript = currentUserText
+                ? ([{ source: 'user', text: currentUserText, isFinal: true }] as any)
+                : [];
+
+            return {
+                transcript: fallbackTranscript,
+                transcriptionError: serverTranscript
+                    ? undefined
+                    : (json?.error ? String(json.error) : (!res.ok ? `HTTP ${res.status}` : 'empty_transcript')),
+                audioSource: snapshot.chosenSource,
+                audioBytes: snapshot.chosenBytes,
+            };
         } catch (err: any) {
-            void logUserActivity({ tool_name: 'live_rehearsal', event_type: 'error', success: false, duration_ms: Date.now() - transcribeStartedAt, metadata: { source: 'transcribe', message: String(err?.message || err), error_kind: /timeout/i.test(String(err?.message || err)) ? 'timeout' : 'ai_failure' } });
-            pushDebug('transcribe_error', { message: String(err?.message || err) });
+            void logUserActivity({
+                tool_name: 'live_rehearsal',
+                event_type: 'error',
+                success: false,
+                duration_ms: Date.now() - transcribeStartedAt,
+                metadata: {
+                    source: 'transcribe',
+                    message: String(err?.message || err),
+                    error_kind: /timeout/i.test(String(err?.message || err)) ? 'timeout' : 'ai_failure',
+                },
+            });
+
+            pushDebug('transcribe_error', {
+                takeId: snapshot.takeId,
+                message: String(err?.message || err),
+            });
+
             try {
-                (window as any).__REHEARSAL_TRANSCRIBE__ = { status: 0, ok: false, error: String(err?.message || err), len: 0, preview: '', ts: Date.now() };
+                (window as any).__REHEARSAL_TRANSCRIBE__ = {
+                    status: 0,
+                    ok: false,
+                    error: String(err?.message || err),
+                    len: 0,
+                    preview: '',
+                    ts: Date.now(),
+                };
             } catch {
                 // ignore
             }
-        }
 
-        return currentUserText
-            ? ([{ source: 'user', text: currentUserText, isFinal: true }] as any)
-            : [];
+            return {
+                transcript: currentUserText
+                    ? ([{ source: 'user', text: currentUserText, isFinal: true }] as any)
+                    : [],
+                transcriptionError: String(err?.message || err),
+                audioSource: snapshot.chosenSource,
+                audioBytes: snapshot.chosenBytes,
+            };
+        }
     };
+
+    const buildTakeFromSnapshot = (
+        snapshot: TakeAudioSnapshot,
+        transcriptResult: {
+            transcript: Transcription[];
+            transcriptionError?: string;
+            audioSource: TakeAudioSnapshot['chosenSource'];
+            audioBytes: number;
+        },
+        markers: SegmentMarker[],
+        startedAt: number,
+        endedAt: number,
+        takeNumber: number
+    ): Take => ({
+        takeNumber,
+        startedAt,
+        endedAt,
+        transcript: transcriptResult.transcript,
+        markers,
+        transcriptionError: transcriptResult.transcriptionError,
+        audioSource: transcriptResult.audioSource,
+        audioBytes: transcriptResult.audioBytes,
+    });
 
     const stopRecorderAndFlush = async () => {
         const recorder = mediaRecorderRef.current;
@@ -1754,58 +1892,50 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         await stopRecorderAndFlush();
 
         // Snapshot audio immediately after recorder stop. Finalize from this immutable take snapshot.
-        const audioSnapshot = createTakeAudioSnapshot();
-
-        // Try to transcribe server-side if Live inputTranscription didn't arrive.
-        // Use the returned transcript immediately (do not rely on state/ref sync).
-        const finalizedHistory = await transcribeOnServerIfNeeded(audioSnapshot);
+        const audioSnapshot = captureTakeSnapshot();
+        const transcriptResult = await transcribeFromSnapshot(audioSnapshot);
 
         // Finalize this take from one resolved transcript source.
         let completedTake: any = null;
         try {
-            const resolvedTranscript = normalizeTranscript(finalizedHistory);
+            const resolvedTranscript = normalizeTranscript(transcriptResult.transcript);
             const fallbackText = String(currentTakeUserTranscriptTextRef.current || '').trim();
             const takeTranscript = resolvedTranscript.length > 0
                 ? resolvedTranscript
                 : (fallbackText ? ([{ source: 'user', text: fallbackText, isFinal: true }] as any) : []);
 
-            const startedAt = currentTakeStartRef.current ?? Date.now();
+            const startedAt = currentTakeStartRef.current ?? audioSnapshot.createdAt;
             const endedAt = Date.now();
             const takeNumber = (takesRef.current?.length ?? 0) + 1;
 
             pushDebug('take_transcript_before_save', {
-                takeId: activeTakeIdRef.current,
+                takeId: audioSnapshot.takeId,
                 takeNumber,
                 resolvedTranscriptLen: getFinalUserTranscriptText(resolvedTranscript).length,
                 fallbackTextLen: fallbackText.length,
                 finalTranscriptLen: getFinalUserTranscriptText(takeTranscript).length,
                 finalTranscriptPreview: getFinalUserTranscriptText(takeTranscript).slice(0, 120),
-            });
-
-            const finalTranscriptLen = getFinalUserTranscriptText(takeTranscript).length;
-            const transcriptionError = finalTranscriptLen > 0 ? undefined : (
-                audioSnapshot.chosenSource === 'none'
-                    ? 'no_audio_captured'
-                    : 'transcription_failed'
-            );
-
-            const finalizedTake = {
-                takeNumber,
-                startedAt,
-                endedAt,
-                transcript: takeTranscript,
-                markers: currentMarkers,
-                transcriptionError,
                 audioSource: audioSnapshot.chosenSource,
                 audioBytes: audioSnapshot.chosenBytes,
-            } as any;
+                transcriptionError: transcriptResult.transcriptionError || '',
+            });
 
-            if (transcriptionError) {
+            const finalizedTake = buildTakeFromSnapshot(
+                audioSnapshot,
+                { ...transcriptResult, transcript: takeTranscript },
+                currentMarkers,
+                startedAt,
+                endedAt,
+                takeNumber
+            ) as any;
+
+            if (finalizedTake.transcriptionError) {
                 pushDebug('take_finalized_without_transcript', {
+                    takeId: audioSnapshot.takeId,
                     takeNumber,
-                    reason: transcriptionError,
-                    audioSource: audioSnapshot.chosenSource,
-                    audioBytes: audioSnapshot.chosenBytes,
+                    reason: finalizedTake.transcriptionError,
+                    audioSource: finalizedTake.audioSource,
+                    audioBytes: finalizedTake.audioBytes,
                 });
             }
 
@@ -1818,14 +1948,15 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             setSelectedTake(nextSelectedTake);
 
             pushDebug('finalized_take', {
+                takeId: audioSnapshot.takeId,
                 takeNumber,
                 transcriptLen: getFinalUserTranscriptText(takeTranscript).length,
                 transcriptPreview: getFinalUserTranscriptText(takeTranscript).slice(0, 120),
                 takesCount: nextTakes.length,
                 selectedTake: nextSelectedTake,
+                audioSource: finalizedTake.audioSource,
+                audioBytes: finalizedTake.audioBytes,
                 transcriptionError: finalizedTake.transcriptionError || '',
-                audioSource: finalizedTake.audioSource || 'none',
-                audioBytes: finalizedTake.audioBytes || 0,
             });
         } catch {
             // ignore
