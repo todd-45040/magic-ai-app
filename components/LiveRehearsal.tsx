@@ -674,6 +674,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         const requestedIndex = typeof session?.selectedTake === 'number' ? session.selectedTake : normalizedTakes.length - 1;
         const nextSelectedTake = Math.max(0, Math.min(requestedIndex, normalizedTakes.length - 1));
 
+        setIsRecording(false);
         setSessionIdeaId(session?.ideaId ?? null);
         setSessionTitle(nextTitle);
         setSessionNotes(nextNotes);
@@ -698,6 +699,12 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             title: nextTitle,
             notes: nextNotes,
             takes: normalizedTakes,
+            selectedTake: nextSelectedTake,
+        });
+
+        console.log('[REHEARSAL DEBUG] reopened saved session', {
+            ideaId: session?.ideaId ?? null,
+            takeCount: normalizedTakes.length,
             selectedTake: nextSelectedTake,
         });
 
