@@ -604,7 +604,11 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
     const sessionRef = useRef<LiveSession | null>(null);
     const sessionPromiseRef = useRef<Promise<LiveSession> | null>(null);
     const cleanupMicStreamRef = useRef<(() => void) | null>(null);
-    const cleanupInputAudioChainRef = useRef<(() => Promise<void> | void) | null>(null);
+    const inputAudioContextRef = useRef<AudioContext | null>(null);
+    const inputSourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
+    const inputProcessorNodeRef = useRef<ScriptProcessorNode | null>(null);
+    const inputZeroGainRef = useRef<GainNode | null>(null);
+    const activeTakeIdRef = useRef(0);
     const errorOccurred = useRef(false);
 
     // Ground-truth recording (for server-side transcription fallback)
@@ -818,6 +822,8 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
     const transcriptEndRef = useRef<HTMLDivElement>(null);
 
     const hardResetTakeState = (reason: string) => {
+        activeTakeIdRef.current += 1;
+
         recordedChunksRef.current = [];
         recordedMimeTypeRef.current = 'audio/webm';
         pcmChunksRef.current = [];
@@ -846,6 +852,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
 
         pushDebug('take_state_reset', {
             reason,
+            takeId: activeTakeIdRef.current,
             existingTakes: takesRef.current.length,
         });
     };
@@ -853,20 +860,55 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
     const cleanupInputAudioChain = async (reason: string) => {
         pushDebug('cleanup_input_audio_chain_start', {
             reason,
-            hasCleanup: !!cleanupInputAudioChainRef.current,
+            takeId: activeTakeIdRef.current,
+            hasInputContext: !!inputAudioContextRef.current,
+            hasSource: !!inputSourceNodeRef.current,
+            hasProcessor: !!inputProcessorNodeRef.current,
+            hasZeroGain: !!inputZeroGainRef.current,
         });
 
         try {
-            if (cleanupInputAudioChainRef.current) {
-                await cleanupInputAudioChainRef.current();
+            if (inputProcessorNodeRef.current) {
+                try { inputProcessorNodeRef.current.onaudioprocess = null; } catch {}
+                try { inputProcessorNodeRef.current.disconnect(); } catch {}
             }
         } catch {
             // ignore
-        } finally {
-            cleanupInputAudioChainRef.current = null;
         }
 
-        pushDebug('cleanup_input_audio_chain_done', { reason });
+        try {
+            if (inputZeroGainRef.current) {
+                try { inputZeroGainRef.current.disconnect(); } catch {}
+            }
+        } catch {
+            // ignore
+        }
+
+        try {
+            if (inputSourceNodeRef.current) {
+                try { inputSourceNodeRef.current.disconnect(); } catch {}
+            }
+        } catch {
+            // ignore
+        }
+
+        try {
+            if (inputAudioContextRef.current && inputAudioContextRef.current.state !== 'closed') {
+                await inputAudioContextRef.current.close().catch(() => void 0);
+            }
+        } catch {
+            // ignore
+        }
+
+        inputProcessorNodeRef.current = null;
+        inputZeroGainRef.current = null;
+        inputSourceNodeRef.current = null;
+        inputAudioContextRef.current = null;
+
+        pushDebug('cleanup_input_audio_chain_done', {
+            reason,
+            takeId: activeTakeIdRef.current,
+        });
     };
 
     useEffect(() => {
@@ -1136,21 +1178,33 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             
             // FIX: Create input audio context with the stream's native sample rate to avoid mismatches.
             const inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-            let source: MediaStreamAudioSourceNode | null = null;
-            let scriptProcessor: ScriptProcessorNode | null = null;
-            let zeroGain: GainNode | null = null;
+            inputAudioContextRef.current = inputAudioContext;
+            inputSourceNodeRef.current = null;
+            inputProcessorNodeRef.current = null;
+            inputZeroGainRef.current = null;
 
             const sessionPromise = startLiveSession(
                 MAGICIAN_LIVE_REHEARSAL_SYSTEM_INSTRUCTION,
                 {
                     onopen: () => { 
                         // Setup microphone streaming once the connection is open
-                        source = inputAudioContext.createMediaStreamSource(stream);
-                        scriptProcessor = inputAudioContext.createScriptProcessor(4096, 1, 1);
+                        const source = inputAudioContext.createMediaStreamSource(stream);
+                        const scriptProcessor = inputAudioContext.createScriptProcessor(4096, 1, 1);
+
+                        inputSourceNodeRef.current = source;
+                        inputProcessorNodeRef.current = scriptProcessor;
 
                         // FIX: Implement audio resampling within the audio processor
                         // to convert the microphone's native sample rate to the 16000Hz required by the API.
+                        const thisTakeId = activeTakeIdRef.current;
                         scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
+                            if (thisTakeId !== activeTakeIdRef.current) {
+                                pushDebug('stale_audio_callback_ignored', {
+                                    thisTakeId,
+                                    activeTakeId: activeTakeIdRef.current,
+                                });
+                                return;
+                            }
                             const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
                             const inputSampleRate = inputAudioContext.sampleRate;
                             const outputSampleRate = 16000;
@@ -1187,8 +1241,9 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
 
                         source.connect(scriptProcessor);
                         // Keep the ScriptProcessorNode alive without routing audible audio to speakers.
-                        zeroGain = inputAudioContext.createGain();
+                        const zeroGain = inputAudioContext.createGain();
                         zeroGain.gain.value = 0;
+                        inputZeroGainRef.current = zeroGain;
                         scriptProcessor.connect(zeroGain);
                         zeroGain.connect(inputAudioContext.destination);
 
@@ -1251,19 +1306,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             // Define the cleanup function for all audio resources
             cleanupMicStreamRef.current = () => {
                 stream.getTracks().forEach(track => track.stop());
-            };
-
-            cleanupInputAudioChainRef.current = async () => {
-                try { if (scriptProcessor) scriptProcessor.disconnect(); } catch {}
-                try { if (zeroGain) zeroGain.disconnect(); } catch {}
-                try { if (source) source.disconnect(); } catch {}
-                try {
-                    if (inputAudioContext.state !== 'closed') {
-                        await inputAudioContext.close().catch(() => void 0);
-                    }
-                } catch {
-                    // ignore
-                }
             };
 
         } catch (error: any) {
