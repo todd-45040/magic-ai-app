@@ -158,7 +158,7 @@ const MIN_TRANSCRIBE_AUDIO_BYTES = 8_000;
 const MIN_TRANSCRIBE_AUDIO_DURATION_MS = 1_200;
 const EMPTY_TRANSCRIPT_RETRY_MIN_CHARS = 8;
 const AUDIO_WARMUP_MS = 400;
-const FORCE_TRANSCRIBE_SOURCE: 'media_recorder' | 'pcm_wav' = 'media_recorder';
+const FORCE_TRANSCRIBE_SOURCE: 'media_recorder' | 'pcm_wav' = 'pcm_wav';
 
 const delay = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 
