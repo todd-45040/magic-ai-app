@@ -645,6 +645,23 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         endedAt: number;
         transcript: Transcription[];
         markers?: SegmentMarker[];
+        transcriptionError?: string;
+        audioSource?: 'pcm_wav' | 'media_recorder' | 'none';
+        audioBytes?: number;
+    };
+
+    type TakeAudioSnapshot = {
+        pcmChunks: Float32Array[];
+        pcmSampleRate: number;
+        recordedChunks: BlobPart[];
+        recordedMimeType: string;
+        pcmBlob: Blob | null;
+        recorderBlob: Blob | null;
+        chosenBlob: Blob | null;
+        chosenSource: 'pcm_wav' | 'media_recorder' | 'none';
+        pcmBlobBytes: number;
+        recorderBytes: number;
+        chosenBytes: number;
     };
 
     type RehearsalSessionContentV2 = {
@@ -1485,6 +1502,50 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             .replace(/\s+/g, ' ')
             .trim();
 
+    const createTakeAudioSnapshot = (): TakeAudioSnapshot => {
+        const pcmChunks = (pcmChunksRef.current || []).map((chunk) => new Float32Array(chunk));
+        const pcmSampleRate = pcmSampleRateRef.current || 16000;
+        const recordedChunks = [...(recordedChunksRef.current || [])];
+        const recordedMimeType = (recordedMimeTypeRef.current || 'audio/webm').split(';')[0];
+        const pcmBlob = buildWavBlobFromFloat32(pcmChunks, pcmSampleRate);
+        const recorderBytes = recordedChunks.reduce((sum: number, c: any) => sum + (c?.size || 0), 0);
+        const recorderBlob = recordedChunks.length && recorderBytes >= 1024
+            ? new Blob(recordedChunks, { type: recordedMimeType })
+            : null;
+        const chosenBlob = pcmBlob && pcmBlob.size >= 1024 ? pcmBlob : recorderBlob;
+        const chosenSource: 'pcm_wav' | 'media_recorder' | 'none' = pcmBlob && chosenBlob === pcmBlob
+            ? 'pcm_wav'
+            : (chosenBlob ? 'media_recorder' : 'none');
+        const snapshot: TakeAudioSnapshot = {
+            pcmChunks,
+            pcmSampleRate,
+            recordedChunks,
+            recordedMimeType,
+            pcmBlob,
+            recorderBlob,
+            chosenBlob,
+            chosenSource,
+            pcmBlobBytes: pcmBlob?.size || 0,
+            recorderBytes,
+            chosenBytes: chosenBlob?.size || 0,
+        };
+
+        pushDebug('take_audio_snapshot', {
+            takeId: activeTakeIdRef.current,
+            pcmChunkCount: snapshot.pcmChunks.length,
+            pcmBlobBytes: snapshot.pcmBlobBytes,
+            pcmSampleRate: snapshot.pcmSampleRate,
+            recorderChunkCount: snapshot.recordedChunks.length,
+            recorderBytes: snapshot.recorderBytes,
+            recorderMimeType: snapshot.recordedMimeType,
+            chosenSource: snapshot.chosenSource,
+            chosenBytes: snapshot.chosenBytes,
+            chosenMimeType: snapshot.chosenBlob?.type || '',
+        });
+
+        return snapshot;
+    };
+
     /**
      * Ensure we have a usable USER transcript for the take.
      *
@@ -1492,40 +1553,34 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
      * value rather than reading `transcriptionHistoryRef.current` immediately
      * after this function.
      */
-    const transcribeOnServerIfNeeded = async (): Promise<Transcription[]> => {
+    const transcribeOnServerIfNeeded = async (audioSnapshot?: TakeAudioSnapshot): Promise<Transcription[]> => {
         const currentHistory = Array.isArray(transcriptionHistoryRef.current) ? transcriptionHistoryRef.current : [];
         const normalizedCurrent = normalizeTranscript(currentHistory);
         const currentUserText = getFinalUserTranscriptText(normalizedCurrent);
         const hasFinalUserSegment = normalizedCurrent.some((t) => t.source === 'user' && t.isFinal);
 
-        const pcmBlob = buildWavBlobFromFloat32(pcmChunksRef.current, pcmSampleRateRef.current || 16000);
-        const recorderChunks = recordedChunksRef.current;
-        const recorderMimeType = (recordedMimeTypeRef.current || 'audio/webm').split(';')[0];
-        const recorderBytes = recorderChunks.reduce((sum: number, c: any) => sum + (c?.size || 0), 0);
-        const blob = pcmBlob && pcmBlob.size >= 1024
-            ? pcmBlob
-            : (recorderChunks.length && recorderBytes >= 1024
-                ? new Blob(recorderChunks, { type: recorderMimeType })
-                : null);
+        const snapshot = audioSnapshot ?? createTakeAudioSnapshot();
+        const pcmBlob = snapshot.pcmBlob;
+        const recorderChunks = snapshot.recordedChunks;
+        const recorderMimeType = snapshot.recordedMimeType;
+        const recorderBytes = snapshot.recorderBytes;
+        const blob = snapshot.chosenBlob;
         const mimeType = blob?.type || recorderMimeType;
-        const bytes = blob?.size || recorderBytes;
-        const chosenSource =
-            pcmBlob && blob === pcmBlob
-                ? 'pcm_wav'
-                : (blob ? 'media_recorder' : 'none');
+        const bytes = snapshot.chosenBytes || recorderBytes;
+        const chosenSource = snapshot.chosenSource;
 
         pushDebug('transcribe_audio_sources', {
             takeId: activeTakeIdRef.current,
             liveLen: currentUserText.length,
             hasFinalUserSegment,
-            pcmChunkCount: pcmChunksRef.current.length,
-            pcmBlobBytes: pcmBlob?.size || 0,
-            pcmSampleRate: pcmSampleRateRef.current || 16000,
+            pcmChunkCount: snapshot.pcmChunks.length,
+            pcmBlobBytes: snapshot.pcmBlobBytes,
+            pcmSampleRate: snapshot.pcmSampleRate,
             recorderChunkCount: recorderChunks.length,
             recorderBytes,
             recorderMimeType,
             chosenSource,
-            chosenBytes: blob?.size || 0,
+            chosenBytes: snapshot.chosenBytes,
             chosenMimeType: blob?.type || '',
         });
 
@@ -1559,7 +1614,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             // ignore
         }
 
-        pushDebug('audio_finalized', { chunks: recorderChunks.length, bytes: blob.size, type: blob.type, source: pcmBlob && blob === pcmBlob ? 'pcm_wav' : 'media_recorder' });
+        pushDebug('audio_finalized', { chunks: recorderChunks.length, bytes: blob.size, type: blob.type, source: chosenSource });
 
         const audioBase64 = await blobToBase64(blob);
         pushDebug('transcribe_request', {
@@ -1573,47 +1628,22 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         const transcribeStartedAt = Date.now();
         try {
             const { getBearerToken } = await import('../services/usageStatusService');
-            const authorization = await getBearerToken();
-
-            const attemptTranscribe = async (attempt: number) => {
-                pushDebug('transcribe_request_attempt', {
-                    attempt,
-                    bytes: blob.size,
-                    mimeType: blob.type,
-                    liveLen: currentUserText.length,
-                });
-                const res = await fetch('/api/transcribe', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: authorization,
-                    },
-                    body: JSON.stringify({ audioBase64, mimeType: blob.type }),
-                });
-                const json = await res.json().catch(() => ({}));
-                return { res, json, serverTranscript: String(json?.transcript || '').trim() };
-            };
-
-            let attempt = 1;
-            let { res, json, serverTranscript } = await attemptTranscribe(attempt);
-
-            if (!res.ok && [500, 502, 503, 504].includes(res.status)) {
-                pushDebug('transcribe_client_retry', {
-                    firstStatus: res.status,
-                    firstReason: json?.reason ? String(json.reason) : '',
-                });
-                await new Promise((resolve) => setTimeout(resolve, 400));
-                attempt = 2;
-                ({ res, json, serverTranscript } = await attemptTranscribe(attempt));
-            }
+            const res = await fetch('/api/transcribe', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: await getBearerToken(),
+                },
+                body: JSON.stringify({ audioBase64, mimeType: blob.type }),
+            });
+            const json = await res.json().catch(() => ({}));
+            const serverTranscript = String(json?.transcript || '').trim();
 
             const w = window as any;
             w.__REHEARSAL_TRANSCRIBE__ = {
                 status: res.status,
                 ok: res.ok,
                 error: json?.error ? String(json.error) : '',
-                reason: json?.reason ? String(json.reason) : '',
-                attempt,
                 len: serverTranscript.length,
                 preview: serverTranscript.slice(0, 160),
                 ts: Date.now(),
@@ -1622,15 +1652,13 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             pushDebug('transcribe_response', {
                 status: res.status,
                 ok: res.ok,
-                reason: json?.reason ? String(json.reason) : '',
-                attempt,
                 serverLen: serverTranscript.length,
                 liveLen: currentUserText.length,
                 error: json?.error ? String(json.error).slice(0, 200) : '',
             });
 
             if (res.ok && serverTranscript) {
-                void logUserActivity({ tool_name: 'live_rehearsal', event_type: 'tool_used', success: true, duration_ms: Date.now() - transcribeStartedAt, metadata: { source: 'transcribe', transcript_length: serverTranscript.length, attempt } });
+                void logUserActivity({ tool_name: 'live_rehearsal', event_type: 'tool_used', success: true, duration_ms: Date.now() - transcribeStartedAt, metadata: { source: 'transcribe', transcript_length: serverTranscript.length } });
 
                 const winner = serverTranscript.length >= currentUserText.length
                     ? serverTranscript
@@ -1645,7 +1673,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 }
             }
             if (!res.ok) {
-                void logUserActivity({ tool_name: 'live_rehearsal', event_type: 'error', success: false, duration_ms: Date.now() - transcribeStartedAt, metadata: { source: 'transcribe', message: json?.error ? String(json.error) : `HTTP ${res.status}`, reason: json?.reason ? String(json.reason) : '', attempt, error_kind: /quota|limit/i.test(String(json?.error || '')) ? 'usage_limit_hit' : /timeout/i.test(String(json?.reason || json?.error || '')) ? 'timeout' : 'ai_failure', status: res.status } });
+                void logUserActivity({ tool_name: 'live_rehearsal', event_type: 'error', success: false, duration_ms: Date.now() - transcribeStartedAt, metadata: { source: 'transcribe', message: json?.error ? String(json.error) : `HTTP ${res.status}`, error_kind: /quota|limit/i.test(String(json?.error || '')) ? 'usage_limit_hit' : /timeout/i.test(String(json?.error || '')) ? 'timeout' : 'ai_failure', status: res.status } });
             }
         } catch (err: any) {
             void logUserActivity({ tool_name: 'live_rehearsal', event_type: 'error', success: false, duration_ms: Date.now() - transcribeStartedAt, metadata: { source: 'transcribe', message: String(err?.message || err), error_kind: /timeout/i.test(String(err?.message || err)) ? 'timeout' : 'ai_failure' } });
@@ -1725,12 +1753,12 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         // Stop recording and flush last chunks BEFORE we tear down tracks.
         await stopRecorderAndFlush();
 
-        // Give late inputTranscription / turnComplete events a brief chance to land.
-        await wait(350);
+        // Snapshot audio immediately after recorder stop. Finalize from this immutable take snapshot.
+        const audioSnapshot = createTakeAudioSnapshot();
 
         // Try to transcribe server-side if Live inputTranscription didn't arrive.
         // Use the returned transcript immediately (do not rely on state/ref sync).
-        const finalizedHistory = await transcribeOnServerIfNeeded();
+        const finalizedHistory = await transcribeOnServerIfNeeded(audioSnapshot);
 
         // Finalize this take from one resolved transcript source.
         let completedTake: any = null;
@@ -1754,13 +1782,32 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 finalTranscriptPreview: getFinalUserTranscriptText(takeTranscript).slice(0, 120),
             });
 
+            const finalTranscriptLen = getFinalUserTranscriptText(takeTranscript).length;
+            const transcriptionError = finalTranscriptLen > 0 ? undefined : (
+                audioSnapshot.chosenSource === 'none'
+                    ? 'no_audio_captured'
+                    : 'transcription_failed'
+            );
+
             const finalizedTake = {
                 takeNumber,
                 startedAt,
                 endedAt,
                 transcript: takeTranscript,
                 markers: currentMarkers,
+                transcriptionError,
+                audioSource: audioSnapshot.chosenSource,
+                audioBytes: audioSnapshot.chosenBytes,
             } as any;
+
+            if (transcriptionError) {
+                pushDebug('take_finalized_without_transcript', {
+                    takeNumber,
+                    reason: transcriptionError,
+                    audioSource: audioSnapshot.chosenSource,
+                    audioBytes: audioSnapshot.chosenBytes,
+                });
+            }
 
             const nextTakes = [...(takesRef.current ?? []), finalizedTake];
             completedTake = finalizedTake;
@@ -1776,6 +1823,9 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 transcriptPreview: getFinalUserTranscriptText(takeTranscript).slice(0, 120),
                 takesCount: nextTakes.length,
                 selectedTake: nextSelectedTake,
+                transcriptionError: finalizedTake.transcriptionError || '',
+                audioSource: finalizedTake.audioSource || 'none',
+                audioBytes: finalizedTake.audioBytes || 0,
             });
         } catch {
             // ignore
