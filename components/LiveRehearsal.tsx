@@ -1979,20 +1979,49 @@ traceTakeEvent(activeTakeIdRef.current, 'pcm_snapshot_stats', {
         }
 
         await new Promise<void>((resolve) => {
-            const onStop = () => {
+            let settled = false;
+            let finish = () => {
+                if (settled) return;
+                settled = true;
                 recorder.removeEventListener('stop', onStop);
                 traceTakeEvent(takeId, 'media_recorder_stop_received', {
                     finalChunkCount: recordedChunksRef.current.length,
                     finalBytes: recordedChunksRef.current.reduce((sum: number, c: any) => sum + (c?.size || 0), 0),
                 });
-                resolve();
+                window.setTimeout(() => {
+                    traceTakeEvent(takeId, 'media_recorder_stop_settled', {
+                        settledChunkCount: recordedChunksRef.current.length,
+                        settledBytes: recordedChunksRef.current.reduce((sum: number, c: any) => sum + (c?.size || 0), 0),
+                    });
+                    resolve();
+                }, 0);
             };
+
+            const onStop = () => {
+                finish();
+            };
+
             recorder.addEventListener('stop', onStop);
+
+            const timeoutId = window.setTimeout(() => {
+                traceTakeEvent(takeId, 'media_recorder_stop_timeout_fallback', {
+                    recorderState: recorder.state,
+                    chunkCount: recordedChunksRef.current.length,
+                    bytes: recordedChunksRef.current.reduce((sum: number, c: any) => sum + (c?.size || 0), 0),
+                });
+                finish();
+            }, 1500);
+
+            const originalFinish = finish;
+            finish = () => {
+                window.clearTimeout(timeoutId);
+                originalFinish();
+            };
+
             try {
                 recorder.stop();
             } catch {
-                recorder.removeEventListener('stop', onStop);
-                resolve();
+                finish();
             }
         });
     };
