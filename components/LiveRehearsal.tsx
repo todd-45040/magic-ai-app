@@ -16,6 +16,27 @@ import { logEvent } from '../services/analyticsService';
 import { trackClientEvent } from '../services/telemetryClient';
 import { logUserActivity } from '../services/userActivityService';
 
+
+// --- TRACE HELPER (added) ---
+function traceTakeEvent(takeId: string, event: string, data?: any) {
+  try {
+    const payload = { takeId, ...(data || {}) };
+    console.log('[TRACE]', {
+      takeId,
+      event,
+      t: performance.now(),
+      ...(data || {}),
+    });
+    if (typeof (globalThis as any).pushDebug === 'function') {
+      (globalThis as any).pushDebug(event, payload);
+    }
+  } catch {
+    // swallow errors
+  }
+}
+// --- END TRACE HELPER ---
+
+
 // ---- Debug instrumentation (enabled via ?debugRehearsal=1 or localStorage MAW_DEBUG_REHEARSAL=1) ----
 type DebugEvent = { ts: number; event: string; data?: any };
 
