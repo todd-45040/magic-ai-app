@@ -3021,3 +3021,7 @@ const SessionTimelineCard: React.FC<{ transcript: Transcription[]; markers?: Seg
 };
 
 export default LiveRehearsal;
+
+
+// ===== AUDIO DEBUG PATCH ADDED =====
+console.log('[AUDIO DEBUG FILE LOADED]');
