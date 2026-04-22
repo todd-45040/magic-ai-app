@@ -1304,8 +1304,8 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         const bytes = chunks.reduce((sum: number, c: any) => sum + (c?.size || 0), 0);
 
         if (!chunks.length || bytes < 1024) {
-            pushDebug('transcribe_skipped', { reason: 'no_audio_chunks', chunks: chunks.length, bytes });
-            return Array.isArray(transcriptionHistory) ? transcriptionHistory : [];
+            pushDebug('transcribe_skipped', { reason: 'no_audio_chunks', chunks: chunks.length, bytes, currentHistoryLen: currentHistory.length });
+            return currentHistory;
         }
 
         const blob = new Blob(chunks, { type: mimeType });
