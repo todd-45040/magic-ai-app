@@ -665,6 +665,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
 
     const currentTakeStartRef = useRef<number | null>(null);
     const transcriptionHistoryRef = useRef<Transcription[]>([]);
+    const currentTakeUserTranscriptTextRef = useRef<string>('');
 
     const persistDraft = (override?: Partial<{ ideaId: string | null; title: string; notes: string; takes: Take[]; selectedTake: number; }>) => {
         try {
@@ -775,6 +776,12 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
 
     useEffect(() => {
         transcriptionHistoryRef.current = transcriptionHistory;
+        const userText = transcriptionHistory
+            .filter((t) => t?.source === 'user' && typeof t.text === 'string')
+            .map((t) => t.text)
+            .join(' ')
+            .trim();
+        currentTakeUserTranscriptTextRef.current = userText;
         transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [transcriptionHistory]);
 
@@ -954,6 +961,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         setStatus('connecting');
         setErrorMessage('');
         transcriptionHistoryRef.current = [];
+        currentTakeUserTranscriptTextRef.current = '';
         setTranscriptionHistory([]);
         setMarkerCount(0);
         setCurrentMarkers([]);
@@ -1225,6 +1233,11 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                     ? [...prev.slice(0, -1), { ...last, text: last.text + text }]
                     : [...prev, { source: 'user', text, isFinal: false }];
                 transcriptionHistoryRef.current = next;
+                currentTakeUserTranscriptTextRef.current = next
+                    .filter((t) => t?.source === 'user' && typeof t.text === 'string')
+                    .map((t) => t.text)
+                    .join(' ')
+                    .trim();
                 return next;
             });
         }
@@ -1243,6 +1256,11 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             setTranscriptionHistory(prev => {
                 const next = prev.map(t => ({ ...t, isFinal: true }));
                 transcriptionHistoryRef.current = next;
+                currentTakeUserTranscriptTextRef.current = next
+                    .filter((t) => t?.source === 'user' && typeof t.text === 'string')
+                    .map((t) => t.text)
+                    .join(' ')
+                    .trim();
                 return next;
             });
         }
@@ -1304,8 +1322,12 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
         const bytes = chunks.reduce((sum: number, c: any) => sum + (c?.size || 0), 0);
 
         if (!chunks.length || bytes < 1024) {
-            pushDebug('transcribe_skipped', { reason: 'no_audio_chunks', chunks: chunks.length, bytes, currentHistoryLen: currentHistory.length });
-            return currentHistory;
+            pushDebug('transcribe_skipped', { reason: 'no_audio_chunks', chunks: chunks.length, bytes, currentUserTextLen: currentTakeUserTranscriptTextRef.current.length });
+            if (currentHistory.length) return currentHistory;
+            if (currentTakeUserTranscriptTextRef.current.trim()) {
+                return [{ source: 'user', text: currentTakeUserTranscriptTextRef.current.trim(), isFinal: true } as any];
+            }
+            return [];
         }
 
         const blob = new Blob(chunks, { type: mimeType });
@@ -1357,6 +1379,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 void logUserActivity({ tool_name: 'live_rehearsal', event_type: 'tool_used', success: true, duration_ms: Date.now() - transcribeStartedAt, metadata: { source: 'transcribe', transcript_length: transcript.length } });
                 const finalHistory: Transcription[] = [{ source: 'user', text: transcript, isFinal: true } as any];
                 transcriptionHistoryRef.current = finalHistory;
+                currentTakeUserTranscriptTextRef.current = transcript;
                 setTranscriptionHistory(finalHistory);
                 return finalHistory;
             }
@@ -1373,7 +1396,13 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             }
         }
 
-        return Array.isArray(transcriptionHistoryRef.current) ? transcriptionHistoryRef.current : [];
+        if (Array.isArray(transcriptionHistoryRef.current) && transcriptionHistoryRef.current.length) {
+            return transcriptionHistoryRef.current;
+        }
+        if (currentTakeUserTranscriptTextRef.current.trim()) {
+            return [{ source: 'user', text: currentTakeUserTranscriptTextRef.current.trim(), isFinal: true } as any];
+        }
+        return [];
     };
 
     const stopRecorderAndFlush = async () => {
@@ -1453,11 +1482,14 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 .filter((t) => t && typeof t.text === 'string' && t.text.trim().length > 0)
                 .map((t) => ({ ...t, text: String(t.text).trim() }));
             const userOnly = sanitized.filter((t) => t?.source === 'user');
+            const currentTakeText = currentTakeUserTranscriptTextRef.current.trim();
             const takeTranscript = userOnly.length
                 ? userOnly
                 : sanitized.length
                     ? sanitized
-                    : [];
+                    : currentTakeText
+                        ? [{ source: 'user', text: currentTakeText, isFinal: true } as any]
+                        : [];
 
             const startedAt = currentTakeStartRef.current ?? Date.now();
             const endedAt = Date.now();
@@ -1642,6 +1674,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                         setDemoScript('');
                         setDemoDurationSeconds(0);
                         setDemoMarkers([]);
+                        currentTakeUserTranscriptTextRef.current = '';
                         setTranscriptionHistory([]);
                         setErrorMessage('');
                         setStatus('idle');
@@ -1685,6 +1718,8 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                                 setSessionTitle(`Live Rehearsal Session - ${new Date().toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`);
                                 setSessionNotes('');
                                 clearDraft();
+                                currentTakeUserTranscriptTextRef.current = '';
+                                currentTakeUserTranscriptTextRef.current = '';
                                 setTranscriptionHistory([]);
                                 setErrorMessage('');
                                 setBlockedUx(null);
