@@ -174,8 +174,8 @@ const initialMode = (() => {
         });
         setMessage(
           signupContext.isPartner30Day
-            ? `You’ve unlocked a 30-day Professional Trial (${signupContext.isIbm ? 'IBM' : 'SAM'} Partner Access). Check your email to confirm your account before logging in.`
-            : 'Account created! Check your email to confirm your account before logging in.'
+            ? `Almost there! Your 30-day Professional Trial (${signupContext.isIbm ? 'IBM' : 'SAM'} Partner Access) has been started. Now check your email and click the confirmation link to activate your account. The email may take a few minutes to arrive, and you may need to check spam, junk, or promotions.`
+            : 'Almost there! Your account has been created. Now check your email and click the confirmation link to activate your account. The email may take a few minutes to arrive, and you may need to check spam, junk, or promotions.'
         );
         if (signupEstablishedSession) {
           try { onLoginSuccess?.(); } catch {}
@@ -259,6 +259,19 @@ const initialMode = (() => {
                 {mode === 'signup' && signupContext.isPartner30Day && (
                   <div className="mt-4 w-full rounded-xl border border-yellow-300/20 bg-yellow-400/10 px-4 py-3 text-sm text-yellow-100">
                     {signupContext.isIbm ? 'IBM' : 'SAM'} Partner Access detected. We’ll carry your 30-day trial source into signup.
+                  </div>
+                )}
+
+                {mode === 'signup' && (
+                  <div className="mt-4 w-full rounded-xl border border-blue-300/20 bg-blue-400/10 px-4 py-3 text-sm text-blue-100">
+                    <div className="font-semibold text-white">Before you submit</div>
+                    <ul className="mt-2 space-y-1.5 list-disc pl-5 text-blue-50/90">
+                      <li>Create a new password and enter it twice.</li>
+                      <li>After signup, Magic AI Wizard will send you a confirmation email.</li>
+                      <li>The confirmation email may take several minutes to arrive.</li>
+                      <li>Check spam, junk, or promotions folders if you do not see it.</li>
+                      <li>Click the confirmation link in that email to enter the app.</li>
+                    </ul>
                   </div>
                 )}
 
