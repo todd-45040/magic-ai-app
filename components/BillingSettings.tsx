@@ -191,11 +191,11 @@ const founderLabel = useMemo(
                 Yearly
               </button>
             </div>
-            <div
+            {/* <div
               className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${founderPricingApplied ? 'bg-amber-500/15 text-amber-200 border border-amber-400/30' : 'border border-white/10 bg-white/[0.04] text-white/70'}`}
             >
               {founderPricingApplied ? 'Founder pricing locked' : 'Founder pricing path unavailable'}
-            </div>
+            </div> */}
           </div>
         </div>
 
