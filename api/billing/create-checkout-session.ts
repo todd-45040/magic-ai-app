@@ -156,15 +156,9 @@ export default async function handler(request: any, response: any) {
 
       const subscriptionId = String(liveSubscription?.id || '').trim();
       const subscriptionItemId = String(liveSubscription?.items?.data?.[0]?.id || '').trim();
-      if (!subscriptionId || !subscriptionItemId) {
-        return response.status(409).json({
-          error: 'Unable to locate the existing Stripe subscription for this billing-cycle switch. Open the billing portal or refresh billing status and try again.',
-          currentPlan: billingStatus.planKey,
-          requestedPlan: target.internalPlanKey,
-        });
-      }
-
-      {
+      // Partner/product trials can have Professional access without a Stripe subscription yet.
+      // In that case, do not block checkout; fall through and create the first paid subscription.
+      if (subscriptionId && subscriptionItemId) {
         const updated = await updateStripeSubscription(subscriptionId, {
           cancel_at_period_end: false,
           billing_cycle_anchor: 'now',

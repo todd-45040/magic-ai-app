@@ -635,7 +635,9 @@ export async function resolveBillingStatusForUser(admin: any, userId: string): P
     : (resolved.keepAccess ? resolved.planKey : 'free');
 
   const planDef = BILLING_PLAN_CATALOG[effectivePlanKey] || BILLING_PLAN_CATALOG.free;
-  const upgradeTargets = planDef.allowedUpgrades || [];
+  const upgradeTargets = trialActive
+    ? (['amateur', 'founder_amateur', 'professional', 'founder_professional'] as BillingPlanKey[])
+    : (planDef.allowedUpgrades || []);
 
   const currentPriceId =
     String(stripeSnapshot?.priceId || subscription?.price_id || profile?.stripe_price_id || '').trim() || null;

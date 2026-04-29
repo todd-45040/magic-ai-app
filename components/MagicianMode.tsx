@@ -61,6 +61,7 @@ import MagicDictionary from './MagicDictionary';
 import AdminPanel from './AdminPanel';
 import AppSuggestionModal from './AppSuggestionModal';
 import BillingSettings from './BillingSettings';
+import type { BillingCycle } from '../services/planCatalog';
 import TrialConversionBanner from './TrialConversionBanner';
 import FirstWinGate from './FirstWinGate';
 import { getPartnerTrialBadgeLabel, isPartnerTrialUser } from '../services/trialMessaging';
@@ -4475,8 +4476,8 @@ ${action.payload.content}`;
     handleNavigate('performance-analytics');
   };
 
-  const handleUpgrade = (tier: 'amateur' | 'professional') => {
-    onUpgrade(tier as any);
+  const handleUpgrade = (selection: 'amateur' | 'professional' | { tier: 'amateur' | 'professional'; billingCycle?: BillingCycle; founderRequested?: boolean }) => {
+    onUpgrade(selection as any);
     setIsUpgradeModalOpen(false);
   }
   

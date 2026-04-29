@@ -142,6 +142,13 @@ const founderLabel = useMemo(
 
   const isCurrentAmateur = currentPlanKey === 'amateur' || currentPlanKey === 'founder_amateur';
   const isCurrentProfessional = currentPlanKey === 'professional' || currentPlanKey === 'founder_professional';
+  const hasStripeSubscription = Boolean(
+    status?.billingTruth?.stripeSnapshot?.subscriptionExists ||
+    status?.billingTruth?.dbSnapshot?.stripeSubscriptionId ||
+    status?.currentPriceId
+  );
+  const isTrialingWithoutPaidSubscription = Boolean(status?.billingStatus === 'trialing' && !hasStripeSubscription);
+
 
   return (
     <div className="space-y-6">
@@ -226,17 +233,21 @@ const founderLabel = useMemo(
           const badge = founderPricingApplied ? 'Founder pricing' : 'Standard pricing';
           const selectedCycle = billingCycle;
           const planName = tier === 'amateur' ? 'Amateur' : 'Professional';
-          const currentTierRank = getPlanTierRank(currentPlanKey);
+          const currentTierRank = isTrialingWithoutPaidSubscription ? 0 : getPlanTierRank(currentPlanKey);
           const targetTierRank = getPlanTierRank(tier);
-          const isDowngradePath = targetTierRank < currentTierRank;
-          const isSamePlanAndCycle = currentPlanMatch && currentBillingCycle === selectedCycle;
-          const isSamePlanDifferentCycle = currentPlanMatch && currentBillingCycle !== selectedCycle;
+          const isDowngradePath = !isTrialingWithoutPaidSubscription && targetTierRank < currentTierRank;
+          const isSamePlanAndCycle = !isTrialingWithoutPaidSubscription && currentPlanMatch && currentBillingCycle === selectedCycle;
+          const isSamePlanDifferentCycle = !isTrialingWithoutPaidSubscription && currentPlanMatch && currentBillingCycle !== selectedCycle;
           const showCurrentBadge = isSamePlanAndCycle;
           const showCycleSwitchBadge = isSamePlanDifferentCycle;
 
-          let buttonLabel = `Upgrade to ${planName}`;
+          let buttonLabel = isTrialingWithoutPaidSubscription
+            ? `Start ${planName} ${selectedCycle === 'yearly' ? 'Yearly' : 'Monthly'}`
+            : `Upgrade to ${planName}`;
           let buttonDisabled = loading;
-          let helperText = '';
+          let helperText = isTrialingWithoutPaidSubscription
+            ? `Your IBM trial stays active. Checkout simply adds the paid ${planName} ${selectedCycle} plan so service can continue after the trial.`
+            : '';
 
           if (isDowngradePath) {
             buttonLabel = 'Higher plan active';
@@ -247,14 +258,10 @@ const founderLabel = useMemo(
             buttonDisabled = true;
             helperText = `Your ${planName} ${selectedCycle} plan is already active.`;
           } else if (isSamePlanDifferentCycle) {
-            if (!status?.billingCustomerExists) {
-              buttonLabel = 'Complete checkout to activate billing';
-              buttonDisabled = true;
-              helperText = 'Complete checkout to activate billing.';
-            } else {
-              buttonLabel = selectedCycle === 'yearly' ? 'Switch to Yearly' : 'Switch to Monthly';
-              helperText = `Switch your ${planName} plan to ${selectedCycle} billing.`;
-            }
+            buttonLabel = selectedCycle === 'yearly' ? 'Switch to Yearly' : 'Switch to Monthly';
+            helperText = status?.billingCustomerExists
+              ? `Switch your ${planName} plan to ${selectedCycle} billing.`
+              : `Start ${planName} ${selectedCycle} billing through checkout.`;
           }
 
           return (
@@ -292,18 +299,18 @@ const founderLabel = useMemo(
 
               <button
                 onClick={() => {
-                  if (isDowngradePath) {
+                  if (!isTrialingWithoutPaidSubscription && isDowngradePath) {
                     console.warn('Blocked lower-tier checkout attempt while a higher-tier plan is active.');
                     return;
                   }
-                  if (isSamePlanAndCycle) {
+                  if (!isTrialingWithoutPaidSubscription && isSamePlanAndCycle) {
                     console.warn('Blocked duplicate subscription attempt for the current billing plan and cycle.');
                     return;
                   }
                   onUpgrade({ tier, billingCycle: selectedCycle, founderRequested: founderPricingApplied });
                 }}
                 disabled={buttonDisabled}
-                className={`mt-4 inline-flex w-full items-center justify-center rounded-xl px-4 py-3 text-sm font-bold transition ${tier === 'amateur' ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-amber-500 text-slate-950 hover:bg-amber-400'} ${(isSamePlanAndCycle || isDowngradePath) ? 'opacity-50 cursor-not-allowed' : ''} disabled:cursor-not-allowed disabled:opacity-50`}
+                className={`mt-4 inline-flex w-full items-center justify-center rounded-xl px-4 py-3 text-sm font-bold transition ${tier === 'amateur' ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-amber-500 text-slate-950 hover:bg-amber-400'} ${(!isTrialingWithoutPaidSubscription && (isSamePlanAndCycle || isDowngradePath)) ? 'opacity-50 cursor-not-allowed' : ''} disabled:cursor-not-allowed disabled:opacity-50`}
               >
                 {buttonLabel}
               </button>
