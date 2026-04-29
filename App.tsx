@@ -115,7 +115,14 @@ function App() {
     const showIdParam = urlParams.get('showId');
     const tokenParam = urlParams.get('token');
     const recordParam = urlParams.get('record') === '1';
-    const isAuthCallbackFlow = modeParam === 'auth-callback' || Boolean(urlParams.get('code'));
+    const hashParams = new URLSearchParams((window.location.hash || '').replace(/^#/, ''));
+    const isAuthCallbackFlow =
+      modeParam === 'auth-callback' ||
+      Boolean(urlParams.get('code')) ||
+      Boolean(urlParams.get('error')) ||
+      Boolean(hashParams.get('access_token')) ||
+      Boolean(hashParams.get('refresh_token')) ||
+      Boolean(hashParams.get('type'));
 
     const getAppBasePath = () => {
       try {
@@ -149,12 +156,34 @@ function App() {
       try {
         const currentUrl = new URL(window.location.href);
         const hasCode = Boolean(currentUrl.searchParams.get('code'));
-        if (!hasCode) return;
-        await supabase.auth.exchangeCodeForSession(window.location.href);
-        routeAuthCallbackToHome();
+        const hasAuthHash = Boolean(
+          currentUrl.hash &&
+          (currentUrl.hash.includes('access_token=') || currentUrl.hash.includes('refresh_token='))
+        );
+
+        if (hasCode) {
+          const { error } = await supabase.auth.exchangeCodeForSession(window.location.href);
+          if (error) throw error;
+          routeAuthCallbackToHome();
+          return;
+        }
+
+        if (hasAuthHash) {
+          await new Promise(resolve => window.setTimeout(resolve, 250));
+          routeAuthCallbackToHome();
+        }
       } catch (error) {
         console.error('Auth code exchange failed:', error);
       }
+    };
+
+    const waitForAuthCallbackSession = async () => {
+      for (let attempt = 0; attempt < 12; attempt += 1) {
+        const { data } = await supabase.auth.getSession();
+        if (data?.session) return data.session;
+        await new Promise(resolve => window.setTimeout(resolve, 250));
+      }
+      return null;
     };
 
     const demoEnabled = (() => {
@@ -421,8 +450,13 @@ function App() {
       try {
         await exchangeAuthCodeIfPresent();
         const { data } = await supabase.auth.getSession();
-        await applySessionToState(data?.session ?? null);
-      } catch {
+        const callbackSession = isAuthCallbackFlow && !data?.session
+          ? await waitForAuthCallbackSession()
+          : null;
+        await applySessionToState(callbackSession ?? data?.session ?? null);
+      } catch (error) {
+        console.error('Initial auth hydration failed:', error);
+        if (isAuthCallbackFlow) setMode('auth');
         setAuthLoading(false);
         window.clearTimeout(loadingTimeout);
       }

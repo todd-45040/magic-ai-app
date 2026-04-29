@@ -119,9 +119,19 @@ const initialMode = (() => {
     if (!sessionData?.session) throw new Error('Session not established after login');
   }
 
-  async function doSignup() {
+  function buildEmailRedirectTo() {
     const base = getAppBasePath();
-    const emailRedirectTo = `${window.location.origin}${base}/?mode=auth-callback`;
+    const params = new URLSearchParams();
+    params.set('mode', 'auth-callback');
+    if (signupContext.source) params.set('source', signupContext.source);
+    if (signupContext.trial) params.set('trial', signupContext.trial);
+    if (signupContext.isIbm && signupContext.ibmRing) params.set('ibm_ring', signupContext.ibmRing);
+    if (signupContext.isSam && signupContext.samAssembly) params.set('sam_assembly', signupContext.samAssembly);
+    return `${window.location.origin}${base}/?${params.toString()}`;
+  }
+
+  async function doSignup() {
+    const emailRedirectTo = buildEmailRedirectTo();
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
