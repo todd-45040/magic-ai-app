@@ -16,6 +16,7 @@ type WireCard = {
   summary: string;
   source: string;
   sourceUrl?: string | null;
+  thumbnailUrl?: string | null;
   publishedAt?: string;
   when: string;
   category: string;
@@ -133,12 +134,55 @@ function buildCard(item: MagicWireItem, idx: number): WireCard {
     summary,
     source,
     sourceUrl: item.sourceUrl,
+    thumbnailUrl: item.thumbnailUrl || null,
     publishedAt: item.publishedAt,
     when: timeAgo(item.publishedAt),
     category,
     type,
     tags: inferTags(item, category, source, type),
   };
+}
+
+
+
+function thumbnailIcon(category: string, type: string) {
+  const raw = `${category} ${type}`.toLowerCase();
+  if (raw.includes("video")) return "▶";
+  if (raw.includes("community")) return "👥";
+  if (raw.includes("tip")) return "💡";
+  if (raw.includes("trick") || raw.includes("routine")) return "🪄";
+  if (raw.includes("show") || raw.includes("event")) return "🎭";
+  return "📰";
+}
+
+function MagicWireThumbnail({ card }: { card: WireCard }) {
+  const [failed, setFailed] = useState(false);
+  const showImage = Boolean(card.thumbnailUrl) && !failed;
+
+  return (
+    <div className="relative mb-4 h-32 overflow-hidden rounded-xl border border-slate-700/70 bg-slate-950/50">
+      {showImage ? (
+        <img
+          src={card.thumbnailUrl || ""}
+          alt=""
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          onError={() => setFailed(true)}
+          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+        />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_30%_20%,rgba(168,85,247,0.35),transparent_35%),linear-gradient(135deg,rgba(15,23,42,0.92),rgba(88,28,135,0.42),rgba(120,53,15,0.28))]">
+          <div className="text-center">
+            <div className="text-3xl" aria-hidden="true">{thumbnailIcon(card.category, card.type)}</div>
+            <div className="mt-2 max-w-[11rem] truncate px-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-200/80">
+              {card.category}
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/60 via-transparent to-transparent" />
+    </div>
+  );
 }
 
 function StatPill({ label, value }: { label: string; value: string | number }) {
@@ -351,6 +395,7 @@ export default function MagicWire() {
       summary: card.summary,
       source: card.source,
       sourceUrl: card.sourceUrl,
+      thumbnailUrl: card.thumbnailUrl,
       publishedAt: card.publishedAt,
       category: card.category,
       type: card.type,
@@ -786,8 +831,10 @@ export default function MagicWire() {
                 return (
                   <article
                     key={card.id}
-                    className={`rounded-2xl border p-4 transition-all duration-200 ${saved ? "border-purple-400/60 bg-purple-500/5 shadow-[0_0_0_1px_rgba(192,132,252,0.08)]" : "border-slate-800 bg-slate-900/40"} hover:bg-slate-900/55 hover:border-purple-500 hover:shadow-lg hover:shadow-purple-900/20`}
+                    className={`group rounded-2xl border p-4 transition-all duration-200 ${saved ? "border-purple-400/60 bg-purple-500/5 shadow-[0_0_0_1px_rgba(192,132,252,0.08)]" : "border-slate-800 bg-slate-900/40"} hover:bg-slate-900/55 hover:border-purple-500 hover:shadow-lg hover:shadow-purple-900/20`}
                   >
+                    <MagicWireThumbnail card={card} />
+
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="rounded-full border border-slate-700 bg-slate-950/50 px-2.5 py-1 text-[11px] uppercase tracking-wide text-slate-300">
                         {card.source}

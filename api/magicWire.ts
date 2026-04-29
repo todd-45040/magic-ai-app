@@ -5,6 +5,7 @@ type WireItem = {
   body: string;
   source: string;
   sourceUrl: string | null;
+  thumbnailUrl?: string | null;
   publishedAt?: string;
 };
 
@@ -37,6 +38,50 @@ function extractTag(block: string, tag: string): string | null {
 function extractAtomLink(block: string): string | null {
   const m = block.match(/<link[^>]*href=["']([^"']+)["'][^>]*\/?>/i);
   return m ? m[1] : null;
+}
+
+function extractAttr(tagText: string, attr: string): string | null {
+  const re = new RegExp(`${attr}=["']([^"']+)["']`, "i");
+  const m = re.exec(tagText);
+  return m ? decodeHtml(m[1].trim()) : null;
+}
+
+function firstTag(block: string, tagName: string): string | null {
+  const re = new RegExp(`<${tagName}[^>]*>`, "i");
+  const m = re.exec(block);
+  return m ? m[0] : null;
+}
+
+function extractImageFromHtml(raw: string): string | null {
+  if (!raw) return null;
+  const decoded = decodeHtml(raw);
+  const m = decoded.match(/<img[^>]+src=["']([^"']+)["'][^>]*>/i);
+  return m ? decodeHtml(m[1].trim()) : null;
+}
+
+function isLikelyImageUrl(url: string | null): url is string {
+  if (!url) return false;
+  return /^https?:\/\//i.test(url) && !url.includes("pixel") && !url.includes("tracking");
+}
+
+function extractThumbnailUrl(block: string, descRaw: string): string | null {
+  const mediaThumb = firstTag(block, "media:thumbnail");
+  const mediaThumbUrl = mediaThumb ? extractAttr(mediaThumb, "url") : null;
+  if (isLikelyImageUrl(mediaThumbUrl)) return mediaThumbUrl;
+
+  const mediaContent = firstTag(block, "media:content");
+  const mediaContentUrl = mediaContent ? extractAttr(mediaContent, "url") : null;
+  if (isLikelyImageUrl(mediaContentUrl)) return mediaContentUrl;
+
+  const enclosure = firstTag(block, "enclosure");
+  const enclosureType = enclosure ? extractAttr(enclosure, "type") || "" : "";
+  const enclosureUrl = enclosure ? extractAttr(enclosure, "url") : null;
+  if (enclosureType.toLowerCase().startsWith("image/") && isLikelyImageUrl(enclosureUrl)) return enclosureUrl;
+
+  const htmlImage = extractImageFromHtml(descRaw);
+  if (isLikelyImageUrl(htmlImage)) return htmlImage;
+
+  return null;
 }
 
 function pickBlocks(xml: string): { blocks: string[]; kind: "rss" | "atom" | "none" } {
@@ -116,6 +161,7 @@ function parseFeed(xml: string, source: string, category: string): WireItem[] {
       extractTag(b, "content") ||
       "";
 
+    const thumbnailUrl = extractThumbnailUrl(b, descRaw);
     const desc = cleanTextFromRss(descRaw);
 
     // Short summary (2–3 lines)
@@ -139,6 +185,7 @@ function parseFeed(xml: string, source: string, category: string): WireItem[] {
       body: desc || summary, // body is clean full text; summary is short
       source,
       sourceUrl,
+      thumbnailUrl,
       publishedAt: publishedAt || undefined,
     };
   });
@@ -224,6 +271,7 @@ export default async function handler(req: any, res: any) {
         body: "If a source throttles requests, try refresh again in a minute.",
         source: "Magic AI Wizard",
         sourceUrl: "https://www.magicaiwizard.com/app/",
+        thumbnailUrl: null,
       },
     ];
 

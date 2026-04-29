@@ -8,6 +8,7 @@ export type MagicWireItem = {
   body?: string;
   source?: string;
   sourceUrl?: string | null;
+  thumbnailUrl?: string | null;
   publishedAt?: string;
   tags?: string[];
 };
@@ -18,6 +19,7 @@ export type MagicWireSavedPost = {
   summary: string;
   source: string;
   sourceUrl?: string | null;
+  thumbnailUrl?: string | null;
   publishedAt?: string;
   category: string;
   type: string;
