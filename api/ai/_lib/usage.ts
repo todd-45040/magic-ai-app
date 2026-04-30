@@ -332,14 +332,19 @@ async function ensureMonthlyQuotas(admin: any, userId: string, membership: strin
   const defaults = defaultMonthlyQuotas(membership);
 
   if (!needsMonthlyReset(resetDateISO, now)) {
-    if (!shouldUpliftLegacyFreeQuotas(membership, profile)) return profile;
+    const activeTrialProfile = String(profile?.membership || '').trim() === 'trial' && isTrialActive(profile?.trial_end_date);
+    const legacyTrialLiveBalance = activeTrialProfile && clampInt(profile?.quota_live_audio_minutes) <= 20 && defaults.quota_live_audio_minutes > 20;
+    const legacyFreeQuotaBalance = shouldUpliftLegacyFreeQuotas(membership, profile);
+    if (!legacyTrialLiveBalance && !legacyFreeQuotaBalance) return profile;
 
-    const uplift = {
-      quota_live_audio_minutes: defaults.quota_live_audio_minutes,
-      quota_image_gen: defaults.quota_image_gen,
-      quota_identify: defaults.quota_identify,
-      quota_video_uploads: defaults.quota_video_uploads,
-    };
+    const uplift = legacyTrialLiveBalance && !legacyFreeQuotaBalance
+      ? { quota_live_audio_minutes: defaults.quota_live_audio_minutes }
+      : {
+          quota_live_audio_minutes: defaults.quota_live_audio_minutes,
+          quota_image_gen: defaults.quota_image_gen,
+          quota_identify: defaults.quota_identify,
+          quota_video_uploads: defaults.quota_video_uploads,
+        };
 
     const { data, error } = await admin
       .from('users')
@@ -1403,7 +1408,7 @@ export async function enforceLiveMinutes(
     return { ok: false, status: 401, error: 'Unauthorized.', membership: 'free', reason: 'auth_required' };
   }
 
-  const { data: profileData, error: profileErr } = await admin
+  let { data: profileData, error: profileErr } = await admin
     .from('users')
     .select('id, membership, is_admin, trial_end_date, quota_live_audio_minutes, quota_reset_date, daily_live_audio_minutes_used, daily_live_audio_reset_date')
     .eq('id', userId)
@@ -1417,6 +1422,14 @@ export async function enforceLiveMinutes(
   const rawMembership = String(profileData?.membership || 'free').trim();
   const trialActive = rawMembership === 'trial' ? isTrialActive(profileData?.trial_end_date) : false;
   const membership = resolveEffectiveMembership(profileData);
+
+  // Align direct Live Rehearsal minute enforcement with canonical plan quotas
+  // before the atomic Supabase RPC checks the remaining monthly balance.
+  // This uplifts active trial users created under the older 20-minute default.
+  if (profileData && rawMembership === 'trial' && trialActive) {
+    const refreshed = await ensureMonthlyQuotas(admin, userId, membership, profileData);
+    if (refreshed) profileData = refreshed;
+  }
 
   if (rawMembership === 'trial' && !trialActive) {
     const reason: QuotaReason = 'trial_inactive';

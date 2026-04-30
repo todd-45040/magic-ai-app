@@ -229,13 +229,13 @@ export function getUsageQuotaConfigForMembership(membership?: string | null): Us
       dailyAiLimit: 20,
       burstLimit: 20,
       monthlyToolQuotas: {
-        quota_live_audio_minutes: 20,
+        quota_live_audio_minutes: 300,
         quota_image_gen: 2,
         quota_identify: 10,
         quota_video_uploads: 1,
       },
       dailyToolLimits: {
-        live_audio_minutes: 20,
+        live_audio_minutes: 60,
         video_uploads: 1,
       },
     };
