@@ -143,12 +143,6 @@ const FORCE_TRANSCRIBE_SOURCE: 'media_recorder' | 'pcm_wav' = 'pcm_wav';
 const traceTakeEvent = (takeId: string, event: string, data?: any) => {
   try {
     const payload = { takeId, ...(data || {}) };
-    console.log('[TRACE]', {
-      takeId,
-      event,
-      t: performance.now(),
-      ...(data || {}),
-    });
 
     if (typeof pushDebug === 'function') {
       pushDebug(event, payload);
@@ -1645,19 +1639,6 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             },
         });
 
-        console.log('[AUDIO DEBUG]', {
-            takeId,
-            durationMs,
-            pcmBytes: snapshot.pcmBytes,
-            pcmValid,
-            mediaRecorderBytes: snapshot.recorderBytes,
-            mediaRecorderValid,
-            chosenSource: snapshot.chosenSource,
-            chosenBytes: snapshot.chosenBytes,
-            chosenMimeType: snapshot.chosenMimeType,
-            isValidForTranscription: snapshot.isValidForTranscription,
-            forcedSource: FORCE_TRANSCRIBE_SOURCE,
-        });
 
         return snapshot;
     };
@@ -3572,6 +3553,3 @@ const SessionTimelineCard: React.FC<{ transcript: Transcription[]; markers?: Seg
 
 export default LiveRehearsal;
 
-
-// ===== AUDIO DEBUG PATCH ADDED =====
-console.log('[AUDIO DEBUG FILE LOADED]');
