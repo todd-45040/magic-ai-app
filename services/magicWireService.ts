@@ -8,8 +8,8 @@ export type MagicWireItem = {
   body?: string;
   source?: string;
   sourceUrl?: string | null;
-  thumbnailUrl?: string | null;
   publishedAt?: string;
+  thumbnailUrl?: string | null;
   tags?: string[];
 };
 
@@ -19,8 +19,8 @@ export type MagicWireSavedPost = {
   summary: string;
   source: string;
   sourceUrl?: string | null;
-  thumbnailUrl?: string | null;
   publishedAt?: string;
+  thumbnailUrl?: string | null;
   category: string;
   type: string;
   tags: string[];
@@ -39,7 +39,7 @@ export async function getPosts(opts?: {
   count?: number;
   refresh?: boolean;
 }): Promise<MagicWireItem[]> {
-  const count = opts?.count ?? 12;
+  const count = opts?.count ?? 18;
   const refresh = Boolean(opts?.refresh);
 
   const url = refresh

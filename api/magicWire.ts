@@ -5,8 +5,8 @@ type WireItem = {
   body: string;
   source: string;
   sourceUrl: string | null;
-  thumbnailUrl?: string | null;
   publishedAt?: string;
+  thumbnailUrl?: string | null;
 };
 
 function sendJson(res: any, status: number, body: any) {
@@ -35,53 +35,92 @@ function extractTag(block: string, tag: string): string | null {
   return m ? m[1].trim() : null;
 }
 
+function firstMatch(block: string, patterns: RegExp[]): string | null {
+  for (const re of patterns) {
+    const m = re.exec(block);
+    if (m?.[1]) return decodeHtml(m[1].trim());
+  }
+  return null;
+}
+
+function isUsableImageUrl(value?: string | null): value is string {
+  if (!value) return false;
+  const url = value.trim();
+  if (!/^https?:\/\//i.test(url)) return false;
+  if (/\.(svg)(\?|#|$)/i.test(url)) return false;
+  if (/spacer|pixel|tracking|blank|transparent|avatar|logo-?small/i.test(url)) return false;
+  return true;
+}
+
+function extractThumbnailFromBlock(block: string): string | null {
+  const direct = firstMatch(block, [
+    /<media:thumbnail[^>]*url=["']([^"']+)["'][^>]*>/i,
+    /<media:content[^>]*url=["']([^"']+)["'][^>]*>/i,
+    /<enclosure[^>]*url=["']([^"']+)["'][^>]*type=["']image\/[^"']+["'][^>]*>/i,
+    /<itunes:image[^>]*href=["']([^"']+)["'][^>]*>/i,
+    /<image[^>]*url=["']([^"']+)["'][^>]*>/i,
+  ]);
+  if (isUsableImageUrl(direct)) return direct;
+
+  const encodedContent =
+    extractTag(block, "description") ||
+    extractTag(block, "summary") ||
+    extractTag(block, "content") ||
+    extractTag(block, "content:encoded") ||
+    "";
+
+  const decoded = decodeHtml(encodedContent);
+  const img = firstMatch(decoded, [
+    /<img[^>]*src=["']([^"']+)["'][^>]*>/i,
+    /src=["']([^"']+\.(?:jpg|jpeg|png|webp)(?:\?[^"']*)?)["']/i,
+  ]);
+
+  return isUsableImageUrl(img) ? img : null;
+}
+
+async function fetchOgImage(url: string | null): Promise<string | null> {
+  if (!url || !/^https?:\/\//i.test(url)) return null;
+  if (/news\.google\.com/i.test(url)) return null;
+
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), 3500);
+
+  try {
+    const r = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "MagicAIWizard/1.0 (+https://www.magicaiwizard.com)",
+        Accept: "text/html,application/xhtml+xml",
+      },
+    } as any);
+
+    if (!r.ok) return null;
+    const html = (await r.text()).slice(0, 90000);
+    const og = firstMatch(html, [
+      /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["'][^>]*>/i,
+      /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["'][^>]*>/i,
+      /<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["'][^>]*>/i,
+      /<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["'][^>]*>/i,
+    ]);
+
+    if (!og) return null;
+    const absolute = og.startsWith("//")
+      ? `https:${og}`
+      : og.startsWith("/")
+        ? new URL(og, url).toString()
+        : og;
+
+    return isUsableImageUrl(absolute) ? absolute : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 function extractAtomLink(block: string): string | null {
   const m = block.match(/<link[^>]*href=["']([^"']+)["'][^>]*\/?>/i);
   return m ? m[1] : null;
-}
-
-function extractAttr(tagText: string, attr: string): string | null {
-  const re = new RegExp(`${attr}=["']([^"']+)["']`, "i");
-  const m = re.exec(tagText);
-  return m ? decodeHtml(m[1].trim()) : null;
-}
-
-function firstTag(block: string, tagName: string): string | null {
-  const re = new RegExp(`<${tagName}[^>]*>`, "i");
-  const m = re.exec(block);
-  return m ? m[0] : null;
-}
-
-function extractImageFromHtml(raw: string): string | null {
-  if (!raw) return null;
-  const decoded = decodeHtml(raw);
-  const m = decoded.match(/<img[^>]+src=["']([^"']+)["'][^>]*>/i);
-  return m ? decodeHtml(m[1].trim()) : null;
-}
-
-function isLikelyImageUrl(url: string | null): url is string {
-  if (!url) return false;
-  return /^https?:\/\//i.test(url) && !url.includes("pixel") && !url.includes("tracking");
-}
-
-function extractThumbnailUrl(block: string, descRaw: string): string | null {
-  const mediaThumb = firstTag(block, "media:thumbnail");
-  const mediaThumbUrl = mediaThumb ? extractAttr(mediaThumb, "url") : null;
-  if (isLikelyImageUrl(mediaThumbUrl)) return mediaThumbUrl;
-
-  const mediaContent = firstTag(block, "media:content");
-  const mediaContentUrl = mediaContent ? extractAttr(mediaContent, "url") : null;
-  if (isLikelyImageUrl(mediaContentUrl)) return mediaContentUrl;
-
-  const enclosure = firstTag(block, "enclosure");
-  const enclosureType = enclosure ? extractAttr(enclosure, "type") || "" : "";
-  const enclosureUrl = enclosure ? extractAttr(enclosure, "url") : null;
-  if (enclosureType.toLowerCase().startsWith("image/") && isLikelyImageUrl(enclosureUrl)) return enclosureUrl;
-
-  const htmlImage = extractImageFromHtml(descRaw);
-  if (isLikelyImageUrl(htmlImage)) return htmlImage;
-
-  return null;
 }
 
 function pickBlocks(xml: string): { blocks: string[]; kind: "rss" | "atom" | "none" } {
@@ -106,13 +145,9 @@ async function fetchXml(url: string): Promise<string | null> {
     } as any);
 
     if (!r.ok) return null;
-
     const text = await r.text();
-
-    // If a site returns HTML (WAF page), ignore it.
     const head = text.slice(0, 2000).toLowerCase();
     if (head.includes("<html") || head.includes("<!doctype html")) return null;
-
     return text;
   } catch {
     return null;
@@ -123,15 +158,9 @@ async function fetchXml(url: string): Promise<string | null> {
 
 function cleanTextFromRss(raw: string): string {
   if (!raw) return "";
-
-  // IMPORTANT: decode first, then strip tags.
-  // Some feeds (notably Google News) escape HTML in <description>.
   const decodedOnce = decodeHtml(raw);
   const stripped = stripTags(decodedOnce);
-
-  // Some feeds double-encode; decode again safely.
   const decodedTwice = decodeHtml(stripped);
-
   return decodedTwice.trim();
 }
 
@@ -143,11 +172,8 @@ function parseFeed(xml: string, source: string, category: string): WireItem[] {
     const titleRaw = extractTag(b, "title") || "";
     const headline = cleanTextFromRss(titleRaw) || "Magic News";
 
-    // RSS: <link>...</link>
     let link = extractTag(b, "link");
     if (link) link = stripTags(link);
-
-    // Atom fallback
     if (!link) {
       const atomLink = extractAtomLink(b);
       link = atomLink ? atomLink : null;
@@ -159,13 +185,11 @@ function parseFeed(xml: string, source: string, category: string): WireItem[] {
       extractTag(b, "description") ||
       extractTag(b, "summary") ||
       extractTag(b, "content") ||
+      extractTag(b, "content:encoded") ||
       "";
 
-    const thumbnailUrl = extractThumbnailUrl(b, descRaw);
     const desc = cleanTextFromRss(descRaw);
-
-    // Short summary (2–3 lines)
-    const maxLen = 170;
+    const maxLen = 190;
     const summary = desc
       ? desc.length > maxLen
         ? desc.slice(0, maxLen - 1) + "…"
@@ -178,20 +202,21 @@ function parseFeed(xml: string, source: string, category: string): WireItem[] {
       extractTag(b, "published") ||
       undefined;
 
+    const thumbnailUrl = extractThumbnailFromBlock(b);
+
     return {
       category,
       headline,
       summary,
-      body: desc || summary, // body is clean full text; summary is short
+      body: desc || summary,
       source,
       sourceUrl,
-      thumbnailUrl,
       publishedAt: publishedAt || undefined,
+      thumbnailUrl,
     };
   });
 }
 
-// ---- simple in-memory cache (works well on warm lambdas) ----
 declare global {
   // eslint-disable-next-line no-var
   var __mw_cache: { ts: number; items: WireItem[] } | undefined;
@@ -214,14 +239,13 @@ export default async function handler(req: any, res: any) {
       return sendJson(res, 405, { error: "Method not allowed" });
     }
 
-    const countRaw = String(req?.query?.count ?? "9");
-    const count = Math.max(1, Math.min(12, parseInt(countRaw, 10) || 9));
+    const countRaw = String(req?.query?.count ?? "18");
+    const count = Math.max(1, Math.min(24, parseInt(countRaw, 10) || 18));
+    const forceRefresh = String(req?.query?.refresh ?? "") === "1";
 
-    // Cache 10 minutes
-    const cached = getCached(10 * 60 * 1000);
+    const cached = forceRefresh ? null : getCached(10 * 60 * 1000);
     if (cached) return sendJson(res, 200, cached.slice(0, count));
 
-    // (These are the reliable feeds you’re using now)
     const feeds: { url: string; source: string; category: string }[] = [
       {
         url: "https://news.google.com/rss/search?q=magic+trick+magician&hl=en-US&gl=US&ceid=US:en",
@@ -232,6 +256,11 @@ export default async function handler(req: any, res: any) {
         url: "https://news.google.com/rss/search?q=illusionist+show&hl=en-US&gl=US&ceid=US:en",
         source: "Google News",
         category: "Shows & Events",
+      },
+      {
+        url: "https://news.google.com/rss/search?q=card+magic+new+trick&hl=en-US&gl=US&ceid=US:en",
+        source: "Google News",
+        category: "New Tricks",
       },
       {
         url: "https://www.reddit.com/r/MagicTricks/.rss",
@@ -253,7 +282,6 @@ export default async function handler(req: any, res: any) {
       if (s.status === "fulfilled") merged.push(...s.value);
     }
 
-    // De-dupe by headline
     const seen = new Set<string>();
     const deduped = merged.filter((a) => {
       const k = (a.headline || "").toLowerCase().trim();
@@ -262,7 +290,13 @@ export default async function handler(req: any, res: any) {
       return true;
     });
 
-    // Fallback keeps UI from going blank
+    const enriched = await Promise.all(
+      deduped.slice(0, count).map(async (item) => ({
+        ...item,
+        thumbnailUrl: item.thumbnailUrl || await fetchOgImage(item.sourceUrl),
+      }))
+    );
+
     const fallback: WireItem[] = [
       {
         category: "Magic News",
@@ -271,11 +305,11 @@ export default async function handler(req: any, res: any) {
         body: "If a source throttles requests, try refresh again in a minute.",
         source: "Magic AI Wizard",
         sourceUrl: "https://www.magicaiwizard.com/app/",
-        thumbnailUrl: null,
+        thumbnailUrl: "https://images.unsplash.com/photo-1518709268805-4e9042af2176?auto=format&fit=crop&w=1200&q=80",
       },
     ];
 
-    const finalItems = deduped.length ? deduped : fallback;
+    const finalItems = enriched.length ? enriched : fallback;
 
     setCached(finalItems);
     return sendJson(res, 200, finalItems.slice(0, count));

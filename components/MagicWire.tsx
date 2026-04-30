@@ -16,13 +16,60 @@ type WireCard = {
   summary: string;
   source: string;
   sourceUrl?: string | null;
-  thumbnailUrl?: string | null;
   publishedAt?: string;
   when: string;
   category: string;
   type: string;
   tags: string[];
+  thumbnailUrl?: string | null;
 };
+
+
+const CATEGORY_FALLBACK_IMAGES: Record<string, string> = {
+  "Magic News": "https://images.unsplash.com/photo-1518709268805-4e9042af2176?auto=format&fit=crop&w=1200&q=80",
+  "New Tricks": "https://images.unsplash.com/photo-1523292562811-8fa7962a78c8?auto=format&fit=crop&w=1200&q=80",
+  "Shows & Events": "https://images.unsplash.com/photo-1503095396549-807759245b35?auto=format&fit=crop&w=1200&q=80",
+  "Community": "https://images.unsplash.com/photo-1511632765486-a01980e01a18?auto=format&fit=crop&w=1200&q=80",
+  "Industry News": "https://images.unsplash.com/photo-1495020689067-958852a7765e?auto=format&fit=crop&w=1200&q=80",
+  "Performance Tips": "https://images.unsplash.com/photo-1516280440614-37939bbacd81?auto=format&fit=crop&w=1200&q=80",
+  "Videos": "https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&w=1200&q=80",
+  "Platform Updates": "https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=1200&q=80",
+};
+
+const DEFAULT_FALLBACK_IMAGES = [
+  "https://images.unsplash.com/photo-1518709268805-4e9042af2176?auto=format&fit=crop&w=1200&q=80",
+  "https://images.unsplash.com/photo-1523292562811-8fa7962a78c8?auto=format&fit=crop&w=1200&q=80",
+  "https://images.unsplash.com/photo-1503095396549-807759245b35?auto=format&fit=crop&w=1200&q=80",
+  "https://images.unsplash.com/photo-1511632765486-a01980e01a18?auto=format&fit=crop&w=1200&q=80",
+  "https://images.unsplash.com/photo-1495020689067-958852a7765e?auto=format&fit=crop&w=1200&q=80",
+];
+
+function hashString(value: string) {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash << 5) - hash + value.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
+function getArticleImage(card: Pick<WireCard, "id" | "title" | "category" | "thumbnailUrl">) {
+  if (card.thumbnailUrl && /^https?:\/\//i.test(card.thumbnailUrl)) return card.thumbnailUrl;
+  return CATEGORY_FALLBACK_IMAGES[card.category] || DEFAULT_FALLBACK_IMAGES[hashString(card.id || card.title) % DEFAULT_FALLBACK_IMAGES.length];
+}
+
+function getCardSizeClass(index: number) {
+  if (index === 0) return "md:col-span-2 2xl:col-span-2";
+  if (index % 9 === 0) return "md:col-span-2";
+  if (index % 7 === 0) return "2xl:row-span-2";
+  return "";
+}
+
+function getImageHeightClass(index: number) {
+  if (index === 0) return "h-64";
+  if (index % 7 === 0) return "h-56 2xl:h-72";
+  return "h-44";
+}
 
 function domainFromUrl(url?: string | null) {
   if (!url) return "";
@@ -134,112 +181,13 @@ function buildCard(item: MagicWireItem, idx: number): WireCard {
     summary,
     source,
     sourceUrl: item.sourceUrl,
-    thumbnailUrl: item.thumbnailUrl || null,
     publishedAt: item.publishedAt,
+    thumbnailUrl: item.thumbnailUrl,
     when: timeAgo(item.publishedAt),
     category,
     type,
     tags: inferTags(item, category, source, type),
   };
-}
-
-
-
-function stableHash(value: string) {
-  let hash = 0;
-  for (let i = 0; i < value.length; i += 1) {
-    hash = (hash << 5) - hash + value.charCodeAt(i);
-    hash |= 0;
-  }
-  return Math.abs(hash);
-}
-
-function thumbnailIcon(category: string, type: string) {
-  const raw = `${category} ${type}`.toLowerCase();
-  if (raw.includes("video")) return "▶";
-  if (raw.includes("community")) return "👥";
-  if (raw.includes("tip")) return "💡";
-  if (raw.includes("trick") || raw.includes("routine")) return "🪄";
-  if (raw.includes("show") || raw.includes("event")) return "🎭";
-  if (raw.includes("review")) return "⭐";
-  return "📰";
-}
-
-function thumbnailTheme(card: WireCard) {
-  const themes = [
-    "bg-[radial-gradient(circle_at_20%_15%,rgba(250,204,21,0.34),transparent_28%),radial-gradient(circle_at_78%_35%,rgba(168,85,247,0.38),transparent_30%),linear-gradient(135deg,rgba(15,23,42,0.98),rgba(88,28,135,0.66),rgba(120,53,15,0.35))]",
-    "bg-[radial-gradient(circle_at_25%_20%,rgba(56,189,248,0.30),transparent_30%),radial-gradient(circle_at_72%_22%,rgba(217,70,239,0.32),transparent_32%),linear-gradient(135deg,rgba(2,6,23,0.98),rgba(30,41,59,0.85),rgba(76,29,149,0.50))]",
-    "bg-[radial-gradient(circle_at_18%_30%,rgba(251,146,60,0.33),transparent_28%),radial-gradient(circle_at_78%_20%,rgba(192,132,252,0.34),transparent_30%),linear-gradient(135deg,rgba(12,10,9,0.98),rgba(67,20,7,0.72),rgba(17,24,39,0.76))]",
-    "bg-[radial-gradient(circle_at_25%_18%,rgba(45,212,191,0.28),transparent_29%),radial-gradient(circle_at_80%_22%,rgba(168,85,247,0.32),transparent_28%),linear-gradient(135deg,rgba(2,6,23,0.98),rgba(15,23,42,0.82),rgba(20,83,45,0.42))]",
-    "bg-[radial-gradient(circle_at_18%_18%,rgba(248,113,113,0.30),transparent_30%),radial-gradient(circle_at_82%_25%,rgba(234,179,8,0.26),transparent_28%),linear-gradient(135deg,rgba(15,23,42,0.98),rgba(76,29,149,0.52),rgba(127,29,29,0.42))]",
-    "bg-[radial-gradient(circle_at_20%_20%,rgba(129,140,248,0.36),transparent_30%),radial-gradient(circle_at_82%_30%,rgba(244,114,182,0.27),transparent_30%),linear-gradient(135deg,rgba(2,6,23,0.98),rgba(49,46,129,0.66),rgba(88,28,135,0.42))]",
-  ];
-
-  const hash = stableHash(`${card.title}|${card.source}|${card.category}`);
-  return themes[hash % themes.length];
-}
-
-function titleKeywords(title: string) {
-  return title
-    .replace(/[^\w\s-]/g, " ")
-    .split(/\s+/)
-    .filter((word) => word.length > 3)
-    .slice(0, 3)
-    .join(" ");
-}
-
-function MagicWireThumbnail({ card, featured = false }: { card: WireCard; featured?: boolean }) {
-  const [failed, setFailed] = useState(false);
-  const showImage = Boolean(card.thumbnailUrl) && !failed;
-  const heightClass = featured ? "h-44" : "h-36";
-  const sourceInitial = (card.source || "?").trim().charAt(0).toUpperCase();
-
-  return (
-    <div className={`relative mb-4 ${heightClass} overflow-hidden rounded-2xl border border-slate-700/70 bg-slate-950/50 shadow-inner`}>
-      {showImage ? (
-        <img
-          src={card.thumbnailUrl || ""}
-          alt=""
-          loading="lazy"
-          referrerPolicy="no-referrer"
-          onError={() => setFailed(true)}
-          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.06]"
-        />
-      ) : (
-        <div className={`relative flex h-full w-full items-center justify-center ${thumbnailTheme(card)}`}>
-          <div className="absolute inset-0 opacity-20 [background-image:linear-gradient(rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.06)_1px,transparent_1px)] [background-size:22px_22px]" />
-          <div className="absolute -left-10 -top-10 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
-          <div className="absolute -bottom-12 right-2 h-36 w-36 rounded-full bg-purple-500/20 blur-2xl" />
-
-          <div className="relative z-10 flex h-full w-full flex-col justify-between p-4">
-            <div className="flex items-center justify-between">
-              <div className="grid h-9 w-9 place-items-center rounded-xl border border-white/15 bg-white/10 text-sm font-bold text-white/90">
-                {sourceInitial}
-              </div>
-              <div className="rounded-full border border-white/15 bg-black/20 px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-white/75">
-                {titleCase(card.type)}
-              </div>
-            </div>
-
-            <div>
-              <div className="text-3xl drop-shadow" aria-hidden="true">{thumbnailIcon(card.category, card.type)}</div>
-              <div className="mt-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/70">
-                {card.category}
-              </div>
-              <div className="mt-1 line-clamp-1 text-sm font-bold text-white/90">
-                {titleKeywords(card.title) || card.source}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/75 via-slate-950/5 to-transparent" />
-      <div className="pointer-events-none absolute left-3 top-3 rounded-full border border-white/10 bg-black/25 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/75 backdrop-blur">
-        {card.source}
-      </div>
-    </div>
-  );
 }
 
 function StatPill({ label, value }: { label: string; value: string | number }) {
@@ -278,7 +226,7 @@ export default function MagicWire() {
     try {
       setLoading(true);
       setError("");
-      const data = await getPosts({ count: 12, refresh });
+      const data = await getPosts({ count: 18, refresh });
       setItems(data);
 
       if (refresh) {
@@ -452,11 +400,11 @@ export default function MagicWire() {
       summary: card.summary,
       source: card.source,
       sourceUrl: card.sourceUrl,
-      thumbnailUrl: card.thumbnailUrl,
       publishedAt: card.publishedAt,
       category: card.category,
       type: card.type,
       tags: card.tags,
+      thumbnailUrl: card.thumbnailUrl,
     });
 
     setSavedPosts(getSavedPosts());
@@ -862,7 +810,7 @@ export default function MagicWire() {
               {Array.from({ length: 6 }).map((_, i) => (
                 <div
                   key={i}
-                  className="h-[320px] rounded-2xl bg-slate-900/35 border border-slate-800 animate-pulse"
+                  className="h-[220px] rounded-2xl bg-slate-900/35 border border-slate-800 animate-pulse"
                 />
               ))}
             </div>
@@ -881,17 +829,53 @@ export default function MagicWire() {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 2xl:grid-cols-3 auto-rows-auto">
               {filteredCards.map((card, index) => {
                 const saved = savedIds.has(card.id);
+                const articleImage = getArticleImage(card);
+                const sizeClass = getCardSizeClass(index);
+                const imageHeightClass = getImageHeightClass(index);
 
                 return (
                   <article
                     key={card.id}
-                    className={`group rounded-2xl border p-4 transition-all duration-200 ${index === 0 ? "md:col-span-2 2xl:col-span-1" : ""} ${saved ? "border-purple-400/60 bg-purple-500/5 shadow-[0_0_0_1px_rgba(192,132,252,0.08)]" : "border-slate-800 bg-slate-900/40"} hover:-translate-y-0.5 hover:bg-slate-900/55 hover:border-purple-500 hover:shadow-lg hover:shadow-purple-900/20`}
+                    className={`group overflow-hidden rounded-3xl border transition-all duration-300 ${sizeClass} ${saved ? "border-purple-400/60 bg-purple-500/5 shadow-[0_0_0_1px_rgba(192,132,252,0.08)]" : "border-slate-800 bg-slate-900/45"} hover:-translate-y-1 hover:bg-slate-900/65 hover:border-purple-500/80 hover:shadow-2xl hover:shadow-purple-950/30`}
                   >
-                    <MagicWireThumbnail card={card} featured={index === 0} />
+                    <button
+                      type="button"
+                      onClick={() => openOriginal(card)}
+                      disabled={!card.sourceUrl}
+                      className={`relative block w-full overflow-hidden text-left ${card.sourceUrl ? "cursor-pointer" : "cursor-default"}`}
+                      aria-label={card.sourceUrl ? `Open ${card.title}` : card.title}
+                    >
+                      <img
+                        src={articleImage}
+                        alt=""
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                        onError={(event) => {
+                          const fallback = CATEGORY_FALLBACK_IMAGES[card.category] || DEFAULT_FALLBACK_IMAGES[0];
+                          if (event.currentTarget.src !== fallback) event.currentTarget.src = fallback;
+                        }}
+                        className={`w-full ${imageHeightClass} object-cover transition-transform duration-500 group-hover:scale-105`}
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/25 to-transparent" />
+                      <div className="absolute left-4 right-4 top-4 flex items-center justify-between gap-3">
+                        <span className="max-w-[70%] truncate rounded-full border border-white/15 bg-slate-950/65 px-3 py-1 text-[11px] uppercase tracking-wide text-white/90 backdrop-blur">
+                          {card.source}
+                        </span>
+                        <span className="rounded-full border border-purple-300/25 bg-purple-500/25 px-3 py-1 text-[11px] uppercase tracking-wide text-purple-100 backdrop-blur">
+                          {titleCase(card.type)}
+                        </span>
+                      </div>
+                      <div className="absolute bottom-4 left-4 right-4">
+                        <div className="inline-flex rounded-full border border-amber-300/25 bg-amber-500/15 px-3 py-1 text-[11px] uppercase tracking-wide text-amber-100 backdrop-blur">
+                          {card.category}
+                        </div>
+                      </div>
+                    </button>
 
+                    <div className="p-4">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="rounded-full border border-slate-700 bg-slate-950/50 px-2.5 py-1 text-[11px] uppercase tracking-wide text-slate-300">
                         {card.source}
@@ -909,11 +893,11 @@ export default function MagicWire() {
                       )}
                     </div>
 
-                    <h3 className={`${index === 0 ? "text-xl" : "text-lg"} mt-3 font-bold text-amber-200/90 line-clamp-2`}>
+                    <h3 className={`${index === 0 ? "text-2xl" : "text-lg"} mt-3 font-bold leading-snug text-amber-100 line-clamp-2`}>
                       {card.title}
                     </h3>
 
-                    <p className={`${index === 0 ? "line-clamp-3" : "line-clamp-4"} mt-2 text-sm text-slate-300/85`}>
+                    <p className={`mt-2 text-sm leading-relaxed text-slate-300/90 ${index === 0 || index % 7 === 0 ? "line-clamp-5" : "line-clamp-3"}`}>
                       {card.summary}
                     </p>
 
@@ -992,6 +976,7 @@ export default function MagicWire() {
                       >
                         {activeAction?.id === card.id && activeAction.type === "share" ? "Sharing..." : "Share"}
                       </button>
+                    </div>
                     </div>
                   </article>
                 );
