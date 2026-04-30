@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" role="img" aria-hidden="true">
+  <defs>
+    <radialGradient id="g" cx="25%" cy="18%" r="75%"><stop offset="0" stop-color="#7c3aed"/><stop offset="0.45" stop-color="#31145f"/><stop offset="1" stop-color="#050816"/></radialGradient>
+    <linearGradient id="gold" x1="0" x2="1"><stop offset="0" stop-color="#fbbf24"/><stop offset="1" stop-color="#f59e0b"/></linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="1200" height="675" fill="url(#g)"/>
+  <circle cx="180" cy="100" r="170" fill="#a855f7" opacity=".16"/>
+  <circle cx="1000" cy="580" r="230" fill="#0ea5e9" opacity=".09"/>
+<g fill="#f8fafc" opacity=".92"><circle cx="440" cy="280" r="56"/><circle cx="600" cy="242" r="68"/><circle cx="760" cy="280" r="56"/><path d="M332 475 C350 378 414 340 488 360 C520 382 552 398 600 398 C648 398 680 382 712 360 C786 340 850 378 868 475Z"/></g><path d="M368 160 C440 85 760 85 832 160" fill="none" stroke="url(#gold)" stroke-width="12" stroke-linecap="round"/><path d="M332 525 H868" stroke="#a78bfa" stroke-width="10" stroke-linecap="round"/><text x="72" y="604" font-family="Inter,Arial" font-size="44" fill="#fff" font-weight="700">Magic Community</text>
+  <g fill="#fff" opacity=".85"> <circle cx="964" cy="118" r="5"/><circle cx="1014" cy="156" r="3"/><circle cx="1070" cy="102" r="4"/><circle cx="145" cy="535" r="4"/><circle cx="205" cy="492" r="3"/></g>
+</svg>

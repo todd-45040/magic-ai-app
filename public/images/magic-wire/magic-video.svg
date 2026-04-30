@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" role="img" aria-hidden="true">
+  <defs>
+    <radialGradient id="g" cx="25%" cy="18%" r="75%"><stop offset="0" stop-color="#7c3aed"/><stop offset="0.45" stop-color="#31145f"/><stop offset="1" stop-color="#050816"/></radialGradient>
+    <linearGradient id="gold" x1="0" x2="1"><stop offset="0" stop-color="#fbbf24"/><stop offset="1" stop-color="#f59e0b"/></linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="1200" height="675" fill="url(#g)"/>
+  <circle cx="180" cy="100" r="170" fill="#a855f7" opacity=".16"/>
+  <circle cx="1000" cy="580" r="230" fill="#0ea5e9" opacity=".09"/>
+<g transform="translate(260 145)"><rect x="0" y="0" width="680" height="380" rx="38" fill="#020617" stroke="#94a3b8" stroke-width="14"/><path d="M305 132 L305 248 L420 190Z" fill="url(#gold)"/><rect x="60" y="305" width="560" height="12" rx="6" fill="#334155"/><rect x="60" y="305" width="245" height="12" rx="6" fill="#a78bfa"/><circle cx="335" cy="311" r="22" fill="#f8fafc"/></g><path d="M430 95 C520 48 680 48 770 95" stroke="#fbbf24" stroke-width="8" fill="none" opacity=".75"/><text x="72" y="604" font-family="Inter,Arial" font-size="44" fill="#fff" font-weight="700">Magic Video</text>
+  <g fill="#fff" opacity=".85"> <circle cx="964" cy="118" r="5"/><circle cx="1014" cy="156" r="3"/><circle cx="1070" cy="102" r="4"/><circle cx="145" cy="535" r="4"/><circle cx="205" cy="492" r="3"/></g>
+</svg>

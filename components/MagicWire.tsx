@@ -26,22 +26,23 @@ type WireCard = {
 
 
 const CATEGORY_FALLBACK_IMAGES: Record<string, string> = {
-  "Magic News": "https://images.unsplash.com/photo-1518709268805-4e9042af2176?auto=format&fit=crop&w=1200&q=80",
-  "New Tricks": "https://images.unsplash.com/photo-1523292562811-8fa7962a78c8?auto=format&fit=crop&w=1200&q=80",
-  "Shows & Events": "https://images.unsplash.com/photo-1503095396549-807759245b35?auto=format&fit=crop&w=1200&q=80",
-  "Community": "https://images.unsplash.com/photo-1511632765486-a01980e01a18?auto=format&fit=crop&w=1200&q=80",
-  "Industry News": "https://images.unsplash.com/photo-1495020689067-958852a7765e?auto=format&fit=crop&w=1200&q=80",
-  "Performance Tips": "https://images.unsplash.com/photo-1516280440614-37939bbacd81?auto=format&fit=crop&w=1200&q=80",
-  "Videos": "https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&w=1200&q=80",
-  "Platform Updates": "https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=1200&q=80",
+  "Magic News": "/images/magic-wire/magic-news.svg",
+  "New Tricks": "/images/magic-wire/card-magic.svg",
+  "Shows & Events": "/images/magic-wire/stage-magic.svg",
+  "Community": "/images/magic-wire/magic-club.svg",
+  "Industry News": "/images/magic-wire/magic-publication.svg",
+  "Performance Tips": "/images/magic-wire/performance-coaching.svg",
+  "Videos": "/images/magic-wire/magic-video.svg",
+  "Platform Updates": "/images/magic-wire/wizard-update.svg",
 };
 
 const DEFAULT_FALLBACK_IMAGES = [
-  "https://images.unsplash.com/photo-1518709268805-4e9042af2176?auto=format&fit=crop&w=1200&q=80",
-  "https://images.unsplash.com/photo-1523292562811-8fa7962a78c8?auto=format&fit=crop&w=1200&q=80",
-  "https://images.unsplash.com/photo-1503095396549-807759245b35?auto=format&fit=crop&w=1200&q=80",
-  "https://images.unsplash.com/photo-1511632765486-a01980e01a18?auto=format&fit=crop&w=1200&q=80",
-  "https://images.unsplash.com/photo-1495020689067-958852a7765e?auto=format&fit=crop&w=1200&q=80",
+  "/images/magic-wire/card-magic.svg",
+  "/images/magic-wire/stage-magic.svg",
+  "/images/magic-wire/linking-rings.svg",
+  "/images/magic-wire/magic-publication.svg",
+  "/images/magic-wire/performance-coaching.svg",
+  "/images/magic-wire/magic-club.svg",
 ];
 
 function hashString(value: string) {

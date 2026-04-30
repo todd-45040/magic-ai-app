@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" role="img" aria-hidden="true">
+  <defs>
+    <radialGradient id="g" cx="25%" cy="18%" r="75%"><stop offset="0" stop-color="#7c3aed"/><stop offset="0.45" stop-color="#31145f"/><stop offset="1" stop-color="#050816"/></radialGradient>
+    <linearGradient id="gold" x1="0" x2="1"><stop offset="0" stop-color="#fbbf24"/><stop offset="1" stop-color="#f59e0b"/></linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="1200" height="675" fill="url(#g)"/>
+  <circle cx="180" cy="100" r="170" fill="#a855f7" opacity=".16"/>
+  <circle cx="1000" cy="580" r="230" fill="#0ea5e9" opacity=".09"/>
+<g transform="translate(430 145) rotate(-10)"><rect x="0" y="0" width="220" height="320" rx="26" fill="#f8fafc"/><rect x="22" y="22" width="176" height="276" rx="18" fill="none" stroke="#7c2d12" stroke-width="7"/><text x="52" y="92" font-family="Georgia,serif" font-size="78" fill="#7c2d12">A</text><path d="M110 135 C70 90 8 145 55 198 C74 218 100 235 110 258 C120 235 146 218 165 198 C212 145 150 90 110 135Z" fill="#dc2626"/></g><g transform="translate(555 175) rotate(8)"><rect x="0" y="0" width="220" height="320" rx="26" fill="#fff7ed" opacity=".96"/><rect x="22" y="22" width="176" height="276" rx="18" fill="none" stroke="#0f172a" stroke-width="7"/><text x="52" y="92" font-family="Georgia,serif" font-size="78" fill="#0f172a">K</text><path d="M110 132 L135 180 L190 188 L150 226 L160 280 L110 254 L60 280 L70 226 L30 188 L85 180Z" fill="url(#gold)"/></g><path d="M308 468 C453 365 727 340 904 470" fill="none" stroke="#fbbf24" stroke-width="10" stroke-linecap="round" opacity=".8"/><text x="72" y="604" font-family="Inter,Arial" font-size="44" fill="#fff" font-weight="700">Card Magic</text>
+  <g fill="#fff" opacity=".85"> <circle cx="964" cy="118" r="5"/><circle cx="1014" cy="156" r="3"/><circle cx="1070" cy="102" r="4"/><circle cx="145" cy="535" r="4"/><circle cx="205" cy="492" r="3"/></g>
+</svg>

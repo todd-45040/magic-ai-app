@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" role="img" aria-hidden="true">
+  <defs>
+    <radialGradient id="g" cx="25%" cy="18%" r="75%"><stop offset="0" stop-color="#7c3aed"/><stop offset="0.45" stop-color="#31145f"/><stop offset="1" stop-color="#050816"/></radialGradient>
+    <linearGradient id="gold" x1="0" x2="1"><stop offset="0" stop-color="#fbbf24"/><stop offset="1" stop-color="#f59e0b"/></linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="1200" height="675" fill="url(#g)"/>
+  <circle cx="180" cy="100" r="170" fill="#a855f7" opacity=".16"/>
+  <circle cx="1000" cy="580" r="230" fill="#0ea5e9" opacity=".09"/>
+<g transform="translate(485 115)"><rect x="0" y="105" width="230" height="300" rx="115" fill="#111827" stroke="#e5e7eb" stroke-width="18"/><rect x="92" y="405" width="46" height="95" rx="20" fill="#e5e7eb"/><path d="M-90 280 C-70 405 45 500 115 500 C185 500 300 405 320 280" fill="none" stroke="#a78bfa" stroke-width="18" stroke-linecap="round"/><path d="M72 175 h86 M72 225 h86 M72 275 h86" stroke="#fbbf24" stroke-width="12" stroke-linecap="round"/></g><path d="M285 265 C355 205 420 205 490 265" fill="none" stroke="#f8fafc" stroke-width="8" opacity=".45"/><path d="M715 265 C785 205 850 205 920 265" fill="none" stroke="#f8fafc" stroke-width="8" opacity=".45"/><text x="72" y="604" font-family="Inter,Arial" font-size="44" fill="#fff" font-weight="700">Rehearsal & Patter</text>
+  <g fill="#fff" opacity=".85"> <circle cx="964" cy="118" r="5"/><circle cx="1014" cy="156" r="3"/><circle cx="1070" cy="102" r="4"/><circle cx="145" cy="535" r="4"/><circle cx="205" cy="492" r="3"/></g>
+</svg>

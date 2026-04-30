@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" role="img" aria-hidden="true">
+  <defs>
+    <radialGradient id="g" cx="25%" cy="18%" r="75%"><stop offset="0" stop-color="#7c3aed"/><stop offset="0.45" stop-color="#31145f"/><stop offset="1" stop-color="#050816"/></radialGradient>
+    <linearGradient id="gold" x1="0" x2="1"><stop offset="0" stop-color="#fbbf24"/><stop offset="1" stop-color="#f59e0b"/></linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="1200" height="675" fill="url(#g)"/>
+  <circle cx="180" cy="100" r="170" fill="#a855f7" opacity=".16"/>
+  <circle cx="1000" cy="580" r="230" fill="#0ea5e9" opacity=".09"/>
+<path d="M120 110 H1080 V560 H120Z" fill="#020617" opacity=".42"/><path d="M215 545 C310 425 420 370 600 370 C780 370 890 425 985 545Z" fill="#111827"/><path d="M215 130 V545 M985 130 V545" stroke="#7f1d1d" stroke-width="42"/><path d="M250 125 C410 220 790 220 950 125" fill="none" stroke="#dc2626" stroke-width="52"/><ellipse cx="600" cy="525" rx="370" ry="54" fill="#f59e0b" opacity=".28"/><path d="M455 510 C520 385 680 385 745 510" fill="none" stroke="#f8fafc" stroke-width="10" opacity=".55"/><g filter="url(#glow)"><path d="M475 310 L540 190 L605 310 Z" fill="#fde68a" opacity=".74"/><path d="M600 318 L672 165 L742 318 Z" fill="#fef3c7" opacity=".55"/></g><text x="72" y="604" font-family="Inter,Arial" font-size="44" fill="#fff" font-weight="700">Stage & Parlor Magic</text>
+  <g fill="#fff" opacity=".85"> <circle cx="964" cy="118" r="5"/><circle cx="1014" cy="156" r="3"/><circle cx="1070" cy="102" r="4"/><circle cx="145" cy="535" r="4"/><circle cx="205" cy="492" r="3"/></g>
+</svg>
