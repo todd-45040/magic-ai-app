@@ -350,6 +350,64 @@ const inferEffectCategory = (effectInput: string): string => {
   return match ?? 'Custom Illusion';
 };
 
+const compactPhrase = (value: string, fallback = 'stage illusion'): string => {
+  const cleaned = cleanText(value)
+    .replace(/[^a-zA-Z0-9\s,\-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!cleaned) return fallback;
+  return cleaned.length > 110 ? `${cleaned.slice(0, 107).trim()}…` : cleaned;
+};
+
+const deriveVisualAnchor = (plan: BuilderPlan, originalEffect: string): string => {
+  const combined = [
+    originalEffect,
+    plan.project_title,
+    plan.audience_effect,
+    plan.build_concept,
+    ...plan.recommended_construction.main_structure,
+    plan.dimensions_footprint,
+  ]
+    .join(' ')
+    .toLowerCase();
+
+  const anchorPatterns: Array<[RegExp, string]> = [
+    [/vanish|vanishing|disappear/, 'vanishing platform stage illusion'],
+    [/appear|appearance|production/, 'appearance platform stage illusion'],
+    [/levitat|float|floating|suspension/, 'assistant levitation stage illusion'],
+    [/penetrat|sword|blade|spike/, 'penetration cabinet stage illusion'],
+    [/teleport|transport|transposition/, 'modular teleportation trunk stage illusion'],
+    [/transform|change|costume|metamorphosis/, 'visual transformation stage illusion'],
+    [/escape|restraint|locked|chain/, 'escape cabinet stage illusion'],
+    [/trunk|crate|box/, 'trunk-based stage illusion'],
+    [/cabinet/, 'illusion cabinet stage prop'],
+    [/platform|base|deck/, 'raised platform stage illusion'],
+  ];
+
+  const matched = anchorPatterns.find(([pattern]) => pattern.test(combined));
+  if (matched) return matched[1];
+
+  return compactPhrase(plan.project_title || originalEffect, 'custom stage illusion');
+};
+
+const buildVisualContinuityBrief = (plan: BuilderPlan, originalEffect: string): string => {
+  const visualAnchor = deriveVisualAnchor(plan, originalEffect);
+  const mainStructure = compactPhrase(plan.recommended_construction.main_structure.join(', '), 'practical theatrical structure');
+  const materials = compactPhrase(plan.recommended_construction.materials.slice(0, 4).join(', '), 'realistic stage fabrication materials');
+  const footprint = compactPhrase(plan.dimensions_footprint, 'stage-ready footprint');
+
+  return [
+    `VISUAL CONTINUITY ANCHOR: ${visualAnchor}.`,
+    `All generated drawings and concept images must depict the same core illusion concept described in the builder plan, not a generic magic prop.`,
+    `Required visual subject: ${compactPhrase(plan.project_title)} — ${compactPhrase(plan.audience_effect)}.`,
+    `Visible structure must align with: ${mainStructure}.`,
+    `Visual material language must align with: ${materials}.`,
+    `Scale and footprint must feel consistent with: ${footprint}.`,
+    `Do not change the effect category, prop type, or stage footprint between the plan, blueprint drawings, and concept gallery.`,
+  ].join('\n');
+};
+
 
 const asString = (value: unknown, fallback = ''): string =>
   typeof value === 'string' ? value : fallback;
@@ -750,10 +808,15 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
         visuals: false,
       });
 
+      const visualContinuityBrief = buildVisualContinuityBrief(plan, effectInput);
+      const visualAnchor = deriveVisualAnchor(plan, effectInput);
+
       setLoadingStage('Generating blueprint drawings…');
       setIsGeneratingBlueprints(true);
       const blueprintPrompt = [
         BLUEPRINT_STYLE_GUIDE,
+        '',
+        visualContinuityBrief,
         '',
         `Project title: ${plan.project_title}`,
         `Audience effect: ${plan.audience_effect}`,
@@ -764,6 +827,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
         `Dimensions / footprint: ${plan.dimensions_footprint}`,
         `Primary mechanism direction: ${plan.mechanism_approach.primary}`,
         `Mobility / modularity: ${plan.recommended_construction.mobility_modularity}`,
+        `Blueprint continuity requirement: Every drawing must be a technical view of the same ${visualAnchor}; do not introduce unrelated boxes, tables, cabinets, or platforms unless they are part of this plan.`,
         'Create technical drawing style images suitable for illusion build planning.',
       ].join('\n');
 
@@ -781,6 +845,8 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
       const imagePrompt = [
         IMAGE_STYLE_GUIDE,
         '',
+        visualContinuityBrief,
+        '',
         `Project title: ${plan.project_title}`,
         `Audience effect: ${plan.audience_effect}`,
         `Build concept: ${plan.build_concept}`,
@@ -789,7 +855,8 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
         `Mobility / modularity: ${plan.recommended_construction.mobility_modularity}`,
         `Venue / scale: ${venueScale}`,
         `Performer style: ${performerStyle}`,
-        'Produce three distinct but related design directions.',
+        `Concept continuity requirement: Produce three distinct visual variations of the same ${visualAnchor}. Vary finish, trim, framing, and staging only; do not change the illusion type or replace it with unrelated props.`,
+        'Produce three distinct but clearly related design directions that match the builder plan above.',
       ].join('\n');
 
       try {
@@ -826,7 +893,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
             <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
               <div>
                 <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Blueprint Preview</div>
-                <div className="mt-1 text-lg font-bold text-white">{`Blueprint ${String.fromCharCode(65 + activeBlueprintIndex)}`}</div>
+                <div className="mt-1 text-lg font-bold text-white">{`Blueprint ${String.fromCharCode(65 + activeBlueprintIndex)} — ${builderPlan ? deriveVisualAnchor(builderPlan, effectInput) : 'Matched Technical View'}`}</div>
               </div>
               <button
                 type="button"
@@ -1394,12 +1461,18 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                         title="Technical Drawing Set"
                         subtitle="Blueprint-style concept drawings to help visualize structure, layout, and mechanism direction."
                       />
+                      {builderPlan ? (
+                        <div className="rounded-xl border border-sky-400/20 bg-sky-500/10 px-3.5 py-3 text-xs leading-relaxed text-sky-100">
+                          <span className="font-semibold">Continuity lock:</span> these drawings are prompted as technical views of the same concept: <span className="font-semibold">{deriveVisualAnchor(builderPlan, effectInput)}</span>.
+                        </div>
+                      ) : null}
                       {isGeneratingBlueprints ? (
                         <ImageGenerationCard label="Generating blueprint drawings" />
                       ) : blueprintDrawings.length ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {blueprintDrawings.map((src, idx) => {
                             const drawingLabel = `Blueprint ${String.fromCharCode(65 + idx)}`;
+                            const continuityLabel = builderPlan ? `${drawingLabel} — ${deriveVisualAnchor(builderPlan, effectInput)}` : drawingLabel;
                             return (
                               <div
                                 key={`${src.slice(0, 30)}-${idx}`}
@@ -1413,7 +1486,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                                   <div className="aspect-[4/3] overflow-hidden bg-slate-950/40">
                                     <img
                                       src={src}
-                                      alt={`Blueprint drawing ${drawingLabel}`}
+                                      alt={`Blueprint drawing ${continuityLabel}`}
                                       className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
                                     />
                                   </div>
@@ -1424,7 +1497,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                                     <div>
                                       <div className="text-sm font-semibold text-slate-100">{drawingLabel}</div>
                                       <div className="mt-1 text-xs text-slate-400">
-                                        Click image to inspect the drawing at full size
+                                        Matched technical view for {builderPlan ? deriveVisualAnchor(builderPlan, effectInput) : 'this builder plan'}
                                       </div>
                                     </div>
                                   </div>
@@ -1473,12 +1546,18 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                         title="Concept Gallery"
                         subtitle="Compare build directions visually, then select the concept that best matches the practical plan above."
                       />
+                      {builderPlan ? (
+                        <div className="rounded-xl border border-violet-400/20 bg-violet-500/10 px-3.5 py-3 text-xs leading-relaxed text-violet-100">
+                          <span className="font-semibold">Visual continuity:</span> all concepts are prompted as variations of <span className="font-semibold">{deriveVisualAnchor(builderPlan, effectInput)}</span>, using the same audience effect, footprint, and material direction from the builder plan.
+                        </div>
+                      ) : null}
                     {isGeneratingVisuals ? (
                       <ImageGenerationCard label="Generating visual concepts" />
                     ) : imageOptions.length ? (
                       <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
                         {imageOptions.map((src, idx) => {
                           const conceptLabel = `Concept ${String.fromCharCode(65 + idx)}`;
+                          const continuityLabel = builderPlan ? `${conceptLabel} — ${deriveVisualAnchor(builderPlan, effectInput)}` : conceptLabel;
                           const isSelected = selectedConceptIndex === idx;
 
                           return (
@@ -1498,7 +1577,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                                 <div className="aspect-[4/3] overflow-hidden bg-slate-950/40">
                                   <img
                                     src={src}
-                                    alt={`Illusion concept ${conceptLabel}`}
+                                    alt={`Illusion concept ${continuityLabel}`}
                                     className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
                                   />
                                 </div>
@@ -1509,7 +1588,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                                   <div>
                                     <div className="text-sm font-semibold text-slate-100">{conceptLabel}</div>
                                     <div className="mt-1 text-xs text-slate-400">
-                                      {isSelected ? 'Selected for Build' : 'Click image to inspect and compare'}
+                                      {isSelected ? 'Selected matched variation' : `Variation of ${builderPlan ? deriveVisualAnchor(builderPlan, effectInput) : 'this builder plan'}`}
                                     </div>
                                   </div>
                                   {isSelected ? (
