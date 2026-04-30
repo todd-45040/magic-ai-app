@@ -21,56 +21,9 @@ type WireCard = {
   category: string;
   type: string;
   tags: string[];
-  thumbnailUrl?: string | null;
+  thumbnailUrl: string;
+  imageAlt: string;
 };
-
-
-const CATEGORY_FALLBACK_IMAGES: Record<string, string> = {
-  "Magic News": "/images/magic-wire/magic-news.svg",
-  "New Tricks": "/images/magic-wire/card-magic.svg",
-  "Shows & Events": "/images/magic-wire/stage-magic.svg",
-  "Community": "/images/magic-wire/magic-club.svg",
-  "Industry News": "/images/magic-wire/magic-publication.svg",
-  "Performance Tips": "/images/magic-wire/performance-coaching.svg",
-  "Videos": "/images/magic-wire/magic-video.svg",
-  "Platform Updates": "/images/magic-wire/wizard-update.svg",
-};
-
-const DEFAULT_FALLBACK_IMAGES = [
-  "/images/magic-wire/card-magic.svg",
-  "/images/magic-wire/stage-magic.svg",
-  "/images/magic-wire/linking-rings.svg",
-  "/images/magic-wire/magic-publication.svg",
-  "/images/magic-wire/performance-coaching.svg",
-  "/images/magic-wire/magic-club.svg",
-];
-
-function hashString(value: string) {
-  let hash = 0;
-  for (let i = 0; i < value.length; i += 1) {
-    hash = (hash << 5) - hash + value.charCodeAt(i);
-    hash |= 0;
-  }
-  return Math.abs(hash);
-}
-
-function getArticleImage(card: Pick<WireCard, "id" | "title" | "category" | "thumbnailUrl">) {
-  if (card.thumbnailUrl && /^https?:\/\//i.test(card.thumbnailUrl)) return card.thumbnailUrl;
-  return CATEGORY_FALLBACK_IMAGES[card.category] || DEFAULT_FALLBACK_IMAGES[hashString(card.id || card.title) % DEFAULT_FALLBACK_IMAGES.length];
-}
-
-function getCardSizeClass(index: number) {
-  if (index === 0) return "md:col-span-2 2xl:col-span-2";
-  if (index % 9 === 0) return "md:col-span-2";
-  if (index % 7 === 0) return "2xl:row-span-2";
-  return "";
-}
-
-function getImageHeightClass(index: number) {
-  if (index === 0) return "h-64";
-  if (index % 7 === 0) return "h-56 2xl:h-72";
-  return "h-44";
-}
 
 function domainFromUrl(url?: string | null) {
   if (!url) return "";
@@ -163,6 +116,80 @@ function inferTags(item: MagicWireItem, category: string, source: string, type: 
   return Array.from(tags).slice(0, 4);
 }
 
+
+const MAGIC_WIRE_FALLBACK_IMAGES: Record<string, string[]> = {
+  "New Tricks": [
+    "/images/magic-wire/card-magic-01.svg",
+    "/images/magic-wire/closeup-table-01.svg",
+    "/images/magic-wire/coin-magic-01.svg",
+    "/images/magic-wire/wand-spark-01.svg",
+  ],
+  "Industry News": [
+    "/images/magic-wire/magic-magazine-01.svg",
+    "/images/magic-wire/theater-curtain-01.svg",
+    "/images/magic-wire/magic-club-01.svg",
+    "/images/magic-wire/stage-lights-01.svg",
+  ],
+  "Community": [
+    "/images/magic-wire/magic-club-01.svg",
+    "/images/magic-wire/audience-applause-01.svg",
+    "/images/magic-wire/linking-rings-01.svg",
+    "/images/magic-wire/theater-curtain-01.svg",
+  ],
+  "Videos": [
+    "/images/magic-wire/video-stage-01.svg",
+    "/images/magic-wire/stage-lights-01.svg",
+    "/images/magic-wire/rehearsal-mic-01.svg",
+  ],
+  "Performance Tips": [
+    "/images/magic-wire/rehearsal-mic-01.svg",
+    "/images/magic-wire/closeup-table-01.svg",
+    "/images/magic-wire/stage-lights-01.svg",
+  ],
+  "Platform Updates": [
+    "/images/magic-wire/wizard-update-01.svg",
+    "/images/magic-wire/magic-ai-01.svg",
+    "/images/magic-wire/magic-magazine-01.svg",
+  ],
+  "Magic News": [
+    "/images/magic-wire/magic-magazine-01.svg",
+    "/images/magic-wire/theater-curtain-01.svg",
+    "/images/magic-wire/card-magic-01.svg",
+    "/images/magic-wire/linking-rings-01.svg",
+  ],
+  "Shows & Events": [
+    "/images/magic-wire/stage-lights-01.svg",
+    "/images/magic-wire/theater-curtain-01.svg",
+    "/images/magic-wire/audience-applause-01.svg",
+  ],
+};
+
+const MAGIC_WIRE_DEFAULT_IMAGES = [
+  "/images/magic-wire/card-magic-01.svg",
+  "/images/magic-wire/magic-magazine-01.svg",
+  "/images/magic-wire/stage-lights-01.svg",
+  "/images/magic-wire/linking-rings-01.svg",
+  "/images/magic-wire/rehearsal-mic-01.svg",
+  "/images/magic-wire/wizard-update-01.svg",
+];
+
+function stableHash(value: string): number {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
+  }
+  return hash;
+}
+
+function getMagicFallbackImage(category: string, source: string, title: string, idx: number): string {
+  const pool = MAGIC_WIRE_FALLBACK_IMAGES[category] || MAGIC_WIRE_DEFAULT_IMAGES;
+  const key = category + "|" + source + "|" + title + "|" + idx;
+  return pool[stableHash(key) % pool.length];
+}
+
+function imageAltForCard(title: string, category: string) {
+  return category + " image for " + title;
+}
 function buildCard(item: MagicWireItem, idx: number): WireCard {
   const source = publisherFromItem(item);
   const category = inferCategory(item);
@@ -183,11 +210,12 @@ function buildCard(item: MagicWireItem, idx: number): WireCard {
     source,
     sourceUrl: item.sourceUrl,
     publishedAt: item.publishedAt,
-    thumbnailUrl: item.thumbnailUrl,
     when: timeAgo(item.publishedAt),
     category,
     type,
     tags: inferTags(item, category, source, type),
+    thumbnailUrl: item.thumbnailUrl || getMagicFallbackImage(category, source, title, idx),
+    imageAlt: imageAltForCard(title, category),
   };
 }
 
@@ -227,7 +255,7 @@ export default function MagicWire() {
     try {
       setLoading(true);
       setError("");
-      const data = await getPosts({ count: 18, refresh });
+      const data = await getPosts({ count: 12, refresh });
       setItems(data);
 
       if (refresh) {
@@ -811,7 +839,7 @@ export default function MagicWire() {
               {Array.from({ length: 6 }).map((_, i) => (
                 <div
                   key={i}
-                  className="h-[220px] rounded-2xl bg-slate-900/35 border border-slate-800 animate-pulse"
+                  className="h-[320px] rounded-2xl bg-slate-900/35 border border-slate-800 animate-pulse"
                 />
               ))}
             </div>
@@ -830,51 +858,43 @@ export default function MagicWire() {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 2xl:grid-cols-3 auto-rows-auto">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3 auto-rows-auto">
               {filteredCards.map((card, index) => {
                 const saved = savedIds.has(card.id);
-                const articleImage = getArticleImage(card);
-                const sizeClass = getCardSizeClass(index);
-                const imageHeightClass = getImageHeightClass(index);
+                const featured = index === 0 || index % 9 === 0;
+                const wideCard = featured ? "md:col-span-2" : "";
+                const imageHeight = featured ? "h-56 md:h-64" : "h-40";
 
                 return (
                   <article
                     key={card.id}
-                    className={`group overflow-hidden rounded-3xl border transition-all duration-300 ${sizeClass} ${saved ? "border-purple-400/60 bg-purple-500/5 shadow-[0_0_0_1px_rgba(192,132,252,0.08)]" : "border-slate-800 bg-slate-900/45"} hover:-translate-y-1 hover:bg-slate-900/65 hover:border-purple-500/80 hover:shadow-2xl hover:shadow-purple-950/30`}
+                    className={`rounded-2xl border overflow-hidden transition-all duration-200 ${wideCard} ${saved ? "border-purple-400/60 bg-purple-500/5 shadow-[0_0_0_1px_rgba(192,132,252,0.08)]" : "border-slate-800 bg-slate-900/40"} hover:-translate-y-0.5 hover:bg-slate-900/55 hover:border-purple-500 hover:shadow-xl hover:shadow-purple-900/25`}
                   >
-                    <button
-                      type="button"
-                      onClick={() => openOriginal(card)}
-                      disabled={!card.sourceUrl}
-                      className={`relative block w-full overflow-hidden text-left ${card.sourceUrl ? "cursor-pointer" : "cursor-default"}`}
-                      aria-label={card.sourceUrl ? `Open ${card.title}` : card.title}
-                    >
+                    <div className={`relative ${imageHeight} w-full overflow-hidden bg-slate-950`}>
                       <img
-                        src={articleImage}
-                        alt=""
+                        src={card.thumbnailUrl}
+                        alt={card.imageAlt}
                         loading="lazy"
-                        referrerPolicy="no-referrer"
-                        onError={(event) => {
-                          const fallback = CATEGORY_FALLBACK_IMAGES[card.category] || DEFAULT_FALLBACK_IMAGES[0];
-                          if (event.currentTarget.src !== fallback) event.currentTarget.src = fallback;
+                        className="h-full w-full object-cover transition-transform duration-500 hover:scale-[1.04]"
+                        onError={(e) => {
+                          const fallback = getMagicFallbackImage(card.category, card.source, card.title, index + 17);
+                          if (e.currentTarget.src !== window.location.origin + fallback) {
+                            e.currentTarget.src = fallback;
+                          }
                         }}
-                        className={`w-full ${imageHeightClass} object-cover transition-transform duration-500 group-hover:scale-105`}
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/25 to-transparent" />
-                      <div className="absolute left-4 right-4 top-4 flex items-center justify-between gap-3">
-                        <span className="max-w-[70%] truncate rounded-full border border-white/15 bg-slate-950/65 px-3 py-1 text-[11px] uppercase tracking-wide text-white/90 backdrop-blur">
+                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/35 to-transparent" />
+                      <div className="absolute left-4 top-4 flex flex-wrap items-center gap-2">
+                        <span className="rounded-full border border-slate-200/20 bg-slate-950/55 px-2.5 py-1 text-[11px] uppercase tracking-wide text-slate-100 backdrop-blur">
                           {card.source}
                         </span>
-                        <span className="rounded-full border border-purple-300/25 bg-purple-500/25 px-3 py-1 text-[11px] uppercase tracking-wide text-purple-100 backdrop-blur">
-                          {titleCase(card.type)}
-                        </span>
+                        {saved && (
+                          <span className="rounded-full border border-purple-300/40 bg-purple-500/30 px-2.5 py-1 text-[11px] uppercase tracking-wide text-purple-100 backdrop-blur">
+                            ★ Saved
+                          </span>
+                        )}
                       </div>
-                      <div className="absolute bottom-4 left-4 right-4">
-                        <div className="inline-flex rounded-full border border-amber-300/25 bg-amber-500/15 px-3 py-1 text-[11px] uppercase tracking-wide text-amber-100 backdrop-blur">
-                          {card.category}
-                        </div>
-                      </div>
-                    </button>
+                    </div>
 
                     <div className="p-4">
                     <div className="flex flex-wrap items-center gap-2">
@@ -894,11 +914,11 @@ export default function MagicWire() {
                       )}
                     </div>
 
-                    <h3 className={`${index === 0 ? "text-2xl" : "text-lg"} mt-3 font-bold leading-snug text-amber-100 line-clamp-2`}>
+                    <h3 className="mt-3 text-lg font-bold text-amber-200/85 line-clamp-2">
                       {card.title}
                     </h3>
 
-                    <p className={`mt-2 text-sm leading-relaxed text-slate-300/90 ${index === 0 || index % 7 === 0 ? "line-clamp-5" : "line-clamp-3"}`}>
+                    <p className="mt-2 text-sm text-slate-300/85 line-clamp-4">
                       {card.summary}
                     </p>
 
