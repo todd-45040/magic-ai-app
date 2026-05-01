@@ -256,24 +256,38 @@ export default function PropGenerator({ onIdeaSaved, onNavigateShowPlanner, onNa
   }
 
   function buildPropRenderingPrompt(concept: PropConcept) {
+    const propType = inputs.propType || concept.propName || 'custom magic prop';
+    const materials = inputs.materials || concept.materials.join(', ') || 'stage-ready mixed materials';
+    const venue = inputs.venue || 'stage or parlor performance';
+    const audience = inputs.audience || 'live magic audience';
+    const budget = inputs.budget || 'practical professional prototype';
+    const transport = inputs.transport || concept.transportNotes || 'portable performance prop';
+    const reset = inputs.reset || concept.resetSpeed || 'practical reset for repeated performances';
+
     return [
-      'Create one practical artist rendering of this custom magic performance prop.',
-      `Prop name: ${concept.propName}`,
-      `Prop type: ${inputs.propType || concept.propName}`,
-      `Materials / finish: ${inputs.materials || concept.materials.join(', ') || 'stage-ready mixed materials'}`,
-      `Venue: ${inputs.venue || 'stage or parlor performance'}`,
-      `Audience: ${inputs.audience || 'live magic audience'}`,
-      `Budget / build level: ${inputs.budget || 'practical professional prototype'}`,
-      `Transport: ${inputs.transport || concept.transportNotes || 'portable performance prop'}`,
-      `Concept summary: ${concept.conceptSummary}`,
-      `Construction direction: ${concept.constructionIdea}`,
+      'Create one realistic artist rendering of a custom magic performance prop based directly on these exact inputs.',
       '',
-      'Visual requirements:',
+      'User prop inputs that MUST visually guide the rendering:',
+      `- Prop Type: ${propType}`,
+      `- Materials / Finish: ${materials}`,
+      `- Performance Setting: ${venue}`,
+      `- Audience Type: ${audience}`,
+      `- Budget / Build Level: ${budget}`,
+      `- Transportability: ${transport}`,
+      `- Reset Speed: ${reset}`,
+      '',
+      'Generated concept to match:',
+      `- Prop Name: ${concept.propName}`,
+      `- Concept Summary: ${concept.conceptSummary}`,
+      `- Construction Direction: ${concept.constructionIdea}`,
+      '',
+      'Visual style requirements:',
+      '- Show a professional, stage-ready magician prop that looks custom-built for the inputs above.',
+      '- The rendering should feel like a practical product concept or workshop design preview, not a random stock object.',
+      '- Emphasize the specified materials, realistic scale, clean theatrical finish, portability, and live performance usefulness.',
+      '- Use realistic lighting and a clean presentation suitable for a magician reviewing a build concept.',
       '- English-language context only.',
       '- Do not place readable labels, fake text, foreign-language writing, or gibberish text on the image.',
-      '- Show a believable prop rendering that visually matches the generated concept.',
-      '- Make it look like a practical magician prop in a workshop, rehearsal room, or clean stage-product render.',
-      '- Prioritize buildable materials, realistic scale, clean theatrical finish, and transportable construction.',
       '- Do not reveal secret methods, gimmicks, trap mechanisms, hidden compartments, or exposure details.',
       '- Avoid fantasy energy, surreal effects, impossible physics, and unrelated generic stage images.',
     ].join('\n');
@@ -630,7 +644,7 @@ Requirements:
                   <div className="px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-slate-800/70">
                     <div>
                       <div className="font-semibold text-slate-100 flex items-center gap-2"><span aria-hidden="true">🎨</span><span>Artist Rendering</span></div>
-                      <div className="text-xs text-slate-400 mt-1">A practical visual concept matched to this generated prop plan.</div>
+                      <div className="text-xs text-slate-400 mt-1">Generated based on your inputs and matched to this prop plan.</div>
                     </div>
                     <button
                       type="button"
@@ -643,11 +657,16 @@ Requirements:
                   </div>
                   <div className="p-4">
                     {renderingUrl ? (
-                      <img
-                        src={renderingUrl}
-                        alt={result?.propName ? 'Artist rendering of ' + result.propName : 'Artist rendering of generated prop'}
-                        className="w-full rounded-xl border border-slate-800 bg-slate-950 object-cover shadow-lg"
-                      />
+                      <figure>
+                        <img
+                          src={renderingUrl}
+                          alt={result?.propName ? 'Artist rendering of ' + result.propName : 'Artist rendering of generated prop'}
+                          className="w-full rounded-xl border border-slate-800 bg-slate-950 object-cover shadow-lg"
+                        />
+                        <figcaption className="mt-2 text-xs text-slate-400">
+                          Artist rendering generated from your prop type, materials, venue, audience, budget, transport, and reset inputs.
+                        </figcaption>
+                      </figure>
                     ) : renderingLoading ? (
                       <div className="min-h-[240px] rounded-xl border border-dashed border-purple-500/30 bg-purple-500/5 flex items-center justify-center text-center p-6">
                         <div className="text-sm text-slate-300">Creating a practical prop rendering...</div>
