@@ -132,11 +132,37 @@ function unwrapAiText(res: any): string {
   return '';
 }
 
+function toImageDataUrl(img: any): string | null {
+  if (typeof img === 'string' && img.trim()) {
+    return img.startsWith('data:') ? img : img;
+  }
+
+  const base64 =
+    img?.image?.imageBytes ||
+    img?.imageBytes ||
+    img?.b64_json ||
+    img?.base64;
+  const mime = img?.mimeType || img?.mime || 'image/jpeg';
+
+  if (typeof base64 === 'string' && base64.length > 0) {
+    return `data:${mime};base64,${base64}`;
+  }
+
+  return null;
+}
+
 function unwrapAiImages(res: any): string[] {
-  if (Array.isArray(res?.data?.images)) return res.data.images as string[];
-  if (Array.isArray(res?.images)) return res.images as string[];
-  if (Array.isArray(res?.data)) return res.data as string[];
-  return [];
+  const imgs =
+    res?.data?.images ||
+    res?.images ||
+    res?.data?.generatedImages ||
+    res?.generatedImages ||
+    res?.data?.data?.generatedImages ||
+    res?.data?.data?.images ||
+    res?.data;
+
+  if (!Array.isArray(imgs)) return [];
+  return imgs.map(toImageDataUrl).filter((url): url is string => Boolean(url));
 }
 
 function unwrapAiResult<T = unknown>(res: any): T {
@@ -187,16 +213,34 @@ export async function aiJson<T = unknown>(
   return unwrapAiPayload<T>(res);
 }
 
-/** aiImage(prompt, style?, size?) → returns array of image strings (urls or base64, depending on server) */
+/** aiImage(prompt, options?) → returns array of image data URLs or URLs */
+export type AiImageOptions = {
+  style?: string;
+  size?: "512x512" | "1024x1024" | "1536x1536";
+  aspectRatio?: "1:1" | "3:4" | "4:3" | "9:16" | "16:9";
+  count?: number;
+};
+
 export async function aiImage(
   prompt: string,
-  style?: string,
+  styleOrOptions?: string | AiImageOptions,
   size?: "512x512" | "1024x1024" | "1536x1536"
 ) {
+  const options: AiImageOptions =
+    typeof styleOrOptions === 'object' && styleOrOptions !== null
+      ? styleOrOptions
+      : { style: styleOrOptions, size };
+
   const res = await safeFetchJson<{ images: string[] }>("/api/ai/image", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt, style, size }),
+    body: JSON.stringify({
+      prompt,
+      style: options.style,
+      size: options.size,
+      aspectRatio: options.aspectRatio || '4:3',
+      count: Math.max(1, Math.min(4, Math.floor(Number(options.count) || 1))),
+    }),
   });
 
   return unwrapAiImages(res);

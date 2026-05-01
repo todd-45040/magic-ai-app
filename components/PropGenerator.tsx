@@ -5,7 +5,7 @@ import { createShow, addTasksToShow } from "../services/showsService";
 import { useAppDispatch, refreshIdeas, refreshShows } from "../store";
 import ShareButton from "./ShareButton";
 import { trackClientEvent } from "../services/telemetryClient";
-import { aiJson } from "../services/aiProxy";
+import { aiImage, aiJson } from "../services/aiProxy";
 
 type Props = {
   user?: User;
@@ -149,6 +149,9 @@ export default function PropGenerator({ onIdeaSaved, onNavigateShowPlanner, onNa
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<PropConcept | null>(null);
   const [openSections, setOpenSections] = useState<Set<SectionKey>>(new Set(defaultOpen));
+  const [renderingUrl, setRenderingUrl] = useState<string | null>(null);
+  const [renderingLoading, setRenderingLoading] = useState(false);
+  const [renderingError, setRenderingError] = useState<string | null>(null);
 
   const [inputs, setInputs] = useState({
     propType: "",
@@ -202,6 +205,8 @@ export default function PropGenerator({ onIdeaSaved, onNavigateShowPlanner, onNa
       reset: "",
     });
     setResult(null);
+    setRenderingUrl(null);
+    setRenderingError(null);
     setError(null);
     setOpenSections(new Set(defaultOpen));
     void trackClientEvent({
@@ -216,6 +221,8 @@ export default function PropGenerator({ onIdeaSaved, onNavigateShowPlanner, onNa
     const nextDemo = demoInputsList[demoIndex];
     setInputs({ ...nextDemo });
     setResult(null);
+    setRenderingUrl(null);
+    setRenderingError(null);
     setError(null);
     setOpenSections(new Set(defaultOpen));
     setDemoIndex((prev) => (prev + 1) % demoInputsList.length);
@@ -246,6 +253,58 @@ export default function PropGenerator({ onIdeaSaved, onNavigateShowPlanner, onNa
     if (response?.data) return response.data as T;
 
     return response as T;
+  }
+
+  function buildPropRenderingPrompt(concept: PropConcept) {
+    return [
+      'Create one practical artist rendering of this custom magic performance prop.',
+      `Prop name: ${concept.propName}`,
+      `Prop type: ${inputs.propType || concept.propName}`,
+      `Materials / finish: ${inputs.materials || concept.materials.join(', ') || 'stage-ready mixed materials'}`,
+      `Venue: ${inputs.venue || 'stage or parlor performance'}`,
+      `Audience: ${inputs.audience || 'live magic audience'}`,
+      `Budget / build level: ${inputs.budget || 'practical professional prototype'}`,
+      `Transport: ${inputs.transport || concept.transportNotes || 'portable performance prop'}`,
+      `Concept summary: ${concept.conceptSummary}`,
+      `Construction direction: ${concept.constructionIdea}`,
+      '',
+      'Visual requirements:',
+      '- English-language context only.',
+      '- Do not place readable labels, fake text, foreign-language writing, or gibberish text on the image.',
+      '- Show a believable prop rendering that visually matches the generated concept.',
+      '- Make it look like a practical magician prop in a workshop, rehearsal room, or clean stage-product render.',
+      '- Prioritize buildable materials, realistic scale, clean theatrical finish, and transportable construction.',
+      '- Do not reveal secret methods, gimmicks, trap mechanisms, hidden compartments, or exposure details.',
+      '- Avoid fantasy energy, surreal effects, impossible physics, and unrelated generic stage images.',
+    ].join('\n');
+  }
+
+  async function generatePropRendering(conceptOverride?: PropConcept) {
+    const concept = conceptOverride || result;
+    if (!concept || renderingLoading) return;
+    setRenderingLoading(true);
+    setRenderingError(null);
+    try {
+      const images = await aiImage(buildPropRenderingPrompt(concept), {
+        aspectRatio: '4:3',
+        count: 1,
+        style: 'practical prop concept rendering',
+      });
+      const first = images[0];
+      if (!first) throw new Error('No prop rendering was returned.');
+      setRenderingUrl(first);
+      await trackClientEvent({
+        tool: 'prop_generator',
+        action: 'prop_rendering_generated',
+        metadata: { ...telemetryMetadata, prop_name: concept.propName },
+        outcome: 'SUCCESS_NOT_CHARGED',
+      });
+    } catch (e: any) {
+      console.error(e);
+      setRenderingError(e?.message || 'Prop rendering generation failed.');
+    } finally {
+      setRenderingLoading(false);
+    }
   }
 
   async function generate(mode: 'base' | 'alternate' = 'base') {
@@ -286,6 +345,8 @@ Reset: ${inputs.reset}`;
       const json = await callGenerate<any>(prompt);
       const concept = sanitizeConcept(json);
       setResult(concept);
+      setRenderingUrl(null);
+      setRenderingError(null);
       setOpenSections(new Set(defaultOpen));
       await trackClientEvent({
         tool: 'prop_generator',
@@ -293,6 +354,7 @@ Reset: ${inputs.reset}`;
         metadata: { ...telemetryMetadata, prop_name: concept.propName },
         outcome: 'SUCCESS_NOT_CHARGED',
       });
+      void generatePropRendering(concept);
     } catch (e: any) {
       console.error(e);
       setError(e?.message || "Generation failed");
@@ -564,6 +626,41 @@ Requirements:
           ) : (
             <>
               <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                <div className="rounded-2xl border border-slate-800 bg-slate-900/30 overflow-hidden">
+                  <div className="px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-slate-800/70">
+                    <div>
+                      <div className="font-semibold text-slate-100 flex items-center gap-2"><span aria-hidden="true">🎨</span><span>Artist Rendering</span></div>
+                      <div className="text-xs text-slate-400 mt-1">A practical visual concept matched to this generated prop plan.</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => generatePropRendering()}
+                      disabled={renderingLoading}
+                      className="rounded-xl border border-slate-700 bg-slate-950/50 px-3 py-2 text-xs font-semibold text-slate-100 hover:bg-slate-800/60 transition disabled:opacity-50"
+                    >
+                      {renderingLoading ? 'Rendering...' : renderingUrl ? 'Regenerate Image' : 'Generate Image'}
+                    </button>
+                  </div>
+                  <div className="p-4">
+                    {renderingUrl ? (
+                      <img
+                        src={renderingUrl}
+                        alt={result?.propName ? 'Artist rendering of ' + result.propName : 'Artist rendering of generated prop'}
+                        className="w-full rounded-xl border border-slate-800 bg-slate-950 object-cover shadow-lg"
+                      />
+                    ) : renderingLoading ? (
+                      <div className="min-h-[240px] rounded-xl border border-dashed border-purple-500/30 bg-purple-500/5 flex items-center justify-center text-center p-6">
+                        <div className="text-sm text-slate-300">Creating a practical prop rendering...</div>
+                      </div>
+                    ) : (
+                      <div className="min-h-[200px] rounded-xl border border-dashed border-slate-700/70 bg-slate-950/30 flex items-center justify-center text-center p-6">
+                        <div className="text-sm text-slate-400">Generate an example image to help visualize this prop concept.</div>
+                      </div>
+                    )}
+                    {renderingError && <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">{renderingError}</div>}
+                  </div>
+                </div>
+
                 {sections.map((section) => (
                   <CollapsibleCard
                     key={section.key}
