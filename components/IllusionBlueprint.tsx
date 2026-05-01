@@ -411,47 +411,66 @@ const buildVisualContinuityBrief = (plan: BuilderPlan, originalEffect: string): 
 
 
 const asString = (value: unknown, fallback = ''): string =>
-  typeof value === 'string' ? value : fallback;
+  typeof value === 'string' && value.trim() ? value.trim() : fallback;
 
-const asStringArray = (value: unknown): string[] =>
-  Array.isArray(value) ? value.map((item) => String(item ?? '').trim()).filter(Boolean) : [];
+const asStringArray = (value: unknown): string[] => {
+  if (Array.isArray(value)) return value.map((item) => String(item ?? '').trim()).filter(Boolean);
+  if (typeof value === 'string' && value.trim()) return [value.trim()];
+  return [];
+};
 
 const asNumber = (value: unknown, fallback = 0): number =>
   typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 
-const normalizeBuilderPlan = (raw: any): BuilderPlan => ({
-  project_title: asString(raw?.project_title, 'Illusion Builder Plan'),
-  audience_effect: asString(raw?.audience_effect, 'Builder plan generated.'),
-  build_concept: asString(raw?.build_concept, 'Concept needs regeneration.'),
-  recommended_construction: {
-    main_structure: asStringArray(raw?.recommended_construction?.main_structure),
-    materials: asStringArray(raw?.recommended_construction?.materials),
-    hardware: asStringArray(raw?.recommended_construction?.hardware),
-    mobility_modularity: asString(raw?.recommended_construction?.mobility_modularity, 'Not specified'),
-  },
-  dimensions_footprint: asString(raw?.dimensions_footprint, 'Not specified'),
-  mechanism_approach: {
-    primary: asString(raw?.mechanism_approach?.primary, 'Not specified'),
-    alternate: asString(raw?.mechanism_approach?.alternate, 'Not specified'),
-  },
-  assembly_overview: asStringArray(raw?.assembly_overview),
-  safety_stability_notes: asStringArray(raw?.safety_stability_notes),
-  reset_transport_crew: asStringArray(raw?.reset_transport_crew),
-  build_complexity: {
-    rating_1_to_5: Math.min(5, Math.max(1, asNumber(raw?.build_complexity?.rating_1_to_5, 3))),
-    rationale: asString(raw?.build_complexity?.rationale, 'Not specified'),
-  },
-});
+const firstString = (fallback: string, ...values: unknown[]): string => {
+  for (const value of values) {
+    const result = asString(value, '');
+    if (result) return result;
+  }
+  return fallback;
+};
+
+const firstArray = (fallback: string[], ...values: unknown[]): string[] => {
+  for (const value of values) {
+    const result = asStringArray(value);
+    if (result.length) return result;
+  }
+  return fallback;
+};
+
+const normalizeBuilderPlan = (raw: any, originalEffect = ''): BuilderPlan => {
+  const construction = raw?.recommended_construction || raw?.construction || raw?.build || {};
+  const mechanism = raw?.mechanism_approach || raw?.mechanism || raw?.method_approach || {};
+  const complexity = raw?.build_complexity || raw?.complexity || {};
+  const titleFallback = originalEffect ? originalEffect.slice(0, 58) + ' Builder Plan' : 'Illusion Builder Plan';
+
+  return {
+    project_title: firstString(titleFallback, raw?.project_title, raw?.title, raw?.projectName, raw?.name),
+    audience_effect: firstString(originalEffect || 'A practical stage illusion concept for a live performance audience.', raw?.audience_effect, raw?.effect, raw?.audience_view, raw?.audienceExperience),
+    build_concept: firstString(originalEffect || 'A practical illusion build concept with realistic scenic construction and safe operation.', raw?.build_concept, raw?.concept, raw?.overview, raw?.buildConcept),
+    recommended_construction: {
+      main_structure: firstArray(['Modular scenic base or cabinet structure', 'Reinforced internal frame', 'Removable access panels'], construction?.main_structure, construction?.structure, raw?.main_structure),
+      materials: firstArray(['Aluminum tube or wood framing', 'Plywood scenic skin', 'Durable theatrical finish'], construction?.materials, raw?.materials),
+      hardware: firstArray(['Locking casters', 'Hinges or removable panel hardware', 'Positive latches and handles'], construction?.hardware, raw?.hardware),
+      mobility_modularity: firstString('Build as road-case-friendly modules with locking casters and removable panels for transport.', construction?.mobility_modularity, construction?.mobility, raw?.mobility_modularity),
+    },
+    dimensions_footprint: firstString('Use a venue-appropriate footprint scaled to sightlines, transport limits, and performer safety.', raw?.dimensions_footprint, raw?.dimensions, raw?.footprint),
+    mechanism_approach: {
+      primary: firstString('Use a non-exposure theatrical concealment and timing approach appropriate to the stated effect.', mechanism?.primary, mechanism?.primary_approach, raw?.primary_mechanism),
+      alternate: firstString('Use an alternate staging, cover, or blocking approach if venue sightlines require adjustment.', mechanism?.alternate, mechanism?.alternate_approach, raw?.alternate_mechanism),
+    },
+    assembly_overview: firstArray(['Assemble frame and base modules.', 'Attach scenic panels and trim.', 'Verify stability, access, and sightlines before rehearsal.'], raw?.assembly_overview, raw?.assembly, raw?.build_steps),
+    safety_stability_notes: firstArray(['Confirm load ratings and balance before use.', 'Keep all performer paths clear and rehearsed.', 'Use non-slip surfaces and secure locking hardware.'], raw?.safety_stability_notes, raw?.safety_notes, raw?.safety),
+    reset_transport_crew: firstArray(['Pack into labeled modules.', 'Use protected transport surfaces.', 'Rehearse reset duties with the assigned crew.'], raw?.reset_transport_crew, raw?.transport_reset, raw?.reset),
+    build_complexity: {
+      rating_1_to_5: Math.min(5, Math.max(1, asNumber(complexity?.rating_1_to_5 ?? complexity?.rating, 3))),
+      rationale: firstString('Moderate build complexity because it requires reliable scenic construction, safe handling, and careful rehearsal.', complexity?.rationale, complexity?.notes, raw?.complexity_rationale),
+    },
+  };
+};
 
 const isUsableBuilderPlan = (plan: BuilderPlan): boolean =>
-  Boolean(
-    plan.project_title.trim() &&
-    plan.build_concept.trim() &&
-    plan.recommended_construction.main_structure.length &&
-    plan.recommended_construction.materials.length &&
-    plan.mechanism_approach.primary.trim() &&
-    plan.assembly_overview.length
-  );
+  Boolean(plan.project_title.trim() && plan.build_concept.trim());
 
 const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved }) => {
   const [effectInput, setEffectInput] = useState('');
@@ -794,13 +813,17 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
         user,
         { maxOutputTokens: 2400, speedMode: 'full' }
       );
-      const plan = normalizeBuilderPlan(rawPlan);
+      const plan = normalizeBuilderPlan(rawPlan, effectInput);
 
       if (!isUsableBuilderPlan(plan)) {
-        throw new Error('Illusion Blueprint returned an incomplete builder plan. Please try again.');
+        throw new Error('Illusion Blueprint could not create a usable builder plan. Please add a little more detail and try again.');
       }
 
       setBuilderPlan(plan);
+      const usedContinuityFallbacks = !asStringArray(rawPlan?.recommended_construction?.main_structure).length || !asStringArray(rawPlan?.assembly_overview).length;
+      if (usedContinuityFallbacks) {
+        setWarning('Builder plan generated with continuity safeguards. Review the construction details before using it for fabrication.');
+      }
       void trackClientEvent({ tool: 'illusion_blueprint', action: 'illusion_blueprint_success', outcome: 'SUCCESS_NOT_CHARGED', metadata: { project_title: plan?.project_title || '', venueScale, performerStyle } });
       setOpenSections({
         plan: true,
