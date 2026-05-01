@@ -176,11 +176,12 @@ Rules:
 - If any part of the concept is not realistically buildable within the stated venue, crew, budget, transport, or safety constraints, revise it to the most practical version before returning the plan.
 - Do NOT propose effects, dimensions, or mechanisms that require hidden infrastructure, trap access, overhead rigging, or external stage modifications unless the user explicitly states those are available.
 
-- Build complexity must be a number from 1 to 5.`;
+- Build complexity must be a number from 1 to 5.
+- English language only. Return every title, label, section, note, and generated text field in clear English. Do not use non-English words unless they are part of a proper noun supplied by the user.`;
 
-const IMAGE_STYLE_GUIDE = `Create theatrical but practical illusion concept imagery. Show the prop or illusion unit clearly. Prioritize believable materials, clean stage presentation, builder-oriented visibility, fabrication realism, and touring-feasible scale. No text overlays. No exploded diagrams. No impossible sci-fi visuals, floating structures, fantasy physics, or magical energy effects.`;
+const IMAGE_STYLE_GUIDE = `Create theatrical but practical illusion concept imagery. Show the prop or illusion unit clearly. Prioritize believable materials, clean stage presentation, builder-oriented visibility, fabrication realism, and touring-feasible scale. English language only across the entire image. Do not include non-English words, pseudo-foreign writing, random glyphs, or unreadable invented text. If any visible labels or signs appear, they must be simple English words only; otherwise use no text overlays. No exploded diagrams. No impossible sci-fi visuals, floating structures, fantasy physics, or magical energy effects.`;
 
-const BLUEPRINT_STYLE_GUIDE = `Create technical blueprint-style drawings for a stage illusion prop. Show practical construction-oriented diagram views with clean white or light blue linework on a dark blueprint background. Include front elevation, side elevation, and cutaway or mechanism-style layout where helpful. Emphasize labeled structural sections, dimensional feel, fabrication logic, workshop realism, and believable real-world construction. No text paragraphs. No poster art. No glossy rendering. Make it look like an illusion builder's technical concept sheet.`;
+const BLUEPRINT_STYLE_GUIDE = `Create technical blueprint-style drawings for a stage illusion prop. Show practical construction-oriented diagram views with clean white or light blue linework on a dark blueprint background. Include front elevation, side elevation, and cutaway or mechanism-style layout where helpful. Emphasize structural sections, dimensional feel, fabrication logic, workshop realism, and believable real-world construction. English language only across the entire drawing. Any visible labels must be short, clear English words such as FRONT, SIDE, BASE, PANEL, FRAME, WHEEL, HINGE, TRIM, ACCESS, SUPPORT, PLATFORM, TOP, LEFT, RIGHT. Do not use non-English writing, pseudo-foreign characters, random glyphs, or unreadable invented labels. No text paragraphs. No poster art. No glossy rendering. Make it look like an illusion builder's technical concept sheet.`;
 
 const LoadingIndicator: React.FC<{ stage: string }> = ({ stage }) => (
   <div className="flex flex-col items-center justify-center text-center p-8 h-full">
@@ -778,6 +779,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
       generationContext,
       '',
       'Return a compact, practical plan for a real builder/fabricator.',
+      'Use English language only throughout every field of the plan.',
       'The mechanism section must stay non-exposure and principle-based only.',
       'Include only 1 primary and 1 alternate mechanism direction.',
       'Keep all sections concise and reliable.',
@@ -828,6 +830,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
         `Primary mechanism direction: ${plan.mechanism_approach.primary}`,
         `Mobility / modularity: ${plan.recommended_construction.mobility_modularity}`,
         `Blueprint continuity requirement: Every drawing must be a technical view of the same ${visualAnchor}; do not introduce unrelated boxes, tables, cabinets, or platforms unless they are part of this plan.`,
+        'Language requirement: English only. If labels appear inside the drawing, they must be readable English labels. Avoid foreign words, pseudo-language, random symbols, and garbled text.',
         'Create technical drawing style images suitable for illusion build planning.',
       ].join('\n');
 
@@ -856,6 +859,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
         `Venue / scale: ${venueScale}`,
         `Performer style: ${performerStyle}`,
         `Concept continuity requirement: Produce three distinct visual variations of the same ${visualAnchor}. Vary finish, trim, framing, and staging only; do not change the illusion type or replace it with unrelated props.`,
+        'Language requirement: English only. Any signage, labels, notes, or visible words inside the concept image must be clear English. Prefer no text if clean English text cannot be rendered reliably.',
         'Produce three distinct but clearly related design directions that match the builder plan above.',
       ].join('\n');
 
