@@ -39,225 +39,78 @@ type EnrichedFeature = HelpFeature & {
 };
 
 const features: HelpFeature[] = [
-    {
-        icon: WandIcon,
-        title: 'Effect Generator',
-        description: 'Generate new magic trick ideas. Provide details about your show (title, audience, style), and the AI will generate a complete, structured show concept.',
-        proTip: 'Be specific about the venue and audience. The more details you give, the more tailored and usable the output becomes.'
-    },
-    {
-        icon: LightbulbIcon,
-        title: 'Innovation Engine',
-        description: 'A guided brainstorming workspace to develop fresh concepts with structured prompts and iteration.',
-        proTip: 'Start broad, then run a second pass focusing on constraints (props, angles, venue) to tighten the idea.'
-    },
-    {
-        icon: MicrophoneIcon,
-        title: 'Live Rehearsal',
-        description: 'Practice your patter and get real-time feedback on clarity, pacing, and audience engagement.',
-        proTip: 'Do one run “slow and clear” first. Then do a second run at performance speed and compare notes.'
-    },
-    {
-        icon: VideoIcon,
-        title: 'Video Rehearsal',
-        description: 'Upload or record rehearsal video for analysis and actionable improvement suggestions.',
-        proTip: 'Use a tripod and record a full-body angle. Good lighting and clear audio dramatically improves feedback.'
-    },
-    {
-        icon: ImageIcon,
-        title: 'Image Generator',
-        description: 'Create themed images for posters, social posts, show flyers, and promotional artwork.',
-        proTip: 'Include the style (“vintage circus poster”, “clean modern flyer”), aspect ratio, and 2–3 key colors.'
-    },
-    {
-        icon: BookmarkIcon,
-        title: 'Saved Ideas',
-        description: 'Your personal library for generated content. Save, revisit, and refine ideas over time.',
-        proTip: 'Use consistent naming (date + show + effect) so you can find items quickly later.'
-    },
-    {
-        icon: ChecklistIcon,
-        title: 'Prop Checklists',
-        description: 'Create reusable show checklists so you never forget a prop, costume piece, or backup item.',
-        proTip: 'Add a “Plan B” row for each critical item (extra deck, spare batteries, backup gimmick).'
-    },
-    {
-        icon: StageCurtainsIcon,
-        title: 'Show Planner',
-        description: 'Build a show plan with tasks and subtasks so rehearsal and production stays organized.',
-        proTip: 'Break tasks into “Prep”, “Rehearsal”, and “Day-of” sections so nothing gets missed.'
-    },
-    {
-        icon: FileTextIcon,
-        title: 'Patter Engine',
-        description: 'Generate and refine script/patter for your effects. Save versions as you iterate.',
-        proTip: 'Ask for two styles: “family-friendly” and “edgy/late-night” then blend what you like.'
-    },
-    {
-        icon: CameraIcon,
-        title: 'Identify a Trick',
-        description: 'Describe what you saw (or upload an image) and get likely matches, method families, and search suggestions.',
-        proTip: 'Include what the audience believes happened, not what you think the method is.'
-    },
-    {
-        icon: UsersIcon,
-        title: 'Community',
-        description: 'Explore clubs, conventions, and resources to connect with other magicians.',
-        proTip: 'Prefer official links. If a listing looks outdated, verify the club’s current home page.'
-    },
-    {
-        icon: NewspaperIcon,
-        title: 'Magic Wire',
-        description: 'A curated feed of magic-related news and ideas to spark creativity and keep you current.',
-        proTip: 'Use it for weekly inspiration: pick one headline and turn it into an effect premise.'
-    },
-    {
-        icon: BookIcon,
-        title: 'Publications',
-        description: 'Browse recommended books, magazines, and resources to level up your knowledge.',
-        proTip: 'When you find a book you like, take notes in Saved Ideas to capture what you want to try.'
-    },
-    {
-        icon: ViewGridIcon,
-        title: 'Global Search',
-        description: 'Search across tools and saved content quickly so you can find what you need mid-planning.',
-        proTip: 'Search by prop names (“ring”, “rope”) or venues (“school”, “corporate”) for faster recall.'
-    },
-    {
-        icon: DatabaseIcon,
-        title: 'Magic Dictionary',
-        description: 'Look up terms, effects, and concepts. Helpful when learning new branches of magic.',
-        proTip: 'Click related terms to expand your understanding and build a study trail.'
-    },
-    {
-        icon: DollarSignIcon,
-        title: 'Client Management',
-        description: 'Track clients, notes, follow-ups, and gigs so you always know who to contact next.',
-        proTip: 'After every gig, log 2–3 notes: what worked, what didn’t, and the next follow-up date.'
-    },
-    {
-        icon: FileTextIcon,
-        title: 'Contract Generator',
-        description: 'Generate a simple performance agreement template you can tailor for each event.',
-        proTip: 'Always include: payment terms, arrival time, performance duration, and cancellation policy.'
-    },
-    {
-        icon: MegaphoneIcon,
-        title: 'Marketing Campaign',
-        description: 'Generate promotional copy and campaign ideas for social, email, and local outreach.',
-        proTip: 'Specify the channel (“Facebook event”, “email blast”, “poster copy”) for best results.'
-    },
-    {
-        icon: AnalyticsIcon,
-        title: 'Performance Analytics',
-        description: 'Analyze your show feedback trends and track improvement over time.',
-        proTip: 'Pick one metric (clarity, pacing, audience reactions) and focus on it for a month.'
-    },
-    {
-        icon: UsersCogIcon,
-        title: 'Persona Simulator',
-        description: 'Test your show against different audience types to anticipate reactions and refine scripting.',
-        proTip: 'Run the same effect for 2–3 personas (kids, corporate, seniors) and compare notes.'
-    },
-    {
-        icon: BlueprintIcon,
-        title: 'Illusion Blueprint',
-        description: 'High-level planning and safety-minded thinking for staging illusions and large props.',
-        proTip: 'Keep it conceptual—focus on staging, safety, angles, and logistics rather than secret construction.'
-    },
-    {
-        icon: TutorIcon,
-        title: 'Magic Theory Tutor',
-        description: 'Learn foundational theory: misdirection, structure, scripting, and audience management.',
-        proTip: 'Treat theory like reps: read a concept, then apply it to one trick you already do.'
-    },
-    {
-        icon: ShieldIcon,
-        title: 'Member Management',
-        description: 'Manage account-level settings and access.',
-        proTip: 'If something looks locked unexpectedly, log out/in and confirm your current tier.'
-    },
-    {
-        icon: ClockIcon,
-        title: 'Usage Limits',
-        description: 'Some AI tools include daily and per-minute limits to keep costs predictable and the app stable.',
-        proTip: 'If you hit a per-minute limit, wait a moment and retry. Daily limits reset each day.'
-    }
+    { icon: WandIcon, title: 'Effect Generator', description: 'Create structured magic effect ideas from your theme, props, audience, and performance setting. A strong first stop when you need a new routine or fresh premise.', proTip: 'Include venue, audience, available props, reset needs, and performance tone. Specific constraints produce more practical routines.' },
+    { icon: FileTextIcon, title: 'Patter Engine', description: 'Generate and refine scripts, lines, beats, introductions, transitions, and presentation styles for routines you already perform or ideas you are developing.', proTip: 'Ask for two contrasting versions first, such as warm/family-friendly and mysterious/dramatic, then combine the strongest lines.' },
+    { icon: ImageIcon, title: 'Visual Brainstorm', description: 'Generate magic-related visual concepts for posters, props, stages, social posts, theatrical moods, and creative inspiration.', proTip: 'Mention the exact magical subject, setting, style, and whether you want practical prop realism or promotional artwork.' },
+    { icon: CameraIcon, title: 'Identify a Trick', description: 'Upload an image or describe something you saw to receive likely effect families, research terms, and safe search suggestions without exposing secrets.', proTip: 'Describe what the audience sees and remembers, not what you assume the method is.' },
+    { icon: ChecklistIcon, title: 'Prop Generator & Checklist', description: 'Design practical performance props, generate artist renderings, capture material constraints, and turn prop concepts into build-ready checklists.', proTip: 'Provide prop type, materials, budget, transport limits, reset speed, venue, and audience. The rendering and plan will stay better matched.' },
+    { icon: BlueprintIcon, title: 'Illusion Blueprint', description: 'Create high-level, English-language illusion concepts with staging, safety, sightline, transport, and visual planning support.', proTip: 'Use it for concept direction and production planning. Keep real fabrication, engineering, and safety review in the hands of qualified builders.' },
+    { icon: StageCurtainsIcon, title: 'Director Mode', description: 'Build full show structure with audience-aware pacing, transitions, narrative arcs, openers, middles, closers, and rehearsal priorities.', proTip: 'Give the show length, audience type, venue, style, and must-include routines to get a more coherent show flow.' },
+    { icon: LightbulbIcon, title: 'Innovation Engine', description: 'A guided brainstorming workspace to refresh old material, combine ideas, and develop new presentations around practical constraints.', proTip: 'Run one broad creative pass, then a second pass focused only on angles, reset, pocket management, and audience handling.' },
+    { icon: UsersCogIcon, title: "Assistant's Studio", description: 'Plan assistant choreography, cues, blocking, entrances, exits, handoffs, and on-stage partnership details.', proTip: 'Write cue words and physical positions clearly so both performer and assistant can rehearse the same map.' },
+    { icon: BookIcon, title: 'Gospel Magic Assistant', description: 'Develop respectful gospel magic presentations, lesson connections, and audience-appropriate framing for ministry settings.', proTip: 'State the age group, message theme, venue, and desired tone before generating material.' },
+    { icon: TutorIcon, title: 'Mentalism Assistant', description: 'Structure mentalism presentations, scripting, reveals, audience management, and theatrical framing in a safe, performance-focused way.', proTip: 'Focus prompts on presentation, fairness, clarity, and audience experience rather than secret methods.' },
+    { icon: MicrophoneIcon, title: 'Live Rehearsal', description: 'Record multiple takes, review transcripts, and receive feedback on pacing, clarity, confidence, and performance structure.', proTip: 'Do several shorter takes instead of one long run. Compare openings, pauses, and final lines across takes.' },
+    { icon: VideoIcon, title: 'Video Rehearsal', description: 'Upload or record rehearsal video for analysis of blocking, body language, clarity, audience focus, and performance improvement opportunities.', proTip: 'Record from the audience viewpoint with clear light and sound. Full-body framing helps the feedback become more useful.' },
+    { icon: ShieldIcon, title: 'Angle & Risk Analysis', description: 'Review a routine for sightlines, audience management, reset risk, prop handling, blocking, and practical show conditions.', proTip: 'Include stage shape, audience position, lighting, helpers, and whether spectators may stand or surround you.' },
+    { icon: UsersCogIcon, title: 'Persona Simulator', description: 'Test material against simulated audience types such as skeptical adults, enthusiastic children, distracted corporate guests, or hecklers.', proTip: 'Run the same script against two or three personas and look for lines that confuse, drag, or invite interruptions.' },
+    { icon: BookmarkIcon, title: 'Saved Ideas', description: 'Store generated routines, scripts, prop ideas, show notes, and revisions so your best material stays organized and easy to revisit.', proTip: 'Save promising drafts early. You can refine later, but lost ideas are hard to recreate exactly.' },
+    { icon: StageCurtainsIcon, title: 'Show Planner', description: 'Organize shows, setlists, tasks, subtasks, props, rehearsal steps, deadlines, and preparation workflows.', proTip: 'Break each show into prep, rehearsal, packing, travel, setup, performance, and follow-up tasks.' },
+    { icon: UsersIcon, title: 'Show Feedback', description: 'Collect and review audience or client feedback so you can see what landed, what confused people, and what needs refinement.', proTip: 'Look for repeated comments across shows. One isolated comment is interesting; repeated comments are actionable.' },
+    { icon: AnalyticsIcon, title: 'Performance Analytics', description: 'Review feedback trends, usage patterns, audience reactions, and performance improvement signals over time.', proTip: 'Pick one improvement target per month, such as clearer openings, stronger closers, or better pacing.' },
+    { icon: DollarSignIcon, title: 'Client Management', description: 'Track clients, notes, contact details, event context, follow-ups, and gig-related business information.', proTip: 'After every performance, record what worked, what the client cared about, and when to follow up.' },
+    { icon: FileTextIcon, title: 'Contract Generator', description: 'Generate performance agreement templates that can be customized for event details, expectations, payment terms, and cancellation language.', proTip: 'Always review generated contracts before use and adapt them to your local requirements and business practices.' },
+    { icon: MegaphoneIcon, title: 'Marketing Campaign', description: 'Create promotional copy, email ideas, social posts, flyers, positioning statements, and campaign angles for your magic business.', proTip: 'Specify the exact channel and audience, such as corporate holiday party email or family birthday Facebook post.' },
+    { icon: NewspaperIcon, title: 'Magic Wire', description: 'Browse magic-related news and inspiration to stay current and spark creative thinking.', proTip: 'Turn one headline or historical note into a presentation hook for an existing routine.' },
+    { icon: BookIcon, title: 'Publications', description: 'Explore recommended books, magazines, and learning resources to deepen your study of magic.', proTip: 'When you find a useful source, save a note about how you might apply it to your own show.' },
+    { icon: DatabaseIcon, title: 'Magic Dictionary', description: 'Look up magic terms, concepts, effect categories, and study references while learning or planning.', proTip: 'Search related terms after each lookup to build a stronger understanding of the concept.' },
+    { icon: ViewGridIcon, title: 'Global Search', description: 'Search across tools and saved content so you can quickly find ideas, notes, shows, clients, and planning details.', proTip: 'Try searching by prop, venue, audience, show title, or theme.' },
+    { icon: UsersIcon, title: 'Community', description: 'Find clubs, conventions, resources, and community-oriented magic links.', proTip: 'Verify dates and official links before planning travel or contacting an organization.' },
+    { icon: ShieldIcon, title: 'Member Management', description: 'Review account, plan, trial, and access-related information for your Magic AI Wizard membership.', proTip: 'If access looks wrong after upgrading or confirming email, log out and back in to refresh your account status.' },
+    { icon: ClockIcon, title: 'Usage Limits', description: 'See how daily, monthly, and per-minute limits work for AI tools and Live Rehearsal so the app remains stable for everyone.', proTip: 'If you hit a short burst limit, wait a minute and retry. Daily limits reset automatically.' }
 ];
 
 function inferCategory(title: string): { category: HelpCategory; view?: string } {
     const t = title.toLowerCase();
-    // direct view mapping (matches types.ts MagicianTab/MagicianView)
     const viewMap: Record<string, string> = {
-        'effect generator': 'effect-generator',
-        'show planner': 'show-planner',
-        'identify a trick': 'identify',
-        'patter engine': 'patter-engine',
-        'live rehearsal': 'live-rehearsal',
-        'video rehearsal': 'video-rehearsal',
-        'saved ideas': 'saved-ideas',
-        'prop checklists': 'prop-checklists',
-        'magic wire': 'magic-wire',
-        'publications': 'publications',
-        'community': 'community',
-        'global search': 'global-search',
-        'magic dictionary': 'magic-dictionary',
-        'marketing campaign': 'marketing-campaign',
-        'contract generator': 'contract-generator',
-        'client management': 'client-management',
-        'performance analytics': 'performance-analytics',
-        'persona simulator': 'persona-simulator',
-        'illusion blueprint': 'illusion-blueprint',
-        'magic theory tutor': 'magic-theory-tutor',
-        'member management': 'member-management'
+        'effect generator': 'effect-generator', 'patter engine': 'patter-engine', 'visual brainstorm': 'visual-brainstorm', 'identify a trick': 'identify',
+        'prop generator & checklist': 'prop-checklists', 'illusion blueprint': 'illusion-blueprint', 'director mode': 'director-mode', 'innovation engine': 'effect-generator',
+        "assistant's studio": 'assistant-studio', 'gospel magic assistant': 'gospel-magic-assistant', 'mentalism assistant': 'mentalism-assistant',
+        'live rehearsal': 'live-rehearsal', 'video rehearsal': 'video-rehearsal', 'angle & risk analysis': 'angle-risk', 'persona simulator': 'persona-simulator',
+        'saved ideas': 'saved-ideas', 'show planner': 'show-planner', 'show feedback': 'show-feedback', 'performance analytics': 'performance-analytics',
+        'client management': 'client-management', 'contract generator': 'contract-generator', 'marketing campaign': 'marketing-campaign', 'magic wire': 'magic-wire',
+        'publications': 'publications', 'magic dictionary': 'magic-dictionary', 'global search': 'global-search', 'community': 'community', 'member management': 'member-management', 'usage limits': 'member-management'
     };
-
     const view = viewMap[t] ?? undefined;
-
-    if (t.includes('rehears')) return { category: 'Rehearse', view };
-    if (t.includes('patter') || t.includes('effect') || t.includes('innovation') || t.includes('image')) return { category: 'Create', view };
-    if (t.includes('show planner') || t.includes('checklist') || t.includes('saved')) return { category: 'Plan & Organize', view };
+    if (t.includes('rehears') || t.includes('angle') || t.includes('persona')) return { category: 'Rehearse', view };
+    if (t.includes('patter') || t.includes('effect') || t.includes('innovation') || t.includes('image') || t.includes('visual') || t.includes('identify') || t.includes('prop generator') || t.includes('blueprint') || t.includes('director') || t.includes('assistant') || t.includes('gospel') || t.includes('mentalism')) return { category: 'Create', view };
+    if (t.includes('show planner') || t.includes('checklist') || t.includes('saved') || t.includes('feedback')) return { category: 'Plan & Organize', view };
     if (t.includes('client') || t.includes('contract') || t.includes('marketing') || t.includes('analytics')) return { category: 'Business', view };
-    if (t.includes('theory') || t.includes('dictionary') || t.includes('publication')) return { category: 'Learn', view };
+    if (t.includes('theory') || t.includes('dictionary') || t.includes('publication') || t.includes('wire')) return { category: 'Learn', view };
     if (t.includes('community')) return { category: 'Community', view };
     if (t.includes('search')) return { category: 'Search', view };
     if (t.includes('member') || t.includes('usage')) return { category: 'Account', view };
-
     return { category: 'Other', view };
 }
 
 const workflows = [
-    {
-        title: 'Build a new routine',
-        icon: WandIcon,
-        steps: [
-            { label: 'Generate an effect idea', view: 'effect-generator' },
-            { label: 'Write patter / script', view: 'patter-engine' },
-            { label: 'Save versions you like', view: 'saved-ideas' },
-            { label: 'Create a prop checklist', view: 'prop-checklists' },
-            { label: 'Rehearse and refine', view: 'live-rehearsal' }
-        ]
-    },
-    {
-        title: 'Prepare for a gig',
-        icon: StageCurtainsIcon,
-        steps: [
-            { label: 'Create your show plan', view: 'show-planner' },
-            { label: 'Generate a contract template', view: 'contract-generator' },
-            { label: 'Build your packing list', view: 'prop-checklists' },
-            { label: 'Run a final rehearsal', view: 'video-rehearsal' }
-        ]
-    },
-    {
-        title: 'Learn something new',
-        icon: BookIcon,
-        steps: [
-            { label: 'Look up terms as you study', view: 'magic-dictionary' },
-            { label: 'Read recommended resources', view: 'publications' },
-            { label: 'Apply one idea immediately', view: 'saved-ideas' }
-        ]
-    }
+    { title: 'First 5 minutes', icon: StarIcon, steps: [
+        { label: 'Generate your first effect idea', view: 'effect-generator' }, { label: 'Save one idea you like', view: 'saved-ideas' }, { label: 'Write a short patter draft', view: 'patter-engine' }, { label: 'Create a prop or checklist', view: 'prop-checklists' }, { label: 'Try one Live Rehearsal take', view: 'live-rehearsal' }
+    ] },
+    { title: 'Build a new routine', icon: WandIcon, steps: [
+        { label: 'Generate an effect idea', view: 'effect-generator' }, { label: 'Brainstorm visuals or props', view: 'visual-brainstorm' }, { label: 'Write patter / script', view: 'patter-engine' }, { label: 'Check angles and risks', view: 'angle-risk' }, { label: 'Rehearse and refine', view: 'live-rehearsal' }
+    ] },
+    { title: 'Prepare for a gig', icon: StageCurtainsIcon, steps: [
+        { label: 'Create your show plan', view: 'show-planner' }, { label: 'Generate a contract template', view: 'contract-generator' }, { label: 'Build your packing list', view: 'prop-checklists' }, { label: 'Create marketing copy', view: 'marketing-campaign' }, { label: 'Run a final rehearsal', view: 'video-rehearsal' }
+    ] },
+    { title: 'Design something visual', icon: BlueprintIcon, steps: [
+        { label: 'Create an illusion concept', view: 'illusion-blueprint' }, { label: 'Generate a prop rendering', view: 'prop-checklists' }, { label: 'Brainstorm promotional art', view: 'visual-brainstorm' }, { label: 'Save the strongest version', view: 'saved-ideas' }
+    ] },
+    { title: 'Learn something new', icon: BookIcon, steps: [
+        { label: 'Look up terms as you study', view: 'magic-dictionary' }, { label: 'Read recommended resources', view: 'publications' }, { label: 'Check Magic Wire for ideas', view: 'magic-wire' }, { label: 'Apply one idea immediately', view: 'saved-ideas' }
+    ] }
 ] as const;
+
 
 const HelpModal: React.FC<HelpModalProps> = ({ onClose, onNavigate, contextView }) => {
     const [query, setQuery] = useState('');
@@ -308,11 +161,11 @@ const HelpModal: React.FC<HelpModalProps> = ({ onClose, onNavigate, contextView 
 
     return (
         <div
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in"
+            className="fixed inset-0 z-[9999] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
             onClick={onClose}
         >
             <div
-                className="w-full max-w-5xl h-[92vh] bg-slate-800/90 border border-slate-600 rounded-lg shadow-2xl shadow-purple-900/40 flex flex-col"
+                className="relative z-[10000] w-full max-w-6xl h-[92vh] bg-slate-800/95 border border-slate-600 rounded-lg shadow-2xl shadow-purple-900/40 flex flex-col"
                 onClick={(e) => e.stopPropagation()}
                 role="dialog"
                 aria-modal="true"
@@ -343,7 +196,7 @@ const HelpModal: React.FC<HelpModalProps> = ({ onClose, onNavigate, contextView 
                             <h3 className="text-lg font-bold text-yellow-300">Getting Started</h3>
                         </div>
 
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
                             {workflows.map((wf) => {
                                 const Icon = wf.icon;
                                 return (
