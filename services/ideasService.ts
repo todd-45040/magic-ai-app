@@ -217,6 +217,11 @@ export async function saveIdea(
 
   if (error) throw error;
   const savedIdea = mapRowToIdea(data as DbIdeaRow);
+  try {
+    localStorage.setItem('magicAiWizard:lastSavedIdeaId', savedIdea.id);
+  } catch {
+    // localStorage may be unavailable in non-browser contexts.
+  }
   void logUserActivity({
     tool_name: String(savedIdea.type || 'idea'),
     event_type: 'idea_saved',

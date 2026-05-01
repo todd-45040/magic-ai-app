@@ -5,6 +5,10 @@ import { getShows, createShow, updateShow, addTaskToShow } from '../services/sho
 import type { SavedIdea, Transcription, IdeaType, IdeaCategory, Show, AiSparkAction } from '../types';
 import { BookmarkIcon, TrashIcon, ShareIcon, MicrophoneIcon, PrintIcon, FileTextIcon, ImageIcon, PencilIcon, WandIcon, CrossIcon } from './icons';
 import ShareButton from './ShareButton';
+import NextStepPanel from './NextStepPanel';
+import RoutineTracker from './RoutineTracker';
+import ResumePanel from './ResumePanel';
+import { FEATURE_FLAGS } from '../featureFlags';
 
 type MawIdeaV2 = {
     format: string;
@@ -620,6 +624,9 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
     const [searchQuery, setSearchQuery] = useState('');
     const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'favorites' | 'recentlyViewed'>('newest');
     const [viewMode, setViewMode] = useState<'grid' | 'compact'>('grid');
+    const [dismissedResumeId, setDismissedResumeId] = useState<string | null>(() => {
+        try { return localStorage.getItem('savedIdeas:dismissedResumeId'); } catch { return null; }
+    });
 
     const [smartTab, setSmartTab] = useState<'all' | 'recent' | 'starred' | 'used' | 'unused' | 'ai'>('all');
     const [pinnedIds, setPinnedIds] = useState<string[]>(() => {
@@ -767,6 +774,13 @@ const [lastOpenedMap, setLastOpenedMap] = useState<Record<string, number>>(() =>
     useEffect(() => {
         try { localStorage.setItem('savedIdeas:lastOpened', JSON.stringify(lastOpenedMap)); } catch {}
     }, [lastOpenedMap]);
+
+    useEffect(() => {
+        try {
+            if (dismissedResumeId) localStorage.setItem('savedIdeas:dismissedResumeId', dismissedResumeId);
+            else localStorage.removeItem('savedIdeas:dismissedResumeId');
+        } catch {}
+    }, [dismissedResumeId]);
 
 
     useEffect(() => {
@@ -1257,6 +1271,22 @@ const openPromoteModal = (idea: SavedIdea) => {
     const favoriteIdeas = useMemo(() => filteredIdeas.filter((idea) => isStarred(idea.id)), [filteredIdeas, starredIds]);
 
 
+    const newestIdea = useMemo(() => {
+        return ideas
+            .filter((idea) => !ideaIsArchived(idea))
+            .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))[0] || null;
+    }, [ideas]);
+
+    const resumeIdea = useMemo(() => {
+        if (!ideas.length) return null;
+        let lastId = '';
+        try { lastId = localStorage.getItem('magicAiWizard:lastSavedIdeaId') || ''; } catch {}
+        const candidate = lastId ? ideas.find((idea) => idea.id === lastId) : null;
+        return candidate || newestIdea;
+    }, [ideas, newestIdea]);
+
+    const showResumePanel = Boolean(FEATURE_FLAGS.activationFlowV1 && resumeIdea && resumeIdea.id !== dismissedResumeId);
+
     const mainSectionGridClass = viewMode === 'compact'
         ? 'grid grid-cols-1 2xl:grid-cols-2 gap-4'
         : 'grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-5';
@@ -1471,6 +1501,30 @@ const openPromoteModal = (idea: SavedIdea) => {
                 <BookmarkIcon className="w-8 h-8 text-purple-400" />
                 <h2 className="text-2xl font-bold text-yellow-400 font-cinzel">My Saved Ideas</h2>
             </div>
+
+            {FEATURE_FLAGS.activationFlowV1 && ideas.length > 0 ? (
+                <RoutineTracker ideas={ideas} shows={shows} />
+            ) : null}
+
+            {showResumePanel && resumeIdea ? (
+                <ResumePanel
+                    idea={resumeIdea}
+                    title={getIdeaDisplay(resumeIdea).title || resumeIdea.title || 'Saved Idea'}
+                    onOpen={openIdeaView}
+                    onDismiss={() => setDismissedResumeId(resumeIdea.id)}
+                />
+            ) : null}
+
+            {FEATURE_FLAGS.activationFlowV1 && newestIdea ? (
+                <NextStepPanel
+                    idea={newestIdea}
+                    title={getIdeaDisplay(newestIdea).title || newestIdea.title || 'Saved Idea'}
+                    body={getIdeaDisplay(newestIdea).body || newestIdea.content || ''}
+                    onAiSpark={onAiSpark}
+                    onAddToShow={openAddToShowModal}
+                    onPromoteToRoutine={openPromoteModal}
+                />
+            ) : null}
 
             {/* Sticky Filters */}
             <div className="sticky top-0 z-20 -mx-4 md:-mx-6 px-4 md:px-6 py-3 mb-5 bg-slate-950/80 backdrop-blur border-b border-slate-800">
