@@ -157,18 +157,30 @@ export async function aiChat(prompt: string, system?: string) {
   return unwrapAiText(res);
 }
 
-/** aiJson(prompt, system?, schemaName?) → structured JSON response */
+export type AiJsonConfig = {
+  schemaName?: string;
+  responseSchema?: Record<string, unknown>;
+  temperature?: number;
+  maxOutputTokens?: number;
+};
+
+/** aiJson(prompt, system?, config?) → structured JSON response */
 export async function aiJson<T = unknown>(
   prompt: string,
   system?: string,
-  schemaName?: string
+  configOrSchemaName?: string | AiJsonConfig
 ) {
+  const config: AiJsonConfig | undefined =
+    typeof configOrSchemaName === 'string'
+      ? { schemaName: configOrSchemaName }
+      : configOrSchemaName;
+
   const res = await safeFetchJson<{ json: T }>("/api/ai/json", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       messages: buildMessages(prompt, system),
-      config: schemaName ? { schemaName } : undefined,
+      config,
     }),
   });
 

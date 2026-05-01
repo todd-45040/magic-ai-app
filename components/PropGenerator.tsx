@@ -58,6 +58,45 @@ const demoInputsList = [
   },
 ] as const;
 
+const propConceptResponseSchema = {
+  type: 'object',
+  properties: {
+    propName: { type: 'string' },
+    conceptSummary: { type: 'string' },
+    performanceUse: { type: 'string' },
+    constructionIdea: { type: 'string' },
+    materials: { type: 'array', items: { type: 'string' } },
+    estimatedCost: { type: 'string' },
+    transportNotes: { type: 'string' },
+    resetSpeed: { type: 'string' },
+    safetyNotes: { type: 'array', items: { type: 'string' } },
+    angleNotes: { type: 'array', items: { type: 'string' } },
+  },
+  required: [
+    'propName',
+    'conceptSummary',
+    'performanceUse',
+    'constructionIdea',
+    'materials',
+    'estimatedCost',
+    'transportNotes',
+    'resetSpeed',
+    'safetyNotes',
+    'angleNotes',
+  ],
+} as const;
+
+const propBuildInstructionsResponseSchema = {
+  type: 'object',
+  properties: {
+    toolsRequired: { type: 'array', items: { type: 'string' } },
+    constructionSteps: { type: 'array', items: { type: 'string' } },
+    estimatedBuildTime: { type: 'string' },
+    difficultyRating: { type: 'string' },
+  },
+  required: ['toolsRequired', 'constructionSteps', 'estimatedBuildTime', 'difficultyRating'],
+} as const;
+
 function sanitizeConcept(raw: any): PropConcept {
   const list = (value: any) => Array.isArray(value) ? value.map((item) => String(item).trim()).filter(Boolean) : [];
   const build = raw?.buildInstructions && typeof raw.buildInstructions === 'object' ? {
@@ -196,7 +235,11 @@ export default function PropGenerator({ onIdeaSaved, onNavigateShowPlanner, onNa
   }
 
   async function callGenerate<T>(prompt: string): Promise<T> {
-    const response: any = await aiJson<any>(prompt);
+    const response: any = await aiJson<any>(prompt, undefined, {
+      responseSchema: propConceptResponseSchema,
+      temperature: 0.25,
+      maxOutputTokens: 1800,
+    });
 
     if (response?.data?.json) return response.data.json as T;
     if (response?.json) return response.json as T;
@@ -284,7 +327,11 @@ Requirements:
 - Focus on materials prep, fabrication sequence, assembly order, finishing, transport readiness, and rehearsal readiness.
 - Do not include dangerous or illegal instructions.
 `;
-      const build = await callGenerate<PropBuildInstructions>(prompt);
+      const build = await aiJson<PropBuildInstructions>(prompt, undefined, {
+        responseSchema: propBuildInstructionsResponseSchema,
+        temperature: 0.2,
+        maxOutputTokens: 1200,
+      });
       setResult((prev) => prev ? ({ ...prev, buildInstructions: {
         toolsRequired: Array.isArray(build.toolsRequired) ? build.toolsRequired.map(String) : [],
         constructionSteps: Array.isArray(build.constructionSteps) ? build.constructionSteps.map(String) : [],
