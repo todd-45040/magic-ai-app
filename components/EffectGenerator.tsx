@@ -11,6 +11,8 @@ import { addTaskToShow } from '../services/showsService';
 import { isDemoMode } from '../src/demo/demoEngine';
 import { markDemoToolCompleted } from '../services/demoTourService';
 import { trackClientEvent } from '../services/telemetryClient';
+import PipelineProgress from './PipelineProgress';
+import { startPipelineSession, updatePipelineSession, trackPipelineAdvance } from '../services/pipelineSessionService';
 
 type ParsedEffect = {
   name: string;
@@ -425,6 +427,14 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
       const title = String(parsed.title || 'Saved visual concept').trim();
       visualHandoffAppliedRef.current = true;
       setVisualSeed(parsed);
+      const pipeline = startPipelineSession({
+        sourceType: 'image',
+        lastStep: 'image',
+        imageUrl: parsed.imageUrl || null,
+        prompt: parsed.prompt || null,
+        title: title || 'Saved visual concept',
+      });
+      try { window.dispatchEvent(new CustomEvent('maw:pipeline-session-updated', { detail: pipeline })); } catch {}
       setItems([title.slice(0, 80), 'picture frame / image', 'magician presentation', 'audience reveal']);
       setCreativeIntent('Visual Miracle');
       setDifficulty('Intermediate');
@@ -838,6 +848,15 @@ ${lastOutput}`
     try {
       localStorage.setItem(PATTER_ENGINE_PREFILL_KEY, JSON.stringify(payload));
       localStorage.setItem('maw_creative_pipeline_last_stage', JSON.stringify({ stage: 'effect_to_script', ts: Date.now(), title: payload.effectTitle }));
+      trackPipelineAdvance('effect', 'script', visualSeed?.source || 'effect_engine', { effectTitle: payload.effectTitle, effectIndex: index });
+      const pipeline = updatePipelineSession('effect', {
+        sourceType: visualSeed?.source === 'visual_image' ? 'image' : 'effect',
+        title: payload.effectTitle,
+        imageUrl: visualSeed?.imageUrl || undefined,
+        prompt: visualSeed?.prompt || undefined,
+        effect,
+      });
+      try { window.dispatchEvent(new CustomEvent('maw:pipeline-session-updated', { detail: pipeline })); } catch {}
     } catch {}
 
     void trackClientEvent({
@@ -1161,6 +1180,9 @@ ${lastOutput}`
 
   return (
     <main className="flex-1 overflow-y-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
+        <div className="lg:col-span-2">
+          <PipelineProgress currentStep="effect" />
+        </div>
         {demoActive && (
             <div className="lg:col-span-2 rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-200">
                 <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">

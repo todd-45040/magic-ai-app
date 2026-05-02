@@ -6,6 +6,8 @@ import { CohesionActions } from "./CohesionActions";
 import SaveActionBar from "./shared/SaveActionBar";
 import { BookIcon, WandIcon, CheckIcon, CopyIcon } from "./icons";
 import type { User } from "../types";
+import PipelineProgress from './PipelineProgress';
+import { updatePipelineSession, trackPipelineAdvance } from '../services/pipelineSessionService';
 
 interface PatterEngineProps {
   user: User;
@@ -79,6 +81,14 @@ const PatterEngine: React.FC<PatterEngineProps> = ({ user: _user, onIdeaSaved })
         if (tones.length) setSelectedTones(tones);
       }
       setPipelineSource(parsed);
+      const pipeline = updatePipelineSession('script', {
+        sourceType: parsed.source === 'visual_image' || parsed.visualSeed?.source === 'visual_image' ? 'image' : 'effect',
+        title: parsed.effectTitle || 'Script draft',
+        imageUrl: parsed.visualSeed?.imageUrl || undefined,
+        prompt: parsed.visualSeed?.prompt || undefined,
+        effect: parsed.effectDescription || null,
+      });
+      try { window.dispatchEvent(new CustomEvent('maw:pipeline-session-updated', { detail: pipeline })); } catch {}
       localStorage.removeItem(PATTER_ENGINE_PREFILL_KEY);
       void trackClientEvent({ tool: 'creative_pipeline', action: 'script_prefill_loaded', outcome: 'SUCCESS_NOT_CHARGED', metadata: { source: parsed.source || 'unknown', effectTitle: parsed.effectTitle || null } });
     } catch {
@@ -211,6 +221,11 @@ Return plain text.`;
       }
 
       setResult(text);
+      const pipeline = updatePipelineSession('script', {
+        title: pipelineSource?.effectTitle || effectDescription.split('\n')[0]?.slice(0, 80) || 'Generated script',
+        script: text,
+      });
+      try { window.dispatchEvent(new CustomEvent('maw:pipeline-session-updated', { detail: pipeline })); } catch {}
       void trackClientEvent({ tool: 'patter_engine', action: 'patter_generate_success', outcome: 'SUCCESS_NOT_CHARGED', metadata: { tones, descriptionLength: desc.length, duration_ms: Date.now() - startedAt } });
     } catch (err: any) {
       void trackClientEvent({ tool: 'patter_engine', action: 'patter_generate_error', outcome: 'ERROR_UPSTREAM', metadata: { tones, descriptionLength: desc.length, duration_ms: Date.now() - startedAt, message: err?.message || 'unknown' } });
@@ -378,6 +393,9 @@ Return plain text.`;
     try {
       localStorage.setItem(SHOW_PLANNER_ROUTINE_HANDOFF_KEY, JSON.stringify(payload));
       localStorage.setItem('maw_creative_pipeline_last_stage', JSON.stringify({ stage: 'script_to_routine', ts: Date.now(), title: payload.title }));
+      trackPipelineAdvance('script', 'routine', pipelineSource?.source || 'patter_engine', { title: payload.title });
+      const pipeline = updatePipelineSession('routine', { title: payload.title, script: result || null, routine: payload });
+      try { window.dispatchEvent(new CustomEvent('maw:pipeline-session-updated', { detail: pipeline })); } catch {}
     } catch {}
 
     void trackClientEvent({ tool: 'creative_pipeline', action: 'script_to_routine_clicked', outcome: 'SUCCESS_NOT_CHARGED', metadata: { title: payload.title, source: pipelineSource?.source || 'patter_engine' } });
@@ -388,7 +406,9 @@ Return plain text.`;
   };
 
   return (
-    <main className="flex-1 overflow-y-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
+    <div className="space-y-6">
+      <PipelineProgress currentStep="script" />
+      <main className="flex-1 overflow-y-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
       {/* Control Panel */}
       <div className="flex flex-col">
         <div ref={topRef} />
@@ -571,7 +591,8 @@ Return plain text.`;
           </div>
         )}
       </div>
-    </main>
+      </main>
+    </div>
   );
 };
 
