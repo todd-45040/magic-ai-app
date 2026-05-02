@@ -397,6 +397,34 @@ function getImageUrlForIdea(idea: SavedIdea): string {
     return getLocalVisualBrainstormImageFallback(idea, v2);
 }
 
+function getImageVariationUrlsForIdea(idea: SavedIdea): string[] {
+    if (idea.type !== 'image') return [];
+    const v2 = tryParseMawIdeaV2(idea.content);
+    const rawCandidates = [
+        (v2 as any)?.structured?.variations,
+        (v2 as any)?.meta?.variationImageUrls,
+        (v2 as any)?.meta?.variations,
+        (v2 as any)?.variations,
+    ];
+    const urls = new Set<string>();
+    const primary = getImageUrlForIdea(idea);
+    if (primary) urls.add(primary);
+
+    rawCandidates.forEach((candidate) => {
+        if (Array.isArray(candidate)) {
+            candidate.forEach((item) => {
+                const url = extractImageUrlFromText(String(item || ''));
+                if (url) urls.add(url);
+            });
+        } else if (typeof candidate === 'string') {
+            const url = extractImageUrlFromText(candidate);
+            if (url) urls.add(url);
+        }
+    });
+
+    return Array.from(urls);
+}
+
 
 const SavedIdeaImage: React.FC<{ idea: SavedIdea; className?: string; full?: boolean }> = ({ idea, className = '', full = false }) => {
     const [failed, setFailed] = useState(false);
@@ -470,8 +498,11 @@ function extractOriginalPrompt(idea: SavedIdea): string | null {
     const candidates = [
         (v2 as any)?.meta?.originalPrompt,
         (v2 as any)?.meta?.prompt,
+        (v2 as any)?.meta?.promptUsed,
+        (v2 as any)?.prompt,
         (v2 as any)?.structured?.originalPrompt,
         (v2 as any)?.structured?.prompt,
+        (v2 as any)?.structured?.promptUsed,
         (idea as any)?.originalPrompt,
         (idea as any)?.prompt,
     ];
@@ -1040,10 +1071,8 @@ const bulkDuplicateToClipboard = async () => {
 
         const openIdeaView = (idea: SavedIdea) => {
         markOpenedNow(idea.id);
-        if (idea.type === 'image' && idea.content) {
-            setLightboxImg(getImageUrlForIdea(idea));
-            return;
-        }
+        // Image ideas now open in the full Idea modal so they can be used as
+        // creative building blocks instead of only showing a passive lightbox.
         setOpenIdea(idea);
     };
 
@@ -1065,6 +1094,55 @@ const openPromoteModal = (idea: SavedIdea) => {
             routineSlot: 'Middle',
             estimatedTime: '5',
         });
+    };
+
+    const buildImageIdeaPromptContext = (idea: SavedIdea): string => {
+        const display = getIdeaDisplay(idea);
+        const prompt = extractOriginalPrompt(idea) || '';
+        const imageUrl = getImageUrlForIdea(idea);
+        return [
+            `Title: ${display.title || idea.title || 'Saved visual idea'}`,
+            prompt ? `Original prompt: ${prompt}` : '',
+            imageUrl ? `Image reference URL/data: ${imageUrl}` : '',
+        ].filter(Boolean).join('\n');
+    };
+
+    const requestImageVariations = (idea: SavedIdea) => {
+        onAiSpark?.({
+            type: 'custom-prompt',
+            payload: {
+                prompt: `Create 4 practical visual variation prompts for this saved magic concept. Keep them suitable for Visual Brainstorm and focused on stage/prop usability, not surreal fantasy.
+
+${buildImageIdeaPromptContext(idea)}
+
+Return: variation title, image prompt, performance use, and what changed from the original.`
+            }
+        });
+        setActionMessage('Variation prompt sent to the AI Assistant. Use these prompts in Visual Brainstorm to generate new image versions.');
+    };
+
+    const useImageInEffect = (idea: SavedIdea) => {
+        onAiSpark?.({
+            type: 'custom-prompt',
+            payload: {
+                prompt: `Build a practical magic effect from this saved visual concept. Include effect description, props, method-safe handling notes, staging, reset, risk/angle warnings, and 3 short patter options.
+
+${buildImageIdeaPromptContext(idea)}`
+            }
+        });
+        setActionMessage('Image concept sent to the AI Assistant to build an effect.');
+    };
+
+    const addImageToScript = (idea: SavedIdea) => {
+        onAiSpark?.({
+            type: 'custom-prompt',
+            payload: {
+                prompt: `Turn this saved visual concept into performance script material. Write a 90-second script, a 3-beat routine outline, audience interaction lines, and a strong closing line.
+
+${buildImageIdeaPromptContext(idea)}`
+            }
+        });
+        setActionMessage('Image concept sent to the AI Assistant for scripting.');
     };
 
     const sendToPlanner = (idea: SavedIdea) => {
@@ -2334,6 +2412,19 @@ const openPromoteModal = (idea: SavedIdea) => {
                                 <button onClick={() => openAddToShowModal(openIdea)} className="px-3 py-1.5 text-xs rounded-full bg-blue-900/30 border border-blue-500/30 text-blue-100 hover:bg-blue-900/50 transition">
                                     Add to Show
                                 </button>
+                                {openIdea.type === 'image' ? (
+                                    <>
+                                        <button onClick={() => requestImageVariations(openIdea)} className="px-3 py-1.5 text-xs rounded-full bg-fuchsia-900/30 border border-fuchsia-500/30 text-fuchsia-100 hover:bg-fuchsia-900/50 transition">
+                                            Generate Variations
+                                        </button>
+                                        <button onClick={() => useImageInEffect(openIdea)} className="px-3 py-1.5 text-xs rounded-full bg-emerald-900/30 border border-emerald-500/30 text-emerald-100 hover:bg-emerald-900/50 transition">
+                                            Use in Effect
+                                        </button>
+                                        <button onClick={() => addImageToScript(openIdea)} className="px-3 py-1.5 text-xs rounded-full bg-amber-900/30 border border-amber-500/30 text-amber-100 hover:bg-amber-900/50 transition">
+                                            Add to Script
+                                        </button>
+                                    </>
+                                ) : null}
                                 {!ideaIsArchived(openIdea) ? (
                                     <button onClick={() => archiveIdea(openIdea)} className="px-3 py-1.5 text-xs rounded-full bg-slate-800/60 border border-slate-700 text-slate-200 hover:border-slate-500 transition">
                                         Archive
@@ -2376,7 +2467,37 @@ const openPromoteModal = (idea: SavedIdea) => {
                                         className="w-full min-h-[220px] rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-sm text-slate-200 focus:outline-none focus:border-purple-500"
                                     />
                                 ) : openIdea.type === 'image' ? (
-                                    <SavedIdeaImage idea={openIdea} full className="w-full rounded-xl border border-slate-800" />
+                                    <div className="space-y-4">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const url = getImageUrlForIdea(openIdea);
+                                                if (url) setLightboxImg(url);
+                                            }}
+                                            className="group block w-full text-left"
+                                            title="View full image"
+                                        >
+                                            <SavedIdeaImage idea={openIdea} full className="w-full rounded-xl border border-slate-800 transition group-hover:border-purple-400/40" />
+                                        </button>
+                                        <div className="flex flex-wrap gap-2">
+                                            <button type="button" onClick={() => requestImageVariations(openIdea)} className="px-3 py-2 text-xs rounded-xl bg-fuchsia-900/30 border border-fuchsia-500/30 text-fuchsia-100 hover:bg-fuchsia-900/50 transition">Generate Variations</button>
+                                            <button type="button" onClick={() => useImageInEffect(openIdea)} className="px-3 py-2 text-xs rounded-xl bg-emerald-900/30 border border-emerald-500/30 text-emerald-100 hover:bg-emerald-900/50 transition">Use in Effect</button>
+                                            <button type="button" onClick={() => addImageToScript(openIdea)} className="px-3 py-2 text-xs rounded-xl bg-amber-900/30 border border-amber-500/30 text-amber-100 hover:bg-amber-900/50 transition">Add to Script</button>
+                                        </div>
+                                        {getImageVariationUrlsForIdea(openIdea).length > 1 ? (
+                                            <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
+                                                <div className="mb-2 text-xs uppercase tracking-wide text-slate-500">Saved Variations</div>
+                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                                    {getImageVariationUrlsForIdea(openIdea).slice(0, 8).map((url, idx) => (
+                                                        <button key={`${url}-${idx}`} type="button" onClick={() => setLightboxImg(url)} className="relative aspect-square overflow-hidden rounded-lg border border-slate-800 bg-slate-950 hover:border-purple-400/40 transition" title={`Open variation ${idx + 1}`}>
+                                                            <img src={url} alt={`Saved variation ${idx + 1}`} className="h-full w-full object-cover" />
+                                                            <span className="absolute left-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-slate-100">{idx === 0 ? 'Primary' : `V${idx}`}</span>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ) : null}
+                                    </div>
                                 ) : (
                                     <div className="text-sm text-slate-200 whitespace-pre-wrap break-words">{getIdeaDisplay(openIdea).body || openIdea.content}</div>
                                 )}

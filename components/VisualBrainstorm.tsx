@@ -1022,16 +1022,31 @@ const activeSession = useMemo(() => {
       // Phase 11 — Save to Idea Vault Enhancement:
       // Store a rich, v2-ish payload inside `content` (still saved as type='image')
       // so the Idea Vault can render beautifully later.
+      const visualPrompt = String(promptUsed || finalPrompt || '').trim();
+      const variationImageUrls = Array.from(new Set([
+        generatedImage,
+        ...(Array.isArray(variationImages) ? variationImages : []),
+      ].filter(Boolean)));
+
       const richPayload = {
         format: 'maw.idea.visual.v1',
+        // Hard guarantee for saved image ideas. Saved Ideas should not need to
+        // guess, parse prose, or recover from browser cache for new saves.
+        type: 'image',
+        imageUrl: generatedImage,
+        prompt: visualPrompt,
+        created_at: new Date(now).toISOString(),
+        source: 'visual_brainstorm',
         tool: 'visual_brainstorm',
         timestamp: now,
         title: conceptTitle?.trim() || buildConceptTitle(),
         // Keep a short human-friendly display (useful for exports / clipboard views)
-        display: `Prompt:\n${String(promptUsed || finalPrompt || '').trim()}`,
+        display: `Prompt:
+${visualPrompt}`,
         structured: {
           imageUrl: generatedImage,
-          promptUsed: String(promptUsed || finalPrompt || '').trim(),
+          promptUsed: visualPrompt,
+          variations: variationImageUrls,
           inputs: {
             objectProp: objectProp?.trim() || '',
             sceneSetting: sceneSetting?.trim() || '',
@@ -1051,7 +1066,9 @@ const activeSession = useMemo(() => {
         },
         meta: {
           imageUrl: generatedImage,
-          promptUsed: String(promptUsed || finalPrompt || '').trim(),
+          prompt: visualPrompt,
+          promptUsed: visualPrompt,
+          variationImageUrls,
           aspectRatio,
           mode,
           variations,
@@ -1059,6 +1076,8 @@ const activeSession = useMemo(() => {
           parentHistoryId: activeItem?.parentHistoryId || null,
           sessionId: activeItem?.sessionId || activeSessionId || null,
           createdAt: now,
+          created_at: new Date(now).toISOString(),
+          source: 'visual_brainstorm',
         },
       };
 
